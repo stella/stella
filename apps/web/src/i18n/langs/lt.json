@@ -2494,10 +2494,6 @@
       "chipNumber": "Skaičius",
       "chipSingle": "Žyma",
       "chipText": "Tekstas",
-      "classify": {
-        "action": "Classify documents",
-        "rerun": "Reclassify documents"
-      },
       "clip": "Apkarpyti",
       "composerTitle": "Pasakykite stella, ko ieškoti",
       "conditionSeparator": "IR",

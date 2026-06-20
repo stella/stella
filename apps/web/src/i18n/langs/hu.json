@@ -2494,10 +2494,6 @@
       "chipNumber": "Szám",
       "chipSingle": "Címke",
       "chipText": "Szöveg",
-      "classify": {
-        "action": "Classify documents",
-        "rerun": "Reclassify documents"
-      },
       "clip": "Részlet",
       "composerTitle": "Mondja el a stellának, mit keressen",
       "conditionSeparator": "ÉS",

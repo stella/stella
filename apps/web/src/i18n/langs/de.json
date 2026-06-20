@@ -2494,10 +2494,6 @@
       "chipNumber": "Zahl",
       "chipSingle": "Schlagwort",
       "chipText": "Text",
-      "classify": {
-        "action": "Classify documents",
-        "rerun": "Reclassify documents"
-      },
       "clip": "Abschneiden",
       "composerTitle": "Was soll stella finden?",
       "conditionSeparator": "UND",

@@ -2497,10 +2497,6 @@ type Messages = {
       "chipNumber": "Number";
       "chipSingle": "Tag";
       "chipText": "Text";
-      "classify": {
-        "action": "Classify documents";
-        "rerun": "Reclassify documents";
-      };
       "clip": "Clip";
       "composerTitle": "Tell stella what to find";
       "conditionSeparator": "AND";
