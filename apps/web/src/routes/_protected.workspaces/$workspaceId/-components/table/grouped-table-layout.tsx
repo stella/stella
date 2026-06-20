@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { type RefObject, useMemo, useRef, useState } from "react";
 
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
@@ -64,6 +64,10 @@ export const GroupedTableLayout = ({
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
   const tableState = useTableState({ workspaceId, view });
   const columns = useTableColumns({ properties, view });
+  // One shared scroller for the whole grouped view: every group's table flows
+  // inside it (no nested scroll boxes), so the sticky group headers stack
+  // correctly and a single horizontal scroll keeps every group aligned.
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const groupByConfig = view.layout.groupByPropertyId ?? "";
   const grouping = useMemo(
@@ -140,9 +144,11 @@ export const GroupedTableLayout = ({
 
   return (
     // Flex column so empty categories can sink below populated ones via
-    // `order` (set per-section once its count resolves) without lifting
-    // each group's async count into the parent.
-    <div className="flex h-full flex-col overflow-y-auto">
+    // `order` (set per-section once its count resolves). No own scroll: the
+    // sections flow into the table layout's existing scroller, so the whole
+    // grouped view shares one scroll (nested scroll boxes break the sticky
+    // group headers and let a group's rows paint over the toolbar).
+    <div className="flex flex-col" ref={scrollRef}>
       {groups.map((group) => (
         <GroupSection
           columns={columns}
@@ -150,6 +156,7 @@ export const GroupedTableLayout = ({
           group={group}
           groupByPropertyId={groupByPropertyId}
           key={group.value ?? "__uncategorized__"}
+          outerScrollRef={scrollRef}
           sumProperties={sumProperties}
           tableState={tableState}
           view={view}
@@ -219,7 +226,7 @@ const GroupedAddRow = ({
 
   return (
     <div
-      className="bg-background sticky bottom-0 z-30 order-last overflow-hidden"
+      className="bg-background sticky start-0 bottom-0 z-30 order-last"
       style={gridStyle}
     >
       <BottomRow table={table} workspaceId={workspaceId} />
@@ -236,6 +243,7 @@ type GroupSectionProps = {
   columns: TableColumnDef[];
   sumProperties: WorkspaceProperty[];
   tableState: ReturnType<typeof useTableState>;
+  outerScrollRef: RefObject<HTMLDivElement | null>;
 };
 
 const GroupSection = ({
@@ -247,6 +255,7 @@ const GroupSection = ({
   columns,
   sumProperties,
   tableState,
+  outerScrollRef,
 }: GroupSectionProps) => {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -295,7 +304,7 @@ const GroupSection = ({
   });
 
   return (
-    <section className={cn("min-w-0", isEmpty && "order-1")}>
+    <section className={cn(isEmpty && "order-1")}>
       <GroupHeader
         collapsed={collapsed}
         empty={isEmpty}
@@ -308,27 +317,25 @@ const GroupSection = ({
       />
       {!collapsed &&
         !isEmpty && (
-          // Each section's table owns an internal scroll container (the
-          // virtualizer needs a sized scroll element), so the section is
-          // bounded; the outer page scrolls between sections. This mirrors
-          // kanban columns, which each scroll independently.
-          <div className="flex max-h-[70vh] flex-col">
-            <WorkspaceTable
-              contentMode={tableState.contentMode}
-              hasNextPage={query.hasNextPage}
-              isFetchingNextPage={query.isFetchingNextPage}
-              onLoadMore={() => {
-                if (query.hasNextPage && !query.isFetchingNextPage) {
-                  void query.fetchNextPage();
-                }
-              }}
-              fillHeight={false}
-              showAddRow={false}
-              stickyColumnHeader={false}
-              table={table}
-              workspaceId={workspaceId}
-            />
-          </div>
+          // The table flows inline in the shared outer scroll (no nested scroll
+          // box), so its rows render directly and the sticky group header stacks
+          // cleanly above the columns.
+          <WorkspaceTable
+            contentMode={tableState.contentMode}
+            fillHeight={false}
+            hasNextPage={query.hasNextPage}
+            isFetchingNextPage={query.isFetchingNextPage}
+            onLoadMore={() => {
+              if (query.hasNextPage && !query.isFetchingNextPage) {
+                void query.fetchNextPage();
+              }
+            }}
+            outerScrollRef={outerScrollRef}
+            showAddRow={false}
+            stickyColumnHeader={false}
+            table={table}
+            workspaceId={workspaceId}
+          />
         )}
     </section>
   );

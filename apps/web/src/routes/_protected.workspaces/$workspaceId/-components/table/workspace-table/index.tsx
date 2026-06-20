@@ -1,4 +1,5 @@
 import {
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -89,6 +90,12 @@ type WorkspaceTableProps = {
   // rail) in the full-height flat table. Grouped sections size to content, so
   // a growing filler just shows as an empty trailing row.
   fillHeight?: boolean;
+  // When set, the table flows inside this shared scroll container instead of
+  // owning its own scroll box. Grouped sections pass the single grouped-view
+  // scroller so every group shares one vertical/horizontal scroll (nested
+  // scroll boxes break the sticky group header). In this mode rows render
+  // directly rather than virtualized — group pages are bounded.
+  outerScrollRef?: RefObject<HTMLDivElement | null>;
 };
 
 export const WorkspaceTable = ({
@@ -101,7 +108,9 @@ export const WorkspaceTable = ({
   showAddRow = true,
   stickyColumnHeader = true,
   fillHeight = true,
+  outerScrollRef,
 }: WorkspaceTableProps) => {
+  const inlineFlow = outerScrollRef !== undefined;
   const t = useTranslations();
   const tableWrapperRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
@@ -248,6 +257,14 @@ export const WorkspaceTable = ({
   const paddingTop = virtualRows.at(0)?.start ?? 0;
   const paddingBottom =
     rowVirtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0);
+  // Inline (grouped) sections render every row in the shared scroll; virtualized
+  // sections render only the windowed rows with padding spacers.
+  const renderedRows = inlineFlow
+    ? rowModel.rows.map((row, index) => ({ row, index }))
+    : virtualRows.map((virtualRow) => ({
+        row: rowModel.rows.at(virtualRow.index),
+        index: virtualRow.index,
+      }));
   const orderedColumns = getOrderedColumns({
     leftColumns: table.getLeftLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
@@ -435,18 +452,24 @@ export const WorkspaceTable = ({
   return (
     <div
       className={cn(
-        "relative h-full flex-1",
+        "relative",
+        !inlineFlow && "h-full flex-1",
         addPropertyColumn && ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
       )}
     >
       <div
-        className="scrollbar-subtle h-full overflow-auto"
+        className={
+          inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto"
+        }
         ref={tableWrapperComposedRef}
       >
         <div
           aria-colcount={visibleColumnCount}
           aria-rowcount={rowModel.rows.length}
-          className="relative flex min-h-full flex-col text-sm"
+          className={cn(
+            "relative flex flex-col text-sm",
+            !inlineFlow && "min-h-full",
+          )}
           role="grid"
           style={gridStyle}
         >
@@ -490,7 +513,7 @@ export const WorkspaceTable = ({
             ))}
           </div>
           <div className="flex flex-1 flex-col">
-            {paddingTop > 0 && (
+            {!inlineFlow && paddingTop > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell
                   className="border-b-0"
@@ -504,8 +527,7 @@ export const WorkspaceTable = ({
                 )}
               </WorkspaceGridRow>
             )}
-            {virtualRows.map((virtualRow) => {
-              const row = rowModel.rows.at(virtualRow.index);
+            {renderedRows.map(({ row, index }) => {
               if (!row) {
                 return null;
               }
@@ -523,7 +545,7 @@ export const WorkspaceTable = ({
                   }
                   contentMode={contentMode}
                   hasExpandedTableCell={expandedTableCell !== null}
-                  index={virtualRow.index}
+                  index={index}
                   key={row.id}
                   lastSelectedIndex={lastSelectedIndex}
                   measureElement={rowVirtualizer.measureElement}
@@ -554,15 +576,15 @@ export const WorkspaceTable = ({
                   }}
                   addPropertyColumn={addPropertyColumn}
                   row={row}
-                  rowLabel={rowLabels[virtualRow.index] ?? ""}
+                  rowLabel={rowLabels[index] ?? ""}
                   renderColumns={renderColumns}
                   table={table}
-                  virtualIndex={virtualRow.index}
+                  virtualIndex={index}
                   workspaceId={workspaceId}
                 />
               );
             })}
-            {paddingBottom > 0 && (
+            {!inlineFlow && paddingBottom > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell
                   className="border-b-0"
