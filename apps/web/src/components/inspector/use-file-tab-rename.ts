@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -21,11 +21,11 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
   const [editValue, setEditValue] = useState("");
   const renameEntity = useRenameEntity();
 
-  const startRename = useCallback((tab: FileTab) => {
+  const startRename = (tab: FileTab) => {
     const dotIndex = tab.label.lastIndexOf(".");
     setEditValue(dotIndex > 0 ? tab.label.slice(0, dotIndex) : tab.label);
     setEditingTabId(tab.id);
-  }, []);
+  };
 
   const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
   const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
@@ -43,41 +43,38 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
     }
   }, [pendingRenameTabId, tabs, startRename, clearRenameRequest]);
 
-  const commitRename = useCallback(
-    (tab: FileTab) => {
-      const trimmed = editValue.trim();
-      if (!trimmed) {
-        setEditingTabId(null);
-        return;
-      }
-
-      const dotIndex = tab.label.lastIndexOf(".");
-      const ext = dotIndex > 0 ? tab.label.slice(dotIndex) : "";
-      const newName = trimmed + ext;
-
+  const commitRename = (tab: FileTab) => {
+    const trimmed = editValue.trim();
+    if (!trimmed) {
       setEditingTabId(null);
+      return;
+    }
 
-      if (newName === tab.label) {
-        return;
-      }
+    const dotIndex = tab.label.lastIndexOf(".");
+    const ext = dotIndex > 0 ? tab.label.slice(dotIndex) : "";
+    const newName = trimmed + ext;
 
-      const previousLabel = tab.label;
-      useInspectorStore.getState().updateLabel(tab.id, newName);
-      renameEntity.mutate(
-        { workspaceId: tab.workspaceId, entityId: tab.entityId, name: newName },
-        {
-          onError: () => {
-            useInspectorStore.getState().updateLabel(tab.id, previousLabel);
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
-          },
+    setEditingTabId(null);
+
+    if (newName === tab.label) {
+      return;
+    }
+
+    const previousLabel = tab.label;
+    useInspectorStore.getState().updateLabel(tab.id, newName);
+    renameEntity.mutate(
+      { workspaceId: tab.workspaceId, entityId: tab.entityId, name: newName },
+      {
+        onError: () => {
+          useInspectorStore.getState().updateLabel(tab.id, previousLabel);
+          stellaToast.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
         },
-      );
-    },
-    [editValue, renameEntity, t],
-  );
+      },
+    );
+  };
 
   return {
     commitRename,

@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { DownloadIcon } from "lucide-react";
@@ -40,36 +38,33 @@ export const TemplateVersionsTab = ({
   const versions =
     versionsData && "versions" in versionsData ? versionsData.versions : [];
 
-  const handleView = useCallback(
-    async (versionId: string) => {
-      const response = await api
-        .templates({ templateId })
-        .versions({ versionId })
-        .get();
+  const handleView = async (versionId: string) => {
+    const response = await api
+      .templates({ templateId })
+      .versions({ versionId })
+      .get();
 
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.loadFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.loadFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
 
-      const { data } = response;
-      if (data instanceof Response) {
-        return;
-      }
+    const { data } = response;
+    if (data instanceof Response) {
+      return;
+    }
 
-      if ("downloadUrl" in data && typeof data.downloadUrl === "string") {
-        window.open(data.downloadUrl, "_blank");
-      }
-    },
-    [templateId, t],
-  );
+    if ("downloadUrl" in data && typeof data.downloadUrl === "string") {
+      window.open(data.downloadUrl, "_blank");
+    }
+  };
 
   if (isLoading) {
     return (

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 
@@ -45,10 +45,7 @@ export const useSyncJustifications = (
   const syncJustifications = useWorkspaceStore(
     (state) => state.syncJustifications,
   );
-  const normalizedEntityIds = useMemo(
-    () => normalizeEntityIds(entityIds),
-    [entityIds],
-  );
+  const normalizedEntityIds = normalizeEntityIds(entityIds);
 
   const { data } = useQuery({
     ...justificationsOptions({
@@ -80,38 +77,27 @@ export const useSyncJustificationChunks = (
     (state) => state.syncJustifications,
   );
   const syncedResultsRef = useRef(new Set<string>());
-  const normalizedChunks = useMemo(
-    () =>
-      entityIdChunks
-        .map((entityIds) => normalizeEntityIds(entityIds))
-        .filter((entityIds) => entityIds.length > 0),
-    [entityIdChunks],
-  );
-  const queries = useMemo(
-    () =>
-      normalizedChunks.map((entityIds) => ({
-        ...justificationsOptions({
-          workspaceId,
-          entityIds,
-        }),
-        enabled,
-      })),
-    [enabled, normalizedChunks, workspaceId],
-  );
-  const combineResults = useCallback(
-    (
-      results: {
-        data: WorkspaceJustification[] | undefined;
-        dataUpdatedAt: number;
-      }[],
-    ) =>
-      results.map((result, index) => ({
-        data: result.data,
-        dataUpdatedAt: result.dataUpdatedAt,
-        entityIds: normalizedChunks.at(index) ?? [],
-      })),
-    [normalizedChunks],
-  );
+  const normalizedChunks = entityIdChunks
+    .map((entityIds) => normalizeEntityIds(entityIds))
+    .filter((entityIds) => entityIds.length > 0);
+  const queries = normalizedChunks.map((entityIds) => ({
+    ...justificationsOptions({
+      workspaceId,
+      entityIds,
+    }),
+    enabled,
+  }));
+  const combineResults = (
+    results: {
+      data: WorkspaceJustification[] | undefined;
+      dataUpdatedAt: number;
+    }[],
+  ) =>
+    results.map((result, index) => ({
+      data: result.data,
+      dataUpdatedAt: result.dataUpdatedAt,
+      entityIds: normalizedChunks.at(index) ?? [],
+    }));
 
   const syncedResults = useQueries({
     queries,

@@ -1,7 +1,6 @@
 import {
   lazy,
   Suspense,
-  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -114,19 +113,16 @@ const PeekPdfViewerContent = ({
   );
   const file = fileQuery.data;
 
-  const renderPageOverlay = useCallback(
-    (pageId: string) => (
-      <PeekPageOverlays
-        activePropertyId={activePropertyId}
-        entityId={entityId}
-        fieldId={fieldId}
-        onPeekNavigate={onPeekNavigate}
-        pageId={pageId}
-        viewId={viewId}
-        workspaceId={workspaceId}
-      />
-    ),
-    [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
+  const renderPageOverlay = (pageId: string) => (
+    <PeekPageOverlays
+      activePropertyId={activePropertyId}
+      entityId={entityId}
+      fieldId={fieldId}
+      onPeekNavigate={onPeekNavigate}
+      pageId={pageId}
+      viewId={viewId}
+      workspaceId={workspaceId}
+    />
   );
 
   if (fileQuery.isError || !file) {
@@ -331,7 +327,7 @@ export const PeekPrintButton = () => {
     [],
   );
 
-  const handlePrint = useCallback(async () => {
+  const handlePrint = async () => {
     if (!pdfDocument) {
       return;
     }
@@ -357,7 +353,7 @@ export const PeekPrintButton = () => {
         setIsPrinting(false);
       }
     }
-  }, [analytics, pdfDocument]);
+  };
 
   return (
     <Tooltip
@@ -399,7 +395,7 @@ export const PreparedPdfPrintButton = ({
     [],
   );
 
-  const handlePrint = useCallback(async () => {
+  const handlePrint = async () => {
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -425,7 +421,7 @@ export const PreparedPdfPrintButton = ({
         setIsPrinting(false);
       }
     }
-  }, [analytics, fieldId, workspaceId]);
+  };
 
   return (
     <Tooltip
@@ -469,6 +465,8 @@ const PeekDocxViewer = ({
   const { containerRef: fitZoomRef, fitZoom: targetZoom } = useDocxFitZoom({
     scaleOffset,
   });
+  // Stable ref callback so React doesn't detach/re-attach the fit-zoom
+  // ResizeObserver every render.
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],

@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import type { UsageLimitExceededReason } from "@/components/usage/usage-limit-modal";
 import { APIError } from "@/lib/errors";
@@ -215,7 +215,7 @@ export const useUsageLimit = ({
 }): UseUsageLimitResult & { hasHostedEntitlement: boolean } => {
   const [state, setState] = useState<ModalState>(INITIAL_STATE);
 
-  const handle = useCallback((error: unknown): boolean => {
+  const handle = (error: unknown): boolean => {
     const extracted = extractFromError(error);
     if (!extracted) {
       return false;
@@ -230,12 +230,10 @@ export const useUsageLimit = ({
       available: structured.available ?? fallback.available,
     });
     return true;
-  }, []);
+  };
 
-  const onOpenChange = useCallback(
-    (open: boolean) => setState((prev) => ({ ...prev, open })),
-    [],
-  );
+  const onOpenChange = (open: boolean) =>
+    setState((prev) => ({ ...prev, open }));
 
   return {
     handle,

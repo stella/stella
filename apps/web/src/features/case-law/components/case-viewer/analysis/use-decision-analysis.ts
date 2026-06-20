@@ -5,7 +5,7 @@
  * triggers generation and polls until complete.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -153,7 +153,7 @@ export const useDecisionAnalysis = (
   const hasErrorResult = query.data?.kind === "error" || query.isError;
   const refetch = query.refetch;
 
-  const generate = useCallback(() => {
+  const generate = () => {
     if (hasFreshAnalysis) {
       return;
     }
@@ -168,7 +168,7 @@ export const useDecisionAnalysis = (
       return;
     }
     setGeneratingFor(decisionId);
-  }, [decisionId, hasErrorResult, hasFreshAnalysis, isGenerating, refetch]);
+  };
 
   const state: AnalysisState = (() => {
     if (hasFreshAnalysis && isDecisionAnalysis(existingAnalysis)) {

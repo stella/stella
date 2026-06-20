@@ -13,7 +13,7 @@
  * actions, and "download anonymized" land in follow-up commits.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -457,7 +457,7 @@ export const AnonymizationFacet = ({
   // while `!matchesReady`: detection hasn't published yet, so
   // filtering would collapse the list to "0 matches" and look
   // identical to "actually nothing matches".
-  const entries = useMemo(() => {
+  const entries = (() => {
     const sourceEntries = allEntries ?? [];
     if (activeFieldId && matchesReady) {
       return sourceEntries.filter((entry) =>
@@ -465,7 +465,7 @@ export const AnonymizationFacet = ({
       );
     }
     return sourceEntries;
-  }, [activeFieldId, allEntries, matchesReady, matchSnapshot.countByCanonical]);
+  })();
   const noOpenDocument = activeFieldId === null;
 
   // Auto-detected entities to surface in the "Detected" section.
@@ -475,15 +475,14 @@ export const AnonymizationFacet = ({
   // disappear from the live match snapshot (they're filtered out
   // before Folio sees them), so re-merge them from the
   // exclusions store with their remembered label.
-  const workspaceCanonicals = useMemo(
-    () => new Set((allEntries ?? []).map((entry) => entry.canonical)),
-    [allEntries],
+  const workspaceCanonicals = new Set(
+    (allEntries ?? []).map((entry) => entry.canonical),
   );
   // Index allowlist entries by canonical (case-insensitive) so the
   // UI knows which detected rows are currently overridden, plus
   // which scope they sit at (for the restore button targeting).
   type AllowlistRow = NonNullable<typeof allowlistEntries>[number];
-  const allowlistByCanonical = useMemo(() => {
+  const allowlistByCanonical = (() => {
     const map = new Map<string, AllowlistRow[]>();
     for (const entry of allowlistEntries ?? []) {
       const key = entry.canonical.toLocaleLowerCase();
@@ -495,8 +494,8 @@ export const AnonymizationFacet = ({
       }
     }
     return map;
-  }, [allowlistEntries]);
-  const detectedGroups = useMemo(() => {
+  })();
+  const detectedGroups = (() => {
     type Row = {
       canonical: string;
       count: number;
@@ -540,13 +539,7 @@ export const AnonymizationFacet = ({
       list.sort((a, b) => a.canonical.localeCompare(b.canonical));
     }
     return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [
-    matchSnapshot.countByCanonical,
-    matchSnapshot.labelByCanonical,
-    allowlistByCanonical,
-    allowlistEntries,
-    workspaceCanonicals,
-  ]);
+  })();
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     () => new Set(),
   );

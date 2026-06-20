@@ -1,4 +1,4 @@
-import { Fragment, useId, useMemo } from "react";
+import { Fragment, useId } from "react";
 
 import { Link, useMatches } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
@@ -71,116 +71,111 @@ export const AppBreadcrumbs = () => {
   const matches = useMatches();
   const id = useId();
 
-  const breadcrumbDefinitions: BreadcrumbDefinition[] = useMemo(
-    () => [
-      defineBreadcrumb(
-        ["/workspaces/"],
-        <BreadcrumbItem className="min-w-8 shrink">
-          <Link
-            activeOptions={{ exact: true, includeSearch: false }}
-            activeProps={{ className: "text-foreground font-semibold" }}
-            className="hover:text-foreground min-w-0 truncate transition-colors"
-            title={t("common.matters")}
-            to="/workspaces"
-          >
-            {t("common.matters")}
-          </Link>
-        </BreadcrumbItem>,
-      ),
-      defineBreadcrumb(["/workspaces/$workspaceId"], renderWorkspaceBreadcrumb),
-      defineBreadcrumb(
-        ["/workspaces/$workspaceId/$viewId/document"],
-        renderPdfBreadcrumb,
-      ),
-      defineBreadcrumb(
-        ["/todos/"],
-        <BreadcrumbLink to="/todos">{t("navigation.myTodos")}</BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/knowledge"],
-        <BreadcrumbLink to="/knowledge">
-          {t("navigation.knowledge")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/knowledge/templates"],
-        <BreadcrumbLink to="/knowledge/templates">
-          {t("navigation.templates")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/contacts/"],
-        <BreadcrumbLink to="/contacts">
-          {t("navigation.contacts")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/knowledge/clauses"],
-        <BreadcrumbLink to="/knowledge/clauses">
-          {t("common.clauses")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(["/contacts/$contactId"], renderContactBreadcrumb),
-      defineBreadcrumb(
-        ["/knowledge/prompts"],
-        <BreadcrumbItem>
-          {t("knowledge.sections.prompts.title")}
-        </BreadcrumbItem>,
-      ),
-      defineBreadcrumb(
-        ["/knowledge/tools"],
-        <BreadcrumbLink to="/knowledge/tools">
-          {t("knowledge.sections.tools.title")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(["/knowledge/tools/$skillId"], <SkillBreadcrumb />),
-      defineBreadcrumb(
-        ["/settings"],
-        <BreadcrumbLink to="/settings">{t("common.settings")}</BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/settings/account/profile"],
-        <BreadcrumbLink to="/settings/account/profile">
-          {t("settings.account.profile")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/settings/account/desktop"],
-        <BreadcrumbLink to="/settings/account/desktop">
-          {t("settings.account.desktop")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/settings/organization"],
-        <BreadcrumbItem>{t("common.organization")}</BreadcrumbItem>,
-      ),
-      defineBreadcrumb(
-        ["/settings/organization/members"],
-        <BreadcrumbLink to="/settings/organization/members">
-          {t("navigation.members")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/settings/organization/matter-numbering"],
-        <BreadcrumbLink to="/settings/organization/matter-numbering">
-          {t("settings.organization.matterNumbering")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/settings/organization/ai"],
-        <BreadcrumbLink to="/settings/organization/ai">
-          {t("settings.organization.ai")}
-        </BreadcrumbLink>,
-      ),
-      defineBreadcrumb(
-        ["/chat"],
-        <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>,
-      ),
-    ],
-    [t],
-  );
+  const breadcrumbDefinitions: BreadcrumbDefinition[] = [
+    defineBreadcrumb(
+      ["/workspaces/"],
+      <BreadcrumbItem className="min-w-8 shrink">
+        <Link
+          activeOptions={{ exact: true, includeSearch: false }}
+          activeProps={{ className: "text-foreground font-semibold" }}
+          className="hover:text-foreground min-w-0 truncate transition-colors"
+          title={t("common.matters")}
+          to="/workspaces"
+        >
+          {t("common.matters")}
+        </Link>
+      </BreadcrumbItem>,
+    ),
+    defineBreadcrumb(["/workspaces/$workspaceId"], renderWorkspaceBreadcrumb),
+    defineBreadcrumb(
+      ["/workspaces/$workspaceId/$viewId/document"],
+      renderPdfBreadcrumb,
+    ),
+    defineBreadcrumb(
+      ["/todos/"],
+      <BreadcrumbLink to="/todos">{t("navigation.myTodos")}</BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/knowledge"],
+      <BreadcrumbLink to="/knowledge">
+        {t("navigation.knowledge")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/knowledge/templates"],
+      <BreadcrumbLink to="/knowledge/templates">
+        {t("navigation.templates")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/contacts/"],
+      <BreadcrumbLink to="/contacts">
+        {t("navigation.contacts")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/knowledge/clauses"],
+      <BreadcrumbLink to="/knowledge/clauses">
+        {t("common.clauses")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(["/contacts/$contactId"], renderContactBreadcrumb),
+    defineBreadcrumb(
+      ["/knowledge/prompts"],
+      <BreadcrumbItem>{t("knowledge.sections.prompts.title")}</BreadcrumbItem>,
+    ),
+    defineBreadcrumb(
+      ["/knowledge/tools"],
+      <BreadcrumbLink to="/knowledge/tools">
+        {t("knowledge.sections.tools.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(["/knowledge/tools/$skillId"], <SkillBreadcrumb />),
+    defineBreadcrumb(
+      ["/settings"],
+      <BreadcrumbLink to="/settings">{t("common.settings")}</BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/settings/account/profile"],
+      <BreadcrumbLink to="/settings/account/profile">
+        {t("settings.account.profile")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/settings/account/desktop"],
+      <BreadcrumbLink to="/settings/account/desktop">
+        {t("settings.account.desktop")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/settings/organization"],
+      <BreadcrumbItem>{t("common.organization")}</BreadcrumbItem>,
+    ),
+    defineBreadcrumb(
+      ["/settings/organization/members"],
+      <BreadcrumbLink to="/settings/organization/members">
+        {t("navigation.members")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/settings/organization/matter-numbering"],
+      <BreadcrumbLink to="/settings/organization/matter-numbering">
+        {t("settings.organization.matterNumbering")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/settings/organization/ai"],
+      <BreadcrumbLink to="/settings/organization/ai">
+        {t("settings.organization.ai")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
+      ["/chat"],
+      <BreadcrumbLink to="/chat">{t("navigation.chat")}</BreadcrumbLink>,
+    ),
+  ];
 
-  const breadcrumbs = useMemo(() => {
+  const breadcrumbs = (() => {
     const results = new Map<string, React.ReactNode>();
 
     for (const match of matches) {
@@ -196,7 +191,7 @@ export const AppBreadcrumbs = () => {
     }
 
     return [...results.values()];
-  }, [matches, breadcrumbDefinitions]);
+  })();
 
   return (
     <Breadcrumb className="min-w-0">

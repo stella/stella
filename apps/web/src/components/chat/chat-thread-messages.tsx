@@ -1,4 +1,3 @@
-import { useMemo } from "react";
 import type { ComponentProps } from "react";
 
 import { isToolUIPart } from "ai";
@@ -400,7 +399,7 @@ const AssistantMessageActions = ({
     | undefined;
 }) => {
   const t = useTranslations();
-  const text = useMemo(() => getMessageText(message), [message]);
+  const text = getMessageText(message);
   const canRetry = Boolean(
     onResend && isLatestAssistantMessage && !isGenerating,
   );
@@ -539,10 +538,7 @@ export const ChatThreadMessages = ({
   workspaceId,
 }: ChatThreadMessagesProps) => {
   const { activeOrganizationId } = useChatApproval();
-  const retryableAssistantMessageId = useMemo(
-    () => getRetryableAssistantMessageId(messages),
-    [messages],
-  );
+  const retryableAssistantMessageId = getRetryableAssistantMessageId(messages);
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
 
   return (
@@ -833,16 +829,10 @@ const AssistantTextPart = ({
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
 }) => {
-  // Stable identity so MessageResponse memo can short-circuit when
-  // nothing actually changed; recomputes only when the pairs array
-  // identity changes (i.e. a fresh stream emitted new restorations).
-  const rehypePlugins = useMemo<PluggableList | undefined>(
-    () =>
-      restorationPairs.length > 0
-        ? [[rehypeAnonSpans, restorationPairs]]
-        : undefined,
-    [restorationPairs],
-  );
+  const rehypePlugins: PluggableList | undefined =
+    restorationPairs.length > 0
+      ? [[rehypeAnonSpans, restorationPairs]]
+      : undefined;
   if (rehypePlugins === undefined) {
     return <MessageResponse components={components}>{text}</MessageResponse>;
   }
@@ -878,13 +868,10 @@ const UserMessageText = ({
    */
   restorationPairs: readonly ChatAnonRestoration[];
 }) => {
-  const rehypePlugins = useMemo<PluggableList | undefined>(
-    () =>
-      restorationPairs.length > 0
-        ? [[rehypeAnonSpans, restorationPairs]]
-        : undefined,
-    [restorationPairs],
-  );
+  const rehypePlugins: PluggableList | undefined =
+    restorationPairs.length > 0
+      ? [[rehypeAnonSpans, restorationPairs]]
+      : undefined;
   if (rehypePlugins === undefined) {
     return (
       <MessageResponse components={USER_TEXT_STREAMDOWN_COMPONENTS}>

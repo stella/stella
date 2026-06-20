@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import type { QueryClient } from "@tanstack/react-query";
@@ -162,51 +162,54 @@ function RouteComponent() {
     new Map<string, ReturnType<typeof setTimeout>>(),
   );
 
-  const handleWorkspaceSSEEvent = useCallback(
-    ({ type, data }: { type: string; data: unknown }) => {
-      const workspaceStore = useWorkspaceStore.getState();
-      if (
-        type !== EXTRACTION_PREVIEW_EVENT_TYPE ||
-        !isExtractionPreviewEventData(data)
-      ) {
-        return;
-      }
+  const handleWorkspaceSSEEvent = ({
+    type,
+    data,
+  }: {
+    type: string;
+    data: unknown;
+  }) => {
+    const workspaceStore = useWorkspaceStore.getState();
+    if (
+      type !== EXTRACTION_PREVIEW_EVENT_TYPE ||
+      !isExtractionPreviewEventData(data)
+    ) {
+      return;
+    }
 
-      // Backend sends "clear" right after the entity-invalidation
-      // broadcast, but the invalidation's refetch needs a network
-      // round-trip — clearing the preview synchronously here makes
-      // the cell flip preview → pending skeleton → final value, with
-      // the skeleton visible for the duration of the refetch. Hold
-      // the preview instead: CellResult only reads it while the
-      // field is still pending, so once the refetch lands and the
-      // field finalises, the preview becomes invisible automatically.
-      // The TTL below still cleans up if the stream is abandoned.
-      if (data.status === "clear" || data.answer === null) {
-        return;
-      }
+    // Backend sends "clear" right after the entity-invalidation
+    // broadcast, but the invalidation's refetch needs a network
+    // round-trip — clearing the preview synchronously here makes
+    // the cell flip preview → pending skeleton → final value, with
+    // the skeleton visible for the duration of the refetch. Hold
+    // the preview instead: CellResult only reads it while the
+    // field is still pending, so once the refetch lands and the
+    // field finalises, the preview becomes invisible automatically.
+    // The TTL below still cleans up if the stream is abandoned.
+    if (data.status === "clear" || data.answer === null) {
+      return;
+    }
 
-      const key = extractionPreviewKey(data.entityId, data.propertyId);
-      const previousTimer = previewClearTimersRef.current.get(key);
-      if (previousTimer !== undefined) {
-        clearTimeout(previousTimer);
-      }
+    const key = extractionPreviewKey(data.entityId, data.propertyId);
+    const previousTimer = previewClearTimersRef.current.get(key);
+    if (previousTimer !== undefined) {
+      clearTimeout(previousTimer);
+    }
 
-      workspaceStore.setExtractionPreview({
-        entityId: data.entityId,
-        propertyId: data.propertyId,
-        answer: data.answer,
-      });
+    workspaceStore.setExtractionPreview({
+      entityId: data.entityId,
+      propertyId: data.propertyId,
+      answer: data.answer,
+    });
 
-      const nextTimer = setTimeout(() => {
-        useWorkspaceStore
-          .getState()
-          .clearExtractionPreview(data.entityId, data.propertyId);
-        previewClearTimersRef.current.delete(key);
-      }, EXTRACTION_PREVIEW_CLIENT_TTL_MS);
-      previewClearTimersRef.current.set(key, nextTimer);
-    },
-    [],
-  );
+    const nextTimer = setTimeout(() => {
+      useWorkspaceStore
+        .getState()
+        .clearExtractionPreview(data.entityId, data.propertyId);
+      previewClearTimersRef.current.delete(key);
+    }, EXTRACTION_PREVIEW_CLIENT_TTL_MS);
+    previewClearTimersRef.current.set(key, nextTimer);
+  };
 
   // Subscribe to workspace SSE events for real-time query
   // invalidation (replaces the Rivet sync actor for this workspace).
@@ -262,9 +265,9 @@ function RouteComponent() {
   // can start a new conversation without first dismissing whatever
   // is currently open.
   const openChat = useInspectorStore((s) => s.openChat);
-  const handleOpenChat = useCallback(() => {
+  const handleOpenChat = () => {
     openChat({ workspaceId, contextMatterIds: [workspaceId] });
-  }, [openChat, workspaceId]);
+  };
   useHotkey(HOTKEYS.NEW_CHAT, handleOpenChat);
 
   // The right-side inspector pane (file viewers + chat tabs) is

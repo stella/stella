@@ -18,7 +18,6 @@ import {
   useEffect,
   useEffectEvent,
   useLayoutEffect,
-  useMemo,
   useRef,
   useState,
 } from "react";
@@ -953,20 +952,17 @@ const FileChatOverlayInner = ({
     ? ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS
     : undefined;
 
-  const threadRef = useMemo<ChatThreadRef>(
-    () =>
-      workspaceId === undefined
-        ? {
-            scope: "global",
-            threadId: chatThreadId,
-          }
-        : {
-            scope: "workspace",
-            threadId: chatThreadId,
-            workspaceId,
-          },
-    [chatThreadId, workspaceId],
-  );
+  const threadRef: ChatThreadRef =
+    workspaceId === undefined
+      ? {
+          scope: "global",
+          threadId: chatThreadId,
+        }
+      : {
+          scope: "workspace",
+          threadId: chatThreadId,
+          workspaceId,
+        };
 
   const { data } = useSuspenseQuery(
     chatThreadOptions({

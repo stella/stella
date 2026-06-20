@@ -6,7 +6,7 @@
  * Positions are calculated from actual DOM positions of group headers.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import type { RefObject } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
@@ -48,7 +48,7 @@ export const AlphabetIndex = ({
   const [active, setActive] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const recalc = useCallback(() => {
+  const recalc = () => {
     const sc = scrollContainerRef.current;
     if (!sc || groups.length === 0) {
       return;
@@ -91,7 +91,7 @@ export const AlphabetIndex = ({
     }
 
     setMarkers(result);
-  }, [scrollContainerRef, groups]);
+  };
 
   useEffect(() => {
     const sc = scrollContainerRef.current;
@@ -109,31 +109,28 @@ export const AlphabetIndex = ({
     recalc();
   }, [collapsedGroups, recalc]);
 
-  const scrollTo = useCallback(
-    (groupId: string) => {
-      const sc = scrollContainerRef.current;
-      if (!sc) {
-        return;
-      }
-      const marker = markers.find((m) => m.groupId === groupId);
-      if (!marker) {
-        return;
-      }
-      sc.scrollTo({ top: marker.top, behavior: "instant" });
+  const scrollTo = (groupId: string) => {
+    const sc = scrollContainerRef.current;
+    if (!sc) {
+      return;
+    }
+    const marker = markers.find((m) => m.groupId === groupId);
+    if (!marker) {
+      return;
+    }
+    sc.scrollTo({ top: marker.top, behavior: "instant" });
 
-      // Flash ring on the target group header
-      const target = sc.querySelector<HTMLElement>(
-        `[data-group-id="${CSS.escape(groupId)}"]`,
-      );
-      if (target) {
-        target.classList.add("ring-2", "ring-primary");
-        setTimeout(() => {
-          target.classList.remove("ring-2", "ring-primary");
-        }, 600);
-      }
-    },
-    [scrollContainerRef, markers],
-  );
+    // Flash ring on the target group header
+    const target = sc.querySelector<HTMLElement>(
+      `[data-group-id="${CSS.escape(groupId)}"]`,
+    );
+    if (target) {
+      target.classList.add("ring-2", "ring-primary");
+      setTimeout(() => {
+        target.classList.remove("ring-2", "ring-primary");
+      }, 600);
+    }
+  };
 
   if (markers.length < MIN_GROUPS_FOR_INDEX) {
     return null;

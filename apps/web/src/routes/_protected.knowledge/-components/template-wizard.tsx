@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   AlertTriangleIcon,
@@ -116,72 +116,66 @@ export const ConfigureStep = ({
   const [expandedField, setExpandedField] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
-  const updateField = useCallback(
-    (path: string, patch: Partial<EditableField>) => {
-      setFields((prev) =>
-        prev.map((f) => (f.path === path ? { ...f, ...patch } : f)),
-      );
-    },
-    [],
-  );
+  const updateField = (path: string, patch: Partial<EditableField>) => {
+    setFields((prev) =>
+      prev.map((f) => (f.path === path ? { ...f, ...patch } : f)),
+    );
+  };
 
-  const handleSave = useCallback(
-    async (e: React.SubmitEvent<HTMLFormElement>) => {
-      e.preventDefault();
+  const handleSave = async (e: React.SubmitEvent<HTMLFormElement>) => {
+    e.preventDefault();
 
-      const trimmed = name.trim();
-      if (!trimmed) {
-        return;
-      }
+    const trimmed = name.trim();
+    if (!trimmed) {
+      return;
+    }
 
-      setSaving(true);
+    setSaving(true);
 
-      // Build manifest from editable field state
-      const manifest = {
-        version: 1,
-        fields: fields.map((f) => ({
-          path: f.path,
-          label: f.label || undefined,
-          inputType: f.inputType,
-          options:
-            f.inputType === "select" && f.options.length > 0
-              ? f.options
-              : undefined,
-          required: f.required || undefined,
-        })),
-        conditions,
-      };
+    // Build manifest from editable field state
+    const manifest = {
+      version: 1,
+      fields: fields.map((f) => ({
+        path: f.path,
+        label: f.label || undefined,
+        inputType: f.inputType,
+        options:
+          f.inputType === "select" && f.options.length > 0
+            ? f.options
+            : undefined,
+        required: f.required || undefined,
+      })),
+      conditions,
+    };
 
-      // Send the original DOCX + manifest to the create
-      // endpoint; the server handles embedding and storage.
-      const response = await api.templates.put({
-        file,
-        name: trimmed,
-        manifest: JSON.stringify(manifest),
-      });
+    // Send the original DOCX + manifest to the create
+    // endpoint; the server handles embedding and storage.
+    const response = await api.templates.put({
+      file,
+      name: trimmed,
+      manifest: JSON.stringify(manifest),
+    });
 
-      setSaving(false);
+    setSaving(false);
 
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.saveFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-
+    if (response.error) {
       stellaToast.add({
-        type: "success",
-        title: t("templates.templateSaved"),
+        type: "error",
+        title: t("templates.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
       });
-      onSaved();
-    },
-    [name, fields, conditions, file, t, onSaved],
-  );
+      return;
+    }
+
+    stellaToast.add({
+      type: "success",
+      title: t("templates.templateSaved"),
+    });
+    onSaved();
+  };
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
@@ -300,38 +294,29 @@ const OptionsTagInput = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [draft, setDraft] = useState("");
 
-  const addOption = useCallback(
-    (value: string) => {
-      const trimmed = value.trim();
-      if (!trimmed || options.includes(trimmed)) {
-        return;
-      }
-      onChange([...options, trimmed]);
-    },
-    [options, onChange],
-  );
+  const addOption = (value: string) => {
+    const trimmed = value.trim();
+    if (!trimmed || options.includes(trimmed)) {
+      return;
+    }
+    onChange([...options, trimmed]);
+  };
 
-  const removeOption = useCallback(
-    (index: number) => {
-      onChange(options.filter((_, i) => i !== index));
-    },
-    [options, onChange],
-  );
+  const removeOption = (index: number) => {
+    onChange(options.filter((_, i) => i !== index));
+  };
 
-  const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter" || e.key === ",") {
-        e.preventDefault();
-        addOption(draft);
-        setDraft("");
-        return;
-      }
-      if (e.key === "Backspace" && draft === "" && options.length > 0) {
-        removeOption(options.length - 1);
-      }
-    },
-    [draft, options, addOption, removeOption],
-  );
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "Enter" || e.key === ",") {
+      e.preventDefault();
+      addOption(draft);
+      setDraft("");
+      return;
+    }
+    if (e.key === "Backspace" && draft === "" && options.length > 0) {
+      removeOption(options.length - 1);
+    }
+  };
 
   return (
     // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events -- wrapper extends click target to focus the nested input; the input is natively keyboard-focusable

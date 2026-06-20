@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import {
   useMutation,
@@ -164,7 +164,7 @@ function Members() {
     );
   };
 
-  const filteredMembers = useMemo(() => {
+  const filteredMembers = (() => {
     const filtered = q
       ? data.members.filter(
           (m) =>
@@ -186,9 +186,9 @@ function Members() {
     });
 
     return sorted;
-  }, [data.members, q, sort]);
+  })();
 
-  const filteredInvitations = useMemo(() => {
+  const filteredInvitations = (() => {
     if (!q) {
       return data.invitations;
     }
@@ -196,7 +196,7 @@ function Members() {
     return data.invitations.filter((inv) =>
       inv.email.toLowerCase().includes(query),
     );
-  }, [data.invitations, q]);
+  })();
 
   const removeMember = useRemoveMember();
   const cancelInvitation = useCancelInvitation();

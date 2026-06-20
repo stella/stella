@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -151,57 +151,45 @@ export const ExistingFileOrganizerDialog = ({
     suggestionStatus === "ready" &&
     (rows.length > 0 || selectedDeleteFolders.length > 0);
 
-  const folderByEntityId = useMemo(
-    () => new Map(existingFolders.map((folder) => [folder.entityId, folder])),
-    [existingFolders],
+  const folderByEntityId = new Map(
+    existingFolders.map((folder) => [folder.entityId, folder]),
   );
-  const fileByEntityId = useMemo(
-    () => new Map(files.map((file) => [file.entityId, file])),
-    [files],
-  );
-  const initialRows = useMemo(
-    () =>
-      buildFileNameSuggestions(
-        files.map((file) => ({
-          id: file.entityId,
-          originalName: file.originalName,
-        })),
-      ).map((suggestion) => {
-        const file = fileByEntityId.get(suggestion.id);
-        const parentFolder = file?.parentId
-          ? folderByEntityId.get(file.parentId)
-          : undefined;
-        return {
-          detectedDate: suggestion.detectedDate,
-          documentType: suggestion.documentType,
-          entityId: suggestion.id,
-          folderPath: parentFolder ? parentFolder.path : "",
-          id: suggestion.id,
-          mimeType: file?.mimeType ?? null,
-          parentId: file?.parentId ?? null,
-          originalName: suggestion.originalName,
-          suggestedName: suggestion.originalName,
-        };
-      }),
-    [files, fileByEntityId, folderByEntityId],
-  );
-  const requestKey = useMemo(
-    () =>
-      JSON.stringify({
-        existingFolders: existingFolders.map((folder) => ({
-          id: folder.entityId,
-          name: folder.name,
-          path: folder.path,
-          parentId: folder.parentId,
-        })),
-        files: files.map((file) => ({
-          id: file.entityId,
-          name: file.originalName,
-          parentId: file.parentId,
-        })),
-      }),
-    [existingFolders, files],
-  );
+  const fileByEntityId = new Map(files.map((file) => [file.entityId, file]));
+  const initialRows = buildFileNameSuggestions(
+    files.map((file) => ({
+      id: file.entityId,
+      originalName: file.originalName,
+    })),
+  ).map((suggestion) => {
+    const file = fileByEntityId.get(suggestion.id);
+    const parentFolder = file?.parentId
+      ? folderByEntityId.get(file.parentId)
+      : undefined;
+    return {
+      detectedDate: suggestion.detectedDate,
+      documentType: suggestion.documentType,
+      entityId: suggestion.id,
+      folderPath: parentFolder ? parentFolder.path : "",
+      id: suggestion.id,
+      mimeType: file?.mimeType ?? null,
+      parentId: file?.parentId ?? null,
+      originalName: suggestion.originalName,
+      suggestedName: suggestion.originalName,
+    };
+  });
+  const requestKey = JSON.stringify({
+    existingFolders: existingFolders.map((folder) => ({
+      id: folder.entityId,
+      name: folder.name,
+      path: folder.path,
+      parentId: folder.parentId,
+    })),
+    files: files.map((file) => ({
+      id: file.entityId,
+      name: file.originalName,
+      parentId: file.parentId,
+    })),
+  });
 
   useEffect(() => {
     if (!open || files.length === 0) {
@@ -406,7 +394,7 @@ export const ExistingFileOrganizerDialog = ({
     );
   };
 
-  const summary = useMemo<RowChangeSummary>(() => {
+  const summary = ((): RowChangeSummary => {
     // Buckets are mutually exclusive so the three counts always sum
     // to rows.length. A file that is both moved and renamed is
     // attributed to "moved" because the move is the more impactful
@@ -441,7 +429,7 @@ export const ExistingFileOrganizerDialog = ({
       renamedCount: renamed,
       unchangedCount: unchanged,
     };
-  }, [fileByEntityId, folderByEntityId, rows]);
+  })();
 
   const handleApply = () => {
     const rowsSnapshot = rows;
@@ -893,7 +881,7 @@ const OrganizerTreePreview = ({
   onRenameFolder,
 }: OrganizerTreePreviewProps) => {
   const t = useTranslations();
-  const root = useMemo(() => buildOrganizerTree(rows), [rows]);
+  const root = buildOrganizerTree(rows);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRootOver, setIsRootOver] = useState(false);
 

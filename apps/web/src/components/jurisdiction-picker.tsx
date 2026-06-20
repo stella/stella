@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { CheckIcon, SearchIcon, StarIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
@@ -35,14 +35,11 @@ export const JurisdictionPicker = ({
   const selectedCodes = selected.map(
     (jurisdiction) => jurisdiction.countryCode,
   );
-  const countryOptions = useMemo(() => createCountryOptions(locale), [locale]);
-  const selectedSet = useMemo(() => new Set(selectedCodes), [selectedCodes]);
-  const suggestedSet = useMemo(
-    () => new Set(suggestedCountryCodes),
-    [suggestedCountryCodes],
-  );
+  const countryOptions = createCountryOptions(locale);
+  const selectedSet = new Set(selectedCodes);
+  const suggestedSet = new Set(suggestedCountryCodes);
 
-  const filteredCountries = useMemo(() => {
+  const filteredCountries = (() => {
     const normalizedQuery = query.trim().toLowerCase();
     const sorted = [...countryOptions].sort((a, b) => {
       const aSuggested = suggestedSet.has(a.code);
@@ -64,7 +61,7 @@ export const JurisdictionPicker = ({
         country.name.toLowerCase().includes(normalizedQuery) ||
         country.code.toLowerCase().includes(normalizedQuery),
     );
-  }, [countryOptions, locale, query, suggestedSet]);
+  })();
 
   const toggleCountry = (countryCode: CountryCode) => {
     if (selectedSet.has(countryCode)) {

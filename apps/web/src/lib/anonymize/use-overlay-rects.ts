@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
@@ -127,23 +127,21 @@ export const useOverlayRects = (
     scale,
   ]);
 
-  return useMemo(() => {
-    if (!normalizedRects || scale === undefined) {
-      return null;
-    }
+  if (!normalizedRects || scale === undefined) {
+    return null;
+  }
 
-    const scaled = new Map<number, OverlayRect[]>();
-    for (const [id, rects] of normalizedRects) {
-      scaled.set(
-        id,
-        rects.map((r) => ({
-          left: r.left * scale,
-          top: r.top * scale,
-          width: r.width * scale,
-          height: r.height * scale,
-        })),
-      );
-    }
-    return scaled;
-  }, [normalizedRects, scale]);
+  const scaled = new Map<number, OverlayRect[]>();
+  for (const [id, rects] of normalizedRects) {
+    scaled.set(
+      id,
+      rects.map((r) => ({
+        left: r.left * scale,
+        top: r.top * scale,
+        width: r.width * scale,
+        height: r.height * scale,
+      })),
+    );
+  }
+  return scaled;
 };

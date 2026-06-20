@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -193,10 +193,7 @@ export const ChatThreadPage = ({
     handleUsageLimit(error);
   }, [error, handleUsageLimit]);
 
-  const sentMessageHistoryHtml = useMemo(
-    () => getUserMessageHtmlHistory(messages),
-    [messages],
-  );
+  const sentMessageHistoryHtml = getUserMessageHtmlHistory(messages);
 
   // Seed brand-new (empty) threads from the persisted web-search
   // preference so the user doesn't have to flip the toggle every time

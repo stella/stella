@@ -691,6 +691,8 @@ const ReadOnlyDocxDocumentViewer = ({
     scaleOffset,
     maxAutoZoom: 0.85,
   });
+  // Stable ref callback so React doesn't detach/re-attach the fit-zoom
+  // ResizeObserver every render.
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],

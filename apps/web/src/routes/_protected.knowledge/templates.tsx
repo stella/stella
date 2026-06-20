@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import { useEffect, useReducer, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -157,11 +157,11 @@ function RouteComponent() {
       ? categoriesData.categories
       : [];
 
-  const handleCategorySelect = useCallback((id: string | null) => {
+  const handleCategorySelect = (id: string | null) => {
     setSelectedCategoryId(id);
-  }, []);
+  };
 
-  const invalidateTemplates = useCallback(() => {
+  const invalidateTemplates = () => {
     queryClient
       .invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
@@ -169,9 +169,9 @@ function RouteComponent() {
       .catch(() => {
         /* fire-and-forget */
       });
-  }, [queryClient, activeOrganizationId]);
+  };
 
-  const invalidateCategories = useCallback(() => {
+  const invalidateCategories = () => {
     queryClient
       .invalidateQueries({
         queryKey: knowledgeKeys.templateCategories.all(activeOrganizationId),
@@ -179,7 +179,7 @@ function RouteComponent() {
       .catch(() => {
         /* fire-and-forget */
       });
-  }, [queryClient, activeOrganizationId]);
+  };
 
   if (view.kind === "configure") {
     return (
@@ -527,17 +527,17 @@ const TemplateDetail = ({
     }
   }, [rename.status]);
 
-  const startRename = useCallback(() => {
+  const startRename = () => {
     renameCancelledRef.current = false;
     renameDispatch({ type: "start", displayName: rename.displayName });
-  }, [rename.displayName]);
+  };
 
-  const cancelRename = useCallback(() => {
+  const cancelRename = () => {
     renameCancelledRef.current = true;
     renameDispatch({ type: "cancel" });
-  }, []);
+  };
 
-  const saveRename = useCallback(async () => {
+  const saveRename = async () => {
     if (renameCancelledRef.current) {
       return;
     }
@@ -578,30 +578,27 @@ const TemplateDetail = ({
       type: "success",
       title: t("templates.templateRenamed"),
     });
-  }, [rename, template.id, t, onRenamed]);
+  };
 
-  const handleRenameKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === "Enter") {
-        e.preventDefault();
-        void saveRename();
-        return;
-      }
-      if (e.key === "Escape") {
-        cancelRename();
-      }
-    },
-    [saveRename, cancelRename],
-  );
+  const handleRenameKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      void saveRename();
+      return;
+    }
+    if (e.key === "Escape") {
+      cancelRename();
+    }
+  };
 
-  const handleTestFill = useCallback(() => {
+  const handleTestFill = () => {
     if (state !== "ready" || !detail) {
       return;
     }
     onFill(detail);
-  }, [state, detail, onFill]);
+  };
 
-  const startEditFields = useCallback(() => {
+  const startEditFields = () => {
     if (state !== "ready" || !detail) {
       return;
     }
@@ -622,20 +619,17 @@ const TemplateDetail = ({
       type: "start",
       fields: buildEditableFields(resolved),
     });
-  }, [state, detail]);
+  };
 
-  const cancelEditFields = useCallback(() => {
+  const cancelEditFields = () => {
     fieldEditDispatch({ type: "cancel" });
-  }, []);
+  };
 
-  const updateField = useCallback(
-    (path: string, patch: Partial<EditableField>) => {
-      fieldEditDispatch({ type: "updateField", path, patch });
-    },
-    [],
-  );
+  const updateField = (path: string, patch: Partial<EditableField>) => {
+    fieldEditDispatch({ type: "updateField", path, patch });
+  };
 
-  const saveFields = useCallback(async () => {
+  const saveFields = async () => {
     if (state !== "ready" || !detail) {
       return;
     }
@@ -696,15 +690,7 @@ const TemplateDetail = ({
       type: "success",
       title: t("templates.fieldsUpdated"),
     });
-  }, [
-    state,
-    detail,
-    fieldEdit,
-    template.id,
-    t,
-    queryClient,
-    activeOrganizationId,
-  ]);
+  };
 
   const fields = detail?.manifest?.fields ?? [];
   const fieldCount = detail?.manifest?.fields.length ?? template.fieldCount;

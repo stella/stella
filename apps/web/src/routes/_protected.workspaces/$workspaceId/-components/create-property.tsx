@@ -1,4 +1,4 @@
-import { Suspense, useCallback, useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
@@ -350,10 +350,7 @@ const PropertyComposerBody = ({
       ? (editingProperty.content.fallback ?? null)
       : null;
 
-  const fileProperties = useMemo(
-    () => properties.filter((p) => p.content.type === "file"),
-    [properties],
-  );
+  const fileProperties = properties.filter((p) => p.content.type === "file");
   const fileProperty = fileProperties.at(0);
   const extractionFileProperty =
     extractionContext?.filePropertyId === null ||
@@ -399,9 +396,8 @@ const PropertyComposerBody = ({
 
   // Snapshot of the original conditions per dependency. Save preserves
   // these so editing name/type/prompt doesn't silently strip conditions
-  // configured via the conditions sub-modal. useMemo keeps the map
-  // stable across renders for the handleSubmit dep array.
-  const initialDependencyConditions = useMemo(() => {
+  // configured via the conditions sub-modal.
+  const initialDependencyConditions = (() => {
     const map = new Map<string, PropertyDependency["condition"]>();
     if (editingTool?.type === "ai-model") {
       for (const dep of editingTool.dependencies) {
@@ -409,7 +405,7 @@ const PropertyComposerBody = ({
       }
     }
     return map;
-  }, [editingTool]);
+  })();
 
   const [contentType, setContentType] =
     useState<CreatableContentType>(initialContentType);
@@ -438,33 +434,25 @@ const PropertyComposerBody = ({
   // was renamed/removed, or if the user switched away from a select
   // content type. The backend rejects mismatched fallbacks; sanitising
   // here keeps the UI honest without round-tripping through setState.
-  const effectiveFallback = useMemo(
-    () =>
-      fallback !== null &&
-      needsOptions &&
-      options.some((o) => o.value === fallback)
-        ? fallback
-        : null,
-    [fallback, needsOptions, options],
-  );
+  const effectiveFallback =
+    fallback !== null &&
+    needsOptions &&
+    options.some((o) => o.value === fallback)
+      ? fallback
+      : null;
 
   // Keep the auto-included file chips in sync if the underlying
   // properties list changes (e.g., a file property is created from
   // another tab while the dialog is open). Derived rather than mirrored
   // so the source-of-truth state never drifts out of valid options.
-  const validFileIds = useMemo(
-    () => new Set(fileProperties.map((p) => p.id)),
-    [fileProperties],
-  );
-  const effectiveSelectedFileIds = useMemo(
-    () => selectedFileIds.filter((id) => validFileIds.has(id)),
-    [selectedFileIds, validFileIds],
+  const validFileIds = new Set(fileProperties.map((p) => p.id));
+  const effectiveSelectedFileIds = selectedFileIds.filter((id) =>
+    validFileIds.has(id),
   );
 
-  const dependencyIds = useMemo(
-    () => [...new Set([...effectiveSelectedFileIds, ...textareaMentions])],
-    [effectiveSelectedFileIds, textareaMentions],
-  );
+  const dependencyIds = [
+    ...new Set([...effectiveSelectedFileIds, ...textareaMentions]),
+  ];
 
   const availableFileToAdd = fileProperties.filter(
     (p) => !effectiveSelectedFileIds.includes(p.id),
@@ -487,7 +475,7 @@ const PropertyComposerBody = ({
     handleBlur: () => undefined,
   };
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = () => {
     if (!canSubmit) {
       return;
     }
@@ -590,29 +578,9 @@ const PropertyComposerBody = ({
         },
       },
     );
-  }, [
-    canSubmit,
-    contentType,
-    createProperty,
-    dependencyIds,
-    editingProperty,
-    editingTool,
-    effectiveFallback,
-    extractionContext,
-    initialDependencyConditions,
-    isEditMode,
-    onClose,
-    onCreated,
-    options,
-    prompt,
-    startWorkflow,
-    t,
-    trimmedName,
-    updateProperty,
-    workspaceId,
-  ]);
+  };
 
-  const handleAutoPrompt = useCallback(() => {
+  const handleAutoPrompt = () => {
     if (trimmedName.length === 0 || suggestPrompt.isPending) {
       return;
     }
@@ -652,17 +620,7 @@ const PropertyComposerBody = ({
         },
       },
     );
-  }, [
-    contentType,
-    editor,
-    needsOptions,
-    options,
-    promptText,
-    suggestPrompt,
-    t,
-    trimmedName,
-    workspaceId,
-  ]);
+  };
 
   const pushOption = (option: WorkspacePropertyOption) =>
     setOptions((prev) => [...prev, option]);

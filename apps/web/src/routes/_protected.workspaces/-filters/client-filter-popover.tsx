@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { CheckIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -24,7 +24,7 @@ export const ClientFilterPopover = ({
   const t = useTranslations();
   const [search, setSearch] = useState("");
 
-  const clients = useMemo(() => {
+  const clients = (() => {
     const map = new Map<string, { id: string; displayName: string }>();
     for (const w of workspaces) {
       if (w.client) {
@@ -34,7 +34,7 @@ export const ClientFilterPopover = ({
     return [...map.values()].sort((a, b) =>
       a.displayName.localeCompare(b.displayName),
     );
-  }, [workspaces]);
+  })();
 
   const q = search.trim().toLowerCase();
   const filtered = q

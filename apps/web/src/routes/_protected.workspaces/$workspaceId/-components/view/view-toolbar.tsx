@@ -1,5 +1,5 @@
 import type { ComponentType } from "react";
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -473,11 +473,11 @@ const FilesystemOrganizerAction = ({
   // useSuspenseQuery) keeps a cache miss from suspending the toolbar
   // chrome — the action button just stays disabled until the data resolves.
   const { data: foldersData } = useQuery(workspaceFoldersOptions(workspaceId));
-  const allFolders = useMemo(() => foldersData ?? [], [foldersData]);
+  const allFolders = foldersData ?? [];
   const { data: filesData } = useQuery(workspaceFilesOptions(workspaceId));
-  const allFiles = useMemo(() => filesData ?? [], [filesData]);
+  const allFiles = filesData ?? [];
 
-  const existingFolders = useMemo(() => {
+  const existingFolders = (() => {
     const folderById = new Map(
       allFolders.map((folder) => [folder.entityId, folder]),
     );
@@ -507,29 +507,22 @@ const FilesystemOrganizerAction = ({
       path: resolvePath(folder.entityId, new Set()),
       parentId: folder.parentId,
     }));
-  }, [allFolders]);
-  const selectedFiles = useMemo(
-    () => allFiles.filter((file) => selectedIds.has(file.entityId)),
-    [allFiles, selectedIds],
+  })();
+  const selectedFiles = allFiles.filter((file) =>
+    selectedIds.has(file.entityId),
   );
   // Fall back to all files when the persisted selection no longer
   // matches anything in the workspace; otherwise the organizer would
   // be unusably empty after the user navigates away from the folder
   // where the selection was made.
-  const organizerSourceFiles = useMemo(
-    () => (selectedFiles.length > 0 ? selectedFiles : allFiles),
-    [allFiles, selectedFiles],
-  );
-  const organizerFiles = useMemo(
-    () =>
-      organizerSourceFiles.map((file) => ({
-        entityId: file.entityId,
-        originalName: file.fileName,
-        parentId: file.parentId,
-        mimeType: file.mimeType,
-      })),
-    [organizerSourceFiles],
-  );
+  const organizerSourceFiles =
+    selectedFiles.length > 0 ? selectedFiles : allFiles;
+  const organizerFiles = organizerSourceFiles.map((file) => ({
+    entityId: file.entityId,
+    originalName: file.fileName,
+    parentId: file.parentId,
+    mimeType: file.mimeType,
+  }));
 
   return (
     <>

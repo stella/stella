@@ -5,7 +5,7 @@
  * open (acquire lock + presigned URL) → checkpoint (auto-save) → finalize / cancel.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
@@ -308,9 +308,9 @@ export const useEditSession = ({
     debouncedCheckpoint(buffer);
   };
 
-  const markDirty = useCallback(() => {
+  const markDirty = () => {
     setIsDirty(true);
-  }, []);
+  };
 
   const finalize = async () => {
     const session = sessionRef.current;

@@ -162,6 +162,7 @@ export const ChatMentionList = ({
   if (latestClientRect) {
     lastClientRectRef.current = latestClientRect;
   }
+  // Stable virtual-anchor identity for the Base UI positioner (Floating UI).
   const anchor = useMemo(
     () => ({
       getBoundingClientRect: () => {

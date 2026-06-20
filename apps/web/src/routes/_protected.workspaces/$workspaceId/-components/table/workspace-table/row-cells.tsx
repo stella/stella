@@ -201,6 +201,8 @@ export const DraggableRow = ({
   onToggleExpandedCell,
 }: DraggableRowProps) => {
   const rowRef = useRef<HTMLDivElement>(null);
+  // Stable ref callback so React doesn't re-run TanStack Virtual's
+  // measureElement on every render.
   const setRowRef = useCallback(
     (element: HTMLDivElement | null) => {
       rowRef.current = element;

@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
 
@@ -55,14 +53,11 @@ export const TimesheetWeekView = ({
 
   const matterNameMap = useMatterNameMap(workspaceId);
 
-  const days = useMemo(
-    () => getDaysInRange(weekStart, weekEnd),
-    [weekStart, weekEnd],
-  );
+  const days = getDaysInRange(weekStart, weekEnd);
 
   // Grid: matterId -> { day -> { minutes } }
   type DayData = { minutes: number };
-  const grid = useMemo(() => {
+  const grid = (() => {
     const map = new Map<string, Map<string, DayData>>();
     for (const entry of entries) {
       let dayMap = map.get(entry.matterId);
@@ -77,22 +72,17 @@ export const TimesheetWeekView = ({
       dayMap.set(entry.dateWorked, current);
     }
     return map;
-  }, [entries]);
+  })();
 
   // There is no FX conversion, so amounts in different currencies are never
   // summed under one symbol.
-  const matterAmountsByCurrency = useMemo(
-    () => summarizeBillableAmountByMatterAndCurrency(entries),
-    [entries],
-  );
-  const weekAmountsByCurrency = useMemo(
-    () => summarizeBillableAmountByCurrency(entries),
-    [entries],
-  );
+  const matterAmountsByCurrency =
+    summarizeBillableAmountByMatterAndCurrency(entries);
+  const weekAmountsByCurrency = summarizeBillableAmountByCurrency(entries);
 
   const matterIds = [...grid.keys()];
 
-  const columnTotals = useMemo(() => {
+  const columnTotals = (() => {
     const totals = new Map<string, DayData>();
     for (const day of days) {
       let minutes = 0;
@@ -105,23 +95,23 @@ export const TimesheetWeekView = ({
       totals.set(day, { minutes });
     }
     return totals;
-  }, [grid, days]);
+  })();
 
-  const weekTotals = useMemo(() => {
+  const weekTotals = (() => {
     let minutes = 0;
     for (const data of columnTotals.values()) {
       minutes += data.minutes;
     }
     return { minutes };
-  }, [columnTotals]);
+  })();
 
-  const today = useMemo(() => {
+  const today = (() => {
     const d = new Date();
     const y = d.getFullYear();
     const m = String(d.getMonth() + 1).padStart(2, "0");
     const day = String(d.getDate()).padStart(2, "0");
     return `${y}-${m}-${day}`;
-  }, []);
+  })();
 
   return (
     <div className="overflow-x-auto">

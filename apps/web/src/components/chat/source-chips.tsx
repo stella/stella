@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -83,10 +83,8 @@ export const SourceChips = ({
   parts,
   workspaceId,
 }: SourceChipsProps) => {
-  const { uniqueExternalSources, uniqueSources } = useMemo(
-    () => collectSourceChipEntries(parts),
-    [parts],
-  );
+  const { uniqueExternalSources, uniqueSources } =
+    collectSourceChipEntries(parts);
   const hasMcpExternalSources = uniqueExternalSources.some(
     (source) => source.connectorSlug !== undefined,
   );
@@ -94,21 +92,17 @@ export const SourceChips = ({
     ...mcpConnectorsOptions(activeOrganizationId),
     enabled: hasMcpExternalSources,
   });
-  const uniqueExternalSourcesWithIcons = useMemo(
-    () =>
-      uniqueExternalSources.map((source) => {
-        if (source.connectorSlug === undefined) {
-          return source;
-        }
+  const uniqueExternalSourcesWithIcons = uniqueExternalSources.map((source) => {
+    if (source.connectorSlug === undefined) {
+      return source;
+    }
 
-        const iconHref = findMcpConnectorIconHref({
-          connectorSlug: source.connectorSlug,
-          connectors: mcpConnectorsData?.connectors ?? [],
-        });
-        return iconHref === undefined ? source : { ...source, iconHref };
-      }),
-    [mcpConnectorsData?.connectors, uniqueExternalSources],
-  );
+    const iconHref = findMcpConnectorIconHref({
+      connectorSlug: source.connectorSlug,
+      connectors: mcpConnectorsData?.connectors ?? [],
+    });
+    return iconHref === undefined ? source : { ...source, iconHref };
+  });
   const registerSources = useExternalSourceStore(
     (state) => state.registerSources,
   );

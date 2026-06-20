@@ -3,14 +3,7 @@
  * and renders the Folio DocxEditor.
  */
 
-import {
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties, ReactNode, RefObject } from "react";
 
 import { keepPreviousData, useQuery } from "@tanstack/react-query";
@@ -219,15 +212,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   const anonymizationTermsQuery = useQuery(
     anonymizationTermsOptions(workspaceId),
   );
-  const workspaceAnonymizationTerms = useMemo<AnonymizationTerm[]>(
-    () =>
-      anonymizationTermsQuery.data?.entries.map((entry) => ({
-        canonical: entry.canonical,
-        label: entry.label,
-        variants: entry.variants,
-      })) ?? [],
-    [anonymizationTermsQuery.data],
-  );
+  const workspaceAnonymizationTerms: AnonymizationTerm[] =
+    anonymizationTermsQuery.data?.entries.map((entry) => ({
+      canonical: entry.canonical,
+      label: entry.label,
+      variants: entry.variants,
+    })) ?? [];
   // Detected-entity highlights — runs the wasm anonymization
   // pipeline against the live doc text and exposes each detected
   // entity as a Folio decoration term. Combined with workspace
@@ -377,13 +367,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: isAnonymizationActive,
   });
-  const excludedCanonicalsSet = useMemo(() => {
+  const excludedCanonicalsSet = (() => {
     const set = new Set<string>();
     for (const entry of allowlistQuery.data?.entries ?? []) {
       set.add(entry.canonical.toLocaleLowerCase());
     }
     return set;
-  }, [allowlistQuery.data]);
+  })();
   // Hold the latest list in a ref so the chat-anon polling effect
   // sees fresh exclusions without re-installing its heartbeat on
   // every keystroke / mutation.
@@ -395,7 +385,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     // having to wait up to 2s for the next heartbeat tick.
     runDetectionRef.current?.();
   }, [excludedCanonicalsSet]);
-  const mergedAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
+  const mergedAnonymizationTerms: AnonymizationTerm[] = (() => {
     if (!isAnonymizationActive) {
       return [];
     }
@@ -407,12 +397,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
               !excludedCanonicalsSet.has(term.canonical.toLocaleLowerCase()),
           );
     return [...filteredWorkspace, ...detectedAnonymizationTerms];
-  }, [
-    isAnonymizationActive,
-    workspaceAnonymizationTerms,
-    detectedAnonymizationTerms,
-    excludedCanonicalsSet,
-  ]);
+  })();
   // Dispatch the live term list into the plugin. We can't simply
   // read matches right after `dispatch` because DOCX content
   // loads asynchronously: the first dispatch hits an empty doc
@@ -446,31 +431,30 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // doc edit, async DOCX load); we mirror it into the matches
   // store so the inspector facet's counter and "matching
   // workspace terms" list stay in sync.
-  const handleAnonymizationMatchesChange = useCallback(
-    (matches: readonly { canonical: string; label: string }[]) => {
-      const { publish } = useAnonymizationMatchesStore.getState();
-      if (!isAnonymizationActive) {
-        return;
+  const handleAnonymizationMatchesChange = (
+    matches: readonly { canonical: string; label: string }[],
+  ) => {
+    const { publish } = useAnonymizationMatchesStore.getState();
+    if (!isAnonymizationActive) {
+      return;
+    }
+    const countByCanonical = new Map<string, number>();
+    const labelByCanonical = new Map<string, string>();
+    for (const match of matches) {
+      countByCanonical.set(
+        match.canonical,
+        (countByCanonical.get(match.canonical) ?? 0) + 1,
+      );
+      if (!labelByCanonical.has(match.canonical)) {
+        labelByCanonical.set(match.canonical, match.label);
       }
-      const countByCanonical = new Map<string, number>();
-      const labelByCanonical = new Map<string, string>();
-      for (const match of matches) {
-        countByCanonical.set(
-          match.canonical,
-          (countByCanonical.get(match.canonical) ?? 0) + 1,
-        );
-        if (!labelByCanonical.has(match.canonical)) {
-          labelByCanonical.set(match.canonical, match.label);
-        }
-      }
-      publish(fieldId, {
-        totalMatches: matches.length,
-        countByCanonical,
-        labelByCanonical,
-      });
-    },
-    [fieldId, isAnonymizationActive],
-  );
+    }
+    publish(fieldId, {
+      totalMatches: matches.length,
+      countByCanonical,
+      labelByCanonical,
+    });
+  };
   useEffect(() => {
     const { clear } = useAnonymizationMatchesStore.getState();
     if (!isAnonymizationActive) {
@@ -487,19 +471,20 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // transaction, so we just have to length-gate and publish.
   // The cleanup clears the store so a second tab opening this
   // facet doesn't see a stale prefill from the previous file.
-  const handleSelectionTextChange = useCallback(
-    (selection: { from: number; to: number; text: string }) => {
-      if (selection.from === selection.to) {
-        return;
-      }
-      const single = selection.text.replace(/\s+/gu, " ").trim();
-      if (single.length < 2 || single.length > 200) {
-        return;
-      }
-      useDocumentTextSelectionStore.getState().publish(fieldId, single);
-    },
-    [fieldId],
-  );
+  const handleSelectionTextChange = (selection: {
+    from: number;
+    to: number;
+    text: string;
+  }) => {
+    if (selection.from === selection.to) {
+      return;
+    }
+    const single = selection.text.replace(/\s+/gu, " ").trim();
+    if (single.length < 2 || single.length > 200) {
+      return;
+    }
+    useDocumentTextSelectionStore.getState().publish(fieldId, single);
+  };
   useEffect(
     () => () => {
       useDocumentTextSelectionStore.getState().clear(fieldId);
@@ -517,14 +502,11 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   //   stay quiet.
   // - Doc-sourced selections aren't echoed back to the editor —
   //   that would re-scroll on its own click.
-  const handleAnonymizationTermClick = useCallback(
-    (canonical: string, label: string) => {
-      useAnonymizationSelectionStore
-        .getState()
-        .select(canonical, label, "doc", fieldId);
-    },
-    [fieldId],
-  );
+  const handleAnonymizationTermClick = (canonical: string, label: string) => {
+    useAnonymizationSelectionStore
+      .getState()
+      .select(canonical, label, "doc", fieldId);
+  };
   const sidebarSelectedCanonical = useAnonymizationSelectionStore((s) =>
     s.source === "sidebar" && s.fieldId === fieldId ? s.canonical : null,
   );
@@ -564,6 +546,8 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     scaleOffset,
     maxAutoZoom: 0.85,
   });
+  // Stable ref callback so React doesn't detach/re-attach the fit-zoom
+  // ResizeObserver every render.
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],
@@ -660,7 +644,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     collaborationSession?.saveCheckpoint ?? saveDesktopCheckpoint;
   const finalizeActiveSession =
     collaborationSession?.finalize ?? finalizeDesktopSession;
-  const cancelActiveSession = useCallback(async () => {
+  const cancelActiveSession = async () => {
     if (collaborationSession !== null) {
       const cancelled = await collaborationSession.cancel();
       if (!cancelled) {
@@ -678,13 +662,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     await cancelDesktopSession();
-  }, [
-    cancelCollaboration,
-    cancelDesktopSession,
-    collaborationSession,
-    onClose,
-    t,
-  ]);
+  };
 
   useEffect(() => {
     if (optimisticPreviewRef.current?.fieldId === fieldId) {
@@ -699,14 +677,14 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     setCompatibilityState({ targetKey: editTargetKey, value: null });
   }, [editTargetKey, fieldId]);
 
-  const reportUnsupportedEditAttempt = useCallback(() => {
+  const reportUnsupportedEditAttempt = () => {
     stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
       description: t("folio.unsupportedDocxEditDescription"),
     });
     onClose();
-  }, [onClose, t]);
+  };
 
-  const requestEditMode = useCallback(async () => {
+  const requestEditMode = async () => {
     if (isCollaborativeEditing) {
       return true;
     }
@@ -751,17 +729,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     return opened;
-  }, [
-    compatibility?.canSafelyEdit,
-    collaborationEnabled,
-    fieldId,
-    isCollaborativeEditing,
-    open,
-    previewFile,
-    requestCollaboration,
-    reportUnsupportedEditAttempt,
-    state.status,
-  ]);
+  };
 
   useEffect(() => {
     if (!pendingEditRequestRef.current) {
@@ -907,7 +875,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     return () => cancelAnimationFrame(frame);
   }, [isUnlocked]);
 
-  const clearQueuedChangeCheckpoint = useCallback(() => {
+  const clearQueuedChangeCheckpoint = () => {
     if (changeCheckpointTimerRef.current !== null) {
       clearTimeout(changeCheckpointTimerRef.current);
       changeCheckpointTimerRef.current = null;
@@ -916,9 +884,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       window.cancelIdleCallback(changeCheckpointIdleCallbackRef.current);
       changeCheckpointIdleCallbackRef.current = null;
     }
-  }, []);
+  };
 
-  const saveChangeCheckpoint = useCallback(() => {
+  const saveChangeCheckpoint = () => {
     const ref = editorRef.current;
     if (!ref) {
       return;
@@ -934,13 +902,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       }
       setAutosaveStatus("pending");
     })();
-  }, [saveActiveCheckpoint]);
+  };
 
   // Awaitable variant of `saveChangeCheckpoint` for callers that
   // need to wait for the round-trip before navigating (e.g. the
   // sidepeek → full view handoff). Cancels the queued debounced
   // checkpoint so we don't fire it twice.
-  const flushPendingChanges = useCallback(async () => {
+  const flushPendingChanges = async () => {
     const ref = editorRef.current;
     if (!ref) {
       return;
@@ -954,7 +922,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
     const saved = await saveActiveCheckpoint(buffer);
     setAutosaveStatus(saved ? "synced" : "pending");
-  }, [clearQueuedChangeCheckpoint, saveActiveCheckpoint]);
+  };
 
   // Cmd+S / Ctrl+S checkpoints only while the document is actively editable.
   useEffect(() => {
@@ -996,7 +964,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     [clearQueuedChangeCheckpoint],
   );
 
-  const scheduleChangeCheckpointSave = useCallback(() => {
+  const scheduleChangeCheckpointSave = () => {
     changeCheckpointTimerRef.current = setTimeout(() => {
       changeCheckpointTimerRef.current = null;
       changeCheckpointIdleCallbackRef.current = window.requestIdleCallback(
@@ -1007,9 +975,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         { timeout: 2000 },
       );
     }, CHANGE_CHECKPOINT_DELAY);
-  }, [saveChangeCheckpoint]);
+  };
 
-  const handleChange = useCallback(() => {
+  const handleChange = () => {
     if (!isUnlocked) {
       return;
     }
@@ -1019,14 +987,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     markDirty();
     clearQueuedChangeCheckpoint();
     scheduleChangeCheckpointSave();
-  }, [
-    clearQueuedChangeCheckpoint,
-    isUnlocked,
-    markDirty,
-    scheduleChangeCheckpointSave,
-  ]);
+  };
 
-  const handleFinalize = useCallback(async () => {
+  const handleFinalize = async () => {
     // Save the final version before finalizing
     clearQueuedChangeCheckpoint();
 
@@ -1136,29 +1099,16 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
 
     await finalizeActiveSession();
-  }, [
-    cancelActiveSession,
-    clearQueuedChangeCheckpoint,
-    collaborationSession,
-    fieldId,
-    finalizeActiveSession,
-    isCollaborativeEditing,
-    isDirty,
-    onClose,
-    onSaved,
-    previewFile,
-    saveActiveCheckpoint,
-    t,
-  ]);
+  };
 
-  const handleCancel = useCallback(async () => {
+  const handleCancel = async () => {
     clearQueuedChangeCheckpoint();
     preservedLoadedBufferRef.current = null;
     hasSessionChangesRef.current = false;
     await cancelActiveSession();
-  }, [cancelActiveSession, clearQueuedChangeCheckpoint]);
+  };
 
-  const handleUnlock = useCallback(() => {
+  const handleUnlock = () => {
     if (!canUnlock) {
       onBlockedUnlock?.();
       return;
@@ -1191,34 +1141,23 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       errorToastShownRef.current = false;
       void open();
     }
-  }, [
-    canUnlock,
-    compatibility?.canSafelyEdit,
-    collaborationEnabled,
-    fieldId,
-    onBlockedUnlock,
-    open,
-    previewFile,
-    requestCollaboration,
-    reportUnsupportedEditAttempt,
-    state.status,
-  ]);
+  };
 
-  const handleLockedEditAttempt = useCallback(() => {
+  const handleLockedEditAttempt = () => {
     if (isUnlocked) {
       return;
     }
     onReadonlyEditAttempt?.();
     handleUnlock();
-  }, [handleUnlock, isUnlocked, onReadonlyEditAttempt]);
+  };
 
-  const handleToggleLock = useCallback(() => {
+  const handleToggleLock = () => {
     if (!isUnlocked) {
       handleUnlock();
       return;
     }
     void handleFinalize();
-  }, [handleFinalize, handleUnlock, isUnlocked]);
+  };
 
   useEffect(() => {
     const actionsMap = actionsMapRef?.current;
@@ -1575,12 +1514,12 @@ const useDocxBrowserCollaboration = ({
   }, [initiallyRequested, targetKey]);
   const collaborationSession =
     collaborationState.status === "ready" ? collaborationState.session : null;
-  const cancelCollaboration = useCallback(() => {
+  const cancelCollaboration = () => {
     setRequestState({ requested: false, targetKey });
-  }, [targetKey]);
-  const requestCollaboration = useCallback(() => {
+  };
+  const requestCollaboration = () => {
     setRequestState({ requested: true, targetKey });
-  }, [targetKey]);
+  };
 
   return {
     activeCollaboration:

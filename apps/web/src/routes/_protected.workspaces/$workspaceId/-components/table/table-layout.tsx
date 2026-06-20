@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo } from "react";
+import { lazy, Suspense, useEffect } from "react";
 
 import {
   useSuspenseInfiniteQuery,
@@ -104,14 +104,10 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const updateView = useUpdateView(workspaceId);
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const fieldIds = useMemo(
-    () =>
-      visibleEntityFieldIds({
-        hiddenProperties: view.layout.hiddenProperties,
-        properties,
-      }),
-    [properties, view.layout.hiddenProperties],
-  );
+  const fieldIds = visibleEntityFieldIds({
+    hiddenProperties: view.layout.hiddenProperties,
+    properties,
+  });
 
   useEffect(() => {
     openIfAIUnavailable();
@@ -130,21 +126,13 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       }),
     );
 
-  const treeData = useMemo(
-    () =>
-      toTableEntities(
-        data.pages
-          .flatMap((window) => window.entities)
-          .filter(
-            (entity) => entity.kind !== "folder" && entity.kind !== "task",
-          ),
-      ),
-    [data.pages],
+  const treeData = toTableEntities(
+    data.pages
+      .flatMap((window) => window.entities)
+      .filter((entity) => entity.kind !== "folder" && entity.kind !== "task"),
   );
-  const justificationEntityIdChunks = useMemo(
-    () =>
-      data.pages.map((page) => page.entities.map((entity) => entity.entityId)),
-    [data.pages],
+  const justificationEntityIdChunks = data.pages.map((page) =>
+    page.entities.map((entity) => entity.entityId),
   );
   useSyncJustificationChunks({
     workspaceId,
@@ -174,7 +162,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     setSelectedEntities(view.id, result);
   }, [rowSelection, treeData, view.id, setSelectedEntities]);
 
-  const columns = useMemo(() => {
+  const columns = ((): TableColumnDef[] => {
     const columnDefs: TableColumnDef[] = [
       {
         id: selectColId,
@@ -249,7 +237,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     });
 
     return columnDefs;
-  }, [properties, t, view.layout.filters]);
+  })();
 
   const table = useTable({
     features: workspaceTableFeatures,

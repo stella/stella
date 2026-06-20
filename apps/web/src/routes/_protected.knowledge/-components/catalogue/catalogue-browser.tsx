@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   useQuery,
@@ -199,7 +199,7 @@ export const CatalogueBrowser = ({
 
   const entries = data.entries;
 
-  const filtered = useMemo(() => {
+  const filtered = (() => {
     const normalised = query.trim().toLowerCase();
     const subset = entries.filter((entry) => {
       if (filter !== "all" && entry.kind !== filter) {
@@ -227,9 +227,9 @@ export const CatalogueBrowser = ({
       }
       return left.displayName.localeCompare(right.displayName);
     });
-  }, [entries, filter, jurisdictionFilter, query]);
+  })();
 
-  const allJurisdictionCodes = useMemo(() => {
+  const allJurisdictionCodes = (() => {
     const set = new Set<string>();
     for (const entry of entries) {
       for (const code of entry.jurisdictions) {
@@ -237,7 +237,7 @@ export const CatalogueBrowser = ({
       }
     }
     return [...set].sort();
-  }, [entries]);
+  })();
 
   const onRowFocus = (entry: CatalogueEntry) => {
     const tabId = toolDetailTabId(entry.kind, entry.slug);

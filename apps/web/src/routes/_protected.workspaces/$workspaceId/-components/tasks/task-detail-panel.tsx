@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
@@ -57,7 +57,7 @@ export const TaskDetailPanel = ({
     return found?.type === "task" && found.isNew;
   });
   const clearNewFlag = useInspectorStore((s) => s.clearTaskNewFlag);
-  const handleClose = useCallback(() => closeTab(taskId), [closeTab, taskId]);
+  const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
   const userId = useRouteContext({
     from: "/_protected",

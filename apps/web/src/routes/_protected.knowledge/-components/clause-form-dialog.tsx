@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -118,7 +118,7 @@ const ClauseFormDialogBody = ({
   }));
   const [saving, setSaving] = useState(false);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     if (!form.title.trim()) {
       return;
     }
@@ -200,7 +200,7 @@ const ClauseFormDialogBody = ({
 
     onOpenChange(false);
     onSaved();
-  }, [form, isEdit, t, onOpenChange, onSaved]);
+  };
 
   return (
     <DialogPopup className="sm:max-w-lg">

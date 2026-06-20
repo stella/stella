@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -593,7 +593,7 @@ export function AppSidebar(props: AppSidebarProps) {
     handleCreateWorkspace();
   });
 
-  const pinned = useMemo(() => {
+  const pinned = (() => {
     if (!workspaces) {
       return [];
     }
@@ -603,9 +603,9 @@ export function AppSidebar(props: AppSidebarProps) {
     return pinnedOrder
       .map((id) => wsMap.get(id))
       .filter((ws) => ws !== undefined);
-  }, [workspaces, pinnedOrder]);
+  })();
 
-  const recents = useMemo(() => {
+  const recents = (() => {
     if (!workspaces) {
       return [];
     }
@@ -617,7 +617,7 @@ export function AppSidebar(props: AppSidebarProps) {
           new Date(a.lastActivityAt).getTime(),
       )
       .slice(0, RECENTS_LIMIT);
-  }, [workspaces, pinnedIds]);
+  })();
 
   // Hold-to-reveal nav badges (Control on Mac, Alt on Win/Linux)
   const isNavKeyHeld = useKeyHold(NAV_KEY);

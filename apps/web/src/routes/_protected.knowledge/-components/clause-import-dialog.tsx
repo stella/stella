@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -42,44 +42,41 @@ export const ClauseImportDialog = ({
   const [importing, setImporting] = useState(false);
   const [result, setResult] = useState<ImportResult | null>(null);
 
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const selected = e.target.files?.item(0);
-      if (!selected) {
-        return;
-      }
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const selected = e.target.files?.item(0);
+    if (!selected) {
+      return;
+    }
 
-      setFile(selected);
-      setResult(null);
+    setFile(selected);
+    setResult(null);
 
-      // Preview: parse to count clauses
-      selected
-        .text()
-        .then((text) => {
-          const parsed: unknown = JSON.parse(text);
-          if (
-            typeof parsed !== "object" ||
-            parsed === null ||
-            !("clauses" in parsed)
-          ) {
-            setPreviewCount(0);
-            return;
-          }
-          const { clauses } = parsed;
-          setPreviewCount(Array.isArray(clauses) ? clauses.length : 0);
+    // Preview: parse to count clauses
+    selected
+      .text()
+      .then((text) => {
+        const parsed: unknown = JSON.parse(text);
+        if (
+          typeof parsed !== "object" ||
+          parsed === null ||
+          !("clauses" in parsed)
+        ) {
+          setPreviewCount(0);
           return;
-        })
-        .catch(() => {
-          setPreviewCount(null);
-        });
+        }
+        const { clauses } = parsed;
+        setPreviewCount(Array.isArray(clauses) ? clauses.length : 0);
+        return;
+      })
+      .catch(() => {
+        setPreviewCount(null);
+      });
 
-      // Reset so the same file can be re-selected
-      e.target.value = "";
-    },
-    [],
-  );
+    // Reset so the same file can be re-selected
+    e.target.value = "";
+  };
 
-  const handleImport = useCallback(async () => {
+  const handleImport = async () => {
     if (!file) {
       return;
     }
@@ -120,19 +117,16 @@ export const ClauseImportDialog = ({
     });
 
     onImported();
-  }, [file, t, onImported]);
+  };
 
-  const handleClose = useCallback(
-    (isOpen: boolean) => {
-      if (!isOpen) {
-        setFile(null);
-        setPreviewCount(null);
-        setResult(null);
-      }
-      onOpenChange(isOpen);
-    },
-    [onOpenChange],
-  );
+  const handleClose = (isOpen: boolean) => {
+    if (!isOpen) {
+      setFile(null);
+      setPreviewCount(null);
+      setResult(null);
+    }
+    onOpenChange(isOpen);
+  };
 
   return (
     <Dialog onOpenChange={handleClose} open={open}>

@@ -265,13 +265,10 @@ export const SearchDialog = ({
   const navigate = useNavigate();
   const user = useAuthenticatedUser();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
-  const searchRecentsScope = useMemo(
-    (): SearchRecentsScope => ({
-      organizationId: user.activeOrganizationId,
-      userId: user.id,
-    }),
-    [user.activeOrganizationId, user.id],
-  );
+  const searchRecentsScope: SearchRecentsScope = {
+    organizationId: user.activeOrganizationId,
+    userId: user.id,
+  };
   const [resultsElement, setResultsElement] = useState<HTMLDivElement | null>(
     null,
   );
@@ -341,10 +338,7 @@ export const SearchDialog = ({
     }),
   );
 
-  const allHits = useMemo(
-    () => data?.pages.flatMap((page) => page.hits) ?? [],
-    [data?.pages],
-  );
+  const allHits = data?.pages.flatMap((page) => page.hits) ?? [];
   const getHitVirtualKey = (index: number) => allHits.at(index)?.id ?? index;
 
   // Counts and facets are computed only on the first page (see backend);

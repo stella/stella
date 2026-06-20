@@ -1,5 +1,5 @@
 import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { ToolUIPart } from "ai";
 import {
@@ -132,23 +132,14 @@ export const AskUserCard = ({
   restorationPairs,
 }: AskUserCardProps) => {
   const t = useTranslations();
-  // Stable empty fallback so useMemo deps don't churn when the
-  // caller doesn't pass any pairs.
   const pairs: readonly ChatAnonRestoration[] =
     restorationPairs ?? EMPTY_RESTORATION_PAIRS;
-  const analysisComponents = useMemo(
-    () => ({
-      a: createAnalysisAnchor(workspaceId),
-      "stll-anon": renderAnalysisAnonymizedSpan,
-    }),
-    [workspaceId],
-  );
-  // Stable rehype-plugins identity so Streamdown's internal memo
-  // can short-circuit when nothing actually changed.
-  const analysisRehypePlugins = useMemo<PluggableList | undefined>(
-    () => (pairs.length > 0 ? [[rehypeAnonSpans, pairs]] : undefined),
-    [pairs],
-  );
+  const analysisComponents = {
+    a: createAnalysisAnchor(workspaceId),
+    "stll-anon": renderAnalysisAnonymizedSpan,
+  };
+  const analysisRehypePlugins: PluggableList | undefined =
+    pairs.length > 0 ? [[rehypeAnonSpans, pairs]] : undefined;
   const answeredOutput = part.state === "output-available" ? part.output : null;
   const isLoading = part.state === "input-streaming";
 
@@ -203,22 +194,16 @@ export const AskUserCard = ({
   const isAnswered = answeredOutput !== null || submitted;
   const isDone = isAnswered && !isEditing;
 
-  const setAnswer = useCallback(
-    (idx: number, value: string) =>
-      setAnswers((prev) => ({ ...prev, [idx]: value })),
-    [],
-  );
+  const setAnswer = (idx: number, value: string) =>
+    setAnswers((prev) => ({ ...prev, [idx]: value }));
 
-  const toggleCustom = useCallback(
-    (idx: number) =>
-      setCustomMode((prev) => ({
-        ...prev,
-        [idx]: !prev[idx],
-      })),
-    [],
-  );
+  const toggleCustom = (idx: number) =>
+    setCustomMode((prev) => ({
+      ...prev,
+      [idx]: !prev[idx],
+    }));
 
-  const buildOutput = useCallback((): AskUserOutput | null => {
+  const buildOutput = (): AskUserOutput | null => {
     if (!input) {
       return null;
     }
@@ -228,9 +213,9 @@ export const AskUserCard = ({
         answer: answers[i] ?? "",
       })),
     };
-  }, [input, answers]);
+  };
 
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = () => {
     if (!input || submitted) {
       return;
     }
@@ -240,9 +225,9 @@ export const AskUserCard = ({
     }
     setSubmitted(true);
     onSubmit(part.toolCallId, output);
-  }, [input, submitted, buildOutput, onSubmit, part.toolCallId]);
+  };
 
-  const handleStartEdit = useCallback(() => {
+  const handleStartEdit = () => {
     if (!input || !answeredOutput || !canRerun) {
       return;
     }
@@ -277,14 +262,14 @@ export const AskUserCard = ({
     }
     setCustomMode(nextCustom);
     setIsEditing(true);
-  }, [input, answeredOutput, canRerun]);
+  };
 
-  const handleCancelEdit = useCallback(() => {
+  const handleCancelEdit = () => {
     setIsEditing(false);
     setCustomMode({});
-  }, []);
+  };
 
-  const handleRerun = useCallback(() => {
+  const handleRerun = () => {
     if (!input || !onEditAndRerun) {
       return;
     }
@@ -294,7 +279,7 @@ export const AskUserCard = ({
     }
     setIsEditing(false);
     void onEditAndRerun(part.toolCallId, output);
-  }, [input, onEditAndRerun, buildOutput, part.toolCallId]);
+  };
 
   if (!input) {
     return (

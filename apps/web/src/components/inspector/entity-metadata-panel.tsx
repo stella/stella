@@ -1,6 +1,5 @@
 import type { PropsWithChildren } from "react";
 import {
-  useCallback,
   useEffect,
   useOptimistic,
   useRef,
@@ -186,7 +185,7 @@ const EntityMetadataContent = ({
       : null,
   );
 
-  const refreshEntityFields = useCallback(async () => {
+  const refreshEntityFields = async () => {
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
@@ -195,7 +194,7 @@ const EntityMetadataContent = ({
         queryKey: propertiesOptions(workspaceId).queryKey,
       }),
     ]);
-  }, [queryClient, workspaceId]);
+  };
 
   useEffect(() => {
     if (isWorkflowRunning) {

@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -634,11 +634,8 @@ export const DecisionText = ({
 }: DecisionTextProps) => {
   const t = useTranslations();
 
-  const ast = useMemo(
-    () => parseDocumentAst(decision.documentAst),
-    [decision.documentAst],
-  );
-  const visibleBlocks = useMemo(() => getVisibleBlocks(ast), [ast]);
+  const ast = parseDocumentAst(decision.documentAst);
+  const visibleBlocks = getVisibleBlocks(ast);
   const articleRef = useRef<HTMLElement>(null);
 
   const caseNumberBlock = ast?.blocks.find(
@@ -646,7 +643,7 @@ export const DecisionText = ({
   );
   const displayRef = caseNumberBlock?.plainText ?? decision.caseNumber;
 
-  const searchPieces = useMemo<SearchPiece[]>(() => {
+  const searchPieces: SearchPiece[] = (() => {
     // If the render falls through to the empty-state message
     // (no visible blocks AND no fulltext) nothing gets drawn on
     // the page, so indexing the reference + supplement would
@@ -724,22 +721,12 @@ export const DecisionText = ({
     }
 
     return pieces;
-  }, [
-    decision.court,
-    decision.fulltext,
-    decision.metadata,
-    displayRef,
-    visibleBlocks,
-  ]);
+  })();
 
-  const searchResults = useMemo(
-    () =>
-      buildSearchResults({
-        pieces: searchPieces,
-        query: searchQuery,
-      }),
-    [searchPieces, searchQuery],
-  );
+  const searchResults = buildSearchResults({
+    pieces: searchPieces,
+    query: searchQuery,
+  });
 
   useEffect(() => {
     onMatchCountChange?.(searchResults.matchCount);

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { LucideIcon } from "lucide-react";
@@ -485,10 +485,7 @@ export const useCellMetadataFlags = ({
     (state) => state.clearOverride,
   );
 
-  const metadataManualFlags = useMemo(
-    () => normalizeManualFlags(metadata?.manualFlags ?? []),
-    [metadata?.manualFlags],
-  );
+  const metadataManualFlags = normalizeManualFlags(metadata?.manualFlags ?? []);
   const serverLocked = metadata?.locked === true;
 
   const currentManualFlags = override?.manualFlags ?? metadataManualFlags;
@@ -508,26 +505,19 @@ export const useCellMetadataFlags = ({
     }
   }, [override, metadataManualFlags, serverLocked, clearOverride, key]);
 
-  const activeFlags = useMemo(
-    () =>
-      currentManualFlags.flatMap((flagId) => {
-        const flag = cellFlagsById.get(flagId);
-        return flag === undefined ? [] : [flag];
-      }),
-    [currentManualFlags],
-  );
+  const activeFlags = currentManualFlags.flatMap((flagId) => {
+    const flag = cellFlagsById.get(flagId);
+    return flag === undefined ? [] : [flag];
+  });
   const hasVerifiedFlag = currentManualFlags.includes(VERIFIED_FLAG_ID);
-  const tintFlag = useMemo(
-    () =>
-      TINT_PRIORITY.flatMap((flagId) => {
-        if (!currentManualFlags.includes(flagId)) {
-          return [];
-        }
-        const flag = cellFlagsById.get(flagId);
-        return flag === undefined ? [] : [flag];
-      }).at(0) ?? null,
-    [currentManualFlags],
-  );
+  const tintFlag =
+    TINT_PRIORITY.flatMap((flagId) => {
+      if (!currentManualFlags.includes(flagId)) {
+        return [];
+      }
+      const flag = cellFlagsById.get(flagId);
+      return flag === undefined ? [] : [flag];
+    }).at(0) ?? null;
 
   // Refs let the debounced flush read the latest server snapshot
   // without re-creating the callback on every prop change.

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import {
@@ -121,7 +121,7 @@ function MyTodosPage() {
     workspacesOptions(activeOrganizationId),
   );
 
-  const filtered = useMemo(() => {
+  const filtered = (() => {
     if (!tasks) {
       return [];
     }
@@ -134,9 +134,9 @@ function MyTodosPage() {
       return valid;
     }
     return valid.filter((task) => task.status === filter);
-  }, [tasks, filter]);
+  })();
 
-  const groups = useMemo(() => groupByWorkspace(filtered), [filtered]);
+  const groups = groupByWorkspace(filtered);
 
   const handleCreateTask = async (wsId: string) => {
     const response = await api.tasks({ workspaceId: wsId }).put({

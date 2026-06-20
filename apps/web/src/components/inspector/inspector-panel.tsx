@@ -1,11 +1,4 @@
-import {
-  Suspense,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { Suspense, useEffect, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useMatch, useNavigate } from "@tanstack/react-router";
@@ -105,23 +98,20 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     ...workspaceOptions(workspaceId ?? ""),
     enabled: workspaceId !== undefined,
   });
-  const matterOrigin = useMemo(
-    () =>
-      workspaceId !== undefined && workspace?.name
-        ? {
-            id: workspaceId,
-            name: workspace.name,
-            color: workspace.color ?? null,
-            onClick: () => {
-              void navigate({
-                to: "/workspaces/$workspaceId",
-                params: { workspaceId },
-              });
-            },
-          }
-        : null,
-    [workspace?.name, workspace?.color, navigate, workspaceId],
-  );
+  const matterOrigin =
+    workspaceId !== undefined && workspace?.name
+      ? {
+          id: workspaceId,
+          name: workspace.name,
+          color: workspace.color ?? null,
+          onClick: () => {
+            void navigate({
+              to: "/workspaces/$workspaceId",
+              params: { workspaceId },
+            });
+          },
+        }
+      : null;
   // Resolve the matter's icon colour once so every tab header can
   // tint with the same `color-mix(... 2%)` formula the matter
   // breadcrumb uses — the inspector reads as a continuation of
@@ -193,32 +183,27 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     startRename,
   } = useFileTabRename({ tabs });
 
-  const handleCloseTab = useCallback(
-    (tabId: string) => {
-      const action = docxActionsRef.current.get(tabId);
-      if (editingDocxTabId === tabId && action) {
-        void action.cancel().finally(() => {
-          docxActionsRef.current.delete(tabId);
-          setEditingDocxTabId((current) =>
-            current === tabId ? null : current,
-          );
-          clearAnonymization(tabId);
-          closeTab(tabId);
-        });
-        return;
-      }
-
-      if (editingDocxTabId === tabId) {
+  const handleCloseTab = (tabId: string) => {
+    const action = docxActionsRef.current.get(tabId);
+    if (editingDocxTabId === tabId && action) {
+      void action.cancel().finally(() => {
         docxActionsRef.current.delete(tabId);
-        setEditingDocxTabId(null);
-      }
-      clearAnonymization(tabId);
-      closeTab(tabId);
-    },
-    [closeTab, docxActionsRef.current, editingDocxTabId, setEditingDocxTabId],
-  );
+        setEditingDocxTabId((current) => (current === tabId ? null : current));
+        clearAnonymization(tabId);
+        closeTab(tabId);
+      });
+      return;
+    }
 
-  const flashMinimizeButton = useCallback((tabId: string) => {
+    if (editingDocxTabId === tabId) {
+      docxActionsRef.current.delete(tabId);
+      setEditingDocxTabId(null);
+    }
+    clearAnonymization(tabId);
+    closeTab(tabId);
+  };
+
+  const flashMinimizeButton = (tabId: string) => {
     if (flashMinimizeTimerRef.current !== null) {
       clearTimeout(flashMinimizeTimerRef.current);
     }
@@ -227,7 +212,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       setFlashingMinimizeTabId(null);
       flashMinimizeTimerRef.current = null;
     }, 2200);
-  }, []);
+  };
 
   useEffect(
     () => () => {
@@ -238,7 +223,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     [],
   );
 
-  const handleOpenFullView = useCallback(async () => {
+  const handleOpenFullView = async () => {
     if (!activeTab || activeTab.type !== "pdf") {
       return;
     }
@@ -304,43 +289,30 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         .setFileMetadataLane(activeTab.id, previousMetadataLane);
       throw error;
     }
-  }, [
-    activeTab,
-    docxActionsRef.current,
-    editingDocxTabId,
-    navigate,
-    setEditingDocxTabId,
-    setPdfViewerState,
-  ]);
+  };
 
-  const handleMinimizeFromFullView = useCallback(
-    (tab: FileTab) => {
-      // Drop back to side-peek persona and return to the screen
-      // where the file was maximized from. Full-view internal file
-      // switches use replace navigation, so browser back lands on
-      // the original table/overview/filesystem context.
-      useInspectorStore.getState().setFileMetadataLane(tab.id, "closed");
-      if (hasInAppHistoryEntry()) {
-        window.history.back();
-        return;
-      }
-      void navigate({
-        to: "/workspaces/$workspaceId/$viewId",
-        params: { workspaceId: tab.workspaceId, viewId: "all" },
-      });
-    },
-    [navigate],
-  );
+  const handleMinimizeFromFullView = (tab: FileTab) => {
+    // Drop back to side-peek persona and return to the screen
+    // where the file was maximized from. Full-view internal file
+    // switches use replace navigation, so browser back lands on
+    // the original table/overview/filesystem context.
+    useInspectorStore.getState().setFileMetadataLane(tab.id, "closed");
+    if (hasInAppHistoryEntry()) {
+      window.history.back();
+      return;
+    }
+    void navigate({
+      to: "/workspaces/$workspaceId/$viewId",
+      params: { workspaceId: tab.workspaceId, viewId: "all" },
+    });
+  };
 
   // Keep at most MAX_MOUNTED_PDFS viewers mounted to limit memory.
   // The active tab is always mounted; the rest are the most recently
   // viewed ones. Tabs beyond the limit unmount (and re-load on switch).
   const MAX_MOUNTED_PDFS = 3;
 
-  const pdfTabs = useMemo(
-    () => tabs.filter((tab): tab is FileTab => tab.type === "pdf"),
-    [tabs],
-  );
+  const pdfTabs = tabs.filter((tab): tab is FileTab => tab.type === "pdf");
 
   // Ref-backed recency log: "most recent first", capped at
   // MAX_MOUNTED_PDFS. The ref is written inside `useEffect` (commit
@@ -349,7 +321,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // committed recency plus the current activation/open tabs.
   const pdfRecencyRef = useRef<string[]>([]);
 
-  const mountedPdfIds = useMemo(() => {
+  const mountedPdfIds = (() => {
     const openIds = new Set(pdfTabs.map((tab) => tab.id));
     let next = pdfRecencyRef.current.filter((id) => openIds.has(id));
     if (activeId && activeTab?.type === "pdf") {
@@ -367,7 +339,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
       set.add(activeId);
     }
     return set;
-  }, [activeId, activeTab?.type, pdfTabs]);
+  })();
 
   // Commit the latest recency snapshot after the render commits so
   // discarded renders (Strict Mode, Concurrent) don't pollute the

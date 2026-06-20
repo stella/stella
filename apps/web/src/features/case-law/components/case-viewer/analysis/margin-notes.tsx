@@ -38,6 +38,7 @@ export const MarginNotes = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const heights = useRef(new Map<string, number>());
 
+  // Added/removed from scroll + resize listeners by reference.
   const recalc = useCallback(() => {
     const sc = scrollContainerRef.current;
     const wrapper = containerRef.current;
@@ -70,19 +71,16 @@ export const MarginNotes = ({
     setPositioned(result);
   }, [scrollContainerRef, items]);
 
-  const measureRef = useCallback(
-    (el: HTMLElement | null, id: string) => {
-      if (!el) {
-        return;
-      }
-      const h = el.offsetHeight;
-      if (heights.current.get(id) !== h) {
-        heights.current.set(id, h);
-        requestAnimationFrame(recalc);
-      }
-    },
-    [recalc],
-  );
+  const measureRef = (el: HTMLElement | null, id: string) => {
+    if (!el) {
+      return;
+    }
+    const h = el.offsetHeight;
+    if (heights.current.get(id) !== h) {
+      heights.current.set(id, h);
+      requestAnimationFrame(recalc);
+    }
+  };
 
   useEffect(() => {
     const sc = scrollContainerRef.current;

@@ -1,4 +1,4 @@
-import { useDeferredValue, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDownIcon, LayersIcon, SearchIcon } from "lucide-react";
@@ -76,39 +76,32 @@ export const ChatMatterPicker = ({
   const workspaces = data?.workspaces;
 
   const personalLabel = t("workspaces.parties.personalLabel");
-  const matters = useMemo<Matter[]>(() => {
-    if (!workspaces) {
-      return [];
-    }
-    return workspaces.map((w) => ({
-      id: w.id,
-      name: w.name,
-      color: w.color,
-      clientKey: w.client?.id ?? NO_CLIENT_KEY,
-      clientLabel: w.client?.displayName ?? personalLabel,
-    }));
-  }, [workspaces, personalLabel]);
+  const matters: Matter[] = workspaces
+    ? workspaces.map((w) => ({
+        id: w.id,
+        name: w.name,
+        color: w.color,
+        clientKey: w.client?.id ?? NO_CLIENT_KEY,
+        clientLabel: w.client?.displayName ?? personalLabel,
+      }))
+    : [];
 
-  const matterById = useMemo(() => {
+  const matterById = (() => {
     const map = new Map<string, Matter>();
     for (const m of matters) {
       map.set(m.id, m);
     }
     return map;
-  }, [matters]);
+  })();
 
   // Resolve selected ids → records, dropping any the org no longer
   // recognises (matter deleted, permissions changed) so the trigger
   // never shows a phantom name.
-  const selected = useMemo(
-    () =>
-      matterIds
-        .map((id) => matterById.get(id))
-        .filter((m): m is Matter => m !== undefined),
-    [matterIds, matterById],
-  );
+  const selected = matterIds
+    .map((id) => matterById.get(id))
+    .filter((m): m is Matter => m !== undefined);
 
-  const filtered = useMemo(() => {
+  const filtered = (() => {
     const q = deferredSearch.trim().toLowerCase();
     if (q.length === 0) {
       return matters;
@@ -118,9 +111,9 @@ export const ChatMatterPicker = ({
         m.name.toLowerCase().includes(q) ||
         m.clientLabel.toLowerCase().includes(q),
     );
-  }, [matters, deferredSearch]);
+  })();
 
-  const mattersByClient = useMemo(() => {
+  const mattersByClient = (() => {
     const map = new Map<string, Matter[]>();
     for (const m of matters) {
       const clientMatters = map.get(m.clientKey);
@@ -131,9 +124,9 @@ export const ChatMatterPicker = ({
       }
     }
     return map;
-  }, [matters]);
+  })();
 
-  const groups = useMemo<Group[]>(() => {
+  const groups: Group[] = (() => {
     const map = new Map<string, Group>();
     for (const m of filtered) {
       let group = map.get(m.clientKey);
@@ -159,10 +152,10 @@ export const ChatMatterPicker = ({
       }
       return a.label.localeCompare(b.label);
     });
-  }, [filtered, mattersByClient]);
+  })();
 
   const allSelected = matters.length > 0 && selected.length === matters.length;
-  const selectedIdSet = useMemo(() => new Set(matterIds), [matterIds]);
+  const selectedIdSet = new Set(matterIds);
   const triggerLabel = (() => {
     if (selected.length === 0) {
       return t("inspector.matterPicker.noMatter");

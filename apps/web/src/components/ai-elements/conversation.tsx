@@ -1,6 +1,5 @@
 "use client";
 
-import { useCallback } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { ArrowDownIcon, DownloadIcon } from "lucide-react";
@@ -163,7 +162,7 @@ export const ConversationDownload = ({
   children,
   ...props
 }: ConversationDownloadProps) => {
-  const handleDownload = useCallback(() => {
+  const handleDownload = () => {
     const markdown = messagesToMarkdown(messages, formatMessage);
     const blob = new Blob([markdown], { type: "text/markdown" });
     const url = URL.createObjectURL(blob);
@@ -174,7 +173,7 @@ export const ConversationDownload = ({
     link.click();
     link.remove();
     URL.revokeObjectURL(url);
-  }, [messages, filename, formatMessage]);
+  };
 
   return (
     <Button

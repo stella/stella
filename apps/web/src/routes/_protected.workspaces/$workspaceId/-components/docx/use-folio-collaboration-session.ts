@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { HocuspocusProvider } from "@hocuspocus/provider";
 import type * as HocuspocusProviderModule from "@hocuspocus/provider";
@@ -431,5 +431,5 @@ export const useFolioCollaborationSession = ({
     workspaceId,
   ]);
 
-  return useMemo(() => state, [state]);
+  return state;
 };

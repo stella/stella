@@ -76,12 +76,12 @@ export function MarkdownFolioEditor({
   const [seed, setSeed] = useState(markdown);
   const [rawText, setRawText] = useState(markdown);
 
-  const doc = useMemo<Document>(() => fromMarkdown(seed), [seed]);
+  const doc: Document = fromMarkdown(seed);
   // The editor's normalized form of the current seed. Folio fires an onChange
   // right after it parses/lays out the document; comparing against this baseline
   // keeps that load-time change (and any no-op edit) from emitting upward, so the
   // host doesn't see the file as dirty the moment it opens.
-  const baseline = useMemo(() => toMarkdown(doc, CLEAN_MARKDOWN), [doc]);
+  const baseline = toMarkdown(doc, CLEAN_MARKDOWN);
   const lastEmittedRef = useRef(baseline);
   useEffect(() => {
     lastEmittedRef.current = baseline;
@@ -129,6 +129,8 @@ export function MarkdownFolioEditor({
     maxAutoZoom: 1,
     fitWidth: PAGE_FIT_WIDTH,
   });
+  // Stable ref callback so React doesn't detach/re-attach the fit-zoom
+  // ResizeObserver every render.
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],

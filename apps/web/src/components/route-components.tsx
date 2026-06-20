@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useEffectEvent,
-  useState,
-  useTransition,
-} from "react";
+import { useEffect, useEffectEvent, useState, useTransition } from "react";
 
 import { CancelledError, useQueryClient } from "@tanstack/react-query";
 import { Navigate } from "@tanstack/react-router";
@@ -102,7 +96,7 @@ export const DefaultErrorComponent = ({
     isUnauthorizedError(error) || isMemberError(error);
   const networkError = isNetworkError(error);
 
-  const retryErroredQueries = useCallback(() => {
+  const retryErroredQueries = () => {
     startTransition(async () => {
       await queryClient
         .refetchQueries({
@@ -121,7 +115,7 @@ export const DefaultErrorComponent = ({
       // The counter resets when a non-network error occurs
       // or when recovery succeeds (component unmounts).
     });
-  }, [queryClient, analytics, reset]);
+  };
 
   const { isAutoRetrying, retriesExhausted: retriesAtLimit } = useNetworkRetry({
     networkError,

@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import {
   useMutation,
   useQueryClient,
@@ -735,15 +733,12 @@ export const useCreateFileEntities = (workspaceId: string) => {
     },
   });
 
-  const handleCreateFileEntities = useCallback(
-    (input: CreateFileEntitiesInput) => {
-      if (isPending || !hasUploadInputItems(input)) {
-        return;
-      }
-      mutate(input);
-    },
-    [isPending, mutate],
-  );
+  const handleCreateFileEntities = (input: CreateFileEntitiesInput) => {
+    if (isPending || !hasUploadInputItems(input)) {
+      return;
+    }
+    mutate(input);
+  };
 
   return [isPending, handleCreateFileEntities] as const;
 };

@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -60,7 +60,7 @@ export const DocumentAiSourceBar = ({
     s.justifications.find((j) => j.fieldId === fieldId),
   );
 
-  const slots = useMemo(() => {
+  const slots = (() => {
     if (!justification || !entity || !properties) {
       return [];
     }
@@ -73,7 +73,7 @@ export const DocumentAiSourceBar = ({
         return { fieldId: f.id, property: prop };
       })
       .filter((s) => s !== null);
-  }, [entity, justification, properties]);
+  })();
 
   const currentIdx = slots.findIndex((s) => s.fieldId === fieldId);
   const prevSlot = currentIdx > 0 ? slots[currentIdx - 1] : null;
@@ -100,25 +100,17 @@ export const DocumentAiSourceBar = ({
 
   const justificationId = justification?.id;
   const boundingBoxes = justification?.boundingBoxes;
-  const activeDocumentJustificationContent = useMemo(
-    () =>
-      justification
-        ? {
-            ...justification.content,
-            blocks: justification.content.blocks.filter(
-              (block) => block.fileFieldId === activeTab.id,
-            ),
-          }
-        : null,
-    [activeTab.id, justification],
-  );
-  const citations = useMemo(
-    () =>
-      activeDocumentJustificationContent
-        ? [...iterateJustificationCitations(activeDocumentJustificationContent)]
-        : [],
-    [activeDocumentJustificationContent],
-  );
+  const activeDocumentJustificationContent = justification
+    ? {
+        ...justification.content,
+        blocks: justification.content.blocks.filter(
+          (block) => block.fileFieldId === activeTab.id,
+        ),
+      }
+    : null;
+  const citations = activeDocumentJustificationContent
+    ? [...iterateJustificationCitations(activeDocumentJustificationContent)]
+    : [];
   const hasBoundingBoxCitations = citations.some(
     (citation) => citation.kind === "pdf-bates",
   );

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { panic } from "better-result";
 import { AlertTriangleIcon, EyeIcon, PlusIcon, TrashIcon } from "lucide-react";
@@ -616,121 +616,108 @@ export const TemplateForm = ({
   valuesRef.current = values;
 
   /** Resolve a ValidationError to a translated string. */
-  const resolveError = useCallback(
-    (err: ValidationError | undefined): string | undefined => {
-      if (!err) {
+  const resolveError = (
+    err: ValidationError | undefined,
+  ): string | undefined => {
+    if (!err) {
+      return undefined;
+    }
+    switch (err.kind) {
+      case "required":
+        return t("templates.validationRequired");
+      case "minLength":
+        return t("templates.validationMinLength", {
+          min: String(err.min),
+        });
+      case "maxLength":
+        return t("templates.validationMaxLength", {
+          max: String(err.max),
+        });
+      case "numberMin":
+        return t("templates.validationNumberMin", {
+          min: String(err.min),
+        });
+      case "numberMax":
+        return t("templates.validationNumberMax", {
+          max: String(err.max),
+        });
+      case "pattern":
+        return t("templates.validationPattern");
+      default:
         return undefined;
-      }
-      switch (err.kind) {
-        case "required":
-          return t("templates.validationRequired");
-        case "minLength":
-          return t("templates.validationMinLength", {
-            min: String(err.min),
-          });
-        case "maxLength":
-          return t("templates.validationMaxLength", {
-            max: String(err.max),
-          });
-        case "numberMin":
-          return t("templates.validationNumberMin", {
-            min: String(err.min),
-          });
-        case "numberMax":
-          return t("templates.validationNumberMax", {
-            max: String(err.max),
-          });
-        case "pattern":
-          return t("templates.validationPattern");
-        default:
-          return undefined;
-      }
-    },
-    [t],
-  );
+    }
+  };
 
   /** Find the ResolvedField definition for a given
    *  path (handles array sub-fields). */
-  const findFieldDef = useCallback(
-    (path: string): ResolvedField | undefined => {
-      for (const f of fields) {
-        if (f.path === path) {
-          return f;
-        }
-        if (f.kind === "array" && f.itemFields) {
-          for (const sub of f.itemFields) {
-            // Array item paths: "arr[0].sub"
-            if (
-              path.startsWith(`${f.path}[`) &&
-              path.endsWith(`.${sub.path}`)
-            ) {
-              return sub;
-            }
+  const findFieldDef = (path: string): ResolvedField | undefined => {
+    for (const f of fields) {
+      if (f.path === path) {
+        return f;
+      }
+      if (f.kind === "array" && f.itemFields) {
+        for (const sub of f.itemFields) {
+          // Array item paths: "arr[0].sub"
+          if (path.startsWith(`${f.path}[`) && path.endsWith(`.${sub.path}`)) {
+            return sub;
           }
         }
       }
-      return undefined;
-    },
-    [fields],
-  );
+    }
+    return undefined;
+  };
 
-  const handleChange = useCallback((path: string, value: unknown) => {
+  const handleChange = (path: string, value: unknown) => {
     valuesRef.current = { ...valuesRef.current, [path]: value };
     setValues((prev) => ({ ...prev, [path]: value }));
-  }, []);
+  };
 
   /** Re-validate on change when the field was already
    *  touched. Uses a ref so the touched check is never
    *  stale between blur and the next render. */
-  const handleChangeWithValidation = useCallback(
-    (path: string, value: unknown) => {
-      handleChange(path, value);
+  const handleChangeWithValidation = (path: string, value: unknown) => {
+    handleChange(path, value);
 
-      // Only re-validate if already touched
-      if (!touchedRef.current[path]) {
-        return;
-      }
-      const def = findFieldDef(path);
-      if (def) {
-        const msg = resolveError(validateField(def, value));
-        setErrors((prev) => {
-          if (prev[path] === msg) {
-            return prev;
-          }
-          return { ...prev, [path]: msg };
-        });
-      }
-    },
-    [handleChange, findFieldDef, resolveError],
-  );
-
-  const handleBlur = useCallback(
-    (path: string) => {
-      setTouched((prev) => {
-        if (prev[path]) {
+    // Only re-validate if already touched
+    if (!touchedRef.current[path]) {
+      return;
+    }
+    const def = findFieldDef(path);
+    if (def) {
+      const msg = resolveError(validateField(def, value));
+      setErrors((prev) => {
+        if (prev[path] === msg) {
           return prev;
         }
-        return { ...prev, [path]: true };
+        return { ...prev, [path]: msg };
       });
-      touchedRef.current[path] = true;
-      const def = findFieldDef(path);
-      if (def) {
-        const msg = resolveError(validateField(def, valuesRef.current[path]));
-        setErrors((prev) => {
-          if (prev[path] === msg) {
-            return prev;
-          }
-          return { ...prev, [path]: msg };
-        });
+    }
+  };
+
+  const handleBlur = (path: string) => {
+    setTouched((prev) => {
+      if (prev[path]) {
+        return prev;
       }
-    },
-    [findFieldDef, resolveError],
-  );
+      return { ...prev, [path]: true };
+    });
+    touchedRef.current[path] = true;
+    const def = findFieldDef(path);
+    if (def) {
+      const msg = resolveError(validateField(def, valuesRef.current[path]));
+      setErrors((prev) => {
+        if (prev[path] === msg) {
+          return prev;
+        }
+        return { ...prev, [path]: msg };
+      });
+    }
+  };
 
   /** Remove stale error/touched entries for paths
    *  that no longer correspond to form fields (e.g.
    *  after an array item is removed). */
-  const handleClearPaths = useCallback((paths: string[]) => {
+  const handleClearPaths = (paths: string[]) => {
     setErrors((prev) => {
       let next = { ...prev };
       for (const p of paths) {
@@ -751,31 +738,28 @@ export const TemplateForm = ({
       const { [p]: _, ...rest } = touchedRef.current;
       touchedRef.current = rest;
     }
-  }, []);
+  };
 
   /** Validate all fields; returns true if valid. */
-  const validateAll = useCallback(
-    (currentValues: FormValues): boolean => {
-      const all = collectValidatableFields(fields, currentValues, conditions);
-      const nextErrors: FieldErrors = {};
-      const nextTouched: TouchedFields = {};
-      let valid = true;
+  const validateAll = (currentValues: FormValues): boolean => {
+    const all = collectValidatableFields(fields, currentValues, conditions);
+    const nextErrors: FieldErrors = {};
+    const nextTouched: TouchedFields = {};
+    let valid = true;
 
-      for (const { path, field } of all) {
-        nextTouched[path] = true;
-        const msg = resolveError(validateField(field, currentValues[path]));
-        nextErrors[path] = msg;
-        if (msg) {
-          valid = false;
-        }
+    for (const { path, field } of all) {
+      nextTouched[path] = true;
+      const msg = resolveError(validateField(field, currentValues[path]));
+      nextErrors[path] = msg;
+      if (msg) {
+        valid = false;
       }
+    }
 
-      setTouched((prev) => ({ ...prev, ...nextTouched }));
-      setErrors(nextErrors);
-      return valid;
-    },
-    [fields, conditions, resolveError],
-  );
+    setTouched((prev) => ({ ...prev, ...nextTouched }));
+    setErrors(nextErrors);
+    return valid;
+  };
 
   // Only count errors for currently visible fields;
   // hidden fields may retain stale errors in state.
@@ -799,120 +783,103 @@ export const TemplateForm = ({
     return true;
   });
 
-  const handleDownload = useCallback(
-    async (format: FillFormat) => {
-      if (!validateAll(values)) {
-        // Scroll to the first errored field
-        const all = collectValidatableFields(fields, values, conditions);
-        for (const { path, field: f } of all) {
-          const msg = resolveError(validateField(f, values[path]));
-          if (msg) {
-            const el = document.querySelector(`[name="${CSS.escape(path)}"]`);
-            el?.scrollIntoView({
-              behavior: "smooth",
-              block: "center",
-            });
-            break;
-          }
+  const handleDownload = async (format: FillFormat) => {
+    if (!validateAll(values)) {
+      // Scroll to the first errored field
+      const all = collectValidatableFields(fields, values, conditions);
+      for (const { path, field: f } of all) {
+        const msg = resolveError(validateField(f, values[path]));
+        if (msg) {
+          const el = document.querySelector(`[name="${CSS.escape(path)}"]`);
+          el?.scrollIntoView({
+            behavior: "smooth",
+            block: "center",
+          });
+          break;
         }
-        stellaToast.add({
-          type: "error",
-          title: t("templates.validationErrors"),
-        });
-        return;
       }
+      stellaToast.add({
+        type: "error",
+        title: t("templates.validationErrors"),
+      });
+      return;
+    }
 
-      setLoading(true);
+    setLoading(true);
 
-      const submitValues = buildSubmitValues(values, fields, conditions);
-      const valuesJson = JSON.stringify(submitValues);
+    const submitValues = buildSubmitValues(values, fields, conditions);
+    const valuesJson = JSON.stringify(submitValues);
 
-      const fillResponse = async () => {
-        if (templateId) {
-          return await api
-            .templates({ templateId })
-            .fill.post({ values: valuesJson }, { query: { format } });
-        }
-        if (!file) {
-          panic(
-            "TemplateForm: transient fill requires a file when templateId is absent",
-          );
-        }
-        return await api.templates.fill.post(
-          { file, values: valuesJson },
-          { query: { format } },
+    const fillResponse = async () => {
+      if (templateId) {
+        return await api
+          .templates({ templateId })
+          .fill.post({ values: valuesJson }, { query: { format } });
+      }
+      if (!file) {
+        panic(
+          "TemplateForm: transient fill requires a file when templateId is absent",
         );
-      };
-      const response = await fillResponse();
-
-      setLoading(false);
-
-      if (response.error) {
-        const errorKey =
-          format === "pdf"
-            ? "templates.pdfConversionFailed"
-            : "templates.fillFailed";
-        stellaToast.add({
-          type: "error",
-          title: t(errorKey),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
       }
+      return await api.templates.fill.post(
+        { file, values: valuesJson },
+        { query: { format } },
+      );
+    };
+    const response = await fillResponse();
 
-      const data = response.data;
-      const mimeType = format === "pdf" ? PDF_MIME : DOCX_MIME;
-      const blob =
-        data instanceof Response
-          ? await data.blob()
-          : // SAFETY: Eden returns a typed object for the fill
-            // endpoint, but the actual response is binary
-            // data; the double cast bridges the type mismatch.
-            // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Eden binary-response gotcha; runtime payload is bytes, not the inferred object
-            new Blob([data as unknown as BlobPart], {
-              type: mimeType,
-            });
-      const url = URL.createObjectURL(blob);
-      const anchor = document.createElement("a");
-      anchor.href = url;
-      // SAFETY: the discriminated union guarantees `file` is
-      // defined when `fileName` (from server-side path) is absent.
-      const baseName = fileName ?? file.name;
-      const filename =
+    setLoading(false);
+
+    if (response.error) {
+      const errorKey =
         format === "pdf"
-          ? `filled-${DOCX_EXT_RE.test(baseName) ? baseName.replace(DOCX_EXT_RE, ".pdf") : `${baseName}.pdf`}`
-          : `filled-${baseName}`;
-      anchor.download = filename;
-      anchor.click();
-      URL.revokeObjectURL(url);
+          ? "templates.pdfConversionFailed"
+          : "templates.fillFailed";
+      stellaToast.add({
+        type: "error",
+        title: t(errorKey),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
 
-      onDone(filename);
-    },
-    [
-      values,
-      fields,
-      conditions,
-      file,
-      templateId,
-      fileName,
-      t,
-      onDone,
-      validateAll,
-      resolveError,
-    ],
-  );
+    const data = response.data;
+    const mimeType = format === "pdf" ? PDF_MIME : DOCX_MIME;
+    const blob =
+      data instanceof Response
+        ? await data.blob()
+        : // SAFETY: Eden returns a typed object for the fill
+          // endpoint, but the actual response is binary
+          // data; the double cast bridges the type mismatch.
+          // eslint-disable-next-line typescript/no-unsafe-type-assertion -- Eden binary-response gotcha; runtime payload is bytes, not the inferred object
+          new Blob([data as unknown as BlobPart], {
+            type: mimeType,
+          });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    // SAFETY: the discriminated union guarantees `file` is
+    // defined when `fileName` (from server-side path) is absent.
+    const baseName = fileName ?? file.name;
+    const filename =
+      format === "pdf"
+        ? `filled-${DOCX_EXT_RE.test(baseName) ? baseName.replace(DOCX_EXT_RE, ".pdf") : `${baseName}.pdf`}`
+        : `filled-${baseName}`;
+    anchor.download = filename;
+    anchor.click();
+    URL.revokeObjectURL(url);
 
-  const handleSubmit = useCallback(
-    (e: React.SubmitEvent<HTMLFormElement>) => {
-      e.preventDefault();
-      // Errors are surfaced as toasts inside handleDownload
-      handleDownload("docx").catch(() => undefined);
-    },
-    [handleDownload],
-  );
+    onDone(filename);
+  };
+
+  const handleSubmit = (e: React.SubmitEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    // Errors are surfaced as toasts inside handleDownload
+    handleDownload("docx").catch(() => undefined);
+  };
 
   // ── Fill preview ──────────────────────────────────
   type PreviewState =
@@ -929,7 +896,7 @@ export const TemplateForm = ({
     kind: "idle",
   });
 
-  const handlePreview = useCallback(async () => {
+  const handlePreview = async () => {
     if (!templateId) {
       return;
     }
@@ -968,7 +935,7 @@ export const TemplateForm = ({
       unmatchedPlaceholders: data.unmatchedPlaceholders,
       unusedValues: data.unusedValues,
     });
-  }, [templateId, values, fields, conditions, validateAll, t]);
+  };
 
   // Filter visible non-array fields, then group
   const visibleScalarFields = fields.filter(

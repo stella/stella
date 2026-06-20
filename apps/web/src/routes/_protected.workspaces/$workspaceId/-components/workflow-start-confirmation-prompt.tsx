@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
@@ -48,26 +41,23 @@ export const WorkflowStartConfirmationPromptProvider = ({
   );
   const lastEntityCountRef = useRef(0);
 
-  const settlePrompt = useCallback((confirmed: boolean) => {
+  const settlePrompt = (confirmed: boolean) => {
     const prompt = pendingPromptRef.current;
     pendingPromptRef.current = null;
     setPendingPrompt(null);
     prompt?.resolve(confirmed);
-  }, []);
+  };
 
-  const confirmLargeRun = useCallback<WorkflowStartConfirmationPrompt>(
-    async (input) => {
-      pendingPromptRef.current?.resolve(false);
+  const confirmLargeRun: WorkflowStartConfirmationPrompt = async (input) => {
+    pendingPromptRef.current?.resolve(false);
 
-      return await new Promise((resolve) => {
-        const nextPrompt = { ...input, resolve };
-        pendingPromptRef.current = nextPrompt;
-        lastEntityCountRef.current = input.entityCount;
-        setPendingPrompt(nextPrompt);
-      });
-    },
-    [],
-  );
+    return await new Promise((resolve) => {
+      const nextPrompt = { ...input, resolve };
+      pendingPromptRef.current = nextPrompt;
+      lastEntityCountRef.current = input.entityCount;
+      setPendingPrompt(nextPrompt);
+    });
+  };
 
   useEffect(
     () => () => {

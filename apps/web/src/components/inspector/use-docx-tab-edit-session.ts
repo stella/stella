@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -37,44 +37,41 @@ export const useDocxTabEditSession = ({
     Map<string, DocxCompatibility>
   >(() => new Map());
 
-  const handleStartDocxEdit = useCallback(
-    async (tabId: string) => {
-      const compatibility = docxCompatibilityByTab.get(tabId);
-      const blockReason = getDocxEditBlockReason({
-        canSafelyEdit: compatibility?.canSafelyEdit,
+  const handleStartDocxEdit = async (tabId: string) => {
+    const compatibility = docxCompatibilityByTab.get(tabId);
+    const blockReason = getDocxEditBlockReason({
+      canSafelyEdit: compatibility?.canSafelyEdit,
+    });
+    if (blockReason === "pendingCompatibility") {
+      stellaToast.info(t("folio.checkingDocxEditTitle"), {
+        description: t("folio.checkingDocxEditDescription"),
       });
-      if (blockReason === "pendingCompatibility") {
-        stellaToast.info(t("folio.checkingDocxEditTitle"), {
-          description: t("folio.checkingDocxEditDescription"),
-        });
-        return;
+      return;
+    }
+
+    if (blockReason === "unsafe") {
+      stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
+        description: t("folio.unsupportedDocxEditDescription"),
+      });
+      return;
+    }
+
+    if (editingDocxTabId !== null && editingDocxTabId !== tabId) {
+      const currentAction = docxActionsRef.current.get(editingDocxTabId);
+      if (currentAction !== undefined) {
+        await currentAction.cancel();
       }
+      docxActionsRef.current.delete(editingDocxTabId);
+      setEditingDocxTabId((current) =>
+        current === editingDocxTabId ? null : current,
+      );
+    }
 
-      if (blockReason === "unsafe") {
-        stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
-          description: t("folio.unsupportedDocxEditDescription"),
-        });
-        return;
-      }
+    setEditingDocxTabId(tabId);
+    docxActionsRef.current.get(tabId)?.unlock();
+  };
 
-      if (editingDocxTabId !== null && editingDocxTabId !== tabId) {
-        const currentAction = docxActionsRef.current.get(editingDocxTabId);
-        if (currentAction !== undefined) {
-          await currentAction.cancel();
-        }
-        docxActionsRef.current.delete(editingDocxTabId);
-        setEditingDocxTabId((current) =>
-          current === editingDocxTabId ? null : current,
-        );
-      }
-
-      setEditingDocxTabId(tabId);
-      docxActionsRef.current.get(tabId)?.unlock();
-    },
-    [docxCompatibilityByTab, editingDocxTabId, t],
-  );
-
-  const flashDocxEditButton = useCallback((tabId: string) => {
+  const flashDocxEditButton = (tabId: string) => {
     if (flashDocxEditTimerRef.current !== null) {
       clearTimeout(flashDocxEditTimerRef.current);
     }
@@ -83,7 +80,7 @@ export const useDocxTabEditSession = ({
       setFlashingDocxEditTabId(null);
       flashDocxEditTimerRef.current = null;
     }, 2200);
-  }, []);
+  };
 
   useEffect(
     () => () => {
