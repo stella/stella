@@ -380,26 +380,30 @@ const GroupHeader = ({
       <button
         aria-expanded={empty ? undefined : !collapsed}
         className={cn(
-          "flex min-w-0 flex-1 items-center gap-2 py-1.5 ps-3 text-start transition-colors duration-150",
+          "flex min-w-0 flex-1 items-center py-1.5 text-start transition-colors duration-150",
           !empty && "hover:bg-foreground/[0.04]",
         )}
         disabled={empty}
         onClick={empty ? undefined : onToggle}
         type="button"
       >
-        {empty ? (
-          <span aria-hidden className="size-3.5 shrink-0" />
-        ) : (
-          <ChevronIcon className="text-muted-foreground size-3.5 shrink-0" />
-        )}
-        {group.optionColor && (
-          <SelectColorIcon className="size-3.5" color={group.optionColor} />
-        )}
-        <span className="text-foreground truncate text-sm font-medium">
-          {group.label}
-        </span>
-        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-          {t("workspaces.views.groupItemCount", { count })}
+        {/* The label stays pinned at the left while the band scrolls
+            horizontally with the columns. */}
+        <span className="bg-muted sticky start-0 flex items-center gap-2 ps-3">
+          {empty ? (
+            <span aria-hidden className="size-3.5 shrink-0" />
+          ) : (
+            <ChevronIcon className="text-muted-foreground size-3.5 shrink-0" />
+          )}
+          {group.optionColor && (
+            <SelectColorIcon className="size-3.5" color={group.optionColor} />
+          )}
+          <span className="text-foreground text-sm font-medium">
+            {group.label}
+          </span>
+          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+            {t("workspaces.views.groupItemCount", { count })}
+          </span>
         </span>
       </button>
       {!empty &&
