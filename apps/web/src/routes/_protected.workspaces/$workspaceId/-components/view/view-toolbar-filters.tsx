@@ -87,6 +87,15 @@ export const FilterChips = ({
     onUpdate([...filters, node]);
   };
 
+  // The backend rejects a second top-level kind filter, so drop "Kind" from
+  // the add picker once one already exists.
+  const hasKindFilter = filters.some(
+    (node) => node.type === "predicate" && node.operand.type === "kind",
+  );
+  const pickerFields = hasKindFilter
+    ? fields.filter((field) => field.operand.type !== "kind")
+    : fields;
+
   if (filters.length === 0) {
     return (
       <AddFilterPicker
@@ -128,7 +137,7 @@ export const FilterChips = ({
         );
       })}
       <AddFilterPicker
-        fields={fields}
+        fields={pickerFields}
         onAddAdvanced={() => append(emptyAdvancedGroup())}
         onAddField={(field) => append(leafFromField(field))}
         trigger={

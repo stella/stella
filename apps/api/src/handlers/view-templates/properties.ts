@@ -10,6 +10,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   collectNodePropertyIds,
+  remapDependencyRefs,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
@@ -372,29 +373,27 @@ const recreateTemplateDependencies = async ({
 
     const resolvedEdges = (templateProperty.dependencies ?? []).flatMap(
       (dep) => {
-        const dependsOnPropertyId = propertyIdBySourceId.get(
-          dep.dependsOnSourceId,
+        // Remaps the edge and the gate condition together (so neither is
+        // forgotten); null when the edge endpoint did not remap — the workflow
+        // planner then treats the property as having no inputs.
+        const refs = remapDependencyRefs(
+          {
+            dependsOnPropertyId: dep.dependsOnSourceId,
+            condition: dep.condition,
+          },
+          (id) => propertyIdBySourceId.get(id),
         );
-        // Drop edges where either endpoint failed to remap; the
-        // missing-property branch above already declined to create
-        // them, so the workflow planner will treat the property as
-        // having no inputs rather than crashing.
-        if (!dependsOnPropertyId || dependsOnPropertyId === propertyId) {
+        if (!refs || refs.dependsOnPropertyId === propertyId) {
           return [];
         }
         return [
           {
             workspaceId,
             propertyId: brandPersistedPropertyId(propertyId),
-            dependsOnPropertyId: brandPersistedPropertyId(dependsOnPropertyId),
-            // The gate's operands carry source ids too; remap them like the
-            // edge so the applied gate resolves against the target columns.
-            condition: dep.condition
-              ? remapNodePropertyIds(
-                  dep.condition,
-                  (id) => propertyIdBySourceId.get(id) ?? id,
-                )
-              : null,
+            dependsOnPropertyId: brandPersistedPropertyId(
+              refs.dependsOnPropertyId,
+            ),
+            condition: refs.condition,
           },
         ];
       },

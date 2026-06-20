@@ -112,3 +112,26 @@ export const pruneStaleNode = (
     ? node
     : null;
 };
+
+/**
+ * Remaps both property references a dependency carries — the edge
+ * (`dependsOnPropertyId`) and the gate `condition`'s operands — through one
+ * `remap`, so a copy (workspace duplicate, template apply) can never remap one
+ * without the other. Returns `null` when the edge endpoint does not remap, so
+ * the caller drops the dependency rather than creating a dangling edge.
+ */
+export const remapDependencyRefs = <T extends string>(
+  source: { dependsOnPropertyId: string; condition: ConditionNode | null },
+  remap: (id: string) => T | undefined,
+): { dependsOnPropertyId: T; condition: ConditionNode | null } | null => {
+  const dependsOnPropertyId = remap(source.dependsOnPropertyId);
+  if (dependsOnPropertyId === undefined) {
+    return null;
+  }
+  return {
+    dependsOnPropertyId,
+    condition: source.condition
+      ? remapNodePropertyIds(source.condition, (id) => remap(id) ?? id)
+      : null,
+  };
+};

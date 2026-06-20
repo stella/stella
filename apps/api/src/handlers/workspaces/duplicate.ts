@@ -25,7 +25,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
+import {
+  remapDependencyRefs,
+  remapNodePropertyIds,
+} from "@/api/lib/conditions/ast-utils";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -632,24 +635,24 @@ const duplicateWorkspace = createSafeHandler(
       const newDependencies = snapshot.dependencies
         .map((dependency) => {
           const propertyId = propertyIdMap.get(dependency.propertyId);
-          const dependsOnPropertyId = propertyIdMap.get(
-            dependency.dependsOnPropertyId,
+          // Remaps the edge and the gate condition together so the copy can't
+          // remap one without the other; null when the edge endpoint is gone.
+          const refs = remapDependencyRefs(
+            {
+              dependsOnPropertyId: dependency.dependsOnPropertyId,
+              condition: dependency.condition,
+            },
+            (id) => propertyIdMap.get(id),
           );
-          if (!propertyId || !dependsOnPropertyId) {
+          if (!propertyId || !refs) {
             return null;
           }
           return {
             id: createSafeId<"propertyDependency">(),
             workspaceId: targetWorkspaceId,
             propertyId,
-            dependsOnPropertyId,
-            // The gate's operands reference source property ids too, so remap
-            // them like the edge — otherwise the copied gate resolves nothing.
-            condition: dependency.condition
-              ? remapNodePropertyIds(dependency.condition, (id) =>
-                  remapPropertyId(id, propertyIdMap),
-                )
-              : null,
+            dependsOnPropertyId: refs.dependsOnPropertyId,
+            condition: refs.condition,
           };
         })
         .filter((dependency) => dependency !== null);
