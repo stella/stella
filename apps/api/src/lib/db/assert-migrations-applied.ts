@@ -68,7 +68,7 @@ export const assertMigrationsApplied = async (): Promise<void> => {
       `[startup] Schema drift: ${missing.length} migration(s) in code are not applied to the database. ` +
         `Code has ${local.length}; DB has ${appliedHashes.size}. ` +
         `Missing or modified after apply: ${missingNames}. ` +
-        `Run \`bunx drizzle-kit migrate\` against this database, or set ${ESCAPE_HATCH_ENV}=true ` +
+        `Run \`bun run db:migrate\` against this database, or set ${ESCAPE_HATCH_ENV}=true ` +
         "to bypass the check (emergency only).",
     );
   }

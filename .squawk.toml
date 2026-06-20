@@ -5,7 +5,7 @@
 # .github/workflows/db-migrations.yml.
 pg_version = "18.0"
 
-# `drizzle-kit migrate` wraps every migration in a transaction.
+# The drizzle migrator wraps every migration in a transaction.
 assume_in_transaction = true
 
 # Keep lock-safety rules active. Migrations that need concurrent indexes can
