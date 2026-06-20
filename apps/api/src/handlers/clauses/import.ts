@@ -205,6 +205,7 @@ const importHandler = async function* ({
           );
         }
         for (const [variantIndex, variant] of variants.entries()) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential variant inserts in one transaction preserve sortOrder/insertion order
           await tx.insert(clauseVariants).values({
             id: createSafeId<"clauseVariant">(),
             organizationId,

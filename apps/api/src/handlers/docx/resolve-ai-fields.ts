@@ -64,6 +64,7 @@ export const resolveAiFields = async ({
     if (prompt === undefined) {
       continue;
     }
+    // oxlint-disable-next-line no-await-in-loop -- sequential: metered AI draft call that reads the shared `resolved` accumulator each iteration; must not fan out
     const value = await generate({
       prompt,
       fieldPath: field.path,

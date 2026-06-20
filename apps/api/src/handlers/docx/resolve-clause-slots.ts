@@ -46,6 +46,7 @@ export const resolveClauseSlots = async (
   const patches: Record<string, RichPatchValue> = {};
 
   for (const slot of slots) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential: per-slot clause lookups run on the one shared ScopedDb connection
     const body = await resolveSlotBody(
       templateId,
       slot,
@@ -74,6 +75,7 @@ export const resolveClauseSlotBodies = async (
   const bodies: Record<string, ClauseBody> = {};
 
   for (const slot of slots) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential: per-slot clause lookups run on the one shared ScopedDb connection
     const body = await resolveSlotBody(
       templateId,
       slot,
@@ -113,6 +115,7 @@ export const resolveClauseSlotTexts = async (
   const texts: Record<string, string> = {};
 
   for (const slot of slots) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential: per-slot clause lookups run on the one shared ScopedDb connection
     const body = await resolveSlotBody(
       templateId,
       slot,

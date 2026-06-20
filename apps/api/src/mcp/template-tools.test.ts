@@ -151,6 +151,7 @@ describe("MCP template tools", () => {
       "configure_template_fields",
       "template_marker_reference",
     ]) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-tool assertion; keeps the failing tool name obvious in test output
       expect((await getMcpToolDefinition(name, createContext()))?.scope).toBe(
         "stella:templates",
       );

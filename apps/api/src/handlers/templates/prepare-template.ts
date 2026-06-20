@@ -80,6 +80,7 @@ export const prepareTemplateFromDocument = async ({
     if (!entry) {
       continue;
     }
+    // oxlint-disable-next-line no-await-in-loop -- sequential: each part folds into the shared fields/seenPaths/stillUnapplied accumulators across parts
     const partXml = await entry.async("text");
     const result = applyFieldSuggestions(partXml, suggestions);
     if (result.xml !== partXml) {

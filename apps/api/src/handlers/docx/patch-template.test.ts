@@ -452,6 +452,7 @@ describe("fillTemplate — output stays well-formed in every part", () => {
     expect(partNames(outZip)).toEqual(partNames(inZip));
 
     for (const name of partNames(outZip)) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-part read keeps the failing part name deterministic in the assertion
       const xml = await outZip.files[name]?.async("string");
       if (xml === undefined) {
         throw new Error(`part ${name} unreadable`);
