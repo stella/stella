@@ -1,5 +1,6 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 /**
@@ -26,7 +27,7 @@ export const useInspectorFlash = (
   const seq = useInspectorStore((s) => s.activationSeq);
   const prevSeq = useRef(seq);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = ref.current;
     if (enabled && el && isActive && seq !== prevSeq.current) {
       el.scrollIntoView({ block: "nearest", behavior: "smooth" });

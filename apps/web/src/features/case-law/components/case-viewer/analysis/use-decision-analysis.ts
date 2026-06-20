@@ -90,6 +90,7 @@ export const useDecisionAnalysis = (
   // Clear the marker once the route moves on so returning to the
   // original decision lands in `idle` (matching prior behaviour)
   // instead of resuming a poll the user didn't request again.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id (decisionId change clears generatingFor); lift to a key prop
   useEffect(() => {
     setGeneratingFor(null);
   }, [decisionId]);
@@ -138,6 +139,7 @@ export const useDecisionAnalysis = (
 
   // Mirror a `done` result into the decision query cache so route
   // re-renders pick up the persisted analysis without another fetch.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mirrors query result into the query cache; server-state relay, move into the query layer after review
   useEffect(() => {
     if (query.data?.kind !== "done") {
       return;

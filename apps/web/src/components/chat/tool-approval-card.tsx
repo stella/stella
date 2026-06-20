@@ -360,6 +360,7 @@ export const ToolApprovalCard = ({
           connectors: mcpConnectorsData?.connectors ?? [],
         });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (auto-deny when a blocked tool requests approval), drive from the approval state machine instead
   useEffect(() => {
     if (!isApprovalRequested || !isBlocked || autoDenyRef.current) {
       return;
@@ -377,6 +378,7 @@ export const ToolApprovalCard = ({
   // always allowed, OR if this is a DOCX edit batch (review happens
   // per item in the side panel; the chat-level gate would just be
   // friction).
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (auto-approve when granted/allowed), drive from the approval state machine instead
   useEffect(() => {
     if (
       !isApprovalRequested ||

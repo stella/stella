@@ -1,6 +1,6 @@
-import { useEffect } from "react";
 import type { RefObject } from "react";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { EOC_CLASS_NAME, TEXT_LAYER_ATTRIBUTE } from "@/lib/pdf/consts";
 
 /**
@@ -11,7 +11,7 @@ import { EOC_CLASS_NAME, TEXT_LAYER_ATTRIBUTE } from "@/lib/pdf/consts";
 export const useTextSelection = (
   containerRef: RefObject<HTMLDivElement | null>,
 ) => {
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let prevRange: Range | null = null;
 
     const updateSelectionMarkers = () => {

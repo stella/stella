@@ -1,7 +1,8 @@
-import { createContext, use, useEffect, useState } from "react";
+import { createContext, use, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { PALETTE_STORAGE_KEY, THEME_STORAGE_KEY } from "@/consts";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 
 const THEMES = ["light", "dark", "system"] as const;
 type Theme = (typeof THEMES)[number];
@@ -102,7 +103,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     setPaletteState(next);
   };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const root = document.documentElement;
 
     const updateTheme = () => {
@@ -125,7 +126,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     return () => mq.removeEventListener("change", onChange);
   }, [theme]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const root = document.documentElement;
     const restore = suppressTransitions();
 
@@ -142,7 +143,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     restore();
   }, [palette]);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === THEME_STORAGE_KEY) {
         if (e.newValue === "light" || e.newValue === "dark") {
@@ -161,7 +162,7 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
     };
     window.addEventListener("storage", onStorage);
     return () => window.removeEventListener("storage", onStorage);
-  }, []);
+  });
 
   return (
     <ThemeProviderContext

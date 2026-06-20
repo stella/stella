@@ -1,4 +1,4 @@
-import { useEffect, useReducer, useRef, useState } from "react";
+import { useReducer, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -19,6 +19,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -520,7 +521,7 @@ const TemplateDetail = ({
   });
 
   // Focus input when entering rename mode
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (rename.status === "editing") {
       renameInputRef.current?.focus();
       renameInputRef.current?.select();

@@ -33,6 +33,7 @@ import { useFileTabRename } from "@/components/inspector/use-file-tab-rename";
 import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
+import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -214,14 +215,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     }, 2200);
   };
 
-  useEffect(
-    () => () => {
-      if (flashMinimizeTimerRef.current !== null) {
-        clearTimeout(flashMinimizeTimerRef.current);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (flashMinimizeTimerRef.current !== null) {
+      clearTimeout(flashMinimizeTimerRef.current);
+    }
+  });
 
   const handleOpenFullView = async () => {
     if (!activeTab || activeTab.type !== "pdf") {
@@ -344,6 +342,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // Commit the latest recency snapshot after the render commits so
   // discarded renders (Strict Mode, Concurrent) don't pollute the
   // ref — only the set actually shown to the user is recorded.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- commit-phase ref write syncing committed render state into a ref, not external-system sync; needs review
   useEffect(() => {
     pdfRecencyRef.current = Array.from(mountedPdfIds);
   }, [mountedPdfIds]);
@@ -551,6 +550,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
             field.content.type === "file",
         );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived ref write tracking the current file field; compute in render or move into a ref-updater, needs review
   useEffect(() => {
     if (activeFileField === undefined) {
       return;
@@ -562,6 +562,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     );
   }, [activeFileField]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (derived comparison fires the replaceFileFieldId store action); move into the mutation/handler path
   useEffect(() => {
     if (
       latestFileFieldForProperty === undefined ||

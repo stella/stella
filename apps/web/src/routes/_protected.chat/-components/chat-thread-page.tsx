@@ -181,6 +181,7 @@ export const ChatThreadPage = ({
   // render (the error reference persists in useChat until the
   // user retries).
   const lastHandledErrorRef = useRef<unknown>(null);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (error transition -> usage-limit modal handler); move into the chat-session error path
   useEffect(() => {
     if (!error) {
       lastHandledErrorRef.current = null;
@@ -221,6 +222,7 @@ export const ChatThreadPage = ({
       }
     },
   });
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- data mutation (seeds web-search preference via PATCH on first empty render); move into the thread-open flow
   useEffect(() => {
     if (seededWebSearchForThreadId.current === threadRef.threadId) {
       return;

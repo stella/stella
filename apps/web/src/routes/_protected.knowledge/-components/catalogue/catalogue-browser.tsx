@@ -191,6 +191,7 @@ export const CatalogueBrowser = ({
   // Reuse `role` from the canAddCustom block above for team-skill gating.
   const canManageTeam = role === "admin" || role === "owner";
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- syncs the initialKind prop into local filter state; reset-on-id, lift to a key prop
   useEffect(() => {
     if (initialKind !== undefined) {
       setFilter(initialKind);

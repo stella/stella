@@ -47,6 +47,7 @@ import {
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
@@ -130,6 +131,7 @@ const AnonymizeScrollSync = () => {
     (s) => s.setPendingAnonymizeEntityId,
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (pending entity id -> scroll-to store action + clear flag); move into the action that sets pendingAnonymizeEntityId
   useEffect(() => {
     if (pendingAnonymizeEntityId === null || pageId === undefined) {
       return;
@@ -177,6 +179,7 @@ const JustificationScrollSync = () => {
   );
   const setScrollTo = usePDFStore((s) => s.setScrollTo);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- pushes a changing route param into the PDF store's imperative scroll-to; candidate for useExternalSyncEffect after review
   useEffect(() => {
     if (!justificationId || pageId === undefined) {
       return;
@@ -267,6 +270,7 @@ function RouteComponentInner({
     });
   }, [justificationId, justificationPage, setActiveJustification]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- unmount-only store reset (returns cleanup); candidate for useMountEffect after review
   useEffect(
     () => () => {
       setActiveJustification(null);
@@ -275,6 +279,7 @@ function RouteComponentInner({
     [resetPdfViewerState, setActiveJustification],
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- unmount-only inspector-store cleanup keyed on fieldId; needs review (reads fieldId, returns cleanup)
   useEffect(
     () => () => {
       const inspectorState = useInspectorStore.getState();
@@ -310,6 +315,7 @@ function RouteComponentInner({
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id (setState false when fieldId changes); lift to key prop
   useEffect(() => {
     setDocxUnlocked(false);
   }, [fieldId]);
@@ -367,6 +373,7 @@ function RouteComponentInner({
         )
       : undefined;
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- syncs derived value into a ref map during render; compute in render or move into the handler that mutates the map
   useEffect(() => {
     if (activeFileField === undefined) {
       return;
@@ -378,6 +385,7 @@ function RouteComponentInner({
     );
   }, [activeFileField]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived setState + navigate when the latest version field changes; move into the version-switch handler
   useEffect(() => {
     if (
       latestFileFieldForProperty === undefined ||
@@ -412,6 +420,7 @@ function RouteComponentInner({
     });
   }, [fieldId, latestFileFieldForProperty, navigate]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay opening a file in the inspector store when derived file metadata changes; move into the open handler
   useEffect(() => {
     if (!filePropertyId || activeMimeType === undefined) {
       return;
@@ -839,7 +848,7 @@ const VersionDropZone = ({
   const isUploadingRef = useRef(isUploading);
   isUploadingRef.current = isUploading;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = dropRef.current;
     if (!el || disabled) {
       return undefined;

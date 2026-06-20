@@ -54,6 +54,7 @@ import {
 } from "@/components/inspector/anonymization-matches-store";
 import { useAnonymizationSelectionStore } from "@/components/inspector/anonymization-selection-store";
 import { useDocumentTextSelection } from "@/components/inspector/document-text-selection-store";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -268,7 +269,7 @@ export const AnonymizationFacet = ({
   // every parked Anonymization facet kept the global active
   // counter bumped and the detection worker firing even after
   // the user moved on to a different document.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isVisible) {
       return undefined;
     }
@@ -295,7 +296,7 @@ export const AnonymizationFacet = ({
   // Skip selections that look
   // like they live inside an input/textarea so typing into the
   // term field itself doesn't keep overwriting the value.
-  useEffect(() => {
+  useMountEffect(() => {
     // PDF viewer renders a real DOM `.textLayer` whose
     // selections show up in `window.getSelection()`. The folio
     // paged editor doesn't — it sets PM selections
@@ -333,7 +334,7 @@ export const AnonymizationFacet = ({
     };
     document.addEventListener("selectionchange", handler);
     return () => document.removeEventListener("selectionchange", handler);
-  }, []);
+  });
 
   // Folio selection bridge — picks up PM selections that
   // live in the off-screen hidden PM and aren't visible to
@@ -342,6 +343,7 @@ export const AnonymizationFacet = ({
   // selected text here on every selection-bearing
   // transaction.
   const folioSelection = useDocumentTextSelection(activeFieldId);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (store selection bump → prefill input state), move into the selection-publishing handler
   useEffect(() => {
     if (folioSelection === null) {
       return;
@@ -577,6 +579,7 @@ export const AnonymizationFacet = ({
   const docSelectionSeq = useAnonymizationSelectionStore((s) =>
     s.source === "doc" && s.fieldId === activeFieldId ? s.seq : 0,
   );
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mixed event-relay (setExpandedGroups branch is derived state) plus DOM scroll/flash on a doc-selection bump; needs refactor before it can be external-sync
   useEffect(() => {
     if (!docSelectionCanonical) {
       return;

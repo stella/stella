@@ -118,6 +118,7 @@ export const AIStep = ({
 
   // Drop back to providers phase if a previously-confirmed key
   // was edited after entering the models phase.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay from derived state into parent setter; move into the edit handler
   useEffect(() => {
     if (phase === "models" && !canEnterModelsPhase) {
       onPhaseChange("providers");
@@ -128,6 +129,7 @@ export const AIStep = ({
 
   // Whenever a key changes against its saved fingerprint, reset
   // that row to idle so the user must save again.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state from props; compute row states in render
   useEffect(() => {
     setRowStates((prev) => {
       let changed = false;
@@ -238,6 +240,7 @@ export const AIStep = ({
 
   // Push the preview list (provider + status) to the wizard so
   // the sidebar mock can render an accurate per-provider state.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- pushes derived data to a parent callback prop; lift the computation to the parent
   useEffect(() => {
     if (!onPreviewChange) {
       return;

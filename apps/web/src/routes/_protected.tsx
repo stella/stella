@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -48,6 +48,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/sidebar";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import {
@@ -175,7 +176,7 @@ function ProtectedComponent() {
   });
   const activeWorkspaceId = workspaceMatch?.params.workspaceId;
 
-  useEffect(
+  useExternalSyncEffect(
     () =>
       initializeInspectorTabBroadcast({
         organizationId: inspectorBroadcastOrganizationId,
@@ -535,7 +536,7 @@ function WorkspaceInspectorSidePanel() {
   // user hasn't minimized do we widen to the full pane width.
   const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
     // Keep Folio's find/replace dialog out from under the right inspector
     // pane. Folio reads --folio-find-replace-right on the overlay so the

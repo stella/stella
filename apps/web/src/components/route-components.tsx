@@ -11,6 +11,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { isNetworkError } from "@/components/route-components.logic";
 import { StellaMark } from "@/components/stella-mark";
+import { useMountEffect } from "@/hooks/use-effect";
 import { useSignOut } from "@/hooks/use-sign-out";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { isMemberError, isUnauthorizedError } from "@/lib/errors";
@@ -52,6 +53,7 @@ const useNetworkRetry = ({
     () => networkError && networkRetryCount < AUTO_RETRY_LIMIT,
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- effect chain mixing setState with a scheduled retry timer; move the auto-retry into an event-driven flow
   useEffect(() => {
     if (!networkError) {
       networkRetryCount = 0;
@@ -70,12 +72,9 @@ const useNetworkRetry = ({
     return () => clearTimeout(timer);
   }, [networkError, retry]);
 
-  useEffect(
-    () => () => {
-      networkRetryCount = 0;
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    networkRetryCount = 0;
+  });
 
   return {
     isAutoRetrying,
@@ -125,6 +124,7 @@ export const DefaultErrorComponent = ({
   // Capture errors that aren't auth/cancel/network noise once,
   // plus network errors once retries are exhausted. Keeping the
   // two cases in one effect avoids the prior staggered chain.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- telemetry-only side effect (analytics.captureError) reacting to error state; route through analytics at the boundary
   useEffect(() => {
     if (showUnauthorizedError || isCancelledError) {
       return;
@@ -207,6 +207,7 @@ const UnauthorizedError = () => {
   const { mutate } = useSignOut();
   const signOut = useEffectEvent(mutate);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- fires the sign-out action on mount; move into the auth/redirect flow
   useEffect(() => {
     signOut();
   }, []);

@@ -113,6 +113,7 @@ export const TimeEntryForm = ({
   );
 
   // Auto-fill rate when resolved and not overridden
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (sync resolved-rate query into form fields), compute in render
   useEffect(() => {
     if (rateOverride) {
       return;

@@ -5,8 +5,10 @@
  * "annotation" items are standalone annotation summaries.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
+
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { getCategoryVar } from "./types";
 
@@ -82,7 +84,7 @@ export const MarginNotes = ({
     }
   };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const sc = scrollContainerRef.current;
     if (!sc) {
       return undefined;

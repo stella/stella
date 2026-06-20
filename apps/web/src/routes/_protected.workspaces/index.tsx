@@ -107,6 +107,7 @@ function RouteComponent() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const previousOrganizationIdRef = useRef(activeOrganizationId);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id (search/state reset + query invalidation on org change); lift to a key prop
   useEffect(() => {
     if (previousOrganizationIdRef.current === activeOrganizationId) {
       return;
@@ -150,6 +151,7 @@ function RouteComponent() {
     ? groups.flatMap((g) => (collapsedSet.has(g.groupId) ? [] : g.workspaces))
     : sorted;
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- document keydown subscription with no deps array (re-subscribes each render to read fresh `displayed`); candidate for useExternalSyncEffect after capturing the right deps
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {

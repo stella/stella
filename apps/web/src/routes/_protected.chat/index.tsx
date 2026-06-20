@@ -168,6 +168,7 @@ function ChatIndex() {
   });
   const seededDraftRef = useRef<string | null>(null);
   const seedingDraftRef = useRef<string | null>(null);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (derived preference/draft-meta flags fire the seedDraftWebSearch mutation); move into the mutation flow
   useEffect(() => {
     const threadId = threadIdRef.current;
     if (

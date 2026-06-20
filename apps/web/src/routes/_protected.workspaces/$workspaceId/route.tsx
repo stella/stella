@@ -229,6 +229,7 @@ function RouteComponent() {
   // they left them. PDF tabs from another matter will refetch
   // with their own workspaceId; chat tabs are workspace-tagged
   // so they only render under the matter they belong to.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id (workspace state + timer cleanup on matter switch), lift to key prop
   useEffect(
     () => () => {
       for (const timer of previewClearTimersRef.current.values()) {

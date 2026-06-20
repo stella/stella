@@ -55,6 +55,7 @@ import { buildMaximizeTabAction } from "@/components/inspector/maximize-tab";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -113,6 +114,7 @@ export const ChatTabPanel = ({
   const t = useTranslations();
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- imperative AI-gate open call; event-relay, move into handler
   useEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
@@ -229,7 +231,7 @@ export const ChatTabPanel = ({
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (messages.length > 0 || isGenerating) {
       return undefined;
     }
@@ -264,6 +266,7 @@ export const ChatTabPanel = ({
   const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
   const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
   const startRenameFromStore = labelRename.startEditing;
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (rename request flag), move into handler
   useEffect(() => {
     if (pendingRenameTabId === tab.id) {
       startRenameFromStore();

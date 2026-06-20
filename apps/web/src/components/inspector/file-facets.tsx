@@ -76,6 +76,7 @@ export const FullViewPreviewGuard = ({
   flashMinimize,
 }: FullViewPreviewGuardProps) => {
   const t = useTranslations();
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (stale "preview" facet -> swap facet + toast + flash); move into the full-view entry handler
   useEffect(() => {
     if (facet !== "preview") {
       return;
@@ -99,6 +100,7 @@ const FacetBar = ({
   const { isPulsing: pulsing, pulse } = usePulse(1400);
   const lastPulseSeq = useRef<number | undefined>(pulseSeq);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (pulseSeq bump -> trigger pulse animation); move into the action that increments pulseSeq
   useEffect(() => {
     if (pulseSeq === undefined || pulseSeq === lastPulseSeq.current) {
       return;

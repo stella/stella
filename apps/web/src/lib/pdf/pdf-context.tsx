@@ -2,7 +2,6 @@ import {
   createContext,
   Suspense,
   use,
-  useEffect,
   useState,
   useSyncExternalStore,
 } from "react";
@@ -12,6 +11,7 @@ import { panic } from "better-result";
 import type { Result } from "better-result";
 import { createStore, useStore } from "zustand";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   allocateEntityOverlayId,
   deleteCachedAnonymization,
@@ -638,7 +638,7 @@ export const PDFProvider = ({
     }),
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const unregister = registerAnonymizationStore(fieldId, store);
     const cached = getCachedAnonymization(fieldId);
     if (cached) {
@@ -649,7 +649,7 @@ export const PDFProvider = ({
     };
   }, [fieldId, store]);
 
-  useEffect(() => destroy, [destroy]);
+  useExternalSyncEffect(() => destroy, [destroy]);
 
   return (
     <PDFStoreContext value={store}>

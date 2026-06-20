@@ -1,5 +1,6 @@
 import type { PropsWithChildren } from "react";
 import {
+  useCallback,
   useEffect,
   useOptimistic,
   useRef,
@@ -185,7 +186,7 @@ const EntityMetadataContent = ({
       : null,
   );
 
-  const refreshEntityFields = async () => {
+  const refreshEntityFields = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
@@ -194,8 +195,9 @@ const EntityMetadataContent = ({
         queryKey: propertiesOptions(workspaceId).queryKey,
       }),
     ]);
-  };
+  }, [queryClient, workspaceId]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (workflow-finished refetch), move into handler
   useEffect(() => {
     if (isWorkflowRunning) {
       sawWorkflowRunning.current = true;
@@ -217,6 +219,7 @@ const EntityMetadataContent = ({
     .toSorted()
     .join(",");
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, compute in render
   useEffect(() => {
     const arrivedIds = new Set(
       entityFieldPropertyIdsKey.split(",").filter((id) => id.length > 0),

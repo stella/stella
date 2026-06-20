@@ -55,6 +55,7 @@ export const useSyncJustifications = (
     enabled: enabled && normalizedEntityIds.length > 0,
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- relays query data into the zustand store; server-state sync, move into query select / store integration after review
   useEffect(() => {
     if (!data) {
       return;
@@ -104,6 +105,7 @@ export const useSyncJustificationChunks = (
     combine: combineResults,
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- relays chunked query results into the zustand store with dedup ref; server-state sync, move into query integration after review
   useEffect(() => {
     for (const result of syncedResults) {
       if (!result.data || result.entityIds.length === 0) {

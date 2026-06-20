@@ -179,6 +179,7 @@ const CustomFieldRow = ({
   const [value, setValue] = useState(field.value);
   const latestFieldRef = useRef({ label: field.label, value: field.value });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, reconciles local label/value drafts with field props; compute in render or reset via key
   useEffect(() => {
     const nextField = { label: field.label, value: field.value };
     setLabel((currentLabel) =>

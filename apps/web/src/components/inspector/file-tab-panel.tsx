@@ -246,6 +246,7 @@ export const FileTabPanel = ({
     },
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, reconciles the markdown draft with server text; compute in render or reset via key
   useEffect(() => {
     if (!isMarkdownDisplay) {
       markdownDraftSourceFieldIdRef.current = null;

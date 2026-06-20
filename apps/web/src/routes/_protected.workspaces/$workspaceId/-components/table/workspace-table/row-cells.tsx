@@ -16,6 +16,7 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
@@ -97,6 +98,7 @@ const useActiveCellFlash = ({
 }: ActiveCellFlashInput) => {
   const previousCellActivationSeq = useRef(activationSeq);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (activation-seq advance → scroll + flash cell via ref-edge compare); candidate for useExternalSyncEffect after review
   useEffect(() => {
     const rowElement = rowRef.current;
     if (
@@ -366,13 +368,13 @@ export const DraggableRow = ({
     </>
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (rowRef.current) {
       measureElement(rowRef.current);
     }
   }, [contentMode, expandedCellId, measureElement]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = rowRef.current;
     if (!el) {
       return undefined;

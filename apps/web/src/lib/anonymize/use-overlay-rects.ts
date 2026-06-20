@@ -44,6 +44,7 @@ export const useOverlayRects = (
     }
   }
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- measures pdf.js text-layer rects via the Range API into state; DOM-measurement, candidate for useExternalSyncEffect after review
   useEffect(() => {
     if (normalizedRects) {
       return;

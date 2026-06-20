@@ -35,6 +35,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -126,9 +127,11 @@ export const ExistingFileOrganizerDialog = ({
   const [showInstructions, setShowInstructions] = useState(false);
   const userInstructionsRef = useRef(userInstructions);
   const localeRef = useRef(locale);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref-mirror of state for the latest-value closure; derive at read site instead
   useEffect(() => {
     userInstructionsRef.current = userInstructions;
   }, [userInstructions]);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref-mirror of state for the latest-value closure; derive at read site instead
   useEffect(() => {
     localeRef.current = locale;
   }, [locale]);
@@ -191,6 +194,7 @@ export const ExistingFileOrganizerDialog = ({
     })),
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- data fetch + setState; migrate to TanStack Query
   useEffect(() => {
     if (!open || files.length === 0) {
       return undefined;
@@ -890,7 +894,7 @@ const OrganizerTreePreview = ({
   const onMoveFolderRef = useRef(onMoveFolder);
   onMoveFolderRef.current = onMoveFolder;
 
-  useEffect(() => {
+  useMountEffect(() => {
     const el = containerRef.current;
     if (!el) {
       return undefined;
@@ -924,7 +928,7 @@ const OrganizerTreePreview = ({
         }
       },
     });
-  }, []);
+  });
 
   if (rows.length === 0) {
     return (
@@ -997,7 +1001,7 @@ const OrganizerFolderNode = ({
   const onMoveFolderRef = useRef(onMoveFolder);
   onMoveFolderRef.current = onMoveFolder;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = headerRef.current;
     const handle = dragHandleRef.current;
     if (!el || !handle) {
@@ -1151,7 +1155,7 @@ const OrganizerFileNode = ({
   const liRef = useRef<HTMLLIElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = liRef.current;
     if (!el) {
       return undefined;
@@ -1231,6 +1235,7 @@ const InlineNameInput = ({
 }: InlineNameInputProps) => {
   const [draft, setDraft] = useState(value);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- syncs external value into local draft; reset-on-id, lift to key prop
   useEffect(() => {
     setDraft(value);
   }, [value]);

@@ -63,6 +63,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // mount does not re-run route loaders.
   const router = useRouter();
   const previousLocaleRef = useRef(locale);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay: imperative router.invalidate() on locale change; move into the locale-load completion path
   useEffect(() => {
     if (!onPublicSsrPath || previousLocaleRef.current === locale) {
       return;
@@ -114,6 +115,7 @@ const AnalyticsAuthIdentity = () => {
   const analytics = useAnalytics();
   const authStatus = useClientAuthStatus();
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- telemetry side-effect relay (analytics identify/reset) on auth-status change; route through analytics layer rather than an effect
   useEffect(() => {
     if (authStatus.status === "checking") {
       return;

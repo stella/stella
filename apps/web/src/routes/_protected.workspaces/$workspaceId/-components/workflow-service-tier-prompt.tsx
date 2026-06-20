@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
@@ -12,6 +12,8 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
+
+import { useMountEffect } from "@/hooks/use-effect";
 
 type WorkflowServiceTier = "standard" | "flex";
 
@@ -59,14 +61,11 @@ export const WorkflowServiceTierPromptProvider = ({
     });
   };
 
-  useEffect(
-    () => () => {
-      const prompt = pendingPromptRef.current;
-      pendingPromptRef.current = null;
-      prompt?.resolve("standard");
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    const prompt = pendingPromptRef.current;
+    pendingPromptRef.current = null;
+    prompt?.resolve("standard");
+  });
 
   return (
     <WorkflowServiceTierPromptContext.Provider value={askServiceTier}>

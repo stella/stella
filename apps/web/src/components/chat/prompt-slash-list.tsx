@@ -13,6 +13,7 @@ import {
   groupSlashItemsBySection,
   type SlashSectionKey,
 } from "@/components/chat/prompt-slash-list.logic";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 
 // Prompts and SKILL.md skills are one user-facing concept ("skills"), so
@@ -58,13 +59,14 @@ export const PromptSlashList = ({
 
   const safeIndex = Math.min(selectedIndex, Math.max(0, itemCount - 1));
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (reset selection when items change), compute in render
   useEffect(() => {
     setSelectedIndex(0);
   }, [items]);
 
   // Scroll the active item into view as keyboard nav moves it
   // outside the popup's clipping area.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const list = listRef.current;
     if (!list) {
       return;

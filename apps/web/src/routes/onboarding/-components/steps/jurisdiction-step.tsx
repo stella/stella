@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import createGlobe from "cobe";
 import { XIcon } from "lucide-react";
@@ -8,6 +8,7 @@ import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import {
   COUNTRY_POINTS,
   countryName,
@@ -151,16 +152,16 @@ export const JurisdictionGlobePreview = ({
   const themeRef = useRef<GlobeTheme | null>(null);
   const [themeVersion, setThemeVersion] = useState(0);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const target = document.documentElement;
     const observer = new MutationObserver(() => {
       setThemeVersion((v) => v + 1);
     });
     observer.observe(target, { attributes: true, attributeFilter: ["class"] });
     return () => observer.disconnect();
-  }, []);
+  });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const codeToPoint = new Map(
       COUNTRY_POINTS.map((point) => [point.code, point]),
     );
@@ -187,7 +188,7 @@ export const JurisdictionGlobePreview = ({
       : null;
   }, [selected]);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const canvas = canvasRef.current;
     let cleanup = () => {
       // no globe was created
@@ -253,9 +254,9 @@ export const JurisdictionGlobePreview = ({
     }
 
     return cleanup;
-  }, []);
+  });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     themeRef.current = readGlobeTheme();
   }, [themeVersion]);
 

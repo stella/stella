@@ -43,6 +43,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getChatHitRoute } from "@/components/search-dialog.logic";
 import { UserAvatar } from "@/components/user-avatar";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
@@ -265,10 +266,13 @@ export const SearchDialog = ({
   const navigate = useNavigate();
   const user = useAuthenticatedUser();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
-  const searchRecentsScope: SearchRecentsScope = {
-    organizationId: user.activeOrganizationId,
-    userId: user.id,
-  };
+  const searchRecentsScope = useMemo(
+    (): SearchRecentsScope => ({
+      organizationId: user.activeOrganizationId,
+      userId: user.id,
+    }),
+    [user.activeOrganizationId, user.id],
+  );
   const [resultsElement, setResultsElement] = useState<HTMLDivElement | null>(
     null,
   );
@@ -361,6 +365,7 @@ export const SearchDialog = ({
   });
   const virtualHits = hitVirtualizer.getVirtualItems();
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- loads localStorage recents into state when the dialog opens; migrate to lazy read / query after review
   useEffect(() => {
     if (!open) {
       return;
@@ -756,6 +761,7 @@ export const SearchDialog = ({
   const commandHits = hasTypedQuery && hasResults ? allHits : [];
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- resets summary mutation state when filters/query change; move reset into the filter/query change handlers
   useEffect(() => {
     summarizeSearchMutation.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset is the stable mutation method needed here
@@ -769,7 +775,7 @@ export const SearchDialog = ({
     searchQuery,
   ]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const root = resultsElement;
     const target = loadMoreRef.current;
     if (!hasQuery || !hasNextPage || !root || !target) {

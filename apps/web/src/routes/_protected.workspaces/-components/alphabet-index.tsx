@@ -6,11 +6,12 @@
  * Positions are calculated from actual DOM positions of group headers.
  */
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { RefObject } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceGroup } from "@/routes/_protected.workspaces/-types";
 
 type AlphabetIndexProps = {
@@ -48,7 +49,7 @@ export const AlphabetIndex = ({
   const [active, setActive] = useState(false);
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  const recalc = () => {
+  const recalc = useCallback(() => {
     const sc = scrollContainerRef.current;
     if (!sc || groups.length === 0) {
       return;
@@ -91,9 +92,9 @@ export const AlphabetIndex = ({
     }
 
     setMarkers(result);
-  };
+  }, [scrollContainerRef, groups]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const sc = scrollContainerRef.current;
     if (!sc) {
       return undefined;
@@ -105,6 +106,7 @@ export const AlphabetIndex = ({
   }, [scrollContainerRef, recalc]);
 
   // Recalculate when groups collapse/expand (content reflows)
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived marker state via DOM measurement on reflow; compute in render or memoize from measured layout
   useEffect(() => {
     recalc();
   }, [collapsedGroups, recalc]);

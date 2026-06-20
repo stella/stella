@@ -85,6 +85,7 @@ const MatterNumberingCardBody = ({
     }
   }, 300);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- debounced data fetch on pattern/padding change; migrate to TanStack Query or move into change handler
   useEffect(() => {
     void fetchPreview(pattern, padding);
   }, [pattern, padding, fetchPreview]);

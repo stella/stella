@@ -12,6 +12,7 @@ import {
   CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   getMentionViewScope,
 } from "@/components/chat-mention-helpers";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceEntity } from "@/lib/types";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -124,6 +125,7 @@ export const useWorkspaceChatMentionRegistration = (
     });
   };
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- unmount cleanup of debounced search + pending promise; not external-system sync
   useEffect(
     () => () => {
       debouncedSearchEntities.cancel();
@@ -133,7 +135,7 @@ export const useWorkspaceChatMentionRegistration = (
     [debouncedSearchEntities],
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const extensionId = getWorkspaceMentionExtensionId(workspaceId);
     const unregister = registerExtension(extensionId, {
       mentionSources: [

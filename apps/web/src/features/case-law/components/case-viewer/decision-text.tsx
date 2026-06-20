@@ -7,6 +7,7 @@ import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 import type { SearchMatchRange, SearchPiece } from "./decision-search";
@@ -728,11 +729,12 @@ export const DecisionText = ({
     query: searchQuery,
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reports derived match count to a parent callback prop; lift the count to the parent
   useEffect(() => {
     onMatchCountChange?.(searchResults.matchCount);
   }, [onMatchCountChange, searchResults.matchCount]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (searchQuery.trim().length === 0 || searchResults.matchCount === 0) {
       return;
     }

@@ -13,6 +13,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { FileTab } from "@/components/inspector/inspector-store";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";
@@ -160,6 +161,7 @@ export const DocumentAiSourceBar = ({
   // Kick off the generation request when the justification bar
   // mounts with missing bboxes. The mutation hook itself is the
   // source of truth for `isPending`.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (needsBoxes flag fires a mutation); move into handler
   useEffect(() => {
     if (!needsBoxes || !justificationId) {
       return;
@@ -167,6 +169,7 @@ export const DocumentAiSourceBar = ({
     mutateBoundingBoxes({ justificationId });
   }, [needsBoxes, justificationId, mutateBoundingBoxes]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id derived state (clears expansion when fieldId changes); lift to key prop
   useEffect(() => {
     setIsAnswerExpanded(false);
   }, [fieldId]);
@@ -174,6 +177,7 @@ export const DocumentAiSourceBar = ({
   // Nudge the justifications cache every second while we still need
   // bboxes. POST success doesn't guarantee the payload is in cache
   // yet, so we keep polling until `needsBoxes` flips false.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- polling timer drives query invalidation; data refetch, migrate to TanStack Query refetchInterval
   useEffect(() => {
     if (!needsBoxes) {
       return undefined;
@@ -189,7 +193,7 @@ export const DocumentAiSourceBar = ({
   }, [needsBoxes, queryClient, workspaceId]);
 
   const scrolledForJustificationRef = useRef<string | null>(null);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!boundingBoxes || !isActiveTab || !pages || !setScrollTo) {
       return;
     }
@@ -236,7 +240,7 @@ export const DocumentAiSourceBar = ({
   // justification id" so swapping back to the same cell doesn't
   // re-fire the request mid-typing.
   const scrolledForDocxJustificationRef = useRef<string | null>(null);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isActiveTab || !justificationId) {
       return;
     }
@@ -530,7 +534,7 @@ const useFolioBlockPage = (blockId: string): number | null => {
   const [page, setPage] = useState<number | null>(() =>
     findFolioBlockPage(blockId),
   );
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setPage(findFolioBlockPage(blockId));
     const observer = new MutationObserver(() => {
       const next = findFolioBlockPage(blockId);

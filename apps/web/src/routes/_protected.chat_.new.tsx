@@ -27,6 +27,7 @@ function NewChatRedirect() {
   const navigate = useNavigate();
   const didRedirectRef = useRef(false);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- imperative redirect on mount; navigation side-effect, prefer router redirect/beforeLoad, not external-system sync
   useEffect(() => {
     if (didRedirectRef.current) {
       return;

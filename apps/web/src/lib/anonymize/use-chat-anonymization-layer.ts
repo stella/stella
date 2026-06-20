@@ -1,8 +1,7 @@
-import { useEffect } from "react";
-
 import type { Editor } from "@tiptap/react";
 
 import { setChatAnonDecorationPairs } from "@/components/chat/chat-anon-decorations-plugin";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { warmupChatAnonymizeWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import {
   acquireChatAnonDecorationsPlugin,
@@ -52,7 +51,7 @@ export const useChatAnonymizationLayer = ({
   // The wasm pipeline + name dictionaries take seconds to load
   // cold; doing it eagerly hides that cost behind the user's
   // typing time.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (enabled) {
       warmupChatAnonymizeWorker();
     }
@@ -86,7 +85,7 @@ export const useChatAnonymizationLayer = ({
   // idempotent replace, the last unmount removes. The WeakMap
   // lives on `globalThis` so Vite HMR cannot split bookkeeping
   // across old and new module instances.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!editor || !enabled) {
       return undefined;
     }
@@ -96,7 +95,7 @@ export const useChatAnonymizationLayer = ({
     };
   }, [editor, enabled]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!editor || !enabled) {
       return;
     }

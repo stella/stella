@@ -20,6 +20,7 @@ import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -237,6 +238,7 @@ const ExpandableText = ({ text }: { text: string }) => {
 
   // Collapse when switching to a different entry (the panel is not
   // remounted per selection, so expanded state would otherwise leak).
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id derived state (collapses when text changes); lift to key prop
   useEffect(() => {
     setExpanded(false);
   }, [text]);
@@ -244,7 +246,7 @@ const ExpandableText = ({ text }: { text: string }) => {
   // Measure only while clamped, so overflow is detected against the
   // line-clamp height. A ResizeObserver keeps it correct across font
   // loads, panel animation, and width changes.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = ref.current;
     if (expanded || !el) {
       return () => {

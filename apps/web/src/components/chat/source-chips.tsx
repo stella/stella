@@ -107,6 +107,7 @@ export const SourceChips = ({
     (state) => state.registerSources,
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- writes derived source list into a zustand store every render; compute/register in render or move into the collect step
   useEffect(() => {
     registerSources(uniqueExternalSourcesWithIcons);
   }, [registerSources, uniqueExternalSourcesWithIcons]);

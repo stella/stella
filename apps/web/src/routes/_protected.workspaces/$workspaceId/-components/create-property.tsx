@@ -321,6 +321,7 @@ const PropertyComposerBody = ({
   // null-render guard happens after all hooks have run so the order
   // stays stable.
   const missingForEdit = isEditMode && !editingProperty;
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (missing-property condition → onClose), drive the close from the lookup/render guard instead
   useEffect(() => {
     if (missingForEdit) {
       onClose();

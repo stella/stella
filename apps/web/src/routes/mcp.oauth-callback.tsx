@@ -40,6 +40,7 @@ function McpOAuthCallbackPage() {
   const status = Route.useSearch({ select: (search) => search.status });
   const reason = Route.useSearch({ select: (search) => search.reason });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot OAuth broadcast + window.close + fallback-navigate timer; browser-API side-effect bundle with a navigation relay, not a clean external-value sync
   useEffect(() => {
     const outcome: McpOAuthOutcome =
       status === "connected"

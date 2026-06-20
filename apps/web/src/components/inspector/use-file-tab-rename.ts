@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -21,14 +21,15 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
   const [editValue, setEditValue] = useState("");
   const renameEntity = useRenameEntity();
 
-  const startRename = (tab: FileTab) => {
+  const startRename = useCallback((tab: FileTab) => {
     const dotIndex = tab.label.lastIndexOf(".");
     setEditValue(dotIndex > 0 ? tab.label.slice(0, dotIndex) : tab.label);
     setEditingTabId(tab.id);
-  };
+  }, []);
 
   const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
   const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (rename request flag), move into handler
   useEffect(() => {
     if (pendingRenameTabId === null) {
       return;

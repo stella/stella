@@ -43,6 +43,7 @@ import {
 } from "@/components/drag-preview";
 import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -514,6 +515,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   // (toggleAll → allExpanded → setFolderState → re-render).
   const toggleAllRef = useRef(toggleAll);
   toggleAllRef.current = toggleAll;
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (toggleVersion bump → toggleAll), move into the header button handler
   useEffect(() => {
     if (toggleVersion === 0) {
       return;
@@ -521,6 +523,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     toggleAllRef.current();
   }, [toggleVersion]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, push allExpanded/hasFolders into the store at the source instead of mirroring via effect
   useEffect(() => {
     setFolderState({
       allExpanded,
@@ -600,33 +603,33 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   // Track whether an entity drag is active and whether any
   // dragged entity is nested (has a parentId). Only show the
   // root drop bar when at least one entity can be moved to root.
-  useEffect(
-    () =>
-      monitorForElements({
-        canMonitor: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
-        onDragStart: ({ source }) => {
-          const entities = source.data["entities"];
-          const parentId = source.data["parentId"];
-          const hasNested = isDragEntityList(entities)
-            ? entities.some((entity) => entity.parentId !== null)
-            : typeof parentId === "string";
-          if (hasNested) {
-            setIsDragActive(true);
-          }
-        },
-        onDrop: () => setIsDragActive(false),
-      }),
-    [],
+  useMountEffect(() =>
+    monitorForElements({
+      canMonitor: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
+      onDragStart: ({ source }) => {
+        const entities = source.data["entities"];
+        const parentId = source.data["parentId"];
+        const hasNested = isDragEntityList(entities)
+          ? entities.some((entity) => entity.parentId !== null)
+          : typeof parentId === "string";
+        if (hasNested) {
+          setIsDragActive(true);
+        }
+      },
+      onDrop: () => setIsDragActive(false),
+    }),
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, push selectedIds into the store at the source instead of mirroring via effect
   useEffect(() => {
     setFilesystemSelectedIds(selectedIds);
   }, [selectedIds, setFilesystemSelectedIds]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- cleanup-on-unmount of store selection state; not external-system sync
   useEffect(() => clearFilesystemSelectedIds, [clearFilesystemSelectedIds]);
 
   // Dedicated root-level drop bar (visible during drags).
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = rootBarRef.current;
     if (!el) {
       return undefined;
@@ -1171,7 +1174,7 @@ const FilesystemRow = ({
     onToggleFolderRef.current(node.entityId);
   }, 600);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = rowRef.current;
     if (!el) {
       return undefined;

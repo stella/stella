@@ -164,6 +164,7 @@ export const AskUserCard = ({
   // Seed defaults once the full input arrives (after streaming).
   // The useState initializer only runs on mount, when input may
   // still be null.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state seed from props, compute in render or lift to key prop
   useEffect(() => {
     if (!input) {
       return;

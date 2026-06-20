@@ -1,4 +1,4 @@
-import { createElement, useEffect, useRef, useState } from "react";
+import { createElement, useCallback, useEffect, useRef, useState } from "react";
 import type { ComponentProps } from "react";
 
 import { useChat } from "@ai-sdk/react";
@@ -148,10 +148,10 @@ export const useChatSession = ({
   const conversationIdRef = useRef(conversationId);
   const [queuedMessages, setQueuedMessages] = useState<QueuedChatEntry[]>([]);
 
-  const replaceQueuedMessages = (next: QueuedChatEntry[]) => {
+  const replaceQueuedMessages = useCallback((next: QueuedChatEntry[]) => {
     queueRef.current = next;
     setQueuedMessages(next);
-  };
+  }, []);
 
   const withSendModeSnapshot = (
     options: ChatSendMessageOptions,
@@ -500,13 +500,16 @@ export const useChatSession = ({
   });
   const isGenerating =
     status === "submitted" || status === "streaming" || hasRunningToolCall;
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref sync mirroring derived state into a ref; not external-system sync
   useEffect(() => {
     isGeneratingRef.current = isGenerating;
   }, [isGenerating]);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref sync mirroring state into a ref; not external-system sync
   useEffect(() => {
     queueRef.current = queuedMessages;
   }, [queuedMessages]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id (conversationId) resetting local refs/queue; lift to key prop
   useEffect(() => {
     conversationIdRef.current = conversationId;
     isGeneratingRef.current = false;
@@ -523,6 +526,7 @@ export const useChatSession = ({
   // into a failing provider just burns quota and spams the user
   // with repeats of the same error. The next manual send (or a
   // successful `regenerate`) lifts the gate.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay/effect chain dispatching the next queued send; move into the turn-finished handler
   useEffect(() => {
     const finishedTurn = wasGeneratingRef.current && !isGenerating;
     wasGeneratingRef.current = isGenerating;
@@ -550,12 +554,14 @@ export const useChatSession = ({
     status,
   ]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, recomputing approved-tool sets from storage when id/org/connectors change; compute in render or lift to key
   useEffect(() => {
     setConversationApprovedTools(readConversationApprovedTools(conversationId));
     setAlwaysApprovedTools(
       readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
     );
   }, [conversationId, mcpConnectorIdentities, organizationId]);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- subscribes to window storage/custom events and relays into setState; candidate for useExternalSyncEffect after review
   useEffect(() => {
     const handleApprovedToolsChanged = (event: Event) => {
       const detail = getApprovedToolsChangedDetail(event);

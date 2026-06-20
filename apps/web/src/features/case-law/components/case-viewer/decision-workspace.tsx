@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Loader2Icon, SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -92,7 +92,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
 
   const { state: analysisState, generate: generateDecisionAnalysis } =
     useDecisionAnalysis(decisionId, decision.analysis ?? null);
-  const generate = async () => {
+  const generate = useCallback(async () => {
     if (!ensureAIAvailable) {
       return;
     }
@@ -103,7 +103,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
     }
 
     generateDecisionAnalysis();
-  };
+  }, [ensureAIAvailable, generateDecisionAnalysis]);
 
   const hasAnalysis =
     aiEnabled &&
@@ -190,6 +190,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
     return items;
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (auto-kick AI analysis on derived idle state), move into handler / data-loading flow
   useEffect(() => {
     if (aiEnabled && ast && analysisState.status === "idle") {
       void generate();
@@ -197,6 +198,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
   }, [aiEnabled, analysisState.status, ast, generate]);
 
   const reset = useCaseSearchStore((s) => s.reset);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id store reset + derived search state, lift to key prop
   useEffect(() => {
     reset();
     if (initialSearchQuery) {

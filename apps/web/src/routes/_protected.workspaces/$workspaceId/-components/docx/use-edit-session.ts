@@ -10,6 +10,7 @@ import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
@@ -130,12 +131,13 @@ export const useEditSession = ({
   const isMountedRef = useRef(true);
   const isMounted = () => isMountedRef.current;
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref-mirror of changing props (not external-system sync); set ref at the call site instead
   useEffect(() => {
     releaseContextRef.current = { workspaceId, entityId, propertyId };
   }, [entityId, propertyId, workspaceId]);
 
   // Warn the user before closing the tab with unsaved changes
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (isDirty) {
         e.preventDefault();
@@ -283,11 +285,12 @@ export const useEditSession = ({
   }, CHECKPOINT_DEBOUNCE_MS);
   const debouncedCheckpointRef = useRef(debouncedCheckpoint);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref-mirror of a changing callback (not external-system sync); set ref at the call site instead
   useEffect(() => {
     debouncedCheckpointRef.current = debouncedCheckpoint;
   }, [debouncedCheckpoint]);
 
-  useEffect(() => {
+  useMountEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
@@ -301,7 +304,7 @@ export const useEditSession = ({
       const context = releaseContextRef.current;
       void releaseEditSession(context);
     };
-  }, []);
+  });
 
   const markDirtyAndCheckpoint = (buffer: ArrayBuffer) => {
     setIsDirty(true);

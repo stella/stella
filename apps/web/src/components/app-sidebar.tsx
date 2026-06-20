@@ -64,6 +64,7 @@ import {
   getWorkspacePrimaryNavItems,
   type WorkspacePrimaryNavId,
 } from "@/components/workspace-primary-nav";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
@@ -274,7 +275,7 @@ const MatterItem = ({
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = dropRef.current;
     if (!el || !canDrag) {
       return undefined;
@@ -628,6 +629,7 @@ export function AppSidebar(props: AppSidebarProps) {
     HOLD_DELAY_MS,
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (key-hold flag → debounced badge reveal), move into the key-hold handler
   useEffect(() => {
     if (isNavKeyHeld) {
       showBadges();
@@ -761,7 +763,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const navTargetsRef = useRef(navTargets);
   navTargetsRef.current = navTargets;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!showNavBadges) {
       return undefined;
     }

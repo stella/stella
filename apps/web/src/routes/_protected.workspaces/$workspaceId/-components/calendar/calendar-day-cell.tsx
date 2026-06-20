@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { PlusIcon, SquareCheckIcon } from "lucide-react";
@@ -12,6 +12,7 @@ import {
 } from "@stll/ui/components/menu";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { EntityKind } from "@/lib/types";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import type { CalendarTask } from "@/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks";
@@ -83,7 +84,7 @@ export const CalendarDayCell = ({
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = dropRef.current;
     if (!el || !isEditable) {
       return undefined;

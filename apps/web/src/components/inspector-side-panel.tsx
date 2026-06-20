@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
 
 import { useMatch } from "@tanstack/react-router";
 import { MessageSquarePlusIcon, PanelRightIcon } from "lucide-react";
@@ -7,6 +7,7 @@ import { TOAST_RIGHT_OFFSET_VAR } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   SIDE_RAIL_CONTAINER_CLASS,
   SIDE_RAIL_ICON_BUTTON_SIZE,
@@ -162,7 +163,7 @@ export const InspectorSidePanel = () => {
   // user hasn't minimized do we widen to the full pane width.
   const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
     // Keep Folio's find/replace dialog out from under the right inspector
     // pane. Folio reads --folio-find-replace-right on the overlay so the

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import type { HocuspocusProvider } from "@hocuspocus/provider";
 import type * as HocuspocusProviderModule from "@hocuspocus/provider";
@@ -10,6 +10,7 @@ import type * as Yjs from "yjs";
 import type { DocxEditorCollaboration } from "@stll/folio";
 
 import { env } from "@/env";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { FetchBoundaryError, userErrorMessage } from "@/lib/errors";
@@ -136,7 +137,7 @@ export const useFolioCollaborationSession = ({
   const collabUrl = env.VITE_COLLAB_URL;
   const canConnect = enabled && collabUrl !== undefined;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!canConnect) {
       setState({ status: "idle", collaboration: null });
       return undefined;

@@ -83,10 +83,12 @@ export const SuggestionsFacet = ({
   // entity changes so a previous entity's "already redirected"
   // state doesn't suppress the redirect for the new one. Per
   // Codex review on PR #80.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id ref latch; should be keyed/lifted, not external-system sync
   useEffect(() => {
     hasDispatchedRef.current = false;
   }, [entityId]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay dispatch of onMissingEditor callback; move into handler/derived guard
   useEffect(() => {
     if (registration !== undefined) {
       hasDispatchedRef.current = false;

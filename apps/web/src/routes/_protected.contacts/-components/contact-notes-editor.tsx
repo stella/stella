@@ -24,6 +24,7 @@ export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
   const latestServerNotesRef = useRef(contact.notes ?? "");
   const skipNextSaveRef = useRef(false);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- syncs server notes prop into local draft state; derived state, reconcile during render after review
   useEffect(() => {
     const nextNotes = contact.notes ?? "";
     setDraft((currentDraft) =>

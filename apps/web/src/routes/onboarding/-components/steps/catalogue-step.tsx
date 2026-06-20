@@ -201,6 +201,7 @@ export const CatalogueStep = ({
   // acknowledgement via the detail panel and are never auto-added.
   // Explicit removals are tracked by the parent wizard so remounting
   // this step cannot re-add a recommendation the user removed.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay/derived state, auto-selects recommended entries via parent onChange; move into the step's enter flow
   useEffect(() => {
     const autoSelectionPlan = createCatalogueAutoSelectionPlan({
       recommendedEntries,

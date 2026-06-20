@@ -127,6 +127,7 @@ export const PropertyPopover = ({
   const dependencyGenerationRef = useRef(0);
   const [, startDepsTransition] = useTransition();
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mirrors render value into ref; derived bookkeeping, not external-system sync
   useEffect(() => {
     latestDependenciesRef.current = displayedDependencies;
   }, [displayedDependencies]);

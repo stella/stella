@@ -83,6 +83,7 @@ export function MarkdownFolioEditor({
   // host doesn't see the file as dirty the moment it opens.
   const baseline = toMarkdown(doc, CLEAN_MARKDOWN);
   const lastEmittedRef = useRef(baseline);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, syncs a render-computed baseline into a ref; compute in render
   useEffect(() => {
     lastEmittedRef.current = baseline;
   }, [baseline]);

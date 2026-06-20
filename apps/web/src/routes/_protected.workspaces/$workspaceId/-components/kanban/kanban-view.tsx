@@ -19,6 +19,7 @@ import { useTranslations } from "use-intl";
 import type { OptionColor } from "@stll/api/types";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -144,6 +145,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   // Reset local column order when the groupBy property changes so stale
   // column positions from the previous grouping don't leak through.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id (local column order), lift to key prop
   useEffect(() => {
     setLocalColumnOrder([]);
   }, [configuredGroupBy]);
@@ -637,7 +639,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
   const onReorderRef = useRef(onReorderColumn);
   onReorderRef.current = onReorderColumn;
 
-  useEffect(() => {
+  useMountEffect(() => {
     const el = scrollRef.current;
     if (!el) {
       return undefined;

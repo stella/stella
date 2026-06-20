@@ -72,6 +72,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
   // when the popover closes), so each keystroke doesn't dispatch a
   // ProseMirror transaction + draft re-sync.
   const [draftText, setDraftText] = useState(attrs.text);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, sync the node attr into draft on change (reset-on-change); lift to a key prop or compute in render
   useEffect(() => {
     setDraftText(attrs.text);
   }, [attrs.text]);

@@ -1,7 +1,6 @@
 import {
   lazy,
   Suspense,
-  useEffect,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -34,6 +33,7 @@ import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { PDF_MIME_TYPE } from "@/consts";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { DOCX_MIME } from "@/lib/consts";
@@ -320,12 +320,9 @@ export const PeekPrintButton = () => {
   const [isPrinting, setIsPrinting] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(
-    () => () => {
-      abortControllerRef.current?.abort();
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    abortControllerRef.current?.abort();
+  });
 
   const handlePrint = async () => {
     if (!pdfDocument) {
@@ -388,12 +385,9 @@ export const PreparedPdfPrintButton = ({
   const [isPrinting, setIsPrinting] = useState(false);
   const abortControllerRef = useRef<AbortController | null>(null);
 
-  useEffect(
-    () => () => {
-      abortControllerRef.current?.abort();
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    abortControllerRef.current?.abort();
+  });
 
   const handlePrint = async () => {
     abortControllerRef.current?.abort();
@@ -479,7 +473,7 @@ const PeekDocxViewer = ({
   }, [targetZoom]);
   useDocxWheelZoom(containerRef, editorRef);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!printActionsRef) {
       return undefined;
     }

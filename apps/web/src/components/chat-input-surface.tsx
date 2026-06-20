@@ -1,5 +1,5 @@
 import "./chat-editor.css";
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -14,6 +14,7 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type ChatInputSurfaceProps = {
   autoFocus?: boolean;
@@ -82,7 +83,7 @@ export const ChatInputSurface = ({
     submitDisabled,
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!autoFocus) {
       return;
     }

@@ -17,6 +17,7 @@ export const useClientAuthStatus = (): ClientAuthStatus => {
     isAuthenticated: false,
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- data fetch (load session + setState on mount), migrate to TanStack Query
   useEffect(() => {
     void (async () => {
       const { authClient } = await import("@/lib/auth");

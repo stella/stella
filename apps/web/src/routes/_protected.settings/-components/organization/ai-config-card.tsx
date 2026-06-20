@@ -75,6 +75,7 @@ export const AIConfigCard = () => {
   // initial render (useState initializers only run once).
   // Intentionally depends only on `configured` to avoid
   // overwriting user edits on query refetch.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state from query, seeds form state from config; candidate for query-data initialization
   useEffect(() => {
     if (!config?.configured) {
       return;

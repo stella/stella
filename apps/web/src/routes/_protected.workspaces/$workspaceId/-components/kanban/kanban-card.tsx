@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
@@ -14,6 +14,7 @@ import {
 import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -90,7 +91,7 @@ export const KanbanCard = ({
 
   const dragRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = dragRef.current;
     if (!el) {
       return undefined;

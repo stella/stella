@@ -10,10 +10,12 @@
  * the inspector's clipping containers.
  */
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useTranslations } from "use-intl";
+
+import { useMountEffect } from "@/hooks/use-effect";
 
 const MIN_SELECTION_CHARS = 2;
 const MAX_SELECTION_CHARS = 200;
@@ -35,7 +37,7 @@ export const AnonymizationContextMenu = ({
   const t = useTranslations();
   const [menu, setMenu] = useState<MenuState | null>(null);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const handleContextMenu = (event: MouseEvent) => {
       const target = event.target;
       // Only act inside the file preview area — the doc text lives
@@ -80,7 +82,7 @@ export const AnonymizationContextMenu = ({
       window.removeEventListener("scroll", dismiss, true);
       document.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
+  });
 
   if (menu === null) {
     return null;

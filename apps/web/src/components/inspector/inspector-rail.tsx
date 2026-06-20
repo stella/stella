@@ -381,6 +381,7 @@ const VerticalTab = ({
   // Flash the tab on (re-)activation.
   const activationSeq = useInspectorStore((s) => s.activationSeq);
   const prevSeq = useRef(activationSeq);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (activation-seq advance → flash tab via ref-edge compare); candidate for useExternalSyncEffect after review
   useEffect(() => {
     const el = tabRef.current;
     if (el && active && activationSeq !== prevSeq.current) {

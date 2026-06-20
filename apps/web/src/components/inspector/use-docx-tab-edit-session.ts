@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -10,6 +10,7 @@ import type {
   FileTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store";
+import { useMountEffect } from "@/hooks/use-effect";
 import { DOCX_MIME } from "@/lib/consts";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
@@ -37,39 +38,42 @@ export const useDocxTabEditSession = ({
     Map<string, DocxCompatibility>
   >(() => new Map());
 
-  const handleStartDocxEdit = async (tabId: string) => {
-    const compatibility = docxCompatibilityByTab.get(tabId);
-    const blockReason = getDocxEditBlockReason({
-      canSafelyEdit: compatibility?.canSafelyEdit,
-    });
-    if (blockReason === "pendingCompatibility") {
-      stellaToast.info(t("folio.checkingDocxEditTitle"), {
-        description: t("folio.checkingDocxEditDescription"),
+  const handleStartDocxEdit = useCallback(
+    async (tabId: string) => {
+      const compatibility = docxCompatibilityByTab.get(tabId);
+      const blockReason = getDocxEditBlockReason({
+        canSafelyEdit: compatibility?.canSafelyEdit,
       });
-      return;
-    }
-
-    if (blockReason === "unsafe") {
-      stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
-        description: t("folio.unsupportedDocxEditDescription"),
-      });
-      return;
-    }
-
-    if (editingDocxTabId !== null && editingDocxTabId !== tabId) {
-      const currentAction = docxActionsRef.current.get(editingDocxTabId);
-      if (currentAction !== undefined) {
-        await currentAction.cancel();
+      if (blockReason === "pendingCompatibility") {
+        stellaToast.info(t("folio.checkingDocxEditTitle"), {
+          description: t("folio.checkingDocxEditDescription"),
+        });
+        return;
       }
-      docxActionsRef.current.delete(editingDocxTabId);
-      setEditingDocxTabId((current) =>
-        current === editingDocxTabId ? null : current,
-      );
-    }
 
-    setEditingDocxTabId(tabId);
-    docxActionsRef.current.get(tabId)?.unlock();
-  };
+      if (blockReason === "unsafe") {
+        stellaToast.warning(t("folio.unsupportedDocxEditTitle"), {
+          description: t("folio.unsupportedDocxEditDescription"),
+        });
+        return;
+      }
+
+      if (editingDocxTabId !== null && editingDocxTabId !== tabId) {
+        const currentAction = docxActionsRef.current.get(editingDocxTabId);
+        if (currentAction !== undefined) {
+          await currentAction.cancel();
+        }
+        docxActionsRef.current.delete(editingDocxTabId);
+        setEditingDocxTabId((current) =>
+          current === editingDocxTabId ? null : current,
+        );
+      }
+
+      setEditingDocxTabId(tabId);
+      docxActionsRef.current.get(tabId)?.unlock();
+    },
+    [docxCompatibilityByTab, editingDocxTabId, t],
+  );
 
   const flashDocxEditButton = (tabId: string) => {
     if (flashDocxEditTimerRef.current !== null) {
@@ -82,17 +86,15 @@ export const useDocxTabEditSession = ({
     }, 2200);
   };
 
-  useEffect(
-    () => () => {
-      if (flashDocxEditTimerRef.current !== null) {
-        clearTimeout(flashDocxEditTimerRef.current);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (flashDocxEditTimerRef.current !== null) {
+      clearTimeout(flashDocxEditTimerRef.current);
+    }
+  });
 
   const pendingDocxEditTabId = useInspectorStore((s) => s.pendingDocxEditTabId);
   const clearDocxEditRequest = useInspectorStore((s) => s.clearDocxEditRequest);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (pendingDocxEditTabId store flag fires handleStartDocxEdit); move into the action that sets the flag
   useEffect(() => {
     if (pendingDocxEditTabId === null) {
       return;

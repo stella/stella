@@ -219,6 +219,7 @@ export const PropertyPromptInput = ({
     },
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- relays editor instance to parent callback; event-relay, lift via onEditorReady prop call or ref
   useEffect(() => {
     if (onEditorReady !== undefined) {
       onEditorReady(editor);
@@ -227,6 +228,7 @@ export const PropertyPromptInput = ({
 
   // Auto-populate prompt with file reference when the editor
   // is empty and a file property exists.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot imperative editor populate mixed with parent state relays; candidate for useExternalSyncEffect after isolating the editor write
   useEffect(() => {
     if (
       !autoPopulateOnEmpty ||

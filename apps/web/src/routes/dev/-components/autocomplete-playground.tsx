@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 import { baseKeymap } from "prosemirror-commands";
 import { history, redo, undo } from "prosemirror-history";
@@ -22,6 +22,7 @@ import {
   type AutocompleteTriggerSkipReason,
 } from "@stll/folio";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
 
 const DEBOUNCE_MS = 1500;
@@ -201,7 +202,7 @@ export function AutocompletePlayground() {
     useState<AutocompleteTriggerSkipReason | null>(null);
   const editorId = useId();
 
-  useEffect(() => {
+  useMountEffect(() => {
     const host = editorHostRef.current;
     if (host === null) {
       return () => {

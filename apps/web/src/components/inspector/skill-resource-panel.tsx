@@ -74,6 +74,7 @@ export const SkillResourcePanel = ({
   const [draft, setDraft] = useState(tab.content);
   const [saving, setSaving] = useState(false);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id derived state, lift to a key prop on the panel
   useEffect(() => {
     setEditing(false);
     setDraft(tab.content);

@@ -57,6 +57,7 @@ export const useAISuggestionThread = ({
   })();
 
   // Recompute stale status whenever the document changes.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, recomputes suggestion stale status from the editor doc; compute in render or memoize
   useEffect(() => {
     if (!editorView || allSuggestions.length === 0) {
       return;

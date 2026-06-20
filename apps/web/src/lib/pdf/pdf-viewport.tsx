@@ -71,6 +71,7 @@ export const PDFViewport = ({
 }: PDFViewportProps) => {
   const [password, setPassword] = useState(initialPassword);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, syncing the initialPassword prop into local state; lift to key prop or compute in render
   useEffect(() => {
     setPassword(initialPassword);
   }, [initialPassword]);
@@ -130,6 +131,7 @@ const PDFViewerContent = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- pushes the changing PDF document into the zustand store; candidate for useExternalSyncEffect after review
   useEffect(() => {
     startTransition(() => {
       setDocument(document);
@@ -159,6 +161,7 @@ const PDFViewerContent = ({
     onPageCountChanged?.(count);
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay notifying the parent of page-count changes via an effect event; move into the handler that mutates pages
   useEffect(() => {
     onPageCountChangedEvent(pageIds.length);
   }, [pageIds.length]);

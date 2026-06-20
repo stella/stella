@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { StellaWordmark } from "@/components/stella-wordmark";
+import { useMountEffect } from "@/hooks/use-effect";
 
 export type Phase = "org" | "ai" | "invites" | "done";
 
@@ -19,10 +20,10 @@ export const CreatingStep = ({ currentPhase, progress }: CreatingStepProps) => {
   const t = useTranslations();
   const [showPulse, setShowPulse] = useState(true);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const interval = setInterval(() => setShowPulse((v) => !v), 1200);
     return () => clearInterval(interval);
-  }, []);
+  });
 
   return (
     <div className="flex min-h-dvh items-center justify-center">

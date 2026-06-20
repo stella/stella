@@ -139,6 +139,7 @@ export const OnboardingWizard = () => {
     }),
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state from userEmail/locale, compute in render
   useEffect(() => {
     const locale =
       typeof navigator === "undefined" ? "en" : navigator.language || "en";
@@ -151,6 +152,7 @@ export const OnboardingWizard = () => {
     );
   }, [userEmail]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot suggestion apply via setState; event-relay/derived state, move into init or render
   useEffect(() => {
     const suggestedCountryCode = suggestedCountryCodes.at(0);
 

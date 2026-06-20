@@ -89,6 +89,7 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
     }
   };
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, syncing dialog-open to query availability; compute in render or close in the data handler
   useEffect(() => {
     if (data?.available) {
       setOpen(false);
@@ -147,6 +148,7 @@ export function RequireAIKey({ children }: PropsWithChildren) {
   );
   const { openAIKeyDialog, openIfAIUnavailable } = useAIKeyGate();
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay, opens the key dialog when AI is unavailable; move into the availability-resolved handler
   useEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
@@ -211,6 +213,7 @@ export function AIKeyRequiredDialog({
     createDefaultRoleModels,
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, re-syncs provider/role-model form drafts from config when the dialog opens; reset-on-open via key
   useEffect(() => {
     if (!open) {
       return;

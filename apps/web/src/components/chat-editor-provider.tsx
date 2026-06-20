@@ -1,6 +1,7 @@
 import {
   createContext,
   use,
+  useCallback,
   useEffect,
   useEffectEvent,
   useRef,
@@ -49,6 +50,7 @@ import {
   type SlashItem,
 } from "@/components/chat/prompt-slash-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
@@ -422,7 +424,7 @@ export const useChatComposerWiring = ({
 }: UseChatComposerWiringOptions) => {
   const { blur, setEditable, setSubmitHandler, submit } = controller;
 
-  const submitDraft = async () => {
+  const submitDraft = useCallback(async () => {
     if (submitDisabled) {
       return;
     }
@@ -432,8 +434,9 @@ export const useChatComposerWiring = ({
     await submit(async (draft) => {
       await onSubmit(draft);
     });
-  };
+  }, [onSubmit, onSubmitGuard, submit, submitDisabled]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- registers submit handler with controller; candidate for useExternalSyncEffect after review
   useEffect(() => {
     setSubmitHandler(submitDraft);
     return () => {
@@ -441,7 +444,7 @@ export const useChatComposerWiring = ({
     };
   }, [setSubmitHandler, submitDraft]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setEditable(!inputDisabled);
     if (inputDisabled) {
       blur();
@@ -516,6 +519,7 @@ export const useChatEditor = ({
   };
   markDraftStartedRef.current = markDraftStarted;
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref reset on id change, not external-system sync
   useEffect(() => {
     messageHistoryIndexRef.current = null;
   }, [sentMessageHistoryHtml, threadKey]);
@@ -647,6 +651,7 @@ export const useChatEditor = ({
     });
   };
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- debounce teardown on identity change; candidate for useExternalSyncEffect after review
   useEffect(
     () => () => {
       debouncedFetchWorkspaceEntities.cancel();
@@ -695,6 +700,7 @@ export const useChatEditor = ({
     isFetchingNextPage: isFetchingNextSkillPage,
   } = useInfiniteQuery(skillsOptions(activeOrganizationId));
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- data fetch (auto-paginate skill pages), migrate to TanStack Query
   useEffect(() => {
     if (!hasNextSkillPage || isFetchingNextSkillPage) {
       return;
@@ -936,7 +942,7 @@ export const useChatEditor = ({
     activePluginKeysRef.current = nextPlugins.map((plugin) => plugin.key);
   };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isUsableEditor(editor)) {
       return undefined;
     }
@@ -953,7 +959,7 @@ export const useChatEditor = ({
     };
   }, [editor, extensionVersion, syncEditorPlugins]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isUsableEditor(editor)) {
       return undefined;
     }
@@ -1023,7 +1029,7 @@ export const useChatEditor = ({
       .run();
   };
 
-  useEffect(
+  useExternalSyncEffect(
     () =>
       registerActiveEditor({
         focus,

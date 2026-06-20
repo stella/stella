@@ -493,6 +493,7 @@ export const useCellMetadataFlags = ({
 
   // Clear the override when the server has caught up — both
   // dimensions must match (or be unset on the override side).
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- syncs optimistic store back to server snapshot; derived state, compute in render or store selector
   useEffect(() => {
     if (override === undefined) {
       return;
@@ -532,6 +533,7 @@ export const useCellMetadataFlags = ({
   // Once the server-side metadata catches up with what we last sent,
   // drop the in-flight base so the next flush diffs against the
   // server again.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- in-flight ref bookkeeping derived from server snapshot; not external-system sync
   useEffect(() => {
     if (
       lastSentRef.current !== null &&
@@ -660,6 +662,7 @@ export const useCellMetadataFlags = ({
 
   // Safety net — if the component unmounts with a pending change,
   // commit it instead of dropping the request.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- unmount-flush safety net for debounced mutation; not external-system sync
   useEffect(() => () => flush.flush(), [flush]);
 
   const lockProvenance = metadata?.lockProvenance;

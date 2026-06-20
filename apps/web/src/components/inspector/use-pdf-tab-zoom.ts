@@ -1,4 +1,6 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 const ZOOM_STEP = 0.2;
 const MIN_OFFSET = -0.8;
@@ -43,7 +45,7 @@ export const usePdfTabZoom = ({
     });
   };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = pdfContentRef.current;
     if (!el || activeTabType !== "pdf") {
       return undefined;
