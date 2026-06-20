@@ -1,6 +1,10 @@
 import { beforeEach, expect, test } from "bun:test";
 
-import { useI18nStore } from "@/i18n/i18n-store";
+import {
+  getLangDir,
+  supportedLanguages,
+  useI18nStore,
+} from "@/i18n/i18n-store";
 import en from "@/i18n/langs/en.json";
 
 // Baseline: the app has already booted in English, so the boot latch is on.
@@ -82,6 +86,12 @@ test("cold boot in English latches the spinner off synchronously", async () => {
   const load = useI18nStore.getState().loadMessages("en");
   expect(useI18nStore.getState().hasLoadedOnce).toBe(true);
   await load;
+});
+
+test("every supported language resolves to a known writing direction", () => {
+  for (const lang of supportedLanguages) {
+    expect(["ltr", "rtl"]).toContain(getLangDir(lang));
+  }
 });
 
 test("loadedLang and messages advance together", async () => {

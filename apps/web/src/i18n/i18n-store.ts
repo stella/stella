@@ -62,6 +62,28 @@ export const LANG_ENDONYMS = {
   sk: "Slovenčina",
 } as const satisfies Record<SupportedLanguage, string>;
 
+export type TextDirection = "ltr" | "rtl";
+
+// Per-locale base writing direction. The map is kept complete by `satisfies`,
+// so adding a right-to-left language (e.g. Arabic) is a single new row here.
+const LANG_DIR = {
+  en: "ltr",
+  cs: "ltr",
+  de: "ltr",
+  es: "ltr",
+  et: "ltr",
+  fr: "ltr",
+  hu: "ltr",
+  lt: "ltr",
+  lv: "ltr",
+  pl: "ltr",
+  "pt-BR": "ltr",
+  sk: "ltr",
+} as const satisfies Record<SupportedLanguage, TextDirection>;
+
+export const getLangDir = (lang: SupportedLanguage): TextDirection =>
+  LANG_DIR[lang];
+
 export const isSupportedLanguage = (
   value: string,
 ): value is SupportedLanguage => supportedLanguageSet.has(value);
@@ -152,6 +174,7 @@ const setDocumentLanguage = (lang: SupportedLanguage): void => {
     return;
   }
   document.documentElement.lang = lang;
+  document.documentElement.dir = getLangDir(lang);
 };
 
 const applyMessages = (
