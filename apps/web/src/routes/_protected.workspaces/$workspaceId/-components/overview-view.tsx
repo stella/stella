@@ -18,7 +18,7 @@ import {
   SquareCheckIcon,
   UploadIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import {
   Avatar,
@@ -131,6 +131,7 @@ const getLocaleDayLabel = (dayIndex: number, locale: string) => {
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const t = useTranslations();
   const tWorkspaces = useTranslations("workspaces");
+  const locale = useLocale();
   const lang = useI18nStore((s) => s.lang);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -267,10 +268,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   });
 
-  // `getWeekStart` reads `new Date()` and ignores its argument; the `today` key
-  // is what forces a recompute across day boundaries (the compiler can't infer
-  // that dependency, so it would otherwise cache the first week forever).
-  const weekStart = useMemo(getWeekStart, [today]);
+  // getWeekStart reads `new Date()`, so the `today` key forces a recompute
+  // across day boundaries (the compiler can't infer that); `locale` drives the
+  // first weekday.
+  const weekStart = useMemo(() => getWeekStart(locale), [today, locale]);
   const weekEnd = useMemo(() => {
     const end = new Date(weekStart);
     end.setDate(end.getDate() + 6);
