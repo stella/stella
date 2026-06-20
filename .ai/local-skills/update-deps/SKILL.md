@@ -67,6 +67,17 @@ If the request is vague, default to:
      from source, several minutes). As a fallback, use
      `cargo update --dry-run` plus targeted `cargo search` /
      `cargo info` checks
+   - flag prerelease-pinned deps separately: `bun outdated`
+     and `bun update` resolve the npm `latest` dist-tag, so a
+     dependency intentionally pinned to a prerelease channel
+     (`alpha`, `beta`, `rc`, `next`, `canary`, `dev`) never
+     shows up as outdated and never moves, even when newer
+     prereleases exist on its own channel. Grep the manifests
+     and catalog for prerelease specifiers, then compare each
+     pin against its real channel with `npm view <pkg>
+     dist-tags`. A `bunfig.toml` `minimumReleaseAgeExcludes`
+     entry is a strong hint that a package is deliberately
+     tracked ahead of stable.
    - inspect open dependency PRs if the request is about
      triage rather than local edits
    - include GitHub Actions only when the request covers them
@@ -86,6 +97,10 @@ If the request is vague, default to:
    - minor: check new features and silent behavior changes
    - major: assume migration work
    - `0.x` minor: treat as potentially breaking
+   - prerelease (`beta`, `rc`, etc.): unstable channel; assume
+     breaking changes can land between any two prerelease
+     builds, so read the diff and validate even for a "small"
+     bump
 
 5. **Read official upgrade sources**:
    - changelog or release notes
@@ -146,6 +161,10 @@ If the request is vague, default to:
    - for Cargo, prefer `cargo update -p <crate>` when the
      existing semver range already covers the new version;
      edit `Cargo.toml` only when bumping past the range
+   - prerelease-pinned deps are usually exact-pinned to a
+     non-`latest` dist-tag, so neither `bun update` nor `bun
+     update --latest` will move them; edit the pin by hand to
+     the target prerelease version and run `bun install`
    - after each batch passes validation, commit that batch
      before moving to the next one
 
