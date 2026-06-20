@@ -49,12 +49,18 @@
     }
   },
   "appearance": {
+    "calendar": "التقويم",
+    "calendarGregorian": "الميلادي",
+    "calendarHijri": "الهجري (أم القرى)",
     "cool": "بارد",
     "dark": "داكن",
     "flexoki": "Flexoki",
     "light": "فاتح",
     "neutral": "محايد",
     "nord": "Nord",
+    "numbers": "الأرقام",
+    "numbersEastern": "العربية (٠١٢٣)",
+    "numbersWestern": "الغربية (0123)",
     "palette": "لوحة الألوان",
     "system": "النظام",
     "theme": "السمة",

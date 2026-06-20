@@ -49,12 +49,18 @@
     }
   },
   "appearance": {
+    "calendar": "Calendar",
+    "calendarGregorian": "Gregorian",
+    "calendarHijri": "Hijri (Umm al-Qura)",
     "cool": "Studené",
     "dark": "Tmavý",
     "flexoki": "Flexoki",
     "light": "Světlý",
     "neutral": "Neutrální",
     "nord": "Nord",
+    "numbers": "Numbers",
+    "numbersEastern": "Eastern (٠١٢٣)",
+    "numbersWestern": "Western (0123)",
     "palette": "Paleta",
     "system": "Systém",
     "theme": "Vzhled",

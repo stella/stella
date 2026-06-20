@@ -1,8 +1,10 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
+  CalendarIcon,
   ChevronsUpDownIcon,
   GlobeIcon,
+  HashIcon,
   LogOutIcon,
   MonitorIcon,
   MoonIcon,
@@ -68,7 +70,18 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
+  const calendar = useI18nStore((s) => s.calendar);
+  const numberingSystem = useI18nStore((s) => s.numberingSystem);
+  const setCalendar = useI18nStore((s) => s.setCalendar);
+  const setNumberingSystem = useI18nStore((s) => s.setNumberingSystem);
   const { data: organization } = useQuery(organizationOptions);
+
+  // "auto" resolves to a concrete value for the radio selection: Gregorian for
+  // every locale, Eastern Arabic-Indic digits for Arabic and Western elsewhere.
+  const activeCalendar = calendar === "auto" ? "gregory" : calendar;
+  const autoNumbering = lang === "ar" ? "arab" : "latn";
+  const activeNumbering =
+    numberingSystem === "auto" ? autoNumbering : numberingSystem;
 
   const displayName = user.name ?? user.email;
   const orgName = organization?.name;
@@ -200,6 +213,50 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
                     {LANG_ENDONYMS[langCode]}
                   </MenuRadioItem>
                 ))}
+              </MenuRadioGroup>
+            </MenuSubPopup>
+          </MenuSub>
+          <MenuSub>
+            <MenuSubTrigger>
+              <CalendarIcon />
+              {t("appearance.calendar")}
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              <MenuRadioGroup value={activeCalendar}>
+                <MenuRadioItem
+                  onClick={() => setCalendar("gregory")}
+                  value="gregory"
+                >
+                  {t("appearance.calendarGregorian")}
+                </MenuRadioItem>
+                <MenuRadioItem
+                  onClick={() => setCalendar("islamic-umalqura")}
+                  value="islamic-umalqura"
+                >
+                  {t("appearance.calendarHijri")}
+                </MenuRadioItem>
+              </MenuRadioGroup>
+            </MenuSubPopup>
+          </MenuSub>
+          <MenuSub>
+            <MenuSubTrigger>
+              <HashIcon />
+              {t("appearance.numbers")}
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              <MenuRadioGroup value={activeNumbering}>
+                <MenuRadioItem
+                  onClick={() => setNumberingSystem("latn")}
+                  value="latn"
+                >
+                  {t("appearance.numbersWestern")}
+                </MenuRadioItem>
+                <MenuRadioItem
+                  onClick={() => setNumberingSystem("arab")}
+                  value="arab"
+                >
+                  {t("appearance.numbersEastern")}
+                </MenuRadioItem>
               </MenuRadioGroup>
             </MenuSubPopup>
           </MenuSub>

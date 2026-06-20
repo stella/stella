@@ -52,12 +52,18 @@ type Messages = {
     };
   };
   "appearance": {
+    "calendar": "Calendar";
+    "calendarGregorian": "Gregorian";
+    "calendarHijri": "Hijri (Umm al-Qura)";
     "cool": "Cool";
     "dark": "Dark";
     "flexoki": "Flexoki";
     "light": "Light";
     "neutral": "Neutral";
     "nord": "Nord";
+    "numbers": "Numbers";
+    "numbersEastern": "Eastern (٠١٢٣)";
+    "numbersWestern": "Western (0123)";
     "palette": "Palette";
     "system": "System";
     "theme": "Theme";

@@ -49,12 +49,18 @@
     }
   },
   "appearance": {
+    "calendar": "Calendar",
+    "calendarGregorian": "Gregorian",
+    "calendarHijri": "Hijri (Umm al-Qura)",
     "cool": "Kühl",
     "dark": "Dunkel",
     "flexoki": "Flexoki",
     "light": "Hell",
     "neutral": "Neutral",
     "nord": "Nord",
+    "numbers": "Numbers",
+    "numbersEastern": "Eastern (٠١٢٣)",
+    "numbersWestern": "Western (0123)",
     "palette": "Palette",
     "system": "System",
     "theme": "Design",

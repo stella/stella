@@ -156,9 +156,45 @@ let translator = createTranslator({
 
 export const getTranslator = () => translator;
 
+export type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
+export type NumberingPreference = "auto" | "latn" | "arab";
+
+/**
+ * BCP-47 locale used for formatting, carrying the user's calendar and
+ * number-system preferences as Unicode (-u-) extensions. "auto" resolves to
+ * Gregorian (the safe default for legal dates, even in Arabic) and to Eastern
+ * Arabic-Indic digits for Arabic / Western digits elsewhere. Non-Arabic locales
+ * on the default preferences keep their plain tag, so most callers are
+ * unaffected.
+ */
+export const buildFormattingLocale = (
+  lang: SupportedLanguage,
+  calendar: CalendarPreference,
+  numberingSystem: NumberingPreference,
+): string => {
+  const calendarSystem = calendar === "auto" ? "gregory" : calendar;
+  const numbers =
+    numberingSystem === "auto"
+      ? lang === "ar"
+        ? "arab"
+        : "latn"
+      : numberingSystem;
+
+  const keywords: string[] = [];
+  // Pin Arabic to an explicit calendar (some CLDR regions default to a
+  // non-Gregorian one) and carry any non-Gregorian opt-in.
+  if (calendarSystem !== "gregory" || lang === "ar") {
+    keywords.push(`ca-${calendarSystem}`);
+  }
+  if (numbers !== "latn") {
+    keywords.push(`nu-${numbers}`);
+  }
+  return keywords.length > 0 ? `${lang}-u-${keywords.join("-")}` : lang;
+};
+
 // Locale-aware formatter for non-React code (utilities, store logic), mirroring
 // getTranslator. React components should use use-intl's useFormatter, which
-// reads the same locale from the provider. Both are kept in sync by setLocale.
+// reads the same locale from the provider. Both are kept in sync by the store.
 let formatter = createFormatter({
   locale: "en",
   timeZone: SERVER_I18N_TIME_ZONE,
@@ -175,11 +211,15 @@ type State = {
   // later language switch (which flips isLoaded false while the new locale
   // streams in) cannot send the app back to the boot spinner and unmount it.
   hasLoadedOnce: boolean;
+  calendar: CalendarPreference;
+  numberingSystem: NumberingPreference;
 };
 
 type Actions = {
   setLang: (lang: SupportedLanguage) => Promise<void>;
   loadMessages: (lang: SupportedLanguage) => Promise<void>;
+  setCalendar: (calendar: CalendarPreference) => void;
+  setNumberingSystem: (numberingSystem: NumberingPreference) => void;
 };
 
 let loadRequestId = 0;
@@ -192,18 +232,35 @@ const setDocumentLanguage = (lang: SupportedLanguage): void => {
   document.documentElement.dir = getLangDir(lang);
 };
 
-const applyMessages = (
+const refreshFormatter = (
   lang: SupportedLanguage,
-  messages: LocaleMessages,
+  calendar: CalendarPreference,
+  numberingSystem: NumberingPreference,
 ): void => {
+  formatter = createFormatter({
+    locale: buildFormattingLocale(lang, calendar, numberingSystem),
+    timeZone: resolveAppTimeZone(),
+  });
+};
+
+type ApplyMessagesArgs = {
+  lang: SupportedLanguage;
+  messages: LocaleMessages;
+  calendar: CalendarPreference;
+  numberingSystem: NumberingPreference;
+};
+
+const applyMessages = ({
+  lang,
+  messages,
+  calendar,
+  numberingSystem,
+}: ApplyMessagesArgs): void => {
   translator = createTranslator({
     locale: lang,
     messages,
   });
-  formatter = createFormatter({
-    locale: lang,
-    timeZone: resolveAppTimeZone(),
-  });
+  refreshFormatter(lang, calendar, numberingSystem);
   setDocumentLanguage(lang);
 };
 
@@ -220,6 +277,8 @@ export const useI18nStore = create<State & Actions>()(
       // otherwise), which keeps the boot-spinner gate honest: a persisted
       // non-English locale cannot skip the spinner before its bundle arrives.
       hasLoadedOnce: false,
+      calendar: "auto",
+      numberingSystem: "auto",
 
       loadMessages: async (lang) => {
         const state = get();
@@ -241,7 +300,12 @@ export const useI18nStore = create<State & Actions>()(
           }
 
           const fallback = get();
-          applyMessages(fallback.loadedLang, fallback.messages);
+          applyMessages({
+            lang: fallback.loadedLang,
+            messages: fallback.messages,
+            calendar: fallback.calendar,
+            numberingSystem: fallback.numberingSystem,
+          });
           set({
             lang: fallback.loadedLang,
             isLoaded: true,
@@ -254,7 +318,8 @@ export const useI18nStore = create<State & Actions>()(
           return;
         }
 
-        applyMessages(lang, messages);
+        const { calendar, numberingSystem } = get();
+        applyMessages({ lang, messages, calendar, numberingSystem });
         set({
           lang,
           messages,
@@ -267,11 +332,27 @@ export const useI18nStore = create<State & Actions>()(
       setLang: async (lang) => {
         await get().loadMessages(lang);
       },
+
+      setCalendar: (calendar) => {
+        set({ calendar });
+        const { loadedLang, numberingSystem } = get();
+        refreshFormatter(loadedLang, calendar, numberingSystem);
+      },
+
+      setNumberingSystem: (numberingSystem) => {
+        set({ numberingSystem });
+        const { calendar, loadedLang } = get();
+        refreshFormatter(loadedLang, calendar, numberingSystem);
+      },
     }),
     {
       name: getStorageKey("i18n"),
       version: 0,
-      partialize: (state) => ({ lang: state.lang }),
+      partialize: (state) => ({
+        lang: state.lang,
+        calendar: state.calendar,
+        numberingSystem: state.numberingSystem,
+      }),
       onRehydrateStorage: () => (state) => {
         if (!state) {
           return;

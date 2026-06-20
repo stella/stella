@@ -14,7 +14,11 @@ import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { bundledEnglishMessages, useI18nStore } from "@/i18n/i18n-store";
+import {
+  buildFormattingLocale,
+  bundledEnglishMessages,
+  useI18nStore,
+} from "@/i18n/i18n-store";
 import type Messages from "@/i18n/langs/messages.gen";
 import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { AnalyticsProvider, useAnalytics } from "@/lib/analytics/provider";
@@ -41,6 +45,8 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   const locale = useI18nStore((s) => s.loadedLang);
   const messages = useI18nStore((s) => s.messages);
   const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
+  const calendar = useI18nStore((s) => s.calendar);
+  const numberingSystem = useI18nStore((s) => s.numberingSystem);
   const hydrated = useHydrated();
 
   // window.location is safe here: the server branch never reads it, and
@@ -91,9 +97,16 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
     preHydrationEnglish ? bundledEnglishMessages : messages
   ) as Messages;
 
+  // Plurals and message lookup key off the base language; the -u- extensions
+  // only steer number/date formatting. preHydrationEnglish forces the plain
+  // English tag so client markup matches the server's.
+  const formattingLocale = preHydrationEnglish
+    ? "en"
+    : buildFormattingLocale(locale, calendar, numberingSystem);
+
   return (
     <IntlProvider
-      locale={preHydrationEnglish ? "en" : locale}
+      locale={formattingLocale}
       messages={activeMessages}
       timeZone={resolveAppTimeZone()}
     >

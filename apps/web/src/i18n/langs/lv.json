@@ -49,12 +49,18 @@
     }
   },
   "appearance": {
+    "calendar": "Calendar",
+    "calendarGregorian": "Gregorian",
+    "calendarHijri": "Hijri (Umm al-Qura)",
     "cool": "Vēss",
     "dark": "Tumšs",
     "flexoki": "Flexoki",
     "light": "Gaišs",
     "neutral": "Neitrāls",
     "nord": "Nord",
+    "numbers": "Numbers",
+    "numbersEastern": "Eastern (٠١٢٣)",
+    "numbersWestern": "Western (0123)",
     "palette": "Palete",
     "system": "Sistēma",
     "theme": "Motīvs",
