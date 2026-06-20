@@ -81,6 +81,10 @@ type WorkspaceTableProps = {
   // Grouped sections opt out so the "+ new document" row isn't repeated
   // under every group.
   showAddRow?: boolean;
+  // Grouped sections opt out: the group header already sticks to the page,
+  // and a second sticky header in each section's own scroll box collides
+  // with it on scroll.
+  stickyColumnHeader?: boolean;
 };
 
 export const WorkspaceTable = ({
@@ -91,6 +95,7 @@ export const WorkspaceTable = ({
   isFetchingNextPage = false,
   onLoadMore,
   showAddRow = true,
+  stickyColumnHeader = true,
 }: WorkspaceTableProps) => {
   const t = useTranslations();
   const tableWrapperRef = useRef<HTMLDivElement>(null);
@@ -440,7 +445,12 @@ export const WorkspaceTable = ({
           role="grid"
           style={gridStyle}
         >
-          <div className="bg-background sticky top-0 z-30">
+          <div
+            className={cn(
+              "bg-background z-30",
+              stickyColumnHeader && "sticky top-0",
+            )}
+          >
             {table.getHeaderGroups().map((headerGroup) => (
               <WorkspaceGridRow key={headerGroup.id}>
                 {getOrderedHeaders(headerGroup.headers, renderColumns).map(

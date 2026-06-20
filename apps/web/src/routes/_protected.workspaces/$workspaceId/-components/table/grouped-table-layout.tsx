@@ -277,6 +277,7 @@ const GroupSection = ({
                 }
               }}
               showAddRow={false}
+              stickyColumnHeader={false}
               table={table}
               workspaceId={workspaceId}
             />
