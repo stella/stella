@@ -12,6 +12,7 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
   getEntityGroups,
@@ -26,8 +27,17 @@ import {
   useTableColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { workspaceTableFeatures } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-features";
-import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import type {
+  TableColumnDef,
+  TableTreeNode,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import { getOrderedColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
+import {
+  addPropertyColId,
+  getWorkspaceGridTemplateColumns,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+import type { WorkspaceGridStyle } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import {
   useKanbanGroupOptions,
@@ -146,6 +156,73 @@ export const GroupedTableLayout = ({
           workspaceId={workspaceId}
         />
       ))}
+      <GroupedAddRow
+        columns={columns}
+        tableState={tableState}
+        workspaceId={workspaceId}
+      />
+    </div>
+  );
+};
+
+const NO_ROWS: TableTreeNode[] = [];
+
+type GroupedAddRowProps = {
+  columns: TableColumnDef[];
+  tableState: ReturnType<typeof useTableState>;
+  workspaceId: string;
+};
+
+/**
+ * One "+ new document" row for the whole grouped view, reusing the real
+ * BottomRow. A data-less table supplies the shared column geometry so the row
+ * lines up with the group tables above; the wrapper carries the grid-template
+ * var and sticks the row to the bottom of the scroll area.
+ */
+const GroupedAddRow = ({
+  columns,
+  tableState,
+  workspaceId,
+}: GroupedAddRowProps) => {
+  const table = useTable({
+    features: workspaceTableFeatures,
+    columnResizeMode: "onChange",
+    data: NO_ROWS,
+    columns,
+    defaultColumn: { minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE },
+    manualSorting: true,
+    enableSortingRemoval: false,
+    enableSubRowSelection: true,
+    getRowId: (row) => row.entityId,
+    state: tableState.state,
+  });
+
+  const orderedColumns = getOrderedColumns({
+    leftColumns: table.getLeftLeafColumns(),
+    centerColumns: table.getCenterLeafColumns(),
+    rightColumns: table.getRightLeafColumns(),
+  }).filter((column) => column.getIsVisible());
+  const renderColumns = orderedColumns.filter(
+    (column) => column.id !== addPropertyColId,
+  );
+  const tableWidth = orderedColumns.reduce(
+    (sum, column) => sum + column.getSize(),
+    0,
+  );
+  const gridStyle: WorkspaceGridStyle = {
+    "--workspace-table-columns": getWorkspaceGridTemplateColumns({
+      renderColumns,
+      addPropertyColumn: null,
+    }),
+    minWidth: tableWidth,
+  };
+
+  return (
+    <div
+      className="bg-background sticky bottom-0 z-30 order-last overflow-hidden"
+      style={gridStyle}
+    >
+      <BottomRow table={table} workspaceId={workspaceId} />
     </div>
   );
 };
@@ -246,6 +323,7 @@ const GroupSection = ({
                 }
               }}
               fillHeight={false}
+              showAddRow={false}
               stickyColumnHeader={false}
               table={table}
               workspaceId={workspaceId}
@@ -285,7 +363,7 @@ const GroupHeader = ({
   return (
     <div
       className={cn(
-        "bg-muted/40 sticky top-0 z-20 flex items-center gap-2 border-b pe-3",
+        "bg-muted sticky top-0 z-40 flex items-center gap-2 border-b pe-3",
         // An empty category recedes into the background, surfacing on hover
         // so it stays scannable without competing with populated groups.
         empty && "opacity-60 transition-opacity duration-200 hover:opacity-100",
