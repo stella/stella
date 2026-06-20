@@ -2,23 +2,16 @@ import { useMemo, useState } from "react";
 
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  PlusIcon,
-  TableIcon,
-} from "lucide-react";
+import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
-import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import type {
   WorkspaceEntity,
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
-import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
   getEntityGroups,
@@ -153,30 +146,6 @@ export const GroupedTableLayout = ({
           workspaceId={workspaceId}
         />
       ))}
-      {/* One add-row for the whole grouped view (order-last keeps it below
-          even the sunk empty categories), instead of one per subtable. Mirrors
-          the flat table's BottomRow: a + in the 48px select column, a divider,
-          then the label aligned to the first data column. */}
-      <AddEntityMenu
-        render={
-          <button
-            className={cn(
-              "bg-background text-muted-foreground hover:text-foreground sticky bottom-0 z-20 order-last flex w-full items-stretch border-t transition-colors duration-150",
-              TOOLBAR_ROW_HEIGHT,
-            )}
-            type="button"
-          >
-            <span className="flex w-12 shrink-0 items-center justify-center border-e">
-              <PlusIcon className="size-3.5" />
-            </span>
-            <span className="flex items-center px-3 text-sm">
-              {t("workspaces.newDocument")}
-            </span>
-          </button>
-        }
-        uploadOnly
-        workspaceId={workspaceId}
-      />
     </div>
   );
 };
@@ -277,7 +246,6 @@ const GroupSection = ({
                 }
               }}
               fillHeight={false}
-              showAddRow={false}
               stickyColumnHeader={false}
               table={table}
               workspaceId={workspaceId}
