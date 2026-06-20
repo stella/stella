@@ -78,6 +78,7 @@ export const useStartWorkflow = (workspaceId: string) => {
                 toSafeId<"property">(id),
               ),
             }),
+          ...(args?.force !== undefined && { force: args.force }),
           serviceTier,
         });
 

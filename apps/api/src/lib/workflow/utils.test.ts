@@ -296,4 +296,37 @@ describe("prepareBatch", () => {
 
     expect(result.properties).toHaveLength(0);
   });
+
+  test("forced property is re-included despite fresh status and valid content", () => {
+    const rawBatch = createRawBatch([
+      createBatchProperty("p1", { status: "fresh" }),
+    ]);
+    const fieldContentMap = new Map<string, FieldContent["type"]>([
+      ["p1", "single-select"],
+    ]);
+
+    // Default: a fresh cell that already holds a result is skipped, so an
+    // unforced scoped run only computes documents still missing a value.
+    expect(prepareBatch(rawBatch, fieldContentMap).properties).toHaveLength(0);
+
+    // Forced (explicit re-run): the same cell is recomputed.
+    const forced = new Set<string>([propertyId("p1")]);
+    const result = prepareBatch(rawBatch, fieldContentMap, new Set(), forced);
+    expect(result.properties.map((p) => p.id)).toEqual([propertyId("p1")]);
+  });
+
+  test("locked wins over forced", () => {
+    const rawBatch = createRawBatch([
+      createBatchProperty("p1", { status: "fresh" }),
+    ]);
+    const fieldContentMap = new Map<string, FieldContent["type"]>([
+      ["p1", "text"],
+    ]);
+    const locked = new Set<string>([propertyId("p1")]);
+    const forced = new Set<string>([propertyId("p1")]);
+
+    const result = prepareBatch(rawBatch, fieldContentMap, locked, forced);
+
+    expect(result.properties).toHaveLength(0);
+  });
 });

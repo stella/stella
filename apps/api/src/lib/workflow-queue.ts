@@ -258,6 +258,15 @@ type StartWorkflowArgs = {
    * filter are dropped from every level of the plan.
    */
   propertyIds?: SafeId<"property">[];
+  /**
+   * Re-extract the scoped properties on every targeted entity, even ones
+   * that already hold a valid result. When false (the default), the
+   * per-entity `prepareBatch` gate still skips cells with content, so a
+   * scoped run only computes the entities that are missing a result —
+   * e.g. documents added since the last classification. Set true for an
+   * explicit "re-run all" the user asked for.
+   */
+  force?: boolean;
   serviceTier?: AIRequestServiceTier;
 };
 
@@ -386,6 +395,7 @@ export const startWorkflow = async ({
   entityIds: inputEntityIds,
   entityIdsOrder: inputOrder,
   propertyIds: inputPropertyIds,
+  force = false,
   serviceTier = "standard",
 }: StartWorkflowArgs): Promise<StartWorkflowResult> => {
   const redis = getRedis();
@@ -524,9 +534,11 @@ export const startWorkflow = async ({
     // the property is genuinely still stale at workspace scope. The
     // flag lets us tell scoped runs apart from a full sweep.
     //
-    // Column reruns (propertyIds without entityIds) re-process every
-    // entity for the property, so finishWorkflow may freshen as
-    // usual — do NOT set the scoped flag in that case.
+    // Column runs (propertyIds without entityIds) target every entity
+    // for the property — whether each one actually recomputes is the
+    // per-entity prepareBatch gate's call (forced runs recompute all;
+    // unforced runs only fill missing cells) — so finishWorkflow may
+    // freshen as usual; do NOT set the scoped flag in that case.
     const isCellScopedRun =
       inputPropertyIds &&
       inputPropertyIds.length > 0 &&
@@ -567,7 +579,8 @@ export const startWorkflow = async ({
           serviceTier,
           userId,
           workspaceId,
-          ...(inputPropertyIds &&
+          ...(force &&
+            inputPropertyIds &&
             inputPropertyIds.length > 0 && {
               forcePropertyIds: inputPropertyIds,
             }),

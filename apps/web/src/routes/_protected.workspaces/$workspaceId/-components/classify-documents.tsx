@@ -1,9 +1,15 @@
 import { useSuspenseQuery } from "@tanstack/react-query";
-import { TagsIcon } from "lucide-react";
+import { ChevronDownIcon, TagsIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type { OptionColor } from "@stll/api/types";
 import { Button } from "@stll/ui/components/button";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import type { WorkspaceProperty, WorkspacePropertyOption } from "@/lib/types";
@@ -64,12 +70,21 @@ export const ClassifyDocuments = ({ workspaceId }: ClassifyDocumentsProps) => {
     return null;
   }
 
-  const handleClassify = () => {
-    if (existingClassifier) {
-      void startWorkflow({ propertyIds: [existingClassifier.id] });
+  // Default run leaves `force` unset, so the per-entity gate only computes
+  // documents still missing a classification (e.g. ones added since the
+  // last run). "Reclassify" forces a full redo the user explicitly asked
+  // for.
+  const runClassifier = (force: boolean) => {
+    if (!existingClassifier) {
       return;
     }
+    void startWorkflow({
+      propertyIds: [existingClassifier.id],
+      ...(force && { force: true }),
+    });
+  };
 
+  const createClassifier = () => {
     createProperty.mutate(
       {
         name: DOCUMENT_TYPE_NAME,
@@ -96,19 +111,54 @@ export const ClassifyDocuments = ({ workspaceId }: ClassifyDocumentsProps) => {
     );
   };
 
+  if (!existingClassifier) {
+    return (
+      <Button
+        className="text-muted-foreground hover:bg-accent gap-1 px-2 font-normal"
+        loading={createProperty.isPending}
+        onClick={createClassifier}
+        size="xs"
+        type="button"
+        variant="ghost"
+      >
+        <TagsIcon className="size-3" />
+        {t("workspaces.properties.classify.action")}
+      </Button>
+    );
+  }
+
   return (
-    <Button
-      className="text-muted-foreground hover:bg-accent gap-1 px-2 font-normal"
-      loading={createProperty.isPending}
-      onClick={handleClassify}
-      size="xs"
-      type="button"
-      variant="ghost"
-    >
-      <TagsIcon className="size-3" />
-      {existingClassifier
-        ? t("workspaces.properties.classify.rerun")
-        : t("workspaces.properties.classify.action")}
-    </Button>
+    <div className="flex items-center">
+      <Button
+        className="text-muted-foreground hover:bg-accent gap-1 px-2 font-normal"
+        onClick={() => runClassifier(false)}
+        size="xs"
+        type="button"
+        variant="ghost"
+      >
+        <TagsIcon className="size-3" />
+        {t("workspaces.properties.classify.action")}
+      </Button>
+      <Menu>
+        <MenuTrigger
+          render={
+            <Button
+              aria-label={t("workspaces.properties.classify.rerun")}
+              className="text-muted-foreground hover:bg-accent"
+              size="icon-xs"
+              type="button"
+              variant="ghost"
+            />
+          }
+        >
+          <ChevronDownIcon className="size-3" />
+        </MenuTrigger>
+        <MenuPopup align="end">
+          <MenuItem onClick={() => runClassifier(true)}>
+            {t("workspaces.properties.classify.rerun")}
+          </MenuItem>
+        </MenuPopup>
+      </Menu>
+    </div>
   );
 };

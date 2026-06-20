@@ -14,6 +14,7 @@ const config = {
     entityIds: t.Optional(t.Array(tSafeId("entity"))),
     entityIdsOrder: t.Optional(t.Array(tSafeId("entity"))),
     propertyIds: t.Optional(t.Array(tSafeId("property"))),
+    force: t.Optional(t.Boolean()),
     serviceTier: t.Optional(
       t.Union([t.Literal("standard"), t.Literal("flex")]),
     ),
@@ -56,6 +57,7 @@ const workflowStart = createSafeHandler(
               entityIdsOrder: body.entityIdsOrder,
             }),
             ...(body.propertyIds && { propertyIds: body.propertyIds }),
+            ...(body.force !== undefined && { force: body.force }),
             ...(body.serviceTier && { serviceTier: body.serviceTier }),
           }),
         catch: (cause) =>
