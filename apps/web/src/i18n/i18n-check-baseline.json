@@ -33,6 +33,7 @@
   ],
   "identicalToSource": {
     "appearance.flexoki": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -49,6 +50,7 @@
       "de"
     ],
     "appearance.nord": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -80,6 +82,9 @@
       "pl",
       "pt-BR",
       "sk"
+    ],
+    "auth.emailPlaceholder": [
+      "ar"
     ],
     "billing.codes.codeLabel": [
       "de",
@@ -227,13 +232,18 @@
       "pt-BR",
       "sk"
     ],
+    "common.urlIdentifierPlaceholder": [
+      "ar"
+    ],
     "contacts.communication.emailPlaceholder": [
+      "ar",
       "de"
     ],
     "contacts.communication.title": [
       "fr"
     ],
     "contacts.create.icoPlaceholder": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -250,6 +260,7 @@
       "es"
     ],
     "contacts.fields.bankAccountBic": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -544,6 +555,7 @@
       "sk"
     ],
     "knowledge.agentSkills.newFileFilenamePlaceholder": [
+      "ar",
       "cs",
       "de",
       "et",
@@ -556,6 +568,7 @@
       "sk"
     ],
     "knowledge.agentSkills.newFilePathPlaceholder": [
+      "ar",
       "cs",
       "et",
       "hu",
@@ -576,6 +589,9 @@
       "pt-BR",
       "sk"
     ],
+    "knowledge.agentSkills.urlPlaceholder": [
+      "ar"
+    ],
     "knowledge.agentSkills.version": [
       "de"
     ],
@@ -584,6 +600,7 @@
       "sk"
     ],
     "knowledge.mcp.auth.oauth2": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -601,6 +618,7 @@
       "sk"
     ],
     "knowledge.mcp.urlPlaceholder": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -910,7 +928,11 @@
       "fr",
       "sk"
     ],
+    "organization.invitations.emailAddressPlaceholder": [
+      "ar"
+    ],
     "search.escKey": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -975,6 +997,7 @@
       "fr"
     ],
     "translate.settings.apiKeyPlaceholder": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -1001,6 +1024,7 @@
       "sk"
     ],
     "translate.settings.tierPro": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -1055,6 +1079,7 @@
       "sk"
     ],
     "workspaces.infosoud.title": [
+      "ar",
       "cs",
       "de",
       "es",

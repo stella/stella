@@ -4,26 +4,37 @@ Rules for maintaining consistent translations across all locales.
 
 ## Supported Languages
 
-| Code  | Language            | Plural forms                |
-| ----- | ------------------- | --------------------------- |
-| en    | English             | one, other                  |
-| cs    | Czech               | one, few (2–4), other       |
-| de    | German              | one, other                  |
-| es    | Spanish             | one, many, other            |
-| et    | Estonian            | one, other                  |
-| fr    | French              | one, many, other            |
-| hu    | Hungarian           | one, other                  |
-| lt    | Lithuanian          | one, few (2–9), many, other |
-| lv    | Latvian             | zero, one, other            |
-| pl    | Polish              | one, few (2–4), many, other |
-| pt-BR | Portuguese (Brazil) | one, many, other            |
-| sk    | Slovak              | one, few (2–4), other       |
+| Code  | Language            | Plural forms                     |
+| ----- | ------------------- | -------------------------------- |
+| en    | English             | one, other                       |
+| ar    | Arabic              | zero, one, two, few, many, other |
+| cs    | Czech               | one, few (2–4), other            |
+| de    | German              | one, other                       |
+| es    | Spanish             | one, many, other                 |
+| et    | Estonian            | one, other                       |
+| fr    | French              | one, many, other                 |
+| hu    | Hungarian           | one, other                       |
+| lt    | Lithuanian          | one, few (2–9), many, other      |
+| lv    | Latvian             | zero, one, other                 |
+| pl    | Polish              | one, few (2–4), many, other      |
+| pt-BR | Portuguese (Brazil) | one, many, other                 |
+| sk    | Slovak              | one, few (2–4), other            |
 
 > Czech and Slovak also have a CLDR `many` category, but it only
 > applies to fractional counts (e.g. 1.5); it is not needed for the
 > integer counts used in UI strings, so it is omitted above. Keep
 > `cs.json` and `sk.json` aligned on this — do not add unreachable
 > integer `many` branches to one but not the other.
+
+> Arabic (`ar`) uses all six CLDR plural categories: `zero`, `one`,
+> `two`, `few` (3–10), `many` (11–99), and `other`. Unlike `cs`/`sk`,
+> the `many` form is reachable for integer counts, so every pluralized
+> string must carry all six. `ar` was machine-translated and awaits a
+> native legal-Arabic review; a few proper nouns and format examples
+> that stay in Latin are grandfathered in `i18n-check-baseline.json`,
+> like other locales. Kuwait-specific formatting (Eastern Arabic
+> numerals, Hijri calendar, KWD) belongs to the locale formatting
+> layer, not to these strings.
 
 ## Writing for an International Audience
 

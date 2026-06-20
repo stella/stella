@@ -13,6 +13,7 @@ type LocalizedMessages<T> = {
 
 export const supportedLanguages = [
   "en",
+  "ar",
   "cs",
   "de",
   "es",
@@ -34,6 +35,7 @@ const supportedLanguageSet: ReadonlySet<string> = new Set(supportedLanguages);
 
 const messageLoaders = {
   en: () => en,
+  ar: async () => (await import("@/i18n/langs/ar.json")).default,
   cs: async () => (await import("@/i18n/langs/cs.json")).default,
   de: async () => (await import("@/i18n/langs/de.json")).default,
   es: async () => (await import("@/i18n/langs/es.json")).default,
@@ -49,6 +51,7 @@ const messageLoaders = {
 
 export const LANG_ENDONYMS = {
   en: "English",
+  ar: "العربية",
   cs: "Čeština",
   de: "Deutsch",
   es: "Español",
@@ -68,6 +71,7 @@ export type TextDirection = "ltr" | "rtl";
 // so adding a right-to-left language (e.g. Arabic) is a single new row here.
 const LANG_DIR = {
   en: "ltr",
+  ar: "rtl",
   cs: "ltr",
   de: "ltr",
   es: "ltr",
