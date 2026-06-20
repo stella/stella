@@ -425,7 +425,10 @@ export const WorkspaceTable = ({
         addPropertyColumn && ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
       )}
     >
-      <div className="h-full overflow-auto" ref={tableWrapperComposedRef}>
+      <div
+        className="scrollbar-subtle h-full overflow-auto"
+        ref={tableWrapperComposedRef}
+      >
         <div
           aria-colcount={visibleColumnCount}
           aria-rowcount={rowModel.rows.length}

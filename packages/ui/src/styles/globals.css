@@ -1076,3 +1076,31 @@
   width: 0 !important;
   height: 0 !important;
 }
+
+/*
+ * Thin, low-contrast scrollbar for dense scroll regions (tables, panels)
+ * where the default bar competes for attention. Track is transparent; the
+ * thumb uses the border token and lifts to muted-foreground on hover.
+ */
+@utility scrollbar-subtle {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-border) transparent;
+
+  &::-webkit-scrollbar {
+    width: 0.5rem;
+    height: 0.5rem;
+  }
+
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+
+  &::-webkit-scrollbar-thumb {
+    border-radius: 9999px;
+    background-color: var(--color-border);
+  }
+
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-muted-foreground);
+  }
+}
