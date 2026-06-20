@@ -13,6 +13,7 @@ export {
   createEmptyDocument,
   type CreateEmptyDocumentOptions,
 } from "./core/utils/createDocument";
+export { createDocx } from "./core/docx/rezip";
 export type { Document } from "./core/types/document";
 export type { DocxCompatibility } from "./core/docx/compatibility";
 export {

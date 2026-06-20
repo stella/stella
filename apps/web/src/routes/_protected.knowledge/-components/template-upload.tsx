@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { UploadIcon, WandSparklesIcon } from "lucide-react";
+import { SparklesIcon, UploadIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -19,10 +19,14 @@ type DiscoverData = Exclude<
 >;
 
 type TemplateUploadProps = {
+  onCreateBlank: () => void;
   onDiscovered: (file: File, schema: DiscoverData) => void;
 };
 
-export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
+export const TemplateUpload = ({
+  onCreateBlank,
+  onDiscovered,
+}: TemplateUploadProps) => {
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement>(null);
   const prepareInputRef = useRef<HTMLInputElement>(null);
@@ -163,7 +167,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
         onDrop={handleDrop}
       >
         <div className="bg-muted flex size-12 items-center justify-center rounded-lg">
-          <UploadIcon className="text-muted-foreground size-6" />
+          <SparklesIcon className="text-muted-foreground size-6" />
         </div>
 
         <div className="text-center">
@@ -175,12 +179,34 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
           </p>
         </div>
 
+        {/* Primary: author the template directly in the Studio. */}
+        <div className="flex w-full flex-col items-center gap-2">
+          <Button className="w-full" disabled={loading} onClick={onCreateBlank}>
+            {t("templates.createInStudio")}
+          </Button>
+          <p className="text-muted-foreground text-center text-xs">
+            {t("templates.createInStudioHint")}
+          </p>
+        </div>
+
+        {/* Secondary: import an existing document (upload or AI markup). */}
+        <div className="flex w-full items-center gap-2">
+          <span className="bg-border h-px flex-1" />
+          <span className="text-muted-foreground text-xs">
+            {t("templates.orImportFromDocument")}
+          </span>
+          <span className="bg-border h-px flex-1" />
+        </div>
+
         <div className="flex flex-col items-center gap-2">
           <div className="flex items-center gap-2">
             <Button
               disabled={loading}
               onClick={() => inputRef.current?.click()}
+              size="sm"
+              variant="outline"
             >
+              <UploadIcon />
               {loading
                 ? t("templates.discovering")
                 : t("templates.browseFiles")}
@@ -188,6 +214,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
             <Button
               disabled={loading}
               onClick={() => prepareInputRef.current?.click()}
+              size="sm"
               variant="outline"
             >
               <WandSparklesIcon />

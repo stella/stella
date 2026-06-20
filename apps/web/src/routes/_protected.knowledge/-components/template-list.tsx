@@ -117,6 +117,7 @@ type TemplateListProps = {
   selectedCategoryId: string | null;
   onCategorySelect: (id: string | null) => void;
   onCategoriesChanged: () => void;
+  onCreateBlank: () => void;
   onDiscovered: (file: File, schema: DiscoverData) => void;
   onSelect: (template: TemplateItem) => void;
   onDeleted: () => void;
@@ -130,6 +131,7 @@ export const TemplateList = ({
   selectedCategoryId,
   onCategorySelect,
   onCategoriesChanged,
+  onCreateBlank,
   onDiscovered,
   onSelect,
   onDeleted,
@@ -238,7 +240,12 @@ export const TemplateList = ({
   };
 
   if (templates.length === 0 && !selectedCategoryId) {
-    return <TemplateUpload onDiscovered={onDiscovered} />;
+    return (
+      <TemplateUpload
+        onCreateBlank={onCreateBlank}
+        onDiscovered={onDiscovered}
+      />
+    );
   }
 
   const allTags = [
@@ -307,9 +314,11 @@ export const TemplateList = ({
             <DensityToggle density={density} onChange={changeDensity} />
             {canCreateTemplate && (
               <>
+                {/* Primary action: create a blank template in the Studio. The
+                    hidden input stays for the drag-and-drop .docx import path. */}
                 <Button
                   disabled={discovering}
-                  onClick={() => inputRef.current?.click()}
+                  onClick={onCreateBlank}
                   size="sm"
                 >
                   <PlusIcon />

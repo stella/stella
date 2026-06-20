@@ -12,6 +12,7 @@ import syncTemplateClause from "@/api/handlers/templates/clauses-sync";
 import syncAllTemplateClauses from "@/api/handlers/templates/clauses-sync-all";
 import unlinkTemplateClause from "@/api/handlers/templates/clauses-unlink";
 import createTemplate from "@/api/handlers/templates/create";
+import createBlankTemplate from "@/api/handlers/templates/create-blank";
 import deleteTemplate from "@/api/handlers/templates/delete";
 import discoverTemplate from "@/api/handlers/templates/discover";
 import fillTemplate from "@/api/handlers/templates/fill";
@@ -81,6 +82,10 @@ export const templatesRoute = new Elysia({
   .put("/", createTemplate.handler, {
     body: createTemplate.config.body,
     permissions: createTemplate.config.permissions,
+  })
+  .put("/blank", createBlankTemplate.handler, {
+    body: createBlankTemplate.config.body,
+    permissions: createBlankTemplate.config.permissions,
   })
   .get("/:templateId/preview", previewTemplate.handler, {
     params: previewTemplate.config.params,
