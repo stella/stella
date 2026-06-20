@@ -166,6 +166,10 @@ export const useChatSession = ({
   // IntersectionObserver trigger and shows the top spinner.
   const [olderCursor, setOlderCursor] = useState(initialOlderCursor);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
+  // Set after a failed older-page fetch: the cursor is kept for retry, but the
+  // auto-trigger is suppressed (see ChatThreadMessages) so a still-visible
+  // sentinel cannot loop the request. Cleared on a manual retry or a re-seed.
+  const [loadOlderError, setLoadOlderError] = useState(false);
   const [seededChat, setSeededChat] = useState(chat);
   const isLoadingOlderRef = useRef(false);
   const olderCursorRef = useRef(olderCursor);
@@ -173,6 +177,7 @@ export const useChatSession = ({
     setSeededChat(chat);
     setOlderCursor(initialOlderCursor);
     setIsLoadingOlder(false);
+    setLoadOlderError(false);
     olderCursorRef.current = initialOlderCursor;
     isLoadingOlderRef.current = false;
   }
@@ -182,12 +187,21 @@ export const useChatSession = ({
     if (before === null || isLoadingOlderRef.current) {
       return;
     }
+    const requestedConversationId = conversationId;
     isLoadingOlderRef.current = true;
     setIsLoadingOlder(true);
+    setLoadOlderError(false);
 
     const result = await Result.tryPromise(
       async () => await fetchOlderMessages({ key: threadRef, before }),
     );
+
+    // Discard a response that resolved after the user switched threads: the
+    // re-seed already reset paging for the new thread, so applying this would
+    // corrupt its cursor and prepend the previous thread's messages.
+    if (conversationIdRef.current !== requestedConversationId) {
+      return;
+    }
 
     isLoadingOlderRef.current = false;
     setIsLoadingOlder(false);
@@ -195,8 +209,10 @@ export const useChatSession = ({
     if (Result.isError(result)) {
       // `fetchOlderMessages` already throws a converted APIError; capture it
       // for telemetry and surface a toast so the user knows the older history
-      // failed to load. The cursor is left intact so they can retry.
+      // failed to load. Keep the cursor but flag the error so auto-loading
+      // pauses (the manual button retries) instead of looping the request.
       getAnalytics().captureError(result.error);
+      setLoadOlderError(true);
       stellaToast.add({
         title: t("chat.loadEarlierMessagesError"),
         type: "error",
@@ -217,7 +233,7 @@ export const useChatSession = ({
     });
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [setMessages, t, threadRef]);
+  }, [conversationId, setMessages, t, threadRef]);
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the
@@ -736,6 +752,7 @@ export const useChatSession = ({
     loadOlder,
     olderCursor,
     isLoadingOlder,
+    loadOlderError,
     resendLatestMessage,
     sendMessage,
     queuedMessages,

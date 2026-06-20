@@ -997,6 +997,7 @@ const FileChatOverlayInner = ({
     olderCursor,
     isLoadingOlder,
     loadOlder,
+    loadOlderError,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -1221,6 +1222,7 @@ const FileChatOverlayInner = ({
                 hasOlderMessages={olderCursor !== null}
                 isGenerating={isGenerating}
                 isLoadingOlder={isLoadingOlder}
+                loadOlderError={loadOlderError}
                 messages={messages}
                 onAskUserEditAndRerun={handleAskUserEditAndRerun}
                 onAskUserSubmit={handleAskUserSubmit}

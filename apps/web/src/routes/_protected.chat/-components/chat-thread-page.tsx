@@ -139,6 +139,7 @@ export const ChatThreadPage = ({
     loadOlder,
     olderCursor,
     isLoadingOlder,
+    loadOlderError,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -374,6 +375,7 @@ export const ChatThreadPage = ({
                     hasOlderMessages={olderCursor !== null}
                     isGenerating={isGenerating}
                     isLoadingOlder={isLoadingOlder}
+                    loadOlderError={loadOlderError}
                     messages={messages}
                     onLoadOlder={loadOlder}
                     onAskUserEditAndRerun={handleAskUserEditAndRerun}

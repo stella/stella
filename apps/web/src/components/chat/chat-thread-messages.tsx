@@ -57,6 +57,7 @@ export const ChatThreadMessages = ({
   hasOlderMessages = false,
   isGenerating = false,
   isLoadingOlder = false,
+  loadOlderError = false,
   messages,
   onLoadOlder,
   scrollContainerRef,
@@ -110,7 +111,7 @@ export const ChatThreadMessages = ({
   useEffect(() => {
     const root = scrollRef?.current;
     const target = sentinelRef.current;
-    if (!root || !target || !canLoadOlder || isLoadingOlder) {
+    if (!root || !target || !canLoadOlder || isLoadingOlder || loadOlderError) {
       return undefined;
     }
 
@@ -130,8 +131,10 @@ export const ChatThreadMessages = ({
     // Re-arm on paging state AND when the bound load callback changes: its
     // identity changes on thread switch, so this stops the observer from
     // fetching the previous thread's older page into the current transcript.
+    // `loadOlderError` keeps the observer detached after a failure so it
+    // cannot loop the request; the manual button is the only retry path.
     // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder/scrollRef are stable refs; onLoadOlder tracks the active thread
-  }, [canLoadOlder, isLoadingOlder, onLoadOlder]);
+  }, [canLoadOlder, isLoadingOlder, loadOlderError, onLoadOlder]);
 
   // Scroll anchoring: a prepend changes the first message id and grows
   // scrollHeight above the viewport. Restore the previous offset before
@@ -716,6 +719,9 @@ type ChatThreadMessagesProps = {
   isGenerating?: boolean | undefined;
   /** True while an older page is being fetched + prepended. */
   isLoadingOlder?: boolean | undefined;
+  /** True after an older-page fetch failed; pauses the auto-trigger so the
+   *  sentinel cannot loop the request (the manual button still retries). */
+  loadOlderError?: boolean | undefined;
   messages: PersistedChatMessage[];
   /** Explicit scroll container for surfaces that render outside a
    *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
