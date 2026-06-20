@@ -28,6 +28,12 @@ import {
 import { sanitizeUrl } from "@/api/lib/sanitize-url";
 import { includes } from "@/api/lib/type-guards";
 
+import {
+  appendTextInline,
+  inlinesToPlainText,
+  walkInlines as walkInlinesShared,
+} from "./shared-inlines";
+
 type ParsePlDecisionInput = {
   caseNumber: string;
   ecli: string | undefined;
@@ -203,113 +209,12 @@ const textInline = (text: string, anonymized = false): Inline[] =>
       ]
     : [];
 
-const appendTextInline = (
-  target: Inline[],
-  text: string,
-  anonymized = false,
-): void => {
-  if (!text) {
-    return;
-  }
-
-  const last = target.at(-1);
-  if (
-    last?.type === "text" &&
-    last.anonymized === (anonymized ? true : undefined)
-  ) {
-    last.text += text;
-    return;
-  }
-
-  target.push({
-    type: "text",
-    text,
-    ...(anonymized && { anonymized: true as const }),
-  });
-};
-
 const walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
   anonymized = false,
-): Inline[] => {
-  const inlines: Inline[] = [];
-
-  el.contents().each((_, node) => {
-    if (isText(node)) {
-      appendTextInline(inlines, $(node).text(), anonymized);
-      return;
-    }
-
-    if (!isTag(node)) {
-      return;
-    }
-
-    const $node = $(node);
-    const tag = node.tagName.toLowerCase();
-    // isTag() also matches <script>/<style>; never emit their raw text.
-    if (tag === "script" || tag === "style") {
-      return;
-    }
-    const isAnon = anonymized || $node.hasClass("anon-block");
-
-    if (tag === "br") {
-      inlines.push({ type: "line-break" });
-      return;
-    }
-
-    if (tag === "strong" || tag === "b") {
-      const children = walkInlines($, $node, isAnon);
-      if (children.length > 0) {
-        inlines.push({ type: "bold", children });
-      }
-      return;
-    }
-
-    if (tag === "em" || tag === "i") {
-      const children = walkInlines($, $node, isAnon);
-      if (children.length > 0) {
-        inlines.push({ type: "italic", children });
-      }
-      return;
-    }
-
-    if (tag === "a") {
-      const children = walkInlines($, $node, isAnon);
-      const href = sanitizeUrl($node.attr("href") ?? "");
-      if (href && children.length > 0) {
-        inlines.push({ type: "link", href, children });
-      } else if (children.length > 0) {
-        inlines.push(...children);
-      }
-      return;
-    }
-
-    inlines.push(...walkInlines($, $node, isAnon));
-  });
-
-  return inlines;
-};
-
-const inlinesToPlainText = (inlines: readonly Inline[]): string => {
-  let text = "";
-
-  for (const inline of inlines) {
-    if (inline.type === "text") {
-      text += inline.text;
-      continue;
-    }
-
-    if (inline.type === "line-break") {
-      text += "\n";
-      continue;
-    }
-
-    text += inlinesToPlainText(inline.children);
-  }
-
-  return text;
-};
+): Inline[] =>
+  walkInlinesShared($, el, { sanitizeHref: sanitizeUrl, anonymized });
 
 const inferParagraphRole = (
   state: ParserState,

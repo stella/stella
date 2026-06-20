@@ -24,7 +24,6 @@
  */
 
 import * as cheerio from "cheerio";
-import { isText } from "domhandler";
 import type { AnyNode } from "domhandler";
 
 import type {
@@ -38,6 +37,11 @@ import {
   CZ_CLOSING_RE as CLOSING_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "./cz-patterns";
+import {
+  inlinesToPlainText,
+  stripInlinePrefix,
+  walkInlines as walkInlinesShared,
+} from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -106,131 +110,8 @@ export const parseNssDecisionHtml = (
 const walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
-): Inline[] => {
-  const inlines: Inline[] = [];
-
-  el.contents().each((_, node) => {
-    if (isText(node)) {
-      const text = $(node).text();
-      if (text) {
-        inlines.push({ type: "text", text });
-      }
-      return;
-    }
-
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison -- must skip on exactly "tag"; domhandler isTag() also matches script/style, changing skip behavior
-    if (node.type !== "tag") {
-      return;
-    }
-
-    const tag = node.tagName.toLowerCase();
-    const $node = $(node);
-
-    if (tag === "br") {
-      inlines.push({ type: "line-break" });
-      return;
-    }
-
-    // Extract alt text from images (e.g., decorative headers,
-    // embedded labels). Some decisions embed meaningful text
-    // in <img alt="...">.
-    if (tag === "img") {
-      const alt = $node.attr("alt")?.trim();
-      if (alt) {
-        inlines.push({ type: "text", text: alt });
-      }
-      return;
-    }
-
-    if (tag === "span") {
-      const style = $node.attr("style") ?? "";
-
-      // Skip Aspose spacer spans only when they contain no
-      // meaningful text. Modern exports use these for tab stops
-      // and invisible fills (whitespace-only), but older 2004-era
-      // conversions sometimes place real words inside them.
-      if (
-        style.includes("-aw-import:ignore") ||
-        style.includes("-aw-import:spaces") ||
-        style.includes("display:inline-block")
-      ) {
-        const innerText = $node.text().trim();
-        if (!innerText) {
-          return;
-        }
-      }
-
-      const isBold = style.includes("font-weight:bold");
-      const isItalic = style.includes("font-style:italic");
-
-      const children = walkInlines($, $node);
-      if (children.length === 0) {
-        return;
-      }
-
-      if (isBold && isItalic) {
-        inlines.push({
-          type: "bold",
-          children: [{ type: "italic", children }],
-        });
-      } else if (isBold) {
-        inlines.push({ type: "bold", children });
-      } else if (isItalic) {
-        inlines.push({ type: "italic", children });
-      } else {
-        inlines.push(...children);
-      }
-      return;
-    }
-
-    if (tag === "b" || tag === "strong") {
-      const children = walkInlines($, $node);
-      if (children.length > 0) {
-        inlines.push({ type: "bold", children });
-      }
-      return;
-    }
-
-    if (tag === "i" || tag === "em") {
-      const children = walkInlines($, $node);
-      if (children.length > 0) {
-        inlines.push({ type: "italic", children });
-      }
-      return;
-    }
-
-    if (tag === "a") {
-      const href = $node.attr("href");
-      const children = walkInlines($, $node);
-      if (href && children.length > 0) {
-        inlines.push({ type: "link", href, children });
-      } else if (children.length > 0) {
-        inlines.push(...children);
-      }
-      return;
-    }
-
-    // Unwrap other tags
-    inlines.push(...walkInlines($, $node));
-  });
-
-  return inlines;
-};
-
-const inlinesToPlainText = (inlines: readonly Inline[]): string => {
-  let text = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      text += node.text;
-    } else if (node.type === "line-break") {
-      text += "\n";
-    } else {
-      // bold | italic | link — all carry children
-      text += inlinesToPlainText(node.children);
-    }
-  }
-  return text;
-};
+): Inline[] =>
+  walkInlinesShared($, el, { parseImgAlt: true, parseSpanStyle: true });
 
 // ── Chunk extraction ───────────────────────────────────────
 
@@ -495,70 +376,6 @@ const makeAnchorId = (prefix: string, index: number): string =>
  * italic, and other wrapper nodes by recursively counting
  * their text content.
  */
-const stripInlinePrefix = (
-  inlines: readonly Inline[],
-  charCount: number,
-): Inline[] => {
-  if (charCount <= 0) {
-    return [...inlines];
-  }
-
-  const result: Inline[] = [];
-  let remaining = charCount;
-
-  for (const node of inlines) {
-    if (remaining <= 0) {
-      result.push(node);
-      continue;
-    }
-
-    if (node.type === "text") {
-      if (node.text.length <= remaining) {
-        remaining -= node.text.length;
-      } else {
-        const rest = node.text.slice(remaining);
-        remaining = 0;
-        if (rest) {
-          result.push({ type: "text", text: rest });
-        }
-      }
-      continue;
-    }
-
-    if (node.type === "line-break") {
-      remaining -= 1;
-      continue;
-    }
-
-    // Remaining variants (bold | italic | link) all carry children.
-    const nodeTextLen = inlinesToPlainText(node.children).length;
-    if (nodeTextLen <= remaining) {
-      // Entire node consumed by prefix
-      remaining -= nodeTextLen;
-    } else {
-      // Partial strip inside the node
-      const stripped = stripInlinePrefix(node.children, remaining);
-      remaining = 0;
-      if (stripped.length > 0) {
-        result.push({ ...node, children: stripped });
-      }
-    }
-  }
-
-  // Trim leading whitespace from the first text node
-  const first = result[0];
-  if (result.length > 0 && first?.type === "text") {
-    const trimmed = first.text.trimStart();
-    if (trimmed) {
-      result[0] = { type: "text", text: trimmed };
-    } else {
-      result.shift();
-    }
-  }
-
-  return result;
-};
-
 const classifyChunks = (chunks: readonly PChunk[]): Block[] => {
   let blockCounter = 0;
   const makeBlockId = (): string => {
