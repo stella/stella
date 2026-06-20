@@ -2,9 +2,15 @@ import { useMemo, useState } from "react";
 
 import { useInfiniteQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { useTable } from "@tanstack/react-table";
-import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  PlusIcon,
+  TableIcon,
+} from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import type {
@@ -12,6 +18,7 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import {
   getEntityGroups,
@@ -146,6 +153,21 @@ export const GroupedTableLayout = ({
           workspaceId={workspaceId}
         />
       ))}
+      {/* One add-row for the whole grouped view (order-last keeps it below
+          even the sunk empty categories), instead of one per subtable. */}
+      <AddEntityMenu
+        render={
+          <Button
+            className="bg-background text-muted-foreground hover:text-foreground sticky bottom-0 z-20 order-last h-10 w-full justify-start gap-2 rounded-none border-t px-3 font-normal transition-colors duration-150"
+            variant="ghost"
+          >
+            <PlusIcon className="size-3.5" />
+            {t("workspaces.newDocument")}
+          </Button>
+        }
+        uploadOnly
+        workspaceId={workspaceId}
+      />
     </div>
   );
 };
