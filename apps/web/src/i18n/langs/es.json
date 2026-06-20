@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Actual",
-      "description": "Gestione sus sesiones activas",
       "device": "Dispositivo",
       "deviceOnOs": "{browser} en {os}",
       "ipAddress": "Dirección IP",
@@ -21,25 +20,6 @@
       "description": "Añade credenciales de proveedor para empezar a usar funciones de IA.",
       "title": "Conectar proveedor de IA"
     }
-  },
-  "anonymize": {
-    "addEntity": "Añadir entidad",
-    "checkAnonymization": "Check anonymisation",
-    "closeAddForm": "Cerrar formulario de alta",
-    "confirmAll": "Confirmar todo",
-    "entities": "Entidades",
-    "entityType": "Tipo de entidad",
-    "extractingText": "Extrayendo texto…",
-    "noEntitiesFound": "No se encontraron entidades",
-    "reject": "Rechazar",
-    "rejectAll": "Rechazar todo",
-    "removeEntity": "Eliminar entidad",
-    "revise": "Revise anonymisation",
-    "runPipeline": "Ejecutar flujo",
-    "running": "Ejecutando…",
-    "searchMatches": "Palabras que buscar en el documento",
-    "searchPlaceholder": "Escriba palabras a buscar…",
-    "title": "Anonymisation review"
   },
   "app": {
     "versionMismatch": {
@@ -62,7 +42,6 @@
     "warm": "Cálido"
   },
   "auth": {
-    "betaNoticeBody": "Como precaución durante la beta, no subas datos sensibles, privilegiados, personales, irremplazables o críticos para producción. Cloud es un servicio de demostración.",
     "betaNoticeTitle": "Beta",
     "checkSpamHint": "Si no lo ve, revise su carpeta de spam.",
     "chooseOrganization": "Seleccione en qué organización desea trabajar",
@@ -92,7 +71,6 @@
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
     "signInBeforeInvitation": "Debe iniciar sesión antes de aceptar una invitación a una organización.",
-    "signInWithEmail": "Iniciar sesión con e-mail",
     "subtitle": "Documentos, jurisprudencia y revisión bajo control. Con ayuda de la IA.",
     "useDifferentEmail": "Usar otro correo",
     "weSentCodeTo": "Hemos enviado un código a {email}"
@@ -262,31 +240,14 @@
     "emptyState": "No se encontraron resoluciones. Configure una fuente y ejecute una sincronización para importar jurisprudencia.",
     "filters": {
       "court": "Tribunal",
-      "dateFrom": "Desde",
-      "dateTo": "Hasta",
       "searchPlaceholder": "Buscar por número de expediente..."
     },
-    "loading": "Cargando...",
     "loadingMore": "Cargando más...",
-    "sectionTypes": {
-      "argumentation": "Argumentación",
-      "dissent": "Voto particular",
-      "footer": "Pie",
-      "header": "Encabezado",
-      "ruling": "Fallo",
-      "unknown": "Otro"
-    },
     "seo": {
       "browse": "Explorar jurisprudencia",
       "countries": "Países",
       "courts": "Tribunales",
       "years": "Años"
-    },
-    "sources": {
-      "empty": "No hay fuentes configuradas.",
-      "lastSync": "Última sincronización: {date, date, medium}",
-      "neverSynced": "Sin sincronizar",
-      "title": "Fuentes"
     },
     "viewer": {
       "abstract": "Resumen",
@@ -296,7 +257,6 @@
       "legalSentence": "Fundamento jurídico",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Nombre popular",
-      "sections": "Secciones",
       "source": "Fuente",
       "sourceFields": {
         "decisionCategory": "Categoría de la decisión",
@@ -578,7 +538,6 @@
     "allClauses": "Todas las cláusulas",
     "backToList": "Volver a cláusulas",
     "body": "Cuerpo",
-    "categories": "Categorías",
     "categoryDeleteConfirm": "Las cláusulas de esta categoría pasarán a estar sin categorizar.",
     "categoryName": "Nombre de categoría",
     "categoryNamePlaceholder": "p. ej. Confidencialidad",
@@ -592,7 +551,6 @@
     "createCategory": "Nueva categoría",
     "createClause": "Nueva cláusula",
     "createFailed": "Error al crear la cláusula",
-    "currentVersion": "Actual",
     "deleteCategory": "Eliminar categoría",
     "deleteClause": "Eliminar cláusula",
     "deleteFailed": "Error al eliminar",
@@ -607,7 +565,6 @@
     "importSuccess": "{count, plural, one {# cláusula importada} other {# cláusulas importadas}}",
     "importing": "Importando…",
     "languagePlaceholder": "p. ej. es",
-    "limitReached": "Límite de cláusulas alcanzado",
     "linkClause": "Vincular cláusula",
     "linkFailed": "Error al vincular la cláusula",
     "linked": "Cláusula vinculada",
@@ -615,7 +572,6 @@
     "loadFailed": "Error al cargar las cláusulas",
     "loading": "Cargando cláusulas…",
     "noChanges": "Sin cambios",
-    "noClauses": "Aún no hay cláusulas",
     "noLinkedClauses": "Sin cláusulas vinculadas",
     "noResults": "Aún no hay cláusulas",
     "noVariants": "Sin variantes",
@@ -625,7 +581,6 @@
     "searchClauses": "Buscar cláusulas...",
     "searchPlaceholder": "Buscar cláusulas...",
     "selectFile": "Seleccionar archivo JSON",
-    "selectVariant": "Seleccionar variante",
     "selectVersionToCompare": "Seleccione una versión para comparar con la actual",
     "slotName": "Nombre del espacio",
     "slotNamePlaceholder": "p. ej. NoCompetencia",
@@ -638,7 +593,6 @@
     "unlinkConfirm": "Esta acción eliminará la cláusula de esta plantilla.",
     "unlinkFailed": "Error al desvincular la cláusula",
     "unlinked": "Cláusula desvinculada",
-    "unmappedSlot": "Sin vincular",
     "updateFailed": "Error al actualizar la cláusula",
     "usageNotes": "Notas de uso",
     "usageNotesPlaceholder": "¿Cuándo debe utilizarse esta cláusula? (para el ensamblado por IA)",
@@ -647,8 +601,7 @@
     "variantLabel": "Etiqueta de variante",
     "variantLabelPlaceholder": "p. ej. Estándar",
     "variants": "Variantes",
-    "version": "Versión {version}",
-    "versionCount": "{count, plural, one {# versión} other {# versiones}}"
+    "version": "Versión {version}"
   },
   "common": {
     "accept": "Aceptar",
@@ -971,7 +924,6 @@
     "acceptAll": "Aceptar todo",
     "applyAs": "como",
     "applyDirect": "Directo",
-    "applyMode": "Aplicar como:",
     "applyTracked": "Control de cambios",
     "areaUnspecified": "Sin especificar",
     "byArea": "Por área",
@@ -983,11 +935,9 @@
     "hideAccepted": "Ocultar sugerencias aceptadas",
     "identityAria": "Identidad de control de cambios para {name}",
     "identitySaved": "Identidad guardada",
-    "progressAria": "{reviewed} de {total} revisadas",
     "reject": "Rechazar",
     "rejectAll": "Rechazar todo",
     "revert": "Revertir",
-    "reviewed": "revisadas",
     "savingIdentity": "Guardando…",
     "severityHigh": "Alta",
     "severityLow": "Baja",
@@ -1286,7 +1236,6 @@
       "ignoreScopeAlways": "Ignorar siempre",
       "ignoreScopeDocument": "Ignorar en este asunto",
       "ignoreScopeMenuAriaLabel": "Ámbito de exclusión",
-      "ignoreScopeWorkspace": "Ignorar en este espacio de trabajo",
       "labelPickerAriaLabel": "Etiqueta de entidad",
       "labelPickerEmpty": "No hay etiquetas coincidentes.",
       "labelPickerPlaceholder": "Etiqueta",
@@ -1315,7 +1264,6 @@
     "matterPicker": {
       "allMatters": "Todos los asuntos",
       "description": "Elige los asuntos en los que puede basarse este chat. La IA ve el contenido de cada asunto que selecciones.",
-      "directLabel": "Directo",
       "empty": "No hay asuntos disponibles.",
       "noMatter": "Sin asunto",
       "noResults": "Ningún asunto coincide con «{query}».",
@@ -1558,14 +1506,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Cuenta",
-    "calendar": "Calendario",
     "chat": "Chat",
-    "chatAlreadyOpen": "El chat ya está abierto",
-    "clients": "Clientes",
     "contacts": "Contactos",
-    "inbox": "Bandeja de entrada",
-    "invitations": "Invitaciones",
     "knowledge": "Conocimiento",
     "members": "Miembros",
     "myTodos": "Mis tareas",
@@ -1573,15 +1515,12 @@
     "pinned": "Fijados",
     "recents": "Recientes",
     "search": "Buscar",
-    "searchEmptyState": "Escriba para buscar documentos, asuntos y más.",
-    "searchPlaceholder": "Buscar en todos los espacios de trabajo...",
     "shortcutCategories": {
       "navigation": "Navegación"
     },
     "sidebar": "Panel lateral",
     "sidebarDescription": "Muestra el panel lateral móvil.",
     "templates": "Plantillas",
-    "timeTracking": "Seguimiento de tiempo",
     "toggleChat": "Mostrar/ocultar chat",
     "toggleSidebar": "Alternar barra lateral"
   },
@@ -1611,7 +1550,6 @@
     "catalogueThirdPartyConfirm": "Añadir de todos modos",
     "catalogueThirdPartyDisclaimer": "Este es código de terceros aportado por {author}. stella no lo ha revisado, respaldado ni mantenido. Usted es responsable de comprobar que sea adecuado para su práctica y cumpla las políticas de su firma. Al añadirlo, acepta usarlo bajo su propia responsabilidad.",
     "catalogueTitle": "Personalice su IA",
-    "changeAnytime": "Puede cambiarlo en cualquier momento.",
     "continue": "Continuar",
     "creating": {
       "ai": "Guardando la configuración de IA...",
@@ -1651,8 +1589,7 @@
     "stepJurisdiction": "Jurisdicción",
     "stepOrganization": "Equipo",
     "stepTeam": "Invitar",
-    "termsNotice": "Al continuar, aceptas nuestros <terms>Términos de servicio</terms>.",
-    "welcomeSubtitle": "La configuración toma menos de un minuto."
+    "termsNotice": "Al continuar, aceptas nuestros <terms>Términos de servicio</terms>."
   },
   "organization": {
     "aiConfig": {
@@ -1812,7 +1749,6 @@
       "message": "Mensaje",
       "task": "Tarea"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Tipo de archivo",
     "noResults": "Sin resultados para \"{query}\".",
     "placeholder": "Buscar en todos los asuntos...",
@@ -1820,7 +1756,6 @@
     "recentlyOpenedFiles": "Archivos abiertos recientemente",
     "resultCount": "{count, plural, one {# resultado} other {# resultados}}",
     "summaryAction": "Resumir mejores resultados",
-    "summaryCitations": "Resultados citados",
     "summaryError": "Resumen no disponible",
     "summaryLoading": "Resumiendo resultados...",
     "summaryPrompt": "Usa los mejores resultados y su contenido para redactar una respuesta breve.",
@@ -1891,7 +1826,6 @@
       "pendingInvitations": "Invitaciones pendientes",
       "practiceJurisdictions": "Jurisdicciones de práctica",
       "profile": "Perfil",
-      "profileDescription": "Update name and slug",
       "promptCaching": {
         "description": "Cuando está activado, stella añade marcadores de caché para que las solicitudes de IA repetidas sobre el mismo documento o hilo cuesten ~10× menos y terminen más rápido. Los prompts en caché permanecen con el proveedor de IA hasta 5 minutos, limitados a tu organización. Al desactivarlo, stella deja de enviar marcadores de caché, pero los proveedores pueden seguir cacheando oportunísticamente — solo un contrato de Zero Data Retention con el proveedor desactiva por completo el cacheo del lado del servidor.",
         "title": "Caché de prompts",
@@ -1914,7 +1848,6 @@
       "usageLimitTitleEntitlementInactive": "La autorización de uso no está activa",
       "usageLimitTitleNoEntitlement": "Se requiere autorización de uso",
       "usageLimitTitleUsageLimitExceeded": "Límite de uso de IA alcanzado",
-      "usageLoading": "Cargando…",
       "usageManage": "Gestionar uso alojado",
       "usageManageError": "No se pudo abrir la gestión de uso alojado",
       "usageManuallyManaged": "Gestionado manualmente",

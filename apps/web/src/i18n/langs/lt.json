@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Dabartinis",
-      "description": "Tvarkykite aktyvias sesijas",
       "device": "Įrenginys",
       "deviceOnOs": "{browser} / {os}",
       "ipAddress": "IP adresas",
@@ -21,25 +20,6 @@
       "description": "Pridėkite teikėjo prisijungimo duomenis, kad galėtumėte naudoti AI funkcijas.",
       "title": "Prijungti AI teikėją"
     }
-  },
-  "anonymize": {
-    "addEntity": "Pridėti subjektą",
-    "checkAnonymization": "Check anonymisation",
-    "closeAddForm": "Uždaryti pridėjimo formą",
-    "confirmAll": "Patvirtinti viską",
-    "entities": "Subjektai",
-    "entityType": "Subjekto tipas",
-    "extractingText": "Išgaunamas tekstas…",
-    "noEntitiesFound": "Subjektų nerasta",
-    "reject": "Atmesti",
-    "rejectAll": "Atmesti viską",
-    "removeEntity": "Pašalinti subjektą",
-    "revise": "Revise anonymisation",
-    "runPipeline": "Vykdyti eigą",
-    "running": "Vykdoma…",
-    "searchMatches": "Žodžiai, kurių ieškoti dokumente",
-    "searchPlaceholder": "Įveskite žodžius paieškai…",
-    "title": "Anonymisation review"
   },
   "app": {
     "versionMismatch": {
@@ -62,7 +42,6 @@
     "warm": "Šilti"
   },
   "auth": {
-    "betaNoticeBody": "Atsargumo sumetimais beta laikotarpiu neįkelkite jautrių, privilegijuotų, asmens duomenų, nepakeičiamų ar gamybai kritinių duomenų. Cloud yra demonstracinė paslauga.",
     "betaNoticeTitle": "Beta",
     "checkSpamHint": "Jei jo nematote, patikrinkite šlamšto aplanką.",
     "chooseOrganization": "Pasirinkite organizaciją, kurioje norite dirbti",
@@ -92,7 +71,6 @@
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
-    "signInWithEmail": "Prisijungti el. paštu",
     "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su AI pagalba.",
     "useDifferentEmail": "Naudoti kitą el. pašto adresą",
     "weSentCodeTo": "Išsiuntėme kodą adresu {email}"
@@ -262,31 +240,14 @@
     "emptyState": "Sprendimų nerasta. Sukonfigūruokite šaltinį ir paleiskite sinchronizavimą, kad importuotumėte teismų praktiką.",
     "filters": {
       "court": "Teismas",
-      "dateFrom": "Nuo",
-      "dateTo": "Iki",
       "searchPlaceholder": "Ieškoti pagal bylos numerį..."
     },
-    "loading": "Kraunama...",
     "loadingMore": "Kraunama daugiau...",
-    "sectionTypes": {
-      "argumentation": "Argumentavimas",
-      "dissent": "Atskiroji nuomonė",
-      "footer": "Poraštė",
-      "header": "Antraštė",
-      "ruling": "Rezoliucinė dalis",
-      "unknown": "Kita"
-    },
     "seo": {
       "browse": "Naršyti teismų praktiką",
       "countries": "Šalys",
       "courts": "Teismai",
       "years": "Metai"
-    },
-    "sources": {
-      "empty": "Šaltinių nesukonfigūruota.",
-      "lastSync": "Paskutinė sinchronizacija: {date, date, medium}",
-      "neverSynced": "Dar nesinchronizuota",
-      "title": "Šaltiniai"
     },
     "viewer": {
       "abstract": "Santrauka",
@@ -296,7 +257,6 @@
       "legalSentence": "Teisinė tezė",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populiarus pavadinimas",
-      "sections": "Skyriai",
       "source": "Šaltinis",
       "sourceFields": {
         "decisionCategory": "Sprendimo kategorija",
@@ -578,7 +538,6 @@
     "allClauses": "Visos sąlygos",
     "backToList": "Grįžti į sąlygų sąrašą",
     "body": "Turinys",
-    "categories": "Kategorijos",
     "categoryDeleteConfirm": "Šios kategorijos sąlygos taps nekategorizuotomis.",
     "categoryName": "Kategorijos pavadinimas",
     "categoryNamePlaceholder": "pvz. Konfidencialumas",
@@ -592,7 +551,6 @@
     "createCategory": "Nauja kategorija",
     "createClause": "Nauja sąlyga",
     "createFailed": "Nepavyko sukurti sąlygos",
-    "currentVersion": "Dabartinė",
     "deleteCategory": "Ištrinti kategoriją",
     "deleteClause": "Ištrinti sąlygą",
     "deleteFailed": "Nepavyko ištrinti",
@@ -607,7 +565,6 @@
     "importSuccess": "{count, plural, one {# sąlyga importuota} few {# sąlygos importuotos} many {# sąlygos importuotos} other {# sąlygų importuota}}",
     "importing": "Importuojama…",
     "languagePlaceholder": "pvz. lt",
-    "limitReached": "Pasiekta sąlygų riba",
     "linkClause": "Susieti sąlygą",
     "linkFailed": "Nepavyko susieti sąlygos",
     "linked": "Sąlyga susiesyta",
@@ -615,7 +572,6 @@
     "loadFailed": "Nepavyko įkelti sąlygų",
     "loading": "Įkraunamos sąlygos…",
     "noChanges": "Nėra pakeitimų",
-    "noClauses": "Sąlygų dar nėra",
     "noLinkedClauses": "Nėra susietų sąlygų",
     "noResults": "Sąlygų dar nėra",
     "noVariants": "Nėra variantų",
@@ -625,7 +581,6 @@
     "searchClauses": "Ieškoti sąlygų...",
     "searchPlaceholder": "Ieškoti sąlygų...",
     "selectFile": "Pasirinkti JSON failą",
-    "selectVariant": "Pasirinkti variantą",
     "selectVersionToCompare": "Pasirinkite versiją, kurią norite palyginti su dabartine",
     "slotName": "Nišos pavadinimas",
     "slotNamePlaceholder": "pvz. NekonkurencijosNiša",
@@ -638,7 +593,6 @@
     "unlinkConfirm": "Tai pašalins sąlygą iš šio šablono.",
     "unlinkFailed": "Nepavyko atsiesyti sąlygos",
     "unlinked": "Sąlyga atsieta",
-    "unmappedSlot": "Nesusieta",
     "updateFailed": "Nepavyko atnaujinti sąlygos",
     "usageNotes": "Naudojimo pastabos",
     "usageNotesPlaceholder": "Kada turėtų būti naudojama ši sąlyga? (DI surinkimui)",
@@ -647,8 +601,7 @@
     "variantLabel": "Varianto etiketė",
     "variantLabelPlaceholder": "pvz. Standartinis",
     "variants": "Variantai",
-    "version": "{version} versija",
-    "versionCount": "{count, plural, one {# versija} few {# versijos} many {# versijos} other {# versijų}}"
+    "version": "{version} versija"
   },
   "common": {
     "accept": "Priimti",
@@ -971,7 +924,6 @@
     "acceptAll": "Priimti visus",
     "applyAs": "kaip",
     "applyDirect": "Tiesiogiai",
-    "applyMode": "Taikyti kaip:",
     "applyTracked": "Sekami pakeitimai",
     "areaUnspecified": "Nenurodyta",
     "byArea": "Pagal sritį",
@@ -983,11 +935,9 @@
     "hideAccepted": "Slėpti priimtus pasiūlymus",
     "identityAria": "Sekamų pakeitimų tapatybė nariui {name}",
     "identitySaved": "Tapatybė išsaugota",
-    "progressAria": "peržiūrėta {reviewed} iš {total}",
     "reject": "Atmesti",
     "rejectAll": "Atmesti visus",
     "revert": "Atstatyti",
-    "reviewed": "peržiūrėta",
     "savingIdentity": "Išsaugoma…",
     "severityHigh": "Aukšta",
     "severityLow": "Žema",
@@ -1286,7 +1236,6 @@
       "ignoreScopeAlways": "Visada ignoruoti",
       "ignoreScopeDocument": "Ignoruoti šioje byloje",
       "ignoreScopeMenuAriaLabel": "Ignoravimo apimtis",
-      "ignoreScopeWorkspace": "Ignoruoti šioje darbo erdvėje",
       "labelPickerAriaLabel": "Subjekto žyma",
       "labelPickerEmpty": "Atitinkančių žymų nėra.",
       "labelPickerPlaceholder": "Žyma",
@@ -1315,7 +1264,6 @@
     "matterPicker": {
       "allMatters": "Visos bylos",
       "description": "Pasirinkite bylas, kuriomis šis pokalbis gali remtis. DI mato kiekvienos pasirinktos bylos turinį.",
-      "directLabel": "Tiesioginė",
       "empty": "Bylų nėra.",
       "noMatter": "Be bylos",
       "noResults": "Pagal „{query}“ bylų nerasta.",
@@ -1558,14 +1506,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Paskyra",
-    "calendar": "Kalendorius",
     "chat": "Pokalbis",
-    "chatAlreadyOpen": "Pokalbis jau atidarytas",
-    "clients": "Klientai",
     "contacts": "Kontaktai",
-    "inbox": "Gaunamieji",
-    "invitations": "Kvietimai",
     "knowledge": "Žinios",
     "members": "Nariai",
     "myTodos": "Mano užduotys",
@@ -1573,15 +1515,12 @@
     "pinned": "Prisegti",
     "recents": "Naujausi",
     "search": "Ieškoti",
-    "searchEmptyState": "Pradėkite rašyti, kad ieškotumėte dokumentų, bylų ir kt.",
-    "searchPlaceholder": "Ieškoti visose darbo srityse...",
     "shortcutCategories": {
       "navigation": "Naršymas"
     },
     "sidebar": "Šoninė juosta",
     "sidebarDescription": "Rodo mobilią šoninę juostą.",
     "templates": "Šablonai",
-    "timeTracking": "Laiko apskaita",
     "toggleChat": "Perjungti pokalbį",
     "toggleSidebar": "Perjungti šoninę juostą"
   },
@@ -1611,7 +1550,6 @@
     "catalogueThirdPartyConfirm": "Vis tiek pridėti",
     "catalogueThirdPartyDisclaimer": "Tai trečiosios šalies kodas, kurį pateikė {author}. stella jo neperžiūrėjo, nerekomenduoja ir neprižiūri. Jūs atsakote už patikrinimą, ar jis tinka jūsų praktikai ir atitinka jūsų įmonės taisykles. Pridėdami sutinkate naudoti jį savo rizika.",
     "catalogueTitle": "Pritaikykite savo DI",
-    "changeAnytime": "Šį nustatymą galėsite pakeisti bet kada vėliau.",
     "continue": "Tęsti",
     "creating": {
       "ai": "Išsaugoma AI konfigūracija...",
@@ -1651,8 +1589,7 @@
     "stepJurisdiction": "Jurisdikcija",
     "stepOrganization": "Komanda",
     "stepTeam": "Kvietimai",
-    "termsNotice": "Tęsdami sutinkate su mūsų <terms>paslaugų teikimo sąlygomis</terms>.",
-    "welcomeSubtitle": "Nustatymas užtruks mažiau nei minutę."
+    "termsNotice": "Tęsdami sutinkate su mūsų <terms>paslaugų teikimo sąlygomis</terms>."
   },
   "organization": {
     "aiConfig": {
@@ -1812,7 +1749,6 @@
       "message": "Žinutė",
       "task": "Užduotis"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Failo tipas",
     "noResults": "Nerasta rezultatų pagal \"{query}\".",
     "placeholder": "Ieškoti visose bylose...",
@@ -1820,7 +1756,6 @@
     "recentlyOpenedFiles": "Neseniai atidaryti failai",
     "resultCount": "{count, plural, one {# rezultatas} few {# rezultatai} many {# rezultato} other {# rezultatų}}",
     "summaryAction": "Apibendrinti geriausius rezultatus",
-    "summaryCitations": "Cituojami rezultatai",
     "summaryError": "Santrauka nepasiekiama",
     "summaryLoading": "Apibendrinami rezultatai...",
     "summaryPrompt": "Naudoja geriausius rezultatus ir jų turinį trumpam atsakymui parengti.",
@@ -1891,7 +1826,6 @@
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Praktikos jurisdikcijos",
       "profile": "Profilis",
-      "profileDescription": "Update name and slug",
       "promptCaching": {
         "description": "Įjungus stella prideda talpyklos žymes, kad pakartotinės AI užklausos dėl to paties dokumento ar gijos kainuotų ~10× pigiau ir baigtųsi greičiau. Talpyklavime saugomos užklausos lieka pas AI tiekėją iki 5 minučių ir yra ribotos jūsų organizacijai. Išjungus stella nustoja siųsti talpyklos žymes, tačiau tiekėjai vis tiek gali talpyklavti oportunistiškai — tik Zero Data Retention sutartis su tiekėju visiškai išjungia talpyklavimą serverio pusėje.",
         "title": "Užklausų talpyklavimas",
@@ -1914,7 +1848,6 @@
       "usageLimitTitleEntitlementInactive": "Naudojimo teisė neaktyvi",
       "usageLimitTitleNoEntitlement": "Reikalinga naudojimo teisė",
       "usageLimitTitleUsageLimitExceeded": "Pasiektas AI naudojimo limitas",
-      "usageLoading": "Įkeliama…",
       "usageManage": "Tvarkyti prieglobos naudojimą",
       "usageManageError": "Nepavyko atidaryti prieglobos naudojimo valdymo",
       "usageManuallyManaged": "Valdoma rankiniu būdu",

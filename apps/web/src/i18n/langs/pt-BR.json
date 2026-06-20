@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Atual",
-      "description": "Gerencie suas sessões ativas",
       "device": "Dispositivo",
       "deviceOnOs": "{browser} em {os}",
       "ipAddress": "Endereço IP",
@@ -21,25 +20,6 @@
       "description": "Adicione credenciais de provedor para começar a usar recursos de IA.",
       "title": "Conectar provedor de IA"
     }
-  },
-  "anonymize": {
-    "addEntity": "Adicionar entidade",
-    "checkAnonymization": "Verificar anonimização",
-    "closeAddForm": "Fechar formulário de adição",
-    "confirmAll": "Confirmar tudo",
-    "entities": "Entidades",
-    "entityType": "Tipo de entidade",
-    "extractingText": "Extraindo texto…",
-    "noEntitiesFound": "Nenhuma entidade encontrada",
-    "reject": "Rejeitar",
-    "rejectAll": "Rejeitar tudo",
-    "removeEntity": "Remover entidade",
-    "revise": "Revisar anonimização",
-    "runPipeline": "Executar pipeline",
-    "running": "Em execução…",
-    "searchMatches": "Palavras para encontrar no documento",
-    "searchPlaceholder": "Digite palavra(s) para encontrar…",
-    "title": "Revisão de anonimato"
   },
   "app": {
     "versionMismatch": {
@@ -62,7 +42,6 @@
     "warm": "Quente"
   },
   "auth": {
-    "betaNoticeBody": "Como precaução durante a versão beta, não carregue dados confidenciais, privilegiados, pessoais, insubstituíveis ou críticos para a produção. A nuvem é um serviço de demonstração.",
     "betaNoticeTitle": "Beta",
     "checkSpamHint": "Se você não o vir, verifique a pasta de spam.",
     "chooseOrganization": "Escolha em qual organização trabalhar",
@@ -92,7 +71,6 @@
     "selectOrganization": "Selecione uma organização",
     "signIn": "Faça login",
     "signInBeforeInvitation": "Você precisa fazer login antes de aceitar um convite para uma organização.",
-    "signInWithEmail": "Faça login com e-mail",
     "subtitle": "Documentos, jurisprudência e revisão sob controle. Com tecnologia de IA.",
     "useDifferentEmail": "Use um e-mail diferente",
     "weSentCodeTo": "Enviamos um código para {email}"
@@ -262,31 +240,14 @@
     "emptyState": "Nenhuma decisão encontrada. Configure uma fonte e execute uma sincronização para importar jurisprudência.",
     "filters": {
       "court": "Tribunal",
-      "dateFrom": "De",
-      "dateTo": "Para",
       "searchPlaceholder": "Pesquisar por número do processo..."
     },
-    "loading": "Carregando...",
     "loadingMore": "Carregando mais...",
-    "sectionTypes": {
-      "argumentation": "Argumentação",
-      "dissent": "Voto divergente",
-      "footer": "Rodapé",
-      "header": "Cabeçalho",
-      "ruling": "Decisão",
-      "unknown": "Outro"
-    },
     "seo": {
       "browse": "Explorar jurisprudência",
       "countries": "Países",
       "courts": "Tribunais",
       "years": "Anos"
-    },
-    "sources": {
-      "empty": "Nenhuma fonte configurada.",
-      "lastSync": "Última sincronização: {date, date, medium}",
-      "neverSynced": "Nunca sincronizado",
-      "title": "Fontes"
     },
     "viewer": {
       "abstract": "Resumo",
@@ -296,7 +257,6 @@
       "legalSentence": "Tese jurídica",
       "nalusDisclaimer": "Fonte: NALUS, Tribunal Constitucional da República Checa. Gratuito. Esta versão eletrônica não é autêntica; somente os originais com o emblema do estado e assinatura da pessoa autorizada são autênticos.",
       "popularName": "Nome popular",
-      "sections": "Seções",
       "source": "Fonte",
       "sourceFields": {
         "decisionCategory": "Categoria da decisão",
@@ -578,7 +538,6 @@
     "allClauses": "Todas as cláusulas",
     "backToList": "Voltar às cláusulas",
     "body": "Corpo",
-    "categories": "Categorias",
     "categoryDeleteConfirm": "As cláusulas desta categoria ficarão sem categoria.",
     "categoryName": "Nome da categoria",
     "categoryNamePlaceholder": "ex.: Confidencialidade",
@@ -592,7 +551,6 @@
     "createCategory": "Nova categoria",
     "createClause": "Nova cláusula",
     "createFailed": "Falha ao criar cláusula",
-    "currentVersion": "Atual",
     "deleteCategory": "Excluir categoria",
     "deleteClause": "Excluir cláusula",
     "deleteFailed": "Falha ao excluir",
@@ -607,7 +565,6 @@
     "importSuccess": "{count, plural, one {# cláusula importada} many {# cláusulas importadas} other {# cláusulas importadas}}",
     "importing": "Importando…",
     "languagePlaceholder": "ex.: pt-BR",
-    "limitReached": "Limite de cláusula atingido",
     "linkClause": "Vincular cláusula",
     "linkFailed": "Falha ao vincular a cláusula",
     "linked": "Cláusula vinculada",
@@ -615,7 +572,6 @@
     "loadFailed": "Falha ao carregar cláusulas",
     "loading": "Carregando cláusulas…",
     "noChanges": "Sem alterações",
-    "noClauses": "Ainda não há cláusulas",
     "noLinkedClauses": "Nenhuma cláusula vinculada",
     "noResults": "Ainda não há cláusulas",
     "noVariants": "Sem variantes",
@@ -625,7 +581,6 @@
     "searchClauses": "Pesquisar cláusulas...",
     "searchPlaceholder": "Pesquisar cláusulas...",
     "selectFile": "Selecione o arquivo JSON",
-    "selectVariant": "Selecione a variante",
     "selectVersionToCompare": "Selecione uma versão para comparar com a atual",
     "slotName": "Nome do slot",
     "slotNamePlaceholder": "ex.: NaoConcorrencia",
@@ -638,7 +593,6 @@
     "unlinkConfirm": "Isso removerá a cláusula deste modelo.",
     "unlinkFailed": "Falha ao desvincular cláusula",
     "unlinked": "Cláusula desvinculada",
-    "unmappedSlot": "Não vinculado",
     "updateFailed": "Falha ao atualizar a cláusula",
     "usageNotes": "Notas de uso",
     "usageNotesPlaceholder": "Quando esta cláusula deve ser usada? (para montagem de IA)",
@@ -647,8 +601,7 @@
     "variantLabel": "Etiqueta da variante",
     "variantLabelPlaceholder": "ex.: Padrão",
     "variants": "Variantes",
-    "version": "Versão {version}",
-    "versionCount": "{count, plural, one {# versão} many {# versões} other {# versões}}"
+    "version": "Versão {version}"
   },
   "common": {
     "accept": "Aceitar",
@@ -971,7 +924,6 @@
     "acceptAll": "Aceitar tudo",
     "applyAs": "como",
     "applyDirect": "Direto",
-    "applyMode": "Aplicar como:",
     "applyTracked": "Controle de alterações",
     "areaUnspecified": "Não especificado",
     "byArea": "Por área",
@@ -983,11 +935,9 @@
     "hideAccepted": "Ocultar sugestões aceitas",
     "identityAria": "Identidade de controle de alterações para {name}",
     "identitySaved": "Identidade salva",
-    "progressAria": "{reviewed} de {total} revisadas",
     "reject": "Rejeitar",
     "rejectAll": "Rejeitar tudo",
     "revert": "Reverter",
-    "reviewed": "revisado",
     "savingIdentity": "Salvando…",
     "severityHigh": "Alto",
     "severityLow": "Baixo",
@@ -1286,7 +1236,6 @@
       "ignoreScopeAlways": "Sempre ignorar",
       "ignoreScopeDocument": "Ignorar neste caso",
       "ignoreScopeMenuAriaLabel": "Escopo da exclusão",
-      "ignoreScopeWorkspace": "Ignorar neste espaço de trabalho",
       "labelPickerAriaLabel": "Rótulo da entidade",
       "labelPickerEmpty": "Nenhum rótulo correspondente.",
       "labelPickerPlaceholder": "Rótulo",
@@ -1315,7 +1264,6 @@
     "matterPicker": {
       "allMatters": "Todos os casos",
       "description": "Escolha os casos que este chat pode usar. A IA vê o conteúdo de todos os casos selecionados.",
-      "directLabel": "Direto",
       "empty": "Nenhum caso disponível.",
       "noMatter": "Nenhum caso",
       "noResults": "Nenhum caso corresponde a “{query}”.",
@@ -1558,14 +1506,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Conta",
-    "calendar": "Calendário",
     "chat": "Bate-papo",
-    "chatAlreadyOpen": "O bate-papo já está aberto",
-    "clients": "Clientes",
     "contacts": "Contatos",
-    "inbox": "Caixa de entrada",
-    "invitations": "Convites",
     "knowledge": "Conhecimento",
     "members": "Membros",
     "myTodos": "Minhas tarefas",
@@ -1573,15 +1515,12 @@
     "pinned": "Fixado",
     "recents": "Recentes",
     "search": "Pesquisar",
-    "searchEmptyState": "Comece a digitar para pesquisar documentos, casos e muito mais.",
-    "searchPlaceholder": "Pesquisar em todos os ambientes de trabalho...",
     "shortcutCategories": {
       "navigation": "Navegação"
     },
     "sidebar": "Barra lateral",
     "sidebarDescription": "Exibe a barra lateral móvel.",
     "templates": "Modelos",
-    "timeTracking": "Controle de tempo",
     "toggleChat": "Alternar bate-papo",
     "toggleSidebar": "Alternar barra lateral"
   },
@@ -1611,7 +1550,6 @@
     "catalogueThirdPartyConfirm": "Adicionar mesmo assim",
     "catalogueThirdPartyDisclaimer": "Este é código de terceiros contribuído por {author}. stella não o revisou, endossou nem mantém. Você é responsável por verificar se ele é adequado à sua prática e compatível com as políticas da sua firma. Ao adicioná-lo, você aceita usá-lo por sua conta e risco.",
     "catalogueTitle": "Personalize sua IA",
-    "changeAnytime": "Você pode alterar isso a qualquer momento nas configurações.",
     "continue": "Continuar",
     "creating": {
       "ai": "Salvando configuração de IA...",
@@ -1651,8 +1589,7 @@
     "stepJurisdiction": "Jurisdição",
     "stepOrganization": "Equipe",
     "stepTeam": "Convidar",
-    "termsNotice": "Ao continuar, você concorda com nossos <terms>Termos de Serviço</terms>.",
-    "welcomeSubtitle": "A configuração leva menos de um minuto."
+    "termsNotice": "Ao continuar, você concorda com nossos <terms>Termos de Serviço</terms>."
   },
   "organization": {
     "aiConfig": {
@@ -1812,7 +1749,6 @@
       "message": "Mensagem",
       "task": "Tarefa"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Tipo de arquivo",
     "noResults": "Nenhum resultado encontrado para \"{query}\".",
     "placeholder": "Pesquisar em todos os casos...",
@@ -1820,7 +1756,6 @@
     "recentlyOpenedFiles": "Arquivos abertos recentemente",
     "resultCount": "{count, plural, one {# resultado} many {# resultados} other {# resultados}}",
     "summaryAction": "Resuma os principais resultados",
-    "summaryCitations": "Resultados citados",
     "summaryError": "Resumo indisponível",
     "summaryLoading": "Resumindo os resultados...",
     "summaryPrompt": "Use os principais resultados e seu conteúdo para redigir uma resposta curta.",
@@ -1891,7 +1826,6 @@
       "pendingInvitations": "Convites pendentes",
       "practiceJurisdictions": "Jurisdições de atuação",
       "profile": "Perfil",
-      "profileDescription": "Atualizar nome da organização",
       "promptCaching": {
         "description": "Quando ativado, a stella adiciona marcadores de cache para que solicitações de IA repetidas sobre o mesmo documento ou thread custem ~10× menos e terminem mais rápido. Os prompts em cache permanecem com o provedor de IA por até 5 minutos, restritos à sua organização. Ao desativar, a stella para de enviar marcadores de cache, mas os provedores ainda podem cachear oportunisticamente — apenas um contrato Zero Data Retention com o provedor desativa totalmente o cache do lado do servidor.",
         "title": "Cache de prompts",
@@ -1914,7 +1848,6 @@
       "usageLimitTitleEntitlementInactive": "A habilitação de uso não está ativa",
       "usageLimitTitleNoEntitlement": "Habilitação de uso necessária",
       "usageLimitTitleUsageLimitExceeded": "Limite de uso de IA atingido",
-      "usageLoading": "Carregando…",
       "usageManage": "Gerenciar uso hospedado",
       "usageManageError": "Não foi possível abrir o gerenciamento de uso hospedado",
       "usageManuallyManaged": "Gerenciado manualmente",

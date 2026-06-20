@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Aktuální",
-      "description": "Spravujte svá aktivní sezení",
       "device": "Zařízení",
       "deviceOnOs": "{browser} na {os}",
       "ipAddress": "IP adresa",
@@ -21,25 +20,6 @@
       "description": "Přidejte přihlašovací údaje poskytovatele a začněte používat funkce AI.",
       "title": "Připojit poskytovatele AI"
     }
-  },
-  "anonymize": {
-    "addEntity": "Přidat entitu",
-    "checkAnonymization": "Zkontrolovat anonymizaci",
-    "closeAddForm": "Zavřít přidávání entity",
-    "confirmAll": "Potvrdit vše",
-    "entities": "Entity",
-    "entityType": "Typ entity",
-    "extractingText": "Extrakce textu…",
-    "noEntitiesFound": "Žádné entity nenalezeny",
-    "reject": "Zamítnout",
-    "rejectAll": "Zamítnout vše",
-    "removeEntity": "Odebrat entitu",
-    "revise": "Revidovat anonymizaci",
-    "runPipeline": "Spustit pipeline",
-    "running": "Zpracování…",
-    "searchMatches": "Slova k vyhledání v dokumentu",
-    "searchPlaceholder": "Zadejte slova k vyhledání…",
-    "title": "Kontrola anonymizace"
   },
   "app": {
     "versionMismatch": {
@@ -62,7 +42,6 @@
     "warm": "Teplé"
   },
   "auth": {
-    "betaNoticeBody": "Jako preventivní opatření během bety nenahrávejte citlivá, privilegovaná, osobní, nenahraditelná ani produkčně kritická data. Cloud je demonstrační služba.",
     "betaNoticeTitle": "Beta",
     "checkSpamHint": "Pokud kód nevidíte, podívejte se do složky Spam.",
     "chooseOrganization": "Vyberte organizaci, ve které chcete pracovat",
@@ -92,7 +71,6 @@
     "selectOrganization": "Vyberte organizaci",
     "signIn": "Přihlásit se",
     "signInBeforeInvitation": "Pro přijetí pozvánky do organizace se musíte nejprve přihlásit.",
-    "signInWithEmail": "Přihlásit se e-mailem",
     "subtitle": "Dokumenty, judikatura i revize pod kontrolou. S pomocí AI.",
     "useDifferentEmail": "Použít jiný e-mail",
     "weSentCodeTo": "Kód jsme odeslali na {email}"
@@ -262,31 +240,14 @@
     "emptyState": "Žádná rozhodnutí nenalezena. Nastavte zdroj a spusťte synchronizaci pro import judikatury.",
     "filters": {
       "court": "Soud",
-      "dateFrom": "Od",
-      "dateTo": "Do",
       "searchPlaceholder": "Hledat podle spisové značky..."
     },
-    "loading": "Načítání...",
     "loadingMore": "Načítání dalších...",
-    "sectionTypes": {
-      "argumentation": "Argumentace",
-      "dissent": "Disentní stanovisko",
-      "footer": "Zápatí",
-      "header": "Záhlaví",
-      "ruling": "Výrok",
-      "unknown": "Ostatní"
-    },
     "seo": {
       "browse": "Procházet judikaturu",
       "countries": "Země",
       "courts": "Soudy",
       "years": "Roky"
-    },
-    "sources": {
-      "empty": "Žádné zdroje nejsou nakonfigurovány.",
-      "lastSync": "Poslední synchronizace: {date, date, medium}",
-      "neverSynced": "Dosud nesynchronizováno",
-      "title": "Zdroje"
     },
     "viewer": {
       "abstract": "Abstrakt",
@@ -296,7 +257,6 @@
       "legalSentence": "Právní věta",
       "nalusDisclaimer": "Zdroj: NALUS, Ústavní soud ČR. Bezplatné. Elektronická verze není autentická; autentické jsou pouze originály a stejnopisy se státním znakem a podpisem příslušné úřední osoby.",
       "popularName": "Populární název",
-      "sections": "Části",
       "source": "Zdroj",
       "sourceFields": {
         "decisionCategory": "Kategorie rozhodnutí",
@@ -578,7 +538,6 @@
     "allClauses": "Všechny klauzule",
     "backToList": "Zpět na klauzule",
     "body": "Text",
-    "categories": "Kategorie",
     "categoryDeleteConfirm": "Klauzule v této kategorii budou označeny jako nekategorizované.",
     "categoryName": "Název kategorie",
     "categoryNamePlaceholder": "např. Mlčenlivost",
@@ -592,7 +551,6 @@
     "createCategory": "Nová kategorie",
     "createClause": "Nová klauzule",
     "createFailed": "Klauzuli se nepodařilo vytvořit",
-    "currentVersion": "Aktuální",
     "deleteCategory": "Smazat kategorii",
     "deleteClause": "Smazat klauzuli",
     "deleteFailed": "Smazání se nezdařilo",
@@ -607,7 +565,6 @@
     "importSuccess": "{count, plural, one {# klauzule importována} few {# klauzule importovány} other {# klauzulí importováno}}",
     "importing": "Importuji…",
     "languagePlaceholder": "např. cs",
-    "limitReached": "Byl dosažen limit klauzulí",
     "linkClause": "Propojit klauzuli",
     "linkFailed": "Propojení klauzule se nezdařilo",
     "linked": "Klauzule propojena",
@@ -615,7 +572,6 @@
     "loadFailed": "Načtení klauzulí se nezdařilo",
     "loading": "Načítám klauzule…",
     "noChanges": "Žádné změny",
-    "noClauses": "Zatím žádné klauzule",
     "noLinkedClauses": "Žádné propojené klauzule",
     "noResults": "Zatím žádné klauzule",
     "noVariants": "Žádné varianty",
@@ -625,7 +581,6 @@
     "searchClauses": "Hledat klauzule…",
     "searchPlaceholder": "Hledat klauzule…",
     "selectFile": "Vybrat soubor JSON",
-    "selectVariant": "Vybrat variantu",
     "selectVersionToCompare": "Vyberte verzi pro porovnání s aktuální",
     "slotName": "Název slotu",
     "slotNamePlaceholder": "např. ZakazKonkurence",
@@ -638,7 +593,6 @@
     "unlinkConfirm": "Tímto se klauzule odebere z této šablony.",
     "unlinkFailed": "Odpojení klauzule se nezdařilo",
     "unlinked": "Klauzule odpojena",
-    "unmappedSlot": "Nepropojeno",
     "updateFailed": "Aktualizace klauzule se nezdařila",
     "usageNotes": "Poznámky k použití",
     "usageNotesPlaceholder": "Kdy má být tato klauzule použita? (pro automatické sestavení)",
@@ -647,8 +601,7 @@
     "variantLabel": "Označení varianty",
     "variantLabelPlaceholder": "např. Standardní",
     "variants": "Varianty",
-    "version": "Verze {version}",
-    "versionCount": "{count, plural, one {# verze} few {# verze} other {# verzí}}"
+    "version": "Verze {version}"
   },
   "common": {
     "accept": "Přijmout",
@@ -971,7 +924,6 @@
     "acceptAll": "Přijmout vše",
     "applyAs": "jako",
     "applyDirect": "Bez režimu sledování změn",
-    "applyMode": "Aplikovat jako:",
     "applyTracked": "V režimu sledování změn",
     "areaUnspecified": "Nezařazeno",
     "byArea": "Podle oblasti",
@@ -983,11 +935,9 @@
     "hideAccepted": "Skrýt přijaté návrhy",
     "identityAria": "Identita pro sledované změny ({name})",
     "identitySaved": "Identita uložena",
-    "progressAria": "{reviewed} z {total} projito",
     "reject": "Odmítnout",
     "rejectAll": "Odmítnout vše",
     "revert": "Vrátit zpět",
-    "reviewed": "projito",
     "savingIdentity": "Ukládám…",
     "severityHigh": "Vysoká",
     "severityLow": "Nízká",
@@ -1286,7 +1236,6 @@
       "ignoreScopeAlways": "Vždy ignorovat",
       "ignoreScopeDocument": "Ignorovat v rámci tohoto spisu",
       "ignoreScopeMenuAriaLabel": "Rozsah ignorování",
-      "ignoreScopeWorkspace": "Ignorovat v tomto spise",
       "labelPickerAriaLabel": "Štítek údaje",
       "labelPickerEmpty": "Žádný odpovídající štítek.",
       "labelPickerPlaceholder": "Štítek",
@@ -1315,7 +1264,6 @@
     "matterPicker": {
       "allMatters": "Všechny spisy",
       "description": "Vyberte spisy, ze kterých chat čerpá. AI vidí obsah všech vybraných spisů.",
-      "directLabel": "Přímé",
       "empty": "Žádné dostupné spisy.",
       "noMatter": "Žádný spis",
       "noResults": "Žádný spis neodpovídá „{query}“.",
@@ -1558,14 +1506,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Účet",
-    "calendar": "Kalendář",
     "chat": "Chat",
-    "chatAlreadyOpen": "Chat je již otevřený",
-    "clients": "Klienti",
     "contacts": "Kontakty",
-    "inbox": "Doručená pošta",
-    "invitations": "Pozvánky",
     "knowledge": "Znalosti",
     "members": "Členové",
     "myTodos": "Moje úkoly",
@@ -1573,15 +1515,12 @@
     "pinned": "Připnuté",
     "recents": "Nedávné",
     "search": "Hledat",
-    "searchEmptyState": "Začněte psát pro vyhledávání dokumentů, spisů a dalšího.",
-    "searchPlaceholder": "Hledat ve všech pracovních prostorech...",
     "shortcutCategories": {
       "navigation": "Navigace"
     },
     "sidebar": "Postranní panel",
     "sidebarDescription": "Zobrazí mobilní postranní panel.",
     "templates": "Šablony",
-    "timeTracking": "Sledování času",
     "toggleChat": "Přepnout chat",
     "toggleSidebar": "Přepnout postranní panel"
   },
@@ -1611,7 +1550,6 @@
     "catalogueThirdPartyConfirm": "Přesto přidat",
     "catalogueThirdPartyDisclaimer": "Toto je kód třetí strany od {author}. stella jej nereviduje, neschvaluje ani neudržuje. Sami odpovídáte za ověření, že je vhodný pro vaši praxi a v souladu s pravidly vaší kanceláře. Přidáním přijímáte použití na vlastní riziko.",
     "catalogueTitle": "Přizpůsobte si AI",
-    "changeAnytime": "Toto nastavení lze změnit i kdykoliv později.",
     "continue": "Pokračovat",
     "creating": {
       "ai": "Ukládáme nastavení AI...",
@@ -1651,8 +1589,7 @@
     "stepJurisdiction": "Jurisdikce",
     "stepOrganization": "Tým",
     "stepTeam": "Pozvánky",
-    "termsNotice": "Pokračováním souhlasíte s <terms>Podmínkami služby</terms>.",
-    "welcomeSubtitle": "Nastavení zabere necelou minutu."
+    "termsNotice": "Pokračováním souhlasíte s <terms>Podmínkami služby</terms>."
   },
   "organization": {
     "aiConfig": {
@@ -1812,7 +1749,6 @@
       "message": "Zpráva",
       "task": "Úkol"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Typ souboru",
     "noResults": "Žádné výsledky pro „{query}“.",
     "placeholder": "Hledat ve všech spisech…",
@@ -1820,7 +1756,6 @@
     "recentlyOpenedFiles": "Nedávno otevřené soubory",
     "resultCount": "{count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
     "summaryAction": "Shrnout nejlepší výsledky",
-    "summaryCitations": "Citované výsledky",
     "summaryError": "Shrnutí není dostupné",
     "summaryLoading": "Shrnuji výsledky…",
     "summaryPrompt": "Použije nejlepší výsledky a jejich obsah pro krátkou odpověď.",
@@ -1891,7 +1826,6 @@
       "pendingInvitations": "Čekající pozvánky",
       "practiceJurisdictions": "Jurisdikce praxe",
       "profile": "Profil",
-      "profileDescription": "Upravte název organizace",
       "promptCaching": {
         "description": "Pokud je zapnuto, stella přidává cache značky tak, aby opakované AI dotazy nad stejným dokumentem nebo vláknem stály ~10× méně a byly rychlejší. Cachované prompty zůstávají u poskytovatele AI až 5 minut a jsou omezené na vaši organizaci. Vypnutí zastaví zasílání cache značek, ale poskytovatelé si mohou prompty stále cachovat oportunisticky — pouze smlouva Zero Data Retention s poskytovatelem zcela vypne cachování na straně serveru.",
         "title": "Cachování promptů",
@@ -1914,7 +1848,6 @@
       "usageLimitTitleEntitlementInactive": "Oprávnění k využití není aktivní",
       "usageLimitTitleNoEntitlement": "Je vyžadováno oprávnění k využití",
       "usageLimitTitleUsageLimitExceeded": "Limit využití AI byl dosažen",
-      "usageLoading": "Načítání…",
       "usageManage": "Spravovat hostované využití",
       "usageManageError": "Nepodařilo se otevřít správu hostovaného využití",
       "usageManuallyManaged": "Spravováno ručně",
