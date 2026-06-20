@@ -60,30 +60,38 @@ describe("encryptMcpSecret / decryptMcpSecret", () => {
   });
 
   test("roundtrips arbitrary secret payloads (invariant over the value space)", async () => {
-    for (let i = 0; i < 64; i++) {
+    const payloads = Array.from({ length: 64 }, () => {
       const length = Math.floor(Math.random() * 256);
-      const payload = Array.from({ length }, () =>
+      return Array.from({ length }, () =>
         String.fromCodePoint(Math.floor(Math.random() * 2 ** 16)),
       ).join("");
+    });
 
-      const { ciphertext, iv } = await encryptMcpSecret({
-        connectorId,
-        organizationId,
-        purpose,
-        secret: payload,
-        userId,
-      });
+    const roundtrips = await Promise.all(
+      payloads.map(async (payload) => {
+        const { ciphertext, iv } = await encryptMcpSecret({
+          connectorId,
+          organizationId,
+          purpose,
+          secret: payload,
+          userId,
+        });
 
-      const decrypted = await decryptMcpSecret({
-        ciphertext,
-        connectorId,
-        iv,
-        organizationId,
-        purpose,
-        userId,
-      });
+        const decrypted = await decryptMcpSecret({
+          ciphertext,
+          connectorId,
+          iv,
+          organizationId,
+          purpose,
+          userId,
+        });
 
-      expect(String(decrypted)).toBe(payload);
+        return { payload, decrypted: String(decrypted) };
+      }),
+    );
+
+    for (const { payload, decrypted } of roundtrips) {
+      expect(decrypted).toBe(payload);
     }
   });
 

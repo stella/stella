@@ -68,7 +68,7 @@ describe("slugify", () => {
   });
 
   test("invariant: output is a valid slug and slugify is stable under reapplication", () => {
-    const validSlug = /^(skill|[a-z0-9]+(?:-[a-z0-9]+)*)$/u;
+    const validSlug = /^(?:skill|[a-z0-9]+(?:-[a-z0-9]+)*)$/u;
     const sample = "abcdefghijklmnopqrstuvwxyz0123456789 -_.!@/\\éžñ日";
     const rand = (n: number) => Math.floor(Math.random() * n);
 
