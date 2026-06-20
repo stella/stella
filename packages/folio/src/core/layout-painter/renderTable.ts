@@ -262,6 +262,8 @@ function renderNestedTable(
       doc,
       spanningCells,
       rowYPositions,
+      undefined,
+      block.bidi,
     );
     tableEl.append(rowEl);
     y += rowMeasure.height;
@@ -448,9 +450,17 @@ function renderTableRow(
   spanningCells?: Map<string, SpanningCell>,
   rowYPositions?: number[],
   isFirstRowInFragment?: boolean,
+  bidi = false,
 ): HTMLElement {
   const rowEl = doc.createElement("div");
   rowEl.className = TABLE_CLASS_NAMES.row;
+
+  // RTL tables (w:bidiVisual) mirror columns: logical column 0 paints on the
+  // right. Geometry-only — cell content and saved DOCX are unchanged
+  // (eigenpal/docx-editor#940).
+  const tableWidth = bidi
+    ? columnWidths.reduce((sum, columnWidth) => sum + columnWidth, 0)
+    : 0;
 
   // Positioning
   rowEl.style.position = "absolute";
@@ -518,15 +528,25 @@ function renderTableRow(
       }
     }
 
+    let cellWidth = 0;
+    for (let c = 0; c < colSpan && columnIndex + c < columnWidths.length; c++) {
+      cellWidth += columnWidths[columnIndex + c] ?? 0;
+    }
+    const cellLeft = bidi ? tableWidth - x - cellWidth : x;
+
     const isFirstRow = rowIndex === 0 || isFirstRowInFragment === true;
     const isLastRow = rowIndex + rowSpan >= totalRows;
-    const isFirstCol = columnIndex === 0;
-    const isLastCol = columnIndex + colSpan >= columnWidths.length;
+    // Outer-border sides are visual: in RTL the logical last column is the
+    // visual first (leftmost), so swap which cell draws the left/right border.
+    const atLogicalStart = columnIndex === 0;
+    const atLogicalEnd = columnIndex + colSpan >= columnWidths.length;
+    const isFirstCol = bidi ? atLogicalEnd : atLogicalStart;
+    const isLastCol = bidi ? atLogicalStart : atLogicalEnd;
 
     const cellEl = renderTableCell(
       cell,
       cellMeasure,
-      x,
+      cellLeft,
       cellHeight,
       { isFirstRow, isLastRow, isFirstCol, isLastCol },
       context,
@@ -552,15 +572,13 @@ function renderTableRow(
         startRow: rowIndex,
         rowSpan,
         colSpan,
-        x,
+        x: cellLeft,
         totalHeight: cellHeight,
       });
     }
 
-    // Move x by the width of columns this cell spans
-    for (let c = 0; c < colSpan && columnIndex + c < columnWidths.length; c++) {
-      x += columnWidths[columnIndex + c] ?? 0;
-    }
+    // Advance the logical running offset by the columns this cell spans
+    x += cellWidth;
 
     // Advance column index by colSpan
     columnIndex += colSpan;
@@ -615,14 +633,20 @@ export function renderTableFragment(
     tableEl.dataset["pmEnd"] = String(fragment.pmEnd);
   }
 
-  // Add column resize handles at each column boundary
+  // Add column resize handles at each column boundary. For RTL tables the
+  // boundary at the running left offset maps to the mirrored visual position
+  // so handles stay on the visible column edges (eigenpal/docx-editor#940).
+  const tableColumnsWidth = block.bidi
+    ? measure.columnWidths.reduce((sum, columnWidth) => sum + columnWidth, 0)
+    : 0;
   let handleX = 0;
   for (let col = 0; col < measure.columnWidths.length - 1; col++) {
     handleX += measure.columnWidths[col] ?? 0;
+    const handleLeft = block.bidi ? tableColumnsWidth - handleX : handleX;
     const handle = doc.createElement("div");
     handle.className = TABLE_CLASS_NAMES.resizeHandle;
     handle.style.position = "absolute";
-    handle.style.left = `${handleX - 3}px`;
+    handle.style.left = `${handleLeft - 3}px`;
     handle.style.top = "0";
     handle.style.width = "6px";
     handle.style.height = "100%";
@@ -673,6 +697,7 @@ export function renderTableFragment(
         spanningCells,
         rowYPositions,
         hdrIdx === 0, // first header row draws top border
+        block.bidi,
       );
       rowEl.dataset["repeatedHeader"] = "true";
       tableEl.append(rowEl);
@@ -724,6 +749,7 @@ export function renderTableFragment(
       spanningCells,
       rowYPositions,
       isFirstRowInFragment,
+      block.bidi,
     );
 
     contentParent.append(rowEl);

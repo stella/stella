@@ -2169,9 +2169,12 @@ function convertTable(
   // Extract justification
   const justification = attrs.justification;
 
-  // Extract table indent from _originalFormatting (w:tblInd)
+  // Extract table indent + RTL column order from _originalFormatting
+  // (w:tblInd, w:bidiVisual). bidiVisual is import-only — folio has no UI to
+  // toggle it — so reading the preserved formatting is sufficient
+  // (eigenpal/docx-editor#940).
   const originalFormatting = attrs._originalFormatting as
-    | { indent?: { value: number; type: string } }
+    | { indent?: { value: number; type: string }; bidi?: boolean }
     | undefined;
   const indentPx =
     originalFormatting?.indent?.value &&
@@ -2260,6 +2263,9 @@ function convertTable(
   }
   if (floatingPx) {
     tableBlock.floating = floatingPx;
+  }
+  if (originalFormatting?.bidi) {
+    tableBlock.bidi = true;
   }
   return tableBlock;
 }
