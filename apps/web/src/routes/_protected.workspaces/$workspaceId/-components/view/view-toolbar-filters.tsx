@@ -170,6 +170,8 @@ const FilterChip = ({ node, fields, onChange, onRemove }: FilterChipProps) => {
     return null;
   }
 
+  const valueColor = chipValueColor(field, node, operator);
+
   return (
     <Popover onOpenChange={setOpen} open={open}>
       <PopoverTrigger
@@ -183,6 +185,9 @@ const FilterChip = ({ node, fields, onChange, onRemove }: FilterChipProps) => {
       >
         <FieldTypeIcon field={field} />
         <span className="text-foreground">{field.label}</span>
+        {valueColor !== undefined && (
+          <SelectColorIcon className="size-3.5" color={valueColor} />
+        )}
         <span className="text-muted-foreground">
           {chipSummary({
             field,
@@ -633,6 +638,26 @@ type ChipSummaryArgs = {
 
 const optionLabel = (field: FieldOption, value: string): string =>
   field.options?.find((option) => option.value === value)?.label ?? value;
+
+/**
+ * The option colour for a single-value select chip, so the chip shows the
+ * same swatch the column cell and group header do. Multi-value and
+ * non-select operators have no single swatch to show.
+ */
+const chipValueColor = (
+  field: FieldOption,
+  node: ConditionNode,
+  operator: ConditionOperator,
+): string | undefined => {
+  if (
+    isMultiValue(operator) ||
+    valueEditorFor(field.valueType, operator) !== "select"
+  ) {
+    return undefined;
+  }
+  const value = leafValueString(node);
+  return field.options?.find((option) => option.value === value)?.color;
+};
 
 const chipSummary = ({
   field,

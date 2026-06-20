@@ -5,7 +5,6 @@ import { useTable } from "@tanstack/react-table";
 import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import type {
@@ -21,6 +20,7 @@ import {
   resolveKanbanGrouping,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import type { EntityGroup } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
+import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import {
   DEFAULT_TABLE_COLUMN_MIN_SIZE,
   useTableColumns,
@@ -129,7 +129,10 @@ export const GroupedTableLayout = ({
   const groups = getEntityGroups(options, t("common.uncategorized"));
 
   return (
-    <div className="h-full overflow-y-auto">
+    // Flex column so empty categories can sink below populated ones via
+    // `order` (set per-section once its count resolves) without lifting
+    // each group's async count into the parent.
+    <div className="flex h-full flex-col overflow-y-auto">
       {groups.map((group) => (
         <GroupSection
           columns={columns}
@@ -215,7 +218,7 @@ const GroupSection = ({
   });
 
   return (
-    <section>
+    <section className={cn("min-w-0", isEmpty && "order-1")}>
       <GroupHeader
         collapsed={collapsed}
         empty={isEmpty}
@@ -280,38 +283,38 @@ const GroupHeader = ({
   return (
     <div
       className={cn(
-        "bg-muted/40 sticky top-0 z-20 flex items-center gap-2 border-b px-3 py-1.5",
+        "bg-muted/40 sticky top-0 z-20 flex items-center gap-2 border-b pe-3",
         // An empty category recedes into the background, surfacing on hover
         // so it stays scannable without competing with populated groups.
         empty && "opacity-60 transition-opacity duration-200 hover:opacity-100",
       )}
     >
-      {empty ? (
-        <span aria-hidden className="size-5 shrink-0" />
-      ) : (
-        <Button
-          aria-expanded={!collapsed}
-          className="text-muted-foreground size-5 min-h-0 p-0"
-          onClick={onToggle}
-          size="icon-xs"
-          type="button"
-          variant="ghost"
-        >
-          <ChevronIcon className="size-3.5" />
-        </Button>
-      )}
-      {group.color && (
-        <span
-          className="size-2.5 shrink-0 rounded-full"
-          style={{ backgroundColor: group.color }}
-        />
-      )}
-      <span className="text-foreground truncate text-sm font-medium">
-        {group.label}
-      </span>
-      <span className="text-muted-foreground text-xs tabular-nums">
-        {t("workspaces.views.groupItemCount", { count })}
-      </span>
+      {/* The whole header row is the toggle target, not just the chevron. */}
+      <button
+        aria-expanded={empty ? undefined : !collapsed}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-2 py-1.5 ps-3 text-start transition-colors duration-150",
+          !empty && "hover:bg-foreground/[0.04]",
+        )}
+        disabled={empty}
+        onClick={empty ? undefined : onToggle}
+        type="button"
+      >
+        {empty ? (
+          <span aria-hidden className="size-3.5 shrink-0" />
+        ) : (
+          <ChevronIcon className="text-muted-foreground size-3.5 shrink-0" />
+        )}
+        {group.optionColor && (
+          <SelectColorIcon className="size-3.5" color={group.optionColor} />
+        )}
+        <span className="text-foreground truncate text-sm font-medium">
+          {group.label}
+        </span>
+        <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+          {t("workspaces.views.groupItemCount", { count })}
+        </span>
+      </button>
       {!empty &&
         sumProperties.map((property) => {
           const sum = sumIntProperty(entities, property.id);
