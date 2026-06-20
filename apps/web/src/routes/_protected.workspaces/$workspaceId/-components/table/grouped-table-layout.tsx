@@ -276,6 +276,7 @@ const GroupSection = ({
                   void query.fetchNextPage();
                 }
               }}
+              fillHeight={false}
               showAddRow={false}
               stickyColumnHeader={false}
               table={table}

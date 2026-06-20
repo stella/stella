@@ -85,6 +85,10 @@ type WorkspaceTableProps = {
   // and a second sticky header in each section's own scroll box collides
   // with it on scroll.
   stickyColumnHeader?: boolean;
+  // The end-filler grows to fill leftover height (and hosts the add-property
+  // rail) in the full-height flat table. Grouped sections size to content, so
+  // a growing filler just shows as an empty trailing row.
+  fillHeight?: boolean;
 };
 
 export const WorkspaceTable = ({
@@ -96,6 +100,7 @@ export const WorkspaceTable = ({
   onLoadMore,
   showAddRow = true,
   stickyColumnHeader = true,
+  fillHeight = true,
 }: WorkspaceTableProps) => {
   const t = useTranslations();
   const tableWrapperRef = useRef<HTMLDivElement>(null);
@@ -571,10 +576,12 @@ export const WorkspaceTable = ({
                 )}
               </WorkspaceGridRow>
             )}
-            <TableEndFiller
-              addPropertyColumn={addPropertyColumn}
-              renderColumns={renderColumns}
-            />
+            {fillHeight && (
+              <TableEndFiller
+                addPropertyColumn={addPropertyColumn}
+                renderColumns={renderColumns}
+              />
+            )}
             {showAddRow && (
               <BottomRow
                 table={table}
