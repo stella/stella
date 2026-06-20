@@ -4,6 +4,7 @@ import {
   type OperandResolver,
   type RefOperand,
   evaluateCondition as evaluateConditionNode,
+  pruneIncomplete,
 } from "@stll/conditions";
 
 import type { FieldContent } from "@/api/db/schema-validators";
@@ -106,8 +107,13 @@ export const evaluateGatingCondition = (
   if (!condition) {
     return true;
   }
+  // An incomplete gate (a leaf whose value was never entered) is no gate.
+  const pruned = pruneIncomplete(condition);
+  if (!pruned) {
+    return true;
+  }
   return evaluateConditionNode(
-    condition,
+    pruned,
     buildGatingResolver(fieldContentByPropertyId),
   );
 };

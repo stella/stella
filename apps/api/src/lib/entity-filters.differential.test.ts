@@ -98,7 +98,9 @@ beforeAll(async () => {
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
 
   const { sqlStatements } = await pushSchema(allSchema, pushDb);
+  // Schema DDL must apply in dependency order, so these run sequentially.
   for (const statement of sqlStatements) {
+    // eslint-disable-next-line no-await-in-loop -- ordered DDL, can't parallelize
     await db.execute(sql.raw(statement));
   }
 
@@ -263,15 +265,17 @@ const scalarLiteralArb = (key: PropKey): fc.Arbitrary<string> => {
   return safeText;
 };
 
-// `in` payloads carry at least one value. An empty payload is an incomplete
-// filter (no values chosen yet): SQL drops it to a no-op (`compileNode`
-// returns null → matches all), while the pure evaluator scores it concretely
-// (`[].includes(x)` is false). That gap is a deliberate server-side
-// incomplete-filter prune, not a filter-semantics disagreement, so it is out
-// of scope for this differential comparison.
+// Sometimes emit an empty value/payload: an incomplete filter (operator chosen,
+// value not entered). Both paths must treat it as a no-op, so it's in scope.
+const maybeEmpty = (arb: fc.Arbitrary<string>): fc.Arbitrary<string> =>
+  fc.oneof(
+    { weight: 1, arbitrary: fc.constant("") },
+    { weight: 4, arbitrary: arb },
+  );
+
 const singleSelectInPayload = fc.uniqueArray(
   fc.constantFrom<string>(...SELECT_OPTIONS, "stale"),
-  { minLength: 1, maxLength: 3 },
+  { minLength: 0, maxLength: 3 },
 );
 
 const compareLeaf = (
@@ -279,7 +283,10 @@ const compareLeaf = (
   ops: readonly ("eq" | "neq" | "gt" | "lt" | "gte" | "lte")[],
 ): fc.Arbitrary<ConditionNode> =>
   fc
-    .record({ op: fc.constantFrom(...ops), value: scalarLiteralArb(key) })
+    .record({
+      op: fc.constantFrom(...ops),
+      value: maybeEmpty(scalarLiteralArb(key)),
+    })
     .map(({ op, value }) => ({
       type: "compare",
       left: propertyOperand(key),
@@ -297,7 +304,10 @@ const textPredicateLeaf = (
   ops: readonly ("contains" | "not_contains" | "starts_with" | "ends_with")[],
 ): fc.Arbitrary<ConditionNode> =>
   fc
-    .record({ op: fc.constantFrom(...ops), value: scalarLiteralArb(key) })
+    .record({
+      op: fc.constantFrom(...ops),
+      value: maybeEmpty(scalarLiteralArb(key)),
+    })
     .map(({ op, value }) => ({
       type: "predicate",
       operand: propertyOperand(key),
@@ -342,10 +352,10 @@ const numericLeaf = (key: "int" | "date") =>
   );
 
 const kindLeaf: fc.Arbitrary<ConditionNode> = fc
-  // minLength 1: an empty kind `in` is the same incomplete-filter no-op excluded
-  // for the `in` payload above (SQL drops it; the evaluator scores it false).
+  // Empty kind `in` is an incomplete filter — both paths no-op it (SQL drops it,
+  // the evaluator returns vacuously true), so it is in scope here.
   .uniqueArray(fc.constantFrom<EntityKind>(...ENTITY_KINDS), {
-    minLength: 1,
+    minLength: 0,
     maxLength: 4,
   })
   .map((value) => ({
@@ -427,12 +437,15 @@ const seedRows = async (rows: GeneratedRow[]): Promise<string[]> => {
       entityId: ids[index] ?? toSafeId<"entity">(""),
     })),
   );
-  for (const [index, entityId] of ids.entries()) {
-    await db
-      .update(entities)
-      .set({ currentVersionId: versionIds[index] ?? null })
-      .where(eq(entities.id, entityId));
-  }
+  // Independent per-entity updates (FK requires the version to exist first).
+  await Promise.all(
+    ids.map((entityId, index) =>
+      db
+        .update(entities)
+        .set({ currentVersionId: versionIds[index] ?? null })
+        .where(eq(entities.id, entityId)),
+    ),
+  );
 
   const fieldRows = rows.flatMap((row, index) =>
     PROP_KEYS.flatMap((key) => {

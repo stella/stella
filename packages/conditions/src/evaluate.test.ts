@@ -1,7 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
-import { type ConditionValue, evaluateCondition } from "./evaluate";
+import {
+  type ConditionValue,
+  evaluateCondition,
+  pruneIncomplete,
+} from "./evaluate";
 import {
   type CompareOp,
   type ConditionNode,
@@ -88,15 +92,50 @@ describe("compare operators", () => {
     ).toBe(false);
   });
 
-  test("an incomplete ordered comparison (empty literal) is a no-op", () => {
-    const gt = compare({ type: "property", propertyId: "amount" }, "gt", "");
-    expect(evaluateCondition(gt, resolverFor({ amount: 5 }))).toBe(true);
-    expect(evaluateCondition(gt, resolverFor({ amount: "" }))).toBe(true);
-
-    const lte = compare({ type: "property", propertyId: "due" }, "lte", "");
-    expect(evaluateCondition(lte, resolverFor({ due: "2026-06-01" }))).toBe(
-      true,
+  test("pruneIncomplete drops incomplete leaves and empty groups", () => {
+    const real = compare({ type: "property", propertyId: "x" }, "eq", "a");
+    const incompleteGt = compare(
+      { type: "property", propertyId: "x" },
+      "gt",
+      "",
     );
+    const incompleteContains: ConditionNode = {
+      type: "predicate",
+      operand: { type: "property", propertyId: "x" },
+      op: "contains",
+      value: "",
+    };
+    const eqEmpty = compare({ type: "property", propertyId: "x" }, "eq", "");
+    const isEmpty: ConditionNode = {
+      type: "predicate",
+      operand: { type: "property", propertyId: "x" },
+      op: "is_empty",
+    };
+
+    // Incomplete leaves prune away; complete ones (incl. `eq ""`, `is_empty`) stay.
+    expect(pruneIncomplete(incompleteGt)).toBeNull();
+    expect(pruneIncomplete(incompleteContains)).toBeNull();
+    expect(pruneIncomplete(real)).toEqual(real);
+    expect(pruneIncomplete(eqEmpty)).toEqual(eqEmpty);
+    expect(pruneIncomplete(isEmpty)).toEqual(isEmpty);
+
+    // A group keeps real children and drops incomplete ones...
+    expect(
+      pruneIncomplete({
+        type: "group",
+        combinator: "or",
+        children: [incompleteGt, real],
+      }),
+    ).toEqual({ type: "group", combinator: "or", children: [real] });
+
+    // ...and a group of only incomplete leaves prunes to null.
+    expect(
+      pruneIncomplete({
+        type: "group",
+        combinator: "and",
+        children: [incompleteGt, incompleteContains],
+      }),
+    ).toBeNull();
   });
 });
 

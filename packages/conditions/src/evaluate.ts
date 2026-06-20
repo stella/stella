@@ -103,13 +103,6 @@ const compareValues = (
     return normScalar(left) !== normScalar(right);
   }
 
-  // An ordered comparison needs a comparison value. An empty one is an
-  // incomplete filter (operator chosen, value not yet entered) — treat it as a
-  // no-op (vacuously true) rather than matching every row.
-  if (normScalar(right) === "") {
-    return true;
-  }
-
   // Numeric comparison when the right-hand value (the literal, in Table
   // filters) is a number: a non-numeric left value is then excluded. When the
   // right value is non-numeric — e.g. an ISO date string — compare
@@ -226,4 +219,47 @@ const matchesContains = (
     return actual.some((item) => item.toLowerCase() === needle);
   }
   return normScalar(actual).toLowerCase().includes(needle);
+};
+
+/**
+ * Whether a leaf is an incomplete filter — an ordered comparison or a
+ * value-bearing predicate whose value has not been entered yet. `eq`/`neq`
+ * against `""` and `is_empty`/`is_not_empty`/`is_truthy` are complete.
+ */
+const isIncompleteLeaf = (node: CompareNode | PredicateNode): boolean => {
+  if (node.type === "compare") {
+    return (
+      node.op !== "eq" &&
+      node.op !== "neq" &&
+      node.right.type === "literal" &&
+      String(node.right.value) === ""
+    );
+  }
+  return (
+    node.op !== "is_empty" &&
+    node.op !== "is_not_empty" &&
+    node.op !== "is_truthy" &&
+    asArray(node.value).length === 0
+  );
+};
+
+/**
+ * Drops incomplete leaves and any group left empty, recursing into groups, so
+ * an in-progress filter contributes no constraint. The SQL compiler prunes the
+ * same way (a `null` op-condition is dropped from `and()`/`or()`); applying
+ * this before in-memory evaluation keeps the two implementations in agreement —
+ * crucially under `or`, where a leaf evaluated as vacuously-true would not match
+ * a dropped one. Returns `null` when the whole node is incomplete.
+ */
+export const pruneIncomplete = (node: ConditionNode): ConditionNode | null => {
+  if (node.type === "group") {
+    const children = node.children
+      .map(pruneIncomplete)
+      .filter((child): child is ConditionNode => child !== null);
+    if (children.length === 0) {
+      return null;
+    }
+    return { ...node, children };
+  }
+  return isIncompleteLeaf(node) ? null : node;
 };

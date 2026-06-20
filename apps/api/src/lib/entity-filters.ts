@@ -10,6 +10,7 @@ import {
   type PredicateNode,
   type RefOperand,
   evaluateCondition,
+  pruneIncomplete,
 } from "@stll/conditions";
 
 import { user } from "@/api/db/auth-schema";
@@ -247,7 +248,12 @@ export const applyFilters = <T extends FilterableEntity>(
     return items;
   }
 
-  const prepared = filters.map(expandKindNode);
+  // Prune incomplete leaves first, exactly as the SQL compiler drops them, so
+  // both paths see the same shape (an incomplete leaf must not match under OR).
+  const prepared = filters
+    .map(expandKindNode)
+    .map(pruneIncomplete)
+    .filter((node): node is ConditionNode => node !== null);
 
   return items.filter((entity) => {
     const resolveOrPass = buildResolver(entity);
@@ -504,6 +510,17 @@ const compilePropertyPredicate = (
   node: PredicateNode,
 ): SQL | null => {
   const text = String(node.value ?? "");
+  // Incomplete value-bearing text predicate (no value yet) is a no-op, like the
+  // ordered compare path; contains_all/in already null out on an empty payload.
+  if (
+    text === "" &&
+    (node.op === "contains" ||
+      node.op === "not_contains" ||
+      node.op === "starts_with" ||
+      node.op === "ends_with")
+  ) {
+    return null;
+  }
   // Same matcher for arrays and scalars (membership/emptiness ops).
   const same = (match: (v: SQL) => SQL) =>
     propertyValueMatches(propertyId, match, match);
@@ -644,7 +661,8 @@ const compileNode = (node: ConditionNode): SQL | null => {
 export const buildFilterConditions = (filters: ConditionNode[]): SQL[] => {
   const conditions: SQL[] = [];
   for (const node of filters) {
-    const compiled = compileNode(node);
+    const pruned = pruneIncomplete(node);
+    const compiled = pruned ? compileNode(pruned) : null;
     if (compiled) {
       conditions.push(compiled);
     }
