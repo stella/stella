@@ -49,7 +49,7 @@ import {
 import { TranslateDocumentDialog } from "@/components/translate-document-dialog";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
-import { ClientOperationError, toAPIError } from "@/lib/errors";
+import { APIError, ClientOperationError, toAPIError } from "@/lib/errors";
 import {
   PDFProvider,
   getPDFPageIdByNumber,
@@ -355,11 +355,17 @@ function RouteComponentInner({
     hasFilePropertyId: filePropertyId !== undefined,
     isComparing,
   });
+  // A 404 from the field-file lookup means a stale/deleted/foreign field id;
+  // fall through to "missing" (recover by navigating back to the matter)
+  // rather than the error boundary. Only real failures (network/5xx) are fatal.
+  const fieldFileFatalError =
+    fieldFileQuery.isError &&
+    !(APIError.is(fieldFileQuery.error) && fieldFileQuery.error.status === 404);
   const filePreviewState = (() => {
     if (activeMimeType !== undefined) {
       return "ready";
     }
-    if (versionDataQuery.isError || fieldFileQuery.isError) {
+    if (versionDataQuery.isError || fieldFileFatalError) {
       return "error";
     }
     if (
