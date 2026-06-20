@@ -282,7 +282,6 @@ const GroupHeader = ({
       {group.color && (
         <span
           className="size-2.5 shrink-0 rounded-full"
-          // eslint-disable-next-line no-inline-style-colors/no-inline-style-colors -- resolved option color from the grouping property
           style={{ backgroundColor: group.color }}
         />
       )}
