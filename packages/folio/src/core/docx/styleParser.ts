@@ -1563,7 +1563,12 @@ function parseDocDefaults(
     }
   }
 
-  return result.rPr || result.pPr ? result : undefined;
+  // Return the (possibly empty) defaults whenever the `<w:docDefaults>` element
+  // is present, so callers can distinguish "document declares empty defaults"
+  // (zero spacing / single line) from "no docDefaults at all". The early guard
+  // above already returns undefined for an absent element
+  // (eigenpal/docx-editor#909).
+  return result;
 }
 
 /**

@@ -21,6 +21,15 @@ const STANDARD_DPI = 96;
 /** Twips per inch (1 inch = 1440 twips) */
 export const TWIPS_PER_INCH = 1440;
 
+/**
+ * Word's auto paragraph spacing in px. HTML-origin paragraphs use
+ * `w:beforeAutospacing`/`w:afterAutospacing` instead of explicit before/after;
+ * Word ignores any explicit value on such paragraphs and renders ~14px. The
+ * value is empirical (Word's rendered auto gap), not derivable from a twips
+ * conversion. See eigenpal/docx-editor#823.
+ */
+export const AUTO_PARAGRAPH_SPACING_PX = 14;
+
 /** EMUs per inch (1 inch = 914400 EMUs) */
 const EMUS_PER_INCH = 914_400;
 

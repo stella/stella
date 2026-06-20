@@ -127,6 +127,19 @@ const ANY_DECIMAL_IN_EMU_ATTR =
   /(?:cx|cy|distT|distB|distL|distR|lIns|tIns|rIns|bIns)="-?\d+\.\d+"/u;
 const POSOFFSET_DECIMAL = /<wp:posOffset>-?\d+\.\d+<\/wp:posOffset>/u;
 
+describe("runSerializer vertical alignment", () => {
+  test("serializes explicit baseline vertical alignment", () => {
+    const xml = serializeRun({
+      type: "run",
+      formatting: { vertAlign: "baseline" },
+      content: [{ type: "footnoteRef", id: 1 }],
+    });
+
+    expect(xml).toContain('<w:vertAlign w:val="baseline"/>');
+    expect(xml).toContain('<w:footnoteReference w:id="1"/>');
+  });
+});
+
 describe("image EMU attributes are integer-only (issue #417)", () => {
   test("inline image with float dimensions serializes integer cx/cy/effectExtent", () => {
     const xml = serializeRun(FLOAT_INLINE_IMAGE);

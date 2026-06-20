@@ -154,6 +154,10 @@ const NOTE_TYPES = [
   "endnote",
 ] as const satisfies readonly NonNullable<FootnoteRefAttrs["noteType"]>[];
 
+const NOTE_REF_VERT_ALIGNS = [
+  "baseline",
+] as const satisfies readonly NonNullable<FootnoteRefAttrs["vertAlign"]>[];
+
 const TEXT_BOX_DOCX_PLACEMENTS = [
   "standalone",
   "inlineWithPrevious",
@@ -416,6 +420,7 @@ export const readParagraphAttrs = (
   validateNumPr(attrs["numPr"], issues);
   optionalBookmarkArray(attrs["bookmarks"], issues);
   optionalEmptyHyperlinkArray(attrs["_emptyHyperlinks"], issues);
+  optionalAutospacingBase(attrs, issues);
   optionalSectionProperties(
     attrs,
     "_sectionProperties",
@@ -1323,6 +1328,13 @@ export const readFootnoteRefMarkAttrs = (
     issues,
     NOTE_TYPES,
   );
+  optionalOneOf(
+    attrs,
+    "vertAlign",
+    "footnoteRef.attrs.vertAlign",
+    issues,
+    NOTE_REF_VERT_ALIGNS,
+  );
 
   return attrsResult(attrs, issues);
 };
@@ -1948,6 +1960,37 @@ const optionalRecord = (
   if (value !== undefined && value !== null && !isRecord(value)) {
     issues.push({ path, message: "Expected an object." });
   }
+};
+
+const optionalAutospacingBase = (
+  attrs: Record<string, unknown>,
+  issues: ProseMirrorAttrIssue[],
+): void => {
+  const value = attrs["_autospacingBase"];
+  if (value === undefined || value === null) {
+    return;
+  }
+
+  if (!isRecord(value)) {
+    issues.push({
+      path: "paragraph.attrs._autospacingBase",
+      message: "Expected an object.",
+    });
+    return;
+  }
+
+  optionalNumber(
+    value,
+    "before",
+    "paragraph.attrs._autospacingBase.before",
+    issues,
+  );
+  optionalNumber(
+    value,
+    "after",
+    "paragraph.attrs._autospacingBase.after",
+    issues,
+  );
 };
 
 const optionalArray = (

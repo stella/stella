@@ -64,9 +64,13 @@ describe("StyleResolver", () => {
   });
 
   describe("resolveParagraphStyle", () => {
-    test("returns docDefaults merged with built-in Normal when no styleId provided", () => {
+    test("respects docDefaults paragraph props when no Normal style and no styleId", () => {
+      // eigenpal/docx-editor#909: docDefaults are authoritative (ECMA-376
+      // §17.7.5). With docDefaults present but no Normal style, the absent
+      // Normal must NOT re-introduce the default-template 259/160 spacing —
+      // the document's own docDefaults win.
       const docDefaults: DocDefaults = {
-        pPr: { lineSpacing: 240, spaceAfter: 160 },
+        pPr: { lineSpacing: 240, spaceAfter: 120 },
         rPr: { fontSize: 22 },
       };
 
@@ -78,10 +82,46 @@ describe("StyleResolver", () => {
       const resolver = createStyleResolver(styleDefinitions);
       const result = resolver.resolveParagraphStyle(null);
 
-      // Built-in Normal style overrides docDefaults for lineSpacing (259) and spaceAfter (160)
+      expect(result.paragraphFormatting?.lineSpacing).toBe(240);
+      expect(result.paragraphFormatting?.spaceAfter).toBe(120);
+      expect(result.runFormatting?.fontSize).toBe(22);
+    });
+
+    test("does NOT synthesize template Normal spacing when docDefaults present but Normal absent", () => {
+      // A generated DOCX with an empty `<w:pPrDefault/>` (no spacing) and no
+      // Normal style: style-less paragraphs (e.g. table cells) must render at
+      // the document's compact default, not the 8pt-after / 1.08-line template.
+      const styleDefinitions: StyleDefinitions = {
+        docDefaults: { rPr: { fontSize: 20 } },
+        styles: [],
+      };
+
+      const resolver = createStyleResolver(styleDefinitions);
+      const result = resolver.resolveParagraphStyle(null);
+
+      expect(result.paragraphFormatting?.spaceAfter).toBeUndefined();
+      expect(result.paragraphFormatting?.lineSpacing).toBeUndefined();
+    });
+
+    test("falls back to template Normal only for a bare document (no Normal, no docDefaults)", () => {
+      // The last-resort fallback survives: a document that defines neither a
+      // Normal style nor docDefaults still gets Word's default-template spacing.
+      const resolver = createStyleResolver({ styles: [] });
+      const result = resolver.resolveParagraphStyle(null);
+
       expect(result.paragraphFormatting?.lineSpacing).toBe(259);
       expect(result.paragraphFormatting?.spaceAfter).toBe(160);
-      expect(result.runFormatting?.fontSize).toBe(22);
+    });
+
+    test("treats an empty but present docDefaults as zero spacing, not template Normal", () => {
+      // A document that declares empty docDefaults (no Normal) wants zero
+      // spacing / single line — the built-in template must not be synthesized
+      // over it (eigenpal/docx-editor#909).
+      const resolver = createStyleResolver({ docDefaults: {}, styles: [] });
+      const result = resolver.resolveParagraphStyle(null);
+
+      expect(result.paragraphFormatting?.spaceAfter).toBeUndefined();
+      expect(result.paragraphFormatting?.lineSpacing).toBeUndefined();
     });
 
     test("applies Normal style when no styleId and Normal exists", () => {

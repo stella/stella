@@ -107,6 +107,7 @@ export type TextEffectAttrs = {
 export type FootnoteRefAttrs = {
   id: string | number;
   noteType?: "footnote" | "endnote";
+  vertAlign?: "baseline";
 };
 
 export type CommentAttrs = {

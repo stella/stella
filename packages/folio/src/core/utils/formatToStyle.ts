@@ -29,6 +29,7 @@ import {
 } from "./colorResolver";
 import { resolveFontFamily, resolveThemeFont } from "./fontResolver";
 import {
+  AUTO_PARAGRAPH_SPACING_PX,
   halfPointsToPixels,
   twipsToPixels,
   eighthsToPixels,
@@ -304,13 +305,18 @@ export function paragraphToStyle(
   // SPACING (margins)
   // ============================================================================
 
-  // Space before (marginTop)
-  if (formatting.spaceBefore !== undefined) {
+  // Space before (marginTop). HTML-origin `w:beforeAutospacing` overrides any
+  // explicit before with Word's ~14px auto gap (eigenpal/docx-editor#823).
+  if (formatting.beforeAutospacing) {
+    style.marginTop = formatPx(AUTO_PARAGRAPH_SPACING_PX);
+  } else if (formatting.spaceBefore !== undefined) {
     style.marginTop = formatPx(twipsToPixels(formatting.spaceBefore));
   }
 
-  // Space after (marginBottom)
-  if (formatting.spaceAfter !== undefined) {
+  // Space after (marginBottom). Same auto-spacing override as above.
+  if (formatting.afterAutospacing) {
+    style.marginBottom = formatPx(AUTO_PARAGRAPH_SPACING_PX);
+  } else if (formatting.spaceAfter !== undefined) {
     style.marginBottom = formatPx(twipsToPixels(formatting.spaceAfter));
   }
 

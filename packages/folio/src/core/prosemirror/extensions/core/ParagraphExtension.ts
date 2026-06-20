@@ -24,6 +24,7 @@ import type {
 import { paragraphToStyle } from "../../../utils/formatToStyle";
 import { collectHeadings } from "../../../utils/headingCollector";
 import { expectParagraphAttrs } from "../../attrs";
+import { autospacingMatchesBase } from "../../autospacingBase";
 import type { ParagraphAttrs } from "../../schema/nodes";
 import {
   paragraphAttrsFromResolvedStyle,
@@ -72,6 +73,22 @@ function paragraphAttrsToDOMStyle(attrs: ParagraphAttrs): string {
       : {}),
     ...(attrs.borders !== undefined ? { borders: attrs.borders } : {}),
     ...(attrs.shading !== undefined ? { shading: attrs.shading } : {}),
+    // HTML-origin auto spacing uses the PM-only import baseline, so direct and
+    // style-sourced auto flags behave the same until an edit changes spacing.
+    ...(autospacingMatchesBase(
+      attrs._autospacingBase,
+      "before",
+      attrs.spaceBefore,
+    )
+      ? { beforeAutospacing: true }
+      : {}),
+    ...(autospacingMatchesBase(
+      attrs._autospacingBase,
+      "after",
+      attrs.spaceAfter,
+    )
+      ? { afterAutospacing: true }
+      : {}),
   };
 
   const style = paragraphToStyle(formatting);
@@ -371,6 +388,7 @@ const paragraphNodeSpec: NodeSpec = {
     bookmarks: { default: null },
     _emptyHyperlinks: { default: null },
     _originalFormatting: { default: null },
+    _autospacingBase: { default: null },
     _sectionProperties: { default: null },
     _propertyChanges: { default: null },
     pPrMark: { default: null },

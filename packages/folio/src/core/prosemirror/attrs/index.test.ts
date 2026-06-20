@@ -38,6 +38,7 @@ describe("ProseMirror attr readers", () => {
       paraId: "para-1",
       numPr: { numId: 4, ilvl: 1 },
       bookmarks: [{ id: 7, name: "_Ref7" }],
+      _autospacingBase: { before: 200, after: null },
       _sectionProperties: { sectionStart: "nextPage" },
       _propertyChanges: [],
     });
@@ -50,6 +51,8 @@ describe("ProseMirror attr readers", () => {
     }
     expect(result.value.numPr?.numId).toBe(4);
     expect(result.value.bookmarks?.at(0)?.name).toBe("_Ref7");
+    expect(result.value._autospacingBase?.before).toBe(200);
+    expect(result.value._autospacingBase?.after).toBeNull();
     expect(expectParagraphAttrs(node).paraId).toBe("para-1");
   });
 
@@ -106,6 +109,7 @@ describe("ProseMirror attr readers", () => {
         highlight: "neon",
         underline: { style: "zigzag" },
       },
+      _autospacingBase: { before: "tight" },
       _sectionProperties: { pageWidth: "wide", orientation: "diagonal" },
       _propertyChanges: [
         {
@@ -133,6 +137,7 @@ describe("ProseMirror attr readers", () => {
         "paragraph.attrs.defaultTextFormatting.bold",
         "paragraph.attrs.defaultTextFormatting.highlight",
         "paragraph.attrs.defaultTextFormatting.underline.style",
+        "paragraph.attrs._autospacingBase.before",
         "paragraph.attrs._sectionProperties.pageWidth",
         "paragraph.attrs._sectionProperties.orientation",
         "paragraph.attrs._propertyChanges[0].type",
