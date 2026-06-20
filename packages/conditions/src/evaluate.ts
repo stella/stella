@@ -103,6 +103,13 @@ const compareValues = (
     return normScalar(left) !== normScalar(right);
   }
 
+  // An ordered comparison needs a comparison value. An empty one is an
+  // incomplete filter (operator chosen, value not yet entered) — treat it as a
+  // no-op (vacuously true) rather than matching every row.
+  if (normScalar(right) === "") {
+    return true;
+  }
+
   // Numeric comparison when the right-hand value (the literal, in Table
   // filters) is a number: a non-numeric left value is then excluded. When the
   // right value is non-numeric — e.g. an ISO date string — compare

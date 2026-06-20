@@ -87,6 +87,17 @@ describe("compare operators", () => {
       evaluateCondition(onOrBefore, resolverFor({ due: "2026-07-01" })),
     ).toBe(false);
   });
+
+  test("an incomplete ordered comparison (empty literal) is a no-op", () => {
+    const gt = compare({ type: "property", propertyId: "amount" }, "gt", "");
+    expect(evaluateCondition(gt, resolverFor({ amount: 5 }))).toBe(true);
+    expect(evaluateCondition(gt, resolverFor({ amount: "" }))).toBe(true);
+
+    const lte = compare({ type: "property", propertyId: "due" }, "lte", "");
+    expect(evaluateCondition(lte, resolverFor({ due: "2026-06-01" }))).toBe(
+      true,
+    );
+  });
 });
 
 describe("predicate operators", () => {

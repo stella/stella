@@ -378,25 +378,25 @@ const compileBuiltinCompare = (
 
 const compileCompare = (node: CompareNode): SQL | null => {
   // The filter UI always compares a ref operand against a literal.
+  const value = literalString(node.right);
+  if (value === null) {
+    return null;
+  }
+  // An ordered comparison with an empty literal is an incomplete filter
+  // (operator chosen, value not yet entered); drop it so an in-progress
+  // "date is before …" doesn't match nearly every row.
+  if (value === "" && node.op !== "eq" && node.op !== "neq") {
+    return null;
+  }
   if (node.left.type === "property") {
-    const value = literalString(node.right);
-    if (value === null) {
-      return null;
-    }
     return propertyExists(
       node.left.propertyId,
       compareOpSql(node.op, fieldValueExpr(fields.content), value),
     );
   }
-
   if (node.left.type === "builtin") {
-    const value = literalString(node.right);
-    if (value === null) {
-      return null;
-    }
     return compileBuiltinCompare(node.left.field, node.op, value);
   }
-
   return null;
 };
 
