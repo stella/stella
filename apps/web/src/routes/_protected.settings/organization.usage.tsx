@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
@@ -87,6 +87,7 @@ function EntitlementCardSkeleton() {
 
 function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
   const t = useTranslations();
+  const format = useFormatter();
   const monthlyAllowance =
     data.policy.monthlyUsageUnitsPerSeat * data.entitlement.seats;
   const usedPct =
@@ -113,7 +114,10 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
             <p className="text-muted-foreground text-sm">
               {data.entitlement.cancelAtPeriodEnd
                 ? t("settings.organization.usageEndsOnTemplate", {
-                    date: formatShortDate(data.entitlement.currentPeriodEnd),
+                    date: formatShortDate(
+                      data.entitlement.currentPeriodEnd,
+                      format,
+                    ),
                   })
                 : t(USAGE_STATUS_KEYS[data.entitlement.status])}{" "}
               ·{" "}
@@ -124,6 +128,7 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
               {formatPeriod(
                 data.entitlement.currentPeriodStart,
                 data.entitlement.currentPeriodEnd,
+                format,
               )}
             </p>
           </div>
@@ -143,7 +148,7 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
             </span>
             <span className="font-medium">
               {t("settings.organization.usageUnitsBalanceTemplate", {
-                remaining: data.remainingUsageUnits.toLocaleString(),
+                remaining: format.number(data.remainingUsageUnits),
               })}
             </span>
           </div>
@@ -218,30 +223,33 @@ function EmptyStateCard() {
   );
 }
 
-const formatShortDate = (iso: string): string => {
+type IntlFormatter = ReturnType<typeof useFormatter>;
+
+const SHORT_DATE_OPTIONS = {
+  month: "short",
+  day: "numeric",
+  year: "numeric",
+} as const;
+
+const formatShortDate = (iso: string, format: IntlFormatter): string => {
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) {
     return "";
   }
-  return new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  }).format(date);
+  return format.dateTime(date, SHORT_DATE_OPTIONS);
 };
 
-const formatPeriod = (start: string, end: string): string => {
+const formatPeriod = (
+  start: string,
+  end: string,
+  format: IntlFormatter,
+): string => {
   const s = new Date(start);
   const e = new Date(end);
   if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) {
     return "";
   }
-  const fmt = new Intl.DateTimeFormat(undefined, {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-  return `${fmt.format(s)} - ${fmt.format(e)}`;
+  return `${format.dateTime(s, SHORT_DATE_OPTIONS)} - ${format.dateTime(e, SHORT_DATE_OPTIONS)}`;
 };
 
 const USAGE_STATUS_KEYS = {

@@ -13,7 +13,7 @@
 import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -148,6 +148,8 @@ const ReadOnlyValue = ({
   content: WorkspaceFieldContent | undefined;
   property: WorkspaceProperty;
 }) => {
+  const format = useFormatter();
+
   if (!content || content.type === "error" || content.type === "pending") {
     return <span className="text-muted-foreground text-sm">—</span>;
   }
@@ -162,7 +164,7 @@ const ReadOnlyValue = ({
     }
     return (
       <span className="text-sm">
-        {new Date(content.value).toLocaleDateString(undefined, {
+        {format.dateTime(new Date(content.value), {
           year: "numeric",
           month: "short",
           day: "numeric",
@@ -461,25 +463,23 @@ const IntDisplay = ({
   value: number;
   currency: string | null;
 }) => {
+  const format = useFormatter();
+
   if (!currency) {
-    return (
-      <span className={intDisplayClass}>
-        {new Intl.NumberFormat().format(value)}
-      </span>
-    );
+    return <span className={intDisplayClass}>{format.number(value)}</span>;
   }
 
   try {
-    const formatted = new Intl.NumberFormat(undefined, {
+    const formatted = format.number(value, {
       style: "currency",
       currency,
       minimumFractionDigits: 0,
-    }).format(value);
+    });
     return <span className={intDisplayClass}>{formatted}</span>;
   } catch {
     return (
       <span className={intDisplayClass}>
-        {new Intl.NumberFormat().format(value)} {currency}
+        {format.number(value)} {currency}
       </span>
     );
   }

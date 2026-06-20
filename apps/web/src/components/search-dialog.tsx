@@ -19,7 +19,7 @@ import {
   WandSparklesIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
-import { useLocale, useTranslations } from "use-intl";
+import { useFormatter, useLocale, useTranslations } from "use-intl";
 
 import type {
   EntityKind,
@@ -1602,12 +1602,12 @@ const SearchResultItem = ({
   onClick,
 }: SearchResultItemProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
   const date = new Date(hit.updatedAt);
-  const formatted = new Intl.DateTimeFormat(locale, {
+  const formatted = format.dateTime(date, {
     month: "short",
     year: "numeric",
-  }).format(date);
+  });
   let editorMeta: { image: string | null; name: string } | null = null;
   if (hit.type === "document" && hit.lastEditedByName) {
     editorMeta = {

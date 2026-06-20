@@ -1,6 +1,6 @@
 import { calcPrice } from "@pydantic/genai-prices";
 import type { ModelPrice, TieredPrices } from "@pydantic/genai-prices";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import {
   encodeModelSelection,
@@ -14,6 +14,7 @@ import type {
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { getProviderIcon } from "@/components/ai-provider-icons";
+import { getFormatter } from "@/i18n/i18n-store";
 
 // "Typical call" = one chat turn through an agent loop with tool
 // calls: large system prompt + tool schemas + a few intermediate
@@ -51,19 +52,47 @@ const formatPerMTok = (
 
 const formatUsd = (value: number): string => {
   if (value === 0) {
-    return "$0";
+    return formatUsdValue(value, { minimumFractionDigits: 0 });
   }
   if (value < 0.01) {
-    return `$${value.toPrecision(2)}`;
+    // Two significant digits for sub-cent prices (mirrors toPrecision(2)).
+    return formatUsdValue(value, {
+      minimumSignificantDigits: 2,
+      maximumSignificantDigits: 2,
+    });
   }
   if (value < 1) {
-    return `$${value.toFixed(3)}`;
+    return formatUsdValue(value, {
+      minimumFractionDigits: 3,
+      maximumFractionDigits: 3,
+    });
   }
   if (value < 100) {
-    return `$${value.toFixed(2)}`;
+    return formatUsdValue(value, {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
   }
-  return `$${value.toFixed(0)}`;
+  return formatUsdValue(value, {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
 };
+
+type UsdDigitsOptions = {
+  minimumFractionDigits?: number;
+  maximumFractionDigits?: number;
+  minimumSignificantDigits?: number;
+  maximumSignificantDigits?: number;
+};
+
+// Onboarding pricing is quoted in USD; only the formatting localizes.
+const formatUsdValue = (value: number, digits: UsdDigitsOptions): string =>
+  getFormatter().number(value, {
+    style: "currency",
+    currency: "USD",
+    ...digits,
+  });
 
 type ModelRow = {
   modelId: string;
@@ -131,6 +160,7 @@ type PricesPanelProps = {
 export const PricesPanel = ({ providers, roleModels }: PricesPanelProps) => {
   const tOrganization = useTranslations("organization");
   const t = useTranslations();
+  const format = useFormatter();
 
   const groups = providers.map((provider) => ({
     provider,
@@ -179,8 +209,8 @@ export const PricesPanel = ({ providers, roleModels }: PricesPanelProps) => {
         </p>
         <p className="text-muted-foreground mt-1 text-xs">
           {tOrganization("aiConfig.prices.typicalCallHint", {
-            input: TYPICAL_INPUT_TOKENS.toLocaleString(),
-            output: TYPICAL_OUTPUT_TOKENS.toLocaleString(),
+            input: format.number(TYPICAL_INPUT_TOKENS),
+            output: format.number(TYPICAL_OUTPUT_TOKENS),
           })}
         </p>
       </div>

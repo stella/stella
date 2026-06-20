@@ -5,6 +5,8 @@ import { useTranslations } from "use-intl";
 import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
 
+import { getFormatter } from "@/i18n/i18n-store";
+
 const BILLING_INCREMENT = 6;
 
 const RE_HM = /^(?:(?<hours>\d+)h)?\s*(?:(?<mins>\d+)m)?$/iu;
@@ -70,7 +72,10 @@ export const formatMinutes = (minutes: number): string => {
 };
 
 export const formatDecimalHours = (minutes: number): string =>
-  (minutes / 60).toFixed(2);
+  getFormatter().number(minutes / 60, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
 type DurationInputProps = {
   value: number;
