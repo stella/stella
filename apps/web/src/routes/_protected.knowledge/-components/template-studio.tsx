@@ -3188,7 +3188,8 @@ const normalizeLookupNumber = (value: string): string =>
  *  (the source of truth for the lookup format's inline markdown): `**bold**`
  *  and `*italic*` spans, non-nesting, asterisk-free content, unmatched
  *  asterisks stay literal. */
-const LOOKUP_PREVIEW_MARKDOWN_RE = /\*\*([^*]+)\*\*|(?<!\*)\*([^*]+)\*(?!\*)/gu;
+const LOOKUP_PREVIEW_MARKDOWN_RE =
+  /\*\*(?<bold>[^*]+)\*\*|(?<!\*)\*(?<italic>[^*]+)\*(?!\*)/gu;
 
 /** A rendered lookup output as a folio preview value: formatted spans when
  *  the format used `**bold**` / `*italic*`, otherwise the plain string. */
@@ -3199,7 +3200,7 @@ const lookupPreviewValue = (rendered: string): TemplatePreviewValue => {
     if (match.index > cursor) {
       spans.push({ text: rendered.slice(cursor, match.index) });
     }
-    const [, bold, italic] = match;
+    const { bold, italic } = match.groups ?? {};
     if (bold !== undefined) {
       spans.push({ text: bold, bold: true });
     } else if (italic !== undefined) {

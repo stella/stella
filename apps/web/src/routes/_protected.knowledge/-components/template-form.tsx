@@ -291,7 +291,7 @@ const arrayIndexKey = (fieldPath: string): string =>
   `${ARRAY_INDEX_KEY_PREFIX}${fieldPath}`;
 
 /** Array item inputs as named by ArrayFieldRenderer: `<path>[<index>].<sub>`. */
-const ARRAY_ITEM_KEY_RE = /^(.+)\[(\d+)\]\.(.+)$/u;
+const ARRAY_ITEM_KEY_RE = /^(?<path>.+)\[(?<index>\d+)\]\.(?<sub>.+)$/u;
 
 export type ArrayItemKey = {
   /** The array field's path. */
@@ -303,8 +303,7 @@ export type ArrayItemKey = {
 
 /** Parse a form-state key into its array item parts; null for scalar keys. */
 export const parseArrayItemKey = (key: string): ArrayItemKey | null => {
-  const match = ARRAY_ITEM_KEY_RE.exec(key);
-  const [, path, index, sub] = match ?? [];
+  const { path, index, sub } = ARRAY_ITEM_KEY_RE.exec(key)?.groups ?? {};
   if (path === undefined || index === undefined || sub === undefined) {
     return null;
   }
