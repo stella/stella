@@ -18,7 +18,7 @@ import type {
   PropertyBatch,
 } from "@/api/lib/workflow/get-execution-plan";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
-import { evaluateCondition } from "@/api/lib/workflow/utils";
+import { evaluateGatingCondition } from "@/api/lib/workflow/utils";
 
 // Types shared between mock and real AI implementations
 export type FieldContentForAI = Exclude<
@@ -160,20 +160,15 @@ export const prepareBatchInput = (
 ): PrepareBatchInputResult => {
   const skippedPropertyIds: SafeId<"property">[] = [];
 
+  const fieldContentByPropertyId = new Map<string, FieldContent>(
+    inputFields.map((field) => [field.propertyId, field.content]),
+  );
+
   // Filter properties based on dependency conditions
   const inputProperties = batch.properties.filter((property) => {
-    const conditionsMet = property.dependencies.every((dep) => {
-      if (!dep.condition) {
-        return true;
-      }
-      const depFieldContent = inputFields.find(
-        (field) => field.propertyId === dep.dependsOnPropertyId,
-      )?.content;
-      if (!depFieldContent) {
-        return false;
-      }
-      return evaluateCondition(depFieldContent, dep.condition);
-    });
+    const conditionsMet = property.dependencies.every((dep) =>
+      evaluateGatingCondition(dep.condition, fieldContentByPropertyId),
+    );
 
     if (!conditionsMet) {
       skippedPropertyIds.push(property.id);

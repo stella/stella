@@ -259,25 +259,6 @@ export const boundingBoxesSchema = t.Object({
 
 export type BoundingBoxes = Static<typeof boundingBoxesSchema>;
 
-export const propertyConditionSchema = t.Union([
-  t.Object({
-    version: v1,
-    type: t.Literal("string"),
-    operator: t.UnionEnum(["eq"]),
-    value: t.String({ minLength: 1, maxLength: 1000 }),
-  }),
-  t.Object({
-    version: v1,
-    type: t.Literal("string-array"),
-    operator: t.UnionEnum(["contains-every"]),
-    value: t.Array(t.String({ minLength: 1, maxLength: 1000 }), {
-      minItems: 1,
-    }),
-  }),
-]);
-
-export type PropertyCondition = Static<typeof propertyConditionSchema>;
-
 // -- Billing schemas --
 
 export const bankAccountSchema = t.Object({

@@ -25,6 +25,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  remapDependencyRefs,
+  remapNodePropertyIds,
+} from "@/api/lib/conditions/ast-utils";
 import { allocateEntityStamp } from "@/api/lib/document-counter";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
@@ -39,6 +43,7 @@ import { getS3 } from "@/api/lib/s3";
 import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 import { processExtraction } from "@/api/lib/search/process-extraction";
 import type { ViewLayout } from "@/api/lib/views-schema";
+import { parseViewLayout } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
@@ -62,18 +67,13 @@ const remapPropertyId = (
 ) => propertyIdMap.get(propertyId) ?? propertyId;
 
 const remapLayout = (
-  layout: ViewLayout,
+  storedLayout: unknown,
   propertyIdMap: Map<string, SafeId<"property">>,
 ): ViewLayout => {
-  const remapFilters = layout.filters.map((filter) => {
-    if (filter.field !== "property") {
-      return filter;
-    }
-    return {
-      ...filter,
-      propertyId: remapPropertyId(filter.propertyId, propertyIdMap),
-    };
-  });
+  const layout = parseViewLayout(storedLayout);
+  const remapFilters = layout.filters.map((node) =>
+    remapNodePropertyIds(node, (id) => remapPropertyId(id, propertyIdMap)),
+  );
   const remapSorts = layout.sorts.map((sort) => ({
     ...sort,
     propertyId: remapPropertyId(sort.propertyId, propertyIdMap),
@@ -635,18 +635,24 @@ const duplicateWorkspace = createSafeHandler(
       const newDependencies = snapshot.dependencies
         .map((dependency) => {
           const propertyId = propertyIdMap.get(dependency.propertyId);
-          const dependsOnPropertyId = propertyIdMap.get(
-            dependency.dependsOnPropertyId,
+          // Remaps the edge and the gate condition together so the copy can't
+          // remap one without the other; null when the edge endpoint is gone.
+          const refs = remapDependencyRefs(
+            {
+              dependsOnPropertyId: dependency.dependsOnPropertyId,
+              condition: dependency.condition,
+            },
+            (id) => propertyIdMap.get(id),
           );
-          if (!propertyId || !dependsOnPropertyId) {
+          if (!propertyId || !refs) {
             return null;
           }
           return {
             id: createSafeId<"propertyDependency">(),
             workspaceId: targetWorkspaceId,
             propertyId,
-            dependsOnPropertyId,
-            condition: dependency.condition,
+            dependsOnPropertyId: refs.dependsOnPropertyId,
+            condition: refs.condition,
           };
         })
         .filter((dependency) => dependency !== null);

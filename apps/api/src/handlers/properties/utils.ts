@@ -2,6 +2,8 @@ import type { Err } from "better-result";
 import { Result } from "better-result";
 import { deepEquals } from "bun";
 
+import type { ConditionNode } from "@stll/conditions";
+
 import type { SafeDb, SafeDbError } from "@/api/db";
 import type {
   AIModelTool,
@@ -10,7 +12,6 @@ import type {
 } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sortDeep } from "@/api/lib/sort-deep";
-import type { PropertyCondition } from "@/api/types";
 
 type PropertyForComparison = {
   content: PropertyContent;
@@ -19,7 +20,7 @@ type PropertyForComparison = {
     | (AIModelTool & {
         dependencies: {
           dependsOnPropertyId: string;
-          condition: PropertyCondition | null;
+          condition: ConditionNode | null;
         }[];
       });
 };

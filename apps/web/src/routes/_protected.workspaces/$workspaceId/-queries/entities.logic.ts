@@ -1,8 +1,4 @@
-import type {
-  EntityKind,
-  ViewFilterCondition,
-  WorkspaceProperty,
-} from "@/lib/types";
+import type { ConditionNode, EntityKind, WorkspaceProperty } from "@/lib/types";
 
 export type ViewSort = {
   propertyId: string;
@@ -13,7 +9,7 @@ export type EntitiesFieldMode = "full" | "visible";
 
 export type EntitiesPageKey = {
   workspaceId: string;
-  filters: ViewFilterCondition[];
+  filters: ConditionNode[];
   sorts: ViewSort[];
   page: number;
   search?: string;

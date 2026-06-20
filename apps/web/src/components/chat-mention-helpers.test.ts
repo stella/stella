@@ -113,9 +113,8 @@ describe("getMentionViewScope", () => {
       getMentionViewScope({
         filters: [
           {
-            id: "filter-1",
-            field: "property",
-            propertyId: "name",
+            type: "predicate",
+            operand: { type: "property", propertyId: "name" },
             op: "contains",
             value: "nda",
           },
@@ -125,9 +124,8 @@ describe("getMentionViewScope", () => {
     ).toEqual({
       filters: [
         {
-          id: "filter-1",
-          field: "property",
-          propertyId: "name",
+          type: "predicate",
+          operand: { type: "property", propertyId: "name" },
           op: "contains",
           value: "nda",
         },

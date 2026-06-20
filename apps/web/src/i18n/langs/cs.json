@@ -650,6 +650,7 @@
     "actions": "Akce",
     "add": "Přidat",
     "all": "Vše",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Adresa",
       "bankAccountNumber": "Číslo bankovního účtu",
@@ -778,6 +779,7 @@
     "open": "Otevřít",
     "openInNewTab": "Otevřít na nové kartě",
     "options": "Možnosti",
+    "or": "Or",
     "organization": "Organizace",
     "organizationName": "Název organizace",
     "pin": "Připnout",
@@ -1104,9 +1106,29 @@
   },
   "filters": {
     "contains": "obsahuje",
+    "contains_all": "contains all of",
+    "dateAfter": "is after",
+    "dateBefore": "is before",
+    "dateOnOrAfter": "is on or after",
+    "dateOnOrBefore": "is on or before",
+    "ends_with": "ends with",
     "eq": "je",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "je prázdné",
-    "neq": "není"
+    "is_not_empty": "is not empty",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
+    "neq": "není",
+    "not_contains": "does not contain",
+    "numEq": "=",
+    "numGt": ">",
+    "numGte": "≥",
+    "numLt": "<",
+    "numLte": "≤",
+    "numNeq": "≠",
+    "starts_with": "starts with"
   },
   "folio": {
     "acceptChange": "Přijmout změnu",
@@ -2437,6 +2459,7 @@
     },
     "possibleDuplicates": "Možné duplicity",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Přidejte alespoň jednu vstupní vlastnost pomocí \"@\"",
       "addOption": "Přidat možnost",
       "addPromptForBetterResults": "Přidejte prompt pro lepší výsledky",
@@ -2478,6 +2501,7 @@
       "editColumn": "Upravit sloupec",
       "editConditions": "Upravit podmínky",
       "editConditionsDescription": "Nastavte podmínky, za kterých se má tato vlastnost generovat.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Zadejte hodnotu",
       "extractEntityType": "Vytěžit informaci",
       "extractEntityTypeDescription": "Sloupec doplňovaný AI.",
@@ -2502,6 +2526,7 @@
       "newColumn": "Nový sloupec",
       "newColumnDescription": "Vyberte, jak se má tento sloupec tabulky vyplňovat.",
       "newColumnName": "Název sloupce",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Zatím žádné dokumenty pro náhled.",
       "noPropertiesFound": "Nebyly nalezeny žádné vlastnosti",
       "optionsHelp": "Zadej hodnoty, ze kterých může AI vybírat.",
@@ -2524,6 +2549,7 @@
       "scopeMatterDescription": "Použít všechny sloupce souborů a spustit celý spis.",
       "searchOrAddOptions": "Hledat nebo přidat možnosti",
       "selectColor": "Vyberte barvu",
+      "selectField": "Select field",
       "selectOperator": "Vyberte operátor",
       "setPromptPlaceholder": "Nastavte prompt pro extrakci informací",
       "singleSelect": "Jednoduchý výběr",
@@ -2580,7 +2606,10 @@
     "unarchiveMatter": "Obnovit z archivu",
     "uploadDocuments": "Nahrát dokumenty",
     "views": {
+      "addAdvancedFilter": "Add advanced filter",
       "addFields": "Přidat pole",
+      "advancedFilter": "Advanced",
+      "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}",
       "aiGenerated": "Generováno AI",
       "calendar": {
         "addDates": "+ Datumy",
@@ -2597,6 +2626,7 @@
         "year": "Rok"
       },
       "cannotDeleteRequired": "Je vyžadováno alespoň jedno zobrazení tohoto typu",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (kopie)",
       "deleteView": "Smazat pohled",
       "exportCsv": "Exportovat CSV",
@@ -2605,6 +2635,9 @@
       "exportXlsx": "Exportovat XLSX",
       "fields": "Pole:",
       "fieldsSelected": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
+      "filter": "Filter",
+      "filterByPlaceholder": "Filter by…",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Seskupit podle:",
       "hideColumn": "Skrýt sloupec",
       "layouts": {
@@ -2618,6 +2651,9 @@
         "timeline": "Časová osa"
       },
       "newView": "Nový {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
+      "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Uložit jako šablonu…",
       "selectProperty": "Vybrat vlastnost",
       "templates": {

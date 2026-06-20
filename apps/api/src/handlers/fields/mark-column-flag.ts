@@ -11,6 +11,8 @@ import {
 } from "drizzle-orm";
 import { t } from "elysia";
 
+import type { ConditionNode } from "@stll/conditions";
+
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { cellMetadata, entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
@@ -19,13 +21,10 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { acquireCellLock } from "@/api/lib/cell-lock";
+import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  tViewFilterConditionSchema,
-  type ViewFilterCondition,
-} from "@/api/lib/views-schema";
 
 import {
   buildColumnFlagMutation,
@@ -46,7 +45,7 @@ const config = {
   body: t.Object({
     propertyId: tSafeId("property"),
     flag: t.Literal(VERIFIED_COLUMN_FLAG),
-    filters: t.Array(tViewFilterConditionSchema),
+    filters: t.Array(tConditionNode),
   }),
 } satisfies HandlerConfig;
 
@@ -66,7 +65,7 @@ type ProcessColumnFlagBatchArgs = {
   workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
   flag: string;
-  filters: ViewFilterCondition[];
+  filters: ConditionNode[];
   userId: SafeId<"user">;
   cursor: SafeId<"entity"> | null;
   addedAt: string;

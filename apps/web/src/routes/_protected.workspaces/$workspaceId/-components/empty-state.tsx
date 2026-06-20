@@ -1,8 +1,10 @@
 import { useRef } from "react";
 
-import { UploadIcon } from "lucide-react";
+import { FilterXIcon, UploadIcon } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
+
+import { Button } from "@stll/ui/components/button";
 
 import {
   EMPTY_SCREEN_MATTERS_VIDEO,
@@ -50,6 +52,35 @@ export const EmptyState = ({
             <p className="text-foreground-strong-muted mt-1 text-xs">{hint}</p>
           )}
         </div>
+      </div>
+    </div>
+  );
+};
+
+type FilteredEmptyStateProps = {
+  onClearFilters: () => void;
+};
+
+export const FilteredEmptyState = ({
+  onClearFilters,
+}: FilteredEmptyStateProps) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex flex-1 items-center justify-center p-8">
+      <div className="flex max-w-sm flex-col items-center gap-3 text-center">
+        <FilterXIcon className="text-muted-foreground size-8" />
+        <div>
+          <p className="text-muted-foreground text-sm">
+            {t("workspaces.views.noFilterResults")}
+          </p>
+          <p className="text-foreground-strong-muted mt-1 text-xs">
+            {t("workspaces.views.noFilterResultsHint")}
+          </p>
+        </div>
+        <Button onClick={onClearFilters} size="sm" variant="secondary">
+          {t("workspaces.views.clearFilters")}
+        </Button>
       </div>
     </div>
   );

@@ -1,6 +1,7 @@
 import * as cheerio from "cheerio";
 
-import type { PropertyCondition } from "@/api/db/schema-validators";
+import type { ConditionNode } from "@stll/conditions";
+
 import { htmlToMarkdown } from "@/api/lib/markdown/html-to-markdown";
 
 /**
@@ -111,7 +112,7 @@ export type AITool = {
   prompt: string;
   dependencies: {
     dependsOnPropertyId: string;
-    condition: PropertyCondition | null;
+    condition: ConditionNode | null;
   }[];
 };
 

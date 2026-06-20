@@ -3,6 +3,8 @@ import { and, count, eq, inArray, notInArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import type { ConditionNode } from "@stll/conditions";
+
 import type { SafeDb, Transaction } from "@/api/db";
 import { member, user } from "@/api/db/auth-schema";
 import {
@@ -38,7 +40,7 @@ import type {
 } from "@/api/lib/entity-constants";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { ViewFilterCondition, ViewSort } from "@/api/lib/views-schema";
+import type { ViewSort } from "@/api/lib/views-schema";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 export type QueryEntitiesFieldMode = "full" | "visible";
@@ -115,7 +117,7 @@ type QueryEntitiesProps = {
   workspaceId: SafeId<"workspace">;
   currentUserId: string;
   currentOrganizationId: SafeId<"organization">;
-  filters: ViewFilterCondition[];
+  filters: ConditionNode[];
   sorts: ViewSort[];
   search?: string | undefined;
   cursor?: EntitiesWindowCursorValues | null | undefined;

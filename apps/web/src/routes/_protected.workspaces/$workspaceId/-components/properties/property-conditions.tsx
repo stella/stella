@@ -1,10 +1,11 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { RouteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { PropertyCondition } from "@stll/api/types";
+import type { ConditionNode } from "@stll/conditions";
+import { pruneIncomplete } from "@stll/conditions";
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -14,87 +15,14 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/components/select";
 import { Separator } from "@stll/ui/components/separator";
 
-import { getTranslator } from "@/i18n/i18n-store";
-import type {
-  PropertyDependency,
-  WorkspaceProperty,
-  WorkspacePropertyOption,
-} from "@/lib/types";
-import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
+import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
+import { ConditionBuilder } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder";
+import type { FieldOption } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
-
-type StringOperators = Extract<
-  PropertyCondition,
-  { type: "string" }
->["operator"];
-
-type StringArrayOperators = Extract<
-  PropertyCondition,
-  { type: "string-array" }
->["operator"];
-
-type ConditionData = {
-  version: 1;
-  operator: ConditionOperator;
-  value: string | string[];
-  options: WorkspacePropertyOption[] | undefined;
-};
-
-type ConditionOperator = PropertyCondition["operator"];
-
-type Condition = PropertyDependency["condition"];
-
-const getConditionData = (
-  property: WorkspaceProperty | undefined,
-  condition: Condition,
-): ConditionData | null => {
-  if (!property) {
-    return null;
-  }
-
-  let defaultOperator: NonNullable<Condition>["operator"] | undefined;
-  let defaultValue: NonNullable<Condition>["value"] | undefined;
-
-  switch (property.content.type) {
-    case "text":
-    case "single-select":
-      defaultValue = "";
-      defaultOperator = "eq";
-      break;
-    case "multi-select":
-      defaultValue = [];
-      defaultOperator = "contains-every";
-      break;
-    default:
-      defaultValue = undefined;
-      defaultOperator = undefined;
-      break;
-  }
-
-  if (defaultValue === undefined || defaultOperator === undefined) {
-    return null;
-  }
-
-  return {
-    version: 1,
-    operator: condition?.operator ?? defaultOperator,
-    value: condition?.value ?? defaultValue,
-    options:
-      "options" in property.content ? property.content.options : undefined,
-  };
-};
 
 type PropertyConditionsProps = {
   workspaceId: string;
@@ -110,29 +38,26 @@ export const PropertyConditions = ({
   const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
-  const data = dependencies
-    .map((dependency) => {
+  const editableDependencies = dependencies
+    .map((dependency, index) => {
       const property = properties.find(
         (p) => p.id === dependency.dependsOnPropertyId,
       );
-      const conditionData = getConditionData(property, dependency.condition);
+      const field = property ? fieldOptionFor(property) : null;
 
-      if (!property || !conditionData) {
+      if (!property || !field) {
         return null;
       }
 
-      return { property, conditionData };
+      return { dependency, field, index, property };
     })
-    .filter(
-      (condition): condition is NonNullable<typeof condition> =>
-        condition !== null,
-    );
+    .filter((entry): entry is NonNullable<typeof entry> => entry !== null);
 
   const conditionCount = dependencies.filter(
     (dependency) => dependency.condition !== null,
   ).length;
 
-  if (data.length === 0) {
+  if (editableDependencies.length === 0) {
     return null;
   }
 
@@ -161,34 +86,26 @@ export const PropertyConditions = ({
         </DialogHeader>
         <ScrollArea className="h-96">
           <DialogPanel>
-            {data.map(({ property, conditionData }) => (
-              <Fragment key={property.id}>
-                <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-2 first:hidden">
-                  <Separator />
-                  <span className="text-muted-foreground text-xs font-medium">
-                    {t("workspaces.properties.conditionSeparator")}
-                  </span>
-                  <Separator />
-                </div>
-                <ConditionRow
-                  data={conditionData}
-                  onConditionChange={(condition) => {
-                    const index = dependencies.findIndex(
-                      (d) => d.dependsOnPropertyId === property.id,
-                    );
-
-                    if (index === -1) {
-                      return;
-                    }
-                    replaceValue(index, {
-                      dependsOnPropertyId: property.id,
-                      condition,
-                    });
-                  }}
-                  property={property}
-                />
-              </Fragment>
-            ))}
+            {editableDependencies.map(
+              ({ dependency, field, index, property }) => (
+                <Fragment key={property.id}>
+                  <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 py-2 first:hidden">
+                    <Separator />
+                    <span className="text-muted-foreground text-xs font-medium">
+                      {t("workspaces.properties.conditionSeparator")}
+                    </span>
+                    <Separator />
+                  </div>
+                  <DependencyConditionEditor
+                    dependency={dependency}
+                    field={field}
+                    index={index}
+                    onPersist={replaceValue}
+                    property={property}
+                  />
+                </Fragment>
+              ),
+            )}
           </DialogPanel>
         </ScrollArea>
       </DialogPopup>
@@ -196,156 +113,84 @@ export const PropertyConditions = ({
   );
 };
 
-const getOperatorLabels = (): Record<ConditionOperator, string> => {
-  const t = getTranslator();
-  return {
-    eq: t("workspaces.operators.equals"),
-    "contains-every": t("workspaces.operators.containsEvery"),
-  };
-};
-
-const STRING_OPERATORS: StringOperators[] = ["eq"];
-const STRING_ARRAY_OPERATORS: StringArrayOperators[] = ["contains-every"];
-
-const getOperatorOptions = (
-  value: string | string[],
-  operatorLabels: Record<ConditionOperator, string>,
-) => {
-  let operatorKeys: ConditionOperator[] = [];
-  if (typeof value === "string") {
-    operatorKeys = STRING_OPERATORS;
-  } else if (Array.isArray(value)) {
-    operatorKeys = STRING_ARRAY_OPERATORS;
-  }
-
-  return operatorKeys.map((operator) => ({
-    value: operator,
-    label: operatorLabels[operator],
-  }));
-};
-
-type BuildConditionArgs = {
-  operator: ConditionOperator;
-  value: string | string[] | null;
-};
-
-const buildCondition = ({
-  operator,
-  value,
-}: BuildConditionArgs): PropertyCondition | null => {
-  if (Array.isArray(value) && operator === "contains-every") {
-    return value.length > 0
-      ? {
-          version: 1,
-          type: "string-array",
-          operator,
-          value,
-        }
-      : null;
-  }
-
-  if (typeof value === "string" && operator === "eq") {
-    return value.trim().length > 0
-      ? {
-          version: 1,
-          type: "string",
-          operator,
-          value: value.trim(),
-        }
-      : null;
-  }
-
-  return null;
-};
-
-type ConditionRowProps = {
+type DependencyConditionEditorProps = {
+  dependency: PropertyDependency;
+  field: FieldOption;
+  index: number;
   property: WorkspaceProperty;
-  data: NonNullable<ReturnType<typeof getConditionData>>;
-  onConditionChange: (condition: PropertyCondition | null) => void;
+  onPersist: (index: number, value: PropertyDependency) => void;
 };
 
-const ConditionRow = ({
+/**
+ * Edits one dependency's gate. The builder is controlled and the parent
+ * persists on every change, so we hold the in-progress group locally
+ * (incomplete leaves and all) and persist only the pruned condition. A
+ * half-entered leaf would otherwise be saved as a live gate and then vanish
+ * from the editor on the next render. An all-incomplete group prunes to
+ * `null` ("no gate"), matching the gating evaluator and the SQL compiler.
+ */
+const DependencyConditionEditor = ({
+  dependency,
+  field,
+  index,
   property,
-  data,
-  onConditionChange,
-}: ConditionRowProps) => {
+  onPersist,
+}: DependencyConditionEditorProps) => {
   const t = useTranslations();
-  const operatorLabels = getOperatorLabels();
-  const operatorOptions = getOperatorOptions(data.value, operatorLabels);
+  const [draft, setDraft] = useState<ConditionNode | null>(
+    dependency.condition,
+  );
 
   return (
     <div className="flex flex-col gap-3 rounded-md border p-3">
       <div className="flex items-center gap-x-1.5">
-        <PropertyIcon type={property.content.type} />{" "}
+        <PropertyIcon type={property.content.type} />
         <span className="text-sm font-medium">{property.name}</span>
       </div>
-      <div className="grid grid-cols-2 gap-2">
-        <Select
-          items={operatorOptions}
-          onValueChange={(newValue) => {
-            if (newValue) {
-              onConditionChange(
-                buildCondition({ operator: newValue, value: data.value }),
-              );
-            }
-          }}
-          value={data.operator}
-        >
-          <SelectTrigger>
-            <SelectValue className="truncate">
-              {(selected) =>
-                operatorOptions.find((o) => o.value === selected)?.label ??
-                t("workspaces.properties.selectOperator")
-              }
-            </SelectValue>
-          </SelectTrigger>
-          <SelectPopup alignItemWithTrigger={false}>
-            {operatorOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
-        {typeof data.value === "string" && !data.options && (
-          <Input
-            onChange={(e) =>
-              onConditionChange(
-                buildCondition({
-                  operator: data.operator,
-                  value: e.target.value,
-                }),
-              )
-            }
-            placeholder={t("workspaces.properties.enterAValue")}
-            value={data.value}
-          />
-        )}
-        {data.options && typeof data.value === "string" && (
-          <FieldValueSelect
-            onChange={(value) => {
-              onConditionChange(
-                buildCondition({ operator: data.operator, value }),
-              );
-            }}
-            options={data.options}
-            type="single-select"
-            value={data.value}
-          />
-        )}
-        {data.options && Array.isArray(data.value) && (
-          <FieldValueSelect
-            onChange={(value) => {
-              onConditionChange(
-                buildCondition({ operator: data.operator, value }),
-              );
-            }}
-            options={data.options}
-            type="multi-select"
-            value={data.value}
-          />
-        )}
-      </div>
+      <p className="text-muted-foreground text-xs">
+        {t("workspaces.properties.editConditionsWhen")}
+      </p>
+      <ConditionBuilder
+        fields={[field]}
+        onChange={(next) => {
+          setDraft(next);
+          onPersist(index, {
+            dependsOnPropertyId: property.id,
+            condition: pruneIncomplete(next),
+          });
+        }}
+        value={draft}
+      />
     </div>
   );
+};
+
+/** Maps a gateable dependency property to a builder field, or null. */
+const fieldOptionFor = (property: WorkspaceProperty): FieldOption | null => {
+  const { content } = property;
+
+  if (content.type === "file") {
+    return null;
+  }
+
+  if (content.type === "single-select" || content.type === "multi-select") {
+    return {
+      operand: { type: "property", propertyId: property.id },
+      label: property.name,
+      valueType: content.type,
+      type: content.type,
+      options: content.options.map((option) => ({
+        value: option.value,
+        label: option.value,
+        color: option.color,
+      })),
+    };
+  }
+
+  return {
+    operand: { type: "property", propertyId: property.id },
+    label: property.name,
+    valueType: content.type,
+    type: content.type,
+  };
 };

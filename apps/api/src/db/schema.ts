@@ -1,3 +1,4 @@
+import type { ConditionNode } from "@stll/conditions";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import type { CountryCode } from "@stll/country-codes";
@@ -43,7 +44,6 @@ import type {
   ContactPhone,
   EntityKind,
   FieldContent,
-  PropertyCondition,
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
@@ -754,7 +754,7 @@ export const propertyDependencies = p.pgTable(
     dependsOnPropertyId: safeUuid<"property">(
       "depends_on_property_id",
     ).notNull(),
-    condition: jsonb().$type<PropertyCondition>(),
+    condition: jsonb().$type<ConditionNode>(),
   },
   (table) => [
     p

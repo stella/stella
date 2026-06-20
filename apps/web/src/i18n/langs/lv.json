@@ -650,6 +650,7 @@
     "actions": "Darbības",
     "add": "Pievienot",
     "all": "Visi",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Adrese",
       "bankAccountNumber": "Bankas konta numurs",
@@ -778,6 +779,7 @@
     "open": "Atvērt",
     "openInNewTab": "Atvērt jaunā cilnē",
     "options": "Iespējas",
+    "or": "Or",
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "pin": "Piespraust",
@@ -1104,9 +1106,29 @@
   },
   "filters": {
     "contains": "satur",
+    "contains_all": "contains all of",
+    "dateAfter": "is after",
+    "dateBefore": "is before",
+    "dateOnOrAfter": "is on or after",
+    "dateOnOrBefore": "is on or before",
+    "ends_with": "ends with",
     "eq": "ir",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "ir tukšs",
-    "neq": "nav"
+    "is_not_empty": "is not empty",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
+    "neq": "nav",
+    "not_contains": "does not contain",
+    "numEq": "=",
+    "numGt": ">",
+    "numGte": "≥",
+    "numLt": "<",
+    "numLte": "≤",
+    "numNeq": "≠",
+    "starts_with": "starts with"
   },
   "folio": {
     "acceptChange": "Pieņemt izmaiņu",
@@ -2437,6 +2459,7 @@
     },
     "possibleDuplicates": "Iespējamie dublikāti",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Pievienojiet vismaz vienu ievades rekvizītu, izmantojot \"@\"",
       "addOption": "Pievienot opciju",
       "addPromptForBetterResults": "Pievienojiet uzvedni labākiem rezultātiem",
@@ -2478,6 +2501,7 @@
       "editColumn": "Rediģēt sleju",
       "editConditions": "Rediģēt nosacījumus",
       "editConditionsDescription": "Iestatiet nosacījumus, kad šis rekvizīts tiks ģenerēts.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Ievadiet vērtību",
       "extractEntityType": "Izvilkt entītijas tipu",
       "extractEntityTypeDescription": "Izveidojiet AI aizpildītu tabulas kolonnu.",
@@ -2502,6 +2526,7 @@
       "newColumn": "Jauna kolonna",
       "newColumnDescription": "Izvēlieties, kā šī tabulas kolonna jāaizpilda.",
       "newColumnName": "Kolonnas nosaukums",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Vēl nav dokumentu priekšskatījumam.",
       "noPropertiesFound": "Rekvizīti nav atrasti",
       "optionsHelp": "Definē vērtības, no kurām AI var izvēlēties.",
@@ -2524,6 +2549,7 @@
       "scopeMatterDescription": "Izmantojiet visas failu kolonnas un palaidiet lietu.",
       "searchOrAddOptions": "Meklēt vai pievienot opcijas",
       "selectColor": "Izvēlieties krāsu",
+      "selectField": "Select field",
       "selectOperator": "Izvēlieties operatoru",
       "setPromptPlaceholder": "Iestatiet uzvedni informācijas ieguvei",
       "singleSelect": "Vienas izvēles",
@@ -2580,7 +2606,10 @@
     "unarchiveMatter": "Atarhivēt",
     "uploadDocuments": "Augšupielādēt dokumentus",
     "views": {
+      "addAdvancedFilter": "Add advanced filter",
       "addFields": "Pievienot laukus",
+      "advancedFilter": "Advanced",
+      "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}",
       "aiGenerated": "AI ģenerēts",
       "calendar": {
         "addDates": "+ Datumi",
@@ -2597,6 +2626,7 @@
         "year": "Gads"
       },
       "cannotDeleteRequired": "Ir nepieciešams vismaz viens šāda veida skats",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Dzēst skatu",
       "exportCsv": "Eksportēt CSV",
@@ -2605,6 +2635,9 @@
       "exportXlsx": "Eksportēt XLSX",
       "fields": "Lauki:",
       "fieldsSelected": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
+      "filter": "Filter",
+      "filterByPlaceholder": "Filter by…",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupēt pēc:",
       "hideColumn": "Slēpt kolonnu",
       "layouts": {
@@ -2618,6 +2651,9 @@
         "timeline": "Laika skala"
       },
       "newView": "Jauns {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
+      "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Saglabāt kā veidni…",
       "selectProperty": "Izvēlieties rekvizītu",
       "templates": {

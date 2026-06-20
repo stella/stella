@@ -650,6 +650,7 @@
     "actions": "Veiksmai",
     "add": "Pridėti",
     "all": "Visi",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Adresas",
       "bankAccountNumber": "Banko sąskaitos numeris",
@@ -778,6 +779,7 @@
     "open": "Atidaryti",
     "openInNewTab": "Atidaryti naujame skirtuke",
     "options": "Parinktys",
+    "or": "Or",
     "organization": "Organizacija",
     "organizationName": "Organizacijos pavadinimas",
     "pin": "Prisegti",
@@ -1104,9 +1106,29 @@
   },
   "filters": {
     "contains": "apima",
+    "contains_all": "contains all of",
+    "dateAfter": "is after",
+    "dateBefore": "is before",
+    "dateOnOrAfter": "is on or after",
+    "dateOnOrBefore": "is on or before",
+    "ends_with": "ends with",
     "eq": "yra",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "yra tuščias",
-    "neq": "nėra"
+    "is_not_empty": "is not empty",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
+    "neq": "nėra",
+    "not_contains": "does not contain",
+    "numEq": "=",
+    "numGt": ">",
+    "numGte": "≥",
+    "numLt": "<",
+    "numLte": "≤",
+    "numNeq": "≠",
+    "starts_with": "starts with"
   },
   "folio": {
     "acceptChange": "Priimti pakeitimą",
@@ -2437,6 +2459,7 @@
     },
     "possibleDuplicates": "Galimi dublikatai",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Pridėkite bent vieną įvesties savybę naudodami \"@\"",
       "addOption": "Pridėti parinktį",
       "addPromptForBetterResults": "Pridėkite užklausą geresniems rezultatams",
@@ -2478,6 +2501,7 @@
       "editColumn": "Redaguoti stulpelį",
       "editConditions": "Redaguoti sąlygas",
       "editConditionsDescription": "Nustatykite sąlygas, kada ši savybė turi būti generuojama.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Įveskite reikšmę",
       "extractEntityType": "Ištraukti subjekto tipą",
       "extractEntityTypeDescription": "Sukurkite AI pildomą lentelės stulpelį.",
@@ -2502,6 +2526,7 @@
       "newColumn": "Naujas stulpelis",
       "newColumnDescription": "Pasirinkite, kaip šis lentelės stulpelis turi būti pildomas.",
       "newColumnName": "Stulpelio pavadinimas",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Dar nėra dokumentų peržiūrai.",
       "noPropertiesFound": "Savybių nerasta",
       "optionsHelp": "Apibrėžk reikšmes, iš kurių AI gali rinktis.",
@@ -2524,6 +2549,7 @@
       "scopeMatterDescription": "Naudokite visus failų stulpelius ir paleiskite bylą.",
       "searchOrAddOptions": "Ieškoti arba pridėti parinktis",
       "selectColor": "Pasirinkite spalvą",
+      "selectField": "Select field",
       "selectOperator": "Pasirinkite operatorių",
       "setPromptPlaceholder": "Nustatykite užklausą informacijos išgavimui",
       "singleSelect": "Vienas pasirinkimas",
@@ -2580,7 +2606,10 @@
     "unarchiveMatter": "Išarchyvuoti",
     "uploadDocuments": "Įkelti dokumentus",
     "views": {
+      "addAdvancedFilter": "Add advanced filter",
       "addFields": "Pridėti laukus",
+      "advancedFilter": "Advanced",
+      "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}",
       "aiGenerated": "Sugeneruota AI",
       "calendar": {
         "addDates": "+ Datos",
@@ -2597,6 +2626,7 @@
         "year": "Metai"
       },
       "cannotDeleteRequired": "Reikalingas bent vienas šio tipo rodinys",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (kopija)",
       "deleteView": "Ištrinti rodinį",
       "exportCsv": "Eksportuoti CSV",
@@ -2605,6 +2635,9 @@
       "exportXlsx": "Eksportuoti XLSX",
       "fields": "Laukai:",
       "fieldsSelected": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinktų} other {# pasirinktų}}",
+      "filter": "Filter",
+      "filterByPlaceholder": "Filter by…",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupuoti pagal:",
       "hideColumn": "Slėpti stulpelį",
       "layouts": {
@@ -2618,6 +2651,9 @@
         "timeline": "Laiko juosta"
       },
       "newView": "Naujas {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
+      "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Išsaugoti kaip šabloną…",
       "selectProperty": "Pasirinkti savybę",
       "templates": {

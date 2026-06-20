@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
-import type { ViewFilterCondition } from "@/api/lib/views-schema";
+import type { ConditionNode } from "@stll/conditions";
 
 import {
   applyFilters,
@@ -13,104 +13,76 @@ import {
 
 // -- buildFilterConditions (builtin filters) --
 
-const builtinFilter = (
-  overrides: Partial<Extract<ViewFilterCondition, { field: "builtin" }>>,
-): ViewFilterCondition =>
-  ({
-    id: "f1",
-    field: "builtin" as const,
-    builtinField: "status" as const,
-    op: "eq" as const,
-    value: undefined,
-    ...overrides,
-  }) as ViewFilterCondition;
+const builtinCompare = (
+  field: "status" | "priority",
+  op: "eq" | "neq",
+  value: string,
+): ConditionNode => ({
+  type: "compare",
+  left: { type: "builtin", field },
+  op,
+  right: { type: "literal", value },
+});
+
+const builtinPredicate = (
+  field: "status" | "priority",
+  op: "in" | "is_empty",
+  value?: string[],
+): ConditionNode => ({
+  type: "predicate",
+  operand: { type: "builtin", field },
+  op,
+  ...(value !== undefined && { value }),
+});
 
 describe("buildFilterConditions (builtin)", () => {
   test("eq with empty string returns no conditions", () => {
-    const conds = buildFilterConditions([
-      builtinFilter({ op: "eq", value: "" }),
-    ]);
-    expect(conds).toHaveLength(0);
-  });
-
-  test("eq with undefined value returns no conditions", () => {
-    const conds = buildFilterConditions([
-      builtinFilter({ op: "eq", value: undefined }),
-    ]);
+    const conds = buildFilterConditions([builtinCompare("status", "eq", "")]);
     expect(conds).toHaveLength(0);
   });
 
   test("eq with valid value returns one condition", () => {
     const conds = buildFilterConditions([
-      builtinFilter({ op: "eq", value: "open" }),
+      builtinCompare("status", "eq", "open"),
     ]);
     expect(conds).toHaveLength(1);
   });
 
   test("neq with empty string returns no conditions", () => {
-    const conds = buildFilterConditions([
-      builtinFilter({ op: "neq", value: "" }),
-    ]);
-    expect(conds).toHaveLength(0);
-  });
-
-  test("neq with undefined value returns no conditions", () => {
-    const conds = buildFilterConditions([
-      builtinFilter({ op: "neq", value: undefined }),
-    ]);
+    const conds = buildFilterConditions([builtinCompare("status", "neq", "")]);
     expect(conds).toHaveLength(0);
   });
 
   test("neq with valid value returns one condition", () => {
     const conds = buildFilterConditions([
-      builtinFilter({ op: "neq", value: "done" }),
+      builtinCompare("status", "neq", "done"),
     ]);
     expect(conds).toHaveLength(1);
   });
 
   test("in with empty array returns no conditions", () => {
-    const conds = buildFilterConditions([
-      builtinFilter({ op: "in", value: [] }),
-    ]);
+    const conds = buildFilterConditions([builtinPredicate("status", "in", [])]);
     expect(conds).toHaveLength(0);
   });
 
   test("in with values returns one condition", () => {
     const conds = buildFilterConditions([
-      builtinFilter({ op: "in", value: ["open", "done"] }),
+      builtinPredicate("status", "in", ["open", "done"]),
     ]);
     expect(conds).toHaveLength(1);
   });
 
   test("is_empty returns one condition", () => {
-    const conds = buildFilterConditions([builtinFilter({ op: "is_empty" })]);
-    expect(conds).toHaveLength(1);
-  });
-
-  test("unknown builtinField returns no conditions", () => {
     const conds = buildFilterConditions([
-      builtinFilter({
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion -- intentionally invalid value
-        builtinField: "nonexistent" as "status",
-      }),
+      builtinPredicate("status", "is_empty"),
     ]);
-    expect(conds).toHaveLength(0);
+    expect(conds).toHaveLength(1);
   });
 
   test("multiple filters produce multiple conditions", () => {
     const conds = buildFilterConditions([
-      builtinFilter({
-        id: "f1",
-        builtinField: "status",
-        op: "eq",
-        value: "open",
-      }),
-      builtinFilter({
-        id: "f2",
-        builtinField: "priority",
-        op: "neq",
-        value: "low",
-      }),
+      builtinCompare("status", "eq", "open"),
+      builtinCompare("priority", "neq", "low"),
     ]);
     expect(conds).toHaveLength(2);
   });
@@ -118,29 +90,33 @@ describe("buildFilterConditions (builtin)", () => {
 
 // -- buildFilterConditions (kind filters) --
 
+const kindIn = (value: string[]): ConditionNode => ({
+  type: "predicate",
+  operand: { type: "kind" },
+  op: "in",
+  value,
+});
+
 describe("buildFilterConditions (kind)", () => {
   test("kind filter with empty value produces no conditions", () => {
-    const conds = buildFilterConditions([
-      {
-        id: "f1",
-        field: "kind",
-        op: "in",
-        value: [],
-      },
-    ]);
+    const conds = buildFilterConditions([kindIn([])]);
     expect(conds).toHaveLength(0);
   });
 
   test("kind filter with values produces one condition", () => {
-    const conds = buildFilterConditions([
-      {
-        id: "f1",
-        field: "kind",
-        op: "in",
-        value: ["task"],
-      },
-    ]);
+    const conds = buildFilterConditions([kindIn(["task"])]);
     expect(conds).toHaveLength(1);
+  });
+
+  test("kind filter including document expands to folder", () => {
+    const dialect = new PgDialect();
+    const [cond] = buildFilterConditions([kindIn(["document"])]);
+    if (!cond) {
+      throw new Error("expected kind condition");
+    }
+    const { sql, params } = dialect.sqlToQuery(cond);
+    expect(sql).toContain('"kind"');
+    expect(params).toContain("folder");
   });
 });
 
@@ -184,6 +160,28 @@ const makeIntField = (entityId: string, propertyId: string, value: number) => ({
   },
 });
 
+const propertyCompare = (
+  propertyId: string,
+  op: "eq" | "neq",
+  value: string,
+): ConditionNode => ({
+  type: "compare",
+  left: { type: "property", propertyId },
+  op,
+  right: { type: "literal", value },
+});
+
+const propertyPredicate = (
+  propertyId: string,
+  op: "contains" | "is_empty",
+  value?: string,
+): ConditionNode => ({
+  type: "predicate",
+  operand: { type: "property", propertyId },
+  op,
+  ...(value !== undefined && { value }),
+});
+
 describe("applyFilters (in-memory)", () => {
   test("empty filters returns all items", () => {
     const items = [makeEntity("1", "task"), makeEntity("2", "task")];
@@ -192,9 +190,7 @@ describe("applyFilters (in-memory)", () => {
 
   test("kind filter includes matching entities", () => {
     const items = [makeEntity("1", "task"), makeEntity("2", "document")];
-    const filtered = applyFilters(items, [
-      { id: "f1", field: "kind", op: "in", value: ["task"] },
-    ]);
+    const filtered = applyFilters(items, [kindIn(["task"])]);
     expect(filtered).toHaveLength(1);
     expect(filtered[0]?.entityId).toBe("1");
   });
@@ -205,9 +201,7 @@ describe("applyFilters (in-memory)", () => {
       makeEntity("2", "folder"),
       makeEntity("3", "task"),
     ];
-    const filtered = applyFilters(items, [
-      { id: "f1", field: "kind", op: "in", value: ["document"] },
-    ]);
+    const filtered = applyFilters(items, [kindIn(["document"])]);
     expect(filtered).toHaveLength(2);
   });
 
@@ -217,13 +211,7 @@ describe("applyFilters (in-memory)", () => {
       makeEntity("2", "task", [["p1", "beta"]]),
     ];
     const filtered = applyFilters(items, [
-      {
-        id: "f1",
-        field: "property",
-        propertyId: "p1",
-        op: "eq",
-        value: "alpha",
-      },
+      propertyCompare("p1", "eq", "alpha"),
     ]);
     expect(filtered).toHaveLength(1);
     expect(filtered[0]?.entityId).toBe("1");
@@ -235,13 +223,7 @@ describe("applyFilters (in-memory)", () => {
       makeEntity("2", "task", [["p1", "beta"]]),
     ];
     const filtered = applyFilters(items, [
-      {
-        id: "f1",
-        field: "property",
-        propertyId: "p1",
-        op: "neq",
-        value: "alpha",
-      },
+      propertyCompare("p1", "neq", "alpha"),
     ]);
     expect(filtered).toHaveLength(1);
     expect(filtered[0]?.entityId).toBe("2");
@@ -253,13 +235,7 @@ describe("applyFilters (in-memory)", () => {
       makeEntity("2", "task", [["p1", "goodbye"]]),
     ];
     const filtered = applyFilters(items, [
-      {
-        id: "f1",
-        field: "property",
-        propertyId: "p1",
-        op: "contains",
-        value: "hello",
-      },
+      propertyPredicate("p1", "contains", "hello"),
     ]);
     expect(filtered).toHaveLength(1);
     expect(filtered[0]?.entityId).toBe("1");
@@ -270,31 +246,18 @@ describe("applyFilters (in-memory)", () => {
       makeEntity("1", "task", [["p1", "value"]]),
       makeEntity("2", "task", []),
     ];
-    const filtered = applyFilters(items, [
-      {
-        id: "f1",
-        field: "property",
-        propertyId: "p1",
-        op: "is_empty",
-      },
-    ]);
+    const filtered = applyFilters(items, [propertyPredicate("p1", "is_empty")]);
     expect(filtered).toHaveLength(1);
     expect(filtered[0]?.entityId).toBe("2");
   });
 
   test("builtin filters pass through in-memory (always true)", () => {
     const items = [makeEntity("1", "task"), makeEntity("2", "task")];
+    // Builtin filters are server-side only; nodes referencing builtin
+    // operands pass through in-memory.
     const filtered = applyFilters(items, [
-      {
-        id: "f1",
-        field: "builtin",
-        builtinField: "status",
-        op: "eq",
-        value: "open",
-      },
+      builtinCompare("status", "eq", "open"),
     ]);
-    // Builtin filters are server-side only; in-memory always
-    // returns true
     expect(filtered).toHaveLength(2);
   });
 });

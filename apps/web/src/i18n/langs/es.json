@@ -650,6 +650,7 @@
     "actions": "Acciones",
     "add": "Añadir",
     "all": "Todos",
+    "and": "And",
     "anonymizationLabels": {
       "address": "Dirección",
       "bankAccountNumber": "Número de cuenta bancaria",
@@ -778,6 +779,7 @@
     "open": "Abrir",
     "openInNewTab": "Abrir en una pestaña nueva",
     "options": "Opciones",
+    "or": "Or",
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "pin": "Fijar",
@@ -1104,9 +1106,29 @@
   },
   "filters": {
     "contains": "contiene",
+    "contains_all": "contains all of",
+    "dateAfter": "is after",
+    "dateBefore": "is before",
+    "dateOnOrAfter": "is on or after",
+    "dateOnOrBefore": "is on or before",
+    "ends_with": "ends with",
     "eq": "es",
+    "gt": "is greater than",
+    "gte": "is greater than or equal to",
+    "in": "is any of",
     "is_empty": "está vacío",
-    "neq": "no es"
+    "is_not_empty": "is not empty",
+    "lt": "is less than",
+    "lte": "is less than or equal to",
+    "neq": "no es",
+    "not_contains": "does not contain",
+    "numEq": "=",
+    "numGt": ">",
+    "numGte": "≥",
+    "numLt": "<",
+    "numLte": "≤",
+    "numNeq": "≠",
+    "starts_with": "starts with"
   },
   "folio": {
     "acceptChange": "Aceptar cambio",
@@ -2437,6 +2459,7 @@
     },
     "possibleDuplicates": "Posibles duplicados",
     "properties": {
+      "addCondition": "Add condition",
       "addInputProperty": "Añada al menos una propiedad de entrada usando \"@\"",
       "addOption": "Añadir opción",
       "addPromptForBetterResults": "Añada una instrucción para mejores resultados",
@@ -2478,6 +2501,7 @@
       "editColumn": "Editar columna",
       "editConditions": "Editar condiciones",
       "editConditionsDescription": "Establezca las condiciones para generar esta propiedad.",
+      "editConditionsWhen": "Only run extraction when …",
       "enterAValue": "Introduzca un valor",
       "extractEntityType": "Extraer tipo de entidad",
       "extractEntityTypeDescription": "Cree una columna de tabla extraída por IA.",
@@ -2502,6 +2526,7 @@
       "newColumn": "Nueva columna",
       "newColumnDescription": "Elija cómo se debe rellenar esta columna de la tabla.",
       "newColumnName": "Nombre de columna",
+      "noConditionFields": "No fields available to filter on.",
       "noFirstDocument": "Aún no hay documentos para previsualizar.",
       "noPropertiesFound": "No se encontraron propiedades",
       "optionsHelp": "Define los valores entre los que la IA puede elegir.",
@@ -2524,6 +2549,7 @@
       "scopeMatterDescription": "Use todas las columnas de archivo y ejecute el Matter.",
       "searchOrAddOptions": "Buscar o añadir opciones",
       "selectColor": "Seleccionar color",
+      "selectField": "Select field",
       "selectOperator": "Seleccionar operador",
       "setPromptPlaceholder": "Defina una instrucción para extraer la información",
       "singleSelect": "Selección única",
@@ -2580,7 +2606,10 @@
     "unarchiveMatter": "Desarchivar",
     "uploadDocuments": "Subir documentos",
     "views": {
+      "addAdvancedFilter": "Add advanced filter",
       "addFields": "Añadir campos",
+      "advancedFilter": "Advanced",
+      "advancedFilterCount": "{count, plural, =0 {Any} one {# rule} other {# rules}}",
       "aiGenerated": "Generado por IA",
       "calendar": {
         "addDates": "+ Fechas",
@@ -2597,6 +2626,7 @@
         "year": "Año"
       },
       "cannotDeleteRequired": "Se requiere al menos una vista de este tipo",
+      "clearFilters": "Clear filters",
       "copySuffix": "{name} (copia)",
       "deleteView": "Eliminar vista",
       "exportCsv": "Exportar CSV",
@@ -2605,6 +2635,9 @@
       "exportXlsx": "Exportar XLSX",
       "fields": "Campos:",
       "fieldsSelected": "{count, plural, one {# seleccionado} other {# seleccionados}}",
+      "filter": "Filter",
+      "filterByPlaceholder": "Filter by…",
+      "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Agrupar por:",
       "hideColumn": "Ocultar columna",
       "layouts": {
@@ -2618,6 +2651,9 @@
         "timeline": "Línea de tiempo"
       },
       "newView": "Nueva {layout}",
+      "noFilterResults": "No items match these filters",
+      "noFilterResultsHint": "They would show up here if you removed some filters.",
+      "removeAdvancedFilter": "Remove advanced filter",
       "saveAsTemplate": "Guardar como plantilla…",
       "selectProperty": "Seleccionar propiedad",
       "templates": {

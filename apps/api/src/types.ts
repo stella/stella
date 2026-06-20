@@ -19,8 +19,6 @@ export type OptionColor = SchemaValidators.OptionColor;
 
 export type BoundingBox = SchemaValidators.BoundingBoxes["boxes"][number];
 
-export type PropertyCondition = SchemaValidators.PropertyCondition;
-
 export type EntityKind = SchemaValidators.EntityKind;
 export type {
   AgendaItemKind,
@@ -48,8 +46,8 @@ export type {
 } from "@/api/handlers/chat/types";
 export type ViewLayout = ViewSchemas.ViewLayout;
 export type ViewLayoutType = ViewSchemas.ViewLayoutType;
-export type ViewFilterCondition = ViewSchemas.ViewFilterCondition;
 export type ViewTemplateProperty = ViewSchemas.ViewTemplateProperty;
+export type { ConditionNode } from "@stll/conditions";
 export type { ChatMentionsData } from "@/api/handlers/chat/types";
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 export type { UserFileUrl } from "@/api/handlers/user-files/types";

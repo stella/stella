@@ -2,7 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import type { ViewFilterCondition } from "@/lib/types";
+import type { ConditionNode } from "@/lib/types";
 import { normalizeVisibleFieldIds } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 import type { ViewSort } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities.logic";
 
@@ -12,7 +12,7 @@ type CalendarTasksKey = {
   dateTo: string;
   datePropertyIds: string[];
   endDatePropertyId?: string | undefined;
-  filters: ViewFilterCondition[];
+  filters: ConditionNode[];
   sorts: ViewSort[];
 };
 

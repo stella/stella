@@ -72,6 +72,7 @@
         "@stll/boe": "workspace:*",
         "@stll/business-registries": "workspace:*",
         "@stll/catalogue": "workspace:*",
+        "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/docx-core": "workspace:*",
         "@stll/docx-utils": "workspace:*",
@@ -237,6 +238,7 @@
         "@stll/anonymize-wasm": "catalog:",
         "@stll/api": "workspace:*",
         "@stll/catalogue": "workspace:*",
+        "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
         "@stll/errors": "workspace:*",
         "@stll/folio": "workspace:*",
@@ -383,6 +385,19 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
+        "typescript": "catalog:",
+      },
+    },
+    "packages/conditions": {
+      "name": "@stll/conditions",
+      "version": "0.0.0",
+      "dependencies": {
+        "valibot": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
+        "fast-check": "catalog:",
         "typescript": "catalog:",
       },
     },
@@ -1624,6 +1639,8 @@
     "@stll/catalogue": ["@stll/catalogue@workspace:packages/catalogue"],
 
     "@stll/collab": ["@stll/collab@workspace:apps/collab"],
+
+    "@stll/conditions": ["@stll/conditions@workspace:packages/conditions"],
 
     "@stll/country-codes": ["@stll/country-codes@workspace:packages/country-codes"],
 

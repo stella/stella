@@ -1,10 +1,22 @@
-import { asc, eq, inArray, isNull, ne, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne, not, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
+
+import {
+  type CompareNode,
+  type ConditionNode,
+  type ConditionValue,
+  type GroupNode,
+  type Operand,
+  type PredicateNode,
+  type RefOperand,
+  evaluateCondition,
+  pruneIncomplete,
+} from "@stll/conditions";
 
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
-import type { ViewFilterCondition } from "@/api/lib/views-schema";
+import { typedPgArray } from "@/api/lib/search/sql";
 
 // -- Types --
 
@@ -83,57 +95,180 @@ const findField = (
 ): EntityField | undefined =>
   entityFields.find((f) => f.propertyId === propertyId);
 
-const matchesFilter = (
-  entity: FilterableEntity,
-  filter: ViewFilterCondition,
-): boolean => {
-  if (filter.field === "kind") {
-    if (filter.value.length === 0) {
-      return true;
-    }
-    if (filter.value.includes("document") && entity.kind === "folder") {
-      return true;
-    }
-    return filter.value.includes(entity.kind);
+/**
+ * Resolves a field's content to the value the condition evaluator should see,
+ * mirroring how SQL reads the JSONB `content`:
+ *  - multi-select stays an array, so membership/`in`/`contains` operate on
+ *    discrete options (SQL's `jsonb_array_elements_text` path) instead of a
+ *    joined string that would substring-match across option boundaries;
+ *  - everything else collapses to the same scalar text SQL's
+ *    `content->>'value'` (or `->>'fileName'`) produces.
+ *
+ * Distinct from `getFieldValue`, which the sort comparators need as a plain
+ * string; filtering must not flatten multi-select arrays.
+ */
+const getFilterValue = (content: FieldContent | undefined): ConditionValue => {
+  if (content?.type === "multi-select") {
+    return content.value;
   }
+  return getFieldValue(content);
+};
 
-  if (filter.field === "builtin") {
-    // Builtin filters are handled server-side only.
-    return true;
-  }
+// -- In-memory evaluation --
 
-  const field = findField(entity.fields, filter.propertyId);
-  const value = getFieldValue(field?.content);
+const PASS_THROUGH = Symbol("builtin-pass-through");
 
-  switch (filter.op) {
-    case "eq":
-      return value === (filter.value ?? "");
-    case "neq":
-      return value !== (filter.value ?? "");
-    case "contains":
-      return value
-        .toLowerCase()
-        .includes(String(filter.value ?? "").toLowerCase());
-    case "is_empty":
-      return value === "";
+/**
+ * Resolves an operand to a concrete value for in-memory evaluation.
+ *
+ * Builtin filters narrow only in SQL; the in-memory evaluator never
+ * sees the underlying status/priority columns, so a builtin operand
+ * resolves to a sentinel that callers treat as "matches". `kind` and
+ * `property` resolve from the entity itself.
+ */
+const buildResolver =
+  (entity: FilterableEntity) =>
+  (operand: RefOperand): ConditionValue | typeof PASS_THROUGH => {
+    switch (operand.type) {
+      case "kind":
+        return entity.kind;
+      case "property":
+        return getFilterValue(
+          findField(entity.fields, operand.propertyId)?.content,
+        );
+      case "builtin":
+        return PASS_THROUGH;
+      case "path":
+        return PASS_THROUGH;
+      default:
+        return PASS_THROUGH;
+    }
+  };
+
+const referencesPassThroughOperand = (operand: Operand): boolean =>
+  operand.type === "builtin" || operand.type === "path";
+
+const nodeIsServerSideOnly = (node: ConditionNode): boolean => {
+  switch (node.type) {
+    case "group":
+      return node.children.some(nodeIsServerSideOnly);
+    case "compare":
+      return (
+        referencesPassThroughOperand(node.left) ||
+        referencesPassThroughOperand(node.right)
+      );
+    case "predicate":
+      return referencesPassThroughOperand(node.operand);
     default:
-      return true;
+      return false;
   }
 };
 
-// -- Public API --
+/**
+ * Mirrors SQL's `propertyExists` gate for `compare` nodes: every property
+ * comparison runs inside `EXISTS (... WHERE property_id = ... AND <op>)`, so a
+ * row missing the field never matches — including `neq`/`eq ''`, where an
+ * absent field would otherwise read as the empty string and match in memory.
+ * Predicates need no such gate here: their absent-field behaviour
+ * (`is_empty`/`not_contains` match, everything else fails on `[]`) already
+ * mirrors SQL via the evaluator's empty-value handling.
+ */
+const comparePropertyFieldMissing = (
+  node: ConditionNode,
+  entity: FilterableEntity,
+): boolean => {
+  if (node.type !== "compare") {
+    return false;
+  }
+  const propertyOperand = [node.left, node.right].find(
+    (operand): operand is Extract<RefOperand, { type: "property" }> =>
+      operand.type === "property",
+  );
+  if (!propertyOperand) {
+    return false;
+  }
+  return findField(entity.fields, propertyOperand.propertyId) === undefined;
+};
 
+// Empty OR group: matches nothing (the evaluator's `false` identity). Used to
+// replace a property `compare` whose field is absent, so the surrounding
+// AND/OR/negate combination sees the same `false` SQL produces.
+const NEVER_MATCHES: GroupNode = {
+  type: "group",
+  combinator: "or",
+  children: [],
+};
+
+const gateMissingCompareFields = (
+  node: ConditionNode,
+  entity: FilterableEntity,
+): ConditionNode => {
+  if (node.type === "group") {
+    return {
+      ...node,
+      children: node.children.map((child) =>
+        gateMissingCompareFields(child, entity),
+      ),
+    };
+  }
+  if (comparePropertyFieldMissing(node, entity)) {
+    return NEVER_MATCHES;
+  }
+  return node;
+};
+
+const isKindInPredicate = (node: ConditionNode): node is PredicateNode =>
+  node.type === "predicate" && node.operand.type === "kind" && node.op === "in";
+
+/**
+ * Mirrors the SQL document→folder expansion in-memory: a kind filter
+ * that includes "document" also matches folders.
+ */
+const expandKindNode = (node: ConditionNode): ConditionNode => {
+  if (!isKindInPredicate(node)) {
+    return node;
+  }
+  const values = asValueArray(node.value);
+  if (!values.includes(KIND_DOCUMENT) || values.includes(KIND_FOLDER)) {
+    return node;
+  }
+  return { ...node, value: [...values, KIND_FOLDER] };
+};
+
+/**
+ * In-memory filtering preserves the established semantics: builtin
+ * (and path) operands are server-side only, so any node referencing
+ * them passes through here and is enforced by SQL instead.
+ */
 export const applyFilters = <T extends FilterableEntity>(
   items: T[],
-  filters: ViewFilterCondition[],
+  filters: ConditionNode[],
 ): T[] => {
   if (filters.length === 0) {
     return items;
   }
 
-  return items.filter((entity) =>
-    filters.every((filter) => matchesFilter(entity, filter)),
-  );
+  // Prune incomplete leaves first, exactly as the SQL compiler drops them, so
+  // both paths see the same shape (an incomplete leaf must not match under OR).
+  const prepared = filters
+    .map(expandKindNode)
+    .map(pruneIncomplete)
+    .filter((node): node is ConditionNode => node !== null);
+
+  return items.filter((entity) => {
+    const resolveOrPass = buildResolver(entity);
+    const resolve = (operand: RefOperand): ConditionValue => {
+      const resolved = resolveOrPass(operand);
+      return resolved === PASS_THROUGH ? undefined : resolved;
+    };
+
+    return prepared.every((node) => {
+      if (nodeIsServerSideOnly(node)) {
+        return true;
+      }
+      return evaluateCondition(gateMissingCompareFields(node, entity), resolve);
+    });
+  });
 };
 
 export const applySorts = <T extends FilterableEntity>(
@@ -209,125 +344,329 @@ const numericFieldValueExpr = (contentCol: typeof fields.content): SQL => {
 };
 
 /**
- * Builds an EXISTS subquery that checks whether an entity's
- * current version has a field matching the given condition.
+ * Wraps a per-field predicate in an EXISTS subquery against the
+ * entity's current version.
  */
-const buildPropertyFilterCondition = (
-  filter: Extract<ViewFilterCondition, { field: "property" }>,
-): SQL => {
-  const valExpr = fieldValueExpr(fields.content);
-
-  let opCondition: SQL;
-  switch (filter.op) {
-    case "eq":
-      opCondition = sql`${valExpr} = ${String(filter.value ?? "")}`;
-      break;
-    case "neq":
-      opCondition = sql`${valExpr} != ${String(filter.value ?? "")}`;
-      break;
-    case "contains":
-      opCondition = sql`${valExpr} ILIKE ${`%${String(filter.value ?? "")}%`}`;
-      break;
-    case "is_empty":
-      opCondition = sql`${valExpr} = ''`;
-      break;
-    default:
-      opCondition = sql`TRUE`;
-      break;
-  }
-
-  return sql`EXISTS (
+const propertyExists = (propertyId: string, opCondition: SQL): SQL =>
+  sql`EXISTS (
     SELECT 1 FROM ${fields}
     WHERE ${fields.entityVersionId} = ${entities.currentVersionId}
-      AND ${fields.propertyId} = ${filter.propertyId}
+      AND ${fields.propertyId} = ${propertyId}
       AND ${opCondition}
   )`;
-};
+
+const builtinColumn = (field: "status" | "priority") =>
+  field === "status" ? entities.status : entities.priority;
+
+const KIND_DOCUMENT = "document" as const;
+const KIND_FOLDER = "folder" as const;
 
 /**
- * Maps a builtin field name to its database column.
+ * "document" implies "folder": folders are part of the document
+ * hierarchy, not independently filterable, so a kind filter that
+ * includes documents also matches folders.
  */
-const builtinColumn = (field: string) => {
-  switch (field) {
-    case "status":
-      return entities.status;
-    case "priority":
-      return entities.priority;
+const expandKindValues = (values: readonly string[]): EntityKind[] => {
+  const kinds = values.filter((value): value is EntityKind =>
+    isEntityKind(value),
+  );
+  if (kinds.includes(KIND_DOCUMENT)) {
+    return [...new Set([...kinds, KIND_FOLDER])];
+  }
+  return kinds;
+};
+
+const ENTITY_KINDS: readonly EntityKind[] = [
+  "document",
+  "folder",
+  "task",
+  "message",
+  "link",
+];
+
+const isEntityKind = (value: string): value is EntityKind =>
+  (ENTITY_KINDS as readonly string[]).includes(value);
+
+const asValueArray = (value: string | string[] | undefined): string[] => {
+  if (Array.isArray(value)) {
+    return value;
+  }
+  if (value === undefined || value === "") {
+    return [];
+  }
+  return [value];
+};
+
+// -- Compare nodes --
+
+// Safe numeric form of an arbitrary text expression: non-numeric content
+// becomes NULL (and drops out of comparisons) instead of crashing the cast.
+const safeNumericExpr = (expr: SQL): SQL =>
+  sql`CASE WHEN BTRIM(${expr}::text) ~ ${NUMERIC_TEXT_PATTERN}
+    THEN BTRIM(${expr}::text)::numeric ELSE NULL END`;
+
+const orderedSql = (op: "gt" | "lt" | "gte" | "lte", l: SQL, r: SQL): SQL => {
+  if (op === "gt") {
+    return sql`${l} > ${r}`;
+  }
+  if (op === "lt") {
+    return sql`${l} < ${r}`;
+  }
+  if (op === "gte") {
+    return sql`${l} >= ${r}`;
+  }
+  return sql`${l} <= ${r}`;
+};
+
+const compareOpSql = (op: CompareNode["op"], expr: SQL, value: string): SQL => {
+  if (op === "eq") {
+    return sql`${expr} = ${value}`;
+  }
+  if (op === "neq") {
+    return sql`${expr} != ${value}`;
+  }
+  // Ordered comparison: numeric when the literal is a number (non-numeric
+  // field values become NULL and drop out); otherwise a plain text compare so
+  // ISO dates and other strings order correctly, without a cast that would
+  // crash on non-numeric input.
+  if (NUMERIC_TEXT_RE.test(value.trim())) {
+    return orderedSql(op, safeNumericExpr(expr), sql`${Number(value)}`);
+  }
+  // Exclude blank/absent values: '' would otherwise sort before every date and
+  // leak rows with no value into "is before/on or before" filters.
+  return sql`${expr} <> '' AND ${orderedSql(op, expr, sql`${value}`)}`;
+};
+
+const literalString = (operand: Operand): string | null =>
+  operand.type === "literal" ? String(operand.value) : null;
+
+const compileBuiltinCompare = (
+  field: "status" | "priority",
+  op: CompareNode["op"],
+  value: string,
+): SQL | null => {
+  const col = builtinColumn(field);
+  if (op === "eq") {
+    return value === "" ? null : eq(col, value);
+  }
+  if (op === "neq") {
+    return value === "" ? null : (or(ne(col, value), isNull(col)) ?? null);
+  }
+  return compareOpSql(op, sql`${col}`, value);
+};
+
+const compileCompare = (node: CompareNode): SQL | null => {
+  // The filter UI always compares a ref operand against a literal.
+  const value = literalString(node.right);
+  if (value === null) {
+    return null;
+  }
+  // An ordered comparison with an empty literal is an incomplete filter
+  // (operator chosen, value not yet entered); drop it so an in-progress
+  // "date is before …" doesn't match nearly every row.
+  if (value === "" && node.op !== "eq" && node.op !== "neq") {
+    return null;
+  }
+  if (node.left.type === "property") {
+    return propertyExists(
+      node.left.propertyId,
+      compareOpSql(node.op, fieldValueExpr(fields.content), value),
+    );
+  }
+  if (node.left.type === "builtin") {
+    return compileBuiltinCompare(node.left.field, node.op, value);
+  }
+  return null;
+};
+
+// -- Predicate nodes --
+
+/**
+ * Builds an EXISTS predicate over a property's value, transparently handling
+ * multi-select arrays (the value matches if ANY element does) and scalar
+ * values. `elemMatch` receives the per-element/per-scalar text expression.
+ */
+const propertyValueMatches = (
+  propertyId: string,
+  arrayMatch: (valueExpr: SQL) => SQL,
+  scalarMatch: (valueExpr: SQL) => SQL,
+): SQL => {
+  const content = fields.content;
+  const anyElement = sql`EXISTS (
+    SELECT 1 FROM jsonb_array_elements_text(${content}->'value') AS elem
+    WHERE ${arrayMatch(sql`elem`)}
+  )`;
+  return propertyExists(
+    propertyId,
+    sql`CASE WHEN jsonb_typeof(${content}->'value') = 'array'
+      THEN ${anyElement}
+      ELSE ${scalarMatch(fieldValueExpr(content))}
+    END`,
+  );
+};
+
+const compilePropertyPredicate = (
+  propertyId: string,
+  node: PredicateNode,
+): SQL | null => {
+  const text = String(node.value ?? "");
+  // Incomplete value-bearing text predicate (no value yet) is a no-op, like the
+  // ordered compare path; contains_all/in already null out on an empty payload.
+  if (
+    text === "" &&
+    (node.op === "contains" ||
+      node.op === "not_contains" ||
+      node.op === "starts_with" ||
+      node.op === "ends_with")
+  ) {
+    return null;
+  }
+  // Same matcher for arrays and scalars (membership/emptiness ops).
+  const same = (match: (v: SQL) => SQL) =>
+    propertyValueMatches(propertyId, match, match);
+  // `contains` differs by shape: exact (case-insensitive) option membership for
+  // multi-select array elements, substring for scalar text — matching the
+  // in-memory evaluator (so e.g. "NDA" does not match the option "Non-NDA").
+  const contains = () =>
+    propertyValueMatches(
+      propertyId,
+      (v) => sql`LOWER(${v}) = LOWER(${text})`,
+      (v) => sql`${v} ILIKE ${`%${text}%`}`,
+    );
+  switch (node.op) {
+    case "contains":
+      return contains();
+    case "not_contains":
+      // NOT EXISTS so absent/empty fields count as "does not contain".
+      return sql`NOT ${contains()}`;
+    case "starts_with":
+      return same((v) => sql`${v} ILIKE ${`${text}%`}`);
+    case "ends_with":
+      return same((v) => sql`${v} ILIKE ${`%${text}`}`);
+    case "is_not_empty":
+      return same((v) => sql`${v} <> ''`);
+    case "is_empty":
+      // Empty when no non-empty value exists: covers an absent field, an empty
+      // scalar, and an empty array.
+      return sql`NOT ${same((v) => sql`${v} <> ''`)}`;
+    case "contains_all": {
+      const wanted = asValueArray(node.value);
+      if (wanted.length === 0) {
+        return null;
+      }
+      const clauses = wanted.map((want) => same((v) => sql`${v} = ${want}`));
+      return and(...clauses) ?? null;
+    }
+    case "in": {
+      const values = asValueArray(node.value);
+      if (values.length === 0) {
+        return null;
+      }
+      // `typedPgArray` binds a real `ARRAY[...]::text[]`; a bare `ANY(${values})`
+      // expands to a row constructor `ANY(($1, $2))`, which Postgres rejects.
+      return same((v) => sql`${v} = ANY(${typedPgArray(values, "text")})`);
+    }
     default:
       return null;
   }
 };
 
-const buildBuiltinFilterCondition = (
-  filter: Extract<ViewFilterCondition, { field: "builtin" }>,
+const compileBuiltinPredicate = (
+  field: "status" | "priority",
+  node: PredicateNode,
 ): SQL | null => {
-  const col = builtinColumn(filter.builtinField);
-  if (!col) {
-    return null;
-  }
-
-  switch (filter.op) {
-    case "eq":
-      if (filter.value === undefined || filter.value === "") {
-        return null;
-      }
-      return eq(col, String(filter.value));
-    case "neq":
-      if (filter.value === undefined || filter.value === "") {
-        return null;
-      }
-      return or(ne(col, String(filter.value)), isNull(col)) ?? null;
+  const col = builtinColumn(field);
+  switch (node.op) {
     case "in": {
-      const vals = (() => {
-        if (Array.isArray(filter.value)) {
-          return filter.value;
-        }
-        if (filter.value) {
-          return [filter.value];
-        }
-        return [];
-      })();
-      if (vals.length === 0) {
+      const values = asValueArray(node.value);
+      if (values.length === 0) {
         return null;
       }
-      return inArray(col, vals);
+      return inArray(col, values);
     }
     case "is_empty":
       return sql`(${col} IS NULL OR ${col} = '')`;
+    case "is_not_empty":
+      return sql`(${col} IS NOT NULL AND ${col} <> '')`;
+    default:
+      return null;
+  }
+};
+
+const compileKindPredicate = (node: PredicateNode): SQL | null => {
+  if (node.op !== "in") {
+    return null;
+  }
+  const expanded = expandKindValues(asValueArray(node.value));
+  if (expanded.length === 0) {
+    return null;
+  }
+  return inArray(entities.kind, expanded);
+};
+
+const compilePredicate = (node: PredicateNode): SQL | null => {
+  switch (node.operand.type) {
+    case "kind":
+      return compileKindPredicate(node);
+    case "property":
+      return compilePropertyPredicate(node.operand.propertyId, node);
+    case "builtin":
+      return compileBuiltinPredicate(node.operand.field, node);
+    default:
+      return null;
+  }
+};
+
+// -- Group nodes --
+
+const compileGroup = (node: GroupNode): SQL | null => {
+  const children: SQL[] = [];
+  for (const child of node.children) {
+    const compiled = compileNode(child);
+    if (compiled) {
+      children.push(compiled);
+    }
+  }
+  if (children.length === 0) {
+    return null;
+  }
+
+  const combined =
+    node.combinator === "and" ? and(...children) : or(...children);
+  if (!combined) {
+    return null;
+  }
+  return node.negated ? not(combined) : combined;
+};
+
+const compileNode = (node: ConditionNode): SQL | null => {
+  switch (node.type) {
+    case "group":
+      return compileGroup(node);
+    case "compare":
+      return compileCompare(node);
+    case "predicate":
+      return compilePredicate(node);
     default:
       return null;
   }
 };
 
 /**
- * Converts ViewFilterCondition[] into SQL WHERE conditions
- * that can be combined with `and()`.
+ * Compiles the implicit-AND filter array into SQL WHERE conditions
+ * that can be combined with `and()`. The array is an implicit AND
+ * group, so each node compiles independently and `null` results
+ * (no-op filters) are dropped.
  */
-export const buildFilterConditions = (
-  filters: ViewFilterCondition[],
-): SQL[] => {
+export const buildFilterConditions = (filters: ConditionNode[]): SQL[] => {
   const conditions: SQL[] = [];
-
-  for (const filter of filters) {
-    if (filter.field === "kind") {
-      if (filter.value.length > 0) {
-        // "document" implies "folder" (folders are part of
-        // the document hierarchy, not independently filterable)
-        const expanded = filter.value.includes("document")
-          ? [...new Set([...filter.value, "folder" as const])]
-          : filter.value;
-        conditions.push(inArray(entities.kind, expanded));
-      }
-    } else if (filter.field === "builtin") {
-      const cond = buildBuiltinFilterCondition(filter);
-      if (cond) {
-        conditions.push(cond);
-      }
-    } else {
-      conditions.push(buildPropertyFilterCondition(filter));
+  for (const node of filters) {
+    const pruned = pruneIncomplete(node);
+    const compiled = pruned ? compileNode(pruned) : null;
+    if (compiled) {
+      conditions.push(compiled);
     }
   }
-
   return conditions;
 };
 
