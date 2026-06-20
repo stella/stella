@@ -631,9 +631,6 @@ const GroupByControl = ({
           <SelectItem value={getInternalPropertyId("kind")}>
             {t("common.kind")}
           </SelectItem>
-          <SelectItem value={getInternalPropertyId("created-by")}>
-            {t("workspaces.filesystem.author")}
-          </SelectItem>
           {eligible.map((prop) => (
             <SelectItem key={prop.id} value={prop.id}>
               {prop.name}
