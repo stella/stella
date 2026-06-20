@@ -19,7 +19,7 @@
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix apps/api",
     "format": "oxfmt .",
     "bench:chat-read-surface": "NODE_ENV=development bun scripts/benchmark-chat-read-surface.ts",
-    "db:migrate": "bun run --env-file=.env drizzle-kit migrate",
+    "db:migrate": "bun run --env-file=.env src/db/migrate.ts",
     "db:push": "bun run --env-file=.env drizzle-kit push",
     "db:seed-test-user": "bun scripts/seed-test-user.ts",
     "db:seed-dev": "bun scripts/seed-dev.ts",

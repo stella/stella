@@ -68,8 +68,12 @@ RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
+# Loose files for the one-off migrate task (the API itself is the compiled
+# /app/server binary). migrate.ts runs the drizzle migrator over Bun's SQL
+# client; it imports db-url.ts and reads the drizzle/ migration folder.
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle.config.ts /app/apps/api/drizzle.config.ts
 COPY --chown=stella:stella --from=builder /app/apps/api/src/db-url.ts /app/apps/api/src/db-url.ts
+COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.ts /app/apps/api/src/db/migrate.ts
 COPY --chown=stella:stella --from=builder /app/apps/api/drizzle /app/apps/api/drizzle
 RUN mkdir -p '/$bunfs/root'
 COPY --chown=stella:stella --from=builder /app/runtime-workers /\$bunfs/root/workers
