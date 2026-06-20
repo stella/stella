@@ -2,15 +2,26 @@
 FROM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS base
 WORKDIR /app
 
+FROM base AS install-inputs
+# Preserve Bun's committed root lockfile and full workspace manifest map.
+# Turbo's pruned bun.lock is a generated approximation and can drift from
+# Bun's catalog/resolution semantics.
+COPY . .
+RUN mkdir -p /json && \
+    cp bun.lock package.json /json/ && \
+    for f in bunfig.toml .npmrc; do [ ! -e "$f" ] || cp "$f" /json/; done && \
+    find apps packages -mindepth 2 -maxdepth 2 -name package.json \
+      -not -path '*/node_modules/*' \
+      -exec cp --parents -t /json/ {} +
+
 FROM base AS pruner
-# Keep in sync with the turbo version in the root package.json; an unpinned
-# major lets a new turbo release change `turbo prune` lockfile output mid-flight.
+# Keep in sync with the turbo version in the root package.json.
 RUN bun install -g turbo@2.9.18
 COPY . .
 RUN turbo prune @stll/legal-atlas-runner --docker
 
 FROM base AS deps
-COPY --from=pruner /app/out/json/ .
+COPY --from=install-inputs /json/ .
 RUN bun install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts --network-concurrency=8
 
 FROM deps AS builder
