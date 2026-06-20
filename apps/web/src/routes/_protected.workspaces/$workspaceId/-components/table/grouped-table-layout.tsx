@@ -304,7 +304,10 @@ const GroupSection = ({
   });
 
   return (
-    <section className={cn(isEmpty && "order-1")}>
+    // `w-max min-w-full` so the section is as wide as the table content (not
+    // just the viewport): the group-header band then spans the full scroll
+    // width instead of stopping at the fold.
+    <section className={cn("w-max min-w-full", isEmpty && "order-1")}>
       <GroupHeader
         collapsed={collapsed}
         empty={isEmpty}
