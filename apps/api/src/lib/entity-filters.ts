@@ -15,6 +15,7 @@ import {
 import { user } from "@/api/db/auth-schema";
 import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
+import { typedPgArray } from "@/api/lib/search/sql";
 
 // -- Types --
 
@@ -93,6 +94,25 @@ const findField = (
 ): EntityField | undefined =>
   entityFields.find((f) => f.propertyId === propertyId);
 
+/**
+ * Resolves a field's content to the value the condition evaluator should see,
+ * mirroring how SQL reads the JSONB `content`:
+ *  - multi-select stays an array, so membership/`in`/`contains` operate on
+ *    discrete options (SQL's `jsonb_array_elements_text` path) instead of a
+ *    joined string that would substring-match across option boundaries;
+ *  - everything else collapses to the same scalar text SQL's
+ *    `content->>'value'` (or `->>'fileName'`) produces.
+ *
+ * Distinct from `getFieldValue`, which the sort comparators need as a plain
+ * string; filtering must not flatten multi-select arrays.
+ */
+const getFilterValue = (content: FieldContent | undefined): ConditionValue => {
+  if (content?.type === "multi-select") {
+    return content.value;
+  }
+  return getFieldValue(content);
+};
+
 // -- In-memory evaluation --
 
 const PASS_THROUGH = Symbol("builtin-pass-through");
@@ -112,7 +132,7 @@ const buildResolver =
       case "kind":
         return entity.kind;
       case "property":
-        return getFieldValue(
+        return getFilterValue(
           findField(entity.fields, operand.propertyId)?.content,
         );
       case "builtin":
@@ -141,6 +161,59 @@ const nodeIsServerSideOnly = (node: ConditionNode): boolean => {
     default:
       return false;
   }
+};
+
+/**
+ * Mirrors SQL's `propertyExists` gate for `compare` nodes: every property
+ * comparison runs inside `EXISTS (... WHERE property_id = ... AND <op>)`, so a
+ * row missing the field never matches — including `neq`/`eq ''`, where an
+ * absent field would otherwise read as the empty string and match in memory.
+ * Predicates need no such gate here: their absent-field behaviour
+ * (`is_empty`/`not_contains` match, everything else fails on `[]`) already
+ * mirrors SQL via the evaluator's empty-value handling.
+ */
+const comparePropertyFieldMissing = (
+  node: ConditionNode,
+  entity: FilterableEntity,
+): boolean => {
+  if (node.type !== "compare") {
+    return false;
+  }
+  const propertyOperand = [node.left, node.right].find(
+    (operand): operand is Extract<RefOperand, { type: "property" }> =>
+      operand.type === "property",
+  );
+  if (!propertyOperand) {
+    return false;
+  }
+  return findField(entity.fields, propertyOperand.propertyId) === undefined;
+};
+
+// Empty OR group: matches nothing (the evaluator's `false` identity). Used to
+// replace a property `compare` whose field is absent, so the surrounding
+// AND/OR/negate combination sees the same `false` SQL produces.
+const NEVER_MATCHES: GroupNode = {
+  type: "group",
+  combinator: "or",
+  children: [],
+};
+
+const gateMissingCompareFields = (
+  node: ConditionNode,
+  entity: FilterableEntity,
+): ConditionNode => {
+  if (node.type === "group") {
+    return {
+      ...node,
+      children: node.children.map((child) =>
+        gateMissingCompareFields(child, entity),
+      ),
+    };
+  }
+  if (comparePropertyFieldMissing(node, entity)) {
+    return NEVER_MATCHES;
+  }
+  return node;
 };
 
 const isKindInPredicate = (node: ConditionNode): node is PredicateNode =>
@@ -187,7 +260,7 @@ export const applyFilters = <T extends FilterableEntity>(
       if (nodeIsServerSideOnly(node)) {
         return true;
       }
-      return evaluateCondition(node, resolve);
+      return evaluateCondition(gateMissingCompareFields(node, entity), resolve);
     });
   });
 };
@@ -472,7 +545,9 @@ const compilePropertyPredicate = (
       if (values.length === 0) {
         return null;
       }
-      return same((v) => sql`${v} = ANY(${values})`);
+      // `typedPgArray` binds a real `ARRAY[...]::text[]`; a bare `ANY(${values})`
+      // expands to a row constructor `ANY(($1, $2))`, which Postgres rejects.
+      return same((v) => sql`${v} = ANY(${typedPgArray(values, "text")})`);
     }
     default:
       return null;
