@@ -148,7 +148,10 @@ export const GroupedTableLayout = ({
     // sections flow into the table layout's existing scroller, so the whole
     // grouped view shares one scroll (nested scroll boxes break the sticky
     // group headers and let a group's rows paint over the toolbar).
-    <div className="flex flex-col" ref={scrollRef}>
+    // `w-max min-w-full` sizes the column to the widest group's table content
+    // so every section — populated, empty, and the add-row — stretches to the
+    // full table width (their bands then run the whole scroll width).
+    <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
       {groups.map((group) => (
         <GroupSection
           columns={columns}
@@ -304,10 +307,9 @@ const GroupSection = ({
   });
 
   return (
-    // `w-max min-w-full` so the section is as wide as the table content (not
-    // just the viewport): the group-header band then spans the full scroll
-    // width instead of stopping at the fold.
-    <section className={cn("w-max min-w-full", isEmpty && "order-1")}>
+    // Stretches to the container width (the full table width), so the
+    // group-header band spans the whole scroll width even for empty groups.
+    <section className={cn(isEmpty && "order-1")}>
       <GroupHeader
         collapsed={collapsed}
         empty={isEmpty}
