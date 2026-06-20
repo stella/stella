@@ -156,18 +156,21 @@ export const useChatSession = ({
     addToolOutput,
   } = useChat({ chat });
 
-  // Load-older paging. `olderCursor` seeds from the thread fetch and
-  // advances with each older page; re-seeds when the page navigates to
-  // a different thread inside the same mounted component. `isLoadingOlder`
-  // gates the IntersectionObserver trigger and shows the top spinner.
+  // Load-older paging. `olderCursor` seeds from the thread fetch and advances
+  // with each older page. Re-seed whenever a fresh `Chat` is hydrated — both
+  // on thread switch and on a same-thread refetch (sending a message
+  // invalidates the thread query, which rebuilds the Chat from the newest
+  // page plus a new initial cursor). Keying on conversationId alone would
+  // leave the cursor stale after such a refetch, hiding "load earlier" or
+  // paging from a stale boundary. `isLoadingOlder` gates the
+  // IntersectionObserver trigger and shows the top spinner.
   const [olderCursor, setOlderCursor] = useState(initialOlderCursor);
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
-  const [seededOlderCursorForId, setSeededOlderCursorForId] =
-    useState(conversationId);
+  const [seededChat, setSeededChat] = useState(chat);
   const isLoadingOlderRef = useRef(false);
   const olderCursorRef = useRef(olderCursor);
-  if (seededOlderCursorForId !== conversationId) {
-    setSeededOlderCursorForId(conversationId);
+  if (seededChat !== chat) {
+    setSeededChat(chat);
     setOlderCursor(initialOlderCursor);
     setIsLoadingOlder(false);
     olderCursorRef.current = initialOlderCursor;
