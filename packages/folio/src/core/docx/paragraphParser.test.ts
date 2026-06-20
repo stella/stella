@@ -394,3 +394,61 @@ describe("parseParagraph SDT content preservation", () => {
     expect(outer.content[0].type).toBe("inlineSdt");
   });
 });
+
+describe("parseParagraph complex field formatting (#909)", () => {
+  test("captures the field run's w:rPr when there is no separate result run", () => {
+    // Footer pattern: begin / instrText / separate / end all in a single run
+    // carrying the w:rPr, with no separate result run. The formatting must
+    // survive on the ComplexField so the rendered PAGE number keeps the
+    // footer's size and color instead of falling back to the default.
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:r>
+          <w:rPr><w:color w:val="595959"/><w:sz w:val="14"/><w:szCs w:val="14"/></w:rPr>
+          <w:fldChar w:fldCharType="begin"/>
+          <w:instrText xml:space="preserve"> PAGE </w:instrText>
+          <w:fldChar w:fldCharType="separate"/>
+          <w:fldChar w:fldCharType="end"/>
+        </w:r>
+      </w:p>
+    `);
+
+    const field = paragraph.content.find((c) => c.type === "complexField");
+    expect(field?.type).toBe("complexField");
+    if (!field) {
+      return;
+    }
+    expect(field.fieldResult).toHaveLength(0);
+    expect(field.formatting?.color).toEqual({ rgb: "595959" });
+    // raw w:sz is in half-points (14 half-points = 7pt).
+    expect(field.formatting?.fontSize).toBe(14);
+  });
+
+  test("captures a later run's formatting when the begin run's w:rPr is empty", () => {
+    // The begin run carries an empty <w:rPr/>; the size/colour lives on the
+    // result run. The empty object must not block capturing the later run.
+    const paragraph = parseParagraphXml(`
+      <w:p xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+        <w:r>
+          <w:rPr/>
+          <w:fldChar w:fldCharType="begin"/>
+          <w:instrText xml:space="preserve"> PAGE </w:instrText>
+          <w:fldChar w:fldCharType="separate"/>
+        </w:r>
+        <w:r>
+          <w:rPr><w:color w:val="FF0000"/><w:sz w:val="28"/></w:rPr>
+          <w:t>1</w:t>
+        </w:r>
+        <w:r><w:fldChar w:fldCharType="end"/></w:r>
+      </w:p>
+    `);
+
+    const field = paragraph.content.find((c) => c.type === "complexField");
+    expect(field?.type).toBe("complexField");
+    if (!field) {
+      return;
+    }
+    expect(field.formatting?.color).toEqual({ rgb: "FF0000" });
+    expect(field.formatting?.fontSize).toBe(28);
+  });
+});

@@ -309,6 +309,13 @@ export type ComplexField = {
   fieldCode: Run[];
   /** Display result runs */
   fieldResult: Run[];
+  /**
+   * Run formatting captured from the field's structural run(s) (`w:rPr` on the
+   * `begin`/code run). Used as the run-formatting fallback when the field has
+   * no separate result run to read it from, e.g. a footer `PAGE` number whose
+   * formatting lives on the field run (eigenpal/docx-editor#909).
+   */
+  formatting?: TextFormatting;
   /** Field is locked */
   fldLock?: boolean;
   /** Field is dirty */

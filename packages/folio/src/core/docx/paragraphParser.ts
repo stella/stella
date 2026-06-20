@@ -20,6 +20,7 @@ import type {
   BookmarkEnd,
   SimpleField,
   ComplexField,
+  TextFormatting,
   Theme,
   ColorValue,
   BorderSpec,
@@ -1262,6 +1263,9 @@ function parseParagraphContents(
   let afterSeparator = false;
   let complexFieldLock = false;
   let complexFieldDirty = false;
+  // Run formatting (w:rPr) carried on the field's structural runs, used as a
+  // fallback when the field has no separate result run (eigenpal/docx-editor#909).
+  let complexFieldFormatting: TextFormatting | undefined;
 
   for (const child of children) {
     const localName = getLocalName(child.name);
@@ -1326,11 +1330,28 @@ function parseParagraphContents(
           complexFieldResultRuns = [];
           complexFieldLock = false;
           complexFieldDirty = false;
+          // The structural run carrying `begin` often holds the field's run
+          // formatting (e.g. a footer PAGE field collapsed into one run).
+          complexFieldFormatting = run.formatting;
         }
 
         if (inComplexField) {
           if (instrText) {
             complexFieldInstr += instrText;
+          }
+          // Prefer any field run that actually carries formatting (the begin
+          // run is sometimes an empty `<w:rPr/>` in docs that put `w:rPr` on a
+          // later run). An empty formatting object counts as absent so it does
+          // not block that later, genuinely-formatted run.
+          const captureIsEmpty =
+            !complexFieldFormatting ||
+            Object.keys(complexFieldFormatting).length === 0;
+          if (
+            captureIsEmpty &&
+            run.formatting &&
+            Object.keys(run.formatting).length > 0
+          ) {
+            complexFieldFormatting = run.formatting;
           }
 
           if (hasFieldSeparate) {
@@ -1381,6 +1402,9 @@ function parseParagraphContents(
             }
             if (complexFieldDirty) {
               complexField.dirty = true;
+            }
+            if (complexFieldFormatting) {
+              complexField.formatting = complexFieldFormatting;
             }
 
             contents.push(complexField);

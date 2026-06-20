@@ -44,6 +44,7 @@ import type {
   ParagraphAttrs,
   RunFormattingOverrideAttrs,
   RunShadingAttrs,
+  RunStyleAttrs,
   SdtAttrs,
   ShapeAttrs,
   StrikeAttrs,
@@ -229,6 +230,7 @@ const strikeAttrsCache = new WeakMap<Mark, StrikeAttrs>();
 const textColorAttrsCache = new WeakMap<Mark, TextColorAttrs>();
 const highlightAttrsCache = new WeakMap<Mark, HighlightAttrs>();
 const runShadingAttrsCache = new WeakMap<Mark, RunShadingAttrs>();
+const runStyleAttrsCache = new WeakMap<Mark, RunStyleAttrs>();
 const fontSizeAttrsCache = new WeakMap<Mark, FontSizeAttrs>();
 const fontFamilyAttrsCache = new WeakMap<Mark, FontFamilyAttrs>();
 const characterSpacingAttrsCache = new WeakMap<Mark, CharacterSpacingAttrs>();
@@ -1155,6 +1157,26 @@ export const expectRunShadingMarkAttrs = (mark: Mark): RunShadingAttrs =>
     runShadingAttrsCache,
     readRunShadingMarkAttrs,
     "run shading attrs",
+  );
+
+export const readRunStyleMarkAttrs = (
+  mark: Mark,
+): ReadProseMirrorAttrsResult<RunStyleAttrs> => {
+  const attrs = attrsRecord(mark.attrs);
+  const issues: ProseMirrorAttrIssue[] = [];
+  expectMarkType(mark, "runStyle", issues);
+
+  requiredString(attrs, "styleId", "runStyle.attrs.styleId", issues);
+
+  return attrsResult(attrs, issues);
+};
+
+export const expectRunStyleMarkAttrs = (mark: Mark): RunStyleAttrs =>
+  expectCachedMarkAttrs(
+    mark,
+    runStyleAttrsCache,
+    readRunStyleMarkAttrs,
+    "run style attrs",
   );
 
 export const readFontSizeMarkAttrs = (

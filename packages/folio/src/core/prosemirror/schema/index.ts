@@ -41,6 +41,7 @@ export type {
   TrackedChangeMarkAttrs,
   RunFormattingOverrideAttrs,
   RunShadingAttrs,
+  RunStyleAttrs,
   HyperlinkAttrs,
 } from "./marks";
 

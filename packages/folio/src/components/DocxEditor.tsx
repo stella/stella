@@ -1224,7 +1224,7 @@ export function DocxEditor({
         for (const [rId, hf] of bag) {
           const view = editor.getHfView(rId);
           if (view) {
-            hf.content = proseDocToBlocks(view.state.doc);
+            hf.content = proseDocToBlocks(view.state.doc, doc.package.styles);
           }
         }
       };

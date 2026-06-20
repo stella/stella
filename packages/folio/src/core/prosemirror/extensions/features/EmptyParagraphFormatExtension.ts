@@ -46,7 +46,8 @@ function hasNonFontDefaults(dtf: TextFormatting): boolean {
     dtf.doubleStrike ||
     dtf.color ||
     dtf.highlight ||
-    dtf.vertAlign
+    dtf.vertAlign ||
+    dtf.rtl
   );
 }
 

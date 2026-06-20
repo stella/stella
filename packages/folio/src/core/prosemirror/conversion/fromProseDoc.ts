@@ -13,7 +13,10 @@
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
 import { numPrEqual } from "../../docx/numberingParser";
+import { visitDocxParagraphs } from "../../docx/paragraphTraversal";
 import { narrowEnum, ShapeOutlineStyleSchema } from "../../docx/parserEnums";
+import { createStyleEngine } from "../../style-engine";
+import type { StyleEngine } from "../../style-engine";
 import type {
   ImageWrap,
   ImagePosition,
@@ -57,6 +60,7 @@ import type {
   MathEquation,
   ColorValue,
   CellMargins,
+  StyleDefinitions,
 } from "../../types/document";
 import {
   OUTLINE_STYLE_CSS_ALIASES,
@@ -75,6 +79,7 @@ import {
   expectHardBreakAttrs,
   expectHighlightMarkAttrs,
   expectRunShadingMarkAttrs,
+  expectRunStyleMarkAttrs,
   expectHyperlinkMarkAttrs,
   expectImageAttrs,
   expectMathAttrs,
@@ -103,6 +108,7 @@ import type {
 } from "../schema/nodes";
 import { assertValidProseMirrorDocument } from "../validation";
 import { runShadingAttrsToShading } from "./runShadingMark";
+import { textFormattingToMarks } from "./toProseDoc";
 
 function normalizeShapeOutlineStyle(
   style: string | undefined,
@@ -237,6 +243,18 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
     documentBody.comments = baseDocument.package.document.comments;
   }
 
+  // Reconcile run character-style references (w:rStyle). The `runStyle` mark
+  // preserves the named link, but once a run has been edited away from its
+  // style the link would re-apply the style on save and silently revert the
+  // edit. Needs the original styles to resolve, so only runs when a base
+  // document is present (eigenpal/docx-editor#833).
+  if (baseDocument?.package.styles) {
+    reconcileRunStyleReferences(
+      { content: blocks },
+      createStyleEngine(baseDocument.package.styles),
+    );
+  }
+
   // If we have a base document, preserve its package structure
   if (baseDocument) {
     return {
@@ -254,6 +272,155 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
       document: documentBody,
     },
   };
+}
+
+function isSet(value: unknown): boolean {
+  return value !== null && value !== undefined;
+}
+
+const TEXT_COLOR_MARK_VALUE_KEYS = [
+  "rgb",
+  "themeColor",
+  "themeTint",
+  "themeShade",
+] as const;
+
+function hasTextColorMarkValue(mark: Mark): boolean {
+  return TEXT_COLOR_MARK_VALUE_KEYS.some((key) => isSet(mark.attrs[key]));
+}
+
+function runMarkDroppedStyleProperty(styleMark: Mark, runMark: Mark): boolean {
+  if (styleMark.type.name === "textColor") {
+    return !hasTextColorMarkValue(runMark);
+  }
+
+  return Object.entries(styleMark.attrs).some(
+    ([key, value]) => isSet(value) && !isSet(runMark.attrs[key]),
+  );
+}
+
+// A run still matches its character style as long as it carries a mark for
+// every property the style contributes. A property the user removed leaves no
+// mark of that type, so the inert `w:rStyle` link would wrongly re-apply it on
+// save; a property the user overrode keeps a mark of that type (with a value
+// the serializer re-emits, which wins over the style), so the link may stay.
+// Comparing the marks `toProseDoc` would emit keeps this in lockstep with every
+// property it round-trips — including values that emit no mark (an auto colour,
+// a baseline vertical alignment), which then correctly never count as removed.
+// Negative style properties (`runFormattingOverride`) are also safe to ignore:
+// retaining the style can only keep an inherited property off, and any direct
+// positive mark on the run wins over that style value in OOXML.
+function runDivergesFromStyle(
+  runFormatting: TextFormatting,
+  styleFormatting: TextFormatting,
+): boolean {
+  const runMarks = textFormattingToMarks(runFormatting);
+  return textFormattingToMarks(styleFormatting).some((styleMark) => {
+    if (
+      styleMark.type.name === "runStyle" ||
+      styleMark.type.name === "runFormattingOverride"
+    ) {
+      return false;
+    }
+    const runMark = runMarks.find((mark) => mark.type === styleMark.type);
+    if (!runMark) {
+      // The run dropped this mark type entirely.
+      return true;
+    }
+    // The run kept the mark type but still diverges if it dropped a property
+    // the style sets. Most compound marks have independent attr slots
+    // (`fontFamily.eastAsia` vs. `ascii`); textColor is different because
+    // `rgb` and `themeColor` are alternate representations of one property.
+    return runMarkDroppedStyleProperty(styleMark, runMark);
+  });
+}
+
+function reconcileRunStyleReference(run: Run, styleEngine: StyleEngine): void {
+  const styleId = run.formatting?.styleId;
+  if (!styleId || !run.formatting) {
+    return;
+  }
+  const styleFormatting = styleEngine.getRunStyleOwnProperties(styleId);
+  // Unknown style: keep the reference rather than guess at divergence.
+  if (
+    styleFormatting &&
+    runDivergesFromStyle(run.formatting, styleFormatting)
+  ) {
+    delete run.formatting.styleId;
+  }
+}
+
+function forEachRunInInline(
+  items: readonly (Run | Hyperlink)[],
+  fn: (run: Run) => void,
+): void {
+  for (const item of items) {
+    if (item.type === "run") {
+      fn(item);
+      continue;
+    }
+    for (const child of item.children) {
+      if (child.type === "run") {
+        fn(child);
+      }
+    }
+  }
+}
+
+// Visit every run reachable from a paragraph's inline content, including runs
+// nested in hyperlinks, fields, inline SDTs, and tracked-change containers — a
+// styled run can live in any of them and still needs reconciling.
+function forEachRunInParagraphContent(
+  content: ParagraphContent,
+  fn: (run: Run) => void,
+): void {
+  switch (content.type) {
+    case "run":
+      fn(content);
+      return;
+    case "hyperlink":
+      for (const child of content.children) {
+        if (child.type === "run") {
+          fn(child);
+        }
+      }
+      return;
+    case "simpleField":
+    case "insertion":
+    case "deletion":
+    case "moveFrom":
+    case "moveTo":
+      forEachRunInInline(content.content, fn);
+      return;
+    case "complexField":
+      for (const run of content.fieldCode) {
+        fn(run);
+      }
+      for (const run of content.fieldResult) {
+        fn(run);
+      }
+      return;
+    case "inlineSdt":
+      for (const child of content.content) {
+        forEachRunInParagraphContent(child, fn);
+      }
+      return;
+    default:
+      return;
+  }
+}
+
+function reconcileRunStyleReferences(
+  documentBody: DocumentBody,
+  styleEngine: StyleEngine,
+): void {
+  visitDocxParagraphs({ documentBody }, (paragraph) => {
+    for (const content of paragraph.content) {
+      forEachRunInParagraphContent(content, (run) => {
+        reconcileRunStyleReference(run, styleEngine);
+      });
+    }
+  });
 }
 
 /**
@@ -1920,6 +2087,12 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         );
         break;
 
+      case "runStyle":
+        // Restore the run's character-style reference so `<w:rStyle>` is
+        // re-emitted on save (eigenpal/docx-editor#833).
+        formatting.styleId = expectRunStyleMarkAttrs(mark).styleId;
+        break;
+
       case "fontSize": {
         const attrs = expectFontSizeMarkAttrs(mark);
         formatting.fontSize = attrs.size;
@@ -2731,6 +2904,17 @@ export function updateDocumentContent(
  * Used for converting edited header/footer PM content back to the document
  * model.
  */
-export function proseDocToBlocks(pmDoc: PMNode): BlockContent[] {
-  return extractBlocks(pmDoc);
+export function proseDocToBlocks(
+  pmDoc: PMNode,
+  styles?: StyleDefinitions,
+): BlockContent[] {
+  const blocks = extractBlocks(pmDoc);
+  // Header/footer save paths call this directly instead of `fromProseDoc`, so
+  // run the same w:rStyle reconciliation here when the document's styles are
+  // available — otherwise a character-style edit inside a header or footer is
+  // silently reverted on save (eigenpal/docx-editor#833).
+  if (styles) {
+    reconcileRunStyleReferences({ content: blocks }, createStyleEngine(styles));
+  }
+  return blocks;
 }
