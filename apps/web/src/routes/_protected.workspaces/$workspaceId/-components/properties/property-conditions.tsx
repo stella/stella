@@ -1,10 +1,11 @@
-import { Fragment } from "react";
+import { Fragment, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { RouteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { ConditionNode, GroupNode } from "@stll/conditions";
+import type { ConditionNode } from "@stll/conditions";
+import { pruneIncomplete } from "@stll/conditions";
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -95,27 +96,13 @@ export const PropertyConditions = ({
                     </span>
                     <Separator />
                   </div>
-                  <div className="flex flex-col gap-3 rounded-md border p-3">
-                    <div className="flex items-center gap-x-1.5">
-                      <PropertyIcon type={property.content.type} />
-                      <span className="text-sm font-medium">
-                        {property.name}
-                      </span>
-                    </div>
-                    <p className="text-muted-foreground text-xs">
-                      {t("workspaces.properties.editConditionsWhen")}
-                    </p>
-                    <ConditionBuilder
-                      fields={[field]}
-                      onChange={(next) => {
-                        replaceValue(index, {
-                          dependsOnPropertyId: property.id,
-                          condition: collapseGroup(next),
-                        });
-                      }}
-                      value={dependency.condition}
-                    />
-                  </div>
+                  <DependencyConditionEditor
+                    dependency={dependency}
+                    field={field}
+                    index={index}
+                    onPersist={replaceValue}
+                    property={property}
+                  />
                 </Fragment>
               ),
             )}
@@ -126,16 +113,56 @@ export const PropertyConditions = ({
   );
 };
 
+type DependencyConditionEditorProps = {
+  dependency: PropertyDependency;
+  field: FieldOption;
+  index: number;
+  property: WorkspaceProperty;
+  onPersist: (index: number, value: PropertyDependency) => void;
+};
+
 /**
- * An empty group means "no gate"; the handler stores `null` for that.
- * Otherwise the group node is stored verbatim and the gating evaluator
- * walks it directly.
+ * Edits one dependency's gate. The builder is controlled and the parent
+ * persists on every change, so we hold the in-progress group locally
+ * (incomplete leaves and all) and persist only the pruned condition. A
+ * half-entered leaf would otherwise be saved as a live gate and then vanish
+ * from the editor on the next render. An all-incomplete group prunes to
+ * `null` ("no gate"), matching the gating evaluator and the SQL compiler.
  */
-const collapseGroup = (group: GroupNode): ConditionNode | null => {
-  if (group.children.length === 0) {
-    return null;
-  }
-  return group;
+const DependencyConditionEditor = ({
+  dependency,
+  field,
+  index,
+  property,
+  onPersist,
+}: DependencyConditionEditorProps) => {
+  const t = useTranslations();
+  const [draft, setDraft] = useState<ConditionNode | null>(
+    dependency.condition,
+  );
+
+  return (
+    <div className="flex flex-col gap-3 rounded-md border p-3">
+      <div className="flex items-center gap-x-1.5">
+        <PropertyIcon type={property.content.type} />
+        <span className="text-sm font-medium">{property.name}</span>
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {t("workspaces.properties.editConditionsWhen")}
+      </p>
+      <ConditionBuilder
+        fields={[field]}
+        onChange={(next) => {
+          setDraft(next);
+          onPersist(index, {
+            dependsOnPropertyId: property.id,
+            condition: pruneIncomplete(next),
+          });
+        }}
+        value={draft}
+      />
+    </div>
+  );
 };
 
 /** Maps a gateable dependency property to a builder field, or null. */

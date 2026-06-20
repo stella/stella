@@ -99,7 +99,7 @@ export const FilterChips = ({
   if (filters.length === 0) {
     return (
       <AddFilterPicker
-        fields={fields}
+        fields={pickerFields}
         onAddAdvanced={() => append(emptyAdvancedGroup())}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
