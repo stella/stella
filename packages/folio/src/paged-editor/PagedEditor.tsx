@@ -208,6 +208,7 @@ import {
   twipsToPixels,
 } from "./sectionGeometry";
 import { SelectionOverlay } from "./SelectionOverlay";
+import { tableInsertButtonOffset } from "./tableInsertButtonGeometry";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
 // Visual line navigation hook
@@ -5368,8 +5369,18 @@ export function PagedEditor(
             const rowCenterY = rowRect.top + rowRect.height / 2;
             setTableInsertButton({
               type: "row",
-              x: tableRect.left - viewportRect.left - 24,
-              y: rowCenterY - viewportRect.top - 10,
+              x: tableInsertButtonOffset(
+                tableRect.left,
+                viewportRect.left,
+                zoom,
+                24,
+              ),
+              y: tableInsertButtonOffset(
+                rowCenterY,
+                viewportRect.top,
+                zoom,
+                10,
+              ),
               cellPmPos: pmPos,
             });
             clearTableInsertTimer();
@@ -5391,8 +5402,18 @@ export function PagedEditor(
             const cellCenterX = cellRect.left + cellRect.width / 2;
             setTableInsertButton({
               type: "column",
-              x: cellCenterX - viewportRect.left - 10,
-              y: tableRect.top - viewportRect.top - 24,
+              x: tableInsertButtonOffset(
+                cellCenterX,
+                viewportRect.left,
+                zoom,
+                10,
+              ),
+              y: tableInsertButtonOffset(
+                tableRect.top,
+                viewportRect.top,
+                zoom,
+                24,
+              ),
               cellPmPos: pmPos,
             });
             clearTableInsertTimer();
@@ -5409,7 +5430,7 @@ export function PagedEditor(
         }, TABLE_INSERT_HIDE_DELAY);
       }
     },
-    [readOnly, clearTableInsertTimer],
+    [readOnly, clearTableInsertTimer, zoom],
   );
 
   /**
