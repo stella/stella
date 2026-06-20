@@ -173,12 +173,13 @@ export const useChatSession = ({
   const [seededChat, setSeededChat] = useState(chat);
   const isLoadingOlderRef = useRef(false);
   const olderCursorRef = useRef(olderCursor);
-  // Render-current thread id for the stale-response guard below. Written here
-  // (during render, when a fresh Chat is hydrated) rather than in a passive
-  // effect like conversationIdRef, so a load-older response resolving in the
-  // window between a thread-switch render committing and effects running is
-  // still discarded.
-  const seededConversationIdRef = useRef(conversationId);
+  // Render-current Chat identity for the stale-response guard below. A fresh
+  // Chat means the thread was rehydrated — a thread switch OR a same-thread
+  // refetch (sending a message rebuilds the Chat from a newer first page) — so
+  // an in-flight older request must be discarded. A thread-id guard would miss
+  // the same-thread case. Written during render (not a passive effect) so a
+  // response resolving in the commit→effect window is still caught.
+  const seededChatRef = useRef(chat);
   if (seededChat !== chat) {
     setSeededChat(chat);
     setOlderCursor(initialOlderCursor);
@@ -186,7 +187,7 @@ export const useChatSession = ({
     setLoadOlderError(false);
     olderCursorRef.current = initialOlderCursor;
     isLoadingOlderRef.current = false;
-    seededConversationIdRef.current = conversationId;
+    seededChatRef.current = chat;
   }
 
   const loadOlder = useCallback(async () => {
@@ -194,7 +195,7 @@ export const useChatSession = ({
     if (before === null || isLoadingOlderRef.current) {
       return;
     }
-    const requestedConversationId = conversationId;
+    const requestedChat = seededChatRef.current;
     isLoadingOlderRef.current = true;
     setIsLoadingOlder(true);
     setLoadOlderError(false);
@@ -203,10 +204,11 @@ export const useChatSession = ({
       async () => await fetchOlderMessages({ key: threadRef, before }),
     );
 
-    // Discard a response that resolved after the user switched threads: the
-    // re-seed already reset paging for the new thread, so applying this would
-    // corrupt its cursor and prepend the previous thread's messages.
-    if (seededConversationIdRef.current !== requestedConversationId) {
+    // Discard a response that resolved after the Chat was rehydrated (thread
+    // switch OR same-thread refetch): the re-seed already reset paging for the
+    // new page, so applying this would corrupt its cursor and prepend a stale
+    // page (skipping the boundary message).
+    if (seededChatRef.current !== requestedChat) {
       return;
     }
 
@@ -240,7 +242,7 @@ export const useChatSession = ({
     });
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
-  }, [conversationId, setMessages, t, threadRef]);
+  }, [setMessages, t, threadRef]);
 
   // Mirror `isGenerating` (computed below) and the live queue into
   // refs so the stable `sendMessage` callback can branch on the

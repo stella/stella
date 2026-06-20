@@ -124,12 +124,20 @@ export function VersionsSidebar({
   const viewportRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   const canLoadOlder = hasOlderVersions && onLoadOlder !== undefined;
-  // The list renders oldest → newest, so an older page lands at the
-  // TOP of the first version's id. Track it to detect a genuine
-  // prepend in the layout effect below (vs. a bottom-append upload or
-  // an entity switch).
-  const firstVersionId = versions.at(0)?.id ?? null;
-  const prevFirstVersionIdRef = useRef(firstVersionId);
+  // The list renders oldest → newest, so loading an older page adds rows at
+  // the TOP. `versions` is kept newest-first, so the displayed-top is the
+  // OLDEST version (min versionNumber); track its id to detect a genuine
+  // older-page load in the layout effect below (vs. a bottom-append upload
+  // or an entity switch).
+  let topVersionId: string | null = null;
+  let oldestVersionNumber = Number.POSITIVE_INFINITY;
+  for (const version of versions) {
+    if (version.versionNumber < oldestVersionNumber) {
+      oldestVersionNumber = version.versionNumber;
+      topVersionId = version.id;
+    }
+  }
+  const prevTopVersionIdRef = useRef(topVersionId);
   // scrollHeight captured the instant a load-older request fires,
   // before the prepend grows the container above the viewport. Reset
   // to null once consumed so only a real prepend restores scroll.
@@ -176,17 +184,18 @@ export function VersionsSidebar({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder is a stable closure over refs; onLoadOlder tracks the active entity
   }, [canLoadOlder, isLoadingOlder, loadOlderError, onLoadOlder]);
 
-  // Scroll anchoring: a prepend changes the first version id and grows
-  // scrollHeight above the viewport. Restore the previous offset before
-  // paint so the version under the user's eye stays put. Bottom-appends
-  // (uploads) keep the first id and skip this; an entity switch changes
-  // the id too but has no captured anchor, so it is also skipped.
+  // Scroll anchoring: loading an older page changes the displayed-top
+  // (oldest) version id and grows scrollHeight above the viewport. Restore the
+  // previous offset before paint so the version under the user's eye stays
+  // put. Bottom-appends (uploads) keep the oldest id and skip this; an entity
+  // switch changes the id too but has no captured anchor, so it is also
+  // skipped.
   useLayoutEffect(() => {
-    const previousFirstId = prevFirstVersionIdRef.current;
-    prevFirstVersionIdRef.current = firstVersionId;
+    const previousTopId = prevTopVersionIdRef.current;
+    prevTopVersionIdRef.current = topVersionId;
     const previousScrollHeight = anchorScrollHeightRef.current;
     anchorScrollHeightRef.current = null;
-    if (previousFirstId === firstVersionId || previousScrollHeight === null) {
+    if (previousTopId === topVersionId || previousScrollHeight === null) {
       return;
     }
     const container = viewportRef.current;
@@ -194,7 +203,7 @@ export function VersionsSidebar({
       return;
     }
     container.scrollTop += container.scrollHeight - previousScrollHeight;
-  }, [firstVersionId]);
+  }, [topVersionId]);
 
   const invalidateVersions = async () => {
     await queryClient.invalidateQueries({

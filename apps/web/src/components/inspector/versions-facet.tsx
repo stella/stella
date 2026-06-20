@@ -54,19 +54,27 @@ export const VersionsFacet = ({
   // accumulator from going stale after such a refetch or an entity
   // switch. Refs mirror the state so the stable `loadOlder` callback
   // can read the latest committed values.
-  const [accumulated, setAccumulated] = useState<Version[]>([]);
-  const [olderCursor, setOlderCursor] = useState<string | null>(null);
+  // Initialize from `data` directly so a cache hit on first render seeds the
+  // list (the re-seed below only fires when the data identity *changes*, which
+  // never happens when useQuery returns cached data on mount).
+  const [accumulated, setAccumulated] = useState<Version[]>(
+    data?.versions ?? [],
+  );
+  const [olderCursor, setOlderCursor] = useState<string | null>(
+    data?.olderCursor ?? null,
+  );
   const [isLoadingOlder, setIsLoadingOlder] = useState(false);
   const [loadOlderError, setLoadOlderError] = useState(false);
   const [seededData, setSeededData] = useState(data);
-  const olderCursorRef = useRef<string | null>(null);
+  const olderCursorRef = useRef<string | null>(data?.olderCursor ?? null);
   const isLoadingOlderRef = useRef(false);
-  // Render-current entity id for the stale-response guard in
-  // `loadOlder`. Written during render (when a fresh page is seeded)
-  // rather than in a passive effect, so a response resolving in the
-  // window between an entity-switch render committing and effects
-  // running is still discarded.
-  const seededEntityIdRef = useRef(entityId);
+  // Render-current query-data identity for the stale-response guard in
+  // `loadOlder`. A fresh `data` object means the page was rehydrated — an
+  // entity switch OR a same-entity refetch (upload/restore/delete) — so an
+  // in-flight older request must be discarded. Written during render (not a
+  // passive effect) so a response resolving in the commit→effect window is
+  // still caught.
+  const seededDataRef = useRef(data);
   if (data !== undefined && seededData !== data) {
     setSeededData(data);
     setAccumulated(data.versions);
@@ -75,7 +83,7 @@ export const VersionsFacet = ({
     setLoadOlderError(false);
     olderCursorRef.current = data.olderCursor;
     isLoadingOlderRef.current = false;
-    seededEntityIdRef.current = entityId;
+    seededDataRef.current = data;
   }
 
   const loadOlder = useCallback(async () => {
@@ -83,7 +91,7 @@ export const VersionsFacet = ({
     if (before === null || isLoadingOlderRef.current) {
       return;
     }
-    const requestedEntityId = entityId;
+    const requestedData = seededDataRef.current;
     isLoadingOlderRef.current = true;
     setIsLoadingOlder(true);
     setLoadOlderError(false);
@@ -92,11 +100,11 @@ export const VersionsFacet = ({
       async () => await fetchOlderVersions({ workspaceId, entityId, before }),
     );
 
-    // Discard a response that resolved after the user switched entities:
-    // the re-seed already reset paging for the new entity, so applying
-    // this would corrupt its cursor and prepend the previous entity's
-    // versions.
-    if (seededEntityIdRef.current !== requestedEntityId) {
+    // Discard a response that resolved after the page was rehydrated (entity
+    // switch OR same-entity refetch): the re-seed already reset paging for the
+    // new data, so applying this would corrupt its cursor and merge a stale
+    // page (skipping the boundary version).
+    if (seededDataRef.current !== requestedData) {
       return;
     }
 
@@ -120,13 +128,16 @@ export const VersionsFacet = ({
     const older = result.value;
     setAccumulated((current) => {
       const existingIds = new Set(current.map((version) => version.id));
-      const prepend = older.versions.filter(
+      const next = older.versions.filter(
         (version) => !existingIds.has(version.id),
       );
-      if (prepend.length === 0) {
+      if (next.length === 0) {
         return current;
       }
-      return [...prepend, ...current];
+      // Keep the list newest-first: an older page has smaller versionNumbers,
+      // so it appends after the current page. The sidebar sorts for display
+      // but relies on this order for delete/selection fallbacks.
+      return [...current, ...next];
     });
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
