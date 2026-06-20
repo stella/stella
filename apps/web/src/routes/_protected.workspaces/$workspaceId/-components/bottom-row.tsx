@@ -11,7 +11,9 @@ import {
 import { getInternalColId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const selectColId = getInternalColId("select");
-const bottomRowClassName = `sticky bottom-0 z-20 cursor-pointer ${TOOLBAR_ROW_HEIGHT}`;
+// Add-row is chrome, not data: it recedes (muted, single hairline border) and
+// surfaces on hover so it doesn't compete with the rows above it.
+const bottomRowClassName = `sticky bottom-0 z-20 cursor-pointer text-muted-foreground transition-colors duration-150 hover:text-foreground ${TOOLBAR_ROW_HEIGHT}`;
 
 type BottomRowProps = {
   workspaceId: string;
@@ -33,17 +35,17 @@ export const BottomRow = ({
       render={
         <WorkspaceGridRow className={bottomRowClassName} role="button">
           <WorkspaceGridCell
-            className="z-10 flex items-center justify-center border-t-2"
+            className="z-10 flex items-center justify-center border-t"
             style={{
               left: table.getColumn(selectColId)?.getStart("left"),
               right: table.getColumn(selectColId)?.getStart("right"),
               position: "sticky",
             }}
           >
-            <PlusIcon className="size-4" />
+            <PlusIcon className="size-3.5" />
           </WorkspaceGridCell>
           <WorkspaceGridCell
-            className="z-10 flex items-center border-e-0 border-t-2"
+            className="z-10 flex items-center border-e-0 border-t text-sm"
             style={{
               left: table.getColumn(selectColId)?.getSize(),
               right: table.getColumn(selectColId)?.getSize(),
@@ -54,7 +56,7 @@ export const BottomRow = ({
           </WorkspaceGridCell>
           <WorkspaceGridCell
             aria-hidden="true"
-            className="border-t-2"
+            className="border-t"
             role="presentation"
             style={{ gridColumn: "3 / -1" }}
           />
