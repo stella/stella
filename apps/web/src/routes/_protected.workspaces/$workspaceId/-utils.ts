@@ -1,4 +1,4 @@
-import { useI18nStore } from "@/i18n/i18n-store";
+import { getFormatter, useI18nStore } from "@/i18n/i18n-store";
 import type {
   WorkspaceEntity,
   WorkspaceField,
@@ -51,7 +51,7 @@ export const getFieldValue = (field: WorkspaceField | undefined) => {
       return field.content.value.join(", ");
     case "date":
       return field.content.value
-        ? new Date(field.content.value).toLocaleDateString(undefined, {
+        ? getFormatter().dateTime(new Date(field.content.value), {
             year: "numeric",
             month: "short",
             day: "numeric",

@@ -16,19 +16,10 @@ import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { bundledEnglishMessages, useI18nStore } from "@/i18n/i18n-store";
 import type Messages from "@/i18n/langs/messages.gen";
+import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { AnalyticsProvider, useAnalytics } from "@/lib/analytics/provider";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
-
-const SERVER_I18N_TIME_ZONE = "UTC";
-
-const resolveAppI18nTimeZone = (): string => {
-  if (typeof window === "undefined") {
-    return SERVER_I18N_TIME_ZONE;
-  }
-
-  return Intl.DateTimeFormat().resolvedOptions().timeZone;
-};
 
 const noopSubscribe = () => () => undefined;
 
@@ -104,7 +95,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
     <IntlProvider
       locale={preHydrationEnglish ? "en" : locale}
       messages={activeMessages}
-      timeZone={resolveAppI18nTimeZone()}
+      timeZone={resolveAppTimeZone()}
     >
       {children}
     </IntlProvider>

@@ -1,10 +1,11 @@
-import { createTranslator } from "use-intl/core";
+import { createFormatter, createTranslator } from "use-intl/core";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { getStorageKey } from "@/consts";
 import en from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
+import { resolveAppTimeZone, SERVER_I18N_TIME_ZONE } from "@/i18n/time-zone";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 type LocalizedMessages<T> = {
@@ -155,6 +156,16 @@ let translator = createTranslator({
 
 export const getTranslator = () => translator;
 
+// Locale-aware formatter for non-React code (utilities, store logic), mirroring
+// getTranslator. React components should use use-intl's useFormatter, which
+// reads the same locale from the provider. Both are kept in sync by setLocale.
+let formatter = createFormatter({
+  locale: "en",
+  timeZone: SERVER_I18N_TIME_ZONE,
+});
+
+export const getFormatter = () => formatter;
+
 type State = {
   lang: SupportedLanguage;
   messages: LocaleMessages;
@@ -188,6 +199,10 @@ const applyMessages = (
   translator = createTranslator({
     locale: lang,
     messages,
+  });
+  formatter = createFormatter({
+    locale: lang,
+    timeZone: resolveAppTimeZone(),
   });
   setDocumentLanguage(lang);
 };
