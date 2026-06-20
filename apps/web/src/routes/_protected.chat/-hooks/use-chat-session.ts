@@ -173,6 +173,12 @@ export const useChatSession = ({
   const [seededChat, setSeededChat] = useState(chat);
   const isLoadingOlderRef = useRef(false);
   const olderCursorRef = useRef(olderCursor);
+  // Render-current thread id for the stale-response guard below. Written here
+  // (during render, when a fresh Chat is hydrated) rather than in a passive
+  // effect like conversationIdRef, so a load-older response resolving in the
+  // window between a thread-switch render committing and effects running is
+  // still discarded.
+  const seededConversationIdRef = useRef(conversationId);
   if (seededChat !== chat) {
     setSeededChat(chat);
     setOlderCursor(initialOlderCursor);
@@ -180,6 +186,7 @@ export const useChatSession = ({
     setLoadOlderError(false);
     olderCursorRef.current = initialOlderCursor;
     isLoadingOlderRef.current = false;
+    seededConversationIdRef.current = conversationId;
   }
 
   const loadOlder = useCallback(async () => {
@@ -199,7 +206,7 @@ export const useChatSession = ({
     // Discard a response that resolved after the user switched threads: the
     // re-seed already reset paging for the new thread, so applying this would
     // corrupt its cursor and prepend the previous thread's messages.
-    if (conversationIdRef.current !== requestedConversationId) {
+    if (seededConversationIdRef.current !== requestedConversationId) {
       return;
     }
 
