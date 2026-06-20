@@ -590,12 +590,8 @@ export const __resetChatRequestStateForTests = (): void => {
   threadAutoFireState.clear();
 };
 
-const getThreadAutoFireKey = (
-  messages: readonly PersistedChatMessage[],
-): string | null => messages[0]?.id ?? null;
-
 export const createSendAutomaticallyPredicate =
-  () =>
+  (threadId: string) =>
   ({ messages }: { messages: PersistedChatMessage[] }) => {
     if (hasApprovedActiveDocxEditAwaitingClientOutput({ messages })) {
       return false;
@@ -605,10 +601,10 @@ export const createSendAutomaticallyPredicate =
     if (!fingerprint) {
       return false;
     }
-    const threadKey = getThreadAutoFireKey(messages);
-    if (!threadKey) {
-      return false;
-    }
+    // Key the one-fire budget on the stable thread id, not messages[0].id:
+    // loading older history prepends messages, which would otherwise hand the
+    // same assistant-tail fingerprint a fresh budget and re-fire the turn.
+    const threadKey = threadId;
     const state = threadAutoFireState.get(threadKey) ?? {
       fingerprint: null,
       fires: 0,
@@ -779,7 +775,7 @@ export const chatThreadOptions = ({
             }),
           }),
         }),
-        sendAutomaticallyWhen: createSendAutomaticallyPredicate(),
+        sendAutomaticallyWhen: createSendAutomaticallyPredicate(key.threadId),
       });
 
       return {

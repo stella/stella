@@ -291,7 +291,8 @@ describe("createSendAutomaticallyPredicate", () => {
   });
 
   test("allows sequential auto sends inside the same assistant message", () => {
-    const shouldSendAutomatically = createSendAutomaticallyPredicate();
+    const shouldSendAutomatically =
+      createSendAutomaticallyPredicate("thread-A");
     const baseMessage = {
       id: "message-A",
       role: "assistant",
