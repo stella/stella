@@ -11,7 +11,7 @@
  * keeps a thin local alias over one core.
  */
 
-import * as cheerio from "cheerio";
+import type * as cheerio from "cheerio";
 import { type AnyNode, isTag, isText } from "domhandler";
 
 import type { Inline } from "@/api/handlers/case-law/document-ast";
@@ -121,7 +121,8 @@ export const walkInlines = (
           style.includes("-aw-import:spaces") ||
           style.includes("display:inline-block")
         ) {
-          if (!$child.text().trim()) {
+          const innerText = $child.text().trim();
+          if (!innerText) {
             return;
           }
         }
@@ -227,7 +228,7 @@ export const stripInlinePrefix = (
         const rest = node.text.slice(remaining);
         remaining = 0;
         if (rest) {
-          result.push({ type: "text", text: rest });
+          result.push({ ...node, text: rest });
         }
       }
       continue;
@@ -258,7 +259,7 @@ export const stripInlinePrefix = (
   if (result.length > 0 && first?.type === "text") {
     const trimmed = first.text.trimStart();
     if (trimmed) {
-      result[0] = { type: "text", text: trimmed };
+      result[0] = { ...first, text: trimmed };
     } else {
       result.shift();
     }

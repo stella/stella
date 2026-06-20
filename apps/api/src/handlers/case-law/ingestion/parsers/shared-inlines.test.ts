@@ -122,4 +122,22 @@ describe("stripInlinePrefix", () => {
     const stripped = stripInlinePrefix(inlines, "Hello ".length);
     expect(inlinesToPlainText(stripped)).toBe("World");
   });
+
+  test("preserves the anonymized flag when slicing a text node", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "1. Secret", anonymized: true },
+    ];
+    expect(stripInlinePrefix(inlines, 3)).toEqual([
+      { type: "text", text: "Secret", anonymized: true },
+    ]);
+  });
+
+  test("preserves the anonymized flag through the leading-whitespace trim", () => {
+    const inlines: Inline[] = [
+      { type: "text", text: "12 Secret", anonymized: true },
+    ];
+    expect(stripInlinePrefix(inlines, 2)).toEqual([
+      { type: "text", text: "Secret", anonymized: true },
+    ]);
+  });
 });
