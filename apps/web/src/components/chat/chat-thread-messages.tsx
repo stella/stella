@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
-import type { ComponentProps } from "react";
+import type { ComponentProps, RefObject } from "react";
 
 import { isToolUIPart } from "ai";
 import type { FileUIPart } from "ai";
@@ -59,6 +59,7 @@ export const ChatThreadMessages = ({
   isLoadingOlder = false,
   messages,
   onLoadOlder,
+  scrollContainerRef,
   onResend,
   onSendWithoutAnonymization,
   onAskUserSubmit,
@@ -83,7 +84,7 @@ export const ChatThreadMessages = ({
   // Null when this list renders outside a `Conversation` (the file-chat
   // overlay uses its own scroll container and never wires load-older).
   const stick = useMaybeStickToBottomContext();
-  const scrollRef = stick?.scrollRef ?? null;
+  const scrollRef = scrollContainerRef ?? stick?.scrollRef ?? null;
   const sentinelRef = useRef<HTMLDivElement>(null);
   const firstMessageId = messages.at(0)?.id ?? null;
   const prevFirstMessageIdRef = useRef(firstMessageId);
@@ -713,6 +714,10 @@ type ChatThreadMessagesProps = {
   /** True while an older page is being fetched + prepended. */
   isLoadingOlder?: boolean | undefined;
   messages: PersistedChatMessage[];
+  /** Explicit scroll container for surfaces that render outside a
+   *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
+   *  falls back to the StickToBottom context when omitted. */
+  scrollContainerRef?: RefObject<HTMLDivElement | null> | undefined;
   /** Fetch + prepend the page immediately older than the current top. */
   onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
   onResend?:

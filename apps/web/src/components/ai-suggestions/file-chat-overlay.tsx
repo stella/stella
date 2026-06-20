@@ -994,6 +994,9 @@ const FileChatOverlayInner = ({
   const {
     error,
     messages,
+    olderCursor,
+    isLoadingOlder,
+    loadOlder,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -1015,7 +1018,13 @@ const FileChatOverlayInner = ({
     addToolOutput,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, conversationId: threadRef.threadId, workspaceId });
+  } = useChatSession({
+    chat,
+    conversationId: threadRef.threadId,
+    initialOlderCursor: data.olderCursor,
+    threadRef,
+    workspaceId,
+  });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
   useEffect(() => {
@@ -1209,15 +1218,19 @@ const FileChatOverlayInner = ({
               <ChatThreadMessages
                 approvalPendingMessageId={approvalPendingMessageId}
                 error={error}
+                hasOlderMessages={olderCursor !== null}
                 isGenerating={isGenerating}
+                isLoadingOlder={isLoadingOlder}
                 messages={messages}
                 onAskUserEditAndRerun={handleAskUserEditAndRerun}
                 onAskUserSubmit={handleAskUserSubmit}
                 onCreateDocumentResolve={handleCreateDocumentResolve}
+                onLoadOlder={loadOlder}
                 onOpenCreatedDocument={handleOpenCreatedDocument}
                 onRemoveQueuedMessage={removeQueuedMessage}
                 onResend={resendLatestMessage}
                 queuedMessages={queuedMessages}
+                scrollContainerRef={threadScrollRef}
                 showThinkingIndicator
                 showToolCallDetails={showToolCallDetails}
                 streamdownComponents={streamdownComponents}
