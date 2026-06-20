@@ -4,12 +4,6 @@ export type StartWorkflowArgs = {
   entityIds?: string[];
   entityIdsOrder?: string[];
   propertyIds?: string[];
-  /**
-   * Re-extract the scoped properties on every targeted entity, including
-   * ones that already hold a result. Defaults to false, where a scoped run
-   * only fills documents still missing a value (e.g. newly added ones).
-   */
-  force?: boolean;
   serviceTier?: WorkflowServiceTier;
 };
 
