@@ -64,8 +64,8 @@ Project: root
 - @tanstack/react-start 1.168.25 — MIT
 - @tanstack/react-store 0.11.0 — MIT
 - @tanstack/react-store 0.9.3 — MIT
-- @tanstack/react-table 9.0.0-beta.11 — MIT
-- @tanstack/react-table-devtools 9.0.0-beta.11 — MIT
+- @tanstack/react-table 9.0.0-beta.16 — MIT
+- @tanstack/react-table-devtools 9.0.0-beta.16 — MIT
 - @tanstack/react-virtual 3.14.2 — MIT
 - @tauri-apps/api 2.11.0 — Apache-2.0 OR MIT
 - @tiptap/core 3.26.1 — MIT

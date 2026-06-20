@@ -11122,7 +11122,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.0.0-beta.11",
+      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.0.0-beta.16",
       "description": "React devtools for TanStack Table.",
       "evidence": {
         "identity": [
@@ -11174,10 +11174,10 @@
           "value": "node_modules/@tanstack/react-table-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.0.0-beta.11",
+      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.0.0-beta.16",
       "scope": "required",
       "type": "library",
-      "version": "9.0.0-beta.11"
+      "version": "9.0.0-beta.16"
     },
     {
       "authors": [
@@ -11185,7 +11185,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table@9.0.0-beta.11",
+      "bom-ref": "pkg:npm/@tanstack/react-table@9.0.0-beta.16",
       "description": "Headless UI for building powerful tables & datagrids for React.",
       "evidence": {
         "identity": [
@@ -11273,10 +11273,10 @@
           "value": "node_modules/@tanstack/react-table/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table@9.0.0-beta.11",
+      "purl": "pkg:npm/%40tanstack/react-table@9.0.0-beta.16",
       "scope": "required",
       "type": "library",
-      "version": "9.0.0-beta.11"
+      "version": "9.0.0-beta.16"
     },
     {
       "authors": [
@@ -21381,7 +21381,7 @@
         ],
         "occurrences": [
           {
-            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#18"
+            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#21"
           },
           {
             "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#37"
@@ -21525,7 +21525,7 @@
             "location": "packages/folio/src/core/prosemirror/extensions/features/ImagePasteExtension.ts#9"
           },
           {
-            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#19"
+            "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#22"
           },
           {
             "location": "packages/folio/src/core/prosemirror/plugins/aiCitationDecorations.ts#16"
