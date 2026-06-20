@@ -245,6 +245,7 @@ const GroupSection = ({
                   void query.fetchNextPage();
                 }
               }}
+              showAddRow={false}
               table={table}
               workspaceId={workspaceId}
             />

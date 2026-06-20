@@ -78,6 +78,9 @@ type WorkspaceTableProps = {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   onLoadMore?: () => void;
+  // Grouped sections opt out so the "+ new document" row isn't repeated
+  // under every group.
+  showAddRow?: boolean;
 };
 
 export const WorkspaceTable = ({
@@ -87,6 +90,7 @@ export const WorkspaceTable = ({
   hasNextPage = false,
   isFetchingNextPage = false,
   onLoadMore,
+  showAddRow = true,
 }: WorkspaceTableProps) => {
   const t = useTranslations();
   const tableWrapperRef = useRef<HTMLDivElement>(null);
@@ -561,11 +565,13 @@ export const WorkspaceTable = ({
               addPropertyColumn={addPropertyColumn}
               renderColumns={renderColumns}
             />
-            <BottomRow
-              table={table}
-              onFolderCreated={setEditingEntityId}
-              workspaceId={workspaceId}
-            />
+            {showAddRow && (
+              <BottomRow
+                table={table}
+                onFolderCreated={setEditingEntityId}
+                workspaceId={workspaceId}
+              />
+            )}
           </div>
         </div>
       </div>
