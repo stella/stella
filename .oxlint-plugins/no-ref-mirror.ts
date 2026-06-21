@@ -65,29 +65,6 @@ const isUseRefCall = (node, useRefAliases, reactNamespaces) => {
   );
 };
 
-const getTopLevelRenderAssignment = (node) => {
-  if (node.parent?.type !== "ExpressionStatement") {
-    return null;
-  }
-
-  let current = node.parent.parent;
-  while (current) {
-    if (current.type === "BlockStatement") {
-      return current.parent ?? null;
-    }
-    if (
-      current.type === "FunctionDeclaration" ||
-      current.type === "FunctionExpression" ||
-      current.type === "ArrowFunctionExpression"
-    ) {
-      return current;
-    }
-    current = current.parent;
-  }
-
-  return null;
-};
-
 export default {
   meta: { name: "no-ref-mirror" },
   rules: {
@@ -211,9 +188,6 @@ export default {
 
             const functionNode = findContainingFunction(node);
             if (functionNode === null) {
-              return;
-            }
-            if (getTopLevelRenderAssignment(node) !== functionNode) {
               return;
             }
 

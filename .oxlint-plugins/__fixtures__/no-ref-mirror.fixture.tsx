@@ -11,6 +11,12 @@ export function RefMirrorFixture({ value }: { value: string }) {
   // oxlint-disable-next-line no-ref-mirror/no-ref-mirror
   namespaceRef.current = value;
 
+  const nestedRenderRef = useRef(value);
+  if (value.length > 0) {
+    // oxlint-disable-next-line no-ref-mirror/no-ref-mirror
+    nestedRenderRef.current = value;
+  }
+
   const domRef = useRef<HTMLDivElement | null>(null);
   const timerRef = useRef<number | null>(null);
 

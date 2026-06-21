@@ -1168,6 +1168,11 @@ const FilesystemRow = ({
     onStartEditing(null);
   };
 
+  const isBulkSelected = selectedIds.size > 1 && isSelected;
+  const bulkEntitiesRef = useRef<WorkspaceEntity[] | undefined>(undefined);
+  const getBulkSelectedEntities = () =>
+    isBulkSelected ? getSelectedEntities(selectedIds) : undefined;
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1175,6 +1180,7 @@ const FilesystemRow = ({
     if (!isSelected) {
       onSelect(node.entityId, false);
     }
+    bulkEntitiesRef.current = getBulkSelectedEntities();
     const x = e.clientX;
     const y = e.clientY;
     setMenuState({
@@ -1454,8 +1460,6 @@ const FilesystemRow = ({
     </>
   );
 
-  const isBulkSelected = selectedIds.size > 1 && isSelected;
-
   const openInInspector = (() => {
     if (isBulkSelected) {
       const entities = getSelectedEntities(selectedIds);
@@ -1509,23 +1513,6 @@ const FilesystemRow = ({
     return undefined;
   })();
 
-  // Capture bulk entities at context-menu-open time. Base UI's Menu
-  // steals focus on open, which can trigger a click event that clears
-  // selectedIds before RowActions re-renders. Using a ref preserves
-  // the selection snapshot from when the menu was triggered.
-  const bulkEntitiesRef = useRef<WorkspaceEntity[] | undefined>(undefined);
-  if (isContextOpen && isBulkSelected) {
-    bulkEntitiesRef.current = getSelectedEntities(selectedIds);
-  } else if (!isContextOpen) {
-    bulkEntitiesRef.current = undefined;
-  }
-  let bulkEntities: WorkspaceEntity[] | undefined;
-  if (isContextOpen) {
-    bulkEntities = bulkEntitiesRef.current;
-  } else if (isBulkSelected) {
-    bulkEntities = getSelectedEntities(selectedIds);
-  }
-
   const rowActionsNode = (
     <span className="flex justify-end">
       <RowActions
@@ -1535,7 +1522,9 @@ const FilesystemRow = ({
         onOpenChange={(o) => {
           if (!o) {
             setMenuState({ type: "closed" });
+            bulkEntitiesRef.current = undefined;
           } else if (menuState.type === "closed") {
+            bulkEntitiesRef.current = getBulkSelectedEntities();
             // Trigger-button click: Base UI positions the menu against
             // the trigger element, so no virtual anchor is needed.
             setMenuState({ type: "trigger" });
@@ -1544,7 +1533,7 @@ const FilesystemRow = ({
         onRename={startEditing}
         onSubfolderCreated={onSubfolderCreated}
         open={isContextOpen}
-        selectedEntities={bulkEntities}
+        selectedEntities={isContextOpen ? bulkEntitiesRef.current : undefined}
         workspaceId={workspaceId}
       />
     </span>

@@ -602,6 +602,16 @@ export default defineConfig({
                   "Tiptap extension callbacks and ordinary editor event handlers read latest placeholder, attachments, and slash items; useEffectEvent is not for third-party plugin/event callbacks.",
               },
               {
+                path: "apps/web/src/components/inspector/versions-facet.tsx",
+                reason:
+                  "Older-version paging updates the seeded query identity during render so in-flight page responses can be discarded before the passive-effect window; useEffectEvent would not protect this async race.",
+              },
+              {
+                path: "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts",
+                reason:
+                  "Older-message paging updates the seeded Chat identity during render so stale in-flight page responses are discarded across thread switches and same-thread refetches.",
+              },
+              {
                 path: "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx",
                 reason:
                   "Form refs bridge synchronous onChange/onBlur ordering before React commits, so validation reads the latest field values and touched state inside ordinary event handlers.",

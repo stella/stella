@@ -109,7 +109,7 @@ const ORGANIZATION_SECTION = {
 
 function SettingsLayout() {
   const t = useTranslations();
-  const { data: role } = useQuery(roleOptions);
+  const { data: role } = useQuery({ ...roleOptions, throwOnError: true });
   const showOrganization = role !== undefined && managementRoles.includes(role);
 
   // No `Section` annotation: it would widen labelKey to the full
