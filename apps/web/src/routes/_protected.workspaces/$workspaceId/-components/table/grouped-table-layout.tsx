@@ -167,6 +167,7 @@ export const GroupedTableLayout = ({
       workspaceId,
       filters: view.layout.filters,
       groupByPropertyId: groupByPropertyId ?? "",
+      ...(optionValues !== undefined && { optionValues }),
     }),
     enabled: groupByPropertyId !== null && !isUnsupportedGrouping,
   });

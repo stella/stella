@@ -42,6 +42,10 @@ export type GroupCountsKey = {
   workspaceId: string;
   filters: ConditionNode[];
   groupByPropertyId: string;
+  // The grouping property's option values. The counts depend on them (option
+  // buckets + the uncategorized fold), so a rename/delete of an option must
+  // invalidate the cache.
+  optionValues?: string[];
 };
 
 export const DEFAULT_ENTITY_VIEW_PAGE_SIZE = 100;
@@ -177,10 +181,11 @@ export const entitiesKeys = {
     workspaceId,
     filters,
     groupByPropertyId,
+    optionValues,
   }: GroupCountsKey) => [
     ...entitiesKeys.all(workspaceId),
     "group-counts",
-    { filters, groupByPropertyId },
+    { filters, groupByPropertyId, optionValues: optionValues?.toSorted() },
   ],
   summaries: (workspaceId: string) => [
     ...entitiesKeys.all(workspaceId),
