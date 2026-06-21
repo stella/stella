@@ -527,32 +527,36 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
       : undefined;
 
   const letterSpacing = style.letterSpacing ?? 0;
+  const scale = getHorizontalScaleFactor(style);
   const charWidths: number[] = [];
   let totalWidth = 0;
 
-  // Measure each character individually for click positioning
-  for (let i = 0; i < text.length; i++) {
-    // SAFETY: i < text.length in for loop
-    const rawChar = text[i]!;
-    const char = applyTextTransform(rawChar, style);
+  // Measure each character for click positioning. Iterate whole code points so
+  // an astral CJK ideograph (a surrogate pair) gets the EA font and a real
+  // width; `charWidths` stays one entry per UTF-16 unit (the second unit of an
+  // astral pair carries 0) so it keeps aligning with ProseMirror offsets.
+  let offset = 0;
+  for (const char of text) {
+    // SAFETY: for...of over a string yields whole code points.
+    const cp = char.codePointAt(0)!;
+    const measured = applyTextTransform(char, style);
     if (eastAsiaFont !== undefined) {
-      ctx.font = isCjkCodePoint(rawChar.codePointAt(0)!)
-        ? eastAsiaFont
-        : baseFont;
+      ctx.font = isCjkCodePoint(cp) ? eastAsiaFont : baseFont;
     }
-    const charMetrics = ctx.measureText(char);
+    let charWidth = ctx.measureText(measured).width;
 
-    // Use advance width for individual characters
-    let charWidth = charMetrics.width;
-
-    // Add letter spacing after each character except the last
-    if (letterSpacing && i < text.length - 1) {
+    // Add letter spacing after each code point except the last.
+    if (letterSpacing && offset + char.length < text.length) {
       charWidth += letterSpacing;
     }
 
-    charWidth *= getHorizontalScaleFactor(style);
+    charWidth *= scale;
     charWidths.push(charWidth);
+    if (char.length === 2) {
+      charWidths.push(0);
+    }
     totalWidth += charWidth;
+    offset += char.length;
   }
 
   return {

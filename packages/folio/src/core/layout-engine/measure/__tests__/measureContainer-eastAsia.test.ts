@@ -83,4 +83,22 @@ describe("measureRun with eastAsiaFontFamily", () => {
       { charWidth: eaAwareCharWidth },
     );
   });
+
+  test("measures an astral CJK ideograph with the EA font, keeping UTF-16-aligned widths", () => {
+    withFakeTextMeasure(
+      () => {
+        // "A𠀀B": the Ext-B ideograph is a surrogate pair (2 UTF-16 units), so
+        // charWidths has 4 entries — the astral glyph's width on the first unit
+        // and 0 on the second — and it is measured with the EA font.
+        const { charWidths, width } = measureRun("A𠀀B", {
+          fontFamily: "FolioBaseTestFont",
+          eastAsiaFontFamily: "FolioEaTestFont",
+          fontSize: 12,
+        });
+        expect(charWidths).toEqual([10, 100, 0, 10]);
+        expect(width).toBe(120);
+      },
+      { charWidth: eaAwareCharWidth },
+    );
+  });
 });

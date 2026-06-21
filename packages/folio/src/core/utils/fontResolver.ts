@@ -486,13 +486,21 @@ export function resolveFontFamily(docxFontName: string): ResolvedFont {
   const normalizedName = docxFontName.trim().toLowerCase();
 
   // Direct mapping, or a romanized CJK spelling aliased to its native entry.
-  const mapping =
-    FONT_MAPPINGS[CJK_FONT_ALIASES[normalizedName] ?? normalizedName];
+  const aliasTarget = CJK_FONT_ALIASES[normalizedName];
+  const mapping = FONT_MAPPINGS[aliasTarget ?? normalizedName];
 
   if (mapping) {
+    // When reached via an alias, the authored family may be absent from the
+    // target's stack (e.g. Meiryo / Yu Gothic alias to the MS Gothic mapping).
+    // Prepend it so the viewer's own copy of the named face is tried first.
+    const fallbackStack =
+      aliasTarget &&
+      !mapping.fallbackStack.some((f) => f.toLowerCase() === normalizedName)
+        ? [docxFontName, ...mapping.fallbackStack]
+        : mapping.fallbackStack;
     return {
       googleFont: mapping.googleFont,
-      cssFallback: mapping.fallbackStack.map(quoteFontName).join(", "),
+      cssFallback: fallbackStack.map(quoteFontName).join(", "),
       originalFont: docxFontName,
       hasGoogleEquivalent: true,
       singleLineRatio: mapping.singleLineRatio,

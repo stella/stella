@@ -82,3 +82,22 @@ describe("fontResolver — unmapped native serif faces stay serif", () => {
     });
   }
 });
+
+describe("fontResolver — aliased families keep the authored name first", () => {
+  // Meiryo / Yu Gothic / Yu Mincho alias to the MS Gothic/Mincho mapping, whose
+  // stack does not name them — so the authored family must be prepended for the
+  // viewer's own copy to win.
+  for (const name of ["Meiryo", "Yu Gothic", "Yu Mincho", "メイリオ"]) {
+    test(`${name} is the first fallback`, () => {
+      const resolved = resolveFontFamily(name);
+      // First family in the stack, with the optional CSS quotes stripped.
+      const first = resolved.cssFallback.split(", ")[0]?.replace(/^"|"$/gu, "");
+      expect(first).toBe(name);
+    });
+  }
+
+  test("does not duplicate a name the target stack already lists (PMingLiU)", () => {
+    const { cssFallback } = resolveFontFamily("PMingLiU");
+    expect(cssFallback.match(/PMingLiU/giu)?.length).toBe(1);
+  });
+});
