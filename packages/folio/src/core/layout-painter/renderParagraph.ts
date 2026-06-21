@@ -1327,6 +1327,9 @@ function runMeasureStyle(run: TextRun | FieldRun | MathRun): TextMeasureStyle {
       ? { letterSpacing: run.letterSpacing }
       : {}),
     ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
+    ...(run.eastAsiaFontFamily !== undefined
+      ? { eastAsiaFontFamily: run.eastAsiaFontFamily }
+      : {}),
   };
 }
 
@@ -1465,6 +1468,9 @@ type TextMeasureStyle = {
   italic?: boolean;
   letterSpacing?: number;
   smallCaps?: boolean;
+  /** EA font for CJK code points; segments the measured text by script when set
+   * (and the run has no letter spacing), mirroring measureContainer. */
+  eastAsiaFontFamily?: string;
 };
 
 function applyLetterSpacingToMeasuredWidth(
@@ -1508,18 +1514,35 @@ function createTextMeasurer(
     const cssFallback = resolveFontFamily(fontFamily).cssFallback;
     // Convert pt to px for canvas (1pt = 96/72 px)
     const fontSizePx = (fontSize * 96) / 72;
-    const fontParts: string[] = [];
+    const fontPrefixParts: string[] = [];
     if (style.italic) {
-      fontParts.push("italic");
+      fontPrefixParts.push("italic");
     }
     if (style.smallCaps) {
-      fontParts.push("small-caps");
+      fontPrefixParts.push("small-caps");
     }
     if (style.bold) {
-      fontParts.push(DOCX_BOLD_FONT_WEIGHT);
+      fontPrefixParts.push(DOCX_BOLD_FONT_WEIGHT);
     }
-    fontParts.push(`${fontSizePx}px`, cssFallback);
-    ctx.font = fontParts.join(" ");
+    fontPrefixParts.push(`${fontSizePx}px`);
+    const fontPrefix = fontPrefixParts.join(" ");
+
+    // CJK code points measure with the EA font (matching the per-script sub-spans
+    // the painter emits and measureContainer's segmentation). Gated off for
+    // letter-spaced runs, which keep a single base-font span.
+    if (style.eastAsiaFontFamily && !style.letterSpacing && hasCjk(text)) {
+      const eaFallback = resolveFontFamily(
+        style.eastAsiaFontFamily,
+      ).cssFallback;
+      let segmentedWidth = 0;
+      for (const segment of segmentByScript(text)) {
+        ctx.font = `${fontPrefix} ${segment.isCjk ? eaFallback : cssFallback}`;
+        segmentedWidth += ctx.measureText(segment.text).width;
+      }
+      return segmentedWidth;
+    }
+
+    ctx.font = `${fontPrefix} ${cssFallback}`;
     return applyLetterSpacingToMeasuredWidth(
       ctx.measureText(text).width,
       text,
@@ -1968,14 +1991,7 @@ export function renderLine(
         run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
         fontSize,
         fontFamily,
-        {
-          ...(run.bold !== undefined ? { bold: run.bold } : {}),
-          ...(run.italic !== undefined ? { italic: run.italic } : {}),
-          ...(run.letterSpacing !== undefined
-            ? { letterSpacing: run.letterSpacing }
-            : {}),
-          ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
-        },
+        runMeasureStyle(run),
       );
       reserveScaledAdvance(runEl, measuredWidth, run.horizontalScale);
       currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);
