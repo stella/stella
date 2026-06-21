@@ -1,4 +1,5 @@
 {
+  "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx": 1,
   "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx": 0,
   "apps/web/src/components/ai-suggestions/host.tsx": 15,
   "apps/web/src/components/app-sidebar.tsx": 2,
@@ -32,7 +33,10 @@
   "apps/web/src/routes/_protected.contacts/index.tsx": 1,
   "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx": 0,
   "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx": 0,
+  "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx": 3,
   "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx": 10,
+  "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx": 1,
+  "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx": 8,
   "apps/web/src/routes/_protected.knowledge/clauses.tsx": 5,
   "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx": 0,
   "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx": 0,
