@@ -49,17 +49,28 @@
     }
   },
   "appearance": {
+    "calendar": "Kalendārs",
+    "calendarGregorian": "Gregora",
+    "calendarHijri": "Hidžra (Umm al-Kura)",
     "cool": "Vēss",
     "dark": "Tumšs",
     "flexoki": "Flexoki",
     "light": "Gaišs",
     "neutral": "Neitrāls",
     "nord": "Nord",
+    "numbers": "Cipari",
+    "numbersEastern": "Austrumu (٠١٢٣)",
+    "numbersWestern": "Rietumu (0123)",
     "palette": "Palete",
     "system": "Sistēma",
     "theme": "Motīvs",
     "title": "Izskats",
-    "warm": "Silts"
+    "warm": "Silts",
+    "weekStart": "Nedēļas pirmā diena",
+    "weekStartAuto": "Automātiski",
+    "weekStartMonday": "Pirmdiena",
+    "weekStartSaturday": "Sestdiena",
+    "weekStartSunday": "Svētdiena"
   },
   "auth": {
     "betaNoticeBody": "Piesardzības nolūkos beta periodā neaugšupielādējiet sensitīvus, priviliģētus, personas datus, neaizstājamus vai ražošanai kritiskus datus. Cloud ir demonstrācijas pakalpojums.",
@@ -1254,6 +1265,7 @@
     "somethingWentWrong": "Kaut kas nogāja greizi",
     "synced": "Sinhronizēts",
     "syncing": "Sinhronizē",
+    "textDirection": "Teksta virziens",
     "textEditingMenu": "Teksta rediģēšanas izvēlne",
     "textFormattingGroup": "Teksta formatēšana",
     "toggleTrackChanges": "Pārslēgt izmaiņu izsekošanu",

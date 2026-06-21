@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 
@@ -28,7 +28,7 @@ export const CellResult = ({
   property,
 }: CellResultProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
 
   if (!field) {
     return null;
@@ -108,7 +108,7 @@ export const CellResult = ({
       return <SelectResult property={property} value={null} />;
     }
 
-    const formatted = new Date(field.content.value).toLocaleDateString(locale, {
+    const formatted = format.dateTime(new Date(field.content.value), {
       year: "numeric",
       month: "short",
       day: "numeric",
@@ -306,26 +306,24 @@ const IntCellContainer = ({ children }: { children: ReactNode }) => (
 );
 
 const IntCell = ({ value, currency }: IntCellProps) => {
+  const format = useFormatter();
+
   if (!currency) {
-    return (
-      <IntCellContainer>
-        {new Intl.NumberFormat().format(value)}
-      </IntCellContainer>
-    );
+    return <IntCellContainer>{format.number(value)}</IntCellContainer>;
   }
 
   const formattedResult = Result.try(() =>
-    new Intl.NumberFormat(undefined, {
+    format.number(value, {
       style: "currency",
       currency,
       minimumFractionDigits: 0,
-    }).format(value),
+    }),
   );
 
   if (formattedResult.isErr()) {
     return (
       <IntCellContainer>
-        {new Intl.NumberFormat().format(value)} {currency}
+        {format.number(value)} {currency}
       </IntCellContainer>
     );
   }

@@ -49,17 +49,28 @@
     }
   },
   "appearance": {
+    "calendar": "Calendar",
+    "calendarGregorian": "Gregorian",
+    "calendarHijri": "Hijri (Umm al-Qura)",
     "cool": "Cool",
     "dark": "Dark",
     "flexoki": "Flexoki",
     "light": "Light",
     "neutral": "Neutral",
     "nord": "Nord",
+    "numbers": "Numbers",
+    "numbersEastern": "Eastern (٠١٢٣)",
+    "numbersWestern": "Western (0123)",
     "palette": "Palette",
     "system": "System",
     "theme": "Theme",
     "title": "Appearance",
-    "warm": "Warm"
+    "warm": "Warm",
+    "weekStart": "First day of week",
+    "weekStartAuto": "Automatic",
+    "weekStartMonday": "Monday",
+    "weekStartSaturday": "Saturday",
+    "weekStartSunday": "Sunday"
   },
   "auth": {
     "betaNoticeBody": "As a precaution during beta, do not upload sensitive, privileged, personal, irreplaceable, or production-critical data. Cloud is a demo service.",
@@ -1254,6 +1265,7 @@
     "somethingWentWrong": "Something went wrong",
     "synced": "Synced",
     "syncing": "Syncing",
+    "textDirection": "Text direction",
     "textEditingMenu": "Text editing menu",
     "textFormattingGroup": "Text formatting",
     "toggleTrackChanges": "Toggle Track Changes",

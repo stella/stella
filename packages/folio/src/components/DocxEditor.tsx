@@ -87,6 +87,7 @@ import {
   clearFormatting,
   applyStyle,
   createStyleResolver,
+  toggleBidi,
   setRtl,
   setLtr,
   getTableContext,
@@ -2106,6 +2107,9 @@ export function DocxEditor({
         switch (action.type) {
           case "alignment":
             setAlignment(action.value)(commandState, view.dispatch);
+            break;
+          case "toggleDirection":
+            toggleBidi(commandState, view.dispatch);
             break;
           case "textColor": {
             // action.value can be a ColorValue object or a string like "#FF0000"

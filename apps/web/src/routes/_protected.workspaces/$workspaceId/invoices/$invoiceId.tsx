@@ -17,7 +17,7 @@ import {
   UndoIcon,
   XCircleIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
@@ -196,6 +196,7 @@ const InvoiceDetail = ({
   invoiceId: string;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [editOpen, setEditOpen] = useState(false);
@@ -422,7 +423,11 @@ const InvoiceDetail = ({
                       {entry.invoiceNarrative ?? entry.narrative}
                     </td>
                     <td className="px-4 py-2 text-end tabular-nums">
-                      {(entry.billedMinutes / 60).toFixed(1)}h
+                      {format.number(entry.billedMinutes / 60, {
+                        minimumFractionDigits: 1,
+                        maximumFractionDigits: 1,
+                      })}
+                      h
                     </td>
                     <td className="px-4 py-2 text-end tabular-nums">
                       {formatCurrencyAmount(

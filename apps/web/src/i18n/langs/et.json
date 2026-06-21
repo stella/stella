@@ -49,17 +49,28 @@
     }
   },
   "appearance": {
+    "calendar": "Kalender",
+    "calendarGregorian": "Gregoriuse",
+    "calendarHijri": "Hidžra (Umm al-Qura)",
     "cool": "Jahe",
     "dark": "Tume",
     "flexoki": "Flexoki",
     "light": "Hele",
     "neutral": "Neutraalne",
     "nord": "Nord",
+    "numbers": "Numbrid",
+    "numbersEastern": "Ida (٠١٢٣)",
+    "numbersWestern": "Lääne (0123)",
     "palette": "Palett",
     "system": "Süsteem",
     "theme": "Teema",
     "title": "Välimus",
-    "warm": "Soe"
+    "warm": "Soe",
+    "weekStart": "Nädala esimene päev",
+    "weekStartAuto": "Automaatne",
+    "weekStartMonday": "Esmaspäev",
+    "weekStartSaturday": "Laupäev",
+    "weekStartSunday": "Pühapäev"
   },
   "auth": {
     "betaNoticeBody": "Ettevaatusabinõuna ärge laadige beetaperioodil üles tundlikke, privilegeeritud, isikuandmeid sisaldavaid, asendamatuid ega tootmiskriitilisi andmeid. Cloud on demoteenus.",
@@ -1254,6 +1265,7 @@
     "somethingWentWrong": "Midagi läks valesti",
     "synced": "Sünkroonitud",
     "syncing": "Sünkroonimine",
+    "textDirection": "Teksti suund",
     "textEditingMenu": "Tekstiredigeerimise menüü",
     "textFormattingGroup": "Teksti vormindus",
     "toggleTrackChanges": "Lülita muudatuste jälgimine",

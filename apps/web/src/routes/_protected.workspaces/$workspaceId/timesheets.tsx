@@ -8,7 +8,7 @@ import {
   DownloadIcon,
   SettingsIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -21,6 +21,7 @@ import {
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
 import { BillingCodesDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog";
@@ -56,14 +57,6 @@ export const Route = createFileRoute(
   component: TimesheetsPage,
 });
 
-const getMonday = (date: Date): Date => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  return d;
-};
-
 const formatDateISO = (d: Date): string => {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, "0");
@@ -89,6 +82,7 @@ const downloadBlob = (content: string, filename: string) => {
 
 function TimesheetsPage() {
   const t = useTranslations();
+  const locale = useLocale();
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
@@ -101,7 +95,7 @@ function TimesheetsPage() {
 
   const dateStr = formatDateISO(currentDate);
 
-  const monday = getMonday(currentDate);
+  const monday = startOfWeek(currentDate, locale);
   const weekStart = formatDateISO(monday);
   const weekEnd = formatDateISO(addDays(monday, 6));
 

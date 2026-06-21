@@ -2,11 +2,12 @@ import { Suspense, useState } from "react";
 
 import { createFileRoute } from "@tanstack/react-router";
 import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
+import { startOfWeek } from "@/i18n/week";
 import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view";
 
 export const Route = createFileRoute(
@@ -56,14 +57,6 @@ const formatDateISO = (d: Date): string => {
   return `${y}-${m}-${day}`;
 };
 
-const getMonday = (date: Date): Date => {
-  const d = new Date(date);
-  const day = d.getDay();
-  const diff = d.getDate() - day + (day === 0 ? -6 : 1);
-  d.setDate(diff);
-  return d;
-};
-
 const addDays = (d: Date, n: number): Date => {
   const result = new Date(d);
   result.setDate(result.getDate() + n);
@@ -72,6 +65,7 @@ const addDays = (d: Date, n: number): Date => {
 
 function ExpensesPage() {
   const t = useTranslations();
+  const locale = useLocale();
   const workspaceId = Route.useParams({
     select: (p) => p.workspaceId,
   });
@@ -79,7 +73,7 @@ function ExpensesPage() {
   const [currentDate, setCurrentDate] = useState(() => new Date());
 
   // Show expenses for the current week
-  const monday = getMonday(currentDate);
+  const monday = startOfWeek(currentDate, locale);
   const sunday = addDays(monday, 6);
   const dateFrom = formatDateISO(monday);
   const dateTo = formatDateISO(sunday);

@@ -52,6 +52,12 @@ const emptyLayout = (
 
 const VIEW_NAMES = {
   en: { overview: "Overview", table: "Table", files: "Files", todos: "Todos" },
+  ar: {
+    overview: "نظرة عامة",
+    table: "جدول",
+    files: "الملفات",
+    todos: "المهام",
+  },
   cs: {
     overview: "Přehled",
     table: "Tabulka",

@@ -1,5 +1,6 @@
 import { createTranslator } from "use-intl/core";
 
+import ar from "./langs/ar.json";
 import cs from "./langs/cs.json";
 import de from "./langs/de.json";
 import en from "./langs/en.json";
@@ -15,6 +16,7 @@ import sk from "./langs/sk.json";
 
 const langMessages = {
   en,
+  ar,
   cs,
   de,
   es,
@@ -29,6 +31,12 @@ const langMessages = {
 } as const;
 
 export type SupportedLang = keyof typeof langMessages;
+
+const RTL_LANGS = new Set<SupportedLang>(["ar"]);
+
+/** Document direction for an email's `<Html>` so RTL locales lay out correctly. */
+export const getEmailDirection = (lang: SupportedLang): "rtl" | "ltr" =>
+  RTL_LANGS.has(lang) ? "rtl" : "ltr";
 
 export const getTranslator = (lang: SupportedLang) =>
   createTranslator({

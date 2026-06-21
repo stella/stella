@@ -118,6 +118,7 @@ export function removeTabStop(position: number): Command {
 }
 
 // Text direction
+export const toggleBidi: Command = cmds["toggleBidi"]!();
 export const setRtl: Command = cmds["setRtl"]!();
 export const setLtr: Command = cmds["setLtr"]!();
 

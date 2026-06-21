@@ -49,17 +49,28 @@
     }
   },
   "appearance": {
+    "calendar": "Calendario",
+    "calendarGregorian": "Gregoriano",
+    "calendarHijri": "Hégira (Umm al-Qura)",
     "cool": "Frío",
     "dark": "Oscuro",
     "flexoki": "Flexoki",
     "light": "Claro",
     "neutral": "Neutro",
     "nord": "Nord",
+    "numbers": "Números",
+    "numbersEastern": "Orientales (٠١٢٣)",
+    "numbersWestern": "Occidentales (0123)",
     "palette": "Paleta",
     "system": "Sistema",
     "theme": "Tema",
     "title": "Apariencia",
-    "warm": "Cálido"
+    "warm": "Cálido",
+    "weekStart": "Primer día de la semana",
+    "weekStartAuto": "Automático",
+    "weekStartMonday": "Lunes",
+    "weekStartSaturday": "Sábado",
+    "weekStartSunday": "Domingo"
   },
   "auth": {
     "betaNoticeBody": "Como precaución durante la beta, no subas datos sensibles, privilegiados, personales, irremplazables o críticos para producción. Cloud es un servicio de demostración.",
@@ -1254,6 +1265,7 @@
     "somethingWentWrong": "Algo salió mal",
     "synced": "Sincronizado",
     "syncing": "Sincronizando",
+    "textDirection": "Dirección del texto",
     "textEditingMenu": "Menú de edición de texto",
     "textFormattingGroup": "Formato de texto",
     "toggleTrackChanges": "Activar o desactivar el control de cambios",

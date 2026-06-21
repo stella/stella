@@ -12,7 +12,7 @@ import {
   Text,
 } from "@react-email/components";
 
-import { getTranslator } from "../i18n/translate";
+import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
 import { BRAND_FOOTER_TEXT, ICON_URL, brand, sharedStyles } from "./_shared";
 
@@ -37,7 +37,7 @@ export const Email = ({
   const t = getTranslator(lang);
 
   return (
-    <Html lang={lang}>
+    <Html lang={lang} dir={getEmailDirection(lang)}>
       <Head />
       <Preview>
         {t("invitation.body", { organizationName, invitedByUsername })}

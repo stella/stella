@@ -16,7 +16,7 @@ import {
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -36,6 +36,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -114,7 +115,8 @@ export const ExistingFileOrganizerDialog = ({
   onOpenChange,
 }: ExistingFileOrganizerDialogProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  // organize-suggestions caps locale at 16 chars; send the base language.
+  const locale = useI18nStore((s) => s.loadedLang);
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
   const userInstructionsKey = `stella.organize-suggestions.user-instructions.${workspaceId}`;

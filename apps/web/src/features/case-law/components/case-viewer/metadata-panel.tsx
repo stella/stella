@@ -78,7 +78,8 @@ const MetadataField = ({
     return null;
   }
 
-  const display = value instanceof Date ? value.toLocaleDateString() : value;
+  const display =
+    value instanceof Date ? value.toLocaleDateString() : <bdi>{value}</bdi>;
 
   return (
     <div>
@@ -267,7 +268,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
           <ul className="space-y-1">
             {decision.citationsFrom.slice(0, 10).map((citation) => (
               <li className="text-muted-foreground text-xs" key={citation.id}>
-                {citation.citationText}
+                <bdi>{citation.citationText}</bdi>
               </li>
             ))}
           </ul>
@@ -282,7 +283,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
           <ul className="space-y-1">
             {decision.citationsTo.slice(0, 10).map((citation) => (
               <li className="text-muted-foreground text-xs" key={citation.id}>
-                {citation.citationText}
+                <bdi>{citation.citationText}</bdi>
               </li>
             ))}
           </ul>

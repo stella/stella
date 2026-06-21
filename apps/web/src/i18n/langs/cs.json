@@ -49,17 +49,28 @@
     }
   },
   "appearance": {
+    "calendar": "Kalendář",
+    "calendarGregorian": "Gregoriánský",
+    "calendarHijri": "Hidžra (Umm al-Kura)",
     "cool": "Studené",
     "dark": "Tmavý",
     "flexoki": "Flexoki",
     "light": "Světlý",
     "neutral": "Neutrální",
     "nord": "Nord",
+    "numbers": "Číslice",
+    "numbersEastern": "Východní (٠١٢٣)",
+    "numbersWestern": "Západní (0123)",
     "palette": "Paleta",
     "system": "Systém",
     "theme": "Vzhled",
     "title": "Vzhled",
-    "warm": "Teplé"
+    "warm": "Teplé",
+    "weekStart": "První den v týdnu",
+    "weekStartAuto": "Automaticky",
+    "weekStartMonday": "Pondělí",
+    "weekStartSaturday": "Sobota",
+    "weekStartSunday": "Neděle"
   },
   "auth": {
     "betaNoticeBody": "Jako preventivní opatření během bety nenahrávejte citlivá, privilegovaná, osobní, nenahraditelná ani produkčně kritická data. Cloud je demonstrační služba.",
@@ -1254,6 +1265,7 @@
     "somethingWentWrong": "Něco se pokazilo",
     "synced": "Synchronizováno",
     "syncing": "Synchronizuji",
+    "textDirection": "Směr textu",
     "textEditingMenu": "Nabídka úprav textu",
     "textFormattingGroup": "Formátování textu",
     "toggleTrackChanges": "Přepnout sledování změn",

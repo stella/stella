@@ -79,6 +79,7 @@ export type FormattingAction =
   | "insertPageBreak"
   | "setRtl"
   | "setLtr"
+  | { type: "toggleDirection" }
   | { type: "fontFamily"; value: string }
   | { type: "fontSize"; value: number }
   | { type: "textColor"; value: ColorValue | string }

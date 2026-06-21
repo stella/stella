@@ -7,6 +7,7 @@ import { useLocale, useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind, WorkspaceView } from "@/lib/types";
@@ -60,6 +61,8 @@ const toAllDayAgendaDateTime = (date: string): string =>
 export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   const t = useTranslations();
   const locale = useLocale();
+  const firstWeekday = getFirstWeekday(locale);
+  const weekend = getWeekendDays(locale);
   const queryClient = useQueryClient();
   const weekdayLabels = getWeekdayLabels(locale);
   const { filters, sorts } = view.layout;
@@ -158,7 +161,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return monthWeeks.flatMap((week) => week.days);
     }
     if (mode === "week") {
-      return getWeekDays(viewDate);
+      return getWeekDays(viewDate, firstWeekday, weekend);
     }
     return [];
   })();
@@ -184,11 +187,15 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         type: "month",
         year,
         month,
+        firstWeekday,
+        weekend,
       });
     }
     return getCalendarQueryRange({
       type: "week",
       viewDate,
+      firstWeekday,
+      weekend,
     });
   })();
 
@@ -532,7 +539,11 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         if (mode === "month") {
           return (
             <>
-              <CalendarWeekHeader weekdayLabels={weekdayLabels} />
+              <CalendarWeekHeader
+                firstWeekday={firstWeekday}
+                weekdayLabels={weekdayLabels}
+                weekend={weekend}
+              />
 
               <div
                 className="relative flex-1 overflow-y-auto overscroll-contain"
@@ -601,7 +612,11 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
         }
         return (
           <>
-            <CalendarWeekHeader weekdayLabels={weekdayLabels} />
+            <CalendarWeekHeader
+              firstWeekday={firstWeekday}
+              weekdayLabels={weekdayLabels}
+              weekend={weekend}
+            />
 
             <div className="grid flex-1 grid-cols-7 grid-rows-1">
               {days.map((day) => (
