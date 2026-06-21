@@ -13,6 +13,7 @@ import {
 
 const EXPECTED_UI_LOCALES = [
   "en",
+  "ar",
   "cs",
   "de",
   "es",
@@ -44,12 +45,13 @@ describe("LANGUAGES", () => {
 });
 
 describe("uiAvailable", () => {
-  test("exactly the 12 shipped UI languages are uiAvailable", () => {
+  test("exactly the 13 shipped UI languages are uiAvailable", () => {
     const uiCodes: string[] = LANGUAGES.filter((l) => l.uiAvailable).map(
       (l) => l.code,
     );
     expect(uiCodes.sort()).toEqual(
       [
+        "ar",
         "cs",
         "de",
         "en",
@@ -67,7 +69,7 @@ describe("uiAvailable", () => {
   });
 
   test("UI_LANGUAGES is the uiAvailable subset", () => {
-    expect(UI_LANGUAGES.length).toBe(12);
+    expect(UI_LANGUAGES.length).toBe(13);
     const uiCodes: string[] = UI_LANGUAGES.map((l) => l.code);
     const filtered = LANGUAGES.filter((l) => l.uiAvailable).map((l) => l.code);
     expect(uiCodes).toEqual(filtered);
