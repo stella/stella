@@ -129,6 +129,7 @@ function ToolsPage() {
       <Suspense fallback={<ToolsCatalogueSkeleton />}>
         <ToolsCatalogue
           initialKind={initialKind}
+          key={initialKind ?? "all"}
           organizationId={organizationId}
         />
       </Suspense>
