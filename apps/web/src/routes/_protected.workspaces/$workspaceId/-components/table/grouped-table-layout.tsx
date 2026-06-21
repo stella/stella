@@ -191,9 +191,10 @@ export const GroupedTableLayout = ({
   const statusLabels =
     grouping.type === "status"
       ? Object.fromEntries(
-          (
-            Object.keys(STATUS_LABEL_KEYS) as (keyof typeof STATUS_LABEL_KEYS)[]
-          ).map((status) => [status, t(STATUS_LABEL_KEYS[status])]),
+          Object.entries(STATUS_LABEL_KEYS).map(([status, key]) => [
+            status,
+            t(key),
+          ]),
         )
       : {};
   const entityKindLabels = {

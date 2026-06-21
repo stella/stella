@@ -280,7 +280,6 @@ export const WorkspaceTable = ({
       (entries) => {
         if (
           entries.some((entry) => entry.isIntersecting) &&
-          hasNextPage &&
           !isFetchingNextPage
         ) {
           onLoadMore();
