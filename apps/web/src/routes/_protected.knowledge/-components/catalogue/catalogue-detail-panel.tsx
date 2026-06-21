@@ -254,7 +254,7 @@ const ExpandableText = ({ text }: { text: string }) => {
       observer.observe(el);
       return () => observer.disconnect();
     },
-    [expanded, text],
+    [expanded],
   );
 
   return (

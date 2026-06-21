@@ -55,7 +55,6 @@ import type {
   TimeFilter,
 } from "@/components/search-filters.logic";
 import { UserAvatar } from "@/components/user-avatar";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
