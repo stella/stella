@@ -206,9 +206,11 @@ function ProfilePageBody() {
             <Select
               disabled={updateTimezone.isPending}
               onValueChange={(tz) => {
-                if (tz) {
-                  updateTimezone.mutate(tz);
+                if (!tz || tz === currentTz) {
+                  return;
                 }
+
+                updateTimezone.mutate(tz);
               }}
               value={currentTz}
             >
