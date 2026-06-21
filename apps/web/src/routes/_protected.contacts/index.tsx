@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useForm } from "@tanstack/react-form";
@@ -238,76 +238,82 @@ const columnHelper = createColumnHelper<ContactTableFeatures, ContactItem>();
 // route-level pending shell all derive from this, so none can drift.
 const useContactColumns = () => {
   const t = useTranslations();
-  return columnHelper.columns([
-    columnHelper.display({
-      id: "icon",
-      header: () => null,
-      cell: ({ row }) =>
-        row.original.type === "person" ? (
-          <UserIcon className="text-muted-foreground size-4" />
-        ) : (
-          <BuildingIcon className="text-muted-foreground size-4" />
-        ),
-    }),
-    columnHelper.accessor("displayName", {
-      id: "name",
-      header: t("common.name"),
-      cell: ({ row, getValue }) => (
-        <Link
-          className="font-medium hover:underline"
-          onClick={(event) => event.stopPropagation()}
-          params={{ contactId: row.original.id }}
-          to="/contacts/$contactId"
-        >
-          {getValue()}
-        </Link>
-      ),
-    }),
-    columnHelper.display({
-      id: "email",
-      header: t("common.email"),
-      cell: ({ row }) => {
-        const primaryEmail =
-          row.original.emails?.find((e) => e.isPrimary) ??
-          row.original.emails?.at(0);
-        if (!primaryEmail) {
-          return null;
-        }
-        return (
-          <a
-            className="text-muted-foreground hover:text-foreground hover:underline"
-            href={`mailto:${primaryEmail.address}`}
-          >
-            {primaryEmail.address}
-          </a>
-        );
-      },
-    }),
-    columnHelper.display({
-      id: "phone",
-      header: t("contacts.columns.phone"),
-      cell: ({ row }) => {
-        const primaryPhone =
-          row.original.phones?.find((p) => p.isPrimary) ??
-          row.original.phones?.at(0);
-        return (
-          <span className="text-muted-foreground">{primaryPhone?.number}</span>
-        );
-      },
-    }),
-    columnHelper.accessor("clientMatterCount", {
-      id: "matters",
-      header: () => <div className="text-end">{t("common.matters")}</div>,
-      cell: ({ getValue }) => (
-        <div className="text-end tabular-nums">{getValue()}</div>
-      ),
-    }),
-    columnHelper.display({
-      id: "actions",
-      header: () => null,
-      cell: ({ row }) => <ContactRowActions contact={row.original} />,
-    }),
-  ]);
+  return useMemo(
+    () =>
+      columnHelper.columns([
+        columnHelper.display({
+          id: "icon",
+          header: () => null,
+          cell: ({ row }) =>
+            row.original.type === "person" ? (
+              <UserIcon className="text-muted-foreground size-4" />
+            ) : (
+              <BuildingIcon className="text-muted-foreground size-4" />
+            ),
+        }),
+        columnHelper.accessor("displayName", {
+          id: "name",
+          header: t("common.name"),
+          cell: ({ row, getValue }) => (
+            <Link
+              className="font-medium hover:underline"
+              onClick={(event) => event.stopPropagation()}
+              params={{ contactId: row.original.id }}
+              to="/contacts/$contactId"
+            >
+              {getValue()}
+            </Link>
+          ),
+        }),
+        columnHelper.display({
+          id: "email",
+          header: t("common.email"),
+          cell: ({ row }) => {
+            const primaryEmail =
+              row.original.emails?.find((e) => e.isPrimary) ??
+              row.original.emails?.at(0);
+            if (!primaryEmail) {
+              return null;
+            }
+            return (
+              <a
+                className="text-muted-foreground hover:text-foreground hover:underline"
+                href={`mailto:${primaryEmail.address}`}
+              >
+                {primaryEmail.address}
+              </a>
+            );
+          },
+        }),
+        columnHelper.display({
+          id: "phone",
+          header: t("contacts.columns.phone"),
+          cell: ({ row }) => {
+            const primaryPhone =
+              row.original.phones?.find((p) => p.isPrimary) ??
+              row.original.phones?.at(0);
+            return (
+              <span className="text-muted-foreground">
+                {primaryPhone?.number}
+              </span>
+            );
+          },
+        }),
+        columnHelper.accessor("clientMatterCount", {
+          id: "matters",
+          header: () => <div className="text-end">{t("common.matters")}</div>,
+          cell: ({ getValue }) => (
+            <div className="text-end tabular-nums">{getValue()}</div>
+          ),
+        }),
+        columnHelper.display({
+          id: "actions",
+          header: () => null,
+          cell: ({ row }) => <ContactRowActions contact={row.original} />,
+        }),
+      ]),
+    [t],
+  );
 };
 
 // Placeholder cells keyed off each column's stable id, so the loading state

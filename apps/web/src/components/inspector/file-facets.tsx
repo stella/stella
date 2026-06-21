@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useTranslations } from "use-intl";
@@ -215,7 +215,7 @@ export const TabFacetBar = ({
   );
   const isDocx = mimeType === DOCX_MIME;
 
-  const { facets, disabledFacets } = (() => {
+  const { facets, disabledFacets } = useMemo(() => {
     if (!isDocx) {
       return {
         facets: baseFacets.filter((f) => f !== "suggestions"),
@@ -229,7 +229,7 @@ export const TabFacetBar = ({
       };
     }
     return { facets: baseFacets, disabledFacets: undefined };
-  })();
+  }, [baseFacets, isDocx, suggestionCount]);
 
   return (
     <FacetBar

@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect } from "react";
+import { lazy, Suspense, useEffect, useMemo } from "react";
 
 import {
   useSuspenseInfiniteQuery,
@@ -104,10 +104,14 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const updateView = useUpdateView(workspaceId);
 
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
-  const fieldIds = visibleEntityFieldIds({
-    hiddenProperties: view.layout.hiddenProperties,
-    properties,
-  });
+  const fieldIds = useMemo(
+    () =>
+      visibleEntityFieldIds({
+        hiddenProperties: view.layout.hiddenProperties,
+        properties,
+      }),
+    [properties, view.layout.hiddenProperties],
+  );
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- effect-triggered action (opens the AI-key gate); move into a route guard or render-time check
   useEffect(() => {
@@ -127,13 +131,21 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
       }),
     );
 
-  const treeData = toTableEntities(
-    data.pages
-      .flatMap((window) => window.entities)
-      .filter((entity) => entity.kind !== "folder" && entity.kind !== "task"),
+  const treeData = useMemo(
+    () =>
+      toTableEntities(
+        data.pages
+          .flatMap((window) => window.entities)
+          .filter(
+            (entity) => entity.kind !== "folder" && entity.kind !== "task",
+          ),
+      ),
+    [data.pages],
   );
-  const justificationEntityIdChunks = data.pages.map((page) =>
-    page.entities.map((entity) => entity.entityId),
+  const justificationEntityIdChunks = useMemo(
+    () =>
+      data.pages.map((page) => page.entities.map((entity) => entity.entityId)),
+    [data.pages],
   );
   useSyncJustificationChunks({
     workspaceId,
@@ -164,7 +176,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     setSelectedEntities(view.id, result);
   }, [rowSelection, treeData, view.id, setSelectedEntities]);
 
-  const columns = ((): TableColumnDef[] => {
+  const columns = useMemo(() => {
     const columnDefs: TableColumnDef[] = [
       {
         id: selectColId,
@@ -239,7 +251,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     });
 
     return columnDefs;
-  })();
+  }, [properties, t, view.layout.filters]);
 
   const table = useTable({
     features: workspaceTableFeatures,

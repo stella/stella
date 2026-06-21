@@ -1,6 +1,7 @@
 import {
   lazy,
   Suspense,
+  useCallback,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -113,16 +114,19 @@ const PeekPdfViewerContent = ({
   );
   const file = fileQuery.data;
 
-  const renderPageOverlay = (pageId: string) => (
-    <PeekPageOverlays
-      activePropertyId={activePropertyId}
-      entityId={entityId}
-      fieldId={fieldId}
-      onPeekNavigate={onPeekNavigate}
-      pageId={pageId}
-      viewId={viewId}
-      workspaceId={workspaceId}
-    />
+  const renderPageOverlay = useCallback(
+    (pageId: string) => (
+      <PeekPageOverlays
+        activePropertyId={activePropertyId}
+        entityId={entityId}
+        fieldId={fieldId}
+        onPeekNavigate={onPeekNavigate}
+        pageId={pageId}
+        viewId={viewId}
+        workspaceId={workspaceId}
+      />
+    ),
+    [activePropertyId, entityId, fieldId, onPeekNavigate, viewId, workspaceId],
   );
 
   if (fileQuery.isError || !file) {
@@ -324,7 +328,7 @@ export const PeekPrintButton = () => {
     abortControllerRef.current?.abort();
   });
 
-  const handlePrint = async () => {
+  const handlePrint = useCallback(async () => {
     if (!pdfDocument) {
       return;
     }
@@ -350,7 +354,7 @@ export const PeekPrintButton = () => {
         setIsPrinting(false);
       }
     }
-  };
+  }, [analytics, pdfDocument]);
 
   return (
     <Tooltip
@@ -389,7 +393,7 @@ export const PreparedPdfPrintButton = ({
     abortControllerRef.current?.abort();
   });
 
-  const handlePrint = async () => {
+  const handlePrint = useCallback(async () => {
     abortControllerRef.current?.abort();
     const controller = new AbortController();
     abortControllerRef.current = controller;
@@ -415,7 +419,7 @@ export const PreparedPdfPrintButton = ({
         setIsPrinting(false);
       }
     }
-  };
+  }, [analytics, fieldId, workspaceId]);
 
   return (
     <Tooltip

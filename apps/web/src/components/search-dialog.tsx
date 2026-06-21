@@ -342,7 +342,10 @@ export const SearchDialog = ({
     }),
   );
 
-  const allHits = data?.pages.flatMap((page) => page.hits) ?? [];
+  const allHits = useMemo(
+    () => data?.pages.flatMap((page) => page.hits) ?? [],
+    [data?.pages],
+  );
   const getHitVirtualKey = (index: number) => allHits.at(index)?.id ?? index;
 
   // Counts and facets are computed only on the first page (see backend);

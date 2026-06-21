@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
@@ -144,10 +144,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const [, handleCreateFileEntities] = useCreateFileEntities(workspaceId);
   // Views — find view IDs by layout type for stat card navigation
   const { data: views } = useQuery(viewsOptions(workspaceId));
-  const findViewByType = (type: string) =>
-    views?.find((v) => v.layout.type === type);
+  const findViewByType = useCallback(
+    (type: string) => views?.find((v) => v.layout.type === type),
+    [views],
+  );
 
-  const handleCreateTask = async () => {
+  const handleCreateTask = useCallback(async () => {
     const response = await api.tasks({ workspaceId }).put({
       queryKey: entitiesKeys.all(workspaceId),
       name: t("tasks.untitled"),
@@ -170,7 +172,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     useInspectorStore
       .getState()
       .openTask({ taskId: entityId, workspaceId, isNew: true });
-  };
+  }, [workspaceId, t, queryClient]);
 
   const updateTaskStatus = useMutation({
     mutationFn: async ({
@@ -213,7 +215,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     },
   });
 
-  const handleTaskContextMenu =
+  const handleTaskContextMenu = useCallback(
     (task: UpcomingTaskContext) => (e: React.MouseEvent) => {
       e.preventDefault();
       e.stopPropagation();
@@ -224,7 +226,9 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         },
         task,
       });
-    };
+    },
+    [],
+  );
 
   const menuTaskStatus = upcomingMenu.task?.status ?? null;
   const currentMenuTaskStatus = isTaskStatus(menuTaskStatus)
@@ -238,11 +242,17 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     cancelled: t("tasks.statusValues.cancelled"),
   };
 
-  const recentEntities = data.recentEntities.filter((e) => e.kind !== "folder");
+  const recentEntities = useMemo(
+    () => data.recentEntities.filter((e) => e.kind !== "folder"),
+    [data.recentEntities],
+  );
   const hasActivity = recentEntities.length > 0;
 
   // Tasks from recent entities (kind === "task")
-  const tasks = data.recentEntities.filter((e) => e.kind === "task");
+  const tasks = useMemo(
+    () => data.recentEntities.filter((e) => e.kind === "task"),
+    [data.recentEntities],
+  );
 
   // Re-compute the current date when the user returns to the
   // tab so the heatmap refreshes across day/week boundaries.
@@ -261,11 +271,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   // is what forces a recompute across day boundaries (the compiler can't infer
   // that dependency, so it would otherwise cache the first week forever).
   const weekStart = useMemo(getWeekStart, [today]);
-  const weekEnd = (() => {
+  const weekEnd = useMemo(() => {
     const end = new Date(weekStart);
     end.setDate(end.getDate() + 6);
     return end;
-  })();
+  }, [weekStart]);
 
   const { data: timeEntries } = useQuery(
     timeEntriesOptions(workspaceId, {
@@ -275,16 +285,16 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   // Previous week for trend comparison
-  const prevWeekStart = (() => {
+  const prevWeekStart = useMemo(() => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() - 7);
     return d;
-  })();
-  const prevWeekEnd = (() => {
+  }, [weekStart]);
+  const prevWeekEnd = useMemo(() => {
     const d = new Date(weekStart);
     d.setDate(d.getDate() - 1);
     return d;
-  })();
+  }, [weekStart]);
 
   const { data: prevTimeEntries } = useQuery(
     timeEntriesOptions(workspaceId, {
@@ -293,14 +303,18 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     }),
   );
 
-  const prevWeekHours = prevTimeEntries
-    ? prevTimeEntries.reduce((sum, e) => sum + e.durationMinutes / 60, 0)
-    : null;
+  const prevWeekHours = useMemo(
+    () =>
+      prevTimeEntries
+        ? prevTimeEntries.reduce((sum, e) => sum + e.durationMinutes / 60, 0)
+        : null,
+    [prevTimeEntries],
+  );
 
   const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
 
   // Build per-user daily heatmap from real time entries
-  const teamHeatmap = (() => {
+  const teamHeatmap = useMemo(() => {
     if (!members || !timeEntries) {
       return [];
     }
@@ -354,25 +368,34 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           dailyEntries,
         };
       });
-  })();
+  }, [members, timeEntries]);
 
-  const totalHoursThisWeek = teamHeatmap.reduce(
-    (sum, m) => sum + m.daily.reduce((s, h) => s + h, 0),
-    0,
+  const totalHoursThisWeek = useMemo(
+    () =>
+      teamHeatmap.reduce(
+        (sum, m) => sum + m.daily.reduce((s, h) => s + h, 0),
+        0,
+      ),
+    [teamHeatmap],
   );
 
   // Tasks with due dates, sorted by nearest deadline first
-  const tasksWithDue = tasks
-    .filter(
-      (task) =>
-        task.dueDate !== null &&
-        task.status !== "done" &&
-        task.status !== "cancelled",
-    )
-    .toSorted(
-      (a, b) =>
-        new Date(a.dueDate ?? 0).getTime() - new Date(b.dueDate ?? 0).getTime(),
-    );
+  const tasksWithDue = useMemo(
+    () =>
+      tasks
+        .filter(
+          (task) =>
+            task.dueDate !== null &&
+            task.status !== "done" &&
+            task.status !== "cancelled",
+        )
+        .toSorted(
+          (a, b) =>
+            new Date(a.dueDate ?? 0).getTime() -
+            new Date(b.dueDate ?? 0).getTime(),
+        ),
+    [tasks],
+  );
 
   return (
     <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-6 tabular-nums">
@@ -1017,7 +1040,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   // can render. The overview endpoint returns enough metadata to
   // build a synthetic fields record for the primary file.
   // Previously TODO by @nnad3N — now resolved.
-  const fullEntity = ((): WorkspaceEntity => {
+  const fullEntity = useMemo((): WorkspaceEntity => {
     const fields: WorkspaceEntity["fields"] = {};
     const propertyKey = entity.propertyId ?? entity.fieldId;
     const fieldKey = entity.fieldId ?? propertyKey;
@@ -1076,16 +1099,16 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       cellMetadata: {},
       fields,
     };
-  })();
+  }, [entity]);
 
-  const handleContextMenu = (e: React.MouseEvent) => {
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const { clientX: x, clientY: y } = e;
     setContextAnchor({
       getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
     });
     setContextOpen(true);
-  };
+  }, []);
 
   const navigable =
     entity.mimeType !== null &&

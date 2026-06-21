@@ -1,4 +1,4 @@
-import { lazy, Suspense, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useRef, useState } from "react";
 import type { MouseEvent } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
@@ -191,7 +191,7 @@ function ProtectedComponent() {
   // tabs the action becomes "open a fresh chat", which is only
   // meaningful inside a matter (we need somewhere to scope the
   // chat to); on non-workspace routes it's a no-op.
-  const handleToggleInspectorHotkey = () => {
+  const handleToggleInspectorHotkey = useCallback(() => {
     const store = useInspectorStore.getState();
     if (store.tabs.length > 0) {
       store.toggleMinimized();
@@ -203,7 +203,7 @@ function ProtectedComponent() {
         contextMatterIds: [activeWorkspaceId],
       });
     }
-  };
+  }, [activeWorkspaceId]);
   useHotkey(HOTKEYS.TOGGLE_CHAT, handleToggleInspectorHotkey);
 
   return (

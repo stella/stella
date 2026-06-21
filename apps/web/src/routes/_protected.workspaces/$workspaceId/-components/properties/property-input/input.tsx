@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useMemo, useRef } from "react";
 import type React from "react";
 
 import {
@@ -140,24 +140,32 @@ export const PropertyPromptInput = ({
   );
   // See chat-editor-provider for the rationale on adapting the
   // dedicated command-skills endpoint to the legacy slash shape.
-  const slashShortcutRows = commandSkills.flatMap((row) =>
-    row.command === null
-      ? []
-      : [
-          {
-            id: row.id,
-            scope: row.scope,
-            name: row.name,
-            command: row.command,
-            prompt: row.body,
-          },
-        ],
+  const slashShortcutRows = useMemo(
+    () =>
+      commandSkills.flatMap((row) =>
+        row.command === null
+          ? []
+          : [
+              {
+                id: row.id,
+                scope: row.scope,
+                name: row.name,
+                command: row.command,
+                prompt: row.body,
+              },
+            ],
+      ),
+    [commandSkills],
   );
   const slashItemsRef = useRef<SlashItem[]>([]);
-  slashItemsRef.current = buildChatSlashItems({
-    shortcuts: slashShortcutRows,
-    skillPages: skillPages?.pages,
-  });
+  slashItemsRef.current = useMemo<SlashItem[]>(
+    () =>
+      buildChatSlashItems({
+        shortcuts: slashShortcutRows,
+        skillPages: skillPages?.pages,
+      }),
+    [slashShortcutRows, skillPages],
+  );
 
   const editor = useEditor({
     extensions: [

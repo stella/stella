@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -162,27 +162,27 @@ function RouteComponent() {
 
   // ── Category change ────────────────────────────────
 
-  const handleCategorySelect = (categoryId: string | null) => {
+  const handleCategorySelect = useCallback((categoryId: string | null) => {
     loadMoreAbort.current?.abort();
     setLoadingMore(false);
     setSelectedCategory(categoryId);
     setExtraClauses([]);
     setNextCursor(undefined);
-  };
+  }, []);
 
   // ── Search ─────────────────────────────────────────
 
-  const handleSearch = (q: string) => {
+  const handleSearch = useCallback((q: string) => {
     loadMoreAbort.current?.abort();
     setLoadingMore(false);
     setSearchQuery(q);
     setExtraClauses([]);
     setNextCursor(undefined);
-  };
+  }, []);
 
   // ── Load more (cursor pagination) ─────────────────
 
-  const handleLoadMore = async () => {
+  const handleLoadMore = useCallback(async () => {
     const cursor = currentNextCursor;
     if (!cursor) {
       return;
@@ -247,11 +247,11 @@ function RouteComponent() {
         setLoadingMore(false);
       }
     }
-  };
+  }, [currentNextCursor, selectedCategory, searchQuery, t]);
 
   // ── Refresh ────────────────────────────────────────
 
-  const handleRefresh = () => {
+  const handleRefresh = useCallback(() => {
     setExtraClauses([]);
     setNextCursor(undefined);
     queryClient
@@ -268,17 +268,17 @@ function RouteComponent() {
       .catch(() => {
         /* fire-and-forget */
       });
-  };
+  }, [queryClient, activeOrganizationId]);
 
   // ── Back to list ───────────────────────────────────
 
-  const handleBackToList = () => {
+  const handleBackToList = useCallback(() => {
     setView({ kind: "list" });
     if (searchQuery) {
       setSearchQuery("");
     }
     handleRefresh();
-  };
+  }, [searchQuery, handleRefresh]);
 
   // ── Render ─────────────────────────────────────────
 

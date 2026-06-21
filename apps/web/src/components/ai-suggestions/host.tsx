@@ -14,7 +14,7 @@
  */
 
 import "@/components/chat-editor.css";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import {
@@ -261,10 +261,10 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   const applyMode: AISuggestionApplyMode =
     applyModeStored ?? config.defaultApplyMode ?? "direct";
 
-  const persistApplyMode = (next: AISuggestionApplyMode) => {
+  const persistApplyMode = useCallback((next: AISuggestionApplyMode) => {
     setApplyModeStored(next);
     writeStoredApplyMode(next);
-  };
+  }, []);
 
   const generationToken = useRef(0);
 
@@ -275,7 +275,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
    * PDF-bbox citations are forwarded through `onCitationActivate`
    * to the wrapper's PDF overlay.
    */
-  const folioCitationRanges: AICitationRange[] = (() => {
+  const folioCitationRanges = useMemo<AICitationRange[]>(() => {
     const out: AICitationRange[] = [];
     for (const c of allCitations) {
       if (c.source.kind === "folio-range") {
@@ -283,11 +283,12 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       }
     }
     return out;
-  })();
+  }, [allCitations]);
 
-  const pendingCount = allSuggestions.filter(
-    (s) => s.status === "pending",
-  ).length;
+  const pendingCount = useMemo(
+    () => allSuggestions.filter((s) => s.status === "pending").length,
+    [allSuggestions],
+  );
 
   const generating = messages.some(
     (m) => m.role === "assistant" && m.status === "loading",
@@ -344,272 +345,267 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
   // ---- generate ------------------------------------------------------------
 
-  const handleGenerate = async (input: {
-    prompt: string;
-    presetId?: string;
-    pastedText?: string;
-  }) => {
-    if (generating) {
-      return;
-    }
+  const handleGenerate = useCallback(
+    async (input: { prompt: string; presetId?: string; pastedText?: string }) => {
+      if (generating) {
+        return;
+      }
 
-    // The bar emits prompt as HTML from the TipTap editor — entity
-    // mentions live as `<entity-mention data-label="…">` nodes.
-    // Flatten to plain text (with mentions inlined as `@Label`) so
-    // pattern-matching generators don't have to parse HTML.
-    const promptText = htmlToPromptText(input.prompt);
+      // The bar emits prompt as HTML from the TipTap editor — entity
+      // mentions live as `<entity-mention data-label="…">` nodes.
+      // Flatten to plain text (with mentions inlined as `@Label`) so
+      // pattern-matching generators don't have to parse HTML.
+      const promptText = htmlToPromptText(input.prompt);
 
-    const userMessage: UserThreadMessage = {
-      id: `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-      role: "user",
-      prompt: promptText,
-      mode,
-      createdAt: Date.now(),
-      ...(input.presetId === undefined ? {} : { presetId: input.presetId }),
-      ...(input.pastedText === undefined
-        ? {}
-        : { pastedText: input.pastedText }),
-    };
-    const assistantId = `a-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-    const assistantPlaceholder: AssistantThreadMessage = {
-      id: assistantId,
-      role: "assistant",
-      text: "",
-      suggestions: [],
-      citations: [],
-      mode,
-      status: "loading",
-      createdAt: Date.now(),
-    };
+      const userMessage: UserThreadMessage = {
+        id: `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
+        role: "user",
+        prompt: promptText,
+        mode,
+        createdAt: Date.now(),
+        ...(input.presetId === undefined ? {} : { presetId: input.presetId }),
+        ...(input.pastedText === undefined
+          ? {}
+          : { pastedText: input.pastedText }),
+      };
+      const assistantId = `a-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
+      const assistantPlaceholder: AssistantThreadMessage = {
+        id: assistantId,
+        role: "assistant",
+        text: "",
+        suggestions: [],
+        citations: [],
+        mode,
+        status: "loading",
+        createdAt: Date.now(),
+      };
 
-    setMessages((prev) => [...prev, userMessage, assistantPlaceholder]);
-    setPanelOpen(true);
+      setMessages((prev) => [...prev, userMessage, assistantPlaceholder]);
+      setPanelOpen(true);
 
-    const token = ++generationToken.current;
+      const token = ++generationToken.current;
 
-    let fullPrompt = promptText;
-    if (input.pastedText) {
-      fullPrompt =
-        promptText.length === 0
-          ? input.pastedText
-          : `${promptText}\n\n${input.pastedText}`;
-    }
+      let fullPrompt = promptText;
+      if (input.pastedText) {
+        fullPrompt =
+          promptText.length === 0
+            ? input.pastedText
+            : `${promptText}\n\n${input.pastedText}`;
+      }
 
-    const docText = editorView
-      ? editorView.state.doc.textBetween(
-          0,
-          editorView.state.doc.content.size,
-          "\n",
-          "\n",
-        )
-      : (documentTextProp ?? "");
-    const selection =
-      editorView !== null &&
-      editorView.state.selection.from !== editorView.state.selection.to
-        ? editorView.state.selection
-        : null;
-    const selectionText =
-      selection !== null && editorView !== null
+      const docText = editorView
         ? editorView.state.doc.textBetween(
-            selection.from,
-            selection.to,
+            0,
+            editorView.state.doc.content.size,
             "\n",
             "\n",
           )
-        : "";
-    const cursorPosition =
-      editorView !== null
-        ? {
-            from: editorView.state.selection.from,
-            to: editorView.state.selection.to,
-          }
-        : null;
-    const visible = editorView ? computeVisibleRange(editorView) : null;
-    const visibleText =
-      visible !== null && editorView !== null
-        ? editorView.state.doc.textBetween(visible.from, visible.to, "\n", "\n")
-        : "";
-    const generateInput: AIGenerateInput = {
-      prompt: fullPrompt,
-      mode,
-      selectionText,
-      selectionRange:
-        selection !== null ? { from: selection.from, to: selection.to } : null,
-      cursorPosition,
-      documentText: docText,
-      visibleText,
-      visibleRange: visible,
-      ...(input.presetId === undefined ? {} : { presetId: input.presetId }),
-    };
+        : (documentTextProp ?? "");
+      const selection =
+        editorView !== null &&
+        editorView.state.selection.from !== editorView.state.selection.to
+          ? editorView.state.selection
+          : null;
+      const selectionText =
+        selection !== null && editorView !== null
+          ? editorView.state.doc.textBetween(
+              selection.from,
+              selection.to,
+              "\n",
+              "\n",
+            )
+          : "";
+      const cursorPosition =
+        editorView !== null
+          ? {
+              from: editorView.state.selection.from,
+              to: editorView.state.selection.to,
+            }
+          : null;
+      const visible = editorView ? computeVisibleRange(editorView) : null;
+      const visibleText =
+        visible !== null && editorView !== null
+          ? editorView.state.doc.textBetween(
+              visible.from,
+              visible.to,
+              "\n",
+              "\n",
+            )
+          : "";
+      const generateInput: AIGenerateInput = {
+        prompt: fullPrompt,
+        mode,
+        selectionText,
+        selectionRange:
+          selection !== null
+            ? { from: selection.from, to: selection.to }
+            : null,
+        cursorPosition,
+        documentText: docText,
+        visibleText,
+        visibleRange: visible,
+        ...(input.presetId === undefined ? {} : { presetId: input.presetId }),
+      };
 
-    try {
-      const response = await config.onGenerate(generateInput);
-      if (generationToken.current !== token) {
-        return;
-      }
-      const rawSuggestions = mode === "ask" ? [] : (response.suggestions ?? []);
-      const anchored: AISuggestion[] = [];
-      for (const s of rawSuggestions) {
-        if (!editorView) {
-          anchored.push(s);
-          continue;
+      try {
+        const response = await config.onGenerate(generateInput);
+        if (generationToken.current !== token) {
+          return;
         }
-        const anchor = resolveSuggestionAnchor(editorView.state.doc, s);
-        anchored.push(
-          anchor === null ? { ...s, status: "stale" } : { ...s, range: anchor },
-        );
+        const rawSuggestions =
+          mode === "ask" ? [] : (response.suggestions ?? []);
+        const anchored: AISuggestion[] = [];
+        for (const s of rawSuggestions) {
+          if (!editorView) {
+            anchored.push(s);
+            continue;
+          }
+          const anchor = resolveSuggestionAnchor(editorView.state.doc, s);
+          anchored.push(
+            anchor === null
+              ? { ...s, status: "stale" }
+              : { ...s, range: anchor },
+          );
+        }
+        updateAssistantMessage(assistantId, (m) => ({
+          id: m.id,
+          role: "assistant",
+          mode: m.mode,
+          createdAt: m.createdAt,
+          status: "complete",
+          text: response.text ?? "",
+          suggestions: anchored,
+          citations: response.citations ?? [],
+        }));
+      } catch (error) {
+        if (generationToken.current !== token) {
+          return;
+        }
+        updateAssistantMessage(assistantId, (m) => ({
+          id: m.id,
+          role: "assistant",
+          mode: m.mode,
+          createdAt: m.createdAt,
+          text: m.text,
+          suggestions: m.suggestions,
+          citations: m.citations,
+          status: "error",
+          error: error instanceof Error ? error.message : "Generation failed",
+        }));
       }
-      updateAssistantMessage(assistantId, (m) => ({
-        id: m.id,
-        role: "assistant",
-        mode: m.mode,
-        createdAt: m.createdAt,
-        status: "complete",
-        text: response.text ?? "",
-        suggestions: anchored,
-        citations: response.citations ?? [],
-      }));
-    } catch (error) {
-      if (generationToken.current !== token) {
-        return;
-      }
-      updateAssistantMessage(assistantId, (m) => ({
-        id: m.id,
-        role: "assistant",
-        mode: m.mode,
-        createdAt: m.createdAt,
-        text: m.text,
-        suggestions: m.suggestions,
-        citations: m.citations,
-        status: "error",
-        error: error instanceof Error ? error.message : "Generation failed",
-      }));
-    }
-  };
+    },
+    [
+      generating,
+      editorView,
+      documentTextProp,
+      config,
+      updateAssistantMessage,
+      setMessages,
+      mode,
+    ],
+  );
 
   // ---- accept / reject -----------------------------------------------------
 
-  const findSuggestion = (suggestionId: string) =>
-    allSuggestions.find((s) => s.id === suggestionId) ?? null;
+  const findSuggestion = useCallback(
+    (suggestionId: string) =>
+      allSuggestions.find((s) => s.id === suggestionId) ?? null,
+    [allSuggestions],
+  );
 
-  const findOwningMessageId = (suggestionId: string): string | null => {
-    for (const m of messages) {
-      if (m.role !== "assistant") {
-        continue;
+  const findOwningMessageId = useCallback(
+    (suggestionId: string): string | null => {
+      for (const m of messages) {
+        if (m.role !== "assistant") {
+          continue;
+        }
+        if (m.suggestions.some((s) => s.id === suggestionId)) {
+          return m.id;
+        }
       }
-      if (m.suggestions.some((s) => s.id === suggestionId)) {
-        return m.id;
-      }
-    }
-    return null;
-  };
+      return null;
+    },
+    [messages],
+  );
 
   // Apply a single suggestion at the given mode. Split out from
   // handleAcceptOne so resolveFirstAccept can re-run the deferred
   // accept against the *freshly chosen* mode without going back
   // through the first-accept gate that captured `applyModeStored ===
   // null` in the original closure.
-  const acceptOneAtMode = (
-    suggestionId: string,
-    applyAt: AISuggestionApplyMode,
-  ) => {
-    const target = findSuggestion(suggestionId);
-    if (!target || target.status !== "pending") {
-      return;
-    }
-    if (readOnly) {
-      if (!config.onUnlockRequest) {
-        return;
-      }
-      setPendingAccepts((prev) =>
-        prev.includes(suggestionId) ? prev : [...prev, suggestionId],
-      );
-      config.onUnlockRequest();
-      return;
-    }
-    if (!editorView) {
-      return;
-    }
-    const result = applySuggestions({
-      view: editorView,
-      suggestions: [target],
-      mode: applyAt,
-      author,
-    });
-    applyResultToMessages(result);
-  };
-
-  const handleAcceptOne = (suggestionId: string) => {
-    // First-time accept: ask whether to apply with tracked changes,
-    // remember the answer, and defer this accept until they pick.
-    if (applyModeStored === null) {
+  const acceptOneAtMode = useCallback(
+    (suggestionId: string, applyAt: AISuggestionApplyMode) => {
       const target = findSuggestion(suggestionId);
       if (!target || target.status !== "pending") {
         return;
       }
-      setPendingFirstAccept({ kind: "one", suggestionId });
-      return;
-    }
-    acceptOneAtMode(suggestionId, applyMode);
-  };
+      if (readOnly) {
+        if (!config.onUnlockRequest) {
+          return;
+        }
+        setPendingAccepts((prev) =>
+          prev.includes(suggestionId) ? prev : [...prev, suggestionId],
+        );
+        config.onUnlockRequest();
+        return;
+      }
+      if (!editorView) {
+        return;
+      }
+      const result = applySuggestions({
+        view: editorView,
+        suggestions: [target],
+        mode: applyAt,
+        author,
+      });
+      applyResultToMessages(result);
+    },
+    [
+      findSuggestion,
+      readOnly,
+      config,
+      editorView,
+      author,
+      applyResultToMessages,
+      setPendingAccepts,
+    ],
+  );
 
-  const handleRejectOne = (suggestionId: string) => {
-    const messageId = findOwningMessageId(suggestionId);
-    if (!messageId) {
-      return;
-    }
-    updateSuggestion(messageId, suggestionId, (s) => ({
-      ...s,
-      status: "rejected",
-    }));
-  };
+  const handleAcceptOne = useCallback(
+    (suggestionId: string) => {
+      // First-time accept: ask whether to apply with tracked changes,
+      // remember the answer, and defer this accept until they pick.
+      if (applyModeStored === null) {
+        const target = findSuggestion(suggestionId);
+        if (!target || target.status !== "pending") {
+          return;
+        }
+        setPendingFirstAccept({ kind: "one", suggestionId });
+        return;
+      }
+      acceptOneAtMode(suggestionId, applyMode);
+    },
+    [applyModeStored, findSuggestion, acceptOneAtMode, applyMode],
+  );
+
+  const handleRejectOne = useCallback(
+    (suggestionId: string) => {
+      const messageId = findOwningMessageId(suggestionId);
+      if (!messageId) {
+        return;
+      }
+      updateSuggestion(messageId, suggestionId, (s) => ({
+        ...s,
+        status: "rejected",
+      }));
+    },
+    [findOwningMessageId, updateSuggestion],
+  );
 
   // Apply every pending suggestion in a message at the given mode.
   // Mirror of acceptOneAtMode, with the same rationale.
-  const acceptGroupAtMode = (
-    messageId: string,
-    applyAt: AISuggestionApplyMode,
-  ) => {
-    const message = messages.find(
-      (m): m is AssistantThreadMessage =>
-        m.role === "assistant" && m.id === messageId,
-    );
-    if (!message) {
-      return;
-    }
-    const targets = message.suggestions.filter((s) => s.status === "pending");
-    if (targets.length === 0) {
-      return;
-    }
-    if (readOnly) {
-      if (!config.onUnlockRequest) {
-        return;
-      }
-      const ids = targets.map((s) => s.id);
-      setPendingAccepts((prev) => {
-        const merged = new Set(prev);
-        for (const id of ids) {
-          merged.add(id);
-        }
-        return [...merged];
-      });
-      config.onUnlockRequest();
-      return;
-    }
-    if (!editorView) {
-      return;
-    }
-    const result = applySuggestions({
-      view: editorView,
-      suggestions: targets,
-      mode: applyAt,
-      author,
-    });
-    applyResultToMessages(result);
-  };
-
-  const handleAcceptGroup = (messageId: string) => {
-    if (applyModeStored === null) {
+  const acceptGroupAtMode = useCallback(
+    (messageId: string, applyAt: AISuggestionApplyMode) => {
       const message = messages.find(
         (m): m is AssistantThreadMessage =>
           m.role === "assistant" && m.id === messageId,
@@ -617,26 +613,82 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       if (!message) {
         return;
       }
-      const hasPending = message.suggestions.some(
-        (s) => s.status === "pending",
-      );
-      if (!hasPending) {
+      const targets = message.suggestions.filter((s) => s.status === "pending");
+      if (targets.length === 0) {
         return;
       }
-      setPendingFirstAccept({ kind: "group", messageId });
-      return;
-    }
-    acceptGroupAtMode(messageId, applyMode);
-  };
+      if (readOnly) {
+        if (!config.onUnlockRequest) {
+          return;
+        }
+        const ids = targets.map((s) => s.id);
+        setPendingAccepts((prev) => {
+          const merged = new Set(prev);
+          for (const id of ids) {
+            merged.add(id);
+          }
+          return [...merged];
+        });
+        config.onUnlockRequest();
+        return;
+      }
+      if (!editorView) {
+        return;
+      }
+      const result = applySuggestions({
+        view: editorView,
+        suggestions: targets,
+        mode: applyAt,
+        author,
+      });
+      applyResultToMessages(result);
+    },
+    [
+      messages,
+      readOnly,
+      config,
+      editorView,
+      author,
+      applyResultToMessages,
+      setPendingAccepts,
+    ],
+  );
 
-  const handleRejectGroup = (messageId: string) => {
-    updateAssistantMessage(messageId, (m) => ({
-      ...m,
-      suggestions: m.suggestions.map((s) =>
-        s.status === "pending" ? { ...s, status: "rejected" } : s,
-      ),
-    }));
-  };
+  const handleAcceptGroup = useCallback(
+    (messageId: string) => {
+      if (applyModeStored === null) {
+        const message = messages.find(
+          (m): m is AssistantThreadMessage =>
+            m.role === "assistant" && m.id === messageId,
+        );
+        if (!message) {
+          return;
+        }
+        const hasPending = message.suggestions.some(
+          (s) => s.status === "pending",
+        );
+        if (!hasPending) {
+          return;
+        }
+        setPendingFirstAccept({ kind: "group", messageId });
+        return;
+      }
+      acceptGroupAtMode(messageId, applyMode);
+    },
+    [applyModeStored, messages, acceptGroupAtMode, applyMode],
+  );
+
+  const handleRejectGroup = useCallback(
+    (messageId: string) => {
+      updateAssistantMessage(messageId, (m) => ({
+        ...m,
+        suggestions: m.suggestions.map((s) =>
+          s.status === "pending" ? { ...s, status: "rejected" } : s,
+        ),
+      }));
+    },
+    [updateAssistantMessage],
+  );
 
   /**
    * Called from the apply-mode prompt: persist the user's choice and
@@ -645,19 +697,22 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
    * `handleAcceptOne`/`handleAcceptGroup` because that gate would
    * still see `applyModeStored === null` until React re-renders).
    */
-  const resolveFirstAccept = (chosen: AISuggestionApplyMode) => {
-    const queued = pendingFirstAccept;
-    persistApplyMode(chosen);
-    setPendingFirstAccept(null);
-    if (!queued) {
-      return;
-    }
-    if (queued.kind === "one") {
-      acceptOneAtMode(queued.suggestionId, chosen);
-    } else {
-      acceptGroupAtMode(queued.messageId, chosen);
-    }
-  };
+  const resolveFirstAccept = useCallback(
+    (chosen: AISuggestionApplyMode) => {
+      const queued = pendingFirstAccept;
+      persistApplyMode(chosen);
+      setPendingFirstAccept(null);
+      if (!queued) {
+        return;
+      }
+      if (queued.kind === "one") {
+        acceptOneAtMode(queued.suggestionId, chosen);
+      } else {
+        acceptGroupAtMode(queued.messageId, chosen);
+      }
+    },
+    [pendingFirstAccept, persistApplyMode, acceptOneAtMode, acceptGroupAtMode],
+  );
 
   // ---- pending-accept flush on unlock --------------------------------------
 
@@ -694,50 +749,56 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
   // ---- focus + scroll-to ---------------------------------------------------
 
-  const handleFocusSuggestion = (suggestionId: string) => {
-    setFocusedId(suggestionId);
-    const target = findSuggestion(suggestionId);
-    if (!editorView || !target) {
-      return;
-    }
-    const anchor = resolveSuggestionAnchor(editorView.state.doc, target);
-    if (!anchor) {
-      return;
-    }
-    const scrollContainer = editorView.dom.closest("[data-folio-scroll]");
-    if (scrollContainer === null) {
-      return;
-    }
-    const coords = editorView.coordsAtPos(anchor.from);
-    const rect = scrollContainer.getBoundingClientRect();
-    const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
-    scrollContainer.scrollTo({
-      top: targetTop - rect.height / 3,
-      behavior: "smooth",
-    });
-  };
-
-  // ---- citation activate ---------------------------------------------------
-
-  const handleActivateCitation = (citation: AICitation) => {
-    setActiveCitationId(citation.id);
-    // PDF: notify the wrapper to drive its own bbox overlay.
-    onCitationActivate?.(citation);
-    // Folio: scroll the editor to the cited range.
-    if (citation.source.kind === "folio-range" && editorView) {
+  const handleFocusSuggestion = useCallback(
+    (suggestionId: string) => {
+      setFocusedId(suggestionId);
+      const target = findSuggestion(suggestionId);
+      if (!editorView || !target) {
+        return;
+      }
+      const anchor = resolveSuggestionAnchor(editorView.state.doc, target);
+      if (!anchor) {
+        return;
+      }
       const scrollContainer = editorView.dom.closest("[data-folio-scroll]");
       if (scrollContainer === null) {
         return;
       }
-      const coords = editorView.coordsAtPos(citation.source.from);
+      const coords = editorView.coordsAtPos(anchor.from);
       const rect = scrollContainer.getBoundingClientRect();
       const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
       scrollContainer.scrollTo({
         top: targetTop - rect.height / 3,
         behavior: "smooth",
       });
-    }
-  };
+    },
+    [editorView, findSuggestion],
+  );
+
+  // ---- citation activate ---------------------------------------------------
+
+  const handleActivateCitation = useCallback(
+    (citation: AICitation) => {
+      setActiveCitationId(citation.id);
+      // PDF: notify the wrapper to drive its own bbox overlay.
+      onCitationActivate?.(citation);
+      // Folio: scroll the editor to the cited range.
+      if (citation.source.kind === "folio-range" && editorView) {
+        const scrollContainer = editorView.dom.closest("[data-folio-scroll]");
+        if (scrollContainer === null) {
+          return;
+        }
+        const coords = editorView.coordsAtPos(citation.source.from);
+        const rect = scrollContainer.getBoundingClientRect();
+        const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
+        scrollContainer.scrollTo({
+          top: targetTop - rect.height / 3,
+          behavior: "smooth",
+        });
+      }
+    },
+    [editorView, onCitationActivate],
+  );
 
   // ---- keybindings ---------------------------------------------------------
 
@@ -1051,9 +1112,12 @@ export function PromptBar(props: PromptBarProps) {
   // The bar emits `{ prompt }`; the underlying composer emits the
   // raw editor draft. Adapting here lets the rest of the wiring
   // (Enter handler, blur/setEditable, submit gating) stay shared.
-  const handleComposerSubmit = (draft: { html: string }) => {
-    onSubmit({ prompt: draft.html });
-  };
+  const handleComposerSubmit = useCallback(
+    (draft: { html: string }) => {
+      onSubmit({ prompt: draft.html });
+    },
+    [onSubmit],
+  );
 
   const { submitDraft } = useChatComposerWiring({
     controller: editorController,

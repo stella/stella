@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -131,14 +131,24 @@ export const OnboardingWizard = () => {
     readonly ProviderPreview[]
   >([]);
   const [aiPhase, setAiPhase] = useState<"providers" | "models">("providers");
-  const unavailableNativeToolBackendSlugs: ReadonlySet<string> | undefined =
-    nativeToolDeployAvailability
-      ? new Set(nativeToolDeployAvailability.unavailableNativeToolBackendSlugs)
-      : undefined;
-  const onboardingCatalogueEntries = loadCatalogue().filter((entry) =>
-    isCatalogueEntryAvailableDuringOnboarding(entry, {
-      unavailableNativeToolBackendSlugs,
-    }),
+  const unavailableNativeToolBackendSlugs = useMemo<
+    ReadonlySet<string> | undefined
+  >(() => {
+    if (!nativeToolDeployAvailability) {
+      return undefined;
+    }
+    return new Set(
+      nativeToolDeployAvailability.unavailableNativeToolBackendSlugs,
+    );
+  }, [nativeToolDeployAvailability]);
+  const onboardingCatalogueEntries = useMemo(
+    () =>
+      loadCatalogue().filter((entry) =>
+        isCatalogueEntryAvailableDuringOnboarding(entry, {
+          unavailableNativeToolBackendSlugs,
+        }),
+      ),
+    [unavailableNativeToolBackendSlugs],
   );
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot default apply: waits for async session-derived suggestedCountryCodes, then sets data.practiceJurisdictions + the applied latch once; moving the dual setState into render would be a state-update-during-render hazard
@@ -212,258 +222,272 @@ export const OnboardingWizard = () => {
     });
   };
 
-  const executeSetup = async (finalData: WizardData) => {
-    setStep("creating");
-    const startTime = Date.now();
+  const executeSetup = useCallback(
+    async (finalData: WizardData) => {
+      setStep("creating");
+      const startTime = Date.now();
 
-    const delay = async (ms: number) => {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, ms);
-      });
-    };
+      const delay = async (ms: number) => {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, ms);
+        });
+      };
 
-    // Phase 1: Create organization
-    setCreatingPhase("org");
-    setCreatingProgress(15);
-    await delay(800);
+      // Phase 1: Create organization
+      setCreatingPhase("org");
+      setCreatingProgress(15);
+      await delay(800);
 
-    const { data: orgData, error: createOrgError } =
-      await authClient.organization.create({
-        name: finalData.orgName,
-        slug: finalData.orgSlug,
-      });
-
-    if (createOrgError) {
-      analytics.captureError(toAuthClientError(createOrgError));
-      stellaToast.add({
-        title: createOrgError.message ?? t("errors.actionFailed"),
-        type: "error",
-      });
-      setStep("organization");
-      return;
-    }
-
-    await delay(600);
-    setCreatingProgress(35);
-
-    const { error: setActiveError } = await authClient.organization.setActive({
-      organizationId: orgData.id,
-    });
-
-    if (setActiveError) {
-      analytics.captureError(toAuthClientError(setActiveError));
-      stellaToast.add({
-        title: setActiveError.message ?? t("errors.actionFailed"),
-        type: "error",
-      });
-      setStep("organization");
-      return;
-    }
-
-    // From here the org already exists; if anything fails
-    // the safest recovery is to navigate to the main chat.
-    try {
-      // Refresh session so the app recognizes the new org
-      await invalidateSession.mutateAsync();
-      await delay(500);
-      setCreatingProgress(50);
-
-      if (finalData.practiceJurisdictions.length > 0) {
-        const { error: jurisdictionError } = await api["organization-settings"][
-          "practice-jurisdictions"
-        ].post({
-          practiceJurisdictions: finalData.practiceJurisdictions,
+      const { data: orgData, error: createOrgError } =
+        await authClient.organization.create({
+          name: finalData.orgName,
+          slug: finalData.orgSlug,
         });
 
-        if (jurisdictionError) {
-          analytics.captureError(toAPIError(jurisdictionError));
-          stellaToast.add({
-            title: t("onboarding.jurisdictionSaveFailed"),
-            type: "warning",
-          });
-        }
+      if (createOrgError) {
+        analytics.captureError(toAuthClientError(createOrgError));
+        stellaToast.add({
+          title: createOrgError.message ?? t("errors.actionFailed"),
+          type: "error",
+        });
+        setStep("organization");
+        return;
       }
 
-      // Phase 1b: Install selected catalogue entries and persist
-      // explicit opt-outs for omitted default-on native tools. Runs
-      // in parallel; partial failure surfaces as a toast but doesn't
-      // block the rest of setup.
-      const catalogueEntries = loadCatalogue();
-      const catalogueSetupPlan = createCatalogueSetupPlan({
-        entries: catalogueEntries,
-        practiceJurisdictions: finalData.practiceJurisdictions,
-        selectedSlugs: finalData.catalogueSlugs,
-        unavailableNativeToolBackendSlugs,
-      });
-      const installTasks = catalogueSetupPlan.installSlugs.map(async (slug) => {
-        const entry = catalogueEntries.find((e) => e.slug === slug);
-        if (!entry) {
-          return;
-        }
-        if (entry.kind === "skill") {
-          const { error } = await api.catalogue["install-skill"].post({
-            slug: entry.slug,
-            queryKey: ["skills"],
-          });
-          if (error) {
-            throw toAPIError(error);
-          }
-          return;
-        }
-        if (entry.kind === "native-tool") {
-          const { error } = await api.mcp["native-tools"]({
-            slug: entry.backendSlug,
-          }).patch({ enabled: true, queryKey: ["mcp"] });
-          if (error) {
-            throw toAPIError(error);
-          }
-          return;
-        }
-        const { error } = await api.mcp.connectors.post({
-          displayName: entry.displayName,
-          description: entry.description,
-          url: entry.url,
-          queryKey: ["mcp"],
-        });
-        if (error) {
-          throw toAPIError(error);
-        }
-      });
-      const optOutTasks = catalogueSetupPlan.nativeToolOptOuts.map(
-        async (entry) => {
-          const { error } = await api.mcp["native-tools"]({
-            slug: entry.backendSlug,
-          }).patch({ enabled: false, queryKey: ["mcp"] });
-          if (error) {
-            throw toAPIError(error);
-          }
+      await delay(600);
+      setCreatingProgress(35);
+
+      const { error: setActiveError } = await authClient.organization.setActive(
+        {
+          organizationId: orgData.id,
         },
       );
-      const catalogueTasks = [...installTasks, ...optOutTasks];
-      if (catalogueTasks.length > 0) {
-        setCreatingProgress(55);
-        const catalogueResults = await Promise.allSettled(catalogueTasks);
-        const installResults = catalogueResults.slice(0, installTasks.length);
-        const failedInstallCount = installResults.filter(
-          (r) => r.status === "rejected",
-        ).length;
-        const failed = catalogueResults.filter(
-          (r) => r.status === "rejected",
-        ).length;
-        if (failed > 0) {
-          stellaToast.add({
-            title: t("onboarding.cataloguePartial", {
-              installed: String(installTasks.length - failedInstallCount),
-              failed: String(failed),
-            }),
-            type: "warning",
-          });
-        }
-      }
 
-      // Phase 2: Save AI config (BYOK) if user provided one
-      const aiProviderValues = getProviderValues(finalData.aiProviders);
-      const aiOverrideModels = serializeOverrideModels({
-        providers: aiProviderValues,
-        roleModels: finalData.aiRoleModels,
-      });
-
-      if (
-        hasUsableProviderDrafts(finalData.aiProviders) &&
-        aiOverrideModels !== null
-      ) {
-        setCreatingPhase("ai");
-        setCreatingProgress(65);
-        const { error: aiConfigError } = await api["organization-settings"][
-          "ai-config"
-        ].post({
-          providers: serializeProviderDrafts(finalData.aiProviders),
-          overrideModels: aiOverrideModels,
+      if (setActiveError) {
+        analytics.captureError(toAuthClientError(setActiveError));
+        stellaToast.add({
+          title: setActiveError.message ?? t("errors.actionFailed"),
+          type: "error",
         });
-
-        if (aiConfigError) {
-          analytics.captureError(toAPIError(aiConfigError));
-          stellaToast.add({
-            title: t("onboarding.aiConfigFailed"),
-            type: "warning",
-          });
-        } else {
-          queryClient.setQueryData(
-            aiConfigKeys.availability({ organizationId: orgData.id }),
-            {
-              available: true,
-              instanceProvisioned: false,
-              orgConfigured: true,
-            },
-          );
-          await Promise.all([
-            queryClient.invalidateQueries({
-              queryKey: aiConfigKeys.byOrganization({
-                organizationId: orgData.id,
-              }),
-            }),
-            queryClient.invalidateQueries({
-              queryKey: aiConfigKeys.availability({
-                organizationId: orgData.id,
-              }),
-            }),
-          ]);
-        }
+        setStep("organization");
+        return;
       }
 
-      // Phase 3: Send invitations
-      if (finalData.emails.length > 0) {
-        setCreatingPhase("invites");
-        setCreatingProgress(80);
+      // From here the org already exists; if anything fails
+      // the safest recovery is to navigate to the main chat.
+      try {
+        // Refresh session so the app recognizes the new org
+        await invalidateSession.mutateAsync();
+        await delay(500);
+        setCreatingProgress(50);
 
-        const inviteResults = await Promise.all(
-          finalData.emails.map(
-            async (email) =>
-              await authClient.organization.inviteMember({
-                email,
-                role: "member",
-              }),
-          ),
+        if (finalData.practiceJurisdictions.length > 0) {
+          const { error: jurisdictionError } = await api[
+            "organization-settings"
+          ]["practice-jurisdictions"].post({
+            practiceJurisdictions: finalData.practiceJurisdictions,
+          });
+
+          if (jurisdictionError) {
+            analytics.captureError(toAPIError(jurisdictionError));
+            stellaToast.add({
+              title: t("onboarding.jurisdictionSaveFailed"),
+              type: "warning",
+            });
+          }
+        }
+
+        // Phase 1b: Install selected catalogue entries and persist
+        // explicit opt-outs for omitted default-on native tools. Runs
+        // in parallel; partial failure surfaces as a toast but doesn't
+        // block the rest of setup.
+        const catalogueEntries = loadCatalogue();
+        const catalogueSetupPlan = createCatalogueSetupPlan({
+          entries: catalogueEntries,
+          practiceJurisdictions: finalData.practiceJurisdictions,
+          selectedSlugs: finalData.catalogueSlugs,
+          unavailableNativeToolBackendSlugs,
+        });
+        const installTasks = catalogueSetupPlan.installSlugs.map(
+          async (slug) => {
+            const entry = catalogueEntries.find((e) => e.slug === slug);
+            if (!entry) {
+              return;
+            }
+            if (entry.kind === "skill") {
+              const { error } = await api.catalogue["install-skill"].post({
+                slug: entry.slug,
+                queryKey: ["skills"],
+              });
+              if (error) {
+                throw toAPIError(error);
+              }
+              return;
+            }
+            if (entry.kind === "native-tool") {
+              const { error } = await api.mcp["native-tools"]({
+                slug: entry.backendSlug,
+              }).patch({ enabled: true, queryKey: ["mcp"] });
+              if (error) {
+                throw toAPIError(error);
+              }
+              return;
+            }
+            const { error } = await api.mcp.connectors.post({
+              displayName: entry.displayName,
+              description: entry.description,
+              url: entry.url,
+              queryKey: ["mcp"],
+            });
+            if (error) {
+              throw toAPIError(error);
+            }
+          },
         );
+        const optOutTasks = catalogueSetupPlan.nativeToolOptOuts.map(
+          async (entry) => {
+            const { error } = await api.mcp["native-tools"]({
+              slug: entry.backendSlug,
+            }).patch({ enabled: false, queryKey: ["mcp"] });
+            if (error) {
+              throw toAPIError(error);
+            }
+          },
+        );
+        const catalogueTasks = [...installTasks, ...optOutTasks];
+        if (catalogueTasks.length > 0) {
+          setCreatingProgress(55);
+          const catalogueResults = await Promise.allSettled(catalogueTasks);
+          const installResults = catalogueResults.slice(0, installTasks.length);
+          const failedInstallCount = installResults.filter(
+            (r) => r.status === "rejected",
+          ).length;
+          const failed = catalogueResults.filter(
+            (r) => r.status === "rejected",
+          ).length;
+          if (failed > 0) {
+            stellaToast.add({
+              title: t("onboarding.cataloguePartial", {
+                installed: String(installTasks.length - failedInstallCount),
+                failed: String(failed),
+              }),
+              type: "warning",
+            });
+          }
+        }
 
-        const failedCount = inviteResults.filter(
-          (r) => r.error !== null,
-        ).length;
+        // Phase 2: Save AI config (BYOK) if user provided one
+        const aiProviderValues = getProviderValues(finalData.aiProviders);
+        const aiOverrideModels = serializeOverrideModels({
+          providers: aiProviderValues,
+          roleModels: finalData.aiRoleModels,
+        });
 
-        if (failedCount > 0) {
-          stellaToast.add({
-            title: t("onboarding.someInvitesFailed", {
-              count: failedCount,
-            }),
-            type: "warning",
+        if (
+          hasUsableProviderDrafts(finalData.aiProviders) &&
+          aiOverrideModels !== null
+        ) {
+          setCreatingPhase("ai");
+          setCreatingProgress(65);
+          const { error: aiConfigError } = await api["organization-settings"][
+            "ai-config"
+          ].post({
+            providers: serializeProviderDrafts(finalData.aiProviders),
+            overrideModels: aiOverrideModels,
+          });
+
+          if (aiConfigError) {
+            analytics.captureError(toAPIError(aiConfigError));
+            stellaToast.add({
+              title: t("onboarding.aiConfigFailed"),
+              type: "warning",
+            });
+          } else {
+            queryClient.setQueryData(
+              aiConfigKeys.availability({ organizationId: orgData.id }),
+              {
+                available: true,
+                instanceProvisioned: false,
+                orgConfigured: true,
+              },
+            );
+            await Promise.all([
+              queryClient.invalidateQueries({
+                queryKey: aiConfigKeys.byOrganization({
+                  organizationId: orgData.id,
+                }),
+              }),
+              queryClient.invalidateQueries({
+                queryKey: aiConfigKeys.availability({
+                  organizationId: orgData.id,
+                }),
+              }),
+            ]);
+          }
+        }
+
+        // Phase 3: Send invitations
+        if (finalData.emails.length > 0) {
+          setCreatingPhase("invites");
+          setCreatingProgress(80);
+
+          const inviteResults = await Promise.all(
+            finalData.emails.map(
+              async (email) =>
+                await authClient.organization.inviteMember({
+                  email,
+                  role: "member",
+                }),
+            ),
+          );
+
+          const failedCount = inviteResults.filter(
+            (r) => r.error !== null,
+          ).length;
+
+          if (failedCount > 0) {
+            stellaToast.add({
+              title: t("onboarding.someInvitesFailed", {
+                count: failedCount,
+              }),
+              type: "warning",
+            });
+          }
+        }
+
+        await delay(500);
+        setCreatingProgress(90);
+
+        // Phase 3: Complete
+        setCreatingPhase("done");
+        setCreatingProgress(100);
+
+        // Minimum display time so the user can read the status
+        const elapsed = Date.now() - startTime;
+        const minDisplayMs = 4000;
+        if (elapsed < minDisplayMs) {
+          await new Promise<void>((resolve) => {
+            setTimeout(resolve, minDisplayMs - elapsed);
           });
         }
+      } catch (error) {
+        analytics.captureError(error);
       }
 
-      await delay(500);
-      setCreatingProgress(90);
-
-      // Phase 3: Complete
-      setCreatingPhase("done");
-      setCreatingProgress(100);
-
-      // Minimum display time so the user can read the status
-      const elapsed = Date.now() - startTime;
-      const minDisplayMs = 4000;
-      if (elapsed < minDisplayMs) {
-        await new Promise<void>((resolve) => {
-          setTimeout(resolve, minDisplayMs - elapsed);
-        });
-      }
-    } catch (error) {
-      analytics.captureError(error);
-    }
-
-    await navigate({
-      to: "/chat",
-      replace: true,
-    });
-  };
+      await navigate({
+        to: "/chat",
+        replace: true,
+      });
+    },
+    [
+      analytics,
+      invalidateSession,
+      navigate,
+      queryClient,
+      t,
+      unavailableNativeToolBackendSlugs,
+    ],
+  );
 
   const showPrices = step === "ai" && aiPhase === "models";
   let preview = (

@@ -1,5 +1,12 @@
 import type { PropsWithChildren } from "react";
-import { createContext, use, useEffect, useState } from "react";
+import {
+  createContext,
+  use,
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
@@ -61,16 +68,17 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
   const [open, setOpen] = useState(false);
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const availabilityOptions = aiAvailabilityOptions({
-    organizationId: activeOrganizationId,
-  });
+  const availabilityOptions = useMemo(
+    () => aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+    [activeOrganizationId],
+  );
   const { data, isFetching } = useQuery(availabilityOptions);
 
-  const openAIKeyDialog = () => {
+  const openAIKeyDialog = useCallback(() => {
     setOpen(true);
-  };
+  }, []);
 
-  const ensureAIAvailable = async () => {
+  const ensureAIAvailable = useCallback(async () => {
     const availability = await queryClient
       .fetchQuery(availabilityOptions)
       .catch(() => undefined);
@@ -81,13 +89,13 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
 
     setOpen(true);
     return false;
-  };
+  }, [availabilityOptions, queryClient]);
 
-  const openIfAIUnavailable = () => {
+  const openIfAIUnavailable = useCallback(() => {
     if (data && !data.available && !isFetching) {
       setOpen(true);
     }
-  };
+  }, [data, isFetching]);
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- force-closes the dialog whenever the availability query flips to available (e.g. keys configured elsewhere and refetched). `open` is independent user-controlled state set in several places, so it cannot be derived in render, and there is no single data handler that covers every way availability can become true.
   useEffect(() => {
@@ -96,11 +104,14 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
     }
   }, [data?.available]);
 
-  const value = {
-    ensureAIAvailable,
-    openAIKeyDialog,
-    openIfAIUnavailable,
-  };
+  const value = useMemo(
+    () => ({
+      ensureAIAvailable,
+      openAIKeyDialog,
+      openIfAIUnavailable,
+    }),
+    [ensureAIAvailable, openAIKeyDialog, openIfAIUnavailable],
+  );
 
   return (
     <AIAvailabilityContext value={value}>

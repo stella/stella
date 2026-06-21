@@ -1,3 +1,5 @@
+import { useCallback } from "react";
+
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
@@ -30,33 +32,39 @@ export const DecisionFilters = ({
   const t = useTranslations();
 
   /** Update a single filter key, omitting it when empty. */
-  const updateFilter = (
-    key: keyof DecisionListFilters,
-    value: string | null,
-  ) => {
-    const { [key]: _, ...rest } = filters;
-    const trimmed = value || undefined;
-    onFiltersChange({
-      ...rest,
-      ...(trimmed && { [key]: trimmed }),
-    });
-  };
+  const updateFilter = useCallback(
+    (key: keyof DecisionListFilters, value: string | null) => {
+      const { [key]: _, ...rest } = filters;
+      const trimmed = value || undefined;
+      onFiltersChange({
+        ...rest,
+        ...(trimmed && { [key]: trimmed }),
+      });
+    },
+    [filters, onFiltersChange],
+  );
 
   const handleSearchChange = useDebouncedCallback((value: string) => {
     updateFilter("search", value);
   }, 300);
 
-  const handleCourtSelectChange = (value: string | null) => {
-    updateFilter("court", value);
-  };
+  const handleCourtSelectChange = useCallback(
+    (value: string | null) => {
+      updateFilter("court", value);
+    },
+    [updateFilter],
+  );
 
   const handleCourtInputChange = useDebouncedCallback((value: string) => {
     updateFilter("court", value);
   }, 300);
 
-  const handleCountrySelectChange = (value: string | null) => {
-    updateFilter("country", value);
-  };
+  const handleCountrySelectChange = useCallback(
+    (value: string | null) => {
+      updateFilter("country", value);
+    },
+    [updateFilter],
+  );
 
   const handleCountryInputChange = useDebouncedCallback((value: string) => {
     updateFilter("country", value);

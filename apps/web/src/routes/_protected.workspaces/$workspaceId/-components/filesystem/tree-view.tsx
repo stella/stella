@@ -1,4 +1,11 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -248,24 +255,27 @@ const useColumnWidths = (storageKey: string): ColumnWidthsApi => {
     }
   });
 
-  const setWidth = (id: string, width: number) => {
-    const clamped = Math.max(
-      MIN_COL_WIDTH_PX,
-      Math.min(MAX_COL_WIDTH_PX, Math.round(width)),
-    );
-    setWidths((prev) => {
-      if (prev[id] === clamped) {
-        return prev;
-      }
-      const next = { ...prev, [id]: clamped };
-      try {
-        window.localStorage.setItem(storageKey, JSON.stringify(next));
-      } catch {
-        // Ignore quota / unavailable storage.
-      }
-      return next;
-    });
-  };
+  const setWidth = useCallback(
+    (id: string, width: number) => {
+      const clamped = Math.max(
+        MIN_COL_WIDTH_PX,
+        Math.min(MAX_COL_WIDTH_PX, Math.round(width)),
+      );
+      setWidths((prev) => {
+        if (prev[id] === clamped) {
+          return prev;
+        }
+        const next = { ...prev, [id]: clamped };
+        try {
+          window.localStorage.setItem(storageKey, JSON.stringify(next));
+        } catch {
+          // Ignore quota / unavailable storage.
+        }
+        return next;
+      });
+    },
+    [storageKey],
+  );
 
   return { widths, setWidth };
 };
@@ -306,7 +316,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     (s) => s.clearFilesystemSelectedIds,
   );
 
-  const handleSelect = (entityId: string, meta: boolean) => {
+  const handleSelect = useCallback((entityId: string, meta: boolean) => {
     setSelectedIds((prev) => {
       if (meta) {
         const next = new Set(prev);
@@ -324,7 +334,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       }
       return new Set([entityId]);
     });
-  };
+  }, []);
 
   // Background right-click context menu
   const [bgContextAnchor, setBgContextAnchor] = useState<{
@@ -334,22 +344,30 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const { filters, sorts, hiddenProperties } = view.layout;
   const primarySort = sorts.at(0) ?? null;
-  const fieldIds = visibleEntityFieldIds({ hiddenProperties, properties });
+  const fieldIds = useMemo(
+    () => visibleEntityFieldIds({ hiddenProperties, properties }),
+    [hiddenProperties, properties],
+  );
 
-  const handleSortColumn = (propertyId: string) => {
-    const desc =
-      primarySort?.propertyId === propertyId ? !primarySort.desc : false;
-    updateView.mutate({
-      viewId: view.id,
-      layout: {
-        ...view.layout,
-        sorts: [
-          { propertyId, desc },
-          ...view.layout.sorts.filter((sort) => sort.propertyId !== propertyId),
-        ],
-      },
-    });
-  };
+  const handleSortColumn = useCallback(
+    (propertyId: string) => {
+      const desc =
+        primarySort?.propertyId === propertyId ? !primarySort.desc : false;
+      updateView.mutate({
+        viewId: view.id,
+        layout: {
+          ...view.layout,
+          sorts: [
+            { propertyId, desc },
+            ...view.layout.sorts.filter(
+              (sort) => sort.propertyId !== propertyId,
+            ),
+          ],
+        },
+      });
+    },
+    [primarySort, updateView, view.id, view.layout],
+  );
 
   const { data: entityData } = useSuspenseQuery(
     useFilesystemEntitiesOptions({
@@ -363,15 +381,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const data = entityData.entities;
 
   // Build a lookup for drag preview data from selected entities.
-  const entityMap = (() => {
+  const entityMap = useMemo(() => {
     const map = new Map<string, WorkspaceEntity>();
     for (const e of data) {
       map.set(e.entityId, e);
     }
     return map;
-  })();
-  const tree = buildTree(data);
-  const treeNodeMap = (() => {
+  }, [data]);
+  const tree = useMemo(() => buildTree(data), [data]);
+  const treeNodeMap = useMemo(() => {
     const map = new Map<string, TableTreeNode>();
     const visit = (nodes: readonly TableTreeNode[]) => {
       for (const node of nodes) {
@@ -381,34 +399,40 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     };
     visit(tree);
     return map;
-  })();
+  }, [tree]);
 
-  const getSelectedDragItems = (entityIds: Set<string>): DragPreviewData[] => {
-    const items: DragPreviewData[] = [];
-    for (const id of entityIds) {
-      const entity = entityMap.get(id);
-      if (entity) {
-        const f = getFirstFile(entity);
-        items.push({
-          name: getEntityName(entity),
-          kind: entity.kind,
-          mimeType: f?.mimeType ?? null,
-        });
+  const getSelectedDragItems = useCallback(
+    (entityIds: Set<string>): DragPreviewData[] => {
+      const items: DragPreviewData[] = [];
+      for (const id of entityIds) {
+        const entity = entityMap.get(id);
+        if (entity) {
+          const f = getFirstFile(entity);
+          items.push({
+            name: getEntityName(entity),
+            kind: entity.kind,
+            mimeType: f?.mimeType ?? null,
+          });
+        }
       }
-    }
-    return items;
-  };
+      return items;
+    },
+    [entityMap],
+  );
 
-  const getSelectedEntities = (ids: Set<string>): WorkspaceEntity[] => {
-    const entities: WorkspaceEntity[] = [];
-    for (const id of ids) {
-      const entity = treeNodeMap.get(id);
-      if (entity) {
-        entities.push(entity);
+  const getSelectedEntities = useCallback(
+    (ids: Set<string>): WorkspaceEntity[] => {
+      const entities: WorkspaceEntity[] = [];
+      for (const id of ids) {
+        const entity = treeNodeMap.get(id);
+        if (entity) {
+          entities.push(entity);
+        }
       }
-    }
-    return entities;
-  };
+      return entities;
+    },
+    [treeNodeMap],
+  );
 
   // Drill-down navigation (persisted in URL search params)
   const currentFolderId = useSearch({
@@ -417,16 +441,16 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   });
   const navigate = useNavigate();
 
-  const visibleNodes = (() => {
+  const visibleNodes = useMemo(() => {
     if (!currentFolderId) {
       return tree;
     }
     const target = findNode(tree, currentFolderId);
     return target ? target.children : tree;
-  })();
+  }, [tree, currentFolderId]);
 
   // Cmd+A: select all visible entities.
-  const allVisibleIds = (() => {
+  const allVisibleIds = useMemo(() => {
     const ids = new Set<string>();
     const collect = (nodes: readonly TableTreeNode[]) => {
       for (const n of nodes) {
@@ -438,7 +462,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     };
     collect(visibleNodes);
     return ids;
-  })();
+  }, [visibleNodes]);
 
   useHotkey(
     HOTKEYS.SELECT_ALL,
@@ -448,13 +472,13 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     { ignoreInputs: true },
   );
 
-  const clearSelection = () => {
+  const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
-  };
+  }, []);
 
   useHotkey("Escape", clearSelection, { ignoreInputs: true });
 
-  const breadcrumbs = (() => {
+  const breadcrumbs = useMemo(() => {
     if (!currentFolderId) {
       return [];
     }
@@ -469,24 +493,27 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       current = current.parentId ? nodeMap.get(current.parentId) : undefined;
     }
     return trail;
-  })();
+  }, [currentFolderId, data]);
 
-  const navigateToFolder = async (folderId?: string) => {
-    await navigate({
-      from: "/workspaces/$workspaceId/$viewId",
-      search: (prev) => ({ ...prev, folder: folderId }),
-      replace: true,
-    });
-  };
+  const navigateToFolder = useCallback(
+    async (folderId?: string) => {
+      await navigate({
+        from: "/workspaces/$workspaceId/$viewId",
+        search: (prev) => ({ ...prev, folder: folderId }),
+        replace: true,
+      });
+    },
+    [navigate],
+  );
 
   // Expanded folders state: starts with all folders expanded.
-  const allFolderIds = collectFolderIds(data);
+  const allFolderIds = useMemo(() => collectFolderIds(data), [data]);
   const [expandedIds, setExpandedIds] = useState(allFolderIds);
   const allExpanded =
     allFolderIds.size > 0 &&
     [...allFolderIds].every((id) => expandedIds.has(id));
 
-  const toggleFolder = (folderId: string) => {
+  const toggleFolder = useCallback((folderId: string) => {
     setExpandedIds((prev) => {
       const next = new Set(prev);
       if (next.has(folderId)) {
@@ -496,15 +523,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       }
       return next;
     });
-  };
+  }, []);
 
-  const toggleAll = () => {
+  const toggleAll = useCallback(() => {
     if (allExpanded) {
       setExpandedIds(new Set());
     } else {
       setExpandedIds(new Set(allFolderIds));
     }
-  };
+  }, [allExpanded, allFolderIds]);
 
   const setFolderState = useWorkspaceStore((s) => s.setFolderState);
   const toggleVersion = useWorkspaceStore((s) => s.folderState.toggleVersion);
@@ -530,59 +557,73 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     });
   }, [allExpanded, allFolderIds.size, setFolderState]);
 
-  const metadataLabels = {
-    [FILESYSTEM_CREATED_BY_ID]: t("workspaces.filesystem.author"),
-    [FILESYSTEM_UPDATED_AT_ID]: t("workspaces.filesystem.lastUpdated"),
-    [FILESYSTEM_VERSION_ID]: t("workspaces.filesystem.version"),
-  };
+  const metadataLabels = useMemo(
+    () => ({
+      [FILESYSTEM_CREATED_BY_ID]: t("workspaces.filesystem.author"),
+      [FILESYSTEM_UPDATED_AT_ID]: t("workspaces.filesystem.lastUpdated"),
+      [FILESYSTEM_VERSION_ID]: t("workspaces.filesystem.version"),
+    }),
+    [t],
+  );
 
-  const extraColumns = resolveExtraColumns(
-    hiddenProperties,
-    properties,
-    metadataLabels,
+  const extraColumns = useMemo(
+    () => resolveExtraColumns(hiddenProperties, properties, metadataLabels),
+    [hiddenProperties, properties, metadataLabels],
   );
 
   const { widths: columnWidths, setWidth: setColumnWidth } = useColumnWidths(
     `stella.tree-view.column-widths.${view.id}`,
   );
 
-  const gridTemplate = buildGridTemplate(extraColumns, columnWidths);
+  const gridTemplate = useMemo(
+    () => buildGridTemplate(extraColumns, columnWidths),
+    [columnWidths, extraColumns],
+  );
 
-  const handleHideColumn = (propertyId: string) => {
-    // Generic helper preserves the union discriminant. A bare spread of
-    // `view.layout` plus an object literal would collapse the union.
-    const mergeLayout = <L extends ViewLayout>(
-      layout: L,
-      changes: Partial<L>,
-    ): L => ({ ...layout, ...changes });
-    updateView.mutate({
-      viewId: view.id,
-      layout: mergeLayout(view.layout, {
-        hiddenProperties: [...new Set([...hiddenProperties, propertyId])],
-      }),
-    });
-  };
+  const handleHideColumn = useCallback(
+    (propertyId: string) => {
+      // Generic helper preserves the union discriminant. A bare spread of
+      // `view.layout` plus an object literal would collapse the union.
+      const mergeLayout = <L extends ViewLayout>(
+        layout: L,
+        changes: Partial<L>,
+      ): L => ({ ...layout, ...changes });
+      updateView.mutate({
+        viewId: view.id,
+        layout: mergeLayout(view.layout, {
+          hiddenProperties: [...new Set([...hiddenProperties, propertyId])],
+        }),
+      });
+    },
+    [hiddenProperties, updateView, view.id, view.layout],
+  );
 
-  const handleBgContextMenu = (e: React.MouseEvent) => {
+  const handleBgContextMenu = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     const x = e.clientX;
     const y = e.clientY;
     setBgContextAnchor({
       getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
     });
-  };
+  }, []);
 
-  const handleFolderCreated = (entityId: string) => {
+  const handleFolderCreated = useCallback((entityId: string) => {
     setEditingEntityId(entityId);
     setExpandedIds((prev) => new Set(prev).add(entityId));
-  };
+  }, []);
 
-  const handleSubfolderCreated = (entityId: string, parentId: string) => {
-    setEditingEntityId(entityId);
-    setExpandedIds((prev) => new Set(prev).add(parentId).add(entityId));
-  };
+  const handleSubfolderCreated = useCallback(
+    (entityId: string, parentId: string) => {
+      setEditingEntityId(entityId);
+      setExpandedIds((prev) => new Set(prev).add(parentId).add(entityId));
+    },
+    [],
+  );
 
-  const flattenedRows = flattenFilesystemRows(visibleNodes, expandedIds);
+  const flattenedRows = useMemo(
+    () => flattenFilesystemRows(visibleNodes, expandedIds),
+    [visibleNodes, expandedIds],
+  );
   const rowsViewportRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
     count: flattenedRows.length,
@@ -932,40 +973,46 @@ const ColumnHeaderCell = ({
   const isActive = activeSort?.propertyId === propertyId;
   const SortIcon = activeSort?.desc ? ArrowDownIcon : ArrowUpIcon;
 
-  const handleResizePointerDown = (
-    event: React.PointerEvent<HTMLDivElement>,
-  ) => {
-    event.preventDefault();
-    event.stopPropagation();
-    const startX = event.clientX;
-    const startWidth =
-      currentWidth ?? containerRef.current?.getBoundingClientRect().width ?? 0;
-    const handleMove = (moveEvent: PointerEvent) => {
-      moveEvent.preventDefault();
-      const delta = moveEvent.clientX - startX;
-      onResize(startWidth + delta);
-    };
-    const handleUp = () => {
-      window.removeEventListener("pointermove", handleMove);
-      window.removeEventListener("pointerup", handleUp);
-      document.body.style.cursor = "";
-    };
-    document.body.style.cursor = "col-resize";
-    window.addEventListener("pointermove", handleMove);
-    window.addEventListener("pointerup", handleUp);
-  };
+  const handleResizePointerDown = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      event.preventDefault();
+      event.stopPropagation();
+      const startX = event.clientX;
+      const startWidth =
+        currentWidth ??
+        containerRef.current?.getBoundingClientRect().width ??
+        0;
+      const handleMove = (moveEvent: PointerEvent) => {
+        moveEvent.preventDefault();
+        const delta = moveEvent.clientX - startX;
+        onResize(startWidth + delta);
+      };
+      const handleUp = () => {
+        window.removeEventListener("pointermove", handleMove);
+        window.removeEventListener("pointerup", handleUp);
+        document.body.style.cursor = "";
+      };
+      document.body.style.cursor = "col-resize";
+      window.addEventListener("pointermove", handleMove);
+      window.addEventListener("pointerup", handleUp);
+    },
+    [currentWidth, onResize],
+  );
 
-  const handleContextMenu = (event: React.MouseEvent) => {
-    if (!onHide) {
-      return;
-    }
-    event.preventDefault();
-    const x = event.clientX;
-    const y = event.clientY;
-    setContextAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
-  };
+  const handleContextMenu = useCallback(
+    (event: React.MouseEvent) => {
+      if (!onHide) {
+        return;
+      }
+      event.preventDefault();
+      const x = event.clientX;
+      const y = event.clientY;
+      setContextAnchor({
+        getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
+      });
+    },
+    [onHide],
+  );
 
   return (
     <div

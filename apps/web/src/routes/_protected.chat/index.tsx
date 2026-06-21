@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import {
@@ -102,7 +102,10 @@ function ChatIndex() {
   const { data: groupedThreadPages } = useInfiniteQuery(
     groupedChatThreadsOptions(activeOrganizationId),
   );
-  const groupedThreads = mergeGroupedChatThreadPages(groupedThreadPages?.pages);
+  const groupedThreads = useMemo(
+    () => mergeGroupedChatThreadPages(groupedThreadPages?.pages),
+    [groupedThreadPages?.pages],
+  );
   const anonymized = useChatAnonymized(threadRef);
   const setAnonymized = useSetChatAnonymized(threadRef);
   const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
@@ -216,7 +219,7 @@ function ChatIndex() {
     seedDraftWebSearch,
   ]);
 
-  const pinnedMatters = (() => {
+  const pinnedMatters = useMemo(() => {
     const workspaceById = new Map<string, PinnedMatter>();
     for (const workspace of workspaces ?? []) {
       workspaceById.set(workspace.id, {
@@ -235,22 +238,26 @@ function ChatIndex() {
       }
     }
     return matters.slice(0, 5);
-  })();
+  }, [pinnedOrder, workspaces]);
 
-  const lastAccessedMatters = (workspaces ?? [])
-    .toSorted(
-      (left, right) =>
-        new Date(right.lastActivityAt).getTime() -
-        new Date(left.lastActivityAt).getTime(),
-    )
-    .slice(0, 5)
-    .map((workspace) => ({
-      color: workspace.color,
-      id: workspace.id,
-      lastActivityAt: workspace.lastActivityAt,
-      name: workspace.name,
-      client: workspace.client,
-    }));
+  const lastAccessedMatters = useMemo(
+    () =>
+      (workspaces ?? [])
+        .toSorted(
+          (left, right) =>
+            new Date(right.lastActivityAt).getTime() -
+            new Date(left.lastActivityAt).getTime(),
+        )
+        .slice(0, 5)
+        .map((workspace) => ({
+          color: workspace.color,
+          id: workspace.id,
+          lastActivityAt: workspace.lastActivityAt,
+          name: workspace.name,
+          client: workspace.client,
+        })),
+    [workspaces],
+  );
 
   const visibleMatters =
     pinnedMatters.length > 0 ? pinnedMatters : lastAccessedMatters;
@@ -260,7 +267,7 @@ function ChatIndex() {
       : t("chat.landing.lastAccessedMatters");
   const MattersHeadingIcon = pinnedMatters.length > 0 ? PinIcon : LayersIcon;
 
-  const recentChats = (() => {
+  const recentChats = useMemo(() => {
     const threads: RecentChat[] = [];
     for (const thread of groupedThreads.global) {
       threads.push({
@@ -289,7 +296,7 @@ function ChatIndex() {
           new Date(left.updatedAt).getTime(),
       )
       .slice(0, 5);
-  })();
+  }, [groupedThreads]);
 
   const selectPrompt = (prompt: ChatPrompt) => {
     controller.setContent(prompt.body);

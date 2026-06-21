@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
@@ -153,7 +153,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     setLocalColumnOrder([]);
   }, [configuredGroupBy]);
 
-  const grouping = resolveKanbanGrouping(configuredGroupBy, properties);
+  const grouping = useMemo(
+    () => resolveKanbanGrouping(configuredGroupBy, properties),
+    [configuredGroupBy, properties],
+  );
   const groupByPropertyId = getKanbanGroupingPropertyId(grouping);
   const isStatusGrouping = grouping.type === "status";
   const isBuiltInGrouping = grouping.type === "built-in";
@@ -178,11 +181,15 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       !hiddenProperties.includes(id),
   );
 
-  const fieldIds = visibleEntityFieldIds({
-    hiddenProperties,
-    properties,
-    requiredPropertyIds: groupByProperty ? [groupByProperty.id] : [],
-  });
+  const fieldIds = useMemo(
+    () =>
+      visibleEntityFieldIds({
+        hiddenProperties,
+        properties,
+        requiredPropertyIds: groupByProperty ? [groupByProperty.id] : [],
+      }),
+    [groupByProperty, hiddenProperties, properties],
+  );
 
   const { filters, sorts } = view.layout;
 

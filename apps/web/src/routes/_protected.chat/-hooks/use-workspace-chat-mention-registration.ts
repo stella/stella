@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
@@ -50,27 +50,36 @@ export const useWorkspaceChatMentionRegistration = (
     select: (data) =>
       data.find((view) => view.id === viewId) ?? data.at(0) ?? null,
   });
-  const { filters, sorts } = getMentionViewScope(activeView?.layout);
-  const createSearchOptions = (query: string) => {
-    const search = query.trim();
-    return entitiesOptions({
-      workspaceId,
-      filters,
-      sorts,
-      ...(search && { search }),
-      page: 1,
-      pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
-    });
-  };
-  const searchEntities = async (query: string) => {
-    const options = createSearchOptions(query);
-    if (pendingSearchRef.current) {
-      pendingSearchRef.current.queryKey = options.queryKey;
-    }
-    const data = await queryClient.fetchQuery(options);
+  const { filters, sorts } = useMemo(
+    () => getMentionViewScope(activeView?.layout),
+    [activeView?.layout],
+  );
+  const createSearchOptions = useCallback(
+    (query: string) => {
+      const search = query.trim();
+      return entitiesOptions({
+        workspaceId,
+        filters,
+        sorts,
+        ...(search && { search }),
+        page: 1,
+        pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+      });
+    },
+    [filters, sorts, workspaceId],
+  );
+  const searchEntities = useCallback(
+    async (query: string) => {
+      const options = createSearchOptions(query);
+      if (pendingSearchRef.current) {
+        pendingSearchRef.current.queryKey = options.queryKey;
+      }
+      const data = await queryClient.fetchQuery(options);
 
-    return toEntityMentionOptions({ data, workspaceId });
-  };
+      return toEntityMentionOptions({ data, workspaceId });
+    },
+    [createSearchOptions, queryClient, workspaceId],
+  );
   const debouncedSearchEntities = useDebouncedCallback(
     async ({
       query,
@@ -98,32 +107,35 @@ export const useWorkspaceChatMentionRegistration = (
     },
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
-  const searchMentionItems = async (query: string) => {
-    const previous = pendingSearchRef.current;
-    if (previous) {
-      debouncedSearchEntities.cancel();
-      pendingSearchRef.current = null;
-      if (previous.queryKey) {
-        await queryClient.cancelQueries({
-          exact: true,
-          queryKey: previous.queryKey,
-        });
+  const searchMentionItems = useCallback(
+    async (query: string) => {
+      const previous = pendingSearchRef.current;
+      if (previous) {
+        debouncedSearchEntities.cancel();
+        pendingSearchRef.current = null;
+        if (previous.queryKey) {
+          await queryClient.cancelQueries({
+            exact: true,
+            queryKey: previous.queryKey,
+          });
+        }
       }
-    }
 
-    const options = createSearchOptions(query);
-    const cachedData = queryClient.getQueryData<EntityMentionPage>(
-      options.queryKey,
-    );
-    if (cachedData) {
-      return toEntityMentionOptions({ data: cachedData, workspaceId });
-    }
+      const options = createSearchOptions(query);
+      const cachedData = queryClient.getQueryData<EntityMentionPage>(
+        options.queryKey,
+      );
+      if (cachedData) {
+        return toEntityMentionOptions({ data: cachedData, workspaceId });
+      }
 
-    return await new Promise<ChatMentionOption[]>((resolve) => {
-      pendingSearchRef.current = { queryKey: null, resolve };
-      void debouncedSearchEntities({ query, resolve });
-    });
-  };
+      return await new Promise<ChatMentionOption[]>((resolve) => {
+        pendingSearchRef.current = { queryKey: null, resolve };
+        void debouncedSearchEntities({ query, resolve });
+      });
+    },
+    [createSearchOptions, debouncedSearchEntities, queryClient, workspaceId],
+  );
 
   // Tear down the in-flight debounced search whenever its identity changes
   // or the hook unmounts: cancel the pending timer and settle the dangling

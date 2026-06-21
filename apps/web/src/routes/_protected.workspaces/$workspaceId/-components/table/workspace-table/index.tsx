@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
 import { extractClosestEdge } from "@atlaskit/pragmatic-drag-and-drop-hitbox/closest-edge";
@@ -146,23 +153,25 @@ export const WorkspaceTable = ({
   });
 
   const rowModel = table.getRowModel();
-  const selectableRowIds = rowModel.rows
-    .filter((row) => row.getCanSelect())
-    .map((row) => row.id);
+  const selectableRowIds = useMemo(
+    () =>
+      rowModel.rows.filter((row) => row.getCanSelect()).map((row) => row.id),
+    [rowModel.rows],
+  );
   const selectAllState = getSelectAllState({
     selectableRowIds,
     rowSelection: table.state.rowSelection,
   });
-  const handleToggleSelectAll = () => {
+  const handleToggleSelectAll = useCallback(() => {
     table.setRowSelection(
       getNextSelectAllRowSelection({
         selectableRowIds,
         rowSelection: table.state.rowSelection,
       }),
     );
-  };
+  }, [selectableRowIds, table]);
 
-  const rowLabels = (() => {
+  const rowLabels = useMemo(() => {
     // Compute logical row labels that account for collapsed
     // folder children. Each visible row gets a 1-based number;
     // collapsed folders show a range.
@@ -187,9 +196,12 @@ export const WorkspaceTable = ({
       }
     }
     return labels;
-  })();
-  const getVirtualRowKey = (index: number) =>
-    rowModel.rows.at(index)?.original.entityId ?? `table-row-${index}`;
+  }, [rowModel]);
+  const getVirtualRowKey = useCallback(
+    (index: number) =>
+      rowModel.rows.at(index)?.original.entityId ?? `table-row-${index}`,
+    [rowModel.rows],
+  );
   const rowVirtualizer = useVirtualizer({
     count: rowModel.rows.length,
     getScrollElement: () => tableWrapperRef.current,
@@ -246,49 +258,48 @@ export const WorkspaceTable = ({
     width: gridWidth,
   };
   const horizontalMaxScroll = Math.max(0, gridWidth - wrapperWidth);
-  const handleColumnReorder = (
-    sourceId: string,
-    targetId: string,
-    edge: ColumnDropEdge,
-  ) => {
-    const sourceColumn = table.getColumn(sourceId);
-    const targetColumn = table.getColumn(targetId);
-    if (!sourceColumn || !targetColumn) {
-      return;
-    }
+  const handleColumnReorder = useCallback(
+    (sourceId: string, targetId: string, edge: ColumnDropEdge) => {
+      const sourceColumn = table.getColumn(sourceId);
+      const targetColumn = table.getColumn(targetId);
+      if (!sourceColumn || !targetColumn) {
+        return;
+      }
 
-    const pinning = getColumnPinningGroup(sourceColumn);
-    if (
-      pinning !== "center" &&
-      pinning === getColumnPinningGroup(targetColumn)
-    ) {
-      table.setColumnPinning((prev) => ({
-        ...prev,
-        [pinning]: reorderColumnIds({
-          ids: prev[pinning],
-          sourceId,
-          targetId,
-          edge,
-        }),
-      }));
-      return;
-    }
+      const pinning = getColumnPinningGroup(sourceColumn);
+      if (
+        pinning !== "center" &&
+        pinning === getColumnPinningGroup(targetColumn)
+      ) {
+        table.setColumnPinning((prev) => ({
+          ...prev,
+          [pinning]: reorderColumnIds({
+            ids: prev[pinning],
+            sourceId,
+            targetId,
+            edge,
+          }),
+        }));
+        return;
+      }
 
-    const currentVisibleIds = orderedColumns.map((column) => column.id);
-    const reorderedVisibleIds = reorderColumnIds({
-      ids: currentVisibleIds,
-      sourceId,
-      targetId,
-      edge,
-    });
-    const visibleIdSet = new Set(currentVisibleIds);
-    const hiddenIds = table
-      .getAllLeafColumns()
-      .map((column) => column.id)
-      .filter((id) => !visibleIdSet.has(id));
+      const currentVisibleIds = orderedColumns.map((column) => column.id);
+      const reorderedVisibleIds = reorderColumnIds({
+        ids: currentVisibleIds,
+        sourceId,
+        targetId,
+        edge,
+      });
+      const visibleIdSet = new Set(currentVisibleIds);
+      const hiddenIds = table
+        .getAllLeafColumns()
+        .map((column) => column.id)
+        .filter((id) => !visibleIdSet.has(id));
 
-    table.setColumnOrder([...reorderedVisibleIds, ...hiddenIds]);
-  };
+      table.setColumnOrder([...reorderedVisibleIds, ...hiddenIds]);
+    },
+    [orderedColumns, table],
+  );
 
   useExternalSyncEffect(() => {
     const element = tableWrapperRef.current;

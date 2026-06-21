@@ -157,6 +157,7 @@ export const ClauseEditor = ({
       editor.commands.setContent(clauseBodyToTipTap(content));
     }
     return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editor and content are stable refs; only re-sync when contentKey changes
   }, [contentKey]);
 
   const toggleBold = () => {

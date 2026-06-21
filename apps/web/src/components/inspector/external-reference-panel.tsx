@@ -1,4 +1,11 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { RefObject } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -88,7 +95,7 @@ const useInspectorFind = ({
   const allHighlightName = `stella-inspector-find-${highlightKey}`;
   const activeHighlightName = `stella-inspector-find-active-${highlightKey}`;
 
-  const clearFind = () => {
+  const clearFind = useCallback(() => {
     setFindState((prev) =>
       prev.open ? { ...prev, query: "", matchCount: 0, activeIndex: 0 } : prev,
     );
@@ -96,24 +103,24 @@ const useInspectorFind = ({
     CSS.highlights?.delete(allHighlightName);
     // eslint-disable-next-line typescript/no-unnecessary-condition -- CSS.highlights is not available in every supported browser.
     CSS.highlights?.delete(activeHighlightName);
-  };
+  }, [activeHighlightName, allHighlightName]);
 
-  const closeFind = () => {
+  const closeFind = useCallback(() => {
     setFindState(FIND_CLOSED);
-  };
+  }, []);
 
-  const openFind = () => {
+  const openFind = useCallback(() => {
     if (!enabled) {
       return;
     }
     setFindState((prev) => (prev.open ? prev : FIND_OPENED));
-  };
+  }, [enabled]);
 
-  const setFindQuery = (query: string) => {
+  const setFindQuery = useCallback((query: string) => {
     setFindState((prev) => (prev.open ? { ...prev, query } : prev));
-  };
+  }, []);
 
-  const nextMatch = () => {
+  const nextMatch = useCallback(() => {
     setFindState((prev) => {
       if (!prev.open || prev.matchCount === 0) {
         return prev;
@@ -123,9 +130,9 @@ const useInspectorFind = ({
         activeIndex: (prev.activeIndex + 1) % prev.matchCount,
       };
     });
-  };
+  }, []);
 
-  const previousMatch = () => {
+  const previousMatch = useCallback(() => {
     setFindState((prev) => {
       if (!prev.open || prev.matchCount === 0) {
         return prev;
@@ -135,7 +142,7 @@ const useInspectorFind = ({
         activeIndex: (prev.activeIndex - 1 + prev.matchCount) % prev.matchCount,
       };
     });
-  };
+  }, []);
 
   const findOpen = findState.open;
   const findQuery = findState.open ? findState.query : "";
@@ -672,18 +679,32 @@ export const ExternalReferencePanel = ({
     provider !== undefined ||
     connectorSlug !== undefined ||
     sourceToolName !== undefined;
-  const activeExternal = canPreview
-    ? {
-        connectorSlug,
-        provider,
-        snippet: previewSnippet,
-        sourceToolName,
-        text: previewText,
-        title: previewTitle ?? tab.label,
-        url: safeHref,
-      }
-    : undefined;
-  const highlightKey = sanitizeHighlightKey(tab.id);
+  const activeExternal = useMemo(
+    () =>
+      canPreview
+        ? {
+            connectorSlug,
+            provider,
+            snippet: previewSnippet,
+            sourceToolName,
+            text: previewText,
+            title: previewTitle ?? tab.label,
+            url: safeHref,
+          }
+        : undefined,
+    [
+      canPreview,
+      connectorSlug,
+      provider,
+      previewText,
+      previewTitle,
+      previewSnippet,
+      safeHref,
+      tab.label,
+      sourceToolName,
+    ],
+  );
+  const highlightKey = useMemo(() => sanitizeHighlightKey(tab.id), [tab.id]);
   const contentRef = useRef<HTMLElement | null>(null);
   const findInputRef = useRef<HTMLInputElement | null>(null);
   const {
@@ -714,25 +735,25 @@ export const ExternalReferencePanel = ({
           connectorSlug,
           connectors: mcpConnectorsData?.connectors ?? [],
         }));
-  const requestOpenExternal = (href: string) => {
+  const requestOpenExternal = useCallback((href: string) => {
     setConfirmHref(href);
-  };
-  const requestSafeExternalOpen = () => {
+  }, []);
+  const requestSafeExternalOpen = useCallback(() => {
     if (safeHref === undefined) {
       return;
     }
 
     requestOpenExternal(safeHref);
-  };
-  const openConfirmedExternal = () => {
+  }, [requestOpenExternal, safeHref]);
+  const openConfirmedExternal = useCallback(() => {
     if (confirmHref === undefined) {
       return;
     }
 
     window.open(confirmHref, "_blank", "noopener,noreferrer");
     setConfirmHref(undefined);
-  };
-  const copyConfirmHref = async () => {
+  }, [confirmHref]);
+  const copyConfirmHref = useCallback(async () => {
     if (confirmHref === undefined) {
       return;
     }
@@ -743,7 +764,7 @@ export const ExternalReferencePanel = ({
     } catch {
       void stellaToast.error(t("common.error"));
     }
-  };
+  }, [confirmHref, t]);
 
   useExternalSyncEffect(() => {
     if (!findOpen) {

@@ -1,4 +1,4 @@
-import { useDeferredValue, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 
 import type { ToolUIPart } from "ai";
 import {
@@ -128,7 +128,7 @@ type DocumentPreviewProps = {
 
 const DocumentPreview = ({ name, source }: DocumentPreviewProps) => {
   const t = useTranslations();
-  const snippet = extractPreviewSnippet(source);
+  const snippet = useMemo(() => extractPreviewSnippet(source), [source]);
 
   if (!name && !snippet) {
     return null;
@@ -244,7 +244,7 @@ const MatterPickerSection = ({
   const [selectedMatterId, setSelectedMatterId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const filtered = (() => {
+  const filtered = useMemo(() => {
     const q = deferredSearch.trim().toLowerCase();
     if (q.length === 0) {
       return matters;
@@ -254,7 +254,7 @@ const MatterPickerSection = ({
         m.name.toLowerCase().includes(q) ||
         (m.client?.displayName ?? "").toLowerCase().includes(q),
     );
-  })();
+  }, [matters, deferredSearch]);
 
   const handleContinue = async () => {
     if (!selectedMatterId || isSubmitting) {

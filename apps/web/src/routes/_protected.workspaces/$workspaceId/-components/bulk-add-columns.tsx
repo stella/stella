@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useRef, useState } from "react";
+import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
@@ -102,7 +102,7 @@ export const BulkAddColumns = ({
     }
   };
 
-  const triggerFlash = () => {
+  const triggerFlash = useCallback(() => {
     if (flashTimerRef.current !== null) {
       clearTimeout(flashTimerRef.current);
     }
@@ -111,7 +111,7 @@ export const BulkAddColumns = ({
       setFlashClose(false);
       flashTimerRef.current = null;
     }, 700);
-  };
+  }, []);
 
   if (isLimitReached) {
     return null;
@@ -240,37 +240,47 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
   const startWorkflow = useStartWorkflow(workspaceId);
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
 
-  const fileProperties: FileChip[] = properties
-    .filter((p) => p.content.type === "file")
-    .map((p) => ({ id: p.id, name: p.name }));
-  const allProperties: FileChip[] = properties.map((p) => ({
-    id: p.id,
-    name: p.name,
-  }));
-  const defaultFileIds = fileProperties.map((p) => p.id);
+  const fileProperties = useMemo<FileChip[]>(
+    () =>
+      properties
+        .filter((p) => p.content.type === "file")
+        .map((p) => ({ id: p.id, name: p.name })),
+    [properties],
+  );
+  const allProperties = useMemo<FileChip[]>(
+    () => properties.map((p) => ({ id: p.id, name: p.name })),
+    [properties],
+  );
+  const defaultFileIds = useMemo(
+    () => fileProperties.map((p) => p.id),
+    [fileProperties],
+  );
 
   const [drafts, setDrafts] = useState<Draft[]>(() => [
     makeEmptyDraft(0, defaultFileIds),
   ]);
   const nextId = useNextId(drafts.length);
 
-  const updateDraft = (id: number, patch: Partial<Draft>) => {
+  const updateDraft = useCallback((id: number, patch: Partial<Draft>) => {
     setDrafts((prev) =>
       prev.map((d) => (d.id === id ? { ...d, ...patch } : d)),
     );
-  };
+  }, []);
 
-  const removeDraft = (id: number) => {
+  const removeDraft = useCallback((id: number) => {
     setDrafts((prev) =>
       prev.length === 1 ? prev : prev.filter((d) => d.id !== id),
     );
-  };
+  }, []);
 
-  const addDraft = () => {
+  const addDraft = useCallback(() => {
     setDrafts((prev) => [...prev, makeEmptyDraft(nextId(), defaultFileIds)]);
-  };
+  }, [defaultFileIds, nextId]);
 
-  const validDrafts = drafts.filter((d) => d.name.trim().length > 0);
+  const validDrafts = useMemo(
+    () => drafts.filter((d) => d.name.trim().length > 0),
+    [drafts],
+  );
   const canSubmit = validDrafts.length > 0 && !batch.isPending;
 
   dirtyRef.current = drafts.some(
@@ -385,10 +395,10 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
 
 const useNextId = (initial: number) => {
   const ref = useRef(initial);
-  return () => {
+  return useCallback(() => {
     ref.current += 1;
     return ref.current;
-  };
+  }, []);
 };
 
 type DraftCardProps = {
@@ -426,20 +436,23 @@ const DraftCard = ({
     [draft.id],
   );
 
-  const handleMentions = (mentions: string[]) => {
-    onChange({ mentions });
-  };
+  const handleMentions = useCallback(
+    (mentions: string[]) => {
+      onChange({ mentions });
+    },
+    [onChange],
+  );
 
-  const handleEditorReady = (editor: Editor) => {
+  const handleEditorReady = useCallback((editor: Editor) => {
     editorRef.current = editor;
-  };
+  }, []);
 
   const trimmedName = draft.name.trim();
   const isAi = draft.tool === "ai-model";
   const autoPromptDisabled =
     !isAi || trimmedName.length === 0 || suggestPrompt.isPending;
 
-  const handleAutoPrompt = () => {
+  const handleAutoPrompt = useCallback(() => {
     if (autoPromptDisabled) {
       return;
     }
@@ -467,13 +480,28 @@ const DraftCard = ({
         },
       },
     );
-  };
+  }, [
+    autoPromptDisabled,
+    draft.contentType,
+    onChange,
+    suggestPrompt,
+    t,
+    trimmedName,
+    workspaceId,
+  ]);
 
-  const sourceIds = [...new Set([...draft.fileIds, ...draft.mentions])];
-  const selectedFiles = sourceIds.flatMap((id) => {
-    const found = allProperties.find((p) => p.id === id);
-    return found ? [found] : [];
-  });
+  const sourceIds = useMemo(
+    () => [...new Set([...draft.fileIds, ...draft.mentions])],
+    [draft.fileIds, draft.mentions],
+  );
+  const selectedFiles = useMemo(
+    () =>
+      sourceIds.flatMap((id) => {
+        const found = allProperties.find((p) => p.id === id);
+        return found ? [found] : [];
+      }),
+    [sourceIds, allProperties],
+  );
   const availableFiles = allProperties.filter((p) => !sourceIds.includes(p.id));
   const needsOptions =
     draft.contentType === "single-select" ||
