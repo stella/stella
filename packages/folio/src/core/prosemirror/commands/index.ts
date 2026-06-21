@@ -67,6 +67,7 @@ export {
   applyStyle,
   clearStyle,
   getStyleId,
+  toggleBidi,
   setRtl,
   setLtr,
 } from "./paragraph";

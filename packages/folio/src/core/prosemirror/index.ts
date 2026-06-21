@@ -119,6 +119,7 @@ export {
   applyStyle,
   clearStyle,
   getStyleId,
+  toggleBidi,
   setRtl,
   setLtr,
   // Table operations

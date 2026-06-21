@@ -1263,6 +1263,7 @@ type Messages = {
     "somethingWentWrong": "Something went wrong";
     "synced": "Synced";
     "syncing": "Syncing";
+    "textDirection": "Text direction";
     "textEditingMenu": "Text editing menu";
     "textFormattingGroup": "Text formatting";
     "toggleTrackChanges": "Toggle Track Changes";

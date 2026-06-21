@@ -1260,6 +1260,7 @@
     "somethingWentWrong": "Une erreur s’est produite",
     "synced": "Synchronisé",
     "syncing": "Synchronisation",
+    "textDirection": "Sens du texte",
     "textEditingMenu": "Menu d’édition de texte",
     "textFormattingGroup": "Mise en forme du texte",
     "toggleTrackChanges": "Activer le suivi des modifications",
