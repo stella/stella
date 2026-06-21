@@ -175,7 +175,7 @@ export default defineConfig({
     "no-unexpected-multiline": "off",
     "max-classes-per-file": "off",
     "class-methods-use-this": "off",
-    "no-unmodified-loop-condition": "off",
+    "no-unmodified-loop-condition": "error",
     "no-loop-func": "error",
     complexity: "off",
     "func-style": "off",

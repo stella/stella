@@ -165,7 +165,7 @@ export const groupCalendarTasksByDate = ({
           : null;
 
       if (endDate && endDate > startDate) {
-        const current = utcDateFromKey(startDate);
+        let current = utcDateFromKey(startDate);
         const end = utcDateFromKey(endDate);
         if (!current || !end) {
           continue;
@@ -176,7 +176,7 @@ export const groupCalendarTasksByDate = ({
             entity,
             propertyId: propId,
           });
-          current.setUTCDate(current.getUTCDate() + 1);
+          current = addUTCDays(current, 1);
         }
       } else {
         appendToMapArray(map, startDate, { entity, propertyId: propId });
@@ -195,4 +195,10 @@ const appendToMapArray = <K, V>(map: Map<K, V[]>, key: K, value: V): void => {
   }
 
   map.set(key, [value]);
+};
+
+const addUTCDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setUTCDate(next.getUTCDate() + days);
+  return next;
 };

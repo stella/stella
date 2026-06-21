@@ -15,27 +15,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view.logic";
 import { timeEntriesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/time-entries";
 
-type TimesheetWeekViewProps = {
-  workspaceId: string;
-  weekStart: string;
-  weekEnd: string;
-  onDayClick: (date: string) => void;
-};
-
-const getDaysInRange = (start: string, end: string): string[] => {
-  const days: string[] = [];
-  const current = new Date(`${start}T00:00:00`);
-  const endDate = new Date(`${end}T00:00:00`);
-  while (current <= endDate) {
-    const y = current.getFullYear();
-    const m = String(current.getMonth() + 1).padStart(2, "0");
-    const day = String(current.getDate()).padStart(2, "0");
-    days.push(`${y}-${m}-${day}`);
-    current.setDate(current.getDate() + 1);
-  }
-  return days;
-};
-
 export const TimesheetWeekView = ({
   workspaceId,
   weekStart,
@@ -251,4 +230,31 @@ export const TimesheetWeekView = ({
       </table>
     </div>
   );
+};
+
+type TimesheetWeekViewProps = {
+  workspaceId: string;
+  weekStart: string;
+  weekEnd: string;
+  onDayClick: (date: string) => void;
+};
+
+const getDaysInRange = (start: string, end: string): string[] => {
+  const days: string[] = [];
+  let current = new Date(`${start}T00:00:00`);
+  const endDate = new Date(`${end}T00:00:00`);
+  while (current <= endDate) {
+    const y = current.getFullYear();
+    const m = String(current.getMonth() + 1).padStart(2, "0");
+    const day = String(current.getDate()).padStart(2, "0");
+    days.push(`${y}-${m}-${day}`);
+    current = addDays(current, 1);
+  }
+  return days;
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 };
