@@ -194,8 +194,12 @@ export const LIMITS = {
   docxStampMaxBytes: 50 * 1024 * 1024,
   /** Max org-wide custom blacklist terms for anonymization. */
   anonymizationBlacklistEntriesPerOrganization: 1000,
+  /** Max workspace-scoped custom blacklist terms for anonymization. */
+  anonymizationBlacklistEntriesPerWorkspace: 1000,
   /** Max variants per org-wide custom blacklist term. */
   anonymizationBlacklistVariantsPerEntry: 20,
+  /** Max workspace-scoped anonymization allowlist (never-mask) entries. */
+  anonymizationAllowlistEntriesPerWorkspace: 1000,
   /** Recent sessions scanned to detect a new-device/new-IP login. */
   newDeviceLoginSessionScanLimit: 10,
 } as const;
