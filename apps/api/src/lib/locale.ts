@@ -10,6 +10,7 @@
 
 const SUPPORTED_LANGS = [
   "en",
+  "ar",
   "cs",
   "de",
   "es",

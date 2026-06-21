@@ -1,5 +1,6 @@
 import { createTranslator } from "use-intl/core";
 
+import ar from "./langs/ar.json";
 import cs from "./langs/cs.json";
 import de from "./langs/de.json";
 import en from "./langs/en.json";
@@ -15,6 +16,7 @@ import sk from "./langs/sk.json";
 
 const langMessages = {
   en,
+  ar,
   cs,
   de,
   es,
