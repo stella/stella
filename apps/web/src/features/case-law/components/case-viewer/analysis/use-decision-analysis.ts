@@ -15,6 +15,7 @@ import {
   isDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
 
 type AnalysisState =
@@ -90,7 +91,7 @@ export const useDecisionAnalysis = (
   // Clear the marker once the route moves on so returning to the
   // original decision lands in `idle` (matching prior behaviour)
   // instead of resuming a poll the user didn't request again.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id (decisionId change clears generatingFor); lift to a key prop
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset generatingFor when decisionId changes; this is a hook (no element to key in a parent) and setGeneratingFor is also called from generate(), so it is neither lift-to-key nor pure derived state
   useEffect(() => {
     setGeneratingFor(null);
   }, [decisionId]);
@@ -139,8 +140,7 @@ export const useDecisionAnalysis = (
 
   // Mirror a `done` result into the decision query cache so route
   // re-renders pick up the persisted analysis without another fetch.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mirrors query result into the query cache; server-state relay, move into the query layer after review
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (query.data?.kind !== "done") {
       return;
     }

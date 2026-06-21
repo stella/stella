@@ -98,7 +98,7 @@ export function ShortcutHintsOverlay() {
     };
   }, [showDialog]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay/derived state, drives the hints dialog from key-hold state; move into the key-hold handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reacts to the useKeyHold(MOD_KEY) hook output plus suppression state; the trigger is a hook return value with no setter call-site to relay into, so it stays an effect
   useEffect(() => {
     if (isModHeld && !isSuppressedUntilRelease) {
       showDialog();

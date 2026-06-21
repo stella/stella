@@ -5,7 +5,7 @@
  * open (acquire lock + presigned URL) → checkpoint (auto-save) → finalize / cancel.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
@@ -128,13 +128,9 @@ export const useEditSession = ({
   } | null>(null);
   const checkpointQueueRef = useRef(Promise.resolve());
   const releaseContextRef = useRef({ workspaceId, entityId, propertyId });
+  releaseContextRef.current = { workspaceId, entityId, propertyId };
   const isMountedRef = useRef(true);
   const isMounted = () => isMountedRef.current;
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref-mirror of changing props (not external-system sync); set ref at the call site instead
-  useEffect(() => {
-    releaseContextRef.current = { workspaceId, entityId, propertyId };
-  }, [entityId, propertyId, workspaceId]);
 
   // Warn the user before closing the tab with unsaved changes
   useExternalSyncEffect(() => {
@@ -284,11 +280,7 @@ export const useEditSession = ({
     void saveCheckpoint(buffer);
   }, CHECKPOINT_DEBOUNCE_MS);
   const debouncedCheckpointRef = useRef(debouncedCheckpoint);
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref-mirror of a changing callback (not external-system sync); set ref at the call site instead
-  useEffect(() => {
-    debouncedCheckpointRef.current = debouncedCheckpoint;
-  }, [debouncedCheckpoint]);
+  debouncedCheckpointRef.current = debouncedCheckpoint;
 
   useMountEffect(() => {
     isMountedRef.current = true;

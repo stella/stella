@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
@@ -33,6 +33,7 @@ import { useRailContextMenu } from "@/components/inspector/use-rail-context-menu
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
 import Tooltip from "@/components/tooltip";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
   SIDE_RAIL_CONTAINER_CLASS,
@@ -381,8 +382,7 @@ const VerticalTab = ({
   // Flash the tab on (re-)activation.
   const activationSeq = useInspectorStore((s) => s.activationSeq);
   const prevSeq = useRef(activationSeq);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (activation-seq advance → flash tab via ref-edge compare); candidate for useExternalSyncEffect after review
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = tabRef.current;
     if (el && active && activationSeq !== prevSeq.current) {
       el.animate(

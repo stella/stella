@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useOptimistic,
-  useRef,
-  useState,
-  useTransition,
-} from "react";
+import { useOptimistic, useRef, useState, useTransition } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -124,13 +118,12 @@ export const PropertyPopover = ({
   >(null);
   const displayedDependencies = immediateDeps ?? optimisticDeps;
   const latestDependenciesRef = useRef(displayedDependencies);
+  // Mirror the latest render value into the ref during render. Read
+  // only from event handlers (replaceDependency), so this is the
+  // sanctioned latest-value pattern.
+  latestDependenciesRef.current = displayedDependencies;
   const dependencyGenerationRef = useRef(0);
   const [, startDepsTransition] = useTransition();
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mirrors render value into ref; derived bookkeeping, not external-system sync
-  useEffect(() => {
-    latestDependenciesRef.current = displayedDependencies;
-  }, [displayedDependencies]);
 
   // Conditions are editable from the popover without opening the full
   // composer: replaceValue swaps a dependency in place and we save by

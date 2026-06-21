@@ -1,5 +1,3 @@
-import { useEffect } from "react";
-
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -13,6 +11,7 @@ import {
   FrameTitle,
 } from "@stll/ui/components/frame";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import type { McpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { broadcastMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { pageTitle } from "@/lib/page-title";
@@ -40,8 +39,7 @@ function McpOAuthCallbackPage() {
   const status = Route.useSearch({ select: (search) => search.status });
   const reason = Route.useSearch({ select: (search) => search.reason });
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot OAuth broadcast + window.close + fallback-navigate timer; browser-API side-effect bundle with a navigation relay, not a clean external-value sync
-  useEffect(() => {
+  useMountEffect(() => {
     const outcome: McpOAuthOutcome =
       status === "connected"
         ? { status: "connected" }
@@ -56,7 +54,7 @@ function McpOAuthCallbackPage() {
       void navigate({ to: KNOWLEDGE_MCP_PATH });
     }, FALLBACK_NAVIGATE_DELAY_MS);
     return () => window.clearTimeout(fallback);
-  }, [status, reason, navigate]);
+  });
 
   const isError = status === "error";
 

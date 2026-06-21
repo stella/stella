@@ -200,7 +200,7 @@ export const WorkspaceTable = ({
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
   const lastVirtualRow = virtualRows.at(-1);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- infinite-load trigger; event-relay, move into virtualizer onChange/scroll handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- infinite-load trigger that must also re-fire when isFetchingNextPage/hasNextPage flip (not only on virtualizer changes), so it can chain the next page while still parked at the bottom; a virtualizer onChange handler would miss that path, so kept
   useEffect(() => {
     if (!hasNextPage || isFetchingNextPage || !onLoadMore || !lastVirtualRow) {
       return;

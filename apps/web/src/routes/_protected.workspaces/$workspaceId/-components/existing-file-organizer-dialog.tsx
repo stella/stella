@@ -126,15 +126,9 @@ export const ExistingFileOrganizerDialog = ({
   });
   const [showInstructions, setShowInstructions] = useState(false);
   const userInstructionsRef = useRef(userInstructions);
+  userInstructionsRef.current = userInstructions;
   const localeRef = useRef(locale);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref-mirror of state for the latest-value closure; derive at read site instead
-  useEffect(() => {
-    userInstructionsRef.current = userInstructions;
-  }, [userInstructions]);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref-mirror of state for the latest-value closure; derive at read site instead
-  useEffect(() => {
-    localeRef.current = locale;
-  }, [locale]);
+  localeRef.current = locale;
   const [rows, setRows] = useState<ExistingOrganizerRow[]>([]);
   const [suggestionStatus, setSuggestionStatus] =
     useState<SuggestionStatus>("idle");
@@ -1235,7 +1229,7 @@ const InlineNameInput = ({
 }: InlineNameInputProps) => {
   const [draft, setDraft] = useState(value);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- syncs external value into local draft; reset-on-id, lift to key prop
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id: syncs external value into local draft. Rendered at two call sites (file + folder rename); a key prop would remount and drop focus mid-edit, so keep the in-place effect.
   useEffect(() => {
     setDraft(value);
   }, [value]);

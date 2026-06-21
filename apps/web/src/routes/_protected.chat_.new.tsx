@@ -1,8 +1,9 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 
 import { DefaultPendingComponent } from "@/components/route-components";
+import { useMountEffect } from "@/hooks/use-effect";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
 import { pageTitle } from "@/lib/page-title";
 
@@ -27,8 +28,7 @@ function NewChatRedirect() {
   const navigate = useNavigate();
   const didRedirectRef = useRef(false);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- imperative redirect on mount; navigation side-effect, prefer router redirect/beforeLoad, not external-system sync
-  useEffect(() => {
+  useMountEffect(() => {
     if (didRedirectRef.current) {
       return;
     }
@@ -39,7 +39,7 @@ function NewChatRedirect() {
       replace: true,
       to: "/chat/$threadId",
     });
-  }, [navigate]);
+  });
 
   return <DefaultPendingComponent />;
 }

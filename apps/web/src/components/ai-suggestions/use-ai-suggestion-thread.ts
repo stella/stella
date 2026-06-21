@@ -57,7 +57,7 @@ export const useAISuggestionThread = ({
   })();
 
   // Recompute stale status whenever the document changes.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, recomputes suggestion stale status from the editor doc; compute in render or memoize
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- the pending/stale status is persisted into `messages` (the hook's canonical state, written by several mutators and read by the accept/reject pipeline), reconciled here against the live ProseMirror doc. It cannot be deleted and derived in render without restructuring the whole suggestion data model.
   useEffect(() => {
     if (!editorView || allSuggestions.length === 0) {
       return;

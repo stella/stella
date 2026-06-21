@@ -162,7 +162,7 @@ export const KanbanColumn = ({
   const virtualCards = cardVirtualizer.getVirtualItems();
   const lastVirtualCard = virtualCards.at(-1);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- load-more data-fetch trigger reacting to virtualizer position, move into the virtualizer onChange / infinite-query
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- load-more trigger; virtualizer onChange isn't equivalent because the re-check must also fire on prop changes (isLoadingMore flipping false, entities.length growing, hasMore toggling), which onChange wouldn't observe
   useEffect(() => {
     if (!hasMore || isLoadingMore || !onLoadMore || !lastVirtualCard) {
       return;

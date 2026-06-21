@@ -229,7 +229,7 @@ function RouteComponent() {
   // they left them. PDF tabs from another matter will refetch
   // with their own workspaceId; chat tabs are workspace-tagged
   // so they only render under the matter they belong to.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id (workspace state + timer cleanup on matter switch), lift to key prop
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id: clears timers + workspace store on matter switch (cleanup re-runs per workspaceId, not just unmount). This is a route component, so it can't take a key from a parent, and useMountEffect would only clean up on unmount.
   useEffect(
     () => () => {
       for (const timer of previewClearTimersRef.current.values()) {

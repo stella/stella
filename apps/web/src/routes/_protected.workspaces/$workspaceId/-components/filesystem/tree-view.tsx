@@ -515,7 +515,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   // (toggleAll → allExpanded → setFolderState → re-render).
   const toggleAllRef = useRef(toggleAll);
   toggleAllRef.current = toggleAll;
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (toggleVersion bump → toggleAll), move into the header button handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (toggleVersion bump → toggleAll); the trigger is in ViewToolbar's FolderExpandToggle (separate file), but the toggle reads local expandedIds/allFolderIds here, so the action can't be lifted to the button without threading local state up
   useEffect(() => {
     if (toggleVersion === 0) {
       return;
@@ -523,8 +523,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     toggleAllRef.current();
   }, [toggleVersion]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, push allExpanded/hasFolders into the store at the source instead of mirroring via effect
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setFolderState({
       allExpanded,
       hasFolders: allFolderIds.size > 0,
@@ -620,13 +619,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }),
   );
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, push selectedIds into the store at the source instead of mirroring via effect
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setFilesystemSelectedIds(selectedIds);
   }, [selectedIds, setFilesystemSelectedIds]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- cleanup-on-unmount of store selection state; not external-system sync
-  useEffect(() => clearFilesystemSelectedIds, [clearFilesystemSelectedIds]);
+  useMountEffect(() => clearFilesystemSelectedIds);
 
   // Dedicated root-level drop bar (visible during drags).
   useExternalSyncEffect(() => {

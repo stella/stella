@@ -59,7 +59,7 @@ export const PromptSlashList = ({
 
   const safeIndex = Math.min(selectedIndex, Math.max(0, itemCount - 1));
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (reset selection when items change), compute in render
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset selection to 0 when items change; setSelectedIndex is also driven by keyboard nav + hover, so selectedIndex cannot be pure derived state and this stays a reset effect (component is mounted by a tiptap suggestion render(), so lift-to-key does not apply)
   useEffect(() => {
     setSelectedIndex(0);
   }, [items]);

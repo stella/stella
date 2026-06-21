@@ -383,7 +383,7 @@ export function AutocompletePlayground() {
       view.destroy();
       viewRef.current = null;
     };
-  }, []);
+  });
 
   let statusLabel = "";
   if (status === "thinking") {

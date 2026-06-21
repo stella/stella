@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   BanknoteIcon,
@@ -99,7 +99,9 @@ export const CatalogueDetailPanel = ({
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
         {entry.description && (
           <Section title={t("onboarding.catalogueDetailAbout")}>
-            <ExpandableText text={entry.description} />
+            {/* Remount per entry so expanded/overflow state starts fresh
+                (the panel itself is not remounted per selection). */}
+            <ExpandableText key={entry.description} text={entry.description} />
           </Section>
         )}
 
@@ -235,13 +237,6 @@ const ExpandableText = ({ text }: { text: string }) => {
   const ref = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
-
-  // Collapse when switching to a different entry (the panel is not
-  // remounted per selection, so expanded state would otherwise leak).
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id derived state (collapses when text changes); lift to key prop
-  useEffect(() => {
-    setExpanded(false);
-  }, [text]);
 
   // Measure only while clamped, so overflow is detected against the
   // line-clamp height. A ResizeObserver keeps it correct across font

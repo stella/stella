@@ -6,7 +6,7 @@
  * Positions are calculated from actual DOM positions of group headers.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { RefObject } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
@@ -106,8 +106,7 @@ export const AlphabetIndex = ({
   }, [scrollContainerRef, recalc]);
 
   // Recalculate when groups collapse/expand (content reflows)
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived marker state via DOM measurement on reflow; compute in render or memoize from measured layout
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     recalc();
   }, [collapsedGroups, recalc]);
 

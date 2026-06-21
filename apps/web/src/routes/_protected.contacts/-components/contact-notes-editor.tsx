@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -24,14 +24,17 @@ export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
   const latestServerNotesRef = useRef(contact.notes ?? "");
   const skipNextSaveRef = useRef(false);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- syncs server notes prop into local draft state; derived state, reconcile during render after review
-  useEffect(() => {
-    const nextNotes = contact.notes ?? "";
-    setDraft((currentDraft) =>
-      currentDraft === latestServerNotesRef.current ? nextNotes : currentDraft,
-    );
-    latestServerNotesRef.current = nextNotes;
-  }, [contact.notes]);
+  // Reconcile the server notes prop into the local draft during render
+  // (React's sanctioned "adjust state when a prop changes" pattern). When the
+  // server value changes, accept it only if the user hasn't diverged from the
+  // value the server last gave us; otherwise keep the in-progress edit.
+  const nextServerNotes = contact.notes ?? "";
+  if (nextServerNotes !== latestServerNotesRef.current) {
+    if (draft === latestServerNotesRef.current) {
+      setDraft(nextServerNotes);
+    }
+    latestServerNotesRef.current = nextServerNotes;
+  }
 
   const handleSave = () => {
     if (skipNextSaveRef.current) {

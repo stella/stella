@@ -207,10 +207,9 @@ const UnauthorizedError = () => {
   const { mutate } = useSignOut();
   const signOut = useEffectEvent(mutate);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- fires the sign-out action on mount; move into the auth/redirect flow
-  useEffect(() => {
+  useMountEffect(() => {
     signOut();
-  }, []);
+  });
 
   return null;
 };

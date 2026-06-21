@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceJustification } from "@/lib/types";
 import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -55,8 +56,7 @@ export const useSyncJustifications = (
     enabled: enabled && normalizedEntityIds.length > 0,
   });
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- relays query data into the zustand store; server-state sync, move into query select / store integration after review
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!data) {
       return;
     }
@@ -105,8 +105,7 @@ export const useSyncJustificationChunks = (
     combine: combineResults,
   });
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- relays chunked query results into the zustand store with dedup ref; server-state sync, move into query integration after review
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     for (const result of syncedResults) {
       if (!result.data || result.entityIds.length === 0) {
         continue;

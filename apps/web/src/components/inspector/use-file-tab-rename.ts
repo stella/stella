@@ -29,7 +29,7 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
 
   const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
   const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (rename request flag), move into handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- store-driven rename request fanned out to multiple consumers (PDF tabs here, chat tabs in chat-tab-panel); the single requestRename() call-site can't pick the consumer or reach its local rename state, so the relay can't move into the handler
   useEffect(() => {
     if (pendingRenameTabId === null) {
       return;

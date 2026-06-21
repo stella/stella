@@ -5,7 +5,6 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { loadCatalogue } from "@stll/catalogue";
-import type { CountryCode } from "@stll/country-codes";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import {
@@ -112,9 +111,12 @@ export const OnboardingWizard = () => {
     aiProviders: [createProviderCredentialDraft()],
     aiRoleModels: createDefaultRoleModels(),
   }));
-  const [suggestedCountryCodes, setSuggestedCountryCodes] = useState<
-    CountryCode[]
-  >([]);
+  const navigatorLocale =
+    typeof navigator === "undefined" ? "en" : navigator.language || "en";
+  const suggestedCountryCodes = getSuggestedCountryCodes({
+    email: userEmail,
+    locale: navigatorLocale,
+  });
   const [jurisdictionSuggestionApplied, setJurisdictionSuggestionApplied] =
     useState(false);
 
@@ -139,20 +141,7 @@ export const OnboardingWizard = () => {
     }),
   );
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state from userEmail/locale, compute in render
-  useEffect(() => {
-    const locale =
-      typeof navigator === "undefined" ? "en" : navigator.language || "en";
-
-    setSuggestedCountryCodes(
-      getSuggestedCountryCodes({
-        email: userEmail,
-        locale,
-      }),
-    );
-  }, [userEmail]);
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot suggestion apply via setState; event-relay/derived state, move into init or render
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot default apply: waits for async session-derived suggestedCountryCodes, then sets data.practiceJurisdictions + the applied latch once; moving the dual setState into render would be a state-update-during-render hazard
   useEffect(() => {
     const suggestedCountryCode = suggestedCountryCodes.at(0);
 

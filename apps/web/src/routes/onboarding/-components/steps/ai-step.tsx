@@ -118,7 +118,7 @@ export const AIStep = ({
 
   // Drop back to providers phase if a previously-confirmed key
   // was edited after entering the models phase.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay from derived state into parent setter; move into the edit handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- `canEnterModelsPhase` recomputes from row-state resets that land post-commit (via the reset effect below) and from new `providers` props, so there is no single edit handler that owns the transition back to the providers phase.
   useEffect(() => {
     if (phase === "models" && !canEnterModelsPhase) {
       onPhaseChange("providers");
@@ -129,7 +129,7 @@ export const AIStep = ({
 
   // Whenever a key changes against its saved fingerprint, reset
   // that row to idle so the user must save again.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state from props; compute row states in render
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- `rowStates` is not pure derived state: it is also written by saveRow and updateProviders, so it cannot be deleted and computed in render. This effect reconciles validation status against the latest key fingerprints.
   useEffect(() => {
     setRowStates((prev) => {
       let changed = false;
@@ -240,7 +240,7 @@ export const AIStep = ({
 
   // Push the preview list (provider + status) to the wizard so
   // the sidebar mock can render an accurate per-provider state.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- pushes derived data to a parent callback prop; lift the computation to the parent
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- pushes a preview derived from the locally-owned `rowStates` validation status up to the parent. The computation cannot be lifted without hoisting `rowStates` (which saveRow mutates) into the parent.
   useEffect(() => {
     if (!onPreviewChange) {
       return;

@@ -114,7 +114,7 @@ export const ChatTabPanel = ({
   const t = useTranslations();
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- imperative AI-gate open call; event-relay, move into handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- opens the AI-gate dialog once the availability query resolves; no single event triggers it (driven by query state across consumers), so there is no handler call-site to fold it into
   useEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
@@ -266,7 +266,7 @@ export const ChatTabPanel = ({
   const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
   const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
   const startRenameFromStore = labelRename.startEditing;
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (rename request flag), move into handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- store rename-request flag is consumed by multiple tab types (PDF tabs in use-file-tab-rename, chat tabs here) and dispatched generically from the shared context menu; the rename action cannot be folded into the single setter call-site
   useEffect(() => {
     if (pendingRenameTabId === tab.id) {
       startRenameFromStore();

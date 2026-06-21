@@ -343,7 +343,7 @@ export const AnonymizationFacet = ({
   // selected text here on every selection-bearing
   // transaction.
   const folioSelection = useDocumentTextSelection(activeFieldId);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (store selection bump → prefill input state), move into the selection-publishing handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- prefill relayed from a selection the folio editor publishes into a store from its own dispatch wrapper (a different module); there's no in-component setter call-site to host this, and setPendingValue is shared with other paths, so kept
   useEffect(() => {
     if (folioSelection === null) {
       return;
@@ -579,7 +579,7 @@ export const AnonymizationFacet = ({
   const docSelectionSeq = useAnonymizationSelectionStore((s) =>
     s.source === "doc" && s.fieldId === activeFieldId ? s.seq : 0,
   );
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mixed event-relay (setExpandedGroups branch is derived state) plus DOM scroll/flash on a doc-selection bump; needs refactor before it can be external-sync
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- two-pass reaction to a doc-selection store bump: first commit expands the target group (setExpandedGroups, shared with toggleGroup), the re-run then scrolls + flashes the row via DOM imperatives; the expand-then-measure dependency on expandedGroups can't move into render, so kept
   useEffect(() => {
     if (!docSelectionCanonical) {
       return;

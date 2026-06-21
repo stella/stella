@@ -29,6 +29,7 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
@@ -500,16 +501,24 @@ export const useChatSession = ({
   });
   const isGenerating =
     status === "submitted" || status === "streaming" || hasRunningToolCall;
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref sync mirroring derived state into a ref; not external-system sync
+  // These refs are also written optimistically in `sendMessage`/the drain
+  // effect; mirroring the committed value must run post-commit (see the refs'
+  // doc comment above) so a bailed-out render can't strand the ref ahead of
+  // committed state. A render-time assignment would defeat that guarantee.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconcile mutable ref to committed isGenerating post-commit; render-time assign could strand it ahead of a bailed render
   useEffect(() => {
     isGeneratingRef.current = isGenerating;
   }, [isGenerating]);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref sync mirroring state into a ref; not external-system sync
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconcile mutable ref to committed queue post-commit; render-time assign could strand it ahead of a bailed render
   useEffect(() => {
     queueRef.current = queuedMessages;
   }, [queuedMessages]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id (conversationId) resetting local refs/queue; lift to key prop
+  // This is a hook, so there is no element to attach a `key` to: the reset of
+  // these refs + the queue (which fires setState via replaceQueuedMessages) must
+  // happen here. Lifting to a key would require every consumer to remount, which
+  // is out of scope and unverifiable from here.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id inside a hook (no element to key); resets several committed-state refs and the queue
   useEffect(() => {
     conversationIdRef.current = conversationId;
     isGeneratingRef.current = false;
@@ -526,7 +535,11 @@ export const useChatSession = ({
   // into a failing provider just burns quota and spams the user
   // with repeats of the same error. The next manual send (or a
   // successful `regenerate`) lifts the gate.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay/effect chain dispatching the next queued send; move into the turn-finished handler
+  // The "turn finished" trigger is `isGenerating` falling to false, observed
+  // post-commit — the turn ends inside the AI SDK's status machine, not in any
+  // handler we own, so there is no event site to relay this into. It must read
+  // the committed status/queue after the stream settles.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- drains the queue on the post-commit isGenerating-falls-to-false transition; no owned event/handler to relocate into
   useEffect(() => {
     const finishedTurn = wasGeneratingRef.current && !isGenerating;
     wasGeneratingRef.current = isGenerating;
@@ -554,15 +567,18 @@ export const useChatSession = ({
     status,
   ]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, recomputing approved-tool sets from storage when id/org/connectors change; compute in render or lift to key
+  // Re-reads the approved-tool sets from storage when the conversation/org/
+  // connectors change. Both setters are also driven by user approvals and the
+  // cross-tab storage listener below, so the value is genuine local state, not
+  // pure derived state: a render-time compute would discard those mutations.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- re-sync storage-backed approved-tool state on id/org/connector change; setters shared with handlers + storage listener, so not derivable in render
   useEffect(() => {
     setConversationApprovedTools(readConversationApprovedTools(conversationId));
     setAlwaysApprovedTools(
       readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
     );
   }, [conversationId, mcpConnectorIdentities, organizationId]);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- subscribes to window storage/custom events and relays into setState; candidate for useExternalSyncEffect after review
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const handleApprovedToolsChanged = (event: Event) => {
       const detail = getApprovedToolsChangedDetail(event);
       if (!detail) {

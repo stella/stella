@@ -61,7 +61,7 @@ import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
 import { composeRefs } from "@/lib/slot";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
@@ -465,8 +465,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       labelByCanonical,
     });
   };
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- zustand store cleanup of the matches entry on inactive/unmount; move into the store lifecycle, not external-system sync
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const { clear } = useAnonymizationMatchesStore.getState();
     if (!isAnonymizationActive) {
       clear(fieldId);
@@ -496,8 +495,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     }
     useDocumentTextSelectionStore.getState().publish(fieldId, single);
   };
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- zustand store cleanup on unmount/fieldId change; move into the store lifecycle, not external-system sync
-  useEffect(
+  useExternalSyncEffect(
     () => () => {
       useDocumentTextSelectionStore.getState().clear(fieldId);
     },
@@ -861,8 +859,12 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // unmounts AFTER instance B has already registered) doesn't
   // delete B's slot.
   const tokenRef = useRef<ActiveDocxRegistrationToken | null>(null);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- register/unregister lifecycle against the active-docx zustand store; candidate for useExternalSyncEffect after review of the registry contract
-  useEffect(() => {
+  // `isUnlocked` is intentionally NOT in deps: this effect owns the
+  // register/unregister lifecycle, and the next sync below propagates
+  // lock-state changes via `updateEditable`. Including it here would
+  // tear down + re-create the registration on every toggle,
+  // invalidating the token contract documented above.
+  useExternalSyncEffect(() => {
     const token = useActiveDocxStore.getState().registerEditor(entityId, {
       editorRef,
       requestEditMode,
@@ -875,16 +877,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         tokenRef.current = null;
       }
     };
-    // `isUnlocked` is intentionally NOT in deps: this effect owns
-    // the register/unregister lifecycle, and the next effect below
-    // propagates lock-state changes via `updateEditable`. Including
-    // it here would tear down + re-create the registration on every
-    // toggle, invalidating the token contract documented above.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- `isUnlocked` deliberately excluded; see block comment above.
   }, [entityId, requestEditMode]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- pushes the isUnlocked flag into the active-docx zustand store; candidate for useExternalSyncEffect after review of the registry contract
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const token = tokenRef.current;
     if (token === null) {
       return;
@@ -994,13 +989,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     return () => document.removeEventListener("keydown", handler);
   }, [clearQueuedChangeCheckpoint, isUnlocked, saveActiveCheckpoint]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- timer teardown on unmount; candidate for useMountEffect once clearQueuedChangeCheckpoint is stabilized
-  useEffect(
-    () => () => {
-      clearQueuedChangeCheckpoint();
-    },
-    [clearQueuedChangeCheckpoint],
-  );
+  useMountEffect(() => () => {
+    clearQueuedChangeCheckpoint();
+  });
 
   const scheduleChangeCheckpointSave = () => {
     changeCheckpointTimerRef.current = setTimeout(() => {

@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 import type React from "react";
 
 import {
@@ -37,6 +37,7 @@ import {
   PROMPT_EDITOR_SELECTION_CLASS,
   PromptEditorContent,
 } from "@/components/prompt-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   skillCommandsOptions,
   skillsOptions,
@@ -219,17 +220,19 @@ export const PropertyPromptInput = ({
     },
   });
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- relays editor instance to parent callback; event-relay, lift via onEditorReady prop call or ref
-  useEffect(() => {
+  // Push the live editor instance out to the parent whenever it (or the
+  // consumer callback) changes. `useEditor` returns null on the first render
+  // and the instance after; this relays that imperative handle outward.
+  useExternalSyncEffect(() => {
     if (onEditorReady !== undefined) {
       onEditorReady(editor);
     }
   }, [editor, onEditorReady]);
 
   // Auto-populate prompt with file reference when the editor
-  // is empty and a file property exists.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot imperative editor populate mixed with parent state relays; candidate for useExternalSyncEffect after isolating the editor write
-  useEffect(() => {
+  // is empty and a file property exists. The `didAutoPopulate` ref keeps
+  // this a one-shot imperative write into the TipTap editor.
+  useExternalSyncEffect(() => {
     if (
       !autoPopulateOnEmpty ||
       didAutoPopulate.current ||

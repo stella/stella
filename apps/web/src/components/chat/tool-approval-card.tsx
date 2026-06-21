@@ -360,7 +360,7 @@ export const ToolApprovalCard = ({
           connectors: mcpConnectorsData?.connectors ?? [],
         });
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (auto-deny when a blocked tool requests approval), drive from the approval state machine instead
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-deny once a blocked tool's approval request arrives. The trigger is the incoming `part` prop transitioning to approval-requested (plus the blocked set from context), not a local setter, so there is no call site to fold this into. Keep.
   useEffect(() => {
     if (!isApprovalRequested || !isBlocked || autoDenyRef.current) {
       return;
@@ -378,7 +378,7 @@ export const ToolApprovalCard = ({
   // always allowed, OR if this is a DOCX edit batch (review happens
   // per item in the side panel; the chat-level gate would just be
   // friction).
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (auto-approve when granted/allowed), drive from the approval state machine instead
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-approve once the incoming `part` prop reaches approval-requested and a prior grant/allow (from context) covers it. The trigger is an external prop/context transition, not a local setter, so there is no call site to fold this into. Keep.
   useEffect(() => {
     if (
       !isApprovalRequested ||

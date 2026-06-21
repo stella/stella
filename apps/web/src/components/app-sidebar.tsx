@@ -629,7 +629,7 @@ export function AppSidebar(props: AppSidebarProps) {
     HOLD_DELAY_MS,
   );
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (key-hold flag → debounced badge reveal), move into the key-hold handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reacts to the useKeyHold(NAV_KEY) hook output to drive a debounced badge reveal; the trigger is a hook return value with no setter call-site to relay into, so it stays an effect
   useEffect(() => {
     if (isNavKeyHeld) {
       showBadges();

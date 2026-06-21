@@ -436,8 +436,7 @@ export const useChatComposerWiring = ({
     });
   }, [onSubmit, onSubmitGuard, submit, submitDisabled]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- registers submit handler with controller; candidate for useExternalSyncEffect after review
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setSubmitHandler(submitDraft);
     return () => {
       setSubmitHandler(null);
@@ -651,8 +650,7 @@ export const useChatEditor = ({
     });
   };
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- debounce teardown on identity change; candidate for useExternalSyncEffect after review
-  useEffect(
+  useExternalSyncEffect(
     () => () => {
       debouncedFetchWorkspaceEntities.cancel();
       pendingWorkspaceEntitySearchRef.current?.resolve([]);
@@ -700,8 +698,11 @@ export const useChatEditor = ({
     isFetchingNextPage: isFetchingNextSkillPage,
   } = useInfiniteQuery(skillsOptions(activeOrganizationId));
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- data fetch (auto-paginate skill pages), migrate to TanStack Query
-  useEffect(() => {
+  // Drain every skill page into the slash menu: drive the infinite query
+  // forward whenever another page becomes available and we're not already
+  // fetching. This is imperative synchronization with TanStack's query
+  // state, not derived state or a one-shot fetch.
+  useExternalSyncEffect(() => {
     if (!hasNextSkillPage || isFetchingNextSkillPage) {
       return;
     }

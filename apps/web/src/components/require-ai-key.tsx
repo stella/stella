@@ -89,7 +89,7 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
     }
   };
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, syncing dialog-open to query availability; compute in render or close in the data handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- force-closes the dialog whenever the availability query flips to available (e.g. keys configured elsewhere and refetched). `open` is independent user-controlled state set in several places, so it cannot be derived in render, and there is no single data handler that covers every way availability can become true.
   useEffect(() => {
     if (data?.available) {
       setOpen(false);
@@ -148,7 +148,7 @@ export function RequireAIKey({ children }: PropsWithChildren) {
   );
   const { openAIKeyDialog, openIfAIUnavailable } = useAIKeyGate();
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay, opens the key dialog when AI is unavailable; move into the availability-resolved handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- opens the key dialog once the availability query resolves to unavailable; driven by query state, not a user event, so there is no handler call-site to fold it into
   useEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
@@ -213,7 +213,7 @@ export function AIKeyRequiredDialog({
     createDefaultRoleModels,
   );
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, re-syncs provider/role-model form drafts from config when the dialog opens; reset-on-open via key
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- re-syncs the provider/role-model form drafts from `config` when the dialog opens, deliberately ignoring later `config` refetches so user edits survive. The setters are also driven by user edits, so this is not pure derived state; a key-based remount cannot replace it because the dialog is rendered in more than one place and remounting would also reset mutation state and re-suspend the config query.
   useEffect(() => {
     if (!open) {
       return;

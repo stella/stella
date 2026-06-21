@@ -627,7 +627,7 @@ export const ExternalReferencePanel = ({
   //    already handles.
   // 2. Dedupe by (url, status) across the inspector's lifetime so
   //    flipping between tabs doesn't re-toast a cached error.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- error-to-toast relay from query error state; move into the query's error handling
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- toast on a 5xx preview error, deduped by (url, status) across the inspector's lifetime. useQuery has no onError in v5; folding this into the queryFn or a global QueryCache handler would change the dedup/timing semantics. Keep.
   useEffect(() => {
     if (!previewError || !APIError.is(previewError)) {
       return;

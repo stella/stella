@@ -163,7 +163,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return next;
     });
   };
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, syncs name/description/enabled/command form fields from query data; compute in render or reset via key
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconciles editable form fields (name/description/enabled/command, all user-edited via their own setters elsewhere) with server data on load and after each save-refetch; not pure derived state, and the only-rendering-parent that could carry a key isn't in scope, so kept
   useEffect(() => {
     if (!detail.data) {
       return;
@@ -302,7 +302,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // editable — blank and blueprint drafts arrive here straight from the
   // gallery with nothing else to click first.
   const autoOpenedSkillId = useRef<string | null>(null);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-time imperative init, opens the SKILL.md body tab on first data load; move into the data-loaded flow or lift to key
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot tab-open relayed off the query's first data load (no single setter call-site to host it, and useExternalSyncEffect forbids event relays); the only-rendering-parent that could carry a key isn't in scope, so kept
   useEffect(() => {
     if (!detail.data || autoOpenedSkillId.current === skillId) {
       return;

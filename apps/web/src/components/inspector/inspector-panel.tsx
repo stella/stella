@@ -342,7 +342,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // Commit the latest recency snapshot after the render commits so
   // discarded renders (Strict Mode, Concurrent) don't pollute the
   // ref — only the set actually shown to the user is recorded.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- commit-phase ref write syncing committed render state into a ref, not external-system sync; needs review
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- deliberate commit-phase ref write: recording recency during render would capture discarded concurrent/Strict-Mode renders, which is exactly what the commit-only timing prevents, so kept
   useEffect(() => {
     pdfRecencyRef.current = Array.from(mountedPdfIds);
   }, [mountedPdfIds]);
@@ -550,7 +550,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
             field.content.type === "file",
         );
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived ref write tracking the current file field; compute in render or move into a ref-updater, needs review
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- commit-phase ref bookkeeping that the relay effect below reads in the same commit; the two are order-coupled, so moving this into render would change their relative timing, hence kept
   useEffect(() => {
     if (activeFileField === undefined) {
       return;
@@ -562,7 +562,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     );
   }, [activeFileField]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (derived comparison fires the replaceFileFieldId store action); move into the mutation/handler path
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reacts to entity query data (latestFileFieldForProperty) refetching, which has no single setter call-site to move into; fires the replaceFileFieldId store action when a newer file version lands, so kept
   useEffect(() => {
     if (
       latestFileFieldForProperty === undefined ||

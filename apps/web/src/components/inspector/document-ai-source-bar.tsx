@@ -161,7 +161,7 @@ export const DocumentAiSourceBar = ({
   // Kick off the generation request when the justification bar
   // mounts with missing bboxes. The mutation hook itself is the
   // source of truth for `isPending`.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (needsBoxes flag fires a mutation); move into handler
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- kick off bbox generation once async-loaded state (query + store) satisfies needsBoxes. needsBoxes is derived from several async sources, not a single setter call, so there is no handler to fold this into; keep.
   useEffect(() => {
     if (!needsBoxes || !justificationId) {
       return;
@@ -169,7 +169,7 @@ export const DocumentAiSourceBar = ({
     mutateBoundingBoxes({ justificationId });
   }, [needsBoxes, justificationId, mutateBoundingBoxes]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id derived state (clears expansion when fieldId changes); lift to key prop
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset expansion when fieldId changes. setIsAnswerExpanded also backs the toggle button, so it is not pure derived state; a key-reset belongs in the parent (file-tab-panel.tsx, outside this batch) and would also reset this component's bbox refs. Keep.
   useEffect(() => {
     setIsAnswerExpanded(false);
   }, [fieldId]);
@@ -177,7 +177,7 @@ export const DocumentAiSourceBar = ({
   // Nudge the justifications cache every second while we still need
   // bboxes. POST success doesn't guarantee the payload is in cache
   // yet, so we keep polling until `needsBoxes` flips false.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- polling timer drives query invalidation; data refetch, migrate to TanStack Query refetchInterval
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- setInterval that invalidates the justifications cache while bboxes are still missing. The justifications query is owned by useSyncJustifications (outside this file), so refetchInterval cannot be set here; keep.
   useEffect(() => {
     if (!needsBoxes) {
       return undefined;

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -24,6 +24,7 @@ import {
   collectExternalSources,
   collectSourceDocuments,
 } from "@/components/chat/source-chips.logic";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
@@ -107,8 +108,9 @@ export const SourceChips = ({
     (state) => state.registerSources,
   );
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- writes derived source list into a zustand store every render; compute/register in render or move into the collect step
-  useEffect(() => {
+  // Push the derived source list into the external-source store
+  // whenever it changes so the inspector can resolve cited sources.
+  useExternalSyncEffect(() => {
     registerSources(uniqueExternalSourcesWithIcons);
   }, [registerSources, uniqueExternalSourcesWithIcons]);
 

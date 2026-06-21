@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type React from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
@@ -98,8 +98,7 @@ const useActiveCellFlash = ({
 }: ActiveCellFlashInput) => {
   const previousCellActivationSeq = useRef(activationSeq);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (activation-seq advance → scroll + flash cell via ref-edge compare); candidate for useExternalSyncEffect after review
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const rowElement = rowRef.current;
     if (
       !rowElement ||

@@ -86,7 +86,7 @@ function CaseLawInspector({
   const isDragging = useRef(false);
   const lastAutoOpenedDecisionRef = useRef<string | null>(null);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id, fires openChat once per decisionId change; candidate for lifting to a key prop or route action
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id: fires openChat once per decisionId change via a ref guard. A key prop would remount this pane and reset the user's resized `width`, so keep the in-place effect.
   useEffect(() => {
     if (lastAutoOpenedDecisionRef.current === decisionId) {
       return;

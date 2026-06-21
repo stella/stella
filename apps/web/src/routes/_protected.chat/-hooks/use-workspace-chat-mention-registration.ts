@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
@@ -125,8 +125,11 @@ export const useWorkspaceChatMentionRegistration = (
     });
   };
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- unmount cleanup of debounced search + pending promise; not external-system sync
-  useEffect(
+  // Tear down the in-flight debounced search whenever its identity changes
+  // or the hook unmounts: cancel the pending timer and settle the dangling
+  // promise so awaiters don't hang. This is lifecycle management of the
+  // debounce timer (an external system), keyed on the debounced callback.
+  useExternalSyncEffect(
     () => () => {
       debouncedSearchEntities.cancel();
       pendingSearchRef.current?.resolve([]);
