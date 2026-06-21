@@ -27,6 +27,7 @@ describe("calendar view logic", () => {
       type: "month",
       year: 2026,
       month: 4,
+      firstWeekday: 1,
     });
 
     expect(range).toEqual({
@@ -51,6 +52,7 @@ describe("calendar view logic", () => {
     const range = getCalendarQueryRange({
       type: "week",
       viewDate: new Date(Date.UTC(2026, 4, 6)),
+      firstWeekday: 1,
     });
 
     expect(range).toEqual({

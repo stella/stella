@@ -6,6 +6,7 @@
  * datestamp-only, no time component).
  */
 
+import { getFirstWeekday } from "@/i18n/week";
 import type { WorkspaceFieldContent } from "@/lib/types";
 import { includesValue } from "@/lib/utils";
 
@@ -19,7 +20,7 @@ export type CalendarDay = {
   startsMonth?: boolean;
   /** Alternating visual band for continuous month scrolling. */
   monthTone?: "muted";
-  /** Saturday (index 5) or Sunday (index 6) in Mon-first layout */
+  /** Saturday or Sunday, derived from the actual day of week. */
   isWeekend: boolean;
 };
 
@@ -29,18 +30,22 @@ const todayISO = (): string => toISODate(new Date());
 
 /**
  * Returns all days to display in a month grid (6 weeks max).
- * Weeks start on Monday (ISO standard).
+ * Weeks start on the locale's first weekday.
  */
-export const getMonthDays = (year: number, month: number): CalendarDay[] => {
+export const getMonthDays = (
+  year: number,
+  month: number,
+  firstWeekday: number,
+): CalendarDay[] => {
   const today = todayISO();
   const days: CalendarDay[] = [];
 
   // First day of the month
   const first = new Date(Date.UTC(year, month, 1));
-  // Day of week: 0=Sun..6=Sat → shift to Mon=0..Sun=6
-  const startDow = (first.getUTCDay() + 6) % 7;
+  // Column within the week, rotated to the locale's first weekday.
+  const startDow = (first.getUTCDay() - firstWeekday + 7) % 7;
 
-  // Go back to Monday of the first week
+  // Go back to the first weekday of the first week
   const start = new Date(first);
   start.setUTCDate(start.getUTCDate() - startDow);
 
@@ -49,12 +54,12 @@ export const getMonthDays = (year: number, month: number): CalendarDay[] => {
     const d = new Date(start);
     d.setUTCDate(d.getUTCDate() + i);
     const iso = toISODate(d);
-    const dow = i % 7;
+    const dayOfWeek = d.getUTCDay();
     days.push({
       date: iso,
       isCurrentMonth: d.getUTCMonth() === month,
       isToday: iso === today,
-      isWeekend: dow >= 5,
+      isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
     });
   }
 
@@ -63,24 +68,29 @@ export const getMonthDays = (year: number, month: number): CalendarDay[] => {
 
 /**
  * Returns all days to display in a week view.
- * The week containing `referenceDate` (Mon–Sun).
+ * The week containing `referenceDate`, starting on the locale's
+ * first weekday.
  */
-export const getWeekDays = (referenceDate: Date): CalendarDay[] => {
+export const getWeekDays = (
+  referenceDate: Date,
+  firstWeekday: number,
+): CalendarDay[] => {
   const today = todayISO();
-  const dow = (referenceDate.getUTCDay() + 6) % 7;
-  const monday = new Date(referenceDate);
-  monday.setUTCDate(monday.getUTCDate() - dow);
+  const dow = (referenceDate.getUTCDay() - firstWeekday + 7) % 7;
+  const weekStart = new Date(referenceDate);
+  weekStart.setUTCDate(weekStart.getUTCDate() - dow);
 
   const days: CalendarDay[] = [];
   for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
+    const d = new Date(weekStart);
     d.setUTCDate(d.getUTCDate() + i);
     const iso = toISODate(d);
+    const dayOfWeek = d.getUTCDay();
     days.push({
       date: iso,
       isCurrentMonth: true,
       isToday: iso === today,
-      isWeekend: i >= 5,
+      isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
     });
   }
   return days;
@@ -201,20 +211,22 @@ export const isTaskDateProperty = (id: string) =>
   includesValue(TASK_DATE_IDS, id);
 
 /**
- * Localized weekday header labels (Mon–Sun, short).
- * Uses `Intl.DateTimeFormat` so labels follow the active locale.
- * 2024-01-01 is a Monday; we generate Mon→Sun from there.
+ * Localized weekday header labels, starting at the locale's first
+ * weekday. Uses `Intl.DateTimeFormat` so labels follow the active locale.
+ * 2024-01-07 is a Sunday (getUTCDay() === 0); offsetting by the first
+ * weekday yields labels starting from that day.
  */
 export const getWeekdayLabels = (
   locale: string,
   format: "short" | "narrow" = "short",
 ): string[] => {
+  const firstWeekday = getFirstWeekday(locale);
   const fmt = new Intl.DateTimeFormat(locale, {
     weekday: format,
     timeZone: "UTC",
   });
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date(Date.UTC(2024, 0, 1 + i));
+    const d = new Date(Date.UTC(2024, 0, 7 + firstWeekday + i));
     return fmt.format(d);
   });
 };

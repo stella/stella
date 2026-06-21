@@ -2,6 +2,8 @@ import { useLocale } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { getFirstWeekday } from "@/i18n/week";
+
 import type { CalendarDay } from "./calendar-utils";
 import {
   appendToMapArray,
@@ -35,6 +37,7 @@ export const CalendarYearGrid = ({
   onMonthClick,
 }: CalendarYearGridProps) => {
   const locale = useLocale();
+  const firstWeekday = getFirstWeekday(locale);
 
   const monthLabels = getMonthLabels(locale, year, "long");
 
@@ -55,6 +58,7 @@ export const CalendarYearGrid = ({
         {Array.from({ length: 12 }, (_, monthIdx) => (
           <MiniMonth
             dotsByDate={dotsByDate}
+            firstWeekday={firstWeekday}
             isCurrent={monthIdx === currentMonth}
             key={monthLabels[monthIdx] ?? monthIdx}
             label={monthLabels[monthIdx] ?? ""}
@@ -76,9 +80,15 @@ type MiniMonthProps = {
   month: number;
   label: string;
   isCurrent: boolean;
+  firstWeekday: number;
   weekdayLabels: string[];
   dotsByDate: Map<string, YearDot[]>;
   onClick: () => void;
+};
+
+const isWeekendColumn = (firstWeekday: number, index: number): boolean => {
+  const dayOfWeek = (firstWeekday + index) % 7;
+  return dayOfWeek === 0 || dayOfWeek === 6;
 };
 
 const MiniMonth = ({
@@ -86,11 +96,12 @@ const MiniMonth = ({
   month,
   label,
   isCurrent,
+  firstWeekday,
   weekdayLabels,
   dotsByDate,
   onClick,
 }: MiniMonthProps) => {
-  const days = getMonthDays(year, month);
+  const days = getMonthDays(year, month, firstWeekday);
 
   return (
     <button
@@ -117,7 +128,7 @@ const MiniMonth = ({
             className={cn(
               "text-center text-[10px] leading-4",
               "text-foreground-muted",
-              i >= 5 && "text-foreground-disabled",
+              isWeekendColumn(firstWeekday, i) && "text-foreground-disabled",
             )}
             key={wd}
           >

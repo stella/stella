@@ -82,10 +82,12 @@ type CalendarQueryRangeInput =
       type: "month";
       year: number;
       month: number;
+      firstWeekday: number;
     }
   | {
       type: "week";
       viewDate: Date;
+      firstWeekday: number;
     }
   | {
       type: "year";
@@ -104,13 +106,13 @@ export const getCalendarQueryRange = (
     case "month": {
       const fallback = `${input.year}-${String(input.month + 1).padStart(2, "0")}-01`;
       return getBoundedCalendarRange(
-        getMonthDays(input.year, input.month),
+        getMonthDays(input.year, input.month, input.firstWeekday),
         fallback,
       );
     }
     case "week":
       return getBoundedCalendarRange(
-        getWeekDays(input.viewDate),
+        getWeekDays(input.viewDate, input.firstWeekday),
         toUTCDateKey(input.viewDate),
       );
     default: {
