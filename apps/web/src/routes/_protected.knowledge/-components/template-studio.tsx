@@ -6322,13 +6322,14 @@ const buildRecipeDefinition = (
   const recipeFields = paths.map((path) => {
     const field =
       fields.find((f) => f.path === path) ?? defaultStudioField(path);
-    // The recipe schema is a strict FieldMeta subset without formula or
-    // validation; strip both so saving a recipe passes boundary validation
-    // (the snapshot keeps the field's label and type; the formula and loop
-    // repeat bounds stay template-local).
+    // The recipe schema is a strict FieldMeta subset without formula,
+    // validation, or condition; strip them so saving a recipe passes boundary
+    // validation (the snapshot keeps the field's label and type; the formula,
+    // condition rule, and loop repeat bounds stay template-local).
     const {
       formula: _formula,
       validation: _validation,
+      condition: _condition,
       ...recipeField
     } = studioFieldToManifestField(field);
     return recipeField;
