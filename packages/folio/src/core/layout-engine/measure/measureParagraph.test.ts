@@ -803,6 +803,23 @@ describe("all-caps paragraph measurement", () => {
 
     expect(spacedHash).not.toBe(plainHash);
   });
+
+  test("includes the East Asian font in paragraph cache keys", () => {
+    // Measurement now depends on eastAsiaFontFamily, so the cache key must too —
+    // otherwise a CJK run keeps stale measurements when only its EA face changes.
+    const minchoHash = hashParagraphBlock({
+      kind: "paragraph",
+      id: "mincho",
+      runs: [{ kind: "text", text: "日本語", eastAsiaFontFamily: "MS Mincho" }],
+    });
+    const gothicHash = hashParagraphBlock({
+      kind: "paragraph",
+      id: "gothic",
+      runs: [{ kind: "text", text: "日本語", eastAsiaFontFamily: "MS Gothic" }],
+    });
+
+    expect(minchoHash).not.toBe(gothicHash);
+  });
 });
 
 describe("clampFloatingWrapMargins", () => {

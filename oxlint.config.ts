@@ -7,8 +7,8 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
-import core from "./node_modules/ultracite/config/oxlint/core/index.mjs";
-import react from "./node_modules/ultracite/config/oxlint/react/index.mjs";
+import core from "ultracite/oxlint/core";
+import react from "ultracite/oxlint/react";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>

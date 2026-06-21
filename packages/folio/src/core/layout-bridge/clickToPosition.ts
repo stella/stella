@@ -13,6 +13,7 @@ import {
   measuredLineContentOffset,
 } from "../layout-engine/lineFlow";
 import {
+  buildRunFontStyle,
   measureRun,
   findCharacterAtX as findCharAtX,
 } from "../layout-engine/measure/measureContainer";
@@ -53,20 +54,27 @@ export type PositionResult = {
  * Extract FontStyle from a run for measurement.
  */
 function runToFontStyle(run: TextRun | TabRun): FontStyle {
-  return {
-    fontFamily: run.fontFamily ?? "Arial",
-    fontSize: run.fontSize ?? 12,
-    ...(run.bold !== undefined ? { bold: run.bold } : {}),
-    ...(run.italic !== undefined ? { italic: run.italic } : {}),
-    ...(run.letterSpacing !== undefined
-      ? { letterSpacing: run.letterSpacing }
-      : {}),
-    ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
-    ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
-    ...(run.horizontalScale !== undefined
-      ? { horizontalScale: run.horizontalScale }
-      : {}),
-  };
+  return buildRunFontStyle(run, "Arial", 12);
+}
+
+/**
+ * A click in the second half of an astral glyph can resolve to the UTF-16
+ * offset between its surrogate pair (`measureRun` emits a 0-width entry for the
+ * trailing surrogate). Nudge such an offset forward to the code-point boundary
+ * so ProseMirror never receives — or edits inside — a half-pair position.
+ */
+export function snapPastTrailingSurrogate(
+  text: string,
+  offset: number,
+): number {
+  // codePointAt at a low-surrogate index returns that surrogate's code unit
+  // (it only combines when read at the leading surrogate); guard undefined for
+  // the out-of-range case the length check already excludes.
+  const codeUnit = offset < text.length ? text.codePointAt(offset) : undefined;
+  if (codeUnit !== undefined && codeUnit >= 0xdc_00 && codeUnit <= 0xdf_ff) {
+    return offset + 1;
+  }
+  return offset;
 }
 
 /**
@@ -373,7 +381,10 @@ function findCharacterInLine(
       if (adjustedX <= runEndX) {
         // Click is within this run - find exact character
         const localX = adjustedX - currentX;
-        const charInRun = findCharAtX(localX, measurement.charWidths);
+        const charInRun = snapPastTrailingSurrogate(
+          text,
+          findCharAtX(localX, measurement.charWidths),
+        );
         const charOffset = currentCharOffset + charInRun;
         return { charOffset, pmPosition: pmStart + charOffset };
       }

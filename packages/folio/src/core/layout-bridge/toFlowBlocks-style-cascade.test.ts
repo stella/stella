@@ -112,6 +112,68 @@ describe("toFlowBlocks style cascade", () => {
     expect(firstRun(blocks).fontFamily).toBe("Arial Narrow");
   });
 
+  test("inherits the East Asian font from the paragraph style default (eigenpal/docx-editor#949)", () => {
+    const styles: StyleDefinitions = {
+      styles: [
+        {
+          styleId: "Normal",
+          type: "paragraph",
+          default: true,
+          name: "Normal",
+          rPr: { fontFamily: { ascii: "Arial", eastAsia: "MS Mincho" } },
+        },
+      ],
+    };
+    const paragraph: Paragraph = {
+      type: "paragraph",
+      formatting: { styleId: "Normal" },
+      content: [
+        {
+          type: "run",
+          content: [{ type: "text", text: "和文 mixed" }],
+        },
+      ],
+    };
+
+    const run = firstRun(
+      toFlowBlocks(toProseDoc(makeDoc(paragraph, styles), { styles }), {}),
+    );
+
+    expect(run.fontFamily).toBe("Arial");
+    expect(run.eastAsiaFontFamily).toBe("MS Mincho");
+  });
+
+  test("a direct eastAsia run mark overrides the inherited EA default", () => {
+    const styles: StyleDefinitions = {
+      styles: [
+        {
+          styleId: "Normal",
+          type: "paragraph",
+          default: true,
+          name: "Normal",
+          rPr: { fontFamily: { ascii: "Arial", eastAsia: "MS Mincho" } },
+        },
+      ],
+    };
+    const paragraph: Paragraph = {
+      type: "paragraph",
+      formatting: { styleId: "Normal" },
+      content: [
+        {
+          type: "run",
+          formatting: { fontFamily: { eastAsia: "MS Gothic" } },
+          content: [{ type: "text", text: "和文" }],
+        },
+      ],
+    };
+
+    const run = firstRun(
+      toFlowBlocks(toProseDoc(makeDoc(paragraph, styles), { styles }), {}),
+    );
+
+    expect(run.eastAsiaFontFamily).toBe("MS Gothic");
+  });
+
   test("explicit run formatting toggles override paragraph style defaults", () => {
     const styles: StyleDefinitions = {
       styles: [

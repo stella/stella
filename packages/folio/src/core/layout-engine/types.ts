@@ -48,6 +48,14 @@ export type RunFormatting = {
    */
   shading?: string;
   fontFamily?: string;
+  /**
+   * Resolved East-Asian font (`w:eastAsia` / `eastAsiaTheme`). CJK code points
+   * in this run measure and paint with this font; non-CJK keeps `fontFamily`
+   * (ascii/hAnsi). Both the measurer and the painter segment identically (see
+   * `segmentByScript`) so wrapping stays correct. Absent means CJK falls back
+   * to `fontFamily`.
+   */
+  eastAsiaFontFamily?: string;
   fontSize?: number;
   letterSpacing?: number;
   superscript?: boolean;

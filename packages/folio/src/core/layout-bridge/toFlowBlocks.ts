@@ -512,6 +512,9 @@ function extractRunFormatting(
         if (font) {
           formatting.fontFamily = font;
         }
+        if (attrs.eastAsia) {
+          formatting.eastAsiaFontFamily = attrs.eastAsia;
+        }
         break;
       }
 
@@ -767,6 +770,12 @@ function paragraphRunDefaults(
     defaultTextFormatting.fontFamily?.hAnsi;
   if (fontFamily) {
     result.fontFamily = fontFamily;
+  }
+  // East-Asian font inherited from the paragraph style / docDefaults, so CJK
+  // runs without a direct `w:eastAsia` still get per-character EA selection. A
+  // run's own fontFamily mark overrides this via mergeRunFormatting.
+  if (defaultTextFormatting.fontFamily?.eastAsia) {
+    result.eastAsiaFontFamily = defaultTextFormatting.fontFamily.eastAsia;
   }
   if (defaultTextFormatting.fontSize !== undefined) {
     result.fontSize = defaultTextFormatting.fontSize / 2;
