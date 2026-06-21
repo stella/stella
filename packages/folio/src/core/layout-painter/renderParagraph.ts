@@ -1044,9 +1044,23 @@ function renderFieldRun(
   ) {
     const wrapper = doc.createElement("span");
     applyPmPositions(wrapper, resolvedRun.pmStart, resolvedRun.pmEnd);
+    // horizontalScale lives on the wrapper (inline-block so the reserved width
+    // the render loop sets via reserveScaledAdvance applies, scaleX so the
+    // segments scale uniformly); the segments drop it to avoid double-scaling.
+    if (resolvedRun.horizontalScale && resolvedRun.horizontalScale !== 100) {
+      wrapper.style.display = "inline-block";
+      wrapper.style.transform = `scaleX(${resolvedRun.horizontalScale / 100})`;
+      wrapper.style.transformOrigin = "left center";
+    }
     // The pm range lives on the wrapper; segments carry none (the field is one
-    // atomic unit), so drop pmStart/pmEnd before spreading into each segment.
-    const { pmStart: _pmStart, pmEnd: _pmEnd, ...segmentBase } = resolvedRun;
+    // atomic unit), so drop pmStart/pmEnd (and the wrapper-applied scale) before
+    // spreading into each segment.
+    const {
+      pmStart: _pmStart,
+      pmEnd: _pmEnd,
+      horizontalScale: _horizontalScale,
+      ...segmentBase
+    } = resolvedRun;
     for (const segment of segmentByScript(text)) {
       const segmentRun: TextRun = {
         ...segmentBase,
