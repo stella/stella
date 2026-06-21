@@ -480,7 +480,7 @@ describe("public law sitemap", () => {
     const source = await readSource("apps/web/src/routes/_protected.tsx");
 
     expect(source).toContain("ssr: false");
-    expect(source).toContain("pendingComponent: () => null");
+    expect(source).toContain("pendingComponent: ProtectedPendingSkeleton");
   });
 
   test("document routes do not prefetch parent overview billing data", async () => {
