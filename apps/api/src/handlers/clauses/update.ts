@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -234,8 +234,28 @@ const updateClauseHandler = async function* ({
         if (lockedVersionCount >= LIMITS.clauseVersionsPerClause) {
           return { ok: false as const, reason: "limit" as const };
         }
-        newVersion = (locked?.currentVersion ?? existing.currentVersion) + 1;
-        updates.currentVersion = newVersion;
+        // Authoritative dedupe under the same lock: re-read the latest snapshot
+        // body and compare it to the incoming body. Two concurrent snapshot
+        // requests with identical bodies both pass the pre-transaction dedupe
+        // (unlocked read), so without this the second would insert a duplicate
+        // version. When the bodies match, skip the snapshot entirely (leave
+        // newVersion null and do not bump currentVersion); the head body is
+        // still updated below.
+        const [latest] = await tx
+          .select({ body: clauseVersions.body })
+          .from(clauseVersions)
+          .where(eq(clauseVersions.clauseId, clauseId))
+          .orderBy(desc(clauseVersions.version))
+          .limit(1);
+        if (
+          latest &&
+          JSON.stringify(latest.body) === JSON.stringify(body.body)
+        ) {
+          newVersion = null;
+        } else {
+          newVersion = (locked?.currentVersion ?? existing.currentVersion) + 1;
+          updates.currentVersion = newVersion;
+        }
       }
 
       const [row] = await tx
