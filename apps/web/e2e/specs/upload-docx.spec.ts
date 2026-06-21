@@ -1,8 +1,8 @@
-import { expect, test } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { apiGet, apiStatus, apiUploadDocx } from "../helpers/api";
+import { expect, test } from "../helpers/test";
 import {
   type TestWorkspace,
   createTestWorkspace,
@@ -12,20 +12,6 @@ import {
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
 const DOCX_PATH = path.resolve(import.meta.dirname, "../fixtures/simple.docx");
-
-// Transport-layer connection drops the browser reports as console errors.
-// These are dev-server infra flakes, not app errors: the document route
-// fires a burst of API requests after a multi-second gap (cold Folio chunk
-// compile + DOCX parse), and the Bun dev server occasionally tears down an
-// idle HTTP/1.1 keep-alive socket at the instant the browser reuses it, so a
-// single request fails with net::ERR_EMPTY_RESPONSE (React Query retries it;
-// the viewer still paints). They originate in the network stack, never an
-// error boundary, so they cannot be the render-loop bug the console guard
-// protects against — unlike an HTTP 4xx/5xx, which still arrives as a
-// response and is kept. Match only dropped-connection codes, not the broader
-// "failed to load resource" family.
-const TRANSIENT_NETWORK_ERROR =
-  /net::(?:ERR_EMPTY_RESPONSE|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_NETWORK_CHANGED)/u;
 
 test.describe("DOCX upload + inspector", () => {
   let workspace: TestWorkspace | null = null;
@@ -44,6 +30,7 @@ test.describe("DOCX upload + inspector", () => {
   });
 
   test("uploaded DOCX renders in the document view", async ({
+    browserErrors,
     page,
     request,
   }) => {
@@ -53,28 +40,6 @@ test.describe("DOCX upload + inspector", () => {
     }
 
     const docxBuffer = await readFile(DOCX_PATH);
-
-    // Catch ANY error — uncaught exceptions AND console.error. Render-loop
-    // bugs (React #185 / "Maximum update depth") only reach console.error
-    // because they're caught by error boundaries; ignoring them would let
-    // a viewer-crash regression slip through. If new noise appears here,
-    // fix the noise — don't broaden the filter. The one carve-out is
-    // TRANSIENT_NETWORK_ERROR (dropped-connection transport flakes, which
-    // cannot be a render bug); see its definition above.
-    const errors: string[] = [];
-    page.on("pageerror", (err) => {
-      errors.push(`pageerror: ${err.message}`);
-    });
-    page.on("console", (msg) => {
-      if (msg.type() !== "error") {
-        return;
-      }
-      const text = msg.text();
-      if (TRANSIENT_NETWORK_ERROR.test(text)) {
-        return;
-      }
-      errors.push(`console.error: ${text}`);
-    });
 
     const uploaded = await apiUploadDocx(
       request,
@@ -160,6 +125,7 @@ test.describe("DOCX upload + inspector", () => {
       // Surface any errors collected so far — they're usually the real cause
       // of the viewer never mounting (network failure, render crash caught
       // by an error boundary, etc.).
+      const errors = browserErrors.entries();
       if (errors.length > 0) {
         throw new Error(
           `viewer text never appeared; collected errors:\n${errors.join("\n\n")}`,
@@ -168,7 +134,5 @@ test.describe("DOCX upload + inspector", () => {
       }
       throw error;
     }
-
-    expect(errors, errors.join("\n\n")).toEqual([]);
   });
 });

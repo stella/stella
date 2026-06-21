@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../helpers/test";
 
 test("authenticated session lands inside the app shell", async ({ page }) => {
   await page.goto("/");
