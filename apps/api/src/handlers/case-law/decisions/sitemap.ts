@@ -7,6 +7,7 @@ import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
 
 const SITEMAP_SHARD_BUCKET_COUNT = 64;
 const SITEMAP_SHARD_BUCKET_WIDTH = 2;
@@ -18,6 +19,10 @@ const SITEMAP_YEAR_PATTERN = "^(?:\\d{4}|undated)$";
 const SITEMAP_MONTH_PATTERN = "^(?:0[1-9]|1[0-2]|00)$";
 const SITEMAP_BUCKET_PATTERN = "^(?:all|[0-9]{2})$";
 const SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE = 1000;
+// Realistic ceiling for distinct language variants of one logical decision; used
+// to bound the per-batch alternates read so a single languageGroupKey matching
+// many rows cannot make the query grow unbounded.
+const MAX_LANGUAGES_PER_ALTERNATE_GROUP = 30;
 const LANGUAGE_SEGMENT_REGEX = /^[a-z]{2,3}(?:-[a-z0-9]{2,8})*$/u;
 
 export const sitemapShardDecisionsQuerySchema = t.Object({
@@ -310,6 +315,16 @@ export const listSitemapShardDecisionsHandler = async (
       ),
     ];
     const alternateRows: SitemapDecisionRow[] = [];
+    // Bound rows per batch at the realistic max language variants for the up to
+    // SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE group keys in the batch (+1 to
+    // detect overflow). Without this, one languageGroupKey matching many rows
+    // would make the read unbounded. Hitting the cap is a data-integrity anomaly
+    // (a group exceeding the expected variant count), not a normal case: warn and
+    // proceed with what loaded rather than 500 the whole sitemap.
+    const alternateRowLimit =
+      SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE *
+        MAX_LANGUAGES_PER_ALTERNATE_GROUP +
+      1;
     for (const groupKeyBatch of chunkArray(
       languageGroupKeys,
       SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE,
@@ -337,9 +352,18 @@ export const listSitemapShardDecisionsHandler = async (
             redistributableCaseLawSource,
           ),
         )
-        // SAFETY: language variants of at most SITEMAP_LANGUAGE_ALTERNATE_GROUP_BATCH_SIZE decision groups; rows per languageGroupKey = languages one decision is published in
-        // eslint-disable-next-line require-query-limit/require-query-limit
-        .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id));
+        .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
+        .limit(alternateRowLimit);
+      if (batchRows.length === alternateRowLimit) {
+        logger.warn("case_law.sitemap.language_alternate_overflow", {
+          country: query.country,
+          year: query.year,
+          month: query.month,
+          bucket: query.bucket ?? SITEMAP_ALL_BUCKET,
+          groupKeys: groupKeyBatch.length,
+          limit: alternateRowLimit,
+        });
+      }
       alternateRows.push(...batchRows);
     }
 

@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNull } from "drizzle-orm";
+import { and, asc, eq, gt, inArray, isNull } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
 import { defaultDatabaseRetry } from "@/api/db";
@@ -10,9 +11,12 @@ import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+
+const THREAD_FILE_CLEANUP_BATCH_SIZE = 200;
 
 const config = {
   permissions: { chat: ["delete"] },
@@ -61,26 +65,41 @@ const deleteThread = createSafeRootHandler(
       return Result.ok({});
     }
 
-    const files = yield* Result.await(
-      safeDb((tx) =>
-        // SAFETY: delete-time cleanup of one thread's uploaded files — must scan every row to avoid orphaning S3 objects and DB rows (a cap would leak storage). Per-message attachments are capped at LIMITS.chatContextFilesPerMessage.
-        // eslint-disable-next-line require-query-limit/require-query-limit
-        tx.query.userFiles.findMany({
-          where: {
-            threadId: { eq: params.threadId },
-            userId: { eq: user.id },
-          },
-          columns: {
-            id: true,
-            s3Key: true,
-            thumbnailFileId: true,
-            userId: true,
-          },
-        }),
-      ),
-    );
+    // The userFiles.threadId FK is onDelete: 'restrict', so every file row must
+    // be removed before the thread delete. Keyset-batch the cleanup (S3 objects
+    // then DB rows, page by page) so a thread with many uploads never loads its
+    // whole file set into memory; each round is bounded by the batch size and
+    // the loop still deletes every file before falling through to the thread delete.
+    let lastFileId: SafeId<"userFile"> | null = null;
+    while (true) {
+      const conditions: SQL[] = [
+        eq(userFiles.threadId, params.threadId),
+        eq(userFiles.userId, user.id),
+      ];
+      if (lastFileId !== null) {
+        conditions.push(gt(userFiles.id, lastFileId));
+      }
+      const files = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({
+              id: userFiles.id,
+              s3Key: userFiles.s3Key,
+              thumbnailFileId: userFiles.thumbnailFileId,
+              userId: userFiles.userId,
+            })
+            .from(userFiles)
+            .where(and(...conditions))
+            .orderBy(asc(userFiles.id))
+            .limit(THREAD_FILE_CLEANUP_BATCH_SIZE),
+        ),
+      );
 
-    if (files.length > 0) {
+      const hasMore = files.length === THREAD_FILE_CLEANUP_BATCH_SIZE;
+      if (files.length === 0) {
+        break;
+      }
+
       const s3Keys = files.flatMap((file) =>
         file.thumbnailFileId
           ? [
@@ -93,6 +112,7 @@ const deleteThread = createSafeRootHandler(
             ]
           : [file.s3Key],
       );
+      // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination; each page depends on the prior cursor
       const deleteResult = await deleteS3Keys(s3Keys);
       if (Result.isError(deleteResult)) {
         yield* Result.err(
@@ -103,12 +123,12 @@ const deleteThread = createSafeRootHandler(
           }),
         );
       }
-    }
 
-    yield* Result.await(
-      safeDb(async (tx) => {
-        if (files.length > 0) {
-          await tx.delete(userFiles).where(
+      yield* Result.await(
+        // eslint-disable-next-line arrow-body-style -- block body holds the audit-skip directive
+        safeDb((tx) => {
+          // audit: skip — file-row cleanup is part of the thread delete, which emits the CHAT_THREAD audit row below
+          return tx.delete(userFiles).where(
             and(
               eq(userFiles.userId, user.id),
               inArray(
@@ -117,8 +137,17 @@ const deleteThread = createSafeRootHandler(
               ),
             ),
           );
-        }
+        }),
+      );
 
+      if (!hasMore) {
+        break;
+      }
+      lastFileId = files.at(-1)?.id ?? null;
+    }
+
+    yield* Result.await(
+      safeDb(async (tx) => {
         const result = await tx
           .delete(chatThreads)
           .where(
