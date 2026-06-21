@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useQuery } from "@tanstack/react-query";
 
 import { useMaybeAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -29,25 +27,21 @@ export const useSavedPrompts = (): ChatPrompt[] => {
     enabled: activeOrganizationId !== undefined,
   });
 
-  return useMemo(
-    () =>
-      data.slice(0, MAX_SUGGESTIONS).flatMap<ChatPrompt>((row) => {
-        // Defensive: the server filters for command-bearing rows, but
-        // mapping a nullable column needs an explicit narrowing so the
-        // ChatPrompt shape can keep `command: string`.
-        if (row.command === null) {
-          return [];
-        }
-        return [
-          {
-            id: row.id,
-            scope: row.scope,
-            name: row.name,
-            command: row.command,
-            body: row.body,
-          },
-        ];
-      }),
-    [data],
-  );
+  return data.slice(0, MAX_SUGGESTIONS).flatMap<ChatPrompt>((row) => {
+    // Defensive: the server filters for command-bearing rows, but
+    // mapping a nullable column needs an explicit narrowing so the
+    // ChatPrompt shape can keep `command: string`.
+    if (row.command === null) {
+      return [];
+    }
+    return [
+      {
+        id: row.id,
+        scope: row.scope,
+        name: row.name,
+        command: row.command,
+        body: row.body,
+      },
+    ];
+  });
 };

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 import type React from "react";
 
 import {
@@ -37,6 +37,7 @@ import {
   PROMPT_EDITOR_SELECTION_CLASS,
   PromptEditorContent,
 } from "@/components/prompt-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   skillCommandsOptions,
   skillsOptions,
@@ -227,15 +228,19 @@ export const PropertyPromptInput = ({
     },
   });
 
-  useEffect(() => {
+  // Push the live editor instance out to the parent whenever it (or the
+  // consumer callback) changes. `useEditor` returns null on the first render
+  // and the instance after; this relays that imperative handle outward.
+  useExternalSyncEffect(() => {
     if (onEditorReady !== undefined) {
       onEditorReady(editor);
     }
   }, [editor, onEditorReady]);
 
   // Auto-populate prompt with file reference when the editor
-  // is empty and a file property exists.
-  useEffect(() => {
+  // is empty and a file property exists. The `didAutoPopulate` ref keeps
+  // this a one-shot imperative write into the TipTap editor.
+  useExternalSyncEffect(() => {
     if (
       !autoPopulateOnEmpty ||
       didAutoPopulate.current ||

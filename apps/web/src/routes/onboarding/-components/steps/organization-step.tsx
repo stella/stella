@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useRef } from "react";
 
 import { useForm } from "@tanstack/react-form";
 import { useSelector } from "@tanstack/react-store";
@@ -53,10 +53,10 @@ export const OrganizationStep = ({
 
   const { isPulsing: isInputPulsing, pulse } = usePulse(600);
 
-  const flashInput = useCallback(() => {
+  const flashInput = () => {
     inputRef.current?.focus();
     pulse();
-  }, [pulse]);
+  };
 
   return (
     <>

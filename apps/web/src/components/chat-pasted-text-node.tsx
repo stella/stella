@@ -72,6 +72,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
   // when the popover closes), so each keystroke doesn't dispatch a
   // ProseMirror transaction + draft re-sync.
   const [draftText, setDraftText] = useState(attrs.text);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- resets the editable draft when the node attr changes upstream (undo/redo, external edits); can't compute inline (draftText is controlled by the textarea, setDraftText also used in onChange) and can't key (rendered by TipTap's ReactNodeViewRenderer, no JSX call-site)
   useEffect(() => {
     setDraftText(attrs.text);
   }, [attrs.text]);

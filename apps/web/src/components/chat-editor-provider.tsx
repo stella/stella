@@ -51,6 +51,7 @@ import {
   type SlashItem,
 } from "@/components/chat/prompt-slash-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
@@ -449,14 +450,14 @@ export const useChatComposerWiring = ({
     });
   }, [onSubmit, onSubmitGuard, submit, submitDisabled]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setSubmitHandler(submitDraft);
     return () => {
       setSubmitHandler(null);
     };
   }, [setSubmitHandler, submitDraft]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setEditable(!inputDisabled);
     if (inputDisabled) {
       blur();
@@ -531,6 +532,7 @@ export const useChatEditor = ({
   }, [onDraftStart, threadKey]);
   markDraftStartedRef.current = markDraftStarted;
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref reset on id change, not external-system sync
   useEffect(() => {
     messageHistoryIndexRef.current = null;
   }, [sentMessageHistoryHtml, threadKey]);
@@ -667,7 +669,7 @@ export const useChatEditor = ({
     [debouncedFetchWorkspaceEntities, queryClient, threadRef],
   );
 
-  useEffect(
+  useExternalSyncEffect(
     () => () => {
       debouncedFetchWorkspaceEntities.cancel();
       pendingWorkspaceEntitySearchRef.current?.resolve([]);
@@ -715,7 +717,11 @@ export const useChatEditor = ({
     isFetchingNextPage: isFetchingNextSkillPage,
   } = useInfiniteQuery(skillsOptions(activeOrganizationId));
 
-  useEffect(() => {
+  // Drain every skill page into the slash menu: drive the infinite query
+  // forward whenever another page becomes available and we're not already
+  // fetching. This is imperative synchronization with TanStack's query
+  // state, not derived state or a one-shot fetch.
+  useExternalSyncEffect(() => {
     if (!hasNextSkillPage || isFetchingNextSkillPage) {
       return;
     }
@@ -967,7 +973,7 @@ export const useChatEditor = ({
     [getPluginRegistrations],
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isUsableEditor(editor)) {
       return undefined;
     }
@@ -984,7 +990,7 @@ export const useChatEditor = ({
     };
   }, [editor, extensionVersion, syncEditorPlugins]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isUsableEditor(editor)) {
       return undefined;
     }
@@ -1061,7 +1067,7 @@ export const useChatEditor = ({
     [editor, markDraftStarted],
   );
 
-  useEffect(
+  useExternalSyncEffect(
     () =>
       registerActiveEditor({
         focus,

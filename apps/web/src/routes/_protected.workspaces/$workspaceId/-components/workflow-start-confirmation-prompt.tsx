@@ -2,7 +2,6 @@ import {
   createContext,
   useCallback,
   useContext,
-  useEffect,
   useRef,
   useState,
 } from "react";
@@ -19,6 +18,8 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
+
+import { useMountEffect } from "@/hooks/use-effect";
 
 type WorkflowStartConfirmationInput = {
   entityCount: number;
@@ -69,14 +70,11 @@ export const WorkflowStartConfirmationPromptProvider = ({
     [],
   );
 
-  useEffect(
-    () => () => {
-      const prompt = pendingPromptRef.current;
-      pendingPromptRef.current = null;
-      prompt?.resolve(false);
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    const prompt = pendingPromptRef.current;
+    pendingPromptRef.current = null;
+    prompt?.resolve(false);
+  });
 
   return (
     <WorkflowStartConfirmationPromptContext.Provider value={confirmLargeRun}>

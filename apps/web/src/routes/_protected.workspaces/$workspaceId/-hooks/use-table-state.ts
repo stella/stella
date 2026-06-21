@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import type {
   ColumnOrderState,
@@ -63,14 +63,10 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     debouncedSetStoredColumnSizing(data);
   };
 
-  const sorting = useMemo<SortingState>(
-    () =>
-      view.layout.sorts.map((s) => ({
-        id: s.propertyId,
-        desc: s.desc,
-      })),
-    [view.layout.sorts],
-  );
+  const sorting: SortingState = view.layout.sorts.map((s) => ({
+    id: s.propertyId,
+    desc: s.desc,
+  }));
 
   const onSortingChange: OnChangeFn<SortingState> = (updater) => {
     const data = typeof updater === "function" ? updater(sorting) : updater;
@@ -86,9 +82,8 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     });
   };
 
-  const columnPinning = useMemo<ColumnPinningState>(
-    () => createColumnPinningState(view.layout.columnPinning),
-    [view.layout.columnPinning],
+  const columnPinning: ColumnPinningState = createColumnPinningState(
+    view.layout.columnPinning,
   );
 
   const onColumnPinningChange: OnChangeFn<ColumnPinningState> = (updater) => {
@@ -101,9 +96,8 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     });
   };
 
-  const columnOrder = useMemo<ColumnOrderState>(
-    () => createColumnOrderState(view.layout.columnOrder),
-    [view.layout.columnOrder],
+  const columnOrder: ColumnOrderState = createColumnOrderState(
+    view.layout.columnOrder,
   );
 
   const onColumnOrderChange: OnChangeFn<ColumnOrderState> = (updater) => {
@@ -115,9 +109,8 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
     });
   };
 
-  const columnVisibility = useMemo<ColumnVisibilityState>(
-    () => createColumnVisibilityState(view.layout.hiddenProperties),
-    [view.layout.hiddenProperties],
+  const columnVisibility: ColumnVisibilityState = createColumnVisibilityState(
+    view.layout.hiddenProperties,
   );
 
   const onColumnVisibilityChange: OnChangeFn<ColumnVisibilityState> = (

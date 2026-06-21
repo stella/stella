@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -85,7 +85,7 @@ export const TemplateClausesTab = ({
   const links: LinkedClause[] =
     data && "links" in data && Array.isArray(data.links) ? data.links : [];
 
-  const invalidateLinks = useCallback(() => {
+  const invalidateLinks = () => {
     queryClient
       .invalidateQueries({
         queryKey: knowledgeKeys.templates.clauses(
@@ -96,7 +96,7 @@ export const TemplateClausesTab = ({
       .catch(() => {
         /* fire-and-forget */
       });
-  }, [activeOrganizationId, queryClient, templateId]);
+  };
 
   if (isLoading) {
     return (
@@ -180,7 +180,7 @@ const LinkedClauseRow = ({
 
   const isDeleted = link.clause === null;
 
-  const handleUnlink = useCallback(async () => {
+  const handleUnlink = async () => {
     setUnlinking(true);
 
     const response = await api
@@ -208,9 +208,9 @@ const LinkedClauseRow = ({
     });
     setUnlinkOpen(false);
     onChanged();
-  }, [link.id, templateId, t, onChanged]);
+  };
 
-  const handleSync = useCallback(async () => {
+  const handleSync = async () => {
     setSyncing(true);
 
     const response = await api
@@ -237,7 +237,7 @@ const LinkedClauseRow = ({
       title: t("clauses.synced"),
     });
     onChanged();
-  }, [link.id, templateId, t, onChanged]);
+  };
 
   return (
     <li

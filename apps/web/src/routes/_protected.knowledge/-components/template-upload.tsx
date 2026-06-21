@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { UploadIcon } from "lucide-react";
@@ -53,53 +53,44 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
   const loading = discoverMutation.isPending;
 
   const mutateDiscover = discoverMutation.mutate;
-  const discover = useCallback(
-    (file: File) => {
-      if (file.type !== DOCX_MIME) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.invalidFileType"),
-        });
-        return;
-      }
-      mutateDiscover(file);
-    },
-    [mutateDiscover, t],
-  );
+  const discover = (file: File) => {
+    if (file.type !== DOCX_MIME) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.invalidFileType"),
+      });
+      return;
+    }
+    mutateDiscover(file);
+  };
 
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.item(0);
-      if (file) {
-        discover(file);
-      }
-      // Reset so the same file can be re-selected
-      e.target.value = "";
-    },
-    [discover],
-  );
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.item(0);
+    if (file) {
+      discover(file);
+    }
+    // Reset so the same file can be re-selected
+    e.target.value = "";
+  };
 
-  const handleDrop = useCallback(
-    (e: React.DragEvent) => {
-      e.preventDefault();
-      setIsDragOver(false);
-      const file = e.dataTransfer.files.item(0);
-      if (file) {
-        discover(file);
-      }
-    },
-    [discover],
-  );
-
-  const handleDragOver = useCallback((e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(true);
-  }, []);
-
-  const handleDragLeave = useCallback((e: React.DragEvent) => {
+  const handleDrop = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
-  }, []);
+    const file = e.dataTransfer.files.item(0);
+    if (file) {
+      discover(file);
+    }
+  };
+
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+  };
 
   return (
     <div className="flex flex-1 items-center justify-center p-8">

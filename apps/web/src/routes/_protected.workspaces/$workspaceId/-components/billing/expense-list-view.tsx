@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { PlusIcon } from "lucide-react";
@@ -51,7 +51,7 @@ export const ExpenseListView = ({
   const updateExpense = useUpdateExpense();
   const deleteExpense = useDeleteExpense();
 
-  const totalsByCurrency = useMemo(() => {
+  const totalsByCurrency = (() => {
     if (expenses.length === 0) {
       return [];
     }
@@ -63,7 +63,7 @@ export const ExpenseListView = ({
       currency,
       amount,
     }));
-  }, [expenses]);
+  })();
 
   const editingExpense = editingId
     ? expenses.find((e) => e.id === editingId)

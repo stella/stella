@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { CheckIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -39,7 +39,7 @@ export const TeamFilterPopover = ({
   const t = useTranslations();
   const [search, setSearch] = useState("");
 
-  const members = useMemo<MemberOption[]>(() => {
+  const members: MemberOption[] = (() => {
     const map = new Map<string, MemberOption>();
     for (const w of workspaces) {
       for (const m of w.members) {
@@ -55,7 +55,7 @@ export const TeamFilterPopover = ({
     return [...map.values()].sort((a, b) =>
       a.userName.localeCompare(b.userName),
     );
-  }, [workspaces]);
+  })();
 
   const q = search.trim().toLowerCase();
   const filtered = q

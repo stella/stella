@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
@@ -334,45 +334,26 @@ const CreateMatterDialogBody = ({
   const clientInvalid =
     submitAttempted && ownerType === "client" && selectedClient === null;
   const nameInvalid = submitAttempted && name.trim().length === 0;
-  const organizationMembers = useMemo(
-    () => organization?.members ?? [],
-    [organization?.members],
-  );
-  const selectedMemberUserIdSet = useMemo(
-    () => new Set(selectedMemberUserIds),
-    [selectedMemberUserIds],
-  );
-  const collaboratorStats = useMemo(
-    () =>
-      buildCollaboratorStats({
-        currentUserId: currentUser.id,
-        workspaces: workspacesData?.workspaces ?? [],
+  const organizationMembers = organization?.members ?? [];
+  const selectedMemberUserIdSet = new Set(selectedMemberUserIds);
+  const collaboratorStats = buildCollaboratorStats({
+    currentUserId: currentUser.id,
+    workspaces: workspacesData?.workspaces ?? [],
+  });
+  const availableMembers = organizationMembers
+    .filter(
+      (member) =>
+        member.userId !== currentUser.id &&
+        !selectedMemberUserIdSet.has(member.userId),
+    )
+    .toSorted((a, b) =>
+      compareMembersByCollaboratorStats({
+        a,
+        b,
+        collaboratorStats,
       }),
-    [currentUser.id, workspacesData?.workspaces],
-  );
-  const availableMembers = useMemo(
-    () =>
-      organizationMembers
-        .filter(
-          (member) =>
-            member.userId !== currentUser.id &&
-            !selectedMemberUserIdSet.has(member.userId),
-        )
-        .toSorted((a, b) =>
-          compareMembersByCollaboratorStats({
-            a,
-            b,
-            collaboratorStats,
-          }),
-        ),
-    [
-      collaboratorStats,
-      currentUser.id,
-      organizationMembers,
-      selectedMemberUserIdSet,
-    ],
-  );
-  const filteredMembers = useMemo(() => {
+    );
+  const filteredMembers = (() => {
     const trimmedQuery = memberQuery.trim().toLowerCase();
 
     if (!trimmedQuery) {
@@ -384,17 +365,13 @@ const CreateMatterDialogBody = ({
         member.user.name.toLowerCase().includes(trimmedQuery) ||
         member.user.email.toLowerCase().includes(trimmedQuery),
     );
-  }, [availableMembers, memberQuery]);
-  const selectedMembers = useMemo(
-    () =>
-      organizationMembers.filter((member) =>
-        selectedMemberUserIdSet.has(member.userId),
-      ),
-    [organizationMembers, selectedMemberUserIdSet],
+  })();
+  const selectedMembers = organizationMembers.filter((member) =>
+    selectedMemberUserIdSet.has(member.userId),
   );
   const shouldCollapseSelectedMembers = selectedMembers.length > 3;
   const hasAdditionalOrganizationMembers = organizationMembers.length > 1;
-  const possibleDuplicates = useMemo(() => {
+  const possibleDuplicates = (() => {
     if (ownerType === "personal" || selectedClient === null) {
       return [] as ExistingWorkspace[];
     }
@@ -405,7 +382,7 @@ const CreateMatterDialogBody = ({
       name,
       workspaces: workspacesData?.workspaces ?? [],
     });
-  }, [name, ownerType, selectedClient, workspacesData?.workspaces]);
+  })();
 
   return (
     <DialogPopup className="max-w-md">

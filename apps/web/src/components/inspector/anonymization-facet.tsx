@@ -13,7 +13,7 @@
  * actions, and "download anonymized" land in follow-up commits.
  */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import { useMutation, useQuery } from "@tanstack/react-query";
@@ -54,6 +54,7 @@ import {
 } from "@/components/inspector/anonymization-matches-store";
 import { useAnonymizationSelectionStore } from "@/components/inspector/anonymization-selection-store";
 import { useDocumentTextSelection } from "@/components/inspector/document-text-selection-store";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -268,7 +269,7 @@ export const AnonymizationFacet = ({
   // every parked Anonymization facet kept the global active
   // counter bumped and the detection worker firing even after
   // the user moved on to a different document.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isVisible) {
       return undefined;
     }
@@ -295,7 +296,7 @@ export const AnonymizationFacet = ({
   // Skip selections that look
   // like they live inside an input/textarea so typing into the
   // term field itself doesn't keep overwriting the value.
-  useEffect(() => {
+  useMountEffect(() => {
     // PDF viewer renders a real DOM `.textLayer` whose
     // selections show up in `window.getSelection()`. The folio
     // paged editor doesn't — it sets PM selections
@@ -333,7 +334,7 @@ export const AnonymizationFacet = ({
     };
     document.addEventListener("selectionchange", handler);
     return () => document.removeEventListener("selectionchange", handler);
-  }, []);
+  });
 
   // Folio selection bridge — picks up PM selections that
   // live in the off-screen hidden PM and aren't visible to
@@ -342,6 +343,7 @@ export const AnonymizationFacet = ({
   // selected text here on every selection-bearing
   // transaction.
   const folioSelection = useDocumentTextSelection(activeFieldId);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- prefill relayed from a selection the folio editor publishes into a store from its own dispatch wrapper (a different module); there's no in-component setter call-site to host this, and setPendingValue is shared with other paths, so kept
   useEffect(() => {
     if (folioSelection === null) {
       return;
@@ -457,7 +459,7 @@ export const AnonymizationFacet = ({
   // while `!matchesReady`: detection hasn't published yet, so
   // filtering would collapse the list to "0 matches" and look
   // identical to "actually nothing matches".
-  const entries = useMemo(() => {
+  const entries = (() => {
     const sourceEntries = allEntries ?? [];
     if (activeFieldId && matchesReady) {
       return sourceEntries.filter((entry) =>
@@ -465,7 +467,7 @@ export const AnonymizationFacet = ({
       );
     }
     return sourceEntries;
-  }, [activeFieldId, allEntries, matchesReady, matchSnapshot.countByCanonical]);
+  })();
   const noOpenDocument = activeFieldId === null;
 
   // Auto-detected entities to surface in the "Detected" section.
@@ -475,15 +477,14 @@ export const AnonymizationFacet = ({
   // disappear from the live match snapshot (they're filtered out
   // before Folio sees them), so re-merge them from the
   // exclusions store with their remembered label.
-  const workspaceCanonicals = useMemo(
-    () => new Set((allEntries ?? []).map((entry) => entry.canonical)),
-    [allEntries],
+  const workspaceCanonicals = new Set(
+    (allEntries ?? []).map((entry) => entry.canonical),
   );
   // Index allowlist entries by canonical (case-insensitive) so the
   // UI knows which detected rows are currently overridden, plus
   // which scope they sit at (for the restore button targeting).
   type AllowlistRow = NonNullable<typeof allowlistEntries>[number];
-  const allowlistByCanonical = useMemo(() => {
+  const allowlistByCanonical = (() => {
     const map = new Map<string, AllowlistRow[]>();
     for (const entry of allowlistEntries ?? []) {
       const key = entry.canonical.toLocaleLowerCase();
@@ -495,8 +496,8 @@ export const AnonymizationFacet = ({
       }
     }
     return map;
-  }, [allowlistEntries]);
-  const detectedGroups = useMemo(() => {
+  })();
+  const detectedGroups = (() => {
     type Row = {
       canonical: string;
       count: number;
@@ -540,13 +541,7 @@ export const AnonymizationFacet = ({
       list.sort((a, b) => a.canonical.localeCompare(b.canonical));
     }
     return [...groups.entries()].sort(([a], [b]) => a.localeCompare(b));
-  }, [
-    matchSnapshot.countByCanonical,
-    matchSnapshot.labelByCanonical,
-    allowlistByCanonical,
-    allowlistEntries,
-    workspaceCanonicals,
-  ]);
+  })();
   const [expandedGroups, setExpandedGroups] = useState<ReadonlySet<string>>(
     () => new Set(),
   );
@@ -584,6 +579,7 @@ export const AnonymizationFacet = ({
   const docSelectionSeq = useAnonymizationSelectionStore((s) =>
     s.source === "doc" && s.fieldId === activeFieldId ? s.seq : 0,
   );
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- two-pass reaction to a doc-selection store bump: first commit expands the target group (setExpandedGroups, shared with toggleGroup), the re-run then scrolls + flashes the row via DOM imperatives; the expand-then-measure dependency on expandedGroups can't move into render, so kept
   useEffect(() => {
     if (!docSelectionCanonical) {
       return;

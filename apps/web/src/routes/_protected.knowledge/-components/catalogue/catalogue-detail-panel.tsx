@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   BanknoteIcon,
@@ -20,6 +20,7 @@ import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -98,7 +99,9 @@ export const CatalogueDetailPanel = ({
       <div className="flex min-h-0 flex-1 flex-col gap-5 overflow-y-auto px-3 py-4">
         {entry.description && (
           <Section title={t("onboarding.catalogueDetailAbout")}>
-            <ExpandableText text={entry.description} />
+            {/* Remount per entry so expanded/overflow state starts fresh
+                (the panel itself is not remounted per selection). */}
+            <ExpandableText key={entry.description} text={entry.description} />
           </Section>
         )}
 
@@ -235,16 +238,10 @@ const ExpandableText = ({ text }: { text: string }) => {
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
 
-  // Collapse when switching to a different entry (the panel is not
-  // remounted per selection, so expanded state would otherwise leak).
-  useEffect(() => {
-    setExpanded(false);
-  }, [text]);
-
   // Measure only while clamped, so overflow is detected against the
   // line-clamp height. A ResizeObserver keeps it correct across font
   // loads, panel animation, and width changes.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = ref.current;
     if (expanded || !el) {
       return () => {

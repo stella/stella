@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -118,6 +118,7 @@ export const AIStep = ({
 
   // Drop back to providers phase if a previously-confirmed key
   // was edited after entering the models phase.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- `canEnterModelsPhase` recomputes from row-state resets that land post-commit (via the reset effect below) and from new `providers` props, so there is no single edit handler that owns the transition back to the providers phase.
   useEffect(() => {
     if (phase === "models" && !canEnterModelsPhase) {
       onPhaseChange("providers");
@@ -128,6 +129,7 @@ export const AIStep = ({
 
   // Whenever a key changes against its saved fingerprint, reset
   // that row to idle so the user must save again.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- `rowStates` is not pure derived state: it is also written by saveRow and updateProviders, so it cannot be deleted and computed in render. This effect reconciles validation status against the latest key fingerprints.
   useEffect(() => {
     setRowStates((prev) => {
       let changed = false;
@@ -155,92 +157,90 @@ export const AIStep = ({
     });
   }, [providers]);
 
-  const saveRow = useCallback(
-    async (index: number) => {
-      const draft = providers[index];
-      if (!draft) {
-        return;
-      }
-      const apiKey = draft.apiKey.trim();
-      if (!apiKey) {
-        return;
-      }
-      const fp = fingerprintDraft(draft);
-      if (!fp) {
+  const saveRow = async (index: number) => {
+    const draft = providers[index];
+    if (!draft) {
+      return;
+    }
+    const apiKey = draft.apiKey.trim();
+    if (!apiKey) {
+      return;
+    }
+    const fp = fingerprintDraft(draft);
+    if (!fp) {
+      return;
+    }
+    setRowStates((prev) => ({
+      ...prev,
+      [draft.provider]: { status: "checking", savedKey: fp },
+    }));
+
+    const response = await api["ai-config"]["validate-provider"].post({
+      provider: draft.provider,
+      apiKey,
+      ...(draft.provider === "azure_foundry"
+        ? {
+            endpoint: draft.endpoint.trim(),
+            ...(draft.apiVersion ? { apiVersion: draft.apiVersion } : {}),
+          }
+        : {}),
+      ...(draft.provider === "huggingface"
+        ? { endpoint: draft.endpoint.trim() }
+        : {}),
+      ...(draft.provider === "google" ? { region: draft.region } : {}),
+    });
+
+    if (response.error) {
+      // Provider unreachable (502) — treat as soft pass so the
+      // user can proceed; otherwise show invalid.
+      if (response.error.status === 502) {
+        setRowStates((prev) => ({
+          ...prev,
+          [draft.provider]: { status: "valid", savedKey: fp },
+        }));
         return;
       }
       setRowStates((prev) => ({
         ...prev,
-        [draft.provider]: { status: "checking", savedKey: fp },
+        [draft.provider]: { status: "invalid", savedKey: fp },
       }));
-
-      const response = await api["ai-config"]["validate-provider"].post({
-        provider: draft.provider,
-        apiKey,
-        ...(draft.provider === "azure_foundry"
-          ? {
-              endpoint: draft.endpoint.trim(),
-              ...(draft.apiVersion ? { apiVersion: draft.apiVersion } : {}),
-            }
-          : {}),
-        ...(draft.provider === "huggingface"
-          ? { endpoint: draft.endpoint.trim() }
-          : {}),
-        ...(draft.provider === "google" ? { region: draft.region } : {}),
+      stellaToast.add({
+        title: tOrganization("aiConfig.providerKeyInvalid", {
+          provider: PROVIDER_LABELS[draft.provider],
+        }),
+        type: "warning",
       });
+      return;
+    }
 
-      if (response.error) {
-        // Provider unreachable (502) — treat as soft pass so the
-        // user can proceed; otherwise show invalid.
-        if (response.error.status === 502) {
-          setRowStates((prev) => ({
-            ...prev,
-            [draft.provider]: { status: "valid", savedKey: fp },
-          }));
-          return;
-        }
-        setRowStates((prev) => ({
-          ...prev,
-          [draft.provider]: { status: "invalid", savedKey: fp },
-        }));
+    if (!response.data.valid) {
+      setRowStates((prev) => ({
+        ...prev,
+        [draft.provider]: { status: "invalid", savedKey: fp },
+      }));
+      const toastKey = `${draft.provider}:${fp}`;
+      if (!toastedRef.current.has(toastKey)) {
+        toastedRef.current.add(toastKey);
         stellaToast.add({
           title: tOrganization("aiConfig.providerKeyInvalid", {
             provider: PROVIDER_LABELS[draft.provider],
           }),
+          description: response.data.error,
           type: "warning",
         });
-        return;
       }
+      return;
+    }
 
-      if (!response.data.valid) {
-        setRowStates((prev) => ({
-          ...prev,
-          [draft.provider]: { status: "invalid", savedKey: fp },
-        }));
-        const toastKey = `${draft.provider}:${fp}`;
-        if (!toastedRef.current.has(toastKey)) {
-          toastedRef.current.add(toastKey);
-          stellaToast.add({
-            title: tOrganization("aiConfig.providerKeyInvalid", {
-              provider: PROVIDER_LABELS[draft.provider],
-            }),
-            description: response.data.error,
-            type: "warning",
-          });
-        }
-        return;
-      }
-
-      setRowStates((prev) => ({
-        ...prev,
-        [draft.provider]: { status: "valid", savedKey: fp },
-      }));
-    },
-    [providers, tOrganization],
-  );
+    setRowStates((prev) => ({
+      ...prev,
+      [draft.provider]: { status: "valid", savedKey: fp },
+    }));
+  };
 
   // Push the preview list (provider + status) to the wizard so
   // the sidebar mock can render an accurate per-provider state.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- pushes a preview derived from the locally-owned `rowStates` validation status up to the parent. The computation cannot be lifted without hoisting `rowStates` (which saveRow mutates) into the parent.
   useEffect(() => {
     if (!onPreviewChange) {
       return;

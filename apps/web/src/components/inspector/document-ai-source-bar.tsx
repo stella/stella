@@ -13,6 +13,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import type { FileTab } from "@/components/inspector/inspector-store";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { Citation } from "@/lib/citations";
@@ -168,6 +169,7 @@ export const DocumentAiSourceBar = ({
   // Kick off the generation request when the justification bar
   // mounts with missing bboxes. The mutation hook itself is the
   // source of truth for `isPending`.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- kick off bbox generation once async-loaded state (query + store) satisfies needsBoxes. needsBoxes is derived from several async sources, not a single setter call, so there is no handler to fold this into; keep.
   useEffect(() => {
     if (!needsBoxes || !justificationId) {
       return;
@@ -175,6 +177,7 @@ export const DocumentAiSourceBar = ({
     mutateBoundingBoxes({ justificationId });
   }, [needsBoxes, justificationId, mutateBoundingBoxes]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset expansion when fieldId changes. setIsAnswerExpanded also backs the toggle button, so it is not pure derived state; a key-reset belongs in the parent (file-tab-panel.tsx, outside this batch) and would also reset this component's bbox refs. Keep.
   useEffect(() => {
     setIsAnswerExpanded(false);
   }, [fieldId]);
@@ -182,6 +185,7 @@ export const DocumentAiSourceBar = ({
   // Nudge the justifications cache every second while we still need
   // bboxes. POST success doesn't guarantee the payload is in cache
   // yet, so we keep polling until `needsBoxes` flips false.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- setInterval that invalidates the justifications cache while bboxes are still missing. The justifications query is owned by useSyncJustifications (outside this file), so refetchInterval cannot be set here; keep.
   useEffect(() => {
     if (!needsBoxes) {
       return undefined;
@@ -197,7 +201,7 @@ export const DocumentAiSourceBar = ({
   }, [needsBoxes, queryClient, workspaceId]);
 
   const scrolledForJustificationRef = useRef<string | null>(null);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!boundingBoxes || !isActiveTab || !pages || !setScrollTo) {
       return;
     }
@@ -244,7 +248,7 @@ export const DocumentAiSourceBar = ({
   // justification id" so swapping back to the same cell doesn't
   // re-fire the request mid-typing.
   const scrolledForDocxJustificationRef = useRef<string | null>(null);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isActiveTab || !justificationId) {
       return;
     }
@@ -538,7 +542,7 @@ const useFolioBlockPage = (blockId: string): number | null => {
   const [page, setPage] = useState<number | null>(() =>
     findFolioBlockPage(blockId),
   );
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setPage(findFolioBlockPage(blockId));
     const observer = new MutationObserver(() => {
       const next = findFolioBlockPage(blockId);

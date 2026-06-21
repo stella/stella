@@ -1,9 +1,9 @@
-import { useEffect } from "react";
 import type { RefObject } from "react";
 
 import { useDebouncedCallback } from "use-debounce";
 import { useShallow } from "zustand/react/shallow";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { SCROLL_AREA_VIEWPORT_SELECTOR } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { restoreScrollAnchor } from "@/lib/pdf/utils";
@@ -33,7 +33,7 @@ export const usePDFFitToWidth = ({ containerRef }: UsePDFFitToWidthArgs) => {
   );
   const debouncedRerender = useDebouncedCallback(rerenderAtScale, 150);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const anchor = consumePendingScrollAnchor();
 
     if (anchor) {

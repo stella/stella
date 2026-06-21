@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
@@ -58,6 +58,7 @@ import {
   EmptyScreen,
 } from "@/components/empty-screen";
 import { PersonMentionLabel } from "@/components/person-mention-label";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -256,7 +257,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   // Re-compute the current date when the user returns to the
   // tab so the heatmap refreshes across day/week boundaries.
   const [today, setToday] = useState(() => toISODate(new Date()));
-  useEffect(() => {
+  useMountEffect(() => {
     const onVisible = () => {
       if (document.visibilityState === "visible") {
         setToday(toISODate(new Date()));
@@ -264,8 +265,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     };
     document.addEventListener("visibilitychange", onVisible);
     return () => document.removeEventListener("visibilitychange", onVisible);
-  }, []);
+  });
 
+  // `getWeekStart` reads `new Date()` and ignores its argument; the `today` key
+  // is what forces a recompute across day boundaries (the compiler can't infer
+  // that dependency, so it would otherwise cache the first week forever).
   const weekStart = useMemo(getWeekStart, [today]);
   const weekEnd = useMemo(() => {
     const end = new Date(weekStart);
@@ -1126,7 +1130,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
     />
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = rowRef.current;
     if (!el) {
       return undefined;

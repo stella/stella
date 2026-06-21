@@ -64,6 +64,7 @@ import {
   getWorkspacePrimaryNavItems,
   type WorkspacePrimaryNavId,
 } from "@/components/workspace-primary-nav";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
@@ -187,6 +188,7 @@ export function AppSidebar(props: AppSidebarProps) {
     HOLD_DELAY_MS,
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reacts to the useKeyHold(NAV_KEY) hook output to drive a debounced badge reveal; the trigger is a hook return value with no setter call-site to relay into, so it stays an effect
   useEffect(() => {
     if (isNavKeyHeld) {
       showBadges();
@@ -320,7 +322,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const navTargetsRef = useRef(navTargets);
   navTargetsRef.current = navTargets;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!showNavBadges) {
       return undefined;
     }
@@ -720,7 +722,7 @@ const MatterItem = ({
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = dropRef.current;
     if (!el || !canDrag) {
       return undefined;

@@ -255,4 +255,45 @@ describe("custom oxlint guardrails", () => {
       "Public SEO endpoints must use the public case-law API response",
     );
   });
+
+  test("no-raw-use-effect tracks the react import and points at the convention", () => {
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-raw-use-effect.ts",
+    );
+
+    // Must resolve `useEffect` through the react import (named, aliased,
+    // default, and namespace) rather than matching the bare identifier —
+    // otherwise an unrelated local `useEffect` would false-positive.
+    expect(pluginSource).toContain('const REACT_MODULE = "react"');
+    expect(pluginSource).toContain(
+      'getImportedName(specifier) === "useEffect"',
+    );
+    expect(pluginSource).toContain(
+      'specifier.type === "ImportDefaultSpecifier"',
+    );
+    expect(pluginSource).toContain(
+      'specifier.type === "ImportNamespaceSpecifier"',
+    );
+
+    // allowedFiles lets the sanctioned wrapper module call useEffect directly.
+    expect(pluginSource).toContain("allowedFiles");
+
+    // A failing call must point the reader/agent at the source of truth.
+    expect(pluginSource).toContain("/conventions-use-effect");
+  });
+
+  test("no-raw-use-effect is enabled for apps/web with the wrapper allowlisted", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+
+    expect(configSource).toContain("./.oxlint-plugins/no-raw-use-effect.ts");
+    expect(configSource).toContain("no-raw-use-effect/no-raw-use-effect");
+    expect(configSource).toContain(
+      'allowedFiles: ["apps/web/src/hooks/use-effect.ts"]',
+    );
+    // The regression fixture is enabled explicitly because the rule is scoped
+    // to apps/web/src, which the fixtures dir is not.
+    expect(configSource).toContain(
+      ".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx",
+    );
+  });
 });

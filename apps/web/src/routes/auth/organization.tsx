@@ -73,6 +73,7 @@ function Organization() {
     hasSignedOauthQuery(window.location.search);
   const navigate = useNavigate();
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- navigation side-effect driven by derived auth state, move into the data-loading flow
   useEffect(() => {
     if (!isPending && !hasOrganizations && !isOauthPostLogin) {
       void navigate({ to: "/onboarding", replace: true });
@@ -189,6 +190,7 @@ const OrganizationList = ({
   // Auto-select when there's only one organization
   const singleOrg = organizations.length === 1 ? organizations[0] : null;
   const autoSelected = useRef(false);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (auto-trigger select mutation on derived single-org state), move into handler
   useEffect(() => {
     if (singleOrg && !autoSelected.current && !isSelectPending) {
       autoSelected.current = true;

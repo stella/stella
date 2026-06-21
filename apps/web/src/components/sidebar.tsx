@@ -1,4 +1,4 @@
-import { createContext, use, useCallback, useMemo, useState } from "react";
+import { createContext, use, useMemo, useState } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
 import { panic } from "better-result";
@@ -89,33 +89,27 @@ function SidebarProvider({
       : storedState === "expanded";
   });
   const open = openProp ?? _open;
-  const setOpen = useCallback(
-    (value: boolean | ((v: boolean) => boolean)) => {
-      const openState = typeof value === "function" ? value(open) : value;
-      if (setOpenProp) {
-        setOpenProp(openState);
-      } else {
-        _setOpen(openState);
-      }
+  const setOpen = (value: boolean | ((v: boolean) => boolean)) => {
+    const openState = typeof value === "function" ? value(open) : value;
+    if (setOpenProp) {
+      setOpenProp(openState);
+    } else {
+      _setOpen(openState);
+    }
 
-      const state: SidebarContextProps["state"] = openState
-        ? "expanded"
-        : "collapsed";
-      if (typeof localStorage !== "undefined") {
-        localStorage.setItem(SIDEBAR_LS_NAME, state);
-      }
-    },
-    [setOpenProp, open],
-  );
+    const state: SidebarContextProps["state"] = openState
+      ? "expanded"
+      : "collapsed";
+    if (typeof localStorage !== "undefined") {
+      localStorage.setItem(SIDEBAR_LS_NAME, state);
+    }
+  };
 
   // Helper to toggle the sidebar.
-  const toggleSidebar = useCallback(
-    () =>
-      isMobile
-        ? setOpenMobile((isOpen) => !isOpen)
-        : setOpen((isOpen) => !isOpen),
-    [isMobile, setOpen],
-  );
+  const toggleSidebar = () =>
+    isMobile
+      ? setOpenMobile((isOpen) => !isOpen)
+      : setOpen((isOpen) => !isOpen);
 
   useHotkey(HOTKEYS.TOGGLE_SIDEBAR, () => {
     toggleSidebar();
@@ -125,18 +119,15 @@ function SidebarProvider({
   // This makes it easier to style the sidebar with Tailwind classes.
   const state = open ? "expanded" : "collapsed";
 
-  const contextValue = useMemo<SidebarContextProps>(
-    () => ({
-      state,
-      open,
-      setOpen,
-      isMobile,
-      openMobile,
-      setOpenMobile,
-      toggleSidebar,
-    }),
-    [state, open, setOpen, isMobile, openMobile, toggleSidebar],
-  );
+  const contextValue: SidebarContextProps = {
+    state,
+    open,
+    setOpen,
+    isMobile,
+    openMobile,
+    setOpenMobile,
+    toggleSidebar,
+  };
 
   return (
     <SidebarContext value={contextValue}>
@@ -615,7 +606,7 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean;
 }) {
-  // Random width between 50 to 90%.
+  // Impure Math.random() must be frozen to one value for this instance's lifetime.
   const width = useMemo(() => `${Math.floor(Math.random() * 40) + 50}%`, []);
 
   return (

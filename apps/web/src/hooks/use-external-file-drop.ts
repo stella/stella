@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/external/file";
@@ -10,6 +10,7 @@ import {
   collectDroppedFileTree,
   type DroppedFileTree,
 } from "@/hooks/external-file-drop.logic";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { ClientOperationError } from "@/lib/errors";
 
 type ExternalFileDropOptions = {
@@ -67,7 +68,7 @@ export const useExternalFileDrop = ({
   const onErrorRef = useRef(onError);
   onErrorRef.current = onError;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = ref.current;
     if (!el || !enabled) {
       return undefined;

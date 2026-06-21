@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
@@ -64,13 +64,10 @@ export const TimesheetDayView = ({
   const updateEntry = useUpdateTimeEntry();
   const deleteEntry = useDeleteTimeEntry();
 
-  const totalMinutes = useMemo(
-    () => entries.reduce((sum, e) => sum + e.durationMinutes, 0),
-    [entries],
-  );
+  const totalMinutes = entries.reduce((sum, e) => sum + e.durationMinutes, 0);
 
   // Compute total billed amount
-  const totalBilledAmount = useMemo(() => {
+  const totalBilledAmount = (() => {
     let total = 0;
     for (const e of entries) {
       if (e.billable) {
@@ -81,15 +78,13 @@ export const TimesheetDayView = ({
       }
     }
     return total;
-  }, [entries]);
+  })();
 
   // Find dominant currency for display
-  const dominantCurrency = useMemo(() => {
-    if (entries.length === 0) {
-      return DEFAULT_CURRENCY;
-    }
-    return entries.at(0)?.currency ?? DEFAULT_CURRENCY;
-  }, [entries]);
+  const dominantCurrency =
+    entries.length === 0
+      ? DEFAULT_CURRENCY
+      : (entries.at(0)?.currency ?? DEFAULT_CURRENCY);
 
   const editingEntry = editingId
     ? entries.find((e) => e.id === editingId)
@@ -181,7 +176,7 @@ export const TimesheetDayView = ({
     );
   };
 
-  const handleSelect = useCallback((id: string, selected: boolean) => {
+  const handleSelect = (id: string, selected: boolean) => {
     setSelectedIds((prev) => {
       const next = new Set(prev);
       if (selected) {
@@ -191,7 +186,7 @@ export const TimesheetDayView = ({
       }
       return next;
     });
-  }, []);
+  };
 
   const handleSelectAll = () => {
     if (selectedIds.size === entries.length) {

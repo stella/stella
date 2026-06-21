@@ -58,6 +58,7 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
@@ -826,7 +827,7 @@ const FileChatOverlayInner = ({
   const [editorReady, setEditorReady] = useState(() =>
     Boolean(docxEditorRef?.current?.createAIEditSnapshot()),
   );
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (editorReady || !hasDocxEditSurface) {
       return undefined;
     }
@@ -870,6 +871,7 @@ const FileChatOverlayInner = ({
   }, [editorReady, hasDocxEditSurface, docxEditorRef]);
   // Reset readiness when the active file changes — the new doc has
   // its own mount cycle.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id derived state, lift to key prop
   useEffect(() => {
     setEditorReady(false);
   }, [activeFile?.entityId]);
@@ -1028,6 +1030,7 @@ const FileChatOverlayInner = ({
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (open AI-key gate on mount/dep change), move into handler
   useEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
@@ -1067,7 +1070,7 @@ const FileChatOverlayInner = ({
   const shouldFocusComposerAfterNewThreadRef = useRef(false);
   const focusController = editorController.focus;
   const editorInstance = editorController.editor;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (previousChatThreadIdRef.current === chatThreadId) {
       return undefined;
     }
@@ -1152,6 +1155,7 @@ const FileChatOverlayInner = ({
   // Auto-open the thread panel as soon as the first message
   // lands so users see streaming without having to click the
   // chevron themselves.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (panel openness follows thread content), compute in render
   useEffect(() => {
     if (hasThreadContent) {
       setPanelOpen(true);

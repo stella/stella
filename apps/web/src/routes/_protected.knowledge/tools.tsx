@@ -1,4 +1,4 @@
-import { Suspense, useEffect } from "react";
+import { Suspense } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -9,6 +9,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { CatalogueBrowser } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
@@ -100,7 +101,7 @@ function ToolsPage() {
   // postMessage), so the catalogue page needs an active subscription
   // to surface the toast and refetch the catalogue. The legacy
   // listener lived on /knowledge/mcp before the surface unified.
-  useEffect(
+  useExternalSyncEffect(
     () =>
       subscribeToMcpOAuthOutcome((outcome) => {
         if (outcome.status === "connected") {

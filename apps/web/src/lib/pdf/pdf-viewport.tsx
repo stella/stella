@@ -19,6 +19,7 @@ import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 
 import { useTheme } from "@/components/theme-provider";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePageVisibility } from "@/lib/pdf/hooks/use-page-visibility";
 import { usePDFControlledScaleOffset } from "@/lib/pdf/hooks/use-pdf-controlled-scale-offset";
 import { usePDFDocument } from "@/lib/pdf/hooks/use-pdf-document";
@@ -71,6 +72,7 @@ export const PDFViewport = ({
 }: PDFViewportProps) => {
   const [password, setPassword] = useState(initialPassword);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-prop: re-sync local password to the initialPassword prop. Not pure derived state — setPassword is also driven by the password prompt below, so it cannot be computed in render; keep until a key-reset is wired through every PDFViewport call site.
   useEffect(() => {
     setPassword(initialPassword);
   }, [initialPassword]);
@@ -130,7 +132,7 @@ const PDFViewerContent = ({
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     startTransition(() => {
       setDocument(document);
     });
@@ -159,6 +161,7 @@ const PDFViewerContent = ({
     onPageCountChanged?.(count);
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- notify the parent when the derived page count changes. The mutation lives in the zustand PDF store (out of this file), so there is no local setter to fold this into; keep until the store can emit the count itself.
   useEffect(() => {
     onPageCountChangedEvent(pageIds.length);
   }, [pageIds.length]);

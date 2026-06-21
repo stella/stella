@@ -20,6 +20,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
@@ -97,7 +98,7 @@ export const WorkspaceTable = ({
   const [wrapperWidth, setWrapperWidth] = useState(0);
   const [verticalScrollbarWidth, setVerticalScrollbarWidth] = useState(0);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!expandedTableCell) {
       return undefined;
     }
@@ -211,6 +212,7 @@ export const WorkspaceTable = ({
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
   const lastVirtualRow = virtualRows.at(-1);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- infinite-load trigger that must also re-fire when isFetchingNextPage/hasNextPage flip (not only on virtualizer changes), so it can chain the next page while still parked at the bottom; a virtualizer onChange handler would miss that path, so kept
   useEffect(() => {
     if (!hasNextPage || isFetchingNextPage || !onLoadMore || !lastVirtualRow) {
       return;
@@ -299,7 +301,7 @@ export const WorkspaceTable = ({
     [orderedColumns, table],
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const element = tableWrapperRef.current;
     if (!element) {
       return undefined;
@@ -367,7 +369,7 @@ export const WorkspaceTable = ({
     );
   }, [handleColumnReorder, t]);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const element = tableWrapperRef.current;
     if (!element) {
       return undefined;
@@ -383,7 +385,7 @@ export const WorkspaceTable = ({
     resizeObserver.observe(element);
 
     return () => resizeObserver.disconnect();
-  }, []);
+  });
 
   useLayoutEffect(() => {
     const element = tableWrapperRef.current;

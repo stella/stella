@@ -76,13 +76,19 @@ export function MarkdownFolioEditor({
   const [seed, setSeed] = useState(markdown);
   const [rawText, setRawText] = useState(markdown);
 
-  const doc = useMemo<Document>(() => fromMarkdown(seed), [seed]);
+  const doc: Document = fromMarkdown(seed);
   // The editor's normalized form of the current seed. Folio fires an onChange
   // right after it parses/lays out the document; comparing against this baseline
   // keeps that load-time change (and any no-op edit) from emitting upward, so the
   // host doesn't see the file as dirty the moment it opens.
-  const baseline = useMemo(() => toMarkdown(doc, CLEAN_MARKDOWN), [doc]);
+  const baseline = toMarkdown(doc, CLEAN_MARKDOWN);
   const lastEmittedRef = useRef(baseline);
+  // `lastEmittedRef` doubles as mutable dedup state: `emitIfChanged` overwrites
+  // it with the latest user edit between renders. Re-seeding it to `baseline`
+  // must happen only when `baseline` actually changes (a new seed), not on every
+  // render — a render-time assignment would clobber a pending edit value and
+  // un-dedupe the next identical onChange. So this stays a deps-gated effect.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- re-seed dedup ref only when the render-computed baseline changes; a plain render-time ref-assign would clobber the edit value emitIfChanged stores between renders
   useEffect(() => {
     lastEmittedRef.current = baseline;
   }, [baseline]);
@@ -129,6 +135,8 @@ export function MarkdownFolioEditor({
     maxAutoZoom: 1,
     fitWidth: PAGE_FIT_WIDTH,
   });
+  // Stable ref callback so React doesn't detach/re-attach the fit-zoom
+  // ResizeObserver every render.
   const composedContainerRef = useMemo(
     () => composeRefs(containerRef, fitZoomRef),
     [fitZoomRef],

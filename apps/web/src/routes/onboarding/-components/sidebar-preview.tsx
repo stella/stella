@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { formatForDisplay } from "@tanstack/react-hotkeys";
 import {
@@ -18,6 +18,7 @@ import type {
 } from "@/components/ai-config-role-models.logic";
 import { getProviderIcon } from "@/components/ai-provider-icons";
 import { StellaWordmark } from "@/components/stella-wordmark";
+import { useMountEffect } from "@/hooks/use-effect";
 import { HOTKEYS } from "@/lib/hotkeys";
 
 type SidebarPreviewProps = {
@@ -95,10 +96,10 @@ export const SidebarPreview = ({
   // Single shared pulse state so every dot blinks in lockstep,
   // regardless of when each row mounted.
   const [pulseOn, setPulseOn] = useState(true);
-  useEffect(() => {
+  useMountEffect(() => {
     const id = setInterval(() => setPulseOn((v) => !v), PULSE_DURATION_MS / 2);
     return () => clearInterval(id);
-  }, []);
+  });
 
   return (
     <div className="bg-background w-[340px] overflow-hidden rounded-xl shadow-lg">

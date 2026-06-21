@@ -19,6 +19,7 @@ import { useTranslations } from "use-intl";
 import type { OptionColor } from "@stll/api/types";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useMountEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
@@ -144,6 +145,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
 
   // Reset local column order when the groupBy property changes so stale
   // column positions from the previous grouping don't leak through.
+  // A `key` on the parent would remount the whole view and also wipe
+  // `hiddenGroups` (which must survive a groupBy change), so this stays a
+  // scoped reset instead of a lift-to-key.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id resetting only localColumnOrder; lift-to-key would over-reset (also clears hiddenGroups) and the parent render site is out of scope
   useEffect(() => {
     setLocalColumnOrder([]);
   }, [configuredGroupBy]);
@@ -644,7 +649,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
   const onReorderRef = useRef(onReorderColumn);
   onReorderRef.current = onReorderColumn;
 
-  useEffect(() => {
+  useMountEffect(() => {
     const el = scrollRef.current;
     if (!el) {
       return undefined;
@@ -693,7 +698,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
         },
       }),
     );
-  }, []);
+  });
 
   return (
     <div className="flex h-full gap-4 overflow-x-auto p-4" ref={scrollRef}>

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   LayoutTemplateIcon,
@@ -77,57 +77,51 @@ export const TemplateList = ({
   const inputRef = useRef<HTMLInputElement>(null);
   const [discovering, setDiscovering] = useState(false);
 
-  const discover = useCallback(
-    async (file: File) => {
-      if (file.type !== DOCX_MIME) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.invalidFileType"),
-        });
-        return;
-      }
+  const discover = async (file: File) => {
+    if (file.type !== DOCX_MIME) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.invalidFileType"),
+      });
+      return;
+    }
 
-      setDiscovering(true);
-      const response = await api.templates.discover.post({ file });
-      setDiscovering(false);
+    setDiscovering(true);
+    const response = await api.templates.discover.post({ file });
+    setDiscovering(false);
 
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.discoveryFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.discoveryFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
 
-      const { data } = response;
-      if (data instanceof Response) {
-        stellaToast.add({
-          type: "error",
-          title: t("templates.discoveryFailed"),
-        });
-        return;
-      }
+    const { data } = response;
+    if (data instanceof Response) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.discoveryFailed"),
+      });
+      return;
+    }
 
-      onDiscovered(file, data);
-    },
-    [onDiscovered, t],
-  );
+    onDiscovered(file, data);
+  };
 
-  const handleFileChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      const file = e.target.files?.item(0);
-      if (file) {
-        // Errors are surfaced as toasts inside discover
-        discover(file).catch(() => undefined);
-      }
-      e.target.value = "";
-    },
-    [discover],
-  );
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.item(0);
+    if (file) {
+      // Errors are surfaced as toasts inside discover
+      discover(file).catch(() => undefined);
+    }
+    e.target.value = "";
+  };
 
   if (templates.length === 0 && !selectedCategoryId) {
     return <TemplateUpload onDiscovered={onDiscovered} />;
@@ -210,7 +204,7 @@ const TemplateRow = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = async () => {
     setDeleting(true);
     const response = await api
       .templates({
@@ -238,7 +232,7 @@ const TemplateRow = ({
     });
     setDeleteOpen(false);
     onDeleted();
-  }, [template.id, t, onDeleted]);
+  };
 
   return (
     <li className="flex items-center gap-4 px-4 py-3">

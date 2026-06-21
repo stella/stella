@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 const ZOOM_STEP = 0.2;
 const MIN_OFFSET = -0.8;
@@ -19,7 +21,7 @@ export const usePdfTabZoom = ({
   );
   const pdfContentRef = useRef<HTMLDivElement>(null);
 
-  const handleZoom = useCallback((tabId: string, direction: "in" | "out") => {
+  const handleZoom = (tabId: string, direction: "in" | "out") => {
     setScaleOffsets((prev) => {
       const current = prev.get(tabId) ?? 0;
       const delta = direction === "in" ? ZOOM_STEP : -ZOOM_STEP;
@@ -33,17 +35,17 @@ export const usePdfTabZoom = ({
       updated.set(tabId, next);
       return updated;
     });
-  }, []);
+  };
 
-  const handleResetZoom = useCallback((tabId: string) => {
+  const handleResetZoom = (tabId: string) => {
     setScaleOffsets((prev) => {
       const updated = new Map(prev);
       updated.set(tabId, 0);
       return updated;
     });
-  }, []);
+  };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = pdfContentRef.current;
     if (!el || activeTabType !== "pdf") {
       return undefined;

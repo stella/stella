@@ -1,5 +1,5 @@
 import "./chat-editor.css";
-import { useCallback, useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -14,6 +14,7 @@ import type {
 } from "@/components/chat-editor-provider";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type ChatInputSurfaceProps = {
   autoFocus?: boolean;
@@ -82,7 +83,7 @@ export const ChatInputSurface = ({
     submitDisabled,
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!autoFocus) {
       return;
     }
@@ -90,21 +91,18 @@ export const ChatInputSurface = ({
     focus();
   }, [autoFocus, focus]);
 
-  const handleFocus = useCallback(() => {
+  const handleFocus = () => {
     onFocusChange?.(true);
-  }, [onFocusChange]);
+  };
 
-  const handleBlur = useCallback(
-    (event: React.FocusEvent<HTMLDivElement>) => {
-      const nextTarget = event.relatedTarget;
-      if (nextTarget instanceof Node && rootRef.current?.contains(nextTarget)) {
-        return;
-      }
+  const handleBlur = (event: React.FocusEvent<HTMLDivElement>) => {
+    const nextTarget = event.relatedTarget;
+    if (nextTarget instanceof Node && rootRef.current?.contains(nextTarget)) {
+      return;
+    }
 
-      onFocusChange?.(false);
-    },
-    [onFocusChange],
-  );
+    onFocusChange?.(false);
+  };
 
   return (
     <div

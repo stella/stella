@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
@@ -162,11 +162,11 @@ export const ClauseDetailView = ({
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- duplicated web/api paragraph types diverge; not narrowable without a mapper
   const detail = detailQuery.data as unknown as ClauseDetail | undefined;
 
-  const refreshDetail = useCallback(() => {
+  const refreshDetail = () => {
     void queryClient.invalidateQueries({
       queryKey: knowledgeKeys.clauses.detail(organizationId, clauseId),
     });
-  }, [clauseId, organizationId, queryClient]);
+  };
 
   const deleteClause = useMutation({
     mutationFn: async () => {
@@ -445,7 +445,7 @@ const VariantRow = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = async () => {
     setDeleting(true);
     const response = await api
       .clauses({ clauseId })
@@ -472,7 +472,7 @@ const VariantRow = ({
     });
     setDeleteOpen(false);
     onChanged();
-  }, [clauseId, variant.id, t, onChanged]);
+  };
 
   const body = isClauseParagraphs(variant.body) ? variant.body : [];
 
@@ -550,7 +550,7 @@ const VariantFormDialog = ({
   const [bodyText, setBodyText] = useState("");
   const [saving, setSaving] = useState(false);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     if (!label.trim()) {
       return;
     }
@@ -586,7 +586,7 @@ const VariantFormDialog = ({
     setBodyText("");
     onOpenChange(false);
     onSaved();
-  }, [clauseId, label, bodyText, t, onOpenChange, onSaved]);
+  };
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>
@@ -653,50 +653,47 @@ const HistoryTab = ({
   const [diffResult, setDiffResult] = useState<ParagraphDiff[] | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const handleVersionClick = useCallback(
-    async (versionId: string) => {
-      if (selectedId === versionId) {
-        setSelectedId(null);
-        setDiffResult(null);
-        return;
-      }
-
-      setSelectedId(versionId);
-      setLoading(true);
+  const handleVersionClick = async (versionId: string) => {
+    if (selectedId === versionId) {
+      setSelectedId(null);
       setDiffResult(null);
+      return;
+    }
 
-      const response = await api
-        .clauses({ clauseId })
-        .versions({ versionId })
-        .get();
+    setSelectedId(versionId);
+    setLoading(true);
+    setDiffResult(null);
 
-      setLoading(false);
+    const response = await api
+      .clauses({ clauseId })
+      .versions({ versionId })
+      .get();
 
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.loadFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        setSelectedId(null);
-        return;
-      }
+    setLoading(false);
 
-      const data = response.data;
-      if (data instanceof Response) {
-        setSelectedId(null);
-        return;
-      }
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.loadFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      setSelectedId(null);
+      return;
+    }
 
-      const oldBody = isClauseParagraphs(data.body) ? data.body : [];
-      const diff = diffClauseBodies(oldBody, currentBody);
-      setDiffResult(diff);
-    },
-    [clauseId, currentBody, selectedId, t],
-  );
+    const data = response.data;
+    if (data instanceof Response) {
+      setSelectedId(null);
+      return;
+    }
+
+    const oldBody = isClauseParagraphs(data.body) ? data.body : [];
+    const diff = diffClauseBodies(oldBody, currentBody);
+    setDiffResult(diff);
+  };
 
   if (versions.length === 0) {
     return (

@@ -1,6 +1,7 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { PDFProvider } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 
@@ -23,7 +24,7 @@ export const MeasuredPdfProvider = ({
   const [initialFitWidth, setInitialFitWidth] = useState<number | undefined>();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!active || initialFitWidth !== undefined) {
       return undefined;
     }

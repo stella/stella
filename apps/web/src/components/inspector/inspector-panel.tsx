@@ -40,6 +40,7 @@ import { useFileTabRename } from "@/components/inspector/use-file-tab-rename";
 import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
+import { useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -229,14 +230,11 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
     }, 2200);
   }, []);
 
-  useEffect(
-    () => () => {
-      if (flashMinimizeTimerRef.current !== null) {
-        clearTimeout(flashMinimizeTimerRef.current);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (flashMinimizeTimerRef.current !== null) {
+      clearTimeout(flashMinimizeTimerRef.current);
+    }
+  });
 
   const handleOpenFullView = useCallback(async () => {
     if (!activeTab || activeTab.type !== "pdf") {
@@ -372,6 +370,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   // Commit the latest recency snapshot after the render commits so
   // discarded renders (Strict Mode, Concurrent) don't pollute the
   // ref — only the set actually shown to the user is recorded.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- deliberate commit-phase ref write: recording recency during render would capture discarded concurrent/Strict-Mode renders, which is exactly what the commit-only timing prevents, so kept
   useEffect(() => {
     pdfRecencyRef.current = Array.from(mountedPdfIds);
   }, [mountedPdfIds]);
@@ -579,6 +578,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
             field.content.type === "file",
         );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- commit-phase ref bookkeeping that the relay effect below reads in the same commit; the two are order-coupled, so moving this into render would change their relative timing, hence kept
   useEffect(() => {
     if (activeFileField === undefined) {
       return;
@@ -590,6 +590,7 @@ const CurrentFileFieldSync = ({ tab }: { tab: FileTab }) => {
     );
   }, [activeFileField]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reacts to entity query data (latestFileFieldForProperty) refetching, which has no single setter call-site to move into; fires the replaceFileFieldId store action when a newer file version lands, so kept
   useEffect(() => {
     if (
       latestFileFieldForProperty === undefined ||

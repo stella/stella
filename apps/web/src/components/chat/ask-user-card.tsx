@@ -172,7 +172,10 @@ export const AskUserCard = ({
   });
   // Seed defaults once the full input arrives (after streaming).
   // The useState initializer only runs on mount, when input may
-  // still be null.
+  // still be null. `answers` is user-mutated interactive state set in
+  // several handlers, so this is a one-shot prop-arrival merge into
+  // existing state, not a plain compute-in-render or key reset.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot merge of question defaults into shared user-edited answers state once input arrives; setter is shared across handlers so it cannot be derived in render or lifted to a key
   useEffect(() => {
     if (!input) {
       return;

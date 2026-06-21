@@ -303,6 +303,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-untyped-updates.ts",
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
+    "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
@@ -363,6 +364,12 @@ export default defineConfig({
         "suppression-hygiene/require-description": "off",
         "suppression-hygiene/no-foreign-directive": "off",
       },
+    },
+    {
+      // Exercise no-raw-use-effect against its regression fixture; the rule is
+      // otherwise scoped to apps/web/src, which the fixtures dir is not.
+      files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
+      rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
     },
     {
       files: ["**/scripts/**"],
@@ -546,6 +553,20 @@ export default defineConfig({
     {
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
+        // Direct useEffect is banned; route external-system sync through
+        // useMountEffect / useExternalSyncEffect. See /conventions-use-effect.
+        // Upstream-synced packages/folio is intentionally exempt.
+        "no-raw-use-effect/no-raw-use-effect": [
+          "error",
+          { allowedFiles: ["apps/web/src/hooks/use-effect.ts"] },
+        ],
+        // useExternalSyncEffect takes a dependency array, so exhaustive-deps
+        // must inspect it like useEffect. useMountEffect is deliberately
+        // dependency-less (mount-only) and is left unregistered.
+        "react-hooks/exhaustive-deps": [
+          "error",
+          { additionalHooks: "(useExternalSyncEffect)" },
+        ],
         "@tanstack/query/exhaustive-deps": "error",
         "@tanstack/query/infinite-query-property-order": "error",
         "@tanstack/query/mutation-property-order": "error",

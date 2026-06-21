@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
 import {
   useStartTimer,
@@ -52,7 +53,7 @@ export const TimerControls = ({ workspaceId }: TimerControlsProps) => {
   const isRunning = Boolean(activeTimer?.timerStartedAt);
 
   // Tick the elapsed time every second when timer is running
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isRunning || !activeTimer?.timerStartedAt) {
       setElapsed(0);
       return undefined;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type React from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
@@ -16,6 +16,7 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
 import { renderDragPreview } from "@/components/drag-preview";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
@@ -97,7 +98,7 @@ const useActiveCellFlash = ({
 }: ActiveCellFlashInput) => {
   const previousCellActivationSeq = useRef(activationSeq);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const rowElement = rowRef.current;
     if (
       !rowElement ||
@@ -201,6 +202,8 @@ export const DraggableRow = ({
   onToggleExpandedCell,
 }: DraggableRowProps) => {
   const rowRef = useRef<HTMLDivElement>(null);
+  // Stable ref callback so React doesn't re-run TanStack Virtual's
+  // measureElement on every render.
   const setRowRef = useCallback(
     (element: HTMLDivElement | null) => {
       rowRef.current = element;
@@ -364,13 +367,13 @@ export const DraggableRow = ({
     </>
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (rowRef.current) {
       measureElement(rowRef.current);
     }
   }, [contentMode, expandedCellId, measureElement]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = rowRef.current;
     if (!el) {
       return undefined;

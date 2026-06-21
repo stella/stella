@@ -1,11 +1,4 @@
-import {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useRef,
-  useState,
-} from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import type { PropsWithChildren } from "react";
 
 import { useTranslations } from "use-intl";
@@ -19,6 +12,8 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
+
+import { useMountEffect } from "@/hooks/use-effect";
 
 type WorkflowServiceTier = "standard" | "flex";
 
@@ -49,34 +44,28 @@ export const WorkflowServiceTierPromptProvider = ({
     null,
   );
 
-  const settlePrompt = useCallback((serviceTier: WorkflowServiceTier) => {
+  const settlePrompt = (serviceTier: WorkflowServiceTier) => {
     const prompt = pendingPromptRef.current;
     pendingPromptRef.current = null;
     setPendingPrompt(null);
     prompt?.resolve(serviceTier);
-  }, []);
+  };
 
-  const askServiceTier = useCallback<WorkflowServiceTierPrompt>(
-    async (input) => {
-      pendingPromptRef.current?.resolve("standard");
+  const askServiceTier: WorkflowServiceTierPrompt = async (input) => {
+    pendingPromptRef.current?.resolve("standard");
 
-      return await new Promise((resolve) => {
-        const nextPrompt = { ...input, resolve };
-        pendingPromptRef.current = nextPrompt;
-        setPendingPrompt(nextPrompt);
-      });
-    },
-    [],
-  );
+    return await new Promise((resolve) => {
+      const nextPrompt = { ...input, resolve };
+      pendingPromptRef.current = nextPrompt;
+      setPendingPrompt(nextPrompt);
+    });
+  };
 
-  useEffect(
-    () => () => {
-      const prompt = pendingPromptRef.current;
-      pendingPromptRef.current = null;
-      prompt?.resolve("standard");
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    const prompt = pendingPromptRef.current;
+    pendingPromptRef.current = null;
+    prompt?.resolve("standard");
+  });
 
   return (
     <WorkflowServiceTierPromptContext.Provider value={askServiceTier}>

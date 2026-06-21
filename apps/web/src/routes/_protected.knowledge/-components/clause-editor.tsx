@@ -1,5 +1,3 @@
-import { useCallback, useEffect } from "react";
-
 import Bold from "@tiptap/extension-bold";
 import Document from "@tiptap/extension-document";
 import Heading from "@tiptap/extension-heading";
@@ -19,6 +17,8 @@ import {
 } from "lucide-react";
 
 import { Button } from "@stll/ui/components/button";
+
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import "./clause-editor.css";
 import type { ClauseParagraph, ClauseRun } from "./clause-editor-types";
@@ -148,7 +148,7 @@ export const ClauseEditor = ({
   const contentKey = content.map((p) => p.text).join("\n");
   const editorReady = isUsableEditor(editor);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!isUsableEditor(editor)) {
       return undefined;
     }
@@ -160,32 +160,29 @@ export const ClauseEditor = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editor and content are stable refs; only re-sync when contentKey changes
   }, [contentKey]);
 
-  const toggleBold = useCallback(() => {
+  const toggleBold = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().toggleBold().run();
-  }, [editor]);
+  };
 
-  const toggleItalic = useCallback(() => {
+  const toggleItalic = () => {
     if (!isUsableEditor(editor)) {
       return;
     }
 
     editor.chain().focus().toggleItalic().run();
-  }, [editor]);
+  };
 
-  const toggleHeading = useCallback(
-    (level: 1 | 2 | 3) => {
-      if (!isUsableEditor(editor)) {
-        return;
-      }
+  const toggleHeading = (level: 1 | 2 | 3) => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
 
-      editor.chain().focus().toggleHeading({ level }).run();
-    },
-    [editor],
-  );
+    editor.chain().focus().toggleHeading({ level }).run();
+  };
 
   return (
     // Stop modifier key combos from propagating to global

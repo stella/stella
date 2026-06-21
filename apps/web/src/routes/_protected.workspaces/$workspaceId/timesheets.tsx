@@ -1,4 +1,4 @@
-import { Suspense, useMemo, useState } from "react";
+import { Suspense, useState } from "react";
 
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import {
@@ -101,7 +101,7 @@ function TimesheetsPage() {
 
   const dateStr = formatDateISO(currentDate);
 
-  const monday = useMemo(() => getMonday(currentDate), [currentDate]);
+  const monday = getMonday(currentDate);
   const weekStart = formatDateISO(monday);
   const weekEnd = formatDateISO(addDays(monday, 6));
 

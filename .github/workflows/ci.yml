@@ -215,6 +215,18 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun run typecheck -- "${args[@]}"
 
+      - name: React Compiler bailout guard
+        if: steps.changed-files.outputs.package_checks_required == 'true'
+        # Components the React Compiler bails out on (refs-in-render,
+        # try/finally, an ESLint suppression on the component) are not
+        # auto-memoized, so manual useMemo/useCallback there is load-bearing:
+        # removing it leaves unstable references that re-fire effects every
+        # render — loops that lint and typecheck do not catch. Fails when a
+        # baseline bailout file loses memoization or a new bailout component
+        # appears untracked. CI-only: it runs the JS compiler, too slow for the
+        # local loop. Regenerate: `bun scripts/rc-bailouts.ts --write-baseline`.
+        run: bun scripts/rc-bailouts.ts --check
+
       - name: Knip production dependency checks
         if: steps.changed-files.outputs.package_checks_required == 'true'
         # Static gate paired with the image compile/boot smokes

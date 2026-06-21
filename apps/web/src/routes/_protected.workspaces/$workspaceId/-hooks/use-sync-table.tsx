@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 
 import {
@@ -27,10 +25,7 @@ export const useSyncTable = (activeView: UseSyncTableProps) => {
   // just subscribe to the cached query here.
   useQuery(propertiesOptions(workspaceId));
 
-  const justificationEntityIdChunks = useMemo(
-    () => chunkJustificationEntityIds(entityIds),
-    [entityIds],
-  );
+  const justificationEntityIdChunks = chunkJustificationEntityIds(entityIds);
   useSyncJustificationChunks(
     { workspaceId, entityIdChunks: justificationEntityIdChunks },
     { enabled: syncJustifications },

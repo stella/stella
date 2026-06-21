@@ -10,6 +10,7 @@ import { Button } from "@stll/ui/components/button";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   formatHintKey,
   MOD_KEY,
@@ -37,7 +38,7 @@ export function ShortcutHintsOverlay() {
   // held (the user is executing a shortcut, not browsing hints).
   // Also cancel on Mod+Click (e.g. multi-select in filesystem).
   // Uses capture phase so it fires before React hotkey handlers.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const cancel = () => {
       showDialog.cancel();
       setIsVisible(false);
@@ -97,6 +98,7 @@ export function ShortcutHintsOverlay() {
     };
   }, [showDialog]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reacts to the useKeyHold(MOD_KEY) hook output plus suppression state; the trigger is a hook return value with no setter call-site to relay into, so it stays an effect
   useEffect(() => {
     if (isModHeld && !isSuppressedUntilRelease) {
       showDialog();

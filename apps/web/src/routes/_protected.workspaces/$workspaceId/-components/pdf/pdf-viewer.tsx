@@ -1,5 +1,3 @@
-import { useCallback } from "react";
-
 import { useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { produce } from "immer";
@@ -55,18 +53,15 @@ const FullscreenPdfViewer = () => {
     from: "/workspaces/$workspaceId/$viewId/document",
   });
 
-  const handlePageChanged = useCallback(
-    (page: number) => {
-      void navigate({
-        replace: true,
-        search: (prev) =>
-          produce(prev, (s) => {
-            s.pdfPage = page;
-          }),
-      });
-    },
-    [navigate],
-  );
+  const handlePageChanged = (page: number) => {
+    void navigate({
+      replace: true,
+      search: (prev) =>
+        produce(prev, (s) => {
+          s.pdfPage = page;
+        }),
+    });
+  };
 
   return (
     <FileViewerWithAI

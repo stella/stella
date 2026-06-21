@@ -1,8 +1,8 @@
-import { useEffect } from "react";
 import type { RefObject } from "react";
 
 import type { DocxEditorRef } from "@stll/folio";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
@@ -47,7 +47,7 @@ export const useDocxBlockScroll = ({
     (s) => s.clearPendingBlockScroll,
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (pendingBlockScroll === null || pendingBlockScroll.tabId !== fieldId) {
       return undefined;
     }
@@ -64,7 +64,7 @@ export const useDocxBlockScroll = ({
     });
   }, [clearPendingBlockScroll, editorRef, fieldId, pendingBlockScroll]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     let cancelScroll: (() => void) | null = null;
 
     // `FOLIO_SCROLL_EVENT` isn't in the WindowEventMap because it's

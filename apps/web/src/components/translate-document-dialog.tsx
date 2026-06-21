@@ -7,7 +7,7 @@
  * mutation, and on success links the user to the new entity.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useRouteContext } from "@tanstack/react-router";
@@ -85,13 +85,13 @@ export const TranslateDocumentDialog = ({
     label: string;
   };
 
-  const localizedLanguages = useMemo<LanguageOption[]>(() => {
+  const localizedLanguages: LanguageOption[] = (() => {
     const items: LanguageOption[] = DEEPL_TARGET_LANGUAGES.map((lang) => ({
       code: lang.code,
       label: t(`common.languages.${lang.code}`),
     }));
     return items.sort((a, b) => a.label.localeCompare(b.label, locale));
-  }, [t, locale]);
+  })();
 
   const selectedLanguage =
     localizedLanguages.find((l) => l.code === targetLang) ?? null;

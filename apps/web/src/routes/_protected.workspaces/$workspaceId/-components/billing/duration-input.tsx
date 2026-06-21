@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useTranslations } from "use-intl";
 
@@ -89,7 +89,7 @@ export const DurationInput = ({
   const [displayValue, setDisplayValue] = useState(() => formatMinutes(value));
   const [isFocused, setIsFocused] = useState(false);
 
-  const handleBlur = useCallback(() => {
+  const handleBlur = () => {
     setIsFocused(false);
     const parsed = parseDuration(displayValue);
     if (parsed !== null && parsed > 0) {
@@ -99,11 +99,11 @@ export const DurationInput = ({
     } else {
       setDisplayValue(formatMinutes(value));
     }
-  }, [displayValue, onChange, value]);
+  };
 
-  const handleFocus = useCallback(() => {
+  const handleFocus = () => {
     setIsFocused(true);
-  }, []);
+  };
 
   return (
     <div className={cn("relative", className)}>

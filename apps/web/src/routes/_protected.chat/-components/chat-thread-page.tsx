@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 
 import {
   useMutation,
@@ -187,6 +187,7 @@ export const ChatThreadPage = ({
   // render (the error reference persists in useChat until the
   // user retries).
   const lastHandledErrorRef = useRef<unknown>(null);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- open the usage-limit modal on the transition into a new error. `error` is owned by useChatSession (useChat) and has no setter here; folding this in would require threading the handler into that hook (outside this batch). Keep.
   useEffect(() => {
     if (!error) {
       lastHandledErrorRef.current = null;
@@ -199,10 +200,7 @@ export const ChatThreadPage = ({
     handleUsageLimit(error);
   }, [error, handleUsageLimit]);
 
-  const sentMessageHistoryHtml = useMemo(
-    () => getUserMessageHtmlHistory(messages),
-    [messages],
-  );
+  const sentMessageHistoryHtml = getUserMessageHtmlHistory(messages);
 
   // Seed brand-new (empty) threads from the persisted web-search
   // preference so the user doesn't have to flip the toggle every time
@@ -230,6 +228,7 @@ export const ChatThreadPage = ({
       }
     },
   });
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- PATCH-seed the web-search preference once a freshly-opened thread renders empty. The trigger is derived from async query data (data.webSearchAvailable/Enabled) plus store state, not a single setter or a discrete open handler in this file. Keep.
   useEffect(() => {
     if (seededWebSearchForThreadId.current === threadRef.threadId) {
       return;

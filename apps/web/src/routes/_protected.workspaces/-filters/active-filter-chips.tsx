@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
@@ -26,7 +24,7 @@ export const ActiveFilterChips = ({ workspaces }: ActiveFilterChipsProps) => {
     })),
   );
 
-  const memberNames = useMemo(() => {
+  const memberNames = (() => {
     const map = new Map<string, string>();
     for (const w of workspaces) {
       for (const m of w.members) {
@@ -34,7 +32,7 @@ export const ActiveFilterChips = ({ workspaces }: ActiveFilterChipsProps) => {
       }
     }
     return map;
-  }, [workspaces]);
+  })();
 
   const chips: { key: string; label: string; clear: () => void }[] = [];
 

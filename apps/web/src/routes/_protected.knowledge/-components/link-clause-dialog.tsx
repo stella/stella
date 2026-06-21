@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -86,7 +86,7 @@ export const LinkClauseDialog = ({
     return true;
   });
 
-  const handleLink = useCallback(async () => {
+  const handleLink = async () => {
     if (!selectedClauseId) {
       return;
     }
@@ -129,7 +129,7 @@ export const LinkClauseDialog = ({
     setSlotName("");
     onOpenChange(false);
     onLinked();
-  }, [selectedClauseId, slotName, templateId, t, onOpenChange, onLinked]);
+  };
 
   return (
     <Dialog onOpenChange={onOpenChange} open={open}>

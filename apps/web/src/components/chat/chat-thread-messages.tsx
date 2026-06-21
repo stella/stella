@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { ComponentProps, RefObject } from "react";
 
 import { isToolUIPart } from "ai";
@@ -43,6 +43,7 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
 import {
@@ -76,10 +77,7 @@ export const ChatThreadMessages = ({
   workspaceId,
 }: ChatThreadMessagesProps) => {
   const { activeOrganizationId } = useChatApproval();
-  const retryableAssistantMessageId = useMemo(
-    () => getRetryableAssistantMessageId(messages),
-    [messages],
-  );
+  const retryableAssistantMessageId = getRetryableAssistantMessageId(messages);
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
 
   // Null when this list renders outside a `Conversation` (the file-chat
@@ -108,7 +106,7 @@ export const ChatThreadMessages = ({
   // (with a buffer) and an older page exists, fetch it. The observer
   // re-arms each render so it tracks the latest `canLoadOlder` /
   // `isLoadingOlder` without firing while a fetch is in flight.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const root = scrollRef?.current;
     const target = sentinelRef.current;
     if (!root || !target || !canLoadOlder || isLoadingOlder || loadOlderError) {
@@ -648,7 +646,7 @@ const AssistantMessageActions = ({
     | undefined;
 }) => {
   const t = useTranslations();
-  const text = useMemo(() => getMessageText(message), [message]);
+  const text = getMessageText(message);
   const canRetry = Boolean(
     onResend && isLatestAssistantMessage && !isGenerating,
   );
@@ -974,13 +972,10 @@ const AssistantTextPart = ({
   // Stable identity so MessageResponse memo can short-circuit when
   // nothing actually changed; recomputes only when the pairs array
   // identity changes (i.e. a fresh stream emitted new restorations).
-  const rehypePlugins = useMemo<PluggableList | undefined>(
-    () =>
-      restorationPairs.length > 0
-        ? [[rehypeAnonSpans, restorationPairs]]
-        : undefined,
-    [restorationPairs],
-  );
+  const rehypePlugins: PluggableList | undefined =
+    restorationPairs.length > 0
+      ? [[rehypeAnonSpans, restorationPairs]]
+      : undefined;
   if (rehypePlugins === undefined) {
     return <MessageResponse components={components}>{text}</MessageResponse>;
   }
@@ -1016,13 +1011,10 @@ const UserMessageText = ({
    */
   restorationPairs: readonly ChatAnonRestoration[];
 }) => {
-  const rehypePlugins = useMemo<PluggableList | undefined>(
-    () =>
-      restorationPairs.length > 0
-        ? [[rehypeAnonSpans, restorationPairs]]
-        : undefined,
-    [restorationPairs],
-  );
+  const rehypePlugins: PluggableList | undefined =
+    restorationPairs.length > 0
+      ? [[rehypeAnonSpans, restorationPairs]]
+      : undefined;
   if (rehypePlugins === undefined) {
     return (
       <MessageResponse components={USER_TEXT_STREAMDOWN_COMPONENTS}>

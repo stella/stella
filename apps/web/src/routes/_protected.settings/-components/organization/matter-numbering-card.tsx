@@ -85,6 +85,7 @@ const MatterNumberingCardBody = ({
     }
   }, 300);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- debounced preview POST that must also fire once on mount; a useQuery migration would change debounce/mount-fire/abort semantics, and moving into the change handlers would drop the initial preview, so kept as an explicit external fetch
   useEffect(() => {
     void fetchPreview(pattern, padding);
   }, [pattern, padding, fetchPreview]);

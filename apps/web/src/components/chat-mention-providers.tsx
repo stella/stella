@@ -1,4 +1,4 @@
-import { createContext, use, useMemo } from "react";
+import { createContext, use } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -55,25 +55,22 @@ export const ChatMentionProviders = ({
     enabled: workspaces !== undefined && workspaces.length > 0,
   });
 
-  const value = useMemo<MentionProviders>(
-    () => ({
-      getItems: (categories) => {
-        const items: ChatMentionOption[] = [];
+  const value: MentionProviders = {
+    getItems: (categories) => {
+      const items: ChatMentionOption[] = [];
 
-        if (categories.includes("workspace") && workspaces) {
-          items.push(
-            ...buildWorkspaceMentionOptions({
-              firstViewIdsByWorkspaceId,
-              workspaces,
-            }),
-          );
-        }
+      if (categories.includes("workspace") && workspaces) {
+        items.push(
+          ...buildWorkspaceMentionOptions({
+            firstViewIdsByWorkspaceId,
+            workspaces,
+          }),
+        );
+      }
 
-        return items;
-      },
-    }),
-    [firstViewIdsByWorkspaceId, workspaces],
-  );
+      return items;
+    },
+  };
 
   return (
     <MentionProvidersContext value={value}>{children}</MentionProvidersContext>
