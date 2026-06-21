@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import type { UseMutationResult } from "@tanstack/react-query";
 import { useInfiniteQuery, useMutation, useQuery } from "@tanstack/react-query";
@@ -272,8 +272,6 @@ export const SearchDialog = ({
   const [resultsElement, setResultsElement] = useState<HTMLDivElement | null>(
     null,
   );
-  const loadMoreRef = useRef<HTMLDivElement>(null);
-
   const [query, setQuery] = useState("");
   const [debouncedQuery, setDebouncedQuery] = useState("");
   const [recentSearches, setRecentSearches] = useState<RecentSearch[]>([]);
@@ -738,33 +736,29 @@ export const SearchDialog = ({
     searchQuery,
   ]);
 
-  useExternalSyncEffect(() => {
-    const root = resultsElement;
-    const target = loadMoreRef.current;
-    if (!hasQuery || !hasNextPage || !root || !target) {
-      return undefined;
-    }
+  const loadMoreRef = useCallback(
+    (target: HTMLDivElement | null) => {
+      const root = resultsElement;
+      if (!hasQuery || !hasNextPage || !root || !target) {
+        return undefined;
+      }
 
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries.at(0);
-        if (!entry?.isIntersecting || isFetchingNextPage) {
-          return;
-        }
-        void fetchNextPage();
-      },
-      { root, rootMargin: "160px 0px" },
-    );
+      const observer = new IntersectionObserver(
+        (entries) => {
+          const entry = entries.at(0);
+          if (!entry?.isIntersecting || isFetchingNextPage) {
+            return;
+          }
+          void fetchNextPage();
+        },
+        { root, rootMargin: "160px 0px" },
+      );
 
-    observer.observe(target);
-    return () => observer.disconnect();
-  }, [
-    fetchNextPage,
-    hasNextPage,
-    hasQuery,
-    isFetchingNextPage,
-    resultsElement,
-  ]);
+      observer.observe(target);
+      return () => observer.disconnect();
+    },
+    [fetchNextPage, hasNextPage, hasQuery, isFetchingNextPage, resultsElement],
+  );
 
   return (
     <CommandDialog onOpenChange={onOpenChange} open={open}>

@@ -1,4 +1,5 @@
-import type { RefObject } from "react";
+import { useCallback } from "react";
+import type { RefCallback, RefObject } from "react";
 
 import { useDebouncedCallback } from "use-debounce";
 import { useShallow } from "zustand/react/shallow";
@@ -12,7 +13,9 @@ type UsePDFFitToWidthArgs = {
   containerRef: RefObject<HTMLDivElement | null>;
 };
 
-export const usePDFFitToWidth = ({ containerRef }: UsePDFFitToWidthArgs) => {
+export const usePDFFitToWidth = ({
+  containerRef,
+}: UsePDFFitToWidthArgs): RefCallback<HTMLDivElement> => {
   const [
     fitToWidth,
     scaleOffset,
@@ -45,52 +48,52 @@ export const usePDFFitToWidth = ({ containerRef }: UsePDFFitToWidthArgs) => {
       }
     }
 
-    if (fitToWidth === undefined || scaleOffset !== 0) {
-      return undefined;
-    }
+    return undefined;
+  }, [consumePendingScrollAnchor, containerRef, effectiveScale]);
 
-    const container = containerRef.current;
-    if (!container) {
-      return undefined;
-    }
-
-    // Observe the ScrollArea viewport (the visible area),
-    // not the content container. The content container's
-    // width is determined by the PDF pages themselves,
-    // creating a circular dependency.
-    const viewport = container.closest<HTMLElement>(
-      SCROLL_AREA_VIEWPORT_SELECTOR,
-    );
-    const observeTarget = viewport ?? container;
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries.at(0);
-      if (!entry) {
-        return;
+  return useCallback(
+    (container: HTMLDivElement | null) => {
+      if (!container || fitToWidth === undefined || scaleOffset !== 0) {
+        return undefined;
       }
 
-      const containerWidth = entry.contentRect.width;
-      if (containerWidth <= 0) {
-        return;
-      }
+      // Observe the ScrollArea viewport (the visible area),
+      // not the content container. The content container's
+      // width is determined by the PDF pages themselves,
+      // creating a circular dependency.
+      const viewport = container.closest<HTMLElement>(
+        SCROLL_AREA_VIEWPORT_SELECTOR,
+      );
+      const observeTarget = viewport ?? container;
 
-      updateContainerWidth(containerWidth, container);
-      debouncedRerender(effectiveScale);
-    });
+      const observer = new ResizeObserver((entries) => {
+        const entry = entries.at(0);
+        if (!entry) {
+          return;
+        }
 
-    observer.observe(observeTarget);
+        const containerWidth = entry.contentRect.width;
+        if (containerWidth <= 0) {
+          return;
+        }
 
-    return () => {
-      observer.disconnect();
-      debouncedRerender.cancel();
-    };
-  }, [
-    fitToWidth,
-    scaleOffset,
-    effectiveScale,
-    updateContainerWidth,
-    consumePendingScrollAnchor,
-    debouncedRerender,
-    containerRef,
-  ]);
+        updateContainerWidth(containerWidth, container);
+        debouncedRerender(effectiveScale);
+      });
+
+      observer.observe(observeTarget);
+
+      return () => {
+        observer.disconnect();
+        debouncedRerender.cancel();
+      };
+    },
+    [
+      fitToWidth,
+      scaleOffset,
+      effectiveScale,
+      updateContainerWidth,
+      debouncedRerender,
+    ],
+  );
 };

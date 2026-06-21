@@ -20,7 +20,8 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { composeRefs } from "@/lib/slot";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
@@ -369,23 +370,25 @@ export const WorkspaceTable = ({
     );
   }, [handleColumnReorder, t]);
 
-  useMountEffect(() => {
-    const element = tableWrapperRef.current;
-    if (!element) {
-      return undefined;
-    }
+  const tableWrapperObserverRef = useCallback(
+    (element: HTMLDivElement | null) => {
+      if (!element) {
+        return undefined;
+      }
 
-    setWrapperWidth(element.clientWidth);
-    setVerticalScrollbarWidth(getVerticalScrollbarWidth(element));
-
-    const resizeObserver = new ResizeObserver(() => {
       setWrapperWidth(element.clientWidth);
       setVerticalScrollbarWidth(getVerticalScrollbarWidth(element));
-    });
-    resizeObserver.observe(element);
 
-    return () => resizeObserver.disconnect();
-  });
+      const resizeObserver = new ResizeObserver(() => {
+        setWrapperWidth(element.clientWidth);
+        setVerticalScrollbarWidth(getVerticalScrollbarWidth(element));
+      });
+      resizeObserver.observe(element);
+
+      return () => resizeObserver.disconnect();
+    },
+    [],
+  );
 
   useLayoutEffect(() => {
     const element = tableWrapperRef.current;
@@ -410,6 +413,11 @@ export const WorkspaceTable = ({
     }
   }, [horizontalMaxScroll]);
 
+  const tableWrapperComposedRef = useMemo(
+    () => composeRefs(tableWrapperRef, tableWrapperObserverRef),
+    [tableWrapperObserverRef],
+  );
+
   return (
     <div
       className={cn(
@@ -417,7 +425,7 @@ export const WorkspaceTable = ({
         addPropertyColumn && ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
       )}
     >
-      <div className="h-full overflow-auto" ref={tableWrapperRef}>
+      <div className="h-full overflow-auto" ref={tableWrapperComposedRef}>
         <div
           aria-colcount={visibleColumnCount}
           aria-rowcount={rowModel.rows.length}

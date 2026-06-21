@@ -52,9 +52,18 @@ export const composeRefs =
           cleanups.push(() => {
             void cleanup();
           });
+        } else if (node !== null) {
+          cleanups.push(() => {
+            void ref(null);
+          });
         }
       } else if (ref !== undefined && ref !== null) {
         ref.current = node;
+        if (node !== null) {
+          cleanups.push(() => {
+            ref.current = null;
+          });
+        }
       }
     }
     if (cleanups.length > 0) {

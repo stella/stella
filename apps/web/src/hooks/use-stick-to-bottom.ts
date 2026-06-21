@@ -1,15 +1,13 @@
-import { createContext, use, useRef, useState } from "react";
-import type { RefObject } from "react";
+import { createContext, use, useCallback, useRef, useState } from "react";
+import type { RefCallback } from "react";
 
 import { panic } from "better-result";
-
-import { useMountEffect } from "@/hooks/use-effect";
 
 const NEAR_BOTTOM_THRESHOLD_PX = 50;
 
 type StickToBottomContext = {
-  scrollRef: RefObject<HTMLDivElement | null>;
-  contentRef: RefObject<HTMLDivElement | null>;
+  scrollRef: RefCallback<HTMLDivElement>;
+  contentRef: RefCallback<HTMLDivElement>;
   isAtBottom: boolean;
   isScrollable: boolean;
   scrollToBottom: () => void;
@@ -61,8 +59,7 @@ const isSelectingInside = (scrollEl: HTMLElement | null): boolean => {
  * and rAF-synchronized ResizeObserver callbacks.
  */
 export const useStickToBottom = () => {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
+  const scrollElementRef = useRef<HTMLDivElement | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   /** Whether the scroll container has more content than fits the viewport. */
   const [isScrollable, setIsScrollable] = useState(false);
@@ -78,7 +75,7 @@ export const useStickToBottom = () => {
   const programmaticScroll = useRef(false);
 
   const scrollToBottom = () => {
-    const el = scrollRef.current;
+    const el = scrollElementRef.current;
     if (!el) {
       return;
     }
@@ -88,13 +85,12 @@ export const useStickToBottom = () => {
     setIsAtBottom(true);
   };
 
-  // Track user scroll direction to detect intentional scroll-up.
-  useMountEffect(() => {
-    const el = scrollRef.current;
+  const scrollRef = useCallback((el: HTMLDivElement | null) => {
     if (!el) {
       return undefined;
     }
 
+    scrollElementRef.current = el;
     let lastScrollTop = el.scrollTop;
 
     const onScroll = () => {
@@ -144,26 +140,27 @@ export const useStickToBottom = () => {
     el.addEventListener("scroll", onScroll, { passive: true });
     el.addEventListener("wheel", onWheel, { passive: true });
     return () => {
+      scrollElementRef.current = null;
       el.removeEventListener("scroll", onScroll);
       el.removeEventListener("wheel", onWheel);
     };
-  });
+  }, []);
 
-  // Observe content resizes and auto-scroll when pinned.
-  useMountEffect(() => {
-    const content = contentRef.current;
+  const contentRef = useCallback((content: HTMLDivElement | null) => {
     if (!content) {
       return undefined;
     }
 
+    let raf = 0;
     const observer = new ResizeObserver(() => {
       // Defer to rAF to avoid layout thrashing; the
       // ResizeObserver callback fires between style
       // recalc and paint, so reading scroll metrics here
       // can force a synchronous layout. Matching the
       // original library's synchronization approach.
-      requestAnimationFrame(() => {
-        const el = scrollRef.current;
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const el = scrollElementRef.current;
         if (!el) {
           return;
         }
@@ -171,7 +168,7 @@ export const useStickToBottom = () => {
         if (userScrolledUp.current) {
           return;
         }
-        if (isSelectingInside(scrollRef.current)) {
+        if (isSelectingInside(scrollElementRef.current)) {
           return;
         }
         el.scrollTo({
@@ -183,8 +180,11 @@ export const useStickToBottom = () => {
     });
 
     observer.observe(content);
-    return () => observer.disconnect();
-  });
+    return () => {
+      cancelAnimationFrame(raf);
+      observer.disconnect();
+    };
+  }, []);
 
   return { scrollRef, contentRef, isAtBottom, isScrollable, scrollToBottom };
 };

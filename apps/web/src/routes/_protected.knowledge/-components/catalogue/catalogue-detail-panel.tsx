@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import {
   BanknoteIcon,
@@ -20,7 +20,6 @@ import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -234,26 +233,29 @@ export const CatalogueDetailPanel = ({
  */
 const ExpandableText = ({ text }: { text: string }) => {
   const t = useTranslations();
-  const ref = useRef<HTMLParagraphElement>(null);
   const [expanded, setExpanded] = useState(false);
   const [overflowing, setOverflowing] = useState(false);
 
   // Measure only while clamped, so overflow is detected against the
   // line-clamp height. A ResizeObserver keeps it correct across font
   // loads, panel animation, and width changes.
-  useExternalSyncEffect(() => {
-    const el = ref.current;
-    if (expanded || !el) {
-      return () => {
-        /* no-op cleanup */
+  const textRef = useCallback(
+    (el: HTMLParagraphElement | null) => {
+      if (expanded || !el) {
+        return undefined;
+      }
+
+      const measure = () => {
+        setOverflowing(el.scrollHeight > el.clientHeight + 1);
       };
-    }
-    const observer = new ResizeObserver(() => {
-      setOverflowing(el.scrollHeight > el.clientHeight + 1);
-    });
-    observer.observe(el);
-    return () => observer.disconnect();
-  }, [text, expanded]);
+
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(el);
+      return () => observer.disconnect();
+    },
+    [expanded, text],
+  );
 
   return (
     <div className="flex flex-col items-start gap-1.5">
@@ -262,7 +264,7 @@ const ExpandableText = ({ text }: { text: string }) => {
           "text-foreground text-sm leading-relaxed text-pretty",
           !expanded && "line-clamp-5",
         )}
-        ref={ref}
+        ref={textRef}
       >
         {text}
       </p>

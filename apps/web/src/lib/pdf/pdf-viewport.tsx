@@ -31,6 +31,7 @@ import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageProps } from "@/lib/pdf/pdf-page";
 import { approximateFraction } from "@/lib/pdf/pdfjs-utils";
 import { getDevicePixelRatio } from "@/lib/pdf/utils";
+import { composeRefs } from "@/lib/slot";
 
 export { usePDFStore } from "@/lib/pdf/pdf-context";
 
@@ -139,18 +140,18 @@ const PDFViewerContent = ({
   }, [document, setDocument]);
 
   useTextSelection(containerRef);
-  usePDFFitToWidth({
+  const fitToWidthRef = usePDFFitToWidth({
     containerRef,
   });
   usePDFControlledScaleOffset({
     containerRef,
     controlledScaleOffset: scaleOffset,
   });
-  const lastReportedPageRef = usePageVisibility({
-    containerRef,
-    pageIds,
-    onPageChanged,
-  });
+  const { containerRef: pageVisibilityRef, lastReportedPageRef } =
+    usePageVisibility({
+      pageIds,
+      onPageChanged,
+    });
   usePDFExternalPageSync({
     page,
     pageIds,
@@ -166,11 +167,16 @@ const PDFViewerContent = ({
     onPageCountChangedEvent(pageIds.length);
   }, [pageIds.length]);
 
+  const pdfContentRef = useMemo(
+    () => composeRefs(containerRef, fitToWidthRef, pageVisibilityRef),
+    [fitToWidthRef, pageVisibilityRef],
+  );
+
   return (
     <ScrollArea>
       <div className={className}>
         <div
-          ref={containerRef}
+          ref={pdfContentRef}
           className={contentClassName}
           style={viewportStyle}
         >
