@@ -208,6 +208,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
         <>
           <span className="bg-border mx-1 h-4 w-px" />
           <GroupByControl
+            allowMultiSelectGrouping
             allowNone
             groupByPropertyId={view.layout.groupByPropertyId}
             onChange={(groupByPropertyId) =>
@@ -574,6 +575,9 @@ type GroupByControlProps = {
   // grouping resolves to None instead of falling back to a property.
   // Table views default to flat (no grouping); kanban always groups.
   allowNone?: boolean;
+  // Multi-select grouping is valid for the table (a row can appear in several
+  // sections) but not the kanban board (a card belongs to one column).
+  allowMultiSelectGrouping?: boolean;
 };
 
 const GroupByControl = ({
@@ -581,11 +585,16 @@ const GroupByControl = ({
   groupByPropertyId,
   onChange,
   allowNone = false,
+  allowMultiSelectGrouping = false,
 }: GroupByControlProps) => {
   const t = useTranslations();
-  // Single- and multi-select are both groupable (the counts query unnests
-  // multi-select arrays), so offer both in the picker.
-  const eligible = properties.filter(isGroupableProperty);
+  // The table groups by single- or multi-select (the counts query unnests
+  // multi-select arrays); the kanban board stays single-select only.
+  const eligible = properties.filter((property) =>
+    allowMultiSelectGrouping
+      ? isGroupableProperty(property)
+      : property.content.type === "single-select",
+  );
 
   const resolvedId =
     allowNone && !groupByPropertyId

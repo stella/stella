@@ -174,10 +174,19 @@ export const GroupedTableLayout = ({
     },
     [],
   );
-  const allTreeData = useMemo(
-    () => Object.values(treeDataByGroup).flat(),
-    [treeDataByGroup],
-  );
+  const allTreeData = useMemo(() => {
+    // A multi-select grouping puts the same entity in several sections, so
+    // dedupe by entity id before resolving the shared selection and row-id set.
+    const seen = new Set<string>();
+    const unique: TableTreeNode[] = [];
+    for (const node of Object.values(treeDataByGroup).flat()) {
+      if (!seen.has(node.entityId)) {
+        seen.add(node.entityId);
+        unique.push(node);
+      }
+    }
+    return unique;
+  }, [treeDataByGroup]);
   useSyncSelectedEntities({ viewId: view.id, treeData: allTreeData });
   // Every row id across all sections, so a section's select-all keeps the other
   // sections' selections (they share one selection) without resurrecting stale
