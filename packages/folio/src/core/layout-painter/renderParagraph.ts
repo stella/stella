@@ -40,6 +40,7 @@ import {
   parseRotationDegrees,
   rotatedBoundingBox,
 } from "../utils/rotationBoundingBox";
+import { hasCjk, segmentByScript } from "../utils/scriptSegments";
 import { getAutomaticTextColorForBackground } from "./documentColors";
 import {
   applyImageVisualAttrs,
@@ -1199,6 +1200,48 @@ export function sliceRunsForLine(
 }
 
 /**
+ * Split each text run carrying an East-Asian font into per-script sub-runs, so
+ * CJK code points render with `eastAsiaFontFamily` and the rest with
+ * `fontFamily`. Each sub-run gets a contiguous, exact `pmStart`/`pmEnd` (the
+ * same offset math as `sliceRunsForLine`), keeping PM position mapping,
+ * selection rects, and click-to-caret correct. The measurer segments the same
+ * way, so the per-run advances sum to the measured run width. Non-text runs and
+ * runs without CJK pass through unchanged (the common path).
+ */
+export function splitTextRunsByEastAsia(runs: Run[]): Run[] {
+  const result: Run[] = [];
+
+  for (const run of runs) {
+    if (
+      !isTextRun(run) ||
+      run.eastAsiaFontFamily === undefined ||
+      !hasCjk(run.text)
+    ) {
+      result.push(run);
+      continue;
+    }
+
+    let offset = 0;
+    for (const segment of segmentByScript(run.text)) {
+      result.push({
+        ...run,
+        text: segment.text,
+        ...(segment.isCjk ? { fontFamily: run.eastAsiaFontFamily } : {}),
+        ...(run.pmStart !== undefined
+          ? {
+              pmStart: run.pmStart + offset,
+              pmEnd: run.pmStart + offset + segment.text.length,
+            }
+          : {}),
+      });
+      offset += segment.text.length;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Options for rendering a line with justify support
  */
 type RenderLineOptions = {
@@ -1477,7 +1520,7 @@ export function renderLine(
   lineEl.style.lineHeight = `${line.lineHeight}px`;
 
   // Get runs for this line
-  const runsForLine = sliceRunsForLine(block, line);
+  const runsForLine = splitTextRunsByEastAsia(sliceRunsForLine(block, line));
   // OOXML `<m:oMathPara>` (display math) defaults to `jc="centerGroup"` —
   // Word renders display math centred on its own paragraph. When the line
   // holds a single block math run, centre it horizontally so the equation

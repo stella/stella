@@ -134,6 +134,9 @@ type LineState = {
 function runToFontStyle(run: TextRun | TabRun | FieldRun | MathRun): FontStyle {
   return {
     fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
+    ...(run.eastAsiaFontFamily !== undefined
+      ? { eastAsiaFontFamily: run.eastAsiaFontFamily }
+      : {}),
     fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
     ...(run.bold !== undefined ? { bold: run.bold } : {}),
     ...(run.italic !== undefined ? { italic: run.italic } : {}),

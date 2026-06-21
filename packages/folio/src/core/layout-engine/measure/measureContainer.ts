@@ -16,6 +16,11 @@ import { panic } from "better-result";
 import { resolveFontFamily } from "../../utils/fontResolver";
 import { DOCX_BOLD_FONT_WEIGHT } from "../../utils/fontWeights";
 import {
+  hasCjk,
+  isCjkCodePoint,
+  segmentByScript,
+} from "../../utils/scriptSegments";
+import {
   getCachedFontMetrics,
   getCachedTextWidth,
   getTextWidthCacheGeneration,
@@ -42,6 +47,13 @@ const DEFAULT_DESCENT_RATIO = 0.2;
  */
 export type FontStyle = {
   fontFamily?: string;
+  /**
+   * East-Asian font for CJK code points. When set, `measureTextWidth` /
+   * `measureRun` measure CJK code points with this font and the rest with
+   * `fontFamily`, matching the painter's per-script span split so wrapping
+   * and click positioning stay in sync.
+   */
+  eastAsiaFontFamily?: string;
   fontSize?: number; // in points
   bold?: boolean;
   italic?: boolean;
@@ -303,6 +315,10 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   }
   const measuredText = applyTextTransform(text, style);
 
+  if (style.eastAsiaFontFamily && hasCjk(measuredText)) {
+    return measureMixedScriptWidth(measuredText, style);
+  }
+
   const ctx = getCanvasContext();
   const font = buildFontString(style);
   const letterSpacing = style.letterSpacing ?? 0;
@@ -362,6 +378,67 @@ export function measureTextWidth(text: string, style: FontStyle): number {
     horizontalScale,
   );
   return scaledWidth;
+}
+
+/**
+ * Build a glyph-advance-only style for one script segment: keep the properties
+ * that change advance width (family, size, bold/italic, small-caps) and drop
+ * letter spacing, horizontal scale, transform, and the EA font so the segment
+ * takes the single-font path (no double-counting, no recursion).
+ */
+function glyphAdvanceStyle(
+  style: FontStyle,
+  fontFamily: string | undefined,
+): FontStyle {
+  const result: FontStyle = {};
+  if (fontFamily !== undefined) {
+    result.fontFamily = fontFamily;
+  }
+  if (style.fontSize !== undefined) {
+    result.fontSize = style.fontSize;
+  }
+  if (style.bold !== undefined) {
+    result.bold = style.bold;
+  }
+  if (style.italic !== undefined) {
+    result.italic = style.italic;
+  }
+  if (style.fontVariant !== undefined) {
+    result.fontVariant = style.fontVariant;
+  }
+  return result;
+}
+
+/**
+ * Width of text whose CJK code points use `style.eastAsiaFontFamily` and whose
+ * other code points use `style.fontFamily`. Each script segment is measured
+ * with its own font (reusing the single-font cache); letter spacing and
+ * horizontal scale are applied once over the whole string so the total matches
+ * the painter, which renders the same segments as sibling spans.
+ */
+function measureMixedScriptWidth(
+  measuredText: string,
+  style: FontStyle,
+): number {
+  const letterSpacing = style.letterSpacing ?? 0;
+  const horizontalScale = getHorizontalScaleFactor(style);
+
+  let glyphWidth = 0;
+  for (const segment of segmentByScript(measuredText)) {
+    const fontFamily = segment.isCjk
+      ? style.eastAsiaFontFamily
+      : style.fontFamily;
+    glyphWidth += measureTextWidth(
+      segment.text,
+      glyphAdvanceStyle(style, fontFamily),
+    );
+  }
+
+  let width = glyphWidth;
+  if (letterSpacing && measuredText.length > 1) {
+    width += letterSpacing * (measuredText.length - 1);
+  }
+  return width * horizontalScale;
 }
 
 /**
@@ -439,7 +516,15 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
   }
 
   const ctx = getCanvasContext();
-  ctx.font = buildFontString(style);
+  const baseFont = buildFontString(style);
+  ctx.font = baseFont;
+  // CJK code points measure with the EA font (matching the painter); the rest
+  // keep the base font. Only built when an EA font is present so the common
+  // path keeps a single `ctx.font` assignment.
+  const eastAsiaFont =
+    style.eastAsiaFontFamily !== undefined
+      ? buildFontString({ ...style, fontFamily: style.eastAsiaFontFamily })
+      : undefined;
 
   const letterSpacing = style.letterSpacing ?? 0;
   const charWidths: number[] = [];
@@ -448,7 +533,13 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
   // Measure each character individually for click positioning
   for (let i = 0; i < text.length; i++) {
     // SAFETY: i < text.length in for loop
-    const char = applyTextTransform(text[i]!, style);
+    const rawChar = text[i]!;
+    const char = applyTextTransform(rawChar, style);
+    if (eastAsiaFont !== undefined) {
+      ctx.font = isCjkCodePoint(rawChar.codePointAt(0)!)
+        ? eastAsiaFont
+        : baseFont;
+    }
     const charMetrics = ctx.measureText(char);
 
     // Use advance width for individual characters

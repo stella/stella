@@ -512,6 +512,9 @@ function extractRunFormatting(
         if (font) {
           formatting.fontFamily = font;
         }
+        if (attrs.eastAsia) {
+          formatting.eastAsiaFontFamily = attrs.eastAsia;
+        }
         break;
       }
 
