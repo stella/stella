@@ -7,6 +7,17 @@ import type {
   ViewLayoutType,
 } from "@/api/lib/views-schema";
 
+// A grouping points at a deleted property when it is a real (non-built-in)
+// property id no longer present in the workspace. Built-in groupings (`_kind`,
+// `_status`) are internal and always kept.
+const isStaleGroupByPropertyId = (
+  groupByPropertyId: string | undefined,
+  propertyIds: string[],
+): boolean =>
+  groupByPropertyId !== undefined &&
+  !groupByPropertyId.startsWith("_") &&
+  !propertyIds.includes(groupByPropertyId);
+
 export const cleanStalePropertyIds = (
   layout: ViewLayout,
   propertyIds: string[],
@@ -60,13 +71,19 @@ export const cleanStalePropertyIds = (
       layout.columnPinning = cleanedPinning;
       changed = true;
     }
+
+    // A grouped table persists groupByPropertyId; clear it when its property is
+    // deleted so the view falls back to flat instead of the select-property
+    // prompt.
+    if (isStaleGroupByPropertyId(layout.groupByPropertyId, propertyIds)) {
+      layout.groupByPropertyId = undefined;
+      changed = true;
+    }
   }
 
   if (
     layout.type === "kanban" &&
-    layout.groupByPropertyId &&
-    !isInternal(layout.groupByPropertyId) &&
-    !propertyIds.includes(layout.groupByPropertyId)
+    isStaleGroupByPropertyId(layout.groupByPropertyId, propertyIds)
   ) {
     layout.groupByPropertyId = undefined;
     changed = true;
@@ -101,11 +118,7 @@ export const cleanStalePropertyIds = (
       layout.endDatePropertyId = "_created-at";
       changed = true;
     }
-    if (
-      layout.groupByPropertyId &&
-      !isInternal(layout.groupByPropertyId) &&
-      !propertyIds.includes(layout.groupByPropertyId)
-    ) {
+    if (isStaleGroupByPropertyId(layout.groupByPropertyId, propertyIds)) {
       layout.groupByPropertyId = undefined;
       changed = true;
     }
