@@ -43,6 +43,10 @@ const readKanbanGroupBodySchema = t.Object({
   ),
   groupByPropertyId: tGroupByPropertyId,
   groupValue: t.Nullable(t.String({ maxLength: 1000 })),
+  // The property's current option values. When sent (grouped table), the
+  // uncategorized bucket folds in cells whose value is no longer an option;
+  // omitted (kanban board) keeps "no non-empty value".
+  optionValues: t.Optional(t.Array(t.String({ maxLength: 1000 }))),
   includeTotalCount: t.Optional(t.Boolean()),
 });
 
@@ -62,6 +66,7 @@ const readKanbanGroup = createSafeHandler(
     const conditionResult = buildKanbanGroupCondition({
       groupByPropertyId: body.groupByPropertyId,
       groupValue: body.groupValue,
+      optionValues: body.optionValues,
     });
     if (Result.isError(conditionResult)) {
       return Result.err(conditionResult.error);

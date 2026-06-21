@@ -60,6 +60,9 @@ const config = {
     // as reviewed" touches exactly the rows that group shows.
     groupByPropertyId: t.Optional(tGroupByPropertyId),
     groupValue: t.Optional(t.Nullable(t.String({ maxLength: 1000 }))),
+    // The property's option values, so marking the uncategorized subtable folds
+    // in stale-valued cells the same way the grouped table renders them.
+    optionValues: t.Optional(t.Array(t.String({ maxLength: 1000 }))),
   }),
 } satisfies HandlerConfig;
 
@@ -240,6 +243,7 @@ const markColumnFlag = createSafeHandler(
       const conditionResult = buildKanbanGroupCondition({
         groupByPropertyId: body.groupByPropertyId,
         groupValue: body.groupValue ?? null,
+        optionValues: body.optionValues,
       });
       if (Result.isError(conditionResult)) {
         return Result.err(conditionResult.error);

@@ -8,6 +8,9 @@ import { createContext, useContext } from "react";
 export type GroupScope = {
   groupByPropertyId: string;
   groupValue: string | null;
+  // The grouping property's option values, so a "mark this group as reviewed" on
+  // the uncategorized subtable targets the same stale/empty cells it shows.
+  optionValues: string[] | undefined;
   label: string;
 };
 

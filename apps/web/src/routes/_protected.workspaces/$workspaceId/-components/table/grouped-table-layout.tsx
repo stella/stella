@@ -113,6 +113,17 @@ export const GroupedTableLayout = ({
 
   const groupByProperty =
     grouping.type === "property" ? grouping.property : null;
+  // The grouping property's option values, sent to the row/count queries so the
+  // uncategorized group folds in cells whose value is no longer an option
+  // (`undefined` for the built-in "kind" grouping, which has no option list).
+  const optionValues = useMemo(
+    () =>
+      groupByProperty?.content.type === "single-select" ||
+      groupByProperty?.content.type === "multi-select"
+        ? groupByProperty.content.options.map((option) => option.value)
+        : undefined,
+    [groupByProperty],
+  );
   const fieldIds = useMemo(
     () =>
       visibleEntityFieldIds({
@@ -231,21 +242,10 @@ export const GroupedTableLayout = ({
     statusLabels,
     entityKindLabels,
   });
-  const optionGroups = getEntityGroups(options, t("common.uncategorized"));
-  // group-counts buckets the actual stored values, which can include values no
-  // longer in the property's option list (a renamed/deleted option, or an
-  // unreconciled AI value). Those rows are not "uncategorized" (they carry a
-  // value), so without a section for each such value they would silently vanish
-  // when grouping is enabled. Append a group for every counted value that has
-  // no option group.
-  const knownValues = new Set(optionGroups.map((group) => group.value));
-  const staleGroups: EntityGroup[] = [];
-  for (const value of countByValue.keys()) {
-    if (value !== null && !knownValues.has(value)) {
-      staleGroups.push({ label: value, value });
-    }
-  }
-  const groups = [...optionGroups, ...staleGroups];
+  // Cells whose value is no longer a current option fold into the uncategorized
+  // group server-side (the row/count queries treat "no current-option value" as
+  // uncategorized), so the sections are just the option groups plus uncategorized.
+  const groups = getEntityGroups(options, t("common.uncategorized"));
 
   return (
     // Flex column so empty categories can sink below populated ones via
@@ -267,6 +267,7 @@ export const GroupedTableLayout = ({
           group={group}
           groupByPropertyId={groupByPropertyId}
           key={groupKeyFor(group.value)}
+          optionValues={optionValues}
           outerScrollRef={scrollRef}
           reportGroupTreeData={reportGroupTreeData}
           selectAllPreservableRowIds={allRowIds}
@@ -398,6 +399,7 @@ type GroupSectionProps = {
   view: WorkspaceView<"table">;
   group: EntityGroup;
   groupByPropertyId: string;
+  optionValues: string[] | undefined;
   // Authoritative row count from the one upfront group-counts query;
   // `undefined` while that query is still loading.
   count: number | undefined;
@@ -415,6 +417,7 @@ const GroupSection = ({
   view,
   group,
   groupByPropertyId,
+  optionValues,
   count,
   fieldIds,
   columns,
@@ -465,6 +468,7 @@ const GroupSection = ({
       excludedKinds: GROUPED_TABLE_EXCLUDED_KINDS,
       groupByPropertyId,
       groupValue: group.value,
+      ...(optionValues !== undefined && { optionValues }),
     }),
     enabled: hasRows && hasScrolledIntoView,
   });
@@ -562,6 +566,7 @@ const GroupSection = ({
             value={{
               groupByPropertyId,
               groupValue: group.value,
+              optionValues,
               label: group.label,
             }}
           >

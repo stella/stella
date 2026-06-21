@@ -85,6 +85,7 @@ export const PropertyPopover = ({
         | {
             groupByPropertyId: "_status" | "_kind" | SafeId<"property">;
             groupValue: string | null;
+            optionValues?: string[];
           }
         | Record<never, never> =
         scoped && groupScope
@@ -95,6 +96,9 @@ export const PropertyPopover = ({
                   ? groupScope.groupByPropertyId
                   : toSafeId<"property">(groupScope.groupByPropertyId),
               groupValue: groupScope.groupValue,
+              ...(groupScope.optionValues !== undefined && {
+                optionValues: groupScope.optionValues,
+              }),
             }
           : {};
       const response = await api

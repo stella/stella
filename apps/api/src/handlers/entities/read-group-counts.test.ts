@@ -48,7 +48,14 @@ describe("readGroupCounts", () => {
       createContext({
         body: { groupByPropertyId: propertyId, filters: [] },
         safeDb: createSafeDb([
-          [{ content: { type: "single-select", options: [] } }],
+          [
+            {
+              content: {
+                type: "single-select",
+                options: [{ value: "alpha" }, { value: "beta" }],
+              },
+            },
+          ],
           [
             { value: "alpha", count: 2 },
             { value: "beta", count: 1 },
@@ -75,7 +82,14 @@ describe("readGroupCounts", () => {
       createContext({
         body: { groupByPropertyId: propertyId, filters: [] },
         safeDb: createSafeDb([
-          [{ content: { type: "single-select", options: [] } }],
+          [
+            {
+              content: {
+                type: "single-select",
+                options: [{ value: "alpha" }, { value: "beta" }],
+              },
+            },
+          ],
           [{ value: "alpha", count: 3 }],
           [{ count: 0 }],
         ]),

@@ -32,6 +32,9 @@ export type FilesystemEntitiesKey = Omit<
 export type KanbanGroupKey = EntitiesWindowKey & {
   groupByPropertyId: string;
   groupValue: string | null;
+  // The property's option values. Sent by the grouped table so the uncategorized
+  // group folds in stale (out-of-options) cells; omitted by the kanban board.
+  optionValues?: string[];
   includeTotalCount?: boolean;
 };
 
@@ -146,6 +149,7 @@ export const entitiesKeys = {
     excludedKinds,
     groupByPropertyId,
     groupValue,
+    optionValues,
     includeTotalCount,
   }: KanbanGroupKey) => {
     const normalizedFieldMode = fieldMode ?? "full";
@@ -164,6 +168,7 @@ export const entitiesKeys = {
         excludedKinds: excludedKinds?.toSorted() ?? [],
         groupByPropertyId,
         groupValue,
+        optionValues: optionValues?.toSorted(),
         includeTotalCount: includeTotalCount ?? false,
       },
     ];

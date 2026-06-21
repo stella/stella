@@ -6,6 +6,10 @@ import { t } from "elysia";
 import type { SafeDb } from "@/api/db";
 import { entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
+import {
+  buildKanbanGroupCondition,
+  buildOptionArraySql,
+} from "@/api/handlers/entities/kanban-group-condition";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -18,12 +22,6 @@ const KIND_GROUP_ID = "_kind";
 // Folders and tasks are not rows in a document table view; the flat window query
 // excludes them, so the grouped counts must too.
 const TABLE_EXCLUDED_ENTITY_KINDS = ["folder", "task"] satisfies EntityKind[];
-// Cap the stale (out-of-options) value buckets a property grouping returns.
-// Configured options are always kept (ordered first); stale cells (arbitrary
-// AI/manual values no longer in the option list) could otherwise produce an
-// unbounded bucket set and a section-per-bucket render fan-out, so keep only the
-// most-populated stale buckets.
-const MAX_STALE_GROUP_VALUE_BUCKETS = 200;
 const TASK_STATUS_VALUES = [
   "open",
   "in_progress",
@@ -180,12 +178,7 @@ async function* readPropertyGroupCounts({
   optionValues,
 }: ReadPropertyGroupCountsArgs) {
   const baseWhere = baseConditions ?? sql`true`;
-  // Configured option values, ordered first so the bucket cap can only drop
-  // stale (out-of-options) values, never a real option a row still uses.
-  const optionValuesSql = sql`ARRAY[${sql.join(
-    optionValues.map((value) => sql`${value}`),
-    sql`, `,
-  )}]::text[]`;
+  const optionArray = buildOptionArraySql(optionValues);
 
   const valueRows = yield* Result.await(
     safeDb((tx) =>
@@ -220,29 +213,24 @@ async function* readPropertyGroupCounts({
             AND COALESCE(f.content->>'value', '') != ''
         ) AS group_values
         WHERE ${baseWhere}
+          AND group_value = ANY(${optionArray})
         GROUP BY group_value
-        ORDER BY (group_value = ANY(${optionValuesSql})) DESC, count(*) DESC
-        LIMIT ${optionValues.length + MAX_STALE_GROUP_VALUE_BUCKETS}
       `),
     ),
   );
 
-  const uncategorizedCondition = sql`NOT EXISTS (
-    SELECT 1 FROM fields f
-    WHERE f.workspace_id = ${entities.workspaceId}
-      AND f.entity_version_id = ${entities.currentVersionId}
-      AND f.property_id = ${propertyId}
-      AND (
-        (
-          jsonb_typeof(f.content->'value') = 'array'
-          AND jsonb_array_length(f.content->'value') > 0
-        )
-        OR (
-          jsonb_typeof(f.content->'value') != 'array'
-          AND COALESCE(f.content->>'value', '') != ''
-        )
-      )
-  )`;
+  // Uncategorized = no value matching a current option (so stale and empty
+  // cells fold here). Reuse the kanban-group condition so the count matches the
+  // rows that group actually fetches.
+  const uncategorizedResult = buildKanbanGroupCondition({
+    groupByPropertyId: propertyId,
+    groupValue: null,
+    optionValues,
+  });
+  if (Result.isError(uncategorizedResult)) {
+    return Result.err(uncategorizedResult.error);
+  }
+  const uncategorizedCondition = uncategorizedResult.value;
   const uncategorizedRows = yield* Result.await(
     safeDb((tx) =>
       tx
