@@ -9,6 +9,7 @@ import { useTable } from "@tanstack/react-table";
 import { ChevronDownIcon, ChevronRightIcon, TableIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
 import type {
@@ -35,6 +36,10 @@ import type {
   TableColumnDef,
   TableTreeNode,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import {
+  WorkspaceGridCell,
+  WorkspaceGridRow,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid";
 import { getOrderedColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-grid-order";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import {
@@ -204,23 +209,13 @@ export const GroupedTableLayout = ({
 
 const NO_ROWS: TableTreeNode[] = [];
 
-type GroupedAddRowProps = {
-  columns: TableColumnDef[];
-  tableState: ReturnType<typeof useTableState>;
-  workspaceId: string;
-};
-
-/**
- * One "+ new document" row for the whole grouped view, reusing the real
- * BottomRow. A data-less table supplies the shared column geometry so the row
- * lines up with the group tables above; the wrapper carries the grid-template
- * var and sticks the row to the bottom of the scroll area.
- */
-const GroupedAddRow = ({
-  columns,
-  tableState,
-  workspaceId,
-}: GroupedAddRowProps) => {
+// Shared column geometry for the rows that live OUTSIDE a group's own table
+// (the bottom add-row and the loading skeleton): a data-less table supplies the
+// column sizes so they line up with the group tables above.
+const useGroupGridGeometry = (
+  columns: TableColumnDef[],
+  tableState: ReturnType<typeof useTableState>,
+) => {
   const table = useTable({
     features: workspaceTableFeatures,
     columnResizeMode: "onChange",
@@ -254,12 +249,68 @@ const GroupedAddRow = ({
     minWidth: tableWidth,
   };
 
+  return { table, renderColumns, gridStyle };
+};
+
+type GroupedAddRowProps = {
+  columns: TableColumnDef[];
+  tableState: ReturnType<typeof useTableState>;
+  workspaceId: string;
+};
+
+/**
+ * One "+ new document" row for the whole grouped view, reusing the real
+ * BottomRow. The wrapper carries the grid-template var and sticks the row to
+ * the bottom of the scroll area.
+ */
+const GroupedAddRow = ({
+  columns,
+  tableState,
+  workspaceId,
+}: GroupedAddRowProps) => {
+  const { table, gridStyle } = useGroupGridGeometry(columns, tableState);
+
   return (
     <div
       className="bg-background sticky start-0 bottom-0 z-30 order-last"
       style={gridStyle}
     >
       <BottomRow table={table} workspaceId={workspaceId} />
+    </div>
+  );
+};
+
+const SKELETON_ROW_KEYS = ["a", "b", "c", "d", "e"] as const;
+
+type GroupSkeletonProps = {
+  columns: TableColumnDef[];
+  tableState: ReturnType<typeof useTableState>;
+  rows: number;
+};
+
+// Placeholder rows in the real column grid, shown while a group's count (or its
+// rows) are still loading — so the view never flashes "0 items".
+const GroupSkeleton = ({ columns, tableState, rows }: GroupSkeletonProps) => {
+  const { renderColumns, gridStyle } = useGroupGridGeometry(
+    columns,
+    tableState,
+  );
+
+  return (
+    <div style={gridStyle}>
+      {SKELETON_ROW_KEYS.slice(0, rows).map((rowKey) => (
+        <WorkspaceGridRow className="pointer-events-none" key={rowKey}>
+          {renderColumns.map((column) => (
+            <WorkspaceGridCell
+              className="flex min-h-12 items-center px-2"
+              key={column.id}
+              role="presentation"
+            >
+              <Skeleton className="h-3.5 w-3/5" />
+            </WorkspaceGridCell>
+          ))}
+        </WorkspaceGridRow>
+      ))}
     </div>
   );
 };
@@ -336,6 +387,12 @@ const GroupSection = ({
     ...tableState.listeners,
   });
 
+  // While the up-front counts load (count undefined) or a populated group's
+  // rows are still fetching, show skeleton rows instead of an empty body.
+  const isLoadingCounts = count === undefined;
+  const isLoadingRows = hasRows && query.isLoading;
+  const showSkeleton = isLoadingCounts || isLoadingRows;
+
   return (
     // Stretches to the container width (the full table width), so the
     // group-header band spans the whole scroll width even for empty groups.
@@ -346,12 +403,21 @@ const GroupSection = ({
         entities={entities}
         group={group}
         loadedCount={loadedCount}
+        loading={isLoadingCounts}
         onToggle={() => setCollapsed((prev) => !prev)}
         sumProperties={sumProperties}
         totalCount={count ?? null}
       />
+      {!collapsed && showSkeleton && (
+        <GroupSkeleton
+          columns={columns}
+          rows={Math.min(count ?? 3, 5)}
+          tableState={tableState}
+        />
+      )}
       {!collapsed &&
-        hasRows && (
+        hasRows &&
+        !isLoadingRows && (
           // The table flows inline in the shared outer scroll (no nested scroll
           // box), so its rows render directly and the sticky group header stacks
           // cleanly above the columns.
@@ -380,6 +446,7 @@ type GroupHeaderProps = {
   group: EntityGroup;
   collapsed: boolean;
   empty: boolean;
+  loading: boolean;
   onToggle: () => void;
   loadedCount: number;
   totalCount: number | null;
@@ -391,6 +458,7 @@ const GroupHeader = ({
   group,
   collapsed,
   empty,
+  loading,
   onToggle,
   loadedCount,
   totalCount,
@@ -437,7 +505,11 @@ const GroupHeader = ({
             {group.label}
           </span>
           <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-            {t("workspaces.views.groupItemCount", { count })}
+            {loading ? (
+              <Skeleton className="h-3 w-10" />
+            ) : (
+              t("workspaces.views.groupItemCount", { count })
+            )}
           </span>
         </span>
       </button>
