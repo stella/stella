@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
+  CalendarDaysIcon,
   CalendarIcon,
   ChevronsUpDownIcon,
   GlobeIcon,
@@ -74,6 +75,8 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
   const numberingSystem = useI18nStore((s) => s.numberingSystem);
   const setCalendar = useI18nStore((s) => s.setCalendar);
   const setNumberingSystem = useI18nStore((s) => s.setNumberingSystem);
+  const weekStart = useI18nStore((s) => s.weekStart);
+  const setWeekStart = useI18nStore((s) => s.setWeekStart);
   const { data: organization } = useQuery(organizationOptions);
 
   // "auto" resolves to a concrete value for the radio selection: Gregorian for
@@ -256,6 +259,40 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
                   value="arab"
                 >
                   {t("appearance.numbersEastern")}
+                </MenuRadioItem>
+              </MenuRadioGroup>
+            </MenuSubPopup>
+          </MenuSub>
+          <MenuSub>
+            <MenuSubTrigger>
+              <CalendarDaysIcon />
+              {t("appearance.weekStart")}
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              <MenuRadioGroup value={weekStart}>
+                <MenuRadioItem
+                  onClick={() => setWeekStart("auto")}
+                  value="auto"
+                >
+                  {t("appearance.weekStartAuto")}
+                </MenuRadioItem>
+                <MenuRadioItem
+                  onClick={() => setWeekStart("saturday")}
+                  value="saturday"
+                >
+                  {t("appearance.weekStartSaturday")}
+                </MenuRadioItem>
+                <MenuRadioItem
+                  onClick={() => setWeekStart("sunday")}
+                  value="sunday"
+                >
+                  {t("appearance.weekStartSunday")}
+                </MenuRadioItem>
+                <MenuRadioItem
+                  onClick={() => setWeekStart("monday")}
+                  value="monday"
+                >
+                  {t("appearance.weekStartMonday")}
                 </MenuRadioItem>
               </MenuRadioGroup>
             </MenuSubPopup>

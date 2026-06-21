@@ -65,7 +65,12 @@
     "system": "Sistema",
     "theme": "Tema",
     "title": "Aparência",
-    "warm": "Quente"
+    "warm": "Quente",
+    "weekStart": "Primeiro dia da semana",
+    "weekStartAuto": "Automático",
+    "weekStartMonday": "Segunda-feira",
+    "weekStartSaturday": "Sábado",
+    "weekStartSunday": "Domingo"
   },
   "auth": {
     "betaNoticeBody": "Como precaução durante a versão beta, não carregue dados confidenciais, privilegiados, pessoais, insubstituíveis ou críticos para a produção. A nuvem é um serviço de demonstração.",

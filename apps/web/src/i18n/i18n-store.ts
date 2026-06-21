@@ -135,7 +135,38 @@ const detectLang = (): SupportedLanguage => {
   return "en";
 };
 
+/**
+ * Region subtag of the first browser locale that maps to a supported language
+ * (e.g. "SA" from "ar-SA"). Drives region-specific formatting and, crucially,
+ * the first day of the week (Saudi starts Sunday, the UAE Monday, generic
+ * Arabic Saturday). Empty when the browser provides no region.
+ */
+const detectRegion = (): string => {
+  const languages =
+    typeof navigator !== "undefined" && "languages" in navigator
+      ? navigator.languages
+      : [];
+
+  for (const candidate of languages) {
+    const normalized = normalizeLocale(candidate);
+    if (!resolveSupportedLanguage(normalized)) {
+      continue;
+    }
+    try {
+      const region = new Intl.Locale(normalized).region;
+      if (region) {
+        return region;
+      }
+    } catch {
+      // Malformed tag; keep scanning.
+    }
+  }
+
+  return "";
+};
+
 const defaultLanguage = detectLang();
+const defaultRegion = detectRegion();
 const defaultMessages = en;
 
 /**
@@ -158,34 +189,58 @@ export const getTranslator = () => translator;
 
 export type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
 export type NumberingPreference = "auto" | "latn" | "arab";
+export type WeekStartPreference = "auto" | "saturday" | "sunday" | "monday";
+
+const WEEK_START_KEYWORD = {
+  saturday: "sat",
+  sunday: "sun",
+  monday: "mon",
+} as const satisfies Record<Exclude<WeekStartPreference, "auto">, string>;
+
+type FormattingLocaleOptions = {
+  lang: SupportedLanguage;
+  region: string;
+  calendar: CalendarPreference;
+  numberingSystem: NumberingPreference;
+  weekStart: WeekStartPreference;
+};
 
 /**
- * BCP-47 locale used for formatting, carrying the user's calendar and
- * number-system preferences as Unicode (-u-) extensions. "auto" resolves to
+ * BCP-47 locale used for formatting. The base carries the detected region
+ * (e.g. ar-SA) so date/number formatting and the first day of the week follow
+ * the country; Unicode (-u-) extensions carry the calendar, an explicit
+ * first-day-of-week override (fw), and the number system. "auto" resolves to
  * Gregorian (the safe default for legal dates, even in Arabic) and to Eastern
- * Arabic-Indic digits for Arabic / Western digits elsewhere. Non-Arabic locales
- * on the default preferences keep their plain tag, so most callers are
+ * Arabic-Indic digits for Arabic / Western digits elsewhere. A region-less,
+ * all-default non-Arabic locale keeps its plain tag, so most callers are
  * unaffected.
  */
-export const buildFormattingLocale = (
-  lang: SupportedLanguage,
-  calendar: CalendarPreference,
-  numberingSystem: NumberingPreference,
-): string => {
+export const buildFormattingLocale = ({
+  lang,
+  region,
+  calendar,
+  numberingSystem,
+  weekStart,
+}: FormattingLocaleOptions): string => {
+  const base = region ? `${lang}-${region}` : lang;
   const calendarSystem = calendar === "auto" ? "gregory" : calendar;
   const autoNumbers = lang === "ar" ? "arab" : "latn";
   const numbers = numberingSystem === "auto" ? autoNumbers : numberingSystem;
 
+  // Unicode extension keywords, kept in canonical (alphabetical) order: ca, fw, nu.
   const keywords: string[] = [];
   // Pin Arabic to an explicit calendar (some CLDR regions default to a
   // non-Gregorian one) and carry any non-Gregorian opt-in.
   if (calendarSystem !== "gregory" || lang === "ar") {
     keywords.push(`ca-${calendarSystem}`);
   }
+  if (weekStart !== "auto") {
+    keywords.push(`fw-${WEEK_START_KEYWORD[weekStart]}`);
+  }
   if (numbers !== "latn") {
     keywords.push(`nu-${numbers}`);
   }
-  return keywords.length > 0 ? `${lang}-u-${keywords.join("-")}` : lang;
+  return keywords.length > 0 ? `${base}-u-${keywords.join("-")}` : base;
 };
 
 // Locale-aware formatter for non-React code (utilities, store logic), mirroring
@@ -207,8 +262,12 @@ type State = {
   // later language switch (which flips isLoaded false while the new locale
   // streams in) cannot send the app back to the boot spinner and unmount it.
   hasLoadedOnce: boolean;
+  // Detected browser region subtag (e.g. "SA"); not persisted — re-detected
+  // each boot. Drives region-specific formatting and the first day of week.
+  region: string;
   calendar: CalendarPreference;
   numberingSystem: NumberingPreference;
+  weekStart: WeekStartPreference;
 };
 
 type Actions = {
@@ -216,6 +275,7 @@ type Actions = {
   loadMessages: (lang: SupportedLanguage) => Promise<void>;
   setCalendar: (calendar: CalendarPreference) => void;
   setNumberingSystem: (numberingSystem: NumberingPreference) => void;
+  setWeekStart: (weekStart: WeekStartPreference) => void;
 };
 
 let loadRequestId = 0;
@@ -228,13 +288,9 @@ const setDocumentLanguage = (lang: SupportedLanguage): void => {
   document.documentElement.dir = getLangDir(lang);
 };
 
-const refreshFormatter = (
-  lang: SupportedLanguage,
-  calendar: CalendarPreference,
-  numberingSystem: NumberingPreference,
-): void => {
+const refreshFormatter = (formattingLocale: string): void => {
   formatter = createFormatter({
-    locale: buildFormattingLocale(lang, calendar, numberingSystem),
+    locale: formattingLocale,
     timeZone: resolveAppTimeZone(),
   });
 };
@@ -242,22 +298,47 @@ const refreshFormatter = (
 type ApplyMessagesArgs = {
   lang: SupportedLanguage;
   messages: LocaleMessages;
+  region: string;
   calendar: CalendarPreference;
   numberingSystem: NumberingPreference;
+  weekStart: WeekStartPreference;
 };
 
 const applyMessages = ({
   lang,
   messages,
+  region,
   calendar,
   numberingSystem,
+  weekStart,
 }: ApplyMessagesArgs): void => {
   translator = createTranslator({
     locale: lang,
     messages,
   });
-  refreshFormatter(lang, calendar, numberingSystem);
+  refreshFormatter(
+    buildFormattingLocale({
+      lang,
+      region,
+      calendar,
+      numberingSystem,
+      weekStart,
+    }),
+  );
   setDocumentLanguage(lang);
+};
+
+/** Rebuild the non-React formatter from the current store state. */
+const recomputeFormatterForState = (state: State): void => {
+  refreshFormatter(
+    buildFormattingLocale({
+      lang: state.loadedLang,
+      region: state.region,
+      calendar: state.calendar,
+      numberingSystem: state.numberingSystem,
+      weekStart: state.weekStart,
+    }),
+  );
 };
 
 export const useI18nStore = create<State & Actions>()(
@@ -273,8 +354,10 @@ export const useI18nStore = create<State & Actions>()(
       // otherwise), which keeps the boot-spinner gate honest: a persisted
       // non-English locale cannot skip the spinner before its bundle arrives.
       hasLoadedOnce: false,
+      region: defaultRegion,
       calendar: "auto",
       numberingSystem: "auto",
+      weekStart: "auto",
 
       loadMessages: async (lang) => {
         const state = get();
@@ -299,8 +382,10 @@ export const useI18nStore = create<State & Actions>()(
           applyMessages({
             lang: fallback.loadedLang,
             messages: fallback.messages,
+            region: fallback.region,
             calendar: fallback.calendar,
             numberingSystem: fallback.numberingSystem,
+            weekStart: fallback.weekStart,
           });
           set({
             lang: fallback.loadedLang,
@@ -314,8 +399,15 @@ export const useI18nStore = create<State & Actions>()(
           return;
         }
 
-        const { calendar, numberingSystem } = get();
-        applyMessages({ lang, messages, calendar, numberingSystem });
+        const { region, calendar, numberingSystem, weekStart } = get();
+        applyMessages({
+          lang,
+          messages,
+          region,
+          calendar,
+          numberingSystem,
+          weekStart,
+        });
         set({
           lang,
           messages,
@@ -331,14 +423,17 @@ export const useI18nStore = create<State & Actions>()(
 
       setCalendar: (calendar) => {
         set({ calendar });
-        const { loadedLang, numberingSystem } = get();
-        refreshFormatter(loadedLang, calendar, numberingSystem);
+        recomputeFormatterForState(get());
       },
 
       setNumberingSystem: (numberingSystem) => {
         set({ numberingSystem });
-        const { calendar, loadedLang } = get();
-        refreshFormatter(loadedLang, calendar, numberingSystem);
+        recomputeFormatterForState(get());
+      },
+
+      setWeekStart: (weekStart) => {
+        set({ weekStart });
+        recomputeFormatterForState(get());
       },
     }),
     {
@@ -348,6 +443,7 @@ export const useI18nStore = create<State & Actions>()(
         lang: state.lang,
         calendar: state.calendar,
         numberingSystem: state.numberingSystem,
+        weekStart: state.weekStart,
       }),
       onRehydrateStorage: () => (state) => {
         if (!state) {
@@ -367,6 +463,22 @@ export const useI18nStore = create<State & Actions>()(
     },
   ),
 );
+
+/**
+ * The current formatting locale for non-React code (region plus calendar,
+ * number-system, and first-day-of-week extensions). React reads the same value
+ * through use-intl's useLocale().
+ */
+export const getFormattingLocale = (): string => {
+  const state = useI18nStore.getState();
+  return buildFormattingLocale({
+    lang: state.loadedLang,
+    region: state.region,
+    calendar: state.calendar,
+    numberingSystem: state.numberingSystem,
+    weekStart: state.weekStart,
+  });
+};
 
 const waitForHydration = async (): Promise<void> => {
   if (useI18nStore.persist.hasHydrated()) {

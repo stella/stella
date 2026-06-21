@@ -65,7 +65,12 @@
     "system": "Sisteminė",
     "theme": "Tema",
     "title": "Išvaizda",
-    "warm": "Šilti"
+    "warm": "Šilti",
+    "weekStart": "Pirmoji savaitės diena",
+    "weekStartAuto": "Automatiškai",
+    "weekStartMonday": "Pirmadienis",
+    "weekStartSaturday": "Šeštadienis",
+    "weekStartSunday": "Sekmadienis"
   },
   "auth": {
     "betaNoticeBody": "Atsargumo sumetimais beta laikotarpiu neįkelkite jautrių, privilegijuotų, asmens duomenų, nepakeičiamų ar gamybai kritinių duomenų. Cloud yra demonstracinė paslauga.",

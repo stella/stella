@@ -65,7 +65,12 @@
     "system": "Systém",
     "theme": "Vzhľad",
     "title": "Vzhľad",
-    "warm": "Teplé"
+    "warm": "Teplé",
+    "weekStart": "Prvý deň v týždni",
+    "weekStartAuto": "Automaticky",
+    "weekStartMonday": "Pondelok",
+    "weekStartSaturday": "Sobota",
+    "weekStartSunday": "Nedeľa"
   },
   "auth": {
     "betaNoticeBody": "Ako preventívne opatrenie počas bety nenahrávajte citlivé, privilegované, osobné, nenahraditeľné ani produkčne kritické údaje. Cloud je demo služba.",

@@ -69,6 +69,11 @@ type Messages = {
     "theme": "Theme";
     "title": "Appearance";
     "warm": "Warm";
+    "weekStart": "First day of week";
+    "weekStartAuto": "Automatic";
+    "weekStartMonday": "Monday";
+    "weekStartSaturday": "Saturday";
+    "weekStartSunday": "Sunday";
   };
   "auth": {
     "betaNoticeBody": "As a precaution during beta, do not upload sensitive, privileged, personal, irreplaceable, or production-critical data. Cloud is a demo service.";

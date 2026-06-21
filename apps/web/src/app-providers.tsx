@@ -45,8 +45,10 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   const locale = useI18nStore((s) => s.loadedLang);
   const messages = useI18nStore((s) => s.messages);
   const hasLoadedOnce = useI18nStore((s) => s.hasLoadedOnce);
+  const region = useI18nStore((s) => s.region);
   const calendar = useI18nStore((s) => s.calendar);
   const numberingSystem = useI18nStore((s) => s.numberingSystem);
+  const weekStart = useI18nStore((s) => s.weekStart);
   const hydrated = useHydrated();
 
   // window.location is safe here: the server branch never reads it, and
@@ -102,7 +104,13 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // English tag so client markup matches the server's.
   const formattingLocale = preHydrationEnglish
     ? "en"
-    : buildFormattingLocale(locale, calendar, numberingSystem);
+    : buildFormattingLocale({
+        lang: locale,
+        region,
+        calendar,
+        numberingSystem,
+        weekStart,
+      });
 
   return (
     <IntlProvider

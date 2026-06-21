@@ -1,4 +1,4 @@
-import { useI18nStore } from "@/i18n/i18n-store";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import type {
   DateFilter,
@@ -66,7 +66,7 @@ const resolveDateRange = (
     case "thisWeek": {
       // Week start follows the active locale's first weekday.
       const day = now.getDay(); // 0=Sun..6=Sat
-      const firstWeekday = getFirstWeekday(useI18nStore.getState().loadedLang);
+      const firstWeekday = getFirstWeekday(getFormattingLocale());
       const sinceStart = (day - firstWeekday + 7) % 7;
       return {
         fromMs: addLocalCalendarDaysMs(todayStart, -sinceStart),

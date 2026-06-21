@@ -10,7 +10,7 @@ import * as v from "valibot";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useI18nStore } from "@/i18n/i18n-store";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import {
@@ -91,7 +91,7 @@ export const Route = createFileRoute(
         return;
       }
 
-      const weekStart = getWeekStart(useI18nStore.getState().loadedLang);
+      const weekStart = getWeekStart(getFormattingLocale());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
       const prevWeekStart = new Date(weekStart);

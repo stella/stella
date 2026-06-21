@@ -65,7 +65,12 @@
     "system": "Sistema",
     "theme": "Tema",
     "title": "Apariencia",
-    "warm": "Cálido"
+    "warm": "Cálido",
+    "weekStart": "Primer día de la semana",
+    "weekStartAuto": "Automático",
+    "weekStartMonday": "Lunes",
+    "weekStartSaturday": "Sábado",
+    "weekStartSunday": "Domingo"
   },
   "auth": {
     "betaNoticeBody": "Como precaución durante la beta, no subas datos sensibles, privilegiados, personales, irremplazables o críticos para producción. Cloud es un servicio de demostración.",

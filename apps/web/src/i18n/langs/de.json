@@ -65,7 +65,12 @@
     "system": "System",
     "theme": "Design",
     "title": "Darstellung",
-    "warm": "Warm"
+    "warm": "Warm",
+    "weekStart": "Erster Wochentag",
+    "weekStartAuto": "Automatisch",
+    "weekStartMonday": "Montag",
+    "weekStartSaturday": "Samstag",
+    "weekStartSunday": "Sonntag"
   },
   "auth": {
     "betaNoticeBody": "Laden Sie während der Beta vorsichtshalber keine sensiblen, privilegierten, personenbezogenen, unersetzlichen oder produktionskritischen Daten hoch. Cloud ist ein Demodienst.",

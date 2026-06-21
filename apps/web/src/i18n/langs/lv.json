@@ -65,7 +65,12 @@
     "system": "Sistēma",
     "theme": "Motīvs",
     "title": "Izskats",
-    "warm": "Silts"
+    "warm": "Silts",
+    "weekStart": "Nedēļas pirmā diena",
+    "weekStartAuto": "Automātiski",
+    "weekStartMonday": "Pirmdiena",
+    "weekStartSaturday": "Sestdiena",
+    "weekStartSunday": "Svētdiena"
   },
   "auth": {
     "betaNoticeBody": "Piesardzības nolūkos beta periodā neaugšupielādējiet sensitīvus, priviliģētus, personas datus, neaizstājamus vai ražošanai kritiskus datus. Cloud ir demonstrācijas pakalpojums.",

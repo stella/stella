@@ -65,7 +65,12 @@
     "system": "Rendszer",
     "theme": "Téma",
     "title": "Megjelenés",
-    "warm": "Meleg"
+    "warm": "Meleg",
+    "weekStart": "A hét első napja",
+    "weekStartAuto": "Automatikus",
+    "weekStartMonday": "Hétfő",
+    "weekStartSaturday": "Szombat",
+    "weekStartSunday": "Vasárnap"
   },
   "auth": {
     "betaNoticeBody": "Elővigyázatosságból a béta időszakban ne töltsön fel érzékeny, privilegizált, személyes, pótolhatatlan vagy éles működéshez kritikus adatokat. A Cloud bemutató szolgáltatás.",
