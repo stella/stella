@@ -163,10 +163,7 @@ export const resolveTruncationTarget = async ({
     const target = yield* Result.await(
       safeDb((tx) =>
         tx
-          .select({
-            id: chatMessages.id,
-            createdAt: chatMessages.createdAt,
-          })
+          .select({ id: chatMessages.id })
           .from(chatMessages)
           .where(
             and(
@@ -177,8 +174,7 @@ export const resolveTruncationTarget = async ({
           .limit(1),
       ),
     );
-    const targetRow = target.at(0);
-    if (!targetRow) {
+    if (!target.at(0)) {
       return Result.ok(null);
     }
 
@@ -194,9 +190,12 @@ export const resolveTruncationTarget = async ({
           .where(
             and(
               eq(chatMessages.threadId, threadId),
-              // Same (createdAt, id) tuple discipline as message-page.ts so the
-              // target row itself is included in the retained prefix.
-              sql`(${chatMessages.createdAt}, ${chatMessages.id}) <= (${targetRow.createdAt}, ${targetRow.id})`,
+              // Resolve the (createdAt, id) boundary in-DB by id, NOT via a
+              // JS-Date-truncated value: a target whose created_at carries
+              // Postgres microseconds would otherwise fall before the truncated
+              // boundary and be dropped from the retained prefix (then deleted),
+              // making the edited message vanish.
+              sql`(${chatMessages.createdAt}, ${chatMessages.id}) <= (select b.created_at, b.id from chat_messages b where b.id = ${targetMessageId})`,
             ),
           )
           // SAFETY: bounded by the retained prefix [start..target]; the target is
@@ -215,9 +214,9 @@ export const resolveTruncationTarget = async ({
           .where(
             and(
               eq(chatMessages.threadId, threadId),
-              // Same tuple boundary as above, strictly greater so the target row
-              // is kept (only newer rows are replayed away).
-              sql`(${chatMessages.createdAt}, ${chatMessages.id}) > (${targetRow.createdAt}, ${targetRow.id})`,
+              // Same in-DB boundary, strictly greater, so the target row is kept
+              // (only newer rows are replayed away).
+              sql`(${chatMessages.createdAt}, ${chatMessages.id}) > (select b.created_at, b.id from chat_messages b where b.id = ${targetMessageId})`,
             ),
           )
           // SAFETY: bounded by the to-be-deleted tail (target..now]; the rows a

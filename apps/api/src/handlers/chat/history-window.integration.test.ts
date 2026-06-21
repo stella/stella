@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { inArray, sql } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import {
@@ -357,6 +357,46 @@ describe("resolveTruncationTarget", () => {
       m4.id,
       m5.id,
     ]);
+  });
+
+  test("retains a target whose created_at has sub-millisecond precision", async () => {
+    // The boundary is resolved in-DB by id. If it were resolved via a JS Date
+    // (millisecond-truncated), a target with Postgres microseconds would fall
+    // out of the retained prefix and into the delete set — deleting the edited
+    // message. Bump the target to a microsecond timestamp to assert it doesn't.
+    const base = Date.parse("2026-07-01T00:00:00.000Z");
+    const { threadId, messages } = await seedThread([
+      { createdAt: new Date(base), text: "m0" },
+      { createdAt: new Date(base + 1), text: "target" },
+      { createdAt: new Date(base + 2), text: "m2" },
+    ]);
+    const [m0, target, m2] = messages;
+    if (!m0 || !target || !m2) {
+      throw new Error("seed precondition failed");
+    }
+    // Microsecond created_at between m0 (.000) and m2 (.002); a JS Date would
+    // truncate .001500 to .001 and shift the boundary before the target.
+    await testDb.execute(
+      sql`UPDATE chat_messages SET created_at = '2026-07-01 00:00:00.001500+00' WHERE id = ${target.id}`,
+    );
+
+    const resolved = unwrap(
+      await resolveTruncationTarget({
+        safeDb,
+        threadId,
+        targetMessageId: target.id,
+      }),
+    );
+    if (resolved === null) {
+      throw new Error("expected the target to resolve");
+    }
+
+    // Target stays in the retained prefix; only the strictly-newer row is deleted.
+    expect(resolved.messagesForPersistence.map((m) => m.id)).toEqual([
+      m0.id,
+      target.id,
+    ]);
+    expect(resolved.deleteMessageIdsBeforeLatest).toEqual([m2.id]);
   });
 
   test("returns null when the target id is not in the thread", async () => {
