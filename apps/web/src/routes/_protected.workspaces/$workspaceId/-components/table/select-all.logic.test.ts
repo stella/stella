@@ -80,6 +80,31 @@ describe("workspace table select-all state", () => {
     ).toEqual({});
   });
 
+  test("select-all in a section keeps other sections' selections, drops stale", () => {
+    expect(
+      getNextSelectAllRowSelection({
+        selectableRowIds: ["row-1", "row-2"],
+        rowSelection: { "other-1": true, stale: true },
+        preservableRowIds: ["row-1", "row-2", "other-1"],
+      }),
+    ).toEqual({ "other-1": true, "row-1": true, "row-2": true });
+  });
+
+  test("clear-all in a section keeps other sections' selections, drops stale", () => {
+    expect(
+      getNextSelectAllRowSelection({
+        selectableRowIds: ["row-1", "row-2"],
+        rowSelection: {
+          "row-1": true,
+          "row-2": true,
+          "other-1": true,
+          stale: true,
+        },
+        preservableRowIds: ["row-1", "row-2", "other-1"],
+      }),
+    ).toEqual({ "other-1": true });
+  });
+
   test("does not require hidden descendant rows to mark visible rows selected", () => {
     const visibleRowIds = ["folder-row"];
     const hiddenDescendantIds = ["child-row"];

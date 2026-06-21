@@ -30,6 +30,11 @@ type BuildColumnFlagMutationArgs = {
   workspaceId: SafeId<"workspace">;
   propertyId: SafeId<"property">;
   flag: string;
+  set: boolean;
+  // When removing (`set: false`), restrict removal to cells whose flag was added
+  // by the operation stamped with this timestamp. Powers a precise undo that
+  // can't strip flags (or auto-locks) a human set in an earlier operation.
+  onlyAddedAt?: string;
   targets: readonly ColumnFlagTarget[];
   existingRows: readonly ExistingCellMetadataRow[];
   userId: string;
@@ -56,6 +61,8 @@ export const buildColumnFlagMutation = ({
   workspaceId,
   propertyId,
   flag,
+  set,
+  onlyAddedAt,
   targets,
   existingRows,
   userId,
@@ -71,40 +78,108 @@ export const buildColumnFlagMutation = ({
     const existing = existingByVersionId.get(target.entityVersionId);
     const existingFlags = normalizeManualFlags(existing?.manualFlags ?? []);
 
-    if (existingFlags.includes(flag)) {
+    if (set) {
+      if (existingFlags.includes(flag)) {
+        continue;
+      }
+
+      if (existingFlags.length >= MANUAL_FLAGS_MAX_ITEMS) {
+        continue;
+      }
+
+      const manualFlags = normalizeManualFlags([...existingFlags, flag]);
+      const existingProvenance = existing?.flagProvenance ?? {};
+      const flagProvenance = Object.fromEntries(
+        manualFlags.map((manualFlag) => [
+          manualFlag,
+          existingProvenance[manualFlag] ?? { addedBy: userId, addedAt },
+        ]),
+      );
+      // Adding Verified locks the cell so a subsequent AI sweep can't
+      // overwrite the human-confirmed answer. Matches the single-cell
+      // behaviour in the frontend toggleFlag handler.
+      const willAutoLock =
+        flag === VERIFIED_FLAG_ID && existing?.locked !== true;
+      const autoLockProvenance = willAutoLock
+        ? {
+            lockedBy: userId,
+            lockedAt: addedAt,
+            reason: "explicit" as const,
+          }
+        : undefined;
+      const nextLockProvenance = existing?.lockProvenance ?? autoLockProvenance;
+      const metadata: CellMetadata = {
+        version: CELL_METADATA_VERSION,
+        manualFlags,
+        flagProvenance,
+        ...((existing?.locked === true || willAutoLock) && { locked: true }),
+        ...(nextLockProvenance && { lockProvenance: nextLockProvenance }),
+      };
+
+      insertValues.push({
+        workspaceId,
+        entityVersionId: target.entityVersionId,
+        propertyId,
+        metadata,
+        createdBy: userId,
+        updatedBy: userId,
+      });
+
+      auditEvents.push({
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.FIELD,
+        resourceId: `${target.entityVersionId}:${propertyId}`,
+        changes: {
+          manualFlags: { old: existingFlags, new: manualFlags },
+        },
+        metadata: {
+          entityId: target.entityId,
+          entityVersionId: target.entityVersionId,
+          propertyId,
+          bulk: true,
+        },
+      });
       continue;
     }
 
-    if (existingFlags.length >= MANUAL_FLAGS_MAX_ITEMS) {
+    if (!(existing && existingFlags.includes(flag))) {
       continue;
     }
 
-    const manualFlags = normalizeManualFlags([...existingFlags, flag]);
-    const existingProvenance = existing?.flagProvenance ?? {};
+    // Undo precision: only revert the flag this operation added, leaving flags a
+    // human set in an earlier operation untouched.
+    if (
+      onlyAddedAt !== undefined &&
+      existing.flagProvenance?.[flag]?.addedAt !== onlyAddedAt
+    ) {
+      continue;
+    }
+
+    const manualFlags = normalizeManualFlags(
+      existingFlags.filter((existingFlag) => existingFlag !== flag),
+    );
+    const existingProvenance = existing.flagProvenance ?? {};
     const flagProvenance = Object.fromEntries(
       manualFlags.map((manualFlag) => [
         manualFlag,
         existingProvenance[manualFlag] ?? { addedBy: userId, addedAt },
       ]),
     );
-    // Adding Verified locks the cell so a subsequent AI sweep can't
-    // overwrite the human-confirmed answer. Matches the single-cell
-    // behaviour in the frontend toggleFlag handler.
-    const willAutoLock = flag === VERIFIED_FLAG_ID && existing?.locked !== true;
-    const autoLockProvenance = willAutoLock
-      ? {
-          lockedBy: userId,
-          lockedAt: addedAt,
-          reason: "explicit" as const,
-        }
-      : undefined;
-    const nextLockProvenance = existing?.lockProvenance ?? autoLockProvenance;
+    // Drop the auto-lock that this same operation added (matching timestamp);
+    // keep a lock the user or an earlier operation set independently.
+    const lockAddedByThisOp =
+      onlyAddedAt !== undefined &&
+      existing.lockProvenance?.lockedAt === onlyAddedAt;
+    const keepLock = existing.locked === true && !lockAddedByThisOp;
     const metadata: CellMetadata = {
       version: CELL_METADATA_VERSION,
       manualFlags,
       flagProvenance,
-      ...((existing?.locked === true || willAutoLock) && { locked: true }),
-      ...(nextLockProvenance && { lockProvenance: nextLockProvenance }),
+      ...(keepLock && { locked: true }),
+      ...(keepLock &&
+        existing.lockProvenance && {
+          lockProvenance: existing.lockProvenance,
+        }),
     };
 
     insertValues.push({

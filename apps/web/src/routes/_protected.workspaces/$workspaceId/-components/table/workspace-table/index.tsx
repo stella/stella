@@ -1,4 +1,5 @@
 import {
+  type RefObject,
   useCallback,
   useEffect,
   useLayoutEffect,
@@ -54,6 +55,7 @@ import {
   ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
   addPropertyColId,
   getColumnPinningGroup,
+  getScrollableAncestor,
   getVerticalScrollbarWidth,
   getWorkspaceGridTemplateColumns,
   TABLE_COLUMN_DRAG_TYPE,
@@ -78,6 +80,27 @@ type WorkspaceTableProps = {
   hasNextPage?: boolean;
   isFetchingNextPage?: boolean;
   onLoadMore?: () => void;
+  // Grouped sections opt out so the "+ new document" row isn't repeated
+  // under every group.
+  showAddRow?: boolean;
+  // Grouped sections opt out: the group header already sticks to the page,
+  // and a second sticky header in each section's own scroll box collides
+  // with it on scroll.
+  stickyColumnHeader?: boolean;
+  // The end-filler grows to fill leftover height (and hosts the add-property
+  // rail) in the full-height flat table. Grouped sections size to content, so
+  // a growing filler just shows as an empty trailing row.
+  fillHeight?: boolean;
+  // When set, the table flows inside this shared scroll container instead of
+  // owning its own scroll box. Grouped sections pass the single grouped-view
+  // scroller so every group shares one vertical/horizontal scroll (nested
+  // scroll boxes break the sticky group header). In this mode rows render
+  // directly rather than virtualized — group pages are bounded.
+  outerScrollRef?: RefObject<HTMLDivElement | null>;
+  // Union of every section's row ids, so a grouped section's select-all keeps
+  // selections in other sections (they share one selection) while still dropping
+  // stale ids. Omitted by the flat table.
+  selectAllPreservableRowIds?: string[];
 };
 
 export const WorkspaceTable = ({
@@ -87,9 +110,16 @@ export const WorkspaceTable = ({
   hasNextPage = false,
   isFetchingNextPage = false,
   onLoadMore,
+  showAddRow = true,
+  stickyColumnHeader = true,
+  fillHeight = true,
+  outerScrollRef,
+  selectAllPreservableRowIds,
 }: WorkspaceTableProps) => {
+  const inlineFlow = outerScrollRef !== undefined;
   const t = useTranslations();
   const tableWrapperRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
   const previousHorizontalMaxScroll = useRef<number | null>(null);
   const lastColumnDropPosition = useRef<ColumnDropPosition | null>(null);
@@ -168,9 +198,12 @@ export const WorkspaceTable = ({
       getNextSelectAllRowSelection({
         selectableRowIds,
         rowSelection: table.state.rowSelection,
+        ...(selectAllPreservableRowIds && {
+          preservableRowIds: selectAllPreservableRowIds,
+        }),
       }),
     );
-  }, [selectableRowIds, table]);
+  }, [selectableRowIds, selectAllPreservableRowIds, table]);
 
   const rowLabels = useMemo(() => {
     // Compute logical row labels that account for collapsed
@@ -215,7 +248,17 @@ export const WorkspaceTable = ({
   const lastVirtualRow = virtualRows.at(-1);
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- infinite-load trigger that must also re-fire when isFetchingNextPage/hasNextPage flip (not only on virtualizer changes), so it can chain the next page while still parked at the bottom; a virtualizer onChange handler would miss that path, so kept
   useEffect(() => {
-    if (!hasNextPage || isFetchingNextPage || !onLoadMore || !lastVirtualRow) {
+    // Inline (grouped) sections de-virtualize their rows into a non-scrolling
+    // wrapper, so the virtualizer treats every row as visible and would fetch
+    // every page at once. Those sections page via the intersection sentinel
+    // below instead.
+    if (
+      inlineFlow ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      !onLoadMore ||
+      !lastVirtualRow
+    ) {
       return;
     }
 
@@ -225,22 +268,60 @@ export const WorkspaceTable = ({
       onLoadMore();
     }
   }, [
+    inlineFlow,
     hasNextPage,
     isFetchingNextPage,
     lastVirtualRow,
     onLoadMore,
     rowModel.rows.length,
   ]);
+  useExternalSyncEffect(() => {
+    // Bounded paging for inline sections: only fetch the next page when the
+    // sentinel at the end of the rendered rows actually scrolls into the real
+    // scroll viewport. That viewport is an ancestor `overflow-auto` element, not
+    // the non-scrolling content wrapper passed as `outerScrollRef`, so resolve
+    // it from the sentinel itself (null falls back to the browser viewport).
+    const sentinel = loadMoreSentinelRef.current;
+    if (!inlineFlow || !hasNextPage || !onLoadMore || !sentinel) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries.some((entry) => entry.isIntersecting) &&
+          !isFetchingNextPage
+        ) {
+          onLoadMore();
+        }
+      },
+      { root: getScrollableAncestor(sentinel), rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [inlineFlow, hasNextPage, isFetchingNextPage, onLoadMore]);
   const paddingTop = virtualRows.at(0)?.start ?? 0;
   const paddingBottom =
     rowVirtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0);
+  // Inline (grouped) sections render every row in the shared scroll; virtualized
+  // sections render only the windowed rows with padding spacers.
+  const renderedRows = inlineFlow
+    ? rowModel.rows.map((row, index) => ({ row, index }))
+    : virtualRows.map((virtualRow) => ({
+        row: rowModel.rows.at(virtualRow.index),
+        index: virtualRow.index,
+      }));
   const orderedColumns = getOrderedColumns({
     leftColumns: table.getLeftLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
     rightColumns: table.getRightLeafColumns(),
   }).filter((column) => column.getIsVisible());
-  const addPropertyColumn =
-    orderedColumns.find((column) => column.id === addPropertyColId) ?? null;
+  // Grouped sections drop the per-group add-column rail: it would repeat under
+  // every group and the toolbar already offers "+ new column". (Its trigger is
+  // absolute-positioned, so it also wouldn't pin in the shared scroll.)
+  const addPropertyColumn = inlineFlow
+    ? null
+    : (orderedColumns.find((column) => column.id === addPropertyColId) ?? null);
   const renderColumns = orderedColumns.filter(
     (column) => column.id !== addPropertyColId,
   );
@@ -421,19 +502,33 @@ export const WorkspaceTable = ({
   return (
     <div
       className={cn(
-        "relative h-full flex-1",
+        "relative",
+        !inlineFlow && "h-full flex-1",
         addPropertyColumn && ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
       )}
     >
-      <div className="h-full overflow-auto" ref={tableWrapperComposedRef}>
+      <div
+        className={
+          inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto"
+        }
+        ref={tableWrapperComposedRef}
+      >
         <div
           aria-colcount={visibleColumnCount}
           aria-rowcount={rowModel.rows.length}
-          className="relative flex min-h-full flex-col text-sm"
+          className={cn(
+            "relative flex flex-col text-sm",
+            !inlineFlow && "min-h-full",
+          )}
           role="grid"
           style={gridStyle}
         >
-          <div className="bg-background sticky top-0 z-30">
+          <div
+            className={cn(
+              "bg-background z-30",
+              stickyColumnHeader && "sticky top-0",
+            )}
+          >
             {table.getHeaderGroups().map((headerGroup) => (
               <WorkspaceGridRow key={headerGroup.id}>
                 {getOrderedHeaders(headerGroup.headers, renderColumns).map(
@@ -468,7 +563,7 @@ export const WorkspaceTable = ({
             ))}
           </div>
           <div className="flex flex-1 flex-col">
-            {paddingTop > 0 && (
+            {!inlineFlow && paddingTop > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell
                   className="border-b-0"
@@ -482,8 +577,7 @@ export const WorkspaceTable = ({
                 )}
               </WorkspaceGridRow>
             )}
-            {virtualRows.map((virtualRow) => {
-              const row = rowModel.rows.at(virtualRow.index);
+            {renderedRows.map(({ row, index }) => {
               if (!row) {
                 return null;
               }
@@ -501,7 +595,7 @@ export const WorkspaceTable = ({
                   }
                   contentMode={contentMode}
                   hasExpandedTableCell={expandedTableCell !== null}
-                  index={virtualRow.index}
+                  index={index}
                   key={row.id}
                   lastSelectedIndex={lastSelectedIndex}
                   measureElement={rowVirtualizer.measureElement}
@@ -532,15 +626,23 @@ export const WorkspaceTable = ({
                   }}
                   addPropertyColumn={addPropertyColumn}
                   row={row}
-                  rowLabel={rowLabels[virtualRow.index] ?? ""}
+                  rowLabel={rowLabels[index] ?? ""}
                   renderColumns={renderColumns}
                   table={table}
-                  virtualIndex={virtualRow.index}
+                  virtualIndex={index}
                   workspaceId={workspaceId}
                 />
               );
             })}
-            {paddingBottom > 0 && (
+            {inlineFlow && hasNextPage && (
+              <div
+                aria-hidden
+                className="pointer-events-none h-px"
+                ref={loadMoreSentinelRef}
+                style={{ gridColumn: "1 / -1" }}
+              />
+            )}
+            {!inlineFlow && paddingBottom > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell
                   className="border-b-0"
@@ -554,15 +656,19 @@ export const WorkspaceTable = ({
                 )}
               </WorkspaceGridRow>
             )}
-            <TableEndFiller
-              addPropertyColumn={addPropertyColumn}
-              renderColumns={renderColumns}
-            />
-            <BottomRow
-              table={table}
-              onFolderCreated={setEditingEntityId}
-              workspaceId={workspaceId}
-            />
+            {fillHeight && (
+              <TableEndFiller
+                addPropertyColumn={addPropertyColumn}
+                renderColumns={renderColumns}
+              />
+            )}
+            {showAddRow && (
+              <BottomRow
+                table={table}
+                onFolderCreated={setEditingEntityId}
+                workspaceId={workspaceId}
+              />
+            )}
           </div>
         </div>
       </div>

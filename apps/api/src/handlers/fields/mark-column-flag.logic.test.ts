@@ -38,6 +38,7 @@ describe("mark column flag metadata planning", () => {
       workspaceId: WORKSPACE_ID,
       propertyId: PROPERTY_ID,
       flag: "verified",
+      set: true,
       targets: [target],
       existingRows: [
         {
@@ -121,6 +122,7 @@ describe("mark column flag metadata planning", () => {
       workspaceId: WORKSPACE_ID,
       propertyId: PROPERTY_ID,
       flag: "verified",
+      set: true,
       targets: [target],
       existingRows: [
         {
@@ -158,6 +160,7 @@ describe("mark column flag metadata planning", () => {
       workspaceId: WORKSPACE_ID,
       propertyId: PROPERTY_ID,
       flag: "verified",
+      set: true,
       targets: [target],
       existingRows: [
         {
@@ -176,6 +179,254 @@ describe("mark column flag metadata planning", () => {
       auditEvents: [],
       insertValues: [],
       updatedCount: 0,
+    });
+  });
+
+  test("removes the requested flag while preserving other flags and locks", () => {
+    const target = createTarget("ent_undo", "ver_undo");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: false,
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: ["needs-review", "verified"],
+            flagProvenance: {
+              "needs-review": {
+                addedBy: "user_existing",
+                addedAt: "2026-05-28T07:00:00.000Z",
+              },
+              verified: {
+                addedBy: "user_existing",
+                addedAt: "2026-05-28T07:30:00.000Z",
+              },
+            },
+            locked: true,
+            lockProvenance: {
+              lockedBy: "user_lock",
+              lockedAt: LOCKED_AT,
+              reason: "explicit",
+            },
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation.updatedCount).toBe(1);
+    expect(mutation.insertValues).toEqual([
+      {
+        workspaceId: WORKSPACE_ID,
+        entityVersionId: target.entityVersionId,
+        propertyId: PROPERTY_ID,
+        metadata: {
+          version: 1,
+          manualFlags: ["needs-review"],
+          flagProvenance: {
+            "needs-review": {
+              addedBy: "user_existing",
+              addedAt: "2026-05-28T07:00:00.000Z",
+            },
+          },
+          locked: true,
+          lockProvenance: {
+            lockedBy: "user_lock",
+            lockedAt: LOCKED_AT,
+            reason: "explicit",
+          },
+        },
+        createdBy: USER_ID,
+        updatedBy: USER_ID,
+      },
+    ]);
+    expect(mutation.auditEvents).toEqual([
+      {
+        action: "update",
+        resourceType: "field",
+        resourceId: `${target.entityVersionId}:${PROPERTY_ID}`,
+        changes: {
+          manualFlags: {
+            old: ["needs-review", "verified"],
+            new: ["needs-review"],
+          },
+        },
+        metadata: {
+          entityId: target.entityId,
+          entityVersionId: target.entityVersionId,
+          propertyId: PROPERTY_ID,
+          bulk: true,
+        },
+      },
+    ]);
+  });
+
+  test("skips removal for cells without the requested flag", () => {
+    const target = createTarget("ent_no_flag", "ver_no_flag");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: false,
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: ["needs-review"],
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation).toEqual({
+      auditEvents: [],
+      insertValues: [],
+      updatedCount: 0,
+    });
+  });
+
+  test("skips removal for cells without an existing metadata row", () => {
+    const target = createTarget("ent_no_row", "ver_no_row");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: false,
+      targets: [target],
+      existingRows: [],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation).toEqual({
+      auditEvents: [],
+      insertValues: [],
+      updatedCount: 0,
+    });
+  });
+
+  test("onlyAddedAt undo removes the flag and the auto-lock that op added", () => {
+    const target = createTarget("ent_undo_op", "ver_undo_op");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: false,
+      onlyAddedAt: ADDED_AT,
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: ["verified"],
+            flagProvenance: {
+              verified: { addedBy: USER_ID, addedAt: ADDED_AT },
+            },
+            locked: true,
+            lockProvenance: {
+              lockedBy: USER_ID,
+              lockedAt: ADDED_AT,
+              reason: "explicit",
+            },
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation.updatedCount).toBe(1);
+    expect(mutation.insertValues.at(0)?.metadata).toEqual({
+      version: 1,
+      manualFlags: [],
+      flagProvenance: {},
+    });
+  });
+
+  test("onlyAddedAt undo skips a flag verified by an earlier operation", () => {
+    const target = createTarget("ent_undo_earlier", "ver_undo_earlier");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: false,
+      onlyAddedAt: ADDED_AT,
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: ["verified"],
+            flagProvenance: {
+              verified: { addedBy: USER_ID, addedAt: LOCKED_AT },
+            },
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation).toEqual({
+      auditEvents: [],
+      insertValues: [],
+      updatedCount: 0,
+    });
+  });
+
+  test("onlyAddedAt undo removes its flag but keeps an independent lock", () => {
+    const target = createTarget("ent_undo_keep_lock", "ver_undo_keep_lock");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: false,
+      onlyAddedAt: ADDED_AT,
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: ["verified"],
+            flagProvenance: {
+              verified: { addedBy: USER_ID, addedAt: ADDED_AT },
+            },
+            locked: true,
+            lockProvenance: {
+              lockedBy: USER_ID,
+              lockedAt: LOCKED_AT,
+              reason: "explicit",
+            },
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation.updatedCount).toBe(1);
+    expect(mutation.insertValues.at(0)?.metadata).toEqual({
+      version: 1,
+      manualFlags: [],
+      flagProvenance: {},
+      locked: true,
+      lockProvenance: {
+        lockedBy: USER_ID,
+        lockedAt: LOCKED_AT,
+        reason: "explicit",
+      },
     });
   });
 });

@@ -747,6 +747,7 @@ type Messages = {
     "newRow": "New row";
     "next": "Next";
     "noResults": "No results";
+    "none": "None";
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
@@ -789,6 +790,7 @@ type Messages = {
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
     "uncategorized": "Uncategorized";
+    "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unpin": "Unpin";
     "uploadFiles": "Upload files";
@@ -2474,6 +2476,8 @@ type Messages = {
       "keepEmpty": "Keep Empty";
       "manualColumn": "Manual column";
       "markAllAsReviewed": "Mark all as reviewed";
+      "markThisGroupAsReviewed": "Mark this group as reviewed";
+      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
       "newColumn": "New column";
@@ -2592,6 +2596,7 @@ type Messages = {
       "filterByPlaceholder": "Filter by…";
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}";
       "groupBy": "Group by:";
+      "groupItemCount": "{count, plural, one {# item} other {# items}}";
       "hideColumn": "Hide column";
       "layouts": {
         "calendar": "Calendar";

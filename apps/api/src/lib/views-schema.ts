@@ -64,6 +64,7 @@ const tableLayoutSchema = v.strictObject({
   columnOrder: v.array(v.string()),
   columnPinning: v.array(v.string()),
   ...versionedBaseLayoutSchema,
+  groupByPropertyId: v.optional(v.pipe(v.string(), v.minLength(1))),
 });
 
 const filesystemLayoutSchema = v.strictObject({
@@ -189,6 +190,7 @@ const tViewLayoutDefinition = t.Union([
       columnOrder: t.Array(t.String()),
       columnPinning: t.Array(t.String()),
       ...tVersionedBaseLayoutSchema,
+      groupByPropertyId: t.Optional(t.String({ minLength: 1 })),
     },
     strictObjectOptions,
   ),

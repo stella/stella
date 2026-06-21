@@ -96,6 +96,13 @@ const remapLayout = (
       columnPinning: base.columnPinning.map((id) =>
         remapPropertyId(id, propertyIdMap),
       ),
+      // A grouped table carries a groupByPropertyId; remap it like kanban so a
+      // duplicated grouped table doesn't point at the source workspace's
+      // property. Built-in groupings (_kind, _status) aren't in the map and pass
+      // through unchanged.
+      groupByPropertyId: base.groupByPropertyId
+        ? remapPropertyId(base.groupByPropertyId, propertyIdMap)
+        : undefined,
     };
   }
 

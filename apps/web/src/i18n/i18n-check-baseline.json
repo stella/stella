@@ -11,6 +11,7 @@
     "folio.findReplace.noResults",
     "folio.historyGroup",
     "folio.somethingWentWrong",
+    "folio.undo",
     "knowledge.agentSkills.formDescription",
     "knowledge.agentSkills.formName",
     "knowledge.agentSkills.renameFile",
@@ -21,6 +22,7 @@
     "search.kinds.matter",
     "search.updatedWithinOptions.day",
     "tasks.clearDate",
+    "tasks.priorityValues.none",
     "tasks.status",
     "tasks.statusValues.done",
     "tasks.statusValues.open",
@@ -193,6 +195,20 @@
     "common.name": [
       "de"
     ],
+    "common.none": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "common.notes": [
       "fr"
     ],
@@ -228,6 +244,20 @@
     ],
     "common.type": [
       "fr"
+    ],
+    "common.undo": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "common.urlIdentifier": [
       "cs",
@@ -1146,6 +1176,34 @@
       "pt-BR",
       "sk"
     ],
+    "workspaces.properties.markedAsReviewed": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.properties.markThisGroupAsReviewed": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "workspaces.properties.noConditionFields": [
       "cs",
       "de",
@@ -1277,6 +1335,20 @@
       "sk"
     ],
     "workspaces.views.filtersWithCount": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.views.groupItemCount": [
+      "ar",
       "cs",
       "de",
       "es",
