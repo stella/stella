@@ -3255,6 +3255,12 @@ type LookupPreviewRequest = {
   registry: StudioLookup["registry"];
   number: string;
   format: string | null;
+  /** Where the rendering lands in the preview map: the bare `field.path` for
+   *  the default (first) format, the keyed `${field.path}.${format.key}` for
+   *  every later one. Excluded from the cache key (renderings depend only on
+   *  registry+number+format), so identical formats across markers share a
+   *  cache slot. */
+  previewPath: string;
 };
 
 const lookupPreviewKey = (request: LookupPreviewRequest): string =>
@@ -3311,17 +3317,26 @@ const applyCachedLookupRenderings = (
     if (!LOOKUP_PREVIEW_NUMBER_RE.test(number)) {
       continue;
     }
-    const request: LookupPreviewRequest = {
-      registry: lookup.registry,
-      number,
-      // The bare `{{path}}` preview renders the default (first) format.
-      format: lookup.formats.at(0)?.template ?? null,
-    };
-    const cached = lookupPreviewCache.get(lookupPreviewKey(request));
-    if (cached === undefined) {
-      pending.push(request);
-    } else if (cached !== null) {
-      preview[field.path] = lookupPreviewValue(cached);
+    // The fill pipeline writes the default (first) format under the bare
+    // `field.path` and every later format under the keyed
+    // `${field.path}.${format.key}`; the preview plugin matches markers by
+    // exact expression, so each configured format needs its own request and
+    // its own preview slot or keyed markers like `{{company.address}}` stay
+    // blank.
+    for (const [index, format] of lookup.formats.entries()) {
+      const request: LookupPreviewRequest = {
+        registry: lookup.registry,
+        number,
+        format: format.template,
+        previewPath:
+          index === 0 ? field.path : `${field.path}.${format.key}`,
+      };
+      const cached = lookupPreviewCache.get(lookupPreviewKey(request));
+      if (cached === undefined) {
+        pending.push(request);
+      } else if (cached !== null) {
+        preview[request.previewPath] = lookupPreviewValue(cached);
+      }
     }
   }
   return pending;
