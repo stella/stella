@@ -555,7 +555,7 @@ jobs:
           # --preload registers the dev/test-only mock-AI generator; .env.example
           # sets USE_MOCK_AI=true, so e2e must route through the mock rather than
           # the real provider (which would fail on the placeholder API key).
-          NODE_ENV=development nohup bun --port 3001 --preload ./src/dev/register-mock-ai.ts src/index.ts > /tmp/api.log 2>&1 &
+          NODE_ENV=development E2E_DISABLE_AUTH_RATE_LIMIT=true nohup bun --port 3001 --preload ./src/dev/register-mock-ai.ts src/index.ts > /tmp/api.log 2>&1 &
           echo $! > /tmp/api.pid
 
       - name: Wait for API

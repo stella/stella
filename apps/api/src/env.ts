@@ -70,6 +70,17 @@ const envApi = createEnv({
     ),
     REDIS_URL: v.pipe(v.string(), v.url()),
     USE_MOCK_AI: v.optional(v.pipe(v.string(), v.parseBoolean()), "false"),
+    E2E_DISABLE_AUTH_RATE_LIMIT: v.optional(
+      v.pipe(
+        v.string(),
+        v.parseBoolean(),
+        v.check(
+          (disabled) => !disabled || process.env.NODE_ENV === "development",
+          "E2E_DISABLE_AUTH_RATE_LIMIT is test-only and requires NODE_ENV=development.",
+        ),
+      ),
+      "false",
+    ),
     BETTER_AUTH_SECRET: v.pipe(v.string(), v.minLength(32)),
     BETTER_AUTH_URL: v.pipe(v.string(), v.url()),
     BETTER_AUTH_COOKIE_PREFIX: v.optional(
