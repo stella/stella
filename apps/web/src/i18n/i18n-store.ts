@@ -366,6 +366,10 @@ export const useI18nStore = create<State & Actions>()(
         if (state.loadedLang === lang && state.isLoaded) {
           set({ lang, hasLoadedOnce: true });
           setDocumentLanguage(lang);
+          // The bundle is already loaded (e.g. English on boot), but rehydrated
+          // formatting prefs still need to reach the shared formatter, which
+          // was initialized as plain English/UTC.
+          recomputeFormatterForState(get());
           return;
         }
 
