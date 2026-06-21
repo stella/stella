@@ -21,6 +21,7 @@
   "apps/web/src/hooks/use-effect.ts": 0,
   "apps/web/src/hooks/use-external-file-drop.ts": 0,
   "apps/web/src/lib/anonymize/use-overlay-rects.ts": 1,
+  "apps/web/src/lib/pdf/hooks/use-page-visibility.ts": 1,
   "apps/web/src/lib/sse.ts": 0,
   "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts": 4,
   "apps/web/src/routes/_protected.chat/index.tsx": 4,

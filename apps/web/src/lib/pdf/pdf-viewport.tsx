@@ -3,6 +3,7 @@ import {
   useEffect,
   useEffectEvent,
   useId,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -31,6 +32,7 @@ import type { PDFDocument } from "@/lib/pdf/pdf-loader";
 import type { PDFPageProps } from "@/lib/pdf/pdf-page";
 import { approximateFraction } from "@/lib/pdf/pdfjs-utils";
 import { getDevicePixelRatio } from "@/lib/pdf/utils";
+import { composeRefs } from "@/lib/slot";
 
 export { usePDFStore } from "@/lib/pdf/pdf-context";
 
@@ -122,7 +124,7 @@ const PDFViewerContent = ({
   );
 
   const effectiveScale = scale + scaleOffset;
-  const pageIds = pages.keys().toArray();
+  const pageIds = useMemo(() => pages.keys().toArray(), [pages]);
   const viewportStyle: PDFViewportStyle = {
     "--pdf-page-filter": shouldInvert ? "invert(1) hue-rotate(180deg)" : "none",
     "--scale-factor": effectiveScale,
@@ -139,18 +141,18 @@ const PDFViewerContent = ({
   }, [document, setDocument]);
 
   useTextSelection(containerRef);
-  usePDFFitToWidth({
+  const fitToWidthRef = usePDFFitToWidth({
     containerRef,
   });
   usePDFControlledScaleOffset({
     containerRef,
     controlledScaleOffset: scaleOffset,
   });
-  const lastReportedPageRef = usePageVisibility({
-    containerRef,
-    pageIds,
-    onPageChanged,
-  });
+  const { containerRef: pageVisibilityRef, lastReportedPageRef } =
+    usePageVisibility({
+      pageIds,
+      onPageChanged,
+    });
   usePDFExternalPageSync({
     page,
     pageIds,
@@ -166,11 +168,16 @@ const PDFViewerContent = ({
     onPageCountChangedEvent(pageIds.length);
   }, [pageIds.length]);
 
+  const pdfContentRef = useMemo(
+    () => composeRefs(containerRef, fitToWidthRef, pageVisibilityRef),
+    [fitToWidthRef, pageVisibilityRef],
+  );
+
   return (
     <ScrollArea>
       <div className={className}>
         <div
-          ref={containerRef}
+          ref={pdfContentRef}
           className={contentClassName}
           style={viewportStyle}
         >

@@ -1,7 +1,6 @@
-import { useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import type { PropsWithChildren } from "react";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { PDFProvider } from "@/lib/pdf/pdf-context";
 import type { PDFPageFallback } from "@/lib/pdf/pdf-page";
 
@@ -22,41 +21,37 @@ export const MeasuredPdfProvider = ({
   onError,
 }: MeasuredPdfProviderProps) => {
   const [initialFitWidth, setInitialFitWidth] = useState<number | undefined>();
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  useExternalSyncEffect(() => {
-    if (!active || initialFitWidth !== undefined) {
-      return undefined;
-    }
-
-    const container = containerRef.current;
-    if (!container) {
-      return undefined;
-    }
-
-    const updateWidth = (width: number) => {
-      if (width > 0) {
-        setInitialFitWidth(width);
-      }
-    };
-
-    updateWidth(container.clientWidth);
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-      if (!entry) {
-        return;
+  const containerRef = useCallback(
+    (container: HTMLDivElement | null) => {
+      if (!active || initialFitWidth !== undefined || !container) {
+        return undefined;
       }
 
-      updateWidth(entry.contentRect.width);
-    });
+      const updateWidth = (width: number) => {
+        if (width > 0) {
+          setInitialFitWidth(width);
+        }
+      };
 
-    observer.observe(container);
+      updateWidth(container.clientWidth);
 
-    return () => {
-      observer.disconnect();
-    };
-  }, [active, initialFitWidth]);
+      const observer = new ResizeObserver((entries) => {
+        const entry = entries.at(0);
+        if (!entry) {
+          return;
+        }
+
+        updateWidth(entry.contentRect.width);
+      });
+
+      observer.observe(container);
+      return () => {
+        observer.disconnect();
+      };
+    },
+    [active, initialFitWidth],
+  );
 
   return (
     <div className="flex h-full min-h-0 min-w-0 flex-col" ref={containerRef}>
