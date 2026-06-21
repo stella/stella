@@ -31,13 +31,12 @@ const config = {
 
 type SuggestedPromptsResult = { prompts: string[] };
 
-// Generating a few short suggestion lines needs no chain-of-thought, so
-// reasoning is disabled at the call site below. This cap then only bounds
-// the visible lines (re-capped at 3 in `cleanSuggestionsText` anyway). It
-// stays generous as a safety net: should an upstream ignore the
-// reasoning-off flag, a tight cap would be consumed by thinking tokens and
-// truncate the output to a single word.
-const SUGGESTIONS_MAX_OUTPUT_TOKENS = 512;
+// Budget for the visible output only: up to 3 short lines, well under 100
+// tokens. The call requests reasoning off; if the model forces reasoning
+// anyway, the reasoning-fallback middleware tops this cap up by a flat
+// allowance so thinking tokens don't eat into the lines. Re-capped at 3 in
+// `cleanSuggestionsText` regardless.
+const SUGGESTIONS_MAX_OUTPUT_TOKENS = 256;
 
 const SUGGEST_CLEANUP_STEPS = [
   /^\d+[.\-)]\s*/u, // Numbered list: "1. " or "2) " at start (optional trailing space)
@@ -202,12 +201,9 @@ const getSuggestedPrompts = createSafeRootHandler(
           serviceTier: "standard",
         }),
         prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
-        // Listing follow-ups is a formatting task, not a reasoning one:
-        // thinking only adds latency and burns the output budget. The
-        // Google-direct path already forces minimal thinking via role
-        // defaults, but OpenRouter-routed models (e.g. Gemini Flash) think
-        // by default, so turn it off here. Keys for inapplicable providers
-        // are ignored.
+        // Listing follow-ups needs no deep thinking, so ask for reasoning
+        // off; the reasoning-fallback middleware downgrades to minimal on
+        // models that mandate reasoning. Keys for other providers are ignored.
         providerOptions: { openrouter: { reasoning: { effort: "none" } } },
         system: SUGGESTIONS_SYSTEM_PROMPT,
         temperature: 0.3,

@@ -1307,6 +1307,86 @@ export const createServiceTierMiddleware = (
   },
 });
 
+// -- Reasoning fallback -----------------------------------------
+
+const REASONING_MANDATORY_PATTERN = /reasoning is mandatory/iu;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// True when the call asked OpenRouter to skip reasoning entirely.
+const requestsDisabledReasoning = (params: CallOptions): boolean => {
+  const reasoning = params.providerOptions?.["openrouter"]?.["reasoning"];
+  return isRecord(reasoning) && reasoning["effort"] === "none";
+};
+
+// A forced-reasoning retry spends tokens the caller sized for visible
+// output (they asked for none), so top maxOutputTokens up by a flat
+// reasoning allowance to keep the original output budget intact. Left
+// untouched when the caller set no cap (nothing to protect).
+const REASONING_FALLBACK_TOKEN_HEADROOM = 1024;
+
+const withMinimalReasoning = (params: CallOptions): CallOptions => ({
+  ...params,
+  ...(params.maxOutputTokens === undefined
+    ? {}
+    : {
+        maxOutputTokens:
+          params.maxOutputTokens + REASONING_FALLBACK_TOKEN_HEADROOM,
+      }),
+  providerOptions: {
+    ...params.providerOptions,
+    openrouter: {
+      ...params.providerOptions?.["openrouter"],
+      reasoning: { effort: "minimal" },
+    },
+  },
+});
+
+// OpenRouter rejects disabling reasoning on models that require it (e.g.
+// Gemini Flash) with a 400 ("Reasoning is mandatory for this endpoint").
+const isReasoningMandatoryError = (error: unknown): boolean => {
+  if (!APICallError.isInstance(error) || error.statusCode !== 400) {
+    return false;
+  }
+  const body = typeof error.responseBody === "string" ? error.responseBody : "";
+  return REASONING_MANDATORY_PATTERN.test(`${body} ${error.message}`);
+};
+
+// Lets any caller request `reasoning.effort: "none"` without knowing
+// whether the resolved model permits it: when the provider refuses to
+// disable reasoning, retry once at the lowest effort it accepts. Every
+// other error propagates unchanged. Mirrors the service-tier fallback.
+const reasoningFallbackMiddleware: SingleMiddleware = {
+  specificationVersion: "v3",
+  wrapGenerate: async ({ doGenerate, model, params }) => {
+    try {
+      return await doGenerate();
+    } catch (error) {
+      if (
+        !requestsDisabledReasoning(params) ||
+        !isReasoningMandatoryError(error)
+      ) {
+        throw error;
+      }
+      return await model.doGenerate(withMinimalReasoning(params));
+    }
+  },
+  wrapStream: async ({ doStream, model, params }) => {
+    try {
+      return await doStream();
+    } catch (error) {
+      if (
+        !requestsDisabledReasoning(params) ||
+        !isReasoningMandatoryError(error)
+      ) {
+        throw error;
+      }
+      return await model.doStream(withMinimalReasoning(params));
+    }
+  },
+};
+
 // -- Default settings -------------------------------------------
 
 /**
@@ -1519,6 +1599,7 @@ const withInstrumentation = (
     createServiceTierMiddleware(ctx.serviceTierTarget, ctx.serviceTier, {
       allowFallbackToStandard: ctx.allowServiceTierFallback,
     }),
+    reasoningFallbackMiddleware,
   );
   if (isAIDevToolsEnabled()) {
     middlewares.push(devToolsMiddleware());
