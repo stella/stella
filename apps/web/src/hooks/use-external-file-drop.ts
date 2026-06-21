@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffectEvent, useRef, useState } from "react";
 
 import { dropTargetForExternal } from "@atlaskit/pragmatic-drag-and-drop/external/adapter";
 import { containsFiles } from "@atlaskit/pragmatic-drag-and-drop/external/file";
@@ -60,13 +60,28 @@ export const useExternalFileDrop = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [isInnerActive, setIsInnerActive] = useState(false);
 
-  // Store callback in a ref to avoid re-registering the drop target
-  const onDropRef = useRef(onDrop);
-  onDropRef.current = onDrop;
-  const onDropTreeRef = useRef(onDropTree);
-  onDropTreeRef.current = onDropTree;
-  const onErrorRef = useRef(onError);
-  onErrorRef.current = onError;
+  const handleDroppedTree = useEffectEvent((tree: DroppedFileTree) => {
+    if (tree.files.length === 0 && tree.directoryPaths.length === 0) {
+      return;
+    }
+
+    if (onDropTree) {
+      onDropTree(tree);
+      return;
+    }
+
+    const files = tree.files.map(({ file }) => file);
+    if (files.length > 0) {
+      onDrop(files);
+    }
+  });
+  const handleDropError = useEffectEvent((error: Error) => {
+    onError?.(error);
+    stellaToast.add({
+      title: t("errors.uploadFailed"),
+      type: "error",
+    });
+  });
 
   useExternalSyncEffect(() => {
     const el = ref.current;
@@ -93,22 +108,7 @@ export const useExternalFileDrop = ({
           return;
         }
         void collectDroppedFileTree(source)
-          .then((tree) => {
-            if (tree.files.length === 0 && tree.directoryPaths.length === 0) {
-              return undefined;
-            }
-
-            if (onDropTreeRef.current) {
-              onDropTreeRef.current(tree);
-              return undefined;
-            }
-
-            const files = tree.files.map(({ file }) => file);
-            if (files.length > 0) {
-              onDropRef.current(files);
-            }
-            return undefined;
-          })
+          .then(handleDroppedTree)
           .catch((error: unknown) => {
             const normalized =
               error instanceof Error
@@ -118,15 +118,11 @@ export const useExternalFileDrop = ({
                     message: "Failed to read dropped files",
                     cause: error,
                   });
-            onErrorRef.current?.(normalized);
-            stellaToast.add({
-              title: t("errors.uploadFailed"),
-              type: "error",
-            });
+            handleDropError(normalized);
           });
       },
     });
-  }, [enabled, ref, t]);
+  }, [enabled, ref]);
 
   return { ref, isDropTarget, isInnerActive };
 };

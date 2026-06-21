@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffectEvent, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -347,8 +347,7 @@ const ViewTab = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const updateView = useUpdateView(workspaceId);
   const containerRef = useRef<HTMLDivElement>(null);
-  const onReorderRef = useRef(onReorder);
-  onReorderRef.current = onReorder;
+  const handleReorder = useEffectEvent(onReorder);
 
   useExternalSyncEffect(() => {
     const el = containerRef.current;
@@ -380,7 +379,7 @@ const ViewTab = ({
           if (typeof draggedViewId !== "string") {
             return;
           }
-          onReorderRef.current(draggedViewId, id);
+          handleReorder(draggedViewId, id);
         },
       }),
     );

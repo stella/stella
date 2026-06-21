@@ -1,5 +1,5 @@
 import type * as React from "react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -272,8 +272,11 @@ const MatterItem = ({
   const canDrag = isPinned && !!onReorder;
   const isCollapsed = state === "collapsed" && !isMobile;
 
-  const onReorderRef = useRef(onReorder);
-  onReorderRef.current = onReorder;
+  const handleReorder = useEffectEvent(
+    (draggedId: string, targetId: string) => {
+      onReorder?.(draggedId, targetId);
+    },
+  );
 
   useExternalSyncEffect(() => {
     const el = dropRef.current;
@@ -299,7 +302,7 @@ const MatterItem = ({
           if (typeof draggedId !== "string" || draggedId === ws.id) {
             return;
           }
-          onReorderRef.current?.(draggedId, ws.id);
+          handleReorder(draggedId, ws.id);
         },
       }),
     );

@@ -1,4 +1,4 @@
-import { useCallback, useRef } from "react";
+import { useEffectEvent, useRef } from "react";
 
 import {
   useIsMutating,
@@ -82,24 +82,17 @@ export const useCreateBBoxes = ({
     },
   });
 
-  // Refs keep callback identity stable — avoids re-triggering
-  // effects in PeekJustification that list this as a dependency.
-  const pendingRef = useRef(pendingMutationsCount);
-  pendingRef.current = pendingMutationsCount;
-  const mutateRef = useRef(mutation.mutate);
-  mutateRef.current = mutation.mutate;
-
-  return useCallback(() => {
+  return useEffectEvent(() => {
     if (!aiAvailability?.available) {
       return;
     }
 
-    if (pendingRef.current > 0) {
+    if (pendingMutationsCount > 0) {
       return;
     }
 
-    mutateRef.current();
-  }, [aiAvailability?.available]);
+    mutation.mutate();
+  });
 };
 
 export const useIsCreatingBBoxes = () => {
