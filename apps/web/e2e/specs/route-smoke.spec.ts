@@ -61,17 +61,17 @@ const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
   {
     template: "/knowledge/mcp",
     path: "/knowledge/mcp",
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
+    expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=mcp" },
   },
   {
     template: "/knowledge/prompts",
     path: "/knowledge/prompts",
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
+    expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=skill" },
   },
   {
     template: "/knowledge/skills",
     path: "/knowledge/skills",
-    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
+    expectation: { kind: "redirectsTo", to: "/knowledge/tools?kind=skill" },
   },
   { template: "/knowledge/templates", path: "/knowledge/templates" },
   { template: "/knowledge/tools", path: "/knowledge/tools" },
@@ -319,15 +319,28 @@ const assertFinalDestination = (page: Page, route: SmokeRoute) => {
     return;
   }
 
-  const expectedPath =
-    expectation.kind === "redirectsTo"
-      ? expectation.to
-      : new URL(route.path, page.url()).pathname;
+  const target =
+    expectation.kind === "redirectsTo" ? expectation.to : route.path;
+  const expected = new URL(target, page.url());
+  const actual = new URL(page.url());
 
-  expect(
-    new URL(page.url()).pathname,
-    `${route.template} settled on an unexpected route`,
-  ).toBe(expectedPath);
+  // A redirectsTo target opts into search assertion by spelling out a query
+  // string (e.g. the legacy knowledge redirects must preserve ?kind=...).
+  // Otherwise compare pathname only: render-in-place routes may inject default
+  // search params, and a route that drops a required param (e.g. the document
+  // route) bounces to a different pathname, which this assertion already catches.
+  const assertSearch =
+    expectation.kind === "redirectsTo" && expected.search !== "";
+  const expectedHref = assertSearch
+    ? expected.pathname + expected.search
+    : expected.pathname;
+  const actualHref = assertSearch
+    ? actual.pathname + actual.search
+    : actual.pathname;
+
+  expect(actualHref, `${route.template} settled on an unexpected route`).toBe(
+    expectedHref,
+  );
 };
 
 const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
