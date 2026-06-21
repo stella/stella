@@ -12,6 +12,21 @@
       "unknownDevice": "Nezināma ierīce"
     }
   },
+  "agentClaim": {
+    "access": "Saņemtā piekļuve",
+    "accessReadSearch": "Lasīšanas un meklēšanas piekļuve",
+    "approve": "Apstiprināt",
+    "codeLabel": "Ievadiet kodu, ko rāda jūsu aģents",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Varat atgriezties pie sava aģenta.",
+    "connectedTitle": "Aģents savienots",
+    "description": "Mākslīgā intelekta aģents jūsu vārdā pieprasa piekļuvi jūsu stella darbvietai. Apstipriniet tikai tad, ja to sākāt jūs.",
+    "error": "Kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
+    "errorExpired": "Šis pieprasījums ir beidzies. Sāciet savienojumu no jauna no sava aģenta.",
+    "errorInvalid": "Šis kods neizskatās pareizs. Pārbaudiet to un mēģiniet vēlreiz.",
+    "errorNotFound": "Šim kodam neatradām nevienu gaidošu pieprasījumu. Pārbaudiet kodu un mēģiniet vēlreiz.",
+    "title": "Savienojiet savu aģentu"
+  },
   "ai": {
     "analyzeWithAI": "Analizēt ar AI",
     "editWithAI": "Rediģēt ar AI",

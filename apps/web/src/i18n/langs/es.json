@@ -12,6 +12,21 @@
       "unknownDevice": "Dispositivo desconocido"
     }
   },
+  "agentClaim": {
+    "access": "Acceso que obtendrá",
+    "accessReadSearch": "Acceso de lectura y búsqueda",
+    "approve": "Aprobar",
+    "codeLabel": "Introduce el código mostrado por tu agente",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Puedes volver a tu agente.",
+    "connectedTitle": "Agente conectado",
+    "description": "Un agente de IA está solicitando acceso a tu espacio de trabajo de stella en tu nombre. Apruébalo solo si lo iniciaste tú.",
+    "error": "Algo salió mal. Inténtalo de nuevo.",
+    "errorExpired": "Esta solicitud ha caducado. Inicia la conexión de nuevo desde tu agente.",
+    "errorInvalid": "Ese código no parece correcto. Compruébalo e inténtalo de nuevo.",
+    "errorNotFound": "No encontramos ninguna solicitud pendiente para ese código. Comprueba el código e inténtalo de nuevo.",
+    "title": "Conecta tu agente"
+  },
   "ai": {
     "analyzeWithAI": "Analizar con IA",
     "editWithAI": "Editar con IA",

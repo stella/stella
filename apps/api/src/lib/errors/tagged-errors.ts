@@ -31,12 +31,38 @@ export type HandlerErrorUsageDetail = {
   available: number;
 };
 
+/**
+ * Step-up claim block returned alongside an agent-auth ID-JAG
+ * `interaction_required`: a human must complete the RFC 8628-style claim
+ * ceremony before a first `(iss, sub)` delegation is written. Carries the
+ * same fields as the `service_auth` ceremony so the agent can poll the
+ * existing `/agent/token` claim grant.
+ */
+export type HandlerErrorClaim = {
+  registration_id: string;
+  user_code: string;
+  verification_uri: string;
+  verification_uri_complete: string;
+  expires_in: number;
+  interval: number;
+  claim_token: string;
+};
+
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
   code?: HandlerErrorCode | undefined;
   status: TStatus;
   message: string;
+  /**
+   * OAuth-style machine-readable error identifier (e.g. `login_required`,
+   * `interaction_required`, `issuer_not_enabled`). Distinct from `code`
+   * (the internal chat-transport vocabulary); surfaced verbatim on the
+   * response body for agent clients that branch on the error.
+   */
+  error?: string | undefined;
+  /** Step-up ceremony block for an ID-JAG `interaction_required`. */
+  claim?: HandlerErrorClaim | undefined;
   cause?: unknown;
   usage?: HandlerErrorUsageDetail | undefined;
 };
@@ -50,12 +76,16 @@ export class HandlerError<
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare usage?: HandlerErrorUsageDetail | undefined;
+  declare error?: string | undefined;
+  declare claim?: HandlerErrorClaim | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
     this.code = props.code;
     this.status = props.status;
     this.usage = props.usage;
+    this.error = props.error;
+    this.claim = props.claim;
   }
 }
 

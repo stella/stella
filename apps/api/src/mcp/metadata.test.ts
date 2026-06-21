@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { env } from "@/api/env";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import {
   MCP_ANONYMIZED_RESOURCE_SCOPES,
@@ -20,6 +21,11 @@ describe("MCP protected resource metadata", () => {
       authorization_servers: [getAuthIssuerUrl()],
       bearer_methods_supported: ["header"],
       resource: getMcpResourceUrl(),
+      resource_name: "stella",
+      resource_logo_uri: new URL(
+        "favicon.svg",
+        `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
+      ).toString(),
       scopes_supported: [...MCP_DEFAULT_RESOURCE_SCOPES],
     });
   });
@@ -29,6 +35,11 @@ describe("MCP protected resource metadata", () => {
       authorization_servers: [getAuthIssuerUrl()],
       bearer_methods_supported: ["header"],
       resource: getMcpResourceUrl("anonymized"),
+      resource_name: "stella",
+      resource_logo_uri: new URL(
+        "favicon.svg",
+        `${env.FRONTEND_URL.replace(/\/$/u, "")}/`,
+      ).toString(),
       scopes_supported: [...MCP_ANONYMIZED_RESOURCE_SCOPES],
     });
   });

@@ -308,6 +308,13 @@ export const API_RATE_LIMITS = {
    *  against unauthenticated input, so the budget is intentionally
    *  much tighter than the general API. */
   folioCollab: { duration: 60_000, max: 30 },
+  /** Agent-auth registration + claim-grant poll endpoints: 60 req/min
+   *  per IP. These are unauthenticated and pollable (RFC 8628 device
+   *  flow), so they get a dedicated, tight budget separate from the
+   *  general API. The poll interval is enforced server-side per
+   *  registration; this IP cap bounds an attacker registering or
+   *  polling in bulk. */
+  agentAuth: { duration: 60_000, max: 60 },
   /** Document translation: 30 req/min per IP. Each call ships a
    *  full document to the external translation provider and
    *  consumes the org's paid character quota, so this stays well

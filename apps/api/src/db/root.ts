@@ -1,13 +1,18 @@
 import { SQL } from "bun";
 import { drizzle } from "drizzle-orm/bun-sql";
 
+import { agentAuthRelationsPart } from "@/api/db/agent-auth-schema";
 import { authRelationsPart } from "@/api/db/auth-schema";
 import { relations } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 
-const databaseRelations = { ...relations, ...authRelationsPart };
+const databaseRelations = {
+  ...relations,
+  ...authRelationsPart,
+  ...agentAuthRelationsPart,
+};
 
 // Optional pool recycling. Defaults remain disabled until the Bun SQL runtime
 // retires only idle connections; values are seconds and apply to both pools.

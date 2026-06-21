@@ -12,6 +12,21 @@
       "unknownDevice": "Tundmatu seade"
     }
   },
+  "agentClaim": {
+    "access": "Saadav juurdepääs",
+    "accessReadSearch": "Lugemis- ja otsingujuurdepääs",
+    "approve": "Kinnita",
+    "codeLabel": "Sisestage oma agendi kuvatud kood",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Võite oma agendi juurde naasta.",
+    "connectedTitle": "Agent ühendatud",
+    "description": "Tehisintellekti agent taotleb teie nimel juurdepääsu teie stella tööruumile. Kinnitage ainult juhul, kui alustasite seda ise.",
+    "error": "Midagi läks valesti. Palun proovige uuesti.",
+    "errorExpired": "See päring on aegunud. Alustage ühendust oma agendist uuesti.",
+    "errorInvalid": "See kood ei tundu õige. Kontrollige seda ja proovige uuesti.",
+    "errorNotFound": "Selle koodi jaoks ei leidnud me ootel olevat päringut. Kontrollige koodi ja proovige uuesti.",
+    "title": "Ühenda oma agent"
+  },
   "ai": {
     "analyzeWithAI": "Analüüsi AI-ga",
     "editWithAI": "Muuda AI-ga",
