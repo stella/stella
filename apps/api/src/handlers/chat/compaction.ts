@@ -90,6 +90,17 @@ type PlanChatCompactionOptions = {
   triggerTokens?: number | undefined;
 };
 
+/**
+ * Cheap pre-check for the checkpoint writer: does the estimated token total
+ * cross the compaction trigger? Pure token arithmetic, no LLM/summarize call,
+ * so the common (under-trigger) send path never reads the full thread history.
+ * Mirrors the `totalTokens > triggerTokens` gate inside `planChatCompaction`.
+ */
+export const shouldCompactChatMessages = (
+  messages: readonly ChatMessage[],
+  triggerTokens: number = DEFAULT_TRIGGER_TOKENS,
+): boolean => estimateMessagesTokens(messages) > triggerTokens;
+
 export const planChatCompaction = ({
   messages,
   preserveTokens = DEFAULT_PRESERVE_TOKENS,
