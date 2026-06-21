@@ -842,7 +842,7 @@ export const rewriteEachPlaceholdersInText = (
   index: number,
 ): string => {
   const re = new RegExp(
-    `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_]+)\\}\\}`,
+    `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_-]+)\\}\\}`,
     "gu",
   );
   return text.replace(
