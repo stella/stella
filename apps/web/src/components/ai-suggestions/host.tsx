@@ -65,6 +65,18 @@ import { PromptEditorContent } from "@/components/prompt-editor";
 import { usePulse } from "@/hooks/use-pulse";
 import type { TranslationKey } from "@/i18n/types";
 
+import {
+  anchorSuggestion,
+  buildGenerateInput,
+  deriveChatStatus,
+  joinPromptWithPasted,
+  parseStoredApplyMode,
+  resolveAcceptGroupGate,
+  resolveAcceptOneGate,
+  resolveApplyMode,
+  selectResponseSuggestions,
+} from "./host.logic";
+import type { PendingFirstAccept } from "./host.logic";
 import type {
   AssistantThreadMessage,
   FileAIChatConfig,
@@ -82,15 +94,12 @@ const APPLY_MODE_STORAGE_KEY = "stella:ai-suggestions:apply-mode";
 
 function readStoredApplyMode(): AISuggestionApplyMode | null {
   try {
-    const raw = localStorage.getItem(APPLY_MODE_STORAGE_KEY);
-    if (raw === "direct" || raw === "tracked-changes") {
-      return raw;
-    }
+    return parseStoredApplyMode(localStorage.getItem(APPLY_MODE_STORAGE_KEY));
   } catch {
     // localStorage may be disabled (private mode, third-party cookie
     // restrictions); fall through to "no preference".
+    return null;
   }
-  return null;
 }
 
 /**
@@ -224,11 +233,8 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
    * preference was unset. Held until they answer the prompt; then
    * applied with the chosen mode.
    */
-  const [pendingFirstAccept, setPendingFirstAccept] = useState<
-    | { kind: "one"; suggestionId: string }
-    | { kind: "group"; messageId: string }
-    | null
-  >(null);
+  const [pendingFirstAccept, setPendingFirstAccept] =
+    useState<PendingFirstAccept | null>(null);
   const {
     messages,
     setMessages,
@@ -257,8 +263,10 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
    * default. The user-facing "ask once" prompt only blocks the very
    * first accept attempt.
    */
-  const applyMode: AISuggestionApplyMode =
-    applyModeStored ?? config.defaultApplyMode ?? "direct";
+  const applyMode: AISuggestionApplyMode = resolveApplyMode(
+    applyModeStored,
+    config.defaultApplyMode,
+  );
 
   const persistApplyMode = useCallback((next: AISuggestionApplyMode) => {
     setApplyModeStored(next);
@@ -293,12 +301,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     (m) => m.role === "assistant" && m.status === "loading",
   );
 
-  let status: FileAIChatStatus = "idle";
-  if (generating) {
-    status = "generating";
-  } else if (pendingCount > 0) {
-    status = "review-ready";
-  }
+  const status: FileAIChatStatus = deriveChatStatus(generating, pendingCount);
 
   // ---- decoration push (DOCX only) ----------------------------------------
 
@@ -388,13 +391,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
       const token = ++generationToken.current;
 
-      let fullPrompt = promptText;
-      if (input.pastedText) {
-        fullPrompt =
-          promptText.length === 0
-            ? input.pastedText
-            : `${promptText}\n\n${input.pastedText}`;
-      }
+      const fullPrompt = joinPromptWithPasted(promptText, input.pastedText);
 
       const docText = editorView
         ? editorView.state.doc.textBetween(
@@ -435,8 +432,8 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
               "\n",
             )
           : "";
-      const generateInput: AIGenerateInput = {
-        prompt: fullPrompt,
+      const generateInput: AIGenerateInput = buildGenerateInput({
+        fullPrompt,
         mode,
         selectionText,
         selectionRange:
@@ -447,28 +444,24 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
         documentText: docText,
         visibleText,
         visibleRange: visible,
-        ...(input.presetId === undefined ? {} : { presetId: input.presetId }),
-      };
+        presetId: input.presetId,
+      });
 
       try {
         const response = await config.onGenerate(generateInput);
         if (generationToken.current !== token) {
           return;
         }
-        const rawSuggestions =
-          mode === "ask" ? [] : (response.suggestions ?? []);
+        const rawSuggestions = selectResponseSuggestions(
+          mode,
+          response.suggestions,
+        );
         const anchored: AISuggestion[] = [];
         for (const s of rawSuggestions) {
-          if (!editorView) {
-            anchored.push(s);
-            continue;
-          }
-          const anchor = resolveSuggestionAnchor(editorView.state.doc, s);
-          anchored.push(
-            anchor === null
-              ? { ...s, status: "stale" }
-              : { ...s, range: anchor },
-          );
+          const anchor = editorView
+            ? resolveSuggestionAnchor(editorView.state.doc, s)
+            : undefined;
+          anchored.push(anchorSuggestion(s, anchor));
         }
         updateAssistantMessage(assistantId, (m) => ({
           id: m.id,
@@ -578,12 +571,17 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     (suggestionId: string) => {
       // First-time accept: ask whether to apply with tracked changes,
       // remember the answer, and defer this accept until they pick.
-      if (applyModeStored === null) {
-        const target = findSuggestion(suggestionId);
-        if (!target || target.status !== "pending") {
-          return;
-        }
-        setPendingFirstAccept({ kind: "one", suggestionId });
+      const target = findSuggestion(suggestionId);
+      const gate = resolveAcceptOneGate(
+        applyModeStored,
+        suggestionId,
+        target?.status === "pending",
+      );
+      if (gate.type === "noop") {
+        return;
+      }
+      if (gate.type === "defer") {
+        setPendingFirstAccept(gate.pending);
         return;
       }
       acceptOneAtMode(suggestionId, applyMode);
@@ -659,21 +657,22 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
   const handleAcceptGroup = useCallback(
     (messageId: string) => {
-      if (applyModeStored === null) {
-        const message = messages.find(
-          (m): m is AssistantThreadMessage =>
-            m.role === "assistant" && m.id === messageId,
-        );
-        if (!message) {
-          return;
-        }
-        const hasPending = message.suggestions.some(
-          (s) => s.status === "pending",
-        );
-        if (!hasPending) {
-          return;
-        }
-        setPendingFirstAccept({ kind: "group", messageId });
+      const message = messages.find(
+        (m): m is AssistantThreadMessage =>
+          m.role === "assistant" && m.id === messageId,
+      );
+      const hasPending =
+        message?.suggestions.some((s) => s.status === "pending") ?? false;
+      const gate = resolveAcceptGroupGate(
+        applyModeStored,
+        messageId,
+        hasPending,
+      );
+      if (gate.type === "noop") {
+        return;
+      }
+      if (gate.type === "defer") {
+        setPendingFirstAccept(gate.pending);
         return;
       }
       acceptGroupAtMode(messageId, applyMode);

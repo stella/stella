@@ -42,6 +42,18 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getChatHitRoute } from "@/components/search-dialog.logic";
+import {
+  clearTime,
+  resolveUpdatedFrom,
+  resolveUpdatedTo,
+  setCustomTime,
+  setPresetTime,
+  toggleArrayMember,
+} from "@/components/search-filters.logic";
+import type {
+  SearchFilters,
+  TimeFilter,
+} from "@/components/search-filters.logic";
 import { UserAvatar } from "@/components/user-avatar";
 import {
   isPublicLawPreviewEnabled,
@@ -56,7 +68,6 @@ import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { toSafeId } from "@/lib/safe-id";
 import {
-  presetUpdatedFrom,
   searchFacetOptions,
   searchInfiniteOptions,
   TIME_PRESETS,
@@ -234,21 +245,6 @@ const mergeSelectedBuckets = (
   return [...buckets, ...missing];
 };
 
-type TimeFilter =
-  | { mode: "preset"; preset: TimePreset }
-  | { mode: "custom"; updatedFrom?: string; updatedTo?: string };
-
-type SearchFilters = {
-  workspaceIds: string[];
-  types: GlobalSearchResultType[];
-  editedByUserIds: string[];
-  mimeTypes: string[];
-  time?: TimeFilter;
-};
-
-const filterUpdatedTo = (filters: SearchFilters): string | undefined =>
-  filters.time?.mode === "custom" ? filters.time.updatedTo : undefined;
-
 type SearchDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -298,17 +294,12 @@ export const SearchDialog = ({
   // whenever the user picks a new preset or runs a new query, while
   // staying stable across pagination so `fetchNextPage` keeps using
   // the same cutoff as page 1.
-  const updatedFrom = useMemo(() => {
-    if (filters.time?.mode === "preset") {
-      return presetUpdatedFrom(filters.time.preset);
-    }
-    if (filters.time?.mode === "custom") {
-      return filters.time.updatedFrom;
-    }
-    return undefined;
+  const updatedFrom = useMemo(
+    () => resolveUpdatedFrom(filters.time),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentional: include searchQuery so each new query gets a fresh preset cutoff
-  }, [filters.time, searchQuery]);
-  const updatedTo = filterUpdatedTo(filters);
+    [filters.time, searchQuery],
+  );
+  const updatedTo = resolveUpdatedTo(filters.time);
   const selectedSearchTypes = filters.types.filter(
     (type) =>
       isSearchKindOption(type) &&
@@ -588,86 +579,46 @@ export const SearchDialog = ({
   };
 
   const toggleTypeFilter = (type: GlobalSearchResultType) => {
-    setFilters((prev) => {
-      const next = prev.types.includes(type)
-        ? prev.types.filter((item) => item !== type)
-        : [...prev.types, type];
-      return {
-        ...prev,
-        types: next,
-      };
-    });
+    setFilters((prev) => ({
+      ...prev,
+      types: toggleArrayMember(prev.types, type),
+    }));
   };
 
   const toggleWorkspaceFilter = (workspaceId: string) => {
-    setFilters((prev) => {
-      const next = prev.workspaceIds.includes(workspaceId)
-        ? prev.workspaceIds.filter((id) => id !== workspaceId)
-        : [...prev.workspaceIds, workspaceId];
-      return { ...prev, workspaceIds: next };
-    });
+    setFilters((prev) => ({
+      ...prev,
+      workspaceIds: toggleArrayMember(prev.workspaceIds, workspaceId),
+    }));
   };
 
   const toggleEditorFilter = (editorId: string) => {
-    setFilters((prev) => {
-      const next = prev.editedByUserIds.includes(editorId)
-        ? prev.editedByUserIds.filter((id) => id !== editorId)
-        : [...prev.editedByUserIds, editorId];
-      return {
-        ...prev,
-        editedByUserIds: next,
-      };
-    });
+    setFilters((prev) => ({
+      ...prev,
+      editedByUserIds: toggleArrayMember(prev.editedByUserIds, editorId),
+    }));
   };
 
   const setTimePreset = (preset: TimePreset | undefined) => {
-    setFilters((prev): SearchFilters => {
-      const { time: _, ...rest } = prev;
-      if (!preset) {
-        return rest;
-      }
-      return { ...rest, time: { mode: "preset", preset } };
-    });
+    setFilters((prev) => setPresetTime(prev, preset));
   };
 
   const setCustomDateRange = (range: {
     updatedFrom?: string;
     updatedTo?: string;
   }) => {
-    setFilters((prev): SearchFilters => {
-      const { time: _, ...rest } = prev;
-      return {
-        ...rest,
-        time: {
-          mode: "custom",
-          ...(range.updatedFrom !== undefined && {
-            updatedFrom: range.updatedFrom,
-          }),
-          ...(range.updatedTo !== undefined && {
-            updatedTo: range.updatedTo,
-          }),
-        },
-      };
-    });
+    setFilters((prev) => setCustomTime(prev, range));
   };
 
   const clearTimeFilter = () => {
-    setFilters((prev): SearchFilters => {
-      const { time: _, ...rest } = prev;
-      return rest;
-    });
+    setFilters(clearTime);
   };
 
   const toggleMimeTypeFilter = (mimeType: string) => {
-    setFilters((prev) => {
-      const next = prev.mimeTypes.includes(mimeType)
-        ? prev.mimeTypes.filter((item) => item !== mimeType)
-        : [...prev.mimeTypes, mimeType];
-      return {
-        ...prev,
-        mimeTypes: next,
-      };
-    });
+    setFilters((prev) => ({
+      ...prev,
+      mimeTypes: toggleArrayMember(prev.mimeTypes, mimeType),
+    }));
   };
 
   const handleResultClick = async (hit: GlobalSearchHit) => {

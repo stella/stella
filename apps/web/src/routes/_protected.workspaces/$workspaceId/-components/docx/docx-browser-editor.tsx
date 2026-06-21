@@ -83,6 +83,16 @@ import {
   shouldFinalizeEditSession,
 } from "./docx-browser-editor.logic";
 import type { OptimisticPreviewFile } from "./docx-browser-editor.logic";
+import {
+  aggregateAnonymizationMatches,
+  buildAnonymizationDetectionKey,
+  buildExcludedCanonicalsSet,
+  decideAnonymizationDetectionRun,
+  dedupeDetectedAnonymizationTerms,
+  mergeAnonymizationTerms,
+  resolveCheckpointAutosaveStatus,
+} from "./docx-edit-mode.logic";
+import type { AutosaveStatus } from "./docx-edit-mode.logic";
 import type { EditSessionErrorReason } from "./use-edit-session";
 import { useEditSession } from "./use-edit-session";
 
@@ -99,8 +109,6 @@ const colorFromStableId = (value: string) => {
   const color = (hash * 2_654_435_761) % COLLABORATOR_COLOR_SPACE;
   return `#${color.toString(16).padStart(6, "0")}`;
 };
-
-type AutosaveStatus = "synced" | "pending" | "syncing";
 
 type DocxBrowserEditorBaseProps = {
   workspaceId: string;
@@ -287,13 +295,33 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       if (cancelled) {
         return;
       }
-      if (Date.now() < inFlightUntil) {
+      // Cheap in-flight short-circuit before serializing the doc:
+      // `view.state.doc.textContent` walks the whole ProseMirror
+      // tree, so on large DOCX files we must not pay it every 2s
+      // tick while a worker request is still pending. The decision
+      // helper repeats this guard for its own correctness, but the
+      // expensive read has to stay behind it.
+      const now = Date.now();
+      if (now < inFlightUntil) {
         return;
       }
       const text = view.state.doc.textContent;
       const excluded = excludedCanonicalsRef.current;
-      const cacheKey = `${[...excluded].sort().join("|")}~${text}`;
-      if (text.length === 0) {
+      const cacheKey = buildAnonymizationDetectionKey({
+        text,
+        excludedCanonicals: excluded,
+      });
+      const decision = decideAnonymizationDetectionRun({
+        text,
+        cacheKey,
+        lastDeliveredKey,
+        inFlightUntil,
+        now,
+      });
+      if (decision.action === "skip") {
+        return;
+      }
+      if (decision.action === "markRan") {
         // Empty doc: nothing to detect. Release the
         // "in flight" lock so the facet exits the
         // "Detecting…" placeholder instead of stalling
@@ -301,7 +329,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
         markRan();
         return;
       }
-      if (cacheKey === lastDeliveredKey) {
+      if (decision.action === "alreadyDelivered") {
         // Already delivered for this exact text +
         // exclusions; no-op without flipping the
         // started state (we're not running anything).
@@ -323,17 +351,9 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             return;
           }
           lastDeliveredKey = cacheKey;
-          const byCanonical = new Map<string, AnonymizationTerm>();
-          for (const pair of result.pairs) {
-            const key = `${pair.label} ${pair.original.toLowerCase()}`;
-            if (!byCanonical.has(key)) {
-              byCanonical.set(key, {
-                canonical: pair.original,
-                label: pair.label,
-              });
-            }
-          }
-          setDetectedAnonymizationTerms([...byCanonical.values()]);
+          setDetectedAnonymizationTerms(
+            dedupeDetectedAnonymizationTerms(result.pairs),
+          );
           markRan();
           return;
         })
@@ -377,13 +397,10 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     ...anonymizationAllowlistOptions({ workspaceId, entityId }),
     enabled: isAnonymizationActive,
   });
-  const excludedCanonicalsSet = useMemo(() => {
-    const set = new Set<string>();
-    for (const entry of allowlistQuery.data?.entries ?? []) {
-      set.add(entry.canonical.toLocaleLowerCase());
-    }
-    return set;
-  }, [allowlistQuery.data]);
+  const excludedCanonicalsSet = useMemo(
+    () => buildExcludedCanonicalsSet(allowlistQuery.data?.entries ?? []),
+    [allowlistQuery.data],
+  );
   // Hold the latest list in a ref so the chat-anon polling effect
   // sees fresh exclusions without re-installing its heartbeat on
   // every keystroke / mutation.
@@ -395,24 +412,21 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     // having to wait up to 2s for the next heartbeat tick.
     runDetectionRef.current?.();
   }, [excludedCanonicalsSet]);
-  const mergedAnonymizationTerms = useMemo<AnonymizationTerm[]>(() => {
-    if (!isAnonymizationActive) {
-      return [];
-    }
-    const filteredWorkspace =
-      excludedCanonicalsSet.size === 0
-        ? workspaceAnonymizationTerms
-        : workspaceAnonymizationTerms.filter(
-            (term) =>
-              !excludedCanonicalsSet.has(term.canonical.toLocaleLowerCase()),
-          );
-    return [...filteredWorkspace, ...detectedAnonymizationTerms];
-  }, [
-    isAnonymizationActive,
-    workspaceAnonymizationTerms,
-    detectedAnonymizationTerms,
-    excludedCanonicalsSet,
-  ]);
+  const mergedAnonymizationTerms = useMemo<AnonymizationTerm[]>(
+    () =>
+      mergeAnonymizationTerms({
+        isAnonymizationActive,
+        workspaceTerms: workspaceAnonymizationTerms,
+        detectedTerms: detectedAnonymizationTerms,
+        excludedCanonicals: excludedCanonicalsSet,
+      }),
+    [
+      isAnonymizationActive,
+      workspaceAnonymizationTerms,
+      detectedAnonymizationTerms,
+      excludedCanonicalsSet,
+    ],
+  );
   // Dispatch the live term list into the plugin. We can't simply
   // read matches right after `dispatch` because DOCX content
   // loads asynchronously: the first dispatch hits an empty doc
@@ -452,22 +466,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       if (!isAnonymizationActive) {
         return;
       }
-      const countByCanonical = new Map<string, number>();
-      const labelByCanonical = new Map<string, string>();
-      for (const match of matches) {
-        countByCanonical.set(
-          match.canonical,
-          (countByCanonical.get(match.canonical) ?? 0) + 1,
-        );
-        if (!labelByCanonical.has(match.canonical)) {
-          labelByCanonical.set(match.canonical, match.label);
-        }
-      }
-      publish(fieldId, {
-        totalMatches: matches.length,
-        countByCanonical,
-        labelByCanonical,
-      });
+      publish(fieldId, aggregateAnonymizationMatches(matches));
     },
     [fieldId, isAnonymizationActive],
   );
@@ -927,12 +926,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     setAutosaveStatus("syncing");
     void (async () => {
       const buffer = await ref.save({ selective: true });
-      if (buffer) {
-        const saved = await saveActiveCheckpoint(buffer);
-        setAutosaveStatus(saved ? "synced" : "pending");
-        return;
-      }
-      setAutosaveStatus("pending");
+      const checkpointSaved = buffer
+        ? await saveActiveCheckpoint(buffer)
+        : false;
+      setAutosaveStatus(
+        resolveCheckpointAutosaveStatus({
+          buffer: buffer ?? null,
+          checkpointSaved,
+        }),
+      );
     })();
   }, [saveActiveCheckpoint]);
 
@@ -948,12 +950,13 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
     clearQueuedChangeCheckpoint();
     setAutosaveStatus("syncing");
     const buffer = await ref.save({ selective: true });
-    if (!buffer) {
-      setAutosaveStatus("pending");
-      return;
-    }
-    const saved = await saveActiveCheckpoint(buffer);
-    setAutosaveStatus(saved ? "synced" : "pending");
+    const checkpointSaved = buffer ? await saveActiveCheckpoint(buffer) : false;
+    setAutosaveStatus(
+      resolveCheckpointAutosaveStatus({
+        buffer: buffer ?? null,
+        checkpointSaved,
+      }),
+    );
   }, [clearQueuedChangeCheckpoint, saveActiveCheckpoint]);
 
   // Cmd+S / Ctrl+S checkpoints only while the document is actively editable.
@@ -977,12 +980,15 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       setAutosaveStatus("syncing");
       void (async () => {
         const buffer = await ref.save({ selective: true });
-        if (buffer) {
-          const saved = await saveActiveCheckpoint(buffer);
-          setAutosaveStatus(saved ? "synced" : "pending");
-          return;
-        }
-        setAutosaveStatus("pending");
+        const checkpointSaved = buffer
+          ? await saveActiveCheckpoint(buffer)
+          : false;
+        setAutosaveStatus(
+          resolveCheckpointAutosaveStatus({
+            buffer: buffer ?? null,
+            checkpointSaved,
+          }),
+        );
       })();
     };
     document.addEventListener("keydown", handler);
