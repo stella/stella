@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
 import type { ComponentProps, RefObject } from "react";
 
 import { isToolUIPart } from "ai";
@@ -77,7 +77,12 @@ export const ChatThreadMessages = ({
   workspaceId,
 }: ChatThreadMessagesProps) => {
   const { activeOrganizationId } = useChatApproval();
-  const retryableAssistantMessageId = getRetryableAssistantMessageId(messages);
+  // This component bails out of React Compiler (a suppression below), so its
+  // manual memoization is kept (RC will not auto-memoize a bailed component).
+  const retryableAssistantMessageId = useMemo(
+    () => getRetryableAssistantMessageId(messages),
+    [messages],
+  );
   const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
 
   // Null when this list renders outside a `Conversation` (the file-chat
@@ -646,7 +651,7 @@ const AssistantMessageActions = ({
     | undefined;
 }) => {
   const t = useTranslations();
-  const text = getMessageText(message);
+  const text = useMemo(() => getMessageText(message), [message]);
   const canRetry = Boolean(
     onResend && isLatestAssistantMessage && !isGenerating,
   );
@@ -972,10 +977,13 @@ const AssistantTextPart = ({
   // Stable identity so MessageResponse memo can short-circuit when
   // nothing actually changed; recomputes only when the pairs array
   // identity changes (i.e. a fresh stream emitted new restorations).
-  const rehypePlugins: PluggableList | undefined =
-    restorationPairs.length > 0
-      ? [[rehypeAnonSpans, restorationPairs]]
-      : undefined;
+  const rehypePlugins = useMemo<PluggableList | undefined>(
+    () =>
+      restorationPairs.length > 0
+        ? [[rehypeAnonSpans, restorationPairs]]
+        : undefined,
+    [restorationPairs],
+  );
   if (rehypePlugins === undefined) {
     return <MessageResponse components={components}>{text}</MessageResponse>;
   }
@@ -1011,10 +1019,13 @@ const UserMessageText = ({
    */
   restorationPairs: readonly ChatAnonRestoration[];
 }) => {
-  const rehypePlugins: PluggableList | undefined =
-    restorationPairs.length > 0
-      ? [[rehypeAnonSpans, restorationPairs]]
-      : undefined;
+  const rehypePlugins = useMemo<PluggableList | undefined>(
+    () =>
+      restorationPairs.length > 0
+        ? [[rehypeAnonSpans, restorationPairs]]
+        : undefined,
+    [restorationPairs],
+  );
   if (rehypePlugins === undefined) {
     return (
       <MessageResponse components={USER_TEXT_STREAMDOWN_COMPONENTS}>
