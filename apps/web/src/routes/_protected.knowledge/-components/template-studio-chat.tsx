@@ -603,7 +603,12 @@ const TemplateStudioChatInner = ({
     addToolOutput,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, conversationId: threadRef.threadId });
+  } = useChatSession({
+    chat,
+    conversationId: threadRef.threadId,
+    initialOlderCursor: data.olderCursor,
+    threadRef,
+  });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (open AI-key gate on mount/dep change), move into handler

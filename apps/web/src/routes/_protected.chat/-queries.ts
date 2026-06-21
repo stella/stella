@@ -919,6 +919,7 @@ export const chatThreadOptions = ({
           chat: previous.chat,
           contextMatterIds,
           lastActivityAt,
+          olderCursor: previous.olderCursor,
           webSearchAvailable,
           webSearchEnabled,
         };
