@@ -41,6 +41,24 @@ export const tableEndFillerCellStyle: CSSProperties = {
 export const getVerticalScrollbarWidth = (element: HTMLElement) =>
   Math.max(0, element.offsetWidth - element.clientWidth);
 
+// Nearest scrollable ancestor of an element, used as an IntersectionObserver
+// root so observers report against the real scroll viewport (the grouped table
+// flows inside an ancestor `overflow-auto`, not its own scroll box). `null`
+// falls back to the browser viewport.
+export const getScrollableAncestor = (
+  element: HTMLElement,
+): HTMLElement | null => {
+  let current = element.parentElement;
+  while (current) {
+    const { overflowY } = getComputedStyle(current);
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+};
+
 export type ColumnDragPinning = "left" | "right" | "center";
 
 export type ColumnDragData = {

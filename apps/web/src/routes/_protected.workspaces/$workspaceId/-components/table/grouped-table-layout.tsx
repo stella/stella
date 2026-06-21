@@ -19,6 +19,7 @@ import { useFormatter, useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type {
   EntityKind,
   WorkspaceEntity,
@@ -54,6 +55,7 @@ import { getOrderedColumns } from "@/routes/_protected.workspaces/$workspaceId/-
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
 import {
   addPropertyColId,
+  getScrollableAncestor,
   getWorkspaceGridTemplateColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import type { WorkspaceGridStyle } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
@@ -429,6 +431,29 @@ const GroupSection = ({
   const isEmpty = count === 0;
   const hasRows = count !== undefined && count > 0;
 
+  // Defer a populated group's row query until it scrolls near the viewport, so a
+  // property with many populated groups doesn't fan out one /kanban-group request
+  // (and up to GROUP_TABLE_PAGE_SIZE rows) per group on first render. Once seen,
+  // it stays loaded.
+  const sectionRef = useRef<HTMLElement>(null);
+  const [hasScrolledIntoView, setHasScrolledIntoView] = useState(false);
+  useExternalSyncEffect(() => {
+    const section = sectionRef.current;
+    if (hasScrolledIntoView || !hasRows || !section) {
+      return undefined;
+    }
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((entry) => entry.isIntersecting)) {
+          setHasScrolledIntoView(true);
+        }
+      },
+      { root: getScrollableAncestor(section), rootMargin: "400px" },
+    );
+    observer.observe(section);
+    return () => observer.disconnect();
+  }, [hasScrolledIntoView, hasRows]);
+
   const query = useInfiniteQuery({
     ...useKanbanGroupOptions({
       workspaceId,
@@ -441,7 +466,7 @@ const GroupSection = ({
       groupByPropertyId,
       groupValue: group.value,
     }),
-    enabled: hasRows,
+    enabled: hasRows && hasScrolledIntoView,
   });
 
   // When a group empties (its last row moved/deleted), the count is 0 and the
@@ -496,16 +521,17 @@ const GroupSection = ({
     ...tableState.listeners,
   });
 
-  // While the up-front counts load (count undefined) or a populated group's
-  // rows are still fetching, show skeleton rows instead of an empty body.
+  // While the up-front counts load, or a populated group is still offscreen /
+  // fetching its first page, show skeleton rows instead of an empty body.
   const isLoadingCounts = count === undefined;
-  const isLoadingRows = hasRows && query.isLoading;
-  const showSkeleton = isLoadingCounts || isLoadingRows;
+  const isLoadingRows = hasRows && hasScrolledIntoView && query.isLoading;
+  const isPendingVisible = hasRows && !hasScrolledIntoView;
+  const showSkeleton = isLoadingCounts || isLoadingRows || isPendingVisible;
 
   return (
     // Stretches to the container width (the full table width), so the
     // group-header band spans the whole scroll width even for empty groups.
-    <section className={cn(isEmpty && "order-1")}>
+    <section className={cn(isEmpty && "order-1")} ref={sectionRef}>
       <GroupHeader
         collapsed={collapsed}
         empty={isEmpty}
@@ -526,6 +552,7 @@ const GroupSection = ({
       )}
       {!collapsed &&
         hasRows &&
+        hasScrolledIntoView &&
         !isLoadingRows && (
           // The table flows inline in the shared outer scroll (no nested scroll
           // box), so its rows render directly and the sticky group header stacks

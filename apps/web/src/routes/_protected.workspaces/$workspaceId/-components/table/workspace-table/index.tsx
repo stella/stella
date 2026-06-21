@@ -55,6 +55,7 @@ import {
   ADD_PROPERTY_RAIL_ACTIVE_CLASS_NAME,
   addPropertyColId,
   getColumnPinningGroup,
+  getScrollableAncestor,
   getVerticalScrollbarWidth,
   getWorkspaceGridTemplateColumns,
   TABLE_COLUMN_DRAG_TYPE,
@@ -100,20 +101,6 @@ type WorkspaceTableProps = {
   // selections in other sections (they share one selection) while still dropping
   // stale ids. Omitted by the flat table.
   selectAllPreservableRowIds?: string[];
-};
-
-// Nearest scrollable ancestor of an element, used as the IntersectionObserver
-// root so the load-more sentinel reports against the real scroll viewport.
-const getScrollableAncestor = (element: HTMLElement): HTMLElement | null => {
-  let current = element.parentElement;
-  while (current) {
-    const { overflowY } = getComputedStyle(current);
-    if (overflowY === "auto" || overflowY === "scroll") {
-      return current;
-    }
-    current = current.parentElement;
-  }
-  return null;
 };
 
 export const WorkspaceTable = ({

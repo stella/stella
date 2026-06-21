@@ -18,6 +18,11 @@ const KIND_GROUP_ID = "_kind";
 // Folders and tasks are not rows in a document table view; the flat window query
 // excludes them, so the grouped counts must too.
 const TABLE_EXCLUDED_ENTITY_KINDS = ["folder", "task"] satisfies EntityKind[];
+// Cap the distinct value buckets a property grouping returns. A select property
+// normally has far fewer options, but stale cells (arbitrary AI/manual values no
+// longer in the option list) could otherwise produce an unbounded bucket set and
+// a section-per-bucket render fan-out. Keep the most-populated buckets.
+const MAX_GROUP_VALUE_BUCKETS = 200;
 const TASK_STATUS_VALUES = [
   "open",
   "in_progress",
@@ -204,6 +209,8 @@ async function* readPropertyGroupCounts({
         ) AS group_values
         WHERE ${baseWhere}
         GROUP BY group_value
+        ORDER BY count(*) DESC
+        LIMIT ${MAX_GROUP_VALUE_BUCKETS}
       `),
     ),
   );
