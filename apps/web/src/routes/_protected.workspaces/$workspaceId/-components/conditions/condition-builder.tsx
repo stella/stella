@@ -36,13 +36,18 @@ import {
   replaceChild,
   valueEditorFor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
-import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
+import type { FacetContext } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
+import {
+  MultiSelectValue,
+  SingleSelectValue,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
 
 type ConditionBuilderProps = {
   value: ConditionNode | null;
   onChange: (next: GroupNode) => void;
   fields: FieldOption[];
   allowGroups?: boolean;
+  facetContext?: FacetContext | undefined;
 };
 
 export const ConditionBuilder = ({
@@ -50,6 +55,7 @@ export const ConditionBuilder = ({
   onChange,
   fields,
   allowGroups = false,
+  facetContext,
 }: ConditionBuilderProps) => {
   const t = useTranslations();
   const group = asGroup(value);
@@ -78,6 +84,7 @@ export const ConditionBuilder = ({
           if (child.type === "group" && allowGroups) {
             return (
               <NestedGroupRow
+                facetContext={facetContext}
                 fields={fields}
                 key={index}
                 onChange={(next) => onChange(replaceChild(group, index, next))}
@@ -88,6 +95,7 @@ export const ConditionBuilder = ({
           }
           return (
             <LeafRow
+              facetContext={facetContext}
               fields={fields}
               key={index}
               node={child}
@@ -164,6 +172,7 @@ const CombinatorControl = ({
 type NestedGroupRowProps = {
   value: GroupNode;
   fields: FieldOption[];
+  facetContext?: FacetContext | undefined;
   onChange: (next: GroupNode) => void;
   onRemove: () => void;
 };
@@ -171,6 +180,7 @@ type NestedGroupRowProps = {
 const NestedGroupRow = ({
   value,
   fields,
+  facetContext,
   onChange,
   onRemove,
 }: NestedGroupRowProps) => (
@@ -178,6 +188,7 @@ const NestedGroupRow = ({
     <div className="flex-1">
       <ConditionBuilder
         allowGroups
+        facetContext={facetContext}
         fields={fields}
         onChange={onChange}
         value={value}
@@ -192,11 +203,18 @@ const NestedGroupRow = ({
 type LeafRowProps = {
   node: ConditionNode;
   fields: FieldOption[];
+  facetContext?: FacetContext | undefined;
   onChange: (next: ConditionNode) => void;
   onRemove: () => void;
 };
 
-const LeafRow = ({ node, fields, onChange, onRemove }: LeafRowProps) => {
+const LeafRow = ({
+  node,
+  fields,
+  facetContext,
+  onChange,
+  onRemove,
+}: LeafRowProps) => {
   const t = useTranslations();
   const operand = leafOperand(node);
   const fieldIndex = operand
@@ -284,6 +302,7 @@ const LeafRow = ({ node, fields, onChange, onRemove }: LeafRowProps) => {
 
       <LeafValueEditor
         editorKind={editorKind}
+        facetContext={facetContext}
         field={field}
         node={node}
         onChange={onChange}
@@ -302,6 +321,7 @@ type LeafValueEditorProps = {
   field: FieldOption;
   node: ConditionNode;
   operator: ConditionOperator;
+  facetContext?: FacetContext | undefined;
   onChange: (next: ConditionNode) => void;
 };
 
@@ -310,6 +330,7 @@ const LeafValueEditor = ({
   field,
   node,
   operator,
+  facetContext,
   onChange,
 }: LeafValueEditorProps) => {
   const t = useTranslations();
@@ -326,6 +347,7 @@ const LeafValueEditor = ({
     if (isMultiValue(operator)) {
       return (
         <MultiSelectValue
+          facetContext={facetContext}
           field={field}
           onChange={emit}
           value={leafValueList(node)}
@@ -334,6 +356,7 @@ const LeafValueEditor = ({
     }
     return (
       <SingleSelectValue
+        facetContext={facetContext}
         field={field}
         onChange={emit}
         value={leafValueString(node)}
@@ -372,102 +395,5 @@ const LeafValueEditor = ({
       size="sm"
       value={leafValueString(node)}
     />
-  );
-};
-
-type SelectValueEditorProps = {
-  field: FieldOption;
-  value: string;
-  onChange: (value: string) => void;
-};
-
-const SingleSelectValue = ({
-  field,
-  value,
-  onChange,
-}: SelectValueEditorProps) => {
-  const t = useTranslations();
-  const options = field.options ?? [];
-  const selected = options.find((option) => option.value === value);
-
-  return (
-    <Select
-      onValueChange={(next) => {
-        if (next !== null) {
-          onChange(next);
-        }
-      }}
-      value={value}
-    >
-      <SelectTrigger className="h-7 min-h-0 w-auto min-w-28 text-xs" size="sm">
-        <SelectValue placeholder={t("workspaces.fields.selectAValue")}>
-          {() =>
-            selected ? (
-              <span className="flex items-center gap-1.5">
-                {selected.color !== undefined && (
-                  <SelectColorIcon color={selected.color} />
-                )}
-                {selected.label}
-              </span>
-            ) : (
-              t("workspaces.fields.selectAValue")
-            )
-          }
-        </SelectValue>
-      </SelectTrigger>
-      <SelectPopup alignItemWithTrigger={false}>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            <span className="flex items-center gap-1.5">
-              {option.color !== undefined && (
-                <SelectColorIcon color={option.color} />
-              )}
-              {option.label}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectPopup>
-    </Select>
-  );
-};
-
-type MultiSelectValueProps = {
-  field: FieldOption;
-  value: string[];
-  onChange: (value: string[]) => void;
-};
-
-const MultiSelectValue = ({
-  field,
-  value,
-  onChange,
-}: MultiSelectValueProps) => {
-  const t = useTranslations();
-  const options = field.options ?? [];
-  const label =
-    value.length === 0
-      ? t("workspaces.fields.selectValues")
-      : value
-          .map((v) => options.find((option) => option.value === v)?.label ?? v)
-          .join(", ");
-
-  return (
-    <Select multiple onValueChange={(next) => onChange(next)} value={value}>
-      <SelectTrigger className="h-7 min-h-0 w-auto min-w-28 text-xs" size="sm">
-        <SelectValue>{() => label}</SelectValue>
-      </SelectTrigger>
-      <SelectPopup alignItemWithTrigger={false}>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            <span className="flex items-center gap-1.5">
-              {option.color !== undefined && (
-                <SelectColorIcon color={option.color} />
-              )}
-              {option.label}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectPopup>
-    </Select>
   );
 };

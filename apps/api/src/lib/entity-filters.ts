@@ -329,7 +329,7 @@ export const applySorts = <T extends FilterableEntity>(
  * Covers text, single-select, date, int (via `value` key)
  * and file (via `fileName` key).
  */
-const fieldValueExpr = (contentCol: typeof fields.content): SQL =>
+export const fieldValueExpr = (contentCol: typeof fields.content): SQL =>
   sql`COALESCE(${contentCol}->>'value', ${contentCol}->>'fileName', '')`;
 
 const numericFieldValueExpr = (contentCol: typeof fields.content): SQL => {

@@ -60,18 +60,25 @@ import {
   operatorsFor,
   valueEditorFor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
+import type { FacetContext } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
+import {
+  MultiSelectValue,
+  SingleSelectValue,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 
 type FilterChipsProps = {
   filters: ConditionNode[];
   properties: WorkspaceProperty[];
+  facetContext?: FacetContext | undefined;
   onUpdate: (filters: ConditionNode[]) => void;
 };
 
 export const FilterChips = ({
   filters,
   properties,
+  facetContext,
   onUpdate,
 }: FilterChipsProps) => {
   const t = useTranslations();
@@ -118,6 +125,7 @@ export const FilterChips = ({
         if (node.type === "group") {
           return (
             <AdvancedFilterChip
+              facetContext={facetContext}
               fields={fields}
               key={index}
               node={node}
@@ -128,6 +136,7 @@ export const FilterChips = ({
         }
         return (
           <FilterChip
+            facetContext={facetContext}
             fields={fields}
             key={index}
             node={node}
@@ -156,11 +165,18 @@ export const FilterChips = ({
 type FilterChipProps = {
   node: ConditionNode;
   fields: FieldOption[];
+  facetContext?: FacetContext | undefined;
   onChange: (next: ConditionNode) => void;
   onRemove: () => void;
 };
 
-const FilterChip = ({ node, fields, onChange, onRemove }: FilterChipProps) => {
+const FilterChip = ({
+  node,
+  fields,
+  facetContext,
+  onChange,
+  onRemove,
+}: FilterChipProps) => {
   const t = useTranslations();
   const [open, setOpen] = useState(false);
   const field = fieldForNode(node, fields);
@@ -199,6 +215,7 @@ const FilterChip = ({ node, fields, onChange, onRemove }: FilterChipProps) => {
       </PopoverTrigger>
       <PopoverPopup align="start" className="w-72 p-0">
         <FilterEditBody
+          facetContext={facetContext}
           field={field}
           node={node}
           onChange={onChange}
@@ -217,6 +234,7 @@ type FilterEditBodyProps = {
   field: FieldOption;
   node: ConditionNode;
   operator: ConditionOperator;
+  facetContext?: FacetContext | undefined;
   onChange: (next: ConditionNode) => void;
   onRemove: () => void;
 };
@@ -225,6 +243,7 @@ const FilterEditBody = ({
   field,
   node,
   operator,
+  facetContext,
   onChange,
   onRemove,
 }: FilterEditBodyProps) => {
@@ -289,6 +308,7 @@ const FilterEditBody = ({
 
         <ValueEditor
           editorKind={editorKind}
+          facetContext={facetContext}
           field={field}
           node={node}
           onChange={onChange}
@@ -304,6 +324,7 @@ type ValueEditorProps = {
   field: FieldOption;
   node: ConditionNode;
   operator: ConditionOperator;
+  facetContext?: FacetContext | undefined;
   onChange: (next: ConditionNode) => void;
 };
 
@@ -312,6 +333,7 @@ const ValueEditor = ({
   field,
   node,
   operator,
+  facetContext,
   onChange,
 }: ValueEditorProps) => {
   const t = useTranslations();
@@ -328,6 +350,8 @@ const ValueEditor = ({
     if (isMultiValue(operator)) {
       return (
         <MultiSelectValue
+          className="w-full"
+          facetContext={facetContext}
           field={field}
           onChange={emit}
           value={leafValueList(node)}
@@ -336,6 +360,8 @@ const ValueEditor = ({
     }
     return (
       <SingleSelectValue
+        className="w-full"
+        facetContext={facetContext}
         field={field}
         onChange={emit}
         value={leafValueString(node)}
@@ -379,108 +405,12 @@ const ValueEditor = ({
   );
 };
 
-type SingleSelectValueProps = {
-  field: FieldOption;
-  value: string;
-  onChange: (value: string) => void;
-};
-
-const SingleSelectValue = ({
-  field,
-  value,
-  onChange,
-}: SingleSelectValueProps) => {
-  const t = useTranslations();
-  const options = field.options ?? [];
-  const selected = options.find((option) => option.value === value);
-
-  return (
-    <Select
-      onValueChange={(next) => {
-        if (next !== null) {
-          onChange(next);
-        }
-      }}
-      value={value}
-    >
-      <SelectTrigger className="h-7 min-h-0 w-full text-xs" size="sm">
-        <SelectValue placeholder={t("workspaces.fields.selectAValue")}>
-          {() =>
-            selected ? (
-              <span className="flex items-center gap-1.5">
-                {selected.color !== undefined && (
-                  <SelectColorIcon color={selected.color} />
-                )}
-                {selected.label}
-              </span>
-            ) : (
-              t("workspaces.fields.selectAValue")
-            )
-          }
-        </SelectValue>
-      </SelectTrigger>
-      <SelectPopup alignItemWithTrigger={false}>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            <span className="flex items-center gap-1.5">
-              {option.color !== undefined && (
-                <SelectColorIcon color={option.color} />
-              )}
-              {option.label}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectPopup>
-    </Select>
-  );
-};
-
-type MultiSelectValueProps = {
-  field: FieldOption;
-  value: string[];
-  onChange: (value: string[]) => void;
-};
-
-const MultiSelectValue = ({
-  field,
-  value,
-  onChange,
-}: MultiSelectValueProps) => {
-  const t = useTranslations();
-  const options = field.options ?? [];
-  const label =
-    value.length === 0
-      ? t("workspaces.fields.selectValues")
-      : value
-          .map((v) => options.find((option) => option.value === v)?.label ?? v)
-          .join(", ");
-
-  return (
-    <Select multiple onValueChange={(next) => onChange(next)} value={value}>
-      <SelectTrigger className="h-7 min-h-0 w-full text-xs" size="sm">
-        <SelectValue>{() => label}</SelectValue>
-      </SelectTrigger>
-      <SelectPopup alignItemWithTrigger={false}>
-        {options.map((option) => (
-          <SelectItem key={option.value} value={option.value}>
-            <span className="flex items-center gap-1.5">
-              {option.color !== undefined && (
-                <SelectColorIcon color={option.color} />
-              )}
-              {option.label}
-            </span>
-          </SelectItem>
-        ))}
-      </SelectPopup>
-    </Select>
-  );
-};
-
 // ── Advanced (AND/OR group) chip ──────────────────────────
 
 type AdvancedFilterChipProps = {
   node: GroupNode;
   fields: FieldOption[];
+  facetContext?: FacetContext | undefined;
   onChange: (next: GroupNode) => void;
   onRemove: () => void;
 };
@@ -488,6 +418,7 @@ type AdvancedFilterChipProps = {
 const AdvancedFilterChip = ({
   node,
   fields,
+  facetContext,
   onChange,
   onRemove,
 }: AdvancedFilterChipProps) => {
@@ -517,6 +448,7 @@ const AdvancedFilterChip = ({
       <PopoverPopup align="start" className="w-[34rem] max-w-[90vw] p-3">
         <ConditionBuilder
           allowGroups
+          facetContext={facetContext}
           fields={fields}
           onChange={onChange}
           value={node}
