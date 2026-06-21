@@ -1,4 +1,4 @@
-import { Button } from "@stll/ui/components/button";
+import { SuggestedActions } from "@/components/suggested-actions";
 
 // A user + assistant exchange is the minimum to have something to suggest from.
 const SUGGESTIONS_MIN_MESSAGE_COUNT = 2;
@@ -19,10 +19,10 @@ type SuggestedFollowupChipsProps = {
 };
 
 /**
- * Shows up to 3 suggested follow-up prompt chips directly above the
- * chat composer when the composer is empty, the AI has just responded,
- * and no generation is in progress. Chips disappear once the user
- * starts typing or submits a message.
+ * Shows up to 3 suggested follow-up prompts directly above the chat
+ * composer when the composer is empty, the AI has just responded, and
+ * no generation is in progress. They disappear once the user starts
+ * typing or submits a message.
  */
 export const SuggestedFollowupChips = ({
   isGenerating,
@@ -40,27 +40,16 @@ export const SuggestedFollowupChips = ({
     lastMessageRole === "assistant" &&
     messageCount >= SUGGESTIONS_MIN_MESSAGE_COUNT;
 
-  if (!eligible || prompts.length === 0) {
+  if (!eligible) {
     return null;
   }
 
   return (
-    <div
-      aria-label="Suggested follow-up prompts"
-      className="flex flex-wrap gap-2 pb-2"
-    >
-      {prompts.map((prompt, index) => (
-        <Button
-          className="h-auto max-w-xs truncate rounded-full px-3 py-1.5 text-xs"
-          key={index}
-          onClick={() => {
-            onSelect(prompt);
-          }}
-          variant="outline"
-        >
-          {prompt}
-        </Button>
-      ))}
-    </div>
+    <SuggestedActions
+      actions={prompts.map((prompt) => ({ id: prompt, label: prompt }))}
+      className="pb-2"
+      label="Suggested follow-up prompts"
+      onSelect={onSelect}
+    />
   );
 };
