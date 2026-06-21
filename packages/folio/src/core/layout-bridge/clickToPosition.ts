@@ -13,6 +13,7 @@ import {
   measuredLineContentOffset,
 } from "../layout-engine/lineFlow";
 import {
+  buildRunFontStyle,
   measureRun,
   findCharacterAtX as findCharAtX,
 } from "../layout-engine/measure/measureContainer";
@@ -53,20 +54,7 @@ export type PositionResult = {
  * Extract FontStyle from a run for measurement.
  */
 function runToFontStyle(run: TextRun | TabRun): FontStyle {
-  return {
-    fontFamily: run.fontFamily ?? "Arial",
-    fontSize: run.fontSize ?? 12,
-    ...(run.bold !== undefined ? { bold: run.bold } : {}),
-    ...(run.italic !== undefined ? { italic: run.italic } : {}),
-    ...(run.letterSpacing !== undefined
-      ? { letterSpacing: run.letterSpacing }
-      : {}),
-    ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
-    ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
-    ...(run.horizontalScale !== undefined
-      ? { horizontalScale: run.horizontalScale }
-      : {}),
-  };
+  return buildRunFontStyle(run, "Arial", 12);
 }
 
 /**

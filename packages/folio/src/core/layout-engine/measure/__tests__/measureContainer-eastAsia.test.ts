@@ -6,7 +6,11 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { measureRun, measureTextWidth } from "../measureContainer";
+import {
+  buildRunFontStyle,
+  measureRun,
+  measureTextWidth,
+} from "../measureContainer";
 import type { FakeCharWidth } from "./fakeTextMeasure";
 import { withFakeTextMeasure } from "./fakeTextMeasure";
 
@@ -100,5 +104,25 @@ describe("measureRun with eastAsiaFontFamily", () => {
       },
       { charWidth: eaAwareCharWidth },
     );
+  });
+});
+
+describe("buildRunFontStyle", () => {
+  test("carries eastAsiaFontFamily so every measurement path measures CJK with the EA font", () => {
+    const style = buildRunFontStyle(
+      { fontFamily: "Latin", eastAsiaFontFamily: "Mincho", fontSize: 12 },
+      "Arial",
+      11,
+    );
+    expect(style.fontFamily).toBe("Latin");
+    expect(style.eastAsiaFontFamily).toBe("Mincho");
+    expect(style.fontSize).toBe(12);
+  });
+
+  test("applies the family/size fallbacks when the run declares neither", () => {
+    const style = buildRunFontStyle({}, "Arial", 11);
+    expect(style.fontFamily).toBe("Arial");
+    expect(style.fontSize).toBe(11);
+    expect(style.eastAsiaFontFamily).toBeUndefined();
   });
 });

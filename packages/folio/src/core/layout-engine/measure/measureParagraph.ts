@@ -35,6 +35,7 @@ import {
 } from "./floatingZones";
 import { getListMarkerInlineWidth } from "./listMarkerWidth";
 import {
+  buildRunFontStyle,
   measureTextWidth,
   measureRun,
   getFontMetrics,
@@ -132,23 +133,7 @@ type LineState = {
  * (FieldRun page numbers, etc.) consistent with TextRun handling.
  */
 function runToFontStyle(run: TextRun | TabRun | FieldRun | MathRun): FontStyle {
-  return {
-    fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
-    ...(run.eastAsiaFontFamily !== undefined
-      ? { eastAsiaFontFamily: run.eastAsiaFontFamily }
-      : {}),
-    fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
-    ...(run.bold !== undefined ? { bold: run.bold } : {}),
-    ...(run.italic !== undefined ? { italic: run.italic } : {}),
-    ...(run.letterSpacing !== undefined
-      ? { letterSpacing: run.letterSpacing }
-      : {}),
-    ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
-    ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
-    ...(run.horizontalScale !== undefined
-      ? { horizontalScale: run.horizontalScale }
-      : {}),
-  };
+  return buildRunFontStyle(run, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE);
 }
 
 /**

@@ -11,7 +11,10 @@
 import { getHeaderRowsHeight } from "../layout-engine/index";
 import { measuredLineContentOffset } from "../layout-engine/lineFlow";
 import { measureParagraph } from "../layout-engine/measure";
-import { measureRun } from "../layout-engine/measure/measureContainer";
+import {
+  buildRunFontStyle,
+  measureRun,
+} from "../layout-engine/measure/measureContainer";
 import type { FontStyle } from "../layout-engine/measure/measureContainer";
 import {
   buildTableCellFloatingZones,
@@ -92,20 +95,7 @@ const DEFAULT_TABLE_CELL_PADDING_TOP = 1;
  * Extract FontStyle from a run for measurement.
  */
 function runToFontStyle(run: TextRun | TabRun): FontStyle {
-  return {
-    fontFamily: run.fontFamily ?? "Arial",
-    fontSize: run.fontSize ?? 12,
-    ...(run.bold !== undefined ? { bold: run.bold } : {}),
-    ...(run.italic !== undefined ? { italic: run.italic } : {}),
-    ...(run.letterSpacing !== undefined
-      ? { letterSpacing: run.letterSpacing }
-      : {}),
-    ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
-    ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
-    ...(run.horizontalScale !== undefined
-      ? { horizontalScale: run.horizontalScale }
-      : {}),
-  };
+  return buildRunFontStyle(run, "Arial", 12);
 }
 
 function mathRunToFontStyle(run: MathRun): FontStyle {

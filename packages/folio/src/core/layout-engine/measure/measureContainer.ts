@@ -20,6 +20,7 @@ import {
   isCjkCodePoint,
   segmentByScript,
 } from "../../utils/scriptSegments";
+import type { RunFormatting } from "../types";
 import {
   getCachedFontMetrics,
   getCachedTextWidth,
@@ -62,6 +63,38 @@ export type FontStyle = {
   fontVariant?: "small-caps";
   horizontalScale?: number;
 };
+
+/**
+ * Build a measurement `FontStyle` from a run's formatting. Single source of
+ * truth for run → FontStyle so every measurement path (layout line-breaking,
+ * click-to-position, selection rects) carries the same fields — notably
+ * `eastAsiaFontFamily`, which must reach the measurer for CJK click/selection
+ * offsets to match what was wrapped and painted. Callers pass their own family
+ * and size fallbacks for runs that declare neither.
+ */
+export function buildRunFontStyle(
+  run: RunFormatting,
+  fallbackFontFamily: string,
+  fallbackFontSize: number,
+): FontStyle {
+  return {
+    fontFamily: run.fontFamily ?? fallbackFontFamily,
+    ...(run.eastAsiaFontFamily !== undefined
+      ? { eastAsiaFontFamily: run.eastAsiaFontFamily }
+      : {}),
+    fontSize: run.fontSize ?? fallbackFontSize,
+    ...(run.bold !== undefined ? { bold: run.bold } : {}),
+    ...(run.italic !== undefined ? { italic: run.italic } : {}),
+    ...(run.letterSpacing !== undefined
+      ? { letterSpacing: run.letterSpacing }
+      : {}),
+    ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
+    ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
+    ...(run.horizontalScale !== undefined
+      ? { horizontalScale: run.horizontalScale }
+      : {}),
+  };
+}
 
 /**
  * Typography metrics for a font
