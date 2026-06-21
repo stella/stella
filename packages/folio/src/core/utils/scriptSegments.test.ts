@@ -15,6 +15,8 @@ describe("isCjkCodePoint", () => {
     expect(isCjkCodePoint("カ".codePointAt(0)!)).toBe(true); // Katakana
     expect(isCjkCodePoint("한".codePointAt(0)!)).toBe(true); // Hangul syllable
     expect(isCjkCodePoint("、".codePointAt(0)!)).toBe(true); // CJK punctuation
+    expect(isCjkCodePoint("ㄅ".codePointAt(0)!)).toBe(true); // Bopomofo (Traditional Chinese)
+    expect(isCjkCodePoint("⼀".codePointAt(0)!)).toBe(true); // Kangxi radical
     expect(isCjkCodePoint("Ａ".codePointAt(0)!)).toBe(true); // fullwidth Latin A
     expect(isCjkCodePoint("𠀀".codePointAt(0)!)).toBe(true); // Ext B (astral)
   });

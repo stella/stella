@@ -23,15 +23,15 @@ export type ScriptSegment = {
  */
 export function isCjkCodePoint(cp: number): boolean {
   return (
-    (cp >= 0x30_00 && cp <= 0x30_3f) || // CJK symbols and punctuation
-    (cp >= 0x30_40 && cp <= 0x30_ff) || // Hiragana + Katakana
-    (cp >= 0x31_f0 && cp <= 0x31_ff) || // Katakana phonetic extensions
+    (cp >= 0x2e_80 && cp <= 0x2f_ff) || // CJK & Kangxi radicals, ideographic description
+    (cp >= 0x30_00 && cp <= 0x33_ff) || // symbols/punctuation, kana, Bopomofo, Hangul compat Jamo, Kanbun, Bopomofo ext, CJK strokes, Katakana phonetic ext, enclosed/compatibility CJK
     (cp >= 0x34_00 && cp <= 0x4d_bf) || // CJK Unified Ideographs Extension A
     (cp >= 0x4e_00 && cp <= 0x9f_ff) || // CJK Unified Ideographs
-    (cp >= 0xf9_00 && cp <= 0xfa_ff) || // CJK compatibility ideographs
-    (cp >= 0xac_00 && cp <= 0xd7_af) || // Hangul syllables
+    (cp >= 0xa9_60 && cp <= 0xa9_7f) || // Hangul Jamo Extended-A
+    (cp >= 0xac_00 && cp <= 0xd7_ff) || // Hangul syllables + Jamo Extended-B
     (cp >= 0x11_00 && cp <= 0x11_ff) || // Hangul Jamo
-    (cp >= 0x31_30 && cp <= 0x31_8f) || // Hangul compatibility Jamo
+    (cp >= 0xf9_00 && cp <= 0xfa_ff) || // CJK compatibility ideographs
+    (cp >= 0xfe_30 && cp <= 0xfe_4f) || // CJK compatibility forms
     (cp >= 0xff_00 && cp <= 0xff_ef) || // Halfwidth and fullwidth forms
     (cp >= 0x2_00_00 && cp <= 0x3_ff_ff) // CJK Unified Ideographs Extension B+ (astral)
   );

@@ -70,6 +70,25 @@ describe("measureTextWidth with eastAsiaFontFamily", () => {
       { charWidth: eaAwareCharWidth },
     );
   });
+
+  test("counts letter spacing by code point for astral CJK, matching measureRun", () => {
+    withFakeTextMeasure(
+      () => {
+        const style = {
+          fontFamily: "FolioBaseTestFont",
+          eastAsiaFontFamily: "FolioEaTestFont",
+          fontSize: 12,
+          letterSpacing: 5,
+        };
+        // "A𠀀B" is 3 code points → 2 spacing gaps (not 3 from UTF-16 length).
+        // glyphs 10 (base) + 100 (EA) + 10 (base) = 120, plus 5 * 2 = 10.
+        expect(measureTextWidth("A𠀀B", style)).toBe(130);
+        // Caret/selection measurement must arrive at the same total.
+        expect(measureRun("A𠀀B", style).width).toBe(130);
+      },
+      { charWidth: eaAwareCharWidth },
+    );
+  });
 });
 
 describe("measureRun with eastAsiaFontFamily", () => {

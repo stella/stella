@@ -336,6 +336,27 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
 }
 
 /**
+ * Count whole code points (not UTF-16 units) so letter spacing is applied once
+ * per rendered glyph — astral CJK ideographs are one glyph. Avoids allocating
+ * an array on the hot measurement path. Matches `measureRun`'s per-code-point
+ * iteration so layout and caret/selection agree on astral text with spacing.
+ */
+function countCodePoints(text: string): number {
+  let count = 0;
+  for (let i = 0; i < text.length; i++) {
+    count++;
+    const code = text.codePointAt(i);
+    if (code >= 0xd8_00 && code <= 0xdb_ff && i + 1 < text.length) {
+      const next = text.codePointAt(i + 1);
+      if (next >= 0xdc_00 && next <= 0xdf_ff) {
+        i++;
+      }
+    }
+  }
+  return count;
+}
+
+/**
  * Measure the width of a text string with specific styling
  *
  * @param text - The text to measure
@@ -372,8 +393,11 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   let width = metrics.width;
 
   // Apply letter spacing if specified
-  if (letterSpacing && measuredText.length > 1) {
-    width += letterSpacing * (measuredText.length - 1);
+  if (letterSpacing) {
+    const codePoints = countCodePoints(measuredText);
+    if (codePoints > 1) {
+      width += letterSpacing * (codePoints - 1);
+    }
   }
 
   const scaledWidth = width * horizontalScale;
@@ -468,8 +492,11 @@ function measureMixedScriptWidth(
   }
 
   let width = glyphWidth;
-  if (letterSpacing && measuredText.length > 1) {
-    width += letterSpacing * (measuredText.length - 1);
+  if (letterSpacing) {
+    const codePoints = countCodePoints(measuredText);
+    if (codePoints > 1) {
+      width += letterSpacing * (codePoints - 1);
+    }
   }
   return width * horizontalScale;
 }
