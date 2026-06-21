@@ -1791,7 +1791,7 @@
       "owner": "المالك"
     },
     "settings": "إعدادات المؤسسة",
-    "settingsDescription": "عدّل اسم مؤسستك والمُعرّف اللطيف"
+    "settingsDescription": "عدّل اسم مؤسستك والمعرّف"
   },
   "search": {
     "aiRefine": "تحسين الاستعلام باستخدام AI",
