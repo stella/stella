@@ -68,7 +68,6 @@ const searchProviderSearchMock = mock(
     };
   },
 );
-const readEntityByIdHandlerMock = mock();
 const searchDecisionsHandlerMock = mock();
 const readDecisionHandlerMock = mock();
 const APP_BASE_URL = env.FRONTEND_URL.replace(/\/$/u, "");
@@ -153,10 +152,6 @@ void mock.module("@/api/lib/anonymization-blacklist", () => ({
     normalizeAnonymizationBlacklistEntryMock,
 }));
 
-void mock.module("@/api/handlers/entities/read-by-id", () => ({
-  readEntityByIdHandler: readEntityByIdHandlerMock,
-}));
-
 void mock.module("@/api/handlers/case-law/decisions/search", () => ({
   searchDecisionsHandler: searchDecisionsHandlerMock,
 }));
@@ -198,13 +193,6 @@ const parseToolPayload = (
   }
 
   return JSON.parse(item.text) as unknown;
-};
-
-const mockReadEntityByIdHandlerOk = (value: unknown) => {
-  readEntityByIdHandlerMock.mockImplementation(async function* () {
-    yield* [];
-    return Result.ok(value);
-  });
 };
 
 const createReadDecisionResult = () => ({
@@ -281,6 +269,7 @@ const createSelectBuilder = (rows: unknown[]) => {
 type ExtractedContentRow = {
   charCount: number;
   ciphertext: string;
+  entityId: string;
   entity: {
     kind: string;
     name: string;
@@ -290,17 +279,56 @@ type ExtractedContentRow = {
   workspaceId: string;
 };
 
+type MockEqFilter = {
+  eq?: unknown;
+};
+
+type MockEntityFindFirstInput = {
+  where?: {
+    id?: MockEqFilter;
+    workspaceId?: MockEqFilter;
+  };
+};
+
+type MockMcpTransaction = {
+  query: {
+    entities: {
+      findFirst: (input?: MockEntityFindFirstInput) => Promise<{
+        currentVersionId: string;
+        kind: string;
+        name: string;
+      } | null>;
+    };
+    extractedContent: {
+      findFirst: () => Promise<ExtractedContentRow | null>;
+    };
+    fields: {
+      findMany: () => Promise<
+        {
+          content: { type: string };
+          id: string;
+          propertyId: string;
+        }[]
+      >;
+    };
+  };
+  select: () => ReturnType<typeof createSelectBuilder>;
+};
+
 const createExtractedContentRow = ({
   charCount = 321,
+  entityId = "entity_1",
   name = "Share Purchase Agreement",
   workspaceId = "ws_1",
 }: {
   charCount?: number;
+  entityId?: string;
   name?: string;
   workspaceId?: string;
 } = {}): ExtractedContentRow => ({
   charCount,
   ciphertext: "ciphertext",
+  entityId,
   entity: {
     kind: "document",
     name,
@@ -316,21 +344,41 @@ const createScopedDb = (
 ) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
     mock(
-      async (
-        callback: (tx: {
-          query: {
-            extractedContent: {
-              findFirst: () => Promise<ExtractedContentRow | null>;
-            };
-          };
-          select: () => ReturnType<typeof createSelectBuilder>;
-        }) => unknown,
-      ) =>
+      async (callback: (tx: MockMcpTransaction) => unknown) =>
         // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
         await callback({
           query: {
+            entities: {
+              findFirst: async ({ where }: MockEntityFindFirstInput = {}) => {
+                if (!extractedContentRow) {
+                  return null;
+                }
+
+                if (
+                  where?.id?.eq !== extractedContentRow.entityId ||
+                  where.workspaceId?.eq !== extractedContentRow.workspaceId
+                ) {
+                  return null;
+                }
+
+                return {
+                  currentVersionId: "entity_version_1",
+                  kind: extractedContentRow.entity.kind,
+                  name: extractedContentRow.entity.name,
+                };
+              },
+            },
             extractedContent: {
               findFirst: async () => extractedContentRow,
+            },
+            fields: {
+              findMany: async () => [
+                {
+                  content: { type: "file" },
+                  id: "field_1",
+                  propertyId: "property_1",
+                },
+              ],
             },
           },
           select: () => createSelectBuilder(rows),
@@ -376,7 +424,6 @@ describe("OpenAI-compatible MCP tools", () => {
     readContactExecute.mockReset();
     decryptContentMock.mockReset();
     decryptContentMock.mockResolvedValue("Full document text");
-    readEntityByIdHandlerMock.mockReset();
     searchDecisionsHandlerMock.mockReset();
     readDecisionHandlerMock.mockReset();
   });
@@ -593,33 +640,16 @@ describe("OpenAI-compatible MCP tools", () => {
   });
 
   test("fetch returns document text with citation metadata", async () => {
-    mockReadEntityByIdHandlerOk({
-      entityId: "entity_1",
-      fields: [
-        {
-          id: "field_1",
-          content: {
-            type: "file",
-          },
-        },
-      ],
-      kind: "document",
-      name: "Share Purchase Agreement",
-    });
-
     const context = createContext({
-      scopedDb: createScopedDb([], createExtractedContentRow()),
+      scopedDb: createScopedDb(
+        [],
+        createExtractedContentRow({ name: "Share Purchase Agreement" }),
+      ),
     });
     const result = await handleMcpToolCall({
       args: { id: "entity_1" },
       context,
       toolName: "fetch",
-    });
-
-    expect(readEntityByIdHandlerMock).toHaveBeenCalledWith({
-      entityId: "entity_1",
-      safeDb: context.safeDb,
-      workspaceId: "ws_1",
     });
 
     expect(parseToolPayload(result)).toEqual({
@@ -1011,7 +1041,6 @@ describe("OpenAI-compatible MCP tools", () => {
         text: "Matter not found or not accessible",
       },
     ]);
-    expect(readEntityByIdHandlerMock).not.toHaveBeenCalled();
   });
 
   test("search_across_matters passes the MCP workspace allowlist to search", async () => {
@@ -1257,19 +1286,6 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("fetch anonymizes title and text in anonymized mode", async () => {
     decryptContentMock.mockResolvedValueOnce("John Smith signed the agreement");
-    mockReadEntityByIdHandlerOk({
-      entityId: "entity_1",
-      fields: [
-        {
-          id: "field_1",
-          content: {
-            type: "file",
-          },
-        },
-      ],
-      kind: "document",
-      name: "John Smith SPA",
-    });
     anonymizeTextFieldsMock.mockResolvedValue({
       entityCount: 2,
       fields: ["[PERSON_1] SPA", "[PERSON_1] signed the agreement"],
@@ -1307,19 +1323,6 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("fetch preserves empty anonymized output instead of leaking original content", async () => {
     decryptContentMock.mockResolvedValueOnce("John Smith");
-    mockReadEntityByIdHandlerOk({
-      entityId: "entity_1",
-      fields: [
-        {
-          id: "field_1",
-          content: {
-            type: "file",
-          },
-        },
-      ],
-      kind: "document",
-      name: "John Smith",
-    });
     anonymizeTextFieldsMock.mockResolvedValue({
       entityCount: 1,
       fields: ["", ""],
@@ -1358,19 +1361,6 @@ describe("OpenAI-compatible MCP tools", () => {
 
   test("fetch uses generic placeholders when anonymized fields are unexpectedly missing", async () => {
     decryptContentMock.mockResolvedValueOnce("John Smith");
-    mockReadEntityByIdHandlerOk({
-      entityId: "entity_1",
-      fields: [
-        {
-          id: "field_1",
-          content: {
-            type: "file",
-          },
-        },
-      ],
-      kind: "document",
-      name: "John Smith",
-    });
     anonymizeTextFieldsMock.mockResolvedValue({
       entityCount: 1,
       fields: [],
