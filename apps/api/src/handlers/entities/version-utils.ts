@@ -42,7 +42,11 @@ export const buildVersionStamp = ({
   }
 
   return {
-    stamp: toDocumentReference(workspaceReference, docSequence, versionNumber),
+    stamp: toDocumentReference({
+      matterReference: workspaceReference,
+      docSequence,
+      versionNumber,
+    }),
     verificationCode: generateVerificationCode(),
   };
 };

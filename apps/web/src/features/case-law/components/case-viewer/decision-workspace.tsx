@@ -303,16 +303,17 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
               )}
               {aiEnabled && analysisState.status === "error" && (
                 <div className="flex flex-col items-center gap-3 pt-12">
-                  <button
+                  <Button
                     className="text-muted-foreground hover:text-foreground hover:bg-muted flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs transition-colors"
                     onClick={() => {
                       void generate();
                     }}
-                    type="button"
+                    size="sm"
+                    variant="ghost"
                   >
                     <SparklesIcon className="size-3" />
                     {t("common.retry")}
-                  </button>
+                  </Button>
                 </div>
               )}
 

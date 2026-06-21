@@ -9,6 +9,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const termSchema = t.Object({
@@ -47,6 +48,8 @@ export const readWorkspaceAnonymizationTerms = createSafeHandler(
           })
           .from(anonymizationBlacklistEntries)
           .where(eq(anonymizationBlacklistEntries.workspaceId, workspaceId))
+          // SAFETY: one workspace's blacklist terms, loaded fully for masking/management correctness; the set is bounded by the per-workspace write cap (LIMITS.anonymizationBlacklistEntriesPerWorkspace) enforced in createWorkspaceAnonymizationTerms.
+          // eslint-disable-next-line require-query-limit/require-query-limit
           .orderBy(asc(anonymizationBlacklistEntries.canonical)),
       ),
     );
@@ -103,7 +106,14 @@ export const createWorkspaceAnonymizationTerms = createSafeHandler(
         );
 
         if (toInsert.length === 0) {
-          return { inserted: 0 };
+          return { type: "ok" as const, inserted: 0 };
+        }
+
+        if (
+          existing.length + toInsert.length >
+          LIMITS.anonymizationBlacklistEntriesPerWorkspace
+        ) {
+          return { type: "limit-exceeded" as const };
         }
 
         const rows = toInsert.map((entry) => ({
@@ -139,11 +149,20 @@ export const createWorkspaceAnonymizationTerms = createSafeHandler(
           },
         });
 
-        return { inserted: toInsert.length };
+        return { type: "ok" as const, inserted: toInsert.length };
       }),
     );
 
-    return Result.ok(result);
+    if (result.type === "limit-exceeded") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Workspace anonymization term limit reached",
+        }),
+      );
+    }
+
+    return Result.ok({ inserted: result.inserted });
   },
 );
 

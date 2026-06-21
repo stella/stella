@@ -22,6 +22,7 @@ import openFolioCollabSession from "@/api/handlers/entities/open-folio-collab-se
 import organizeSuggestions from "@/api/handlers/entities/organize-suggestions";
 import readEntities from "@/api/handlers/entities/read";
 import readEntityById from "@/api/handlers/entities/read-by-id";
+import readFieldFile from "@/api/handlers/entities/read-field-file";
 import readFilesystemTree from "@/api/handlers/entities/read-filesystem-tree";
 import readKanbanGroup from "@/api/handlers/entities/read-kanban-group";
 import readEntitySummaries from "@/api/handlers/entities/read-summaries";
@@ -201,11 +202,16 @@ export const entitiesRoute = new Elysia({
   })
   .get("/entity/:entityId/versions", readVersions.handler, {
     params: readVersions.config.params,
+    query: readVersions.config.query,
     permissions: readVersions.config.permissions,
   })
   .get("/entity/:entityId/versions/:versionId", readVersionById.handler, {
     params: readVersionById.config.params,
     permissions: readVersionById.config.permissions,
+  })
+  .get("/entity/:entityId/field/:fieldId/file", readFieldFile.handler, {
+    params: readFieldFile.config.params,
+    permissions: readFieldFile.config.permissions,
   })
   .post("/entity/:entityId/compare", compareVersions.handler, {
     body: compareVersions.config.body,

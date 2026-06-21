@@ -96,6 +96,32 @@ const createSkill = createSafeRootHandler(
       );
     }
 
+    // Team skills are org-wide visible in the chat skill catalogue but are only
+    // capped per-user above, so cap them per-org too: otherwise enough members
+    // each authoring team skills can push the catalogue past
+    // agentSkillsChatMetadataMax and silently hide the overflow from the model.
+    if (body.scope === "team") {
+      const teamCount = yield* Result.await(
+        safeDb((tx) =>
+          tx.$count(
+            agentSkills,
+            and(
+              eq(agentSkills.organizationId, session.activeOrganizationId),
+              eq(agentSkills.scope, "team"),
+            ),
+          ),
+        ),
+      );
+      if (teamCount >= LIMITS.agentSkillsTeamPerOrganization) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Team skill limit reached for this organization",
+          }),
+        );
+      }
+    }
+
     const slug = uniqueSlug(body.name);
 
     // contentHash is an integrity marker; for authored skills it

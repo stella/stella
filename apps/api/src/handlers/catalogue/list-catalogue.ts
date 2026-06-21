@@ -23,6 +23,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
+import { LIMITS } from "@/api/lib/limits";
 import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
 
 import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
@@ -30,12 +31,6 @@ import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
 const config = {
   permissions: { workspace: ["read"] },
 } satisfies HandlerConfig;
-
-// Matches the cap on `GET /mcp/connectors`. The catalogue listing
-// surfaces every org-owned custom connector as a synthetic entry,
-// so the same bound applies — otherwise an org with thousands of
-// custom MCPs could turn `/catalogue` into an unbounded read.
-const ORG_CUSTOM_MCP_LIMIT = 100;
 
 /**
  * Distributes over the `LoadedCatalogueEntry` union so the per-member
@@ -248,7 +243,7 @@ const listCatalogue = createSafeRootHandler(
             ),
           )
           .orderBy(mcpConnectors.displayName, mcpConnectors.id)
-          .limit(ORG_CUSTOM_MCP_LIMIT),
+          .limit(LIMITS.mcpConnectorsPageSizeMax),
       ),
     );
     const curatedMcpUrlSet = new Set(mcpUrls);

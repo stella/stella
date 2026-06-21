@@ -996,6 +996,10 @@ const FileChatOverlayInner = ({
   const {
     error,
     messages,
+    olderCursor,
+    isLoadingOlder,
+    loadOlder,
+    loadOlderError,
     resendLatestMessage,
     sendMessage,
     queuedMessages,
@@ -1017,7 +1021,13 @@ const FileChatOverlayInner = ({
     addToolOutput,
     streamdownComponents,
     approvalPendingMessageId,
-  } = useChatSession({ chat, conversationId: threadRef.threadId, workspaceId });
+  } = useChatSession({
+    chat,
+    conversationId: threadRef.threadId,
+    initialOlderCursor: data.olderCursor,
+    threadRef,
+    workspaceId,
+  });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (open AI-key gate on mount/dep change), move into handler
@@ -1213,15 +1223,20 @@ const FileChatOverlayInner = ({
               <ChatThreadMessages
                 approvalPendingMessageId={approvalPendingMessageId}
                 error={error}
+                hasOlderMessages={olderCursor !== null}
                 isGenerating={isGenerating}
+                isLoadingOlder={isLoadingOlder}
+                loadOlderError={loadOlderError}
                 messages={messages}
                 onAskUserEditAndRerun={handleAskUserEditAndRerun}
                 onAskUserSubmit={handleAskUserSubmit}
                 onCreateDocumentResolve={handleCreateDocumentResolve}
+                onLoadOlder={loadOlder}
                 onOpenCreatedDocument={handleOpenCreatedDocument}
                 onRemoveQueuedMessage={removeQueuedMessage}
                 onResend={resendLatestMessage}
                 queuedMessages={queuedMessages}
+                scrollContainerRef={threadScrollRef}
                 showThinkingIndicator
                 showToolCallDetails={showToolCallDetails}
                 streamdownComponents={streamdownComponents}

@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Aktuálna",
-      "description": "Spravujte svoje aktívne relácie",
       "device": "Zariadenie",
       "deviceOnOs": "{browser} na {os}",
       "ipAddress": "IP adresa",
@@ -21,25 +20,6 @@
       "description": "Pridajte prihlasovacie údaje poskytovateľa a začnite používať funkcie AI.",
       "title": "Pripojiť poskytovateľa AI"
     }
-  },
-  "anonymize": {
-    "addEntity": "Pridať entitu",
-    "checkAnonymization": "Skontrolovať anonymizáciu",
-    "closeAddForm": "Zavrieť formulár pridania",
-    "confirmAll": "Potvrdiť všetko",
-    "entities": "Entity",
-    "entityType": "Typ entity",
-    "extractingText": "Extrahovanie textu…",
-    "noEntitiesFound": "Žiadne entity sa nenašli",
-    "reject": "Odmietnuť",
-    "rejectAll": "Odmietnuť všetko",
-    "removeEntity": "Odstrániť entitu",
-    "revise": "Revidovať anonymizáciu",
-    "runPipeline": "Spustiť proces",
-    "running": "Prebieha…",
-    "searchMatches": "Slová na vyhľadanie v dokumente",
-    "searchPlaceholder": "Zadajte slová na vyhľadanie…",
-    "title": "Kontrola anonymizácie"
   },
   "app": {
     "versionMismatch": {
@@ -73,7 +53,6 @@
     "weekStartSunday": "Nedeľa"
   },
   "auth": {
-    "betaNoticeBody": "Ako preventívne opatrenie počas bety nenahrávajte citlivé, privilegované, osobné, nenahraditeľné ani produkčne kritické údaje. Cloud je demo služba.",
     "betaNoticeTitle": "Beta",
     "checkSpamHint": "Ak ho nevidíte, pozrite sa do priečinka Spam.",
     "chooseOrganization": "Vyberte organizáciu, v ktorej chcete pracovať",
@@ -103,7 +82,6 @@
     "selectOrganization": "Vyberte organizáciu",
     "signIn": "Prihlásiť sa",
     "signInBeforeInvitation": "Na prijatie pozvánky do organizácie sa musíte najprv prihlásiť.",
-    "signInWithEmail": "Prihlásiť sa e-mailom",
     "subtitle": "Dokumenty, judikatúra aj revízie pod kontrolou. S pomocou AI.",
     "useDifferentEmail": "Použiť iný e-mail",
     "weSentCodeTo": "Odoslali sme kód na {email}"
@@ -122,8 +100,10 @@
       "activityCode": "Kód aktivity",
       "codeLabel": "Kód",
       "codeLabelField": "Označenie",
+      "codePlaceholder": "L110",
       "createCode": "Vytvoriť kód",
       "inactive": "Neaktívny",
+      "labelPlaceholder": "Rešerš",
       "manageCodes": "Spravovať kódy",
       "noCodesYet": "Zatiaľ žiadne fakturačné kódy",
       "task": "Úloha",
@@ -271,31 +251,14 @@
     "emptyState": "Žiadne rozhodnutia. Nakonfigurujte zdroj a spustite synchronizáciu na import judikatúry.",
     "filters": {
       "court": "Súd",
-      "dateFrom": "Od",
-      "dateTo": "Do",
       "searchPlaceholder": "Hľadať podľa spisovej značky..."
     },
-    "loading": "Načítava sa...",
     "loadingMore": "Načítavajú sa ďalšie...",
-    "sectionTypes": {
-      "argumentation": "Argumentácia",
-      "dissent": "Odlišné stanovisko",
-      "footer": "Päta",
-      "header": "Hlavička",
-      "ruling": "Výrok",
-      "unknown": "Iné"
-    },
     "seo": {
       "browse": "Prehliadať judikatúru",
       "countries": "Krajiny",
       "courts": "Súdy",
       "years": "Roky"
-    },
-    "sources": {
-      "empty": "Žiadne nakonfigurované zdroje.",
-      "lastSync": "Posledná synchronizácia: {date, date, medium}",
-      "neverSynced": "Ešte nesynchronizované",
-      "title": "Zdroje"
     },
     "viewer": {
       "abstract": "Abstrakt",
@@ -305,7 +268,6 @@
       "legalSentence": "Právna veta",
       "nalusDisclaimer": "Zdroj: NALUS, Ústavný súd Českej republiky. Bezplatne. Táto elektronická verzia nie je autentická; autentické sú iba originály so štátnym znakom a podpisom oprávnenej osoby.",
       "popularName": "Populárny názov",
-      "sections": "Časti",
       "source": "Zdroj",
       "sourceFields": {
         "decisionCategory": "Kategória rozhodnutia",
@@ -453,6 +415,9 @@
       "prompts": "Zručnosti",
       "recentChats": "Nedávne chaty"
     },
+    "loadEarlierMessages": "Načítať staršie správy",
+    "loadEarlierMessagesError": "Staršie správy sa nepodarilo načítať",
+    "loadingEarlierMessages": "Načítavajú sa staršie správy…",
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
@@ -584,7 +549,6 @@
     "allClauses": "Všetky klauzuly",
     "backToList": "Späť na zoznam klauzúl",
     "body": "Obsah",
-    "categories": "Kategórie",
     "categoryDeleteConfirm": "Klauzuly v tejto kategórii budú presunuté medzi nekategorizované.",
     "categoryName": "Názov kategórie",
     "categoryNamePlaceholder": "napr. Dôvernosť",
@@ -598,7 +562,6 @@
     "createCategory": "Nová kategória",
     "createClause": "Nová klauzula",
     "createFailed": "Vytvorenie klauzuly sa nepodarilo",
-    "currentVersion": "Aktuálna",
     "deleteCategory": "Odstrániť kategóriu",
     "deleteClause": "Odstrániť klauzulu",
     "deleteFailed": "Odstránenie sa nepodarilo",
@@ -613,7 +576,6 @@
     "importSuccess": "{count, plural, one {# klauzula importovaná} few {# klauzuly importované} other {# klauzúl importovaných}}",
     "importing": "Importujem…",
     "languagePlaceholder": "napr. sk",
-    "limitReached": "Dosiahnutý limit klauzúl",
     "linkClause": "Prepojiť klauzulu",
     "linkFailed": "Prepojenie klauzuly sa nepodarilo",
     "linked": "Klauzula prepojená",
@@ -621,7 +583,6 @@
     "loadFailed": "Načítanie klauzúl sa nepodarilo",
     "loading": "Načítavam klauzuly…",
     "noChanges": "Žiadne zmeny",
-    "noClauses": "Zatiaľ žiadne klauzuly",
     "noLinkedClauses": "Žiadne prepojené klauzuly",
     "noResults": "Zatiaľ žiadne klauzuly",
     "noVariants": "Žiadne varianty",
@@ -631,7 +592,6 @@
     "searchClauses": "Hľadať klauzuly...",
     "searchPlaceholder": "Hľadať klauzuly...",
     "selectFile": "Vybrať súbor JSON",
-    "selectVariant": "Vybrať variant",
     "selectVersionToCompare": "Vyberte verziu na porovnanie s aktuálnou",
     "slotName": "Názov slotu",
     "slotNamePlaceholder": "napr. Nekonkurovanie",
@@ -644,7 +604,6 @@
     "unlinkConfirm": "Týmto odstránite klauzulu z tejto šablóny.",
     "unlinkFailed": "Odpojenie klauzuly sa nepodarilo",
     "unlinked": "Klauzula odpojená",
-    "unmappedSlot": "Neprepojené",
     "updateFailed": "Aktualizácia klauzuly sa nepodarila",
     "usageNotes": "Poznámky k použitiu",
     "usageNotesPlaceholder": "Kedy sa táto klauzula používa? (pre zostavenie pomocou AI)",
@@ -653,8 +612,7 @@
     "variantLabel": "Označenie variantu",
     "variantLabelPlaceholder": "napr. Štandard",
     "variants": "Varianty",
-    "version": "Verzia {version}",
-    "versionCount": "{count, plural, one {# verzia} few {# verzie} other {# verzií}}"
+    "version": "Verzia {version}"
   },
   "common": {
     "accept": "Prijať",
@@ -977,7 +935,6 @@
     "acceptAll": "Prijať všetky",
     "applyAs": "ako",
     "applyDirect": "Priame",
-    "applyMode": "Použiť ako:",
     "applyTracked": "Sledované zmeny",
     "areaUnspecified": "Neurčené",
     "byArea": "Podľa oblasti",
@@ -989,11 +946,9 @@
     "hideAccepted": "Skryť prijaté návrhy",
     "identityAria": "Identita pre sledované zmeny pre {name}",
     "identitySaved": "Identita uložená",
-    "progressAria": "{reviewed} z {total} skontrolovaných",
     "reject": "Odmietnuť",
     "rejectAll": "Odmietnuť všetky",
     "revert": "Vrátiť",
-    "reviewed": "skontrolované",
     "savingIdentity": "Ukladá sa…",
     "severityHigh": "Vysoká",
     "severityLow": "Nízka",
@@ -1293,7 +1248,6 @@
       "ignoreScopeAlways": "Vždy ignorovať",
       "ignoreScopeDocument": "Ignorovať v tomto spise",
       "ignoreScopeMenuAriaLabel": "Rozsah ignorovania",
-      "ignoreScopeWorkspace": "Ignorovať v tomto spise",
       "labelPickerAriaLabel": "Označenie entity",
       "labelPickerEmpty": "Žiadne zodpovedajúce označenie.",
       "labelPickerPlaceholder": "Označenie",
@@ -1322,7 +1276,6 @@
     "matterPicker": {
       "allMatters": "Všetky spisy",
       "description": "Vyberte spisy, z ktorých môže tento chat čerpať. AI vidí obsah všetkých vybraných spisov.",
-      "directLabel": "Priame",
       "empty": "Žiadne spisy nie sú dostupné.",
       "noMatter": "Žiadny spis",
       "noResults": "Žiadny spis sa nezhoduje s „{query}“.",
@@ -1565,14 +1518,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Účet",
-    "calendar": "Kalendár",
     "chat": "Chat",
-    "chatAlreadyOpen": "Chat je už otvorený",
-    "clients": "Klienti",
     "contacts": "Kontakty",
-    "inbox": "Doručená pošta",
-    "invitations": "Pozvánky",
     "knowledge": "Znalosti",
     "members": "Členovia",
     "myTodos": "Moje úlohy",
@@ -1580,15 +1527,12 @@
     "pinned": "Pripnuté",
     "recents": "Nedávne",
     "search": "Hľadať",
-    "searchEmptyState": "Začnite písať na vyhľadávanie dokumentov, spisov a ďalšieho.",
-    "searchPlaceholder": "Hľadať vo všetkých pracovných priestoroch...",
     "shortcutCategories": {
       "navigation": "Navigácia"
     },
     "sidebar": "Bočný panel",
     "sidebarDescription": "Zobrazí mobilný bočný panel.",
     "templates": "Šablóny",
-    "timeTracking": "Sledovanie času",
     "toggleChat": "Prepnúť chat",
     "toggleSidebar": "Prepnúť bočný panel"
   },
@@ -1618,7 +1562,6 @@
     "catalogueThirdPartyConfirm": "Aj tak pridať",
     "catalogueThirdPartyDisclaimer": "Toto je kód tretej strany od {author}. stella ho nereviduje, neschvaľuje ani neudržiava. Sami zodpovedáte za overenie, že je vhodný pre vašu prax a v súlade s pravidlami vašej kancelárie. Pridaním prijímate používanie na vlastné riziko.",
     "catalogueTitle": "Prispôsobte si AI",
-    "changeAnytime": "Toto nastavenie môžete zmeniť aj kedykoľvek neskôr.",
     "continue": "Pokračovať",
     "creating": {
       "ai": "Ukladáme nastavenie AI...",
@@ -1647,6 +1590,7 @@
     "jurisdictionSuggested": "Odporúčané",
     "jurisdictionTitle": "Vyberte jurisdikcie svojej praxe",
     "orgNameLabel": "Názov tímu",
+    "orgNamePlaceholder": "Novák a partneri",
     "orgSubtitle": "Tak vás nájdu vaši kolegovia.",
     "orgTitle": "Pomenujte svoj tím",
     "skipStep": "Preskočiť",
@@ -1657,8 +1601,7 @@
     "stepJurisdiction": "Jurisdikcia",
     "stepOrganization": "Tím",
     "stepTeam": "Pozvánky",
-    "termsNotice": "Pokračovaním súhlasíte s <terms>Podmienkami služby</terms>.",
-    "welcomeSubtitle": "Nastavenie zaberie necelú minútu."
+    "termsNotice": "Pokračovaním súhlasíte s <terms>Podmienkami služby</terms>."
   },
   "organization": {
     "aiConfig": {
@@ -1818,7 +1761,6 @@
       "message": "Správa",
       "task": "Úloha"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Typ súboru",
     "noResults": "Nenašli sa žiadne výsledky pre „{query}“.",
     "placeholder": "Vyhľadávať vo všetkých spisoch...",
@@ -1826,7 +1768,6 @@
     "recentlyOpenedFiles": "Nedávno otvorené súbory",
     "resultCount": "{count, plural, one {# výsledok} few {# výsledky} other {# výsledkov}}",
     "summaryAction": "Zhrnúť najlepšie výsledky",
-    "summaryCitations": "Citované výsledky",
     "summaryError": "Zhrnutie nie je dostupné",
     "summaryLoading": "Zhŕňam výsledky...",
     "summaryPrompt": "Použije najlepšie výsledky a ich obsah na krátku odpoveď.",
@@ -1897,7 +1838,6 @@
       "pendingInvitations": "Čakajúce pozvánky",
       "practiceJurisdictions": "Jurisdikcie praxe",
       "profile": "Profil",
-      "profileDescription": "Upraviť názov organizácie",
       "promptCaching": {
         "description": "Po zapnutí stella pridáva cache značky tak, aby opakované AI dotazy nad rovnakým dokumentom alebo vláknom stáli ~10× menej a boli rýchlejšie. Cachované prompty zostávajú u poskytovateľa AI až 5 minút a sú obmedzené na vašu organizáciu. Vypnutie zastaví zasielanie cache značiek, ale poskytovatelia môžu prompty stále cachovať oportunisticky — iba zmluva Zero Data Retention s poskytovateľom úplne vypne cachovanie na strane servera.",
         "title": "Cachovanie promptov",
@@ -1920,7 +1860,6 @@
       "usageLimitTitleEntitlementInactive": "Oprávnenie na využitie nie je aktívne",
       "usageLimitTitleNoEntitlement": "Vyžaduje sa oprávnenie na využitie",
       "usageLimitTitleUsageLimitExceeded": "Limit využitia AI bol dosiahnutý",
-      "usageLoading": "Načítava sa…",
       "usageManage": "Spravovať hostované využitie",
       "usageManageError": "Nepodarilo sa otvoriť správu hostovaného využitia",
       "usageManuallyManaged": "Spravované manuálne",
@@ -2032,7 +1971,6 @@
     "fieldInputType": "Typ vstupu",
     "fieldLabel": "Popisok",
     "fieldLabelPlaceholder": "napr. Celé meno",
-    "fieldOptions": "Možnosti",
     "fieldOptionsPlaceholder": "Zadajte možnosť a stlačte Enter",
     "fieldUpdateFailed": "Aktualizácia polí sa nepodarila",
     "fields": "Polia",

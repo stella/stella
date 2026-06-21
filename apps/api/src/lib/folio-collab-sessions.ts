@@ -98,6 +98,55 @@ export type FolioCollabSessionAuthorizationResult =
   | { status: "token-expired" }
   | { status: "permission-revoked" };
 
+type FolioCollabSessionDecisionInput = {
+  expiresAt: Date;
+  now: Date;
+  organizationRole: string | null;
+  sessionStatus: string | null | undefined;
+  workspaceMemberId: string | null;
+};
+
+/**
+ * Pure authorization decision for a folio collaboration session. Splits the
+ * status verdict from the side-effecting payload construction so the branch
+ * logic can be exercised without a database row.
+ */
+export const decideFolioCollabSessionStatus = ({
+  expiresAt,
+  now,
+  organizationRole,
+  sessionStatus,
+  workspaceMemberId,
+}: FolioCollabSessionDecisionInput):
+  | "authorized"
+  | "missing"
+  | "token-expired"
+  | "permission-revoked" => {
+  if (sessionStatus !== "open") {
+    return "missing";
+  }
+
+  if (expiresAt < now) {
+    return "token-expired";
+  }
+
+  const role = organizationRole;
+  const canUseWorkspace =
+    role !== null &&
+    isMemberRole(role) &&
+    (role === "owner" || role === "admin" || workspaceMemberId !== null);
+  const hasEntityUpdate =
+    role !== null &&
+    isMemberRole(role) &&
+    roles[role].authorize({ entity: ["update"] }).success;
+
+  if (!canUseWorkspace || !hasEntityUpdate) {
+    return "permission-revoked";
+  }
+
+  return "authorized";
+};
+
 export const authorizeFolioCollabSession = async ({
   sessionId,
   token,
@@ -149,26 +198,19 @@ export const authorizeFolioCollabSession = async ({
     .limit(1);
 
   const row = rows.at(0);
-  if (!row || row.sessionStatus !== "open") {
+  if (!row) {
     return { status: "missing" };
   }
 
-  if (row.expiresAt < new Date()) {
-    return { status: "token-expired" };
-  }
-
-  const role = row.organizationRole;
-  const canUseWorkspace =
-    role !== null &&
-    isMemberRole(role) &&
-    (role === "owner" || role === "admin" || row.workspaceMemberId !== null);
-  const hasEntityUpdate =
-    role !== null &&
-    isMemberRole(role) &&
-    roles[role].authorize({ entity: ["update"] }).success;
-
-  if (!canUseWorkspace || !hasEntityUpdate) {
-    return { status: "permission-revoked" };
+  const status = decideFolioCollabSessionStatus({
+    expiresAt: row.expiresAt,
+    now: new Date(),
+    organizationRole: row.organizationRole,
+    sessionStatus: row.sessionStatus,
+    workspaceMemberId: row.workspaceMemberId,
+  });
+  if (status !== "authorized") {
+    return { status };
   }
 
   return {

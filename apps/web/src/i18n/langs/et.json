@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Praegune",
-      "description": "Hallake oma aktiivseid seansse",
       "device": "Seade",
       "deviceOnOs": "{browser} operatsioonisüsteemis {os}",
       "ipAddress": "IP-aadress",
@@ -21,25 +20,6 @@
       "description": "Lisa teenusepakkuja pääsuandmed, et hakata AI-funktsioone kasutama.",
       "title": "Ühenda AI teenusepakkuja"
     }
-  },
-  "anonymize": {
-    "addEntity": "Lisa olem",
-    "checkAnonymization": "Check anonymisation",
-    "closeAddForm": "Sulge lisamisvorm",
-    "confirmAll": "Kinnita kõik",
-    "entities": "Entiteedid",
-    "entityType": "Entiteedi tüüp",
-    "extractingText": "Teksti eraldamine…",
-    "noEntitiesFound": "Entiteete ei leitud",
-    "reject": "Lükka tagasi",
-    "rejectAll": "Lükka kõik tagasi",
-    "removeEntity": "Eemalda entiteet",
-    "revise": "Revise anonymisation",
-    "runPipeline": "Käivita töövoog",
-    "running": "Käivitamisel…",
-    "searchMatches": "Dokumendist otsitavad sõnad",
-    "searchPlaceholder": "Sisestage otsitavad sõnad…",
-    "title": "Anonymisation review"
   },
   "app": {
     "versionMismatch": {
@@ -73,7 +53,6 @@
     "weekStartSunday": "Pühapäev"
   },
   "auth": {
-    "betaNoticeBody": "Ettevaatusabinõuna ärge laadige beetaperioodil üles tundlikke, privilegeeritud, isikuandmeid sisaldavaid, asendamatuid ega tootmiskriitilisi andmeid. Cloud on demoteenus.",
     "betaNoticeTitle": "Beeta",
     "checkSpamHint": "Kui te seda ei näe, kontrollige rämpsposti kausta.",
     "chooseOrganization": "Valige organisatsioon, milles soovite töötada",
@@ -103,7 +82,6 @@
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
-    "signInWithEmail": "Logi sisse e-postiga",
     "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
     "weSentCodeTo": "Saatsime koodi aadressile {email}"
@@ -122,8 +100,10 @@
       "activityCode": "Tegevuskood",
       "codeLabel": "Kood",
       "codeLabelField": "Silt",
+      "codePlaceholder": "L110",
       "createCode": "Loo kood",
       "inactive": "Mitteaktiivne",
+      "labelPlaceholder": "Uurimine",
       "manageCodes": "Halda koode",
       "noCodesYet": "Arvelduskoode pole veel",
       "task": "Ülesanne",
@@ -271,31 +251,14 @@
     "emptyState": "Otsuseid ei leitud. Seadistage allikas ja käivitage sünkroonimine kohtupraktika importimiseks.",
     "filters": {
       "court": "Kohus",
-      "dateFrom": "Alates",
-      "dateTo": "Kuni",
       "searchPlaceholder": "Otsi kohtuasja numbri järgi..."
     },
-    "loading": "Laadimine...",
     "loadingMore": "Laadib rohkem...",
-    "sectionTypes": {
-      "argumentation": "Argumentatsioon",
-      "dissent": "Eriarvamus",
-      "footer": "Jalus",
-      "header": "Päis",
-      "ruling": "Resolutsioon",
-      "unknown": "Muu"
-    },
     "seo": {
       "browse": "Sirvi kohtupraktikat",
       "countries": "Riigid",
       "courts": "Kohtud",
       "years": "Aastad"
-    },
-    "sources": {
-      "empty": "Allikaid pole seadistatud.",
-      "lastSync": "Viimane sünkroonimine: {date, date, medium}",
-      "neverSynced": "Pole veel sünkroonitud",
-      "title": "Allikad"
     },
     "viewer": {
       "abstract": "Kokkuvõte",
@@ -305,7 +268,6 @@
       "legalSentence": "Õiguslause",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Rahvanimi",
-      "sections": "Jaotised",
       "source": "Allikas",
       "sourceFields": {
         "decisionCategory": "Lahendi kategooria",
@@ -453,6 +415,9 @@
       "prompts": "Oskused",
       "recentChats": "Hiljutised vestlused"
     },
+    "loadEarlierMessages": "Laadi varasemad sõnumid",
+    "loadEarlierMessagesError": "Varasemate sõnumite laadimine ebaõnnestus",
+    "loadingEarlierMessages": "Varasemate sõnumite laadimine…",
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {
@@ -584,7 +549,6 @@
     "allClauses": "Kõik klauslid",
     "backToList": "Tagasi klauslite juurde",
     "body": "Sisu",
-    "categories": "Kategooriad",
     "categoryDeleteConfirm": "Selle kategooria klauslid muutuvad kategoriseerimata.",
     "categoryName": "Kategooria nimi",
     "categoryNamePlaceholder": "nt Konfidentsiaalsus",
@@ -598,7 +562,6 @@
     "createCategory": "Uus kategooria",
     "createClause": "Uus klausel",
     "createFailed": "Klausli loomine ebaõnnestus",
-    "currentVersion": "Praegune",
     "deleteCategory": "Kustuta kategooria",
     "deleteClause": "Kustuta klausel",
     "deleteFailed": "Kustutamine ebaõnnestus",
@@ -613,7 +576,6 @@
     "importSuccess": "{count, plural, one {# klausel imporditud} other {# klauslit imporditud}}",
     "importing": "Importimine…",
     "languagePlaceholder": "nt et",
-    "limitReached": "Klauslite limiit täis",
     "linkClause": "Seo klausel",
     "linkFailed": "Klausli sidumine ebaõnnestus",
     "linked": "Klausel seotud",
@@ -621,7 +583,6 @@
     "loadFailed": "Klauslite laadimine ebaõnnestus",
     "loading": "Klauslite laadimine…",
     "noChanges": "Muudatusi pole",
-    "noClauses": "Klausleid pole veel",
     "noLinkedClauses": "Seotud klausleid pole",
     "noResults": "Klausleid pole veel",
     "noVariants": "Variante pole",
@@ -631,7 +592,6 @@
     "searchClauses": "Otsi klausleid...",
     "searchPlaceholder": "Otsi klausleid...",
     "selectFile": "Vali JSON-fail",
-    "selectVariant": "Vali variant",
     "selectVersionToCompare": "Vali praegusega võrreldav versioon",
     "slotName": "Pesa nimi",
     "slotNamePlaceholder": "nt NonCompete",
@@ -644,7 +604,6 @@
     "unlinkConfirm": "See eemaldab klausli sellest mallist.",
     "unlinkFailed": "Klausli seose eemaldamine ebaõnnestus",
     "unlinked": "Klausli seos eemaldatud",
-    "unmappedSlot": "Seostamata",
     "updateFailed": "Klausli uuendamine ebaõnnestus",
     "usageNotes": "Kasutusjuhised",
     "usageNotesPlaceholder": "Millal peaks seda klauslit kasutama? (tehisintellekti koostamise jaoks)",
@@ -653,8 +612,7 @@
     "variantLabel": "Variandi silt",
     "variantLabelPlaceholder": "nt Standard",
     "variants": "Variandid",
-    "version": "Versioon {version}",
-    "versionCount": "{count, plural, one {# versioon} other {# versiooni}}"
+    "version": "Versioon {version}"
   },
   "common": {
     "accept": "Nõustu",
@@ -977,7 +935,6 @@
     "acceptAll": "Nõustu kõigiga",
     "applyAs": "kui",
     "applyDirect": "Otse",
-    "applyMode": "Rakenda viisil:",
     "applyTracked": "Jälitatud muudatustena",
     "areaUnspecified": "Määramata",
     "byArea": "Valdkonna järgi",
@@ -989,11 +946,9 @@
     "hideAccepted": "Peida nõustutud soovitused",
     "identityAria": "Jälitatud muudatuste identiteet kasutajale {name}",
     "identitySaved": "Identiteet salvestatud",
-    "progressAria": "{reviewed}/{total} üle vaadatud",
     "reject": "Lükka tagasi",
     "rejectAll": "Lükka kõik tagasi",
     "revert": "Taasta",
-    "reviewed": "üle vaadatud",
     "savingIdentity": "Salvestamine…",
     "severityHigh": "Kõrge",
     "severityLow": "Madal",
@@ -1293,7 +1248,6 @@
       "ignoreScopeAlways": "Eira alati",
       "ignoreScopeDocument": "Eira selles toimikus",
       "ignoreScopeMenuAriaLabel": "Eiramise ulatus",
-      "ignoreScopeWorkspace": "Eira selles tööruumis",
       "labelPickerAriaLabel": "Entiteedi silt",
       "labelPickerEmpty": "Sobivat silti ei leitud.",
       "labelPickerPlaceholder": "Silt",
@@ -1322,7 +1276,6 @@
     "matterPicker": {
       "allMatters": "Kõik toimikud",
       "description": "Vali toimikud, millele see vestlus tugineb. AI näeb sisu igast valitud toimikust.",
-      "directLabel": "Otse",
       "empty": "Ühtegi toimikut pole saadaval.",
       "noMatter": "Toimikut pole",
       "noResults": "Ükski toimik ei vasta päringule „{query}”.",
@@ -1565,14 +1518,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Konto",
-    "calendar": "Kalender",
     "chat": "Vestlus",
-    "chatAlreadyOpen": "Vestlus on juba avatud",
-    "clients": "Kliendid",
     "contacts": "Kontaktid",
-    "inbox": "Postkast",
-    "invitations": "Kutsed",
     "knowledge": "Teadmus",
     "members": "Liikmed",
     "myTodos": "Minu ülesanded",
@@ -1580,15 +1527,12 @@
     "pinned": "Kinnitatud",
     "recents": "Hiljutised",
     "search": "Otsing",
-    "searchEmptyState": "Alustage tippimist, et otsida dokumente, toimikuid ja muud.",
-    "searchPlaceholder": "Otsi kõigist tööruumidest...",
     "shortcutCategories": {
       "navigation": "Navigeerimine"
     },
     "sidebar": "Külgriba",
     "sidebarDescription": "Kuvab mobiilse külgriba.",
     "templates": "Mallid",
-    "timeTracking": "Ajaarvestus",
     "toggleChat": "Lülita vestlus sisse/välja",
     "toggleSidebar": "Külgriba kuvamine"
   },
@@ -1618,7 +1562,6 @@
     "catalogueThirdPartyConfirm": "Lisa ikkagi",
     "catalogueThirdPartyDisclaimer": "See on kolmanda osapoole kood, mille on lisanud {author}. stella ei ole seda üle vaadanud, heaks kiitnud ega hoolda. Teie vastutate selle eest, et see sobiks teie praktikaga ja vastaks teie büroo reeglitele. Lisamisel nõustute kasutama seda omal vastutusel.",
     "catalogueTitle": "Kohandage oma tehisintellekti",
-    "changeAnytime": "Seda saate igal ajal hiljem muuta.",
     "continue": "Jätka",
     "creating": {
       "ai": "Salvestame AI seadistust...",
@@ -1647,6 +1590,7 @@
     "jurisdictionSuggested": "Soovitatud",
     "jurisdictionTitle": "Valige oma praktika jurisdiktsioonid",
     "orgNameLabel": "Meeskonna nimi",
+    "orgNamePlaceholder": "Tamm & Partnerid",
     "orgSubtitle": "Nii leiavad teid kolleegid.",
     "orgTitle": "Nimetage oma meeskond",
     "skipStep": "Jäta vahele",
@@ -1657,8 +1601,7 @@
     "stepJurisdiction": "Jurisdiktsioon",
     "stepOrganization": "Meeskond",
     "stepTeam": "Kutsu",
-    "termsNotice": "Jätkates nõustud meie <terms>kasutustingimustega</terms>.",
-    "welcomeSubtitle": "Seadistamine võtab vähem kui minuti."
+    "termsNotice": "Jätkates nõustud meie <terms>kasutustingimustega</terms>."
   },
   "organization": {
     "aiConfig": {
@@ -1818,7 +1761,6 @@
       "message": "Sõnum",
       "task": "Ülesanne"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Failitüüp",
     "noResults": "Päringule „{query}\" tulemusi ei leitud.",
     "placeholder": "Otsi kõigist asjadest...",
@@ -1826,7 +1768,6 @@
     "recentlyOpenedFiles": "Hiljuti avatud failid",
     "resultCount": "{count, plural, one {# tulemus} other {# tulemust}}",
     "summaryAction": "Võta parimad tulemused kokku",
-    "summaryCitations": "Viidatud tulemused",
     "summaryError": "Kokkuvõte pole saadaval",
     "summaryLoading": "Tulemuste kokkuvõtmine...",
     "summaryPrompt": "Kasutab parimaid tulemusi ja nende sisu lühikese vastuse koostamiseks.",
@@ -1897,7 +1838,6 @@
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Praktika jurisdiktsioonid",
       "profile": "Profiil",
-      "profileDescription": "Update name and slug",
       "promptCaching": {
         "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada — ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
         "title": "Promptide vahemällu salvestamine",
@@ -1920,7 +1860,6 @@
       "usageLimitTitleEntitlementInactive": "Kasutusõigus ei ole aktiivne",
       "usageLimitTitleNoEntitlement": "Kasutusõigus on nõutav",
       "usageLimitTitleUsageLimitExceeded": "AI kasutuslimiit on täis",
-      "usageLoading": "Laadimine…",
       "usageManage": "Halda majutatud kasutust",
       "usageManageError": "Majutatud kasutuse haldust ei saanud avada",
       "usageManuallyManaged": "Käsitsi hallatud",
@@ -2032,7 +1971,6 @@
     "fieldInputType": "Sisendi tüüp",
     "fieldLabel": "Silt",
     "fieldLabelPlaceholder": "nt Täisnimi",
-    "fieldOptions": "Valikud",
     "fieldOptionsPlaceholder": "Sisestage valik ja vajutage Enter",
     "fieldUpdateFailed": "Väljade uuendamine ebaõnnestus",
     "fields": "Väljad",

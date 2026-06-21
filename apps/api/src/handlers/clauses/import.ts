@@ -89,6 +89,7 @@ const importHandler = async function* ({
       tx.query.clauseCategories.findMany({
         where: { organizationId: { eq: organizationId } },
         columns: { id: true, name: true, parentId: true },
+        limit: LIMITS.clauseCategoriesCount,
       }),
     ),
   );

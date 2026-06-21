@@ -6,29 +6,6 @@ import { MessageResponse } from "@/components/ai-elements/message";
 import type { MessageResponseProps } from "@/components/ai-elements/message-response";
 import { isSafeMarkdownPreviewImageSrc } from "@/components/markdown-preview.logic";
 
-// Markdown previews render untrusted document content. A remote image
-// source would be fetched the moment the inspector opens, leaking
-// document-open activity to an attacker-controlled URL (tracking pixel /
-// SSRF). Only render images whose data is embedded in the document; for
-// anything else, fall back to the alt text so nothing hits the network.
-const SafePreviewImage = ({
-  alt,
-  node: _node,
-  src,
-  ...props
-}: ComponentProps<"img"> & { node?: unknown }) => {
-  if (isSafeMarkdownPreviewImageSrc(src)) {
-    return <img alt={alt} src={src} {...props} />;
-  }
-  return alt ? (
-    <span className="text-muted-foreground italic">{alt}</span>
-  ) : null;
-};
-
-const MARKDOWN_PREVIEW_COMPONENTS = {
-  img: SafePreviewImage,
-} satisfies MessageResponseProps["components"];
-
 type MarkdownPreviewProps = Omit<MessageResponseProps, "components"> & {
   components?: MessageResponseProps["components"];
 };
@@ -60,3 +37,26 @@ export const MarkdownPreview = ({
     {...props}
   />
 );
+
+// Markdown previews render untrusted document content. A remote image
+// source would be fetched the moment the inspector opens, leaking
+// document-open activity to an attacker-controlled URL (tracking pixel /
+// SSRF). Only render images whose data is embedded in the document; for
+// anything else, fall back to the alt text so nothing hits the network.
+const SafePreviewImage = ({
+  alt,
+  node: _node,
+  src,
+  ...props
+}: ComponentProps<"img"> & { node?: unknown }) => {
+  if (isSafeMarkdownPreviewImageSrc(src)) {
+    return <img alt={alt} src={src} {...props} />;
+  }
+  return alt ? (
+    <span className="text-muted-foreground italic">{alt}</span>
+  ) : null;
+};
+
+const MARKDOWN_PREVIEW_COMPONENTS = {
+  img: SafePreviewImage,
+} satisfies MessageResponseProps["components"];

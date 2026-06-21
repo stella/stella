@@ -1,4 +1,5 @@
-import type { ComponentProps } from "react";
+import { useLayoutEffect, useMemo, useRef } from "react";
+import type { ComponentProps, RefObject } from "react";
 
 import { isToolUIPart } from "ai";
 import type { FileUIPart } from "ai";
@@ -6,6 +7,7 @@ import {
   ClockIcon,
   CopyIcon,
   FileTextIcon,
+  Loader2Icon,
   PaperclipIcon,
   RotateCcwIcon,
   XIcon,
@@ -41,12 +43,262 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
 } from "@/lib/user-files";
 import type { QueuedChatMessage } from "@/routes/_protected.chat/-hooks/use-chat-session";
+
+export const ChatThreadMessages = ({
+  approvalPendingMessageId,
+  error,
+  hasOlderMessages = false,
+  isGenerating = false,
+  isLoadingOlder = false,
+  loadOlderError = false,
+  messages,
+  onLoadOlder,
+  scrollContainerRef,
+  onResend,
+  onSendWithoutAnonymization,
+  onAskUserSubmit,
+  onAskUserEditAndRerun,
+  onCreateDocumentResolve,
+  onOpenCreatedDocument,
+  showThinkingIndicator = false,
+  showToolCallDetails,
+  showToolCalls,
+  queuedMessages,
+  onRemoveQueuedMessage,
+  streamdownComponents,
+  workspaceId,
+}: ChatThreadMessagesProps) => {
+  const { activeOrganizationId } = useChatApproval();
+  // This component bails out of React Compiler (a suppression below), so its
+  // manual memoization is kept (RC will not auto-memoize a bailed component).
+  const retryableAssistantMessageId = useMemo(
+    () => getRetryableAssistantMessageId(messages),
+    [messages],
+  );
+  const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
+
+  // Null when this list renders outside a `Conversation` (the file-chat
+  // overlay uses its own scroll container and never wires load-older).
+  const stick = useMaybeStickToBottomContext();
+  const scrollRef = scrollContainerRef ?? stick?.scrollElementRef ?? null;
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  const firstMessageId = messages.at(0)?.id ?? null;
+  const prevFirstMessageIdRef = useRef(firstMessageId);
+  // Scroll height captured the instant a load-older request fires,
+  // before the prepend grows the container above the viewport. Set
+  // back to null once consumed so only a genuine prepend (not a
+  // bottom-append/stream or a thread switch) restores scroll.
+  const anchorScrollHeightRef = useRef<number | null>(null);
+  const canLoadOlder = hasOlderMessages && onLoadOlder !== undefined;
+
+  const triggerLoadOlder = () => {
+    const container = scrollRef?.current;
+    if (container) {
+      anchorScrollHeightRef.current = container.scrollHeight;
+    }
+    void onLoadOlder?.();
+  };
+
+  // Drive the trigger from a top sentinel: when it scrolls into view
+  // (with a buffer) and an older page exists, fetch it. The observer
+  // re-arms each render so it tracks the latest `canLoadOlder` /
+  // `isLoadingOlder` without firing while a fetch is in flight.
+  useExternalSyncEffect(() => {
+    const root = scrollRef?.current;
+    const target = sentinelRef.current;
+    if (!root || !target || !canLoadOlder || isLoadingOlder || loadOlderError) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries.at(0);
+        if (!entry?.isIntersecting) {
+          return;
+        }
+        triggerLoadOlder();
+      },
+      { root, rootMargin: "240px 0px 0px 0px" },
+    );
+
+    observer.observe(target);
+    return () => observer.disconnect();
+    // Re-arm on paging state AND when the bound load callback changes: its
+    // identity changes on thread switch, so this stops the observer from
+    // fetching the previous thread's older page into the current transcript.
+    // `loadOlderError` keeps the observer detached after a failure so it
+    // cannot loop the request; the manual button is the only retry path.
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggerLoadOlder/scrollRef are stable refs; onLoadOlder tracks the active thread
+  }, [canLoadOlder, isLoadingOlder, loadOlderError, onLoadOlder]);
+
+  // Scroll anchoring: a prepend changes the first message id and grows
+  // scrollHeight above the viewport. Restore the previous offset before
+  // paint so the message under the user's eye stays put. Bottom-appends
+  // and streaming keep the first id, so they skip this and stick-to-
+  // bottom handles them; a thread switch changes the id too but has no
+  // captured anchor, so it is also skipped.
+  useLayoutEffect(() => {
+    const previousFirstId = prevFirstMessageIdRef.current;
+    prevFirstMessageIdRef.current = firstMessageId;
+    const previousScrollHeight = anchorScrollHeightRef.current;
+    anchorScrollHeightRef.current = null;
+    if (previousFirstId === firstMessageId || previousScrollHeight === null) {
+      return;
+    }
+    const container = scrollRef?.current;
+    if (!container) {
+      return;
+    }
+    container.scrollTop += container.scrollHeight - previousScrollHeight;
+  }, [firstMessageId, scrollRef]);
+
+  return (
+    <>
+      {canLoadOlder && (
+        <LoadOlderSentinel
+          isLoadingOlder={isLoadingOlder}
+          onLoadOlder={triggerLoadOlder}
+          ref={sentinelRef}
+        />
+      )}
+      {messages.map((message, index) => (
+        <Message
+          className={cn(
+            "transition-opacity duration-200",
+            approvalPendingMessageId &&
+              approvalPendingMessageId !== message.id &&
+              "opacity-40",
+          )}
+          from={message.role}
+          key={message.id}
+        >
+          <MessageContent>
+            {message.role === "assistant" ? (
+              <>
+                <AssistantMessageParts
+                  activeOrganizationId={activeOrganizationId}
+                  isLatestAssistantMessage={
+                    message.id === retryableAssistantMessageId
+                  }
+                  message={message}
+                  onAskUserEditAndRerun={onAskUserEditAndRerun}
+                  onAskUserSubmit={onAskUserSubmit}
+                  onCreateDocumentResolve={onCreateDocumentResolve}
+                  onOpenCreatedDocument={onOpenCreatedDocument}
+                  shouldShowToolCalls={shouldShowToolCalls}
+                  streamdownComponents={streamdownComponents}
+                  workspaceId={workspaceId}
+                />
+                <SourceChips
+                  activeOrganizationId={activeOrganizationId}
+                  messageId={message.id}
+                  parts={message.parts}
+                  workspaceId={workspaceId}
+                />
+                <AssistantMessageActions
+                  isGenerating={isGenerating}
+                  isLatestAssistantMessage={
+                    message.id === retryableAssistantMessageId
+                  }
+                  message={message}
+                  onResend={onResend}
+                />
+              </>
+            ) : (
+              <>
+                {(() => {
+                  const fileParts: FileUIPart[] = [];
+                  for (const part of message.parts) {
+                    if (part.type === "file") {
+                      fileParts.push(part);
+                    }
+                  }
+
+                  return <UserAttachments parts={fileParts} />;
+                })()}
+                {message.parts.map((part, partIndex) =>
+                  part.type === "text" ? (
+                    <UserMessageText
+                      key={`${message.id}-user-text-${partIndex}`}
+                      restorationPairs={getFollowingAssistantRestorations(
+                        messages,
+                        index,
+                      )}
+                      text={normalizeUserMessageTextForDisplay(part.text)}
+                    />
+                  ) : null,
+                )}
+              </>
+            )}
+          </MessageContent>
+        </Message>
+      ))}
+      {error && (
+        <ChatErrorMessage
+          error={error}
+          isGenerating={isGenerating}
+          onResend={onResend}
+          onSendWithoutAnonymization={onSendWithoutAnonymization}
+        />
+      )}
+      {showThinkingIndicator &&
+        isGenerating &&
+        !hasVisibleContent(messages) && <ThinkingIndicator />}
+      {onRemoveQueuedMessage &&
+        queuedMessages !== undefined &&
+        queuedMessages.length > 0 && (
+          <QueuedUserMessages
+            messages={queuedMessages}
+            onRemove={onRemoveQueuedMessage}
+          />
+        )}
+    </>
+  );
+};
+
+type LoadOlderSentinelProps = {
+  isLoadingOlder: boolean;
+  onLoadOlder: () => void;
+  ref: React.Ref<HTMLDivElement>;
+};
+
+/**
+ * Top-of-list paging affordance. The `div` is the IntersectionObserver
+ * target that auto-loads when scrolled near; the button is the manual,
+ * keyboard-accessible fallback. While a page is in flight it shows a
+ * spinner instead so the observer (re-armed only when idle) cannot
+ * stack requests.
+ */
+const LoadOlderSentinel = ({
+  isLoadingOlder,
+  onLoadOlder,
+  ref,
+}: LoadOlderSentinelProps) => {
+  const t = useTranslations();
+
+  return (
+    <div className="flex justify-center py-1" ref={ref}>
+      {isLoadingOlder ? (
+        <span className="text-muted-foreground flex items-center gap-2 text-xs">
+          <Loader2Icon aria-hidden="true" className="size-3.5 animate-spin" />
+          {t("chat.loadingEarlierMessages")}
+        </span>
+      ) : (
+        <Button onClick={onLoadOlder} size="sm" variant="ghost">
+          {t("chat.loadEarlierMessages")}
+        </Button>
+      )}
+    </div>
+  );
+};
 
 const USER_STREAMDOWN_COMPONENTS = {
   a: (props: ComponentProps<"a">) => (
@@ -399,7 +651,7 @@ const AssistantMessageActions = ({
     | undefined;
 }) => {
   const t = useTranslations();
-  const text = getMessageText(message);
+  const text = useMemo(() => getMessageText(message), [message]);
   const canRetry = Boolean(
     onResend && isLatestAssistantMessage && !isGenerating,
   );
@@ -465,8 +717,21 @@ const getRetryableAssistantMessageId = (
 type ChatThreadMessagesProps = {
   approvalPendingMessageId: string | null;
   error?: Error | undefined;
+  /** Whether an older page exists to load above the current top. */
+  hasOlderMessages?: boolean | undefined;
   isGenerating?: boolean | undefined;
+  /** True while an older page is being fetched + prepended. */
+  isLoadingOlder?: boolean | undefined;
+  /** True after an older-page fetch failed; pauses the auto-trigger so the
+   *  sentinel cannot loop the request (the manual button still retries). */
+  loadOlderError?: boolean | undefined;
   messages: PersistedChatMessage[];
+  /** Explicit scroll container for surfaces that render outside a
+   *  `Conversation`/StickToBottom provider (e.g. the file-chat overlay);
+   *  falls back to the StickToBottom context when omitted. */
+  scrollContainerRef?: RefObject<HTMLDivElement | null> | undefined;
+  /** Fetch + prepend the page immediately older than the current top. */
+  onLoadOlder?: (() => void | PromiseLike<void>) | undefined;
   onResend?:
     | ((options?: ChatResendOptions) => void | PromiseLike<void>)
     | undefined;
@@ -516,126 +781,6 @@ type ChatThreadMessagesProps = {
 
 type ChatResendOptions = {
   messageId?: string | undefined;
-};
-
-export const ChatThreadMessages = ({
-  approvalPendingMessageId,
-  error,
-  isGenerating = false,
-  messages,
-  onResend,
-  onSendWithoutAnonymization,
-  onAskUserSubmit,
-  onAskUserEditAndRerun,
-  onCreateDocumentResolve,
-  onOpenCreatedDocument,
-  showThinkingIndicator = false,
-  showToolCallDetails,
-  showToolCalls,
-  queuedMessages,
-  onRemoveQueuedMessage,
-  streamdownComponents,
-  workspaceId,
-}: ChatThreadMessagesProps) => {
-  const { activeOrganizationId } = useChatApproval();
-  const retryableAssistantMessageId = getRetryableAssistantMessageId(messages);
-  const shouldShowToolCalls = showToolCallDetails ?? showToolCalls ?? false;
-
-  return (
-    <>
-      {messages.map((message, index) => (
-        <Message
-          className={cn(
-            "transition-opacity duration-200",
-            approvalPendingMessageId &&
-              approvalPendingMessageId !== message.id &&
-              "opacity-40",
-          )}
-          from={message.role}
-          key={message.id}
-        >
-          <MessageContent>
-            {message.role === "assistant" ? (
-              <>
-                <AssistantMessageParts
-                  activeOrganizationId={activeOrganizationId}
-                  isLatestAssistantMessage={
-                    message.id === retryableAssistantMessageId
-                  }
-                  message={message}
-                  onAskUserEditAndRerun={onAskUserEditAndRerun}
-                  onAskUserSubmit={onAskUserSubmit}
-                  onCreateDocumentResolve={onCreateDocumentResolve}
-                  onOpenCreatedDocument={onOpenCreatedDocument}
-                  shouldShowToolCalls={shouldShowToolCalls}
-                  streamdownComponents={streamdownComponents}
-                  workspaceId={workspaceId}
-                />
-                <SourceChips
-                  activeOrganizationId={activeOrganizationId}
-                  messageId={message.id}
-                  parts={message.parts}
-                  workspaceId={workspaceId}
-                />
-                <AssistantMessageActions
-                  isGenerating={isGenerating}
-                  isLatestAssistantMessage={
-                    message.id === retryableAssistantMessageId
-                  }
-                  message={message}
-                  onResend={onResend}
-                />
-              </>
-            ) : (
-              <>
-                {(() => {
-                  const fileParts: FileUIPart[] = [];
-                  for (const part of message.parts) {
-                    if (part.type === "file") {
-                      fileParts.push(part);
-                    }
-                  }
-
-                  return <UserAttachments parts={fileParts} />;
-                })()}
-                {message.parts.map((part, partIndex) =>
-                  part.type === "text" ? (
-                    <UserMessageText
-                      key={`${message.id}-user-text-${partIndex}`}
-                      restorationPairs={getFollowingAssistantRestorations(
-                        messages,
-                        index,
-                      )}
-                      text={normalizeUserMessageTextForDisplay(part.text)}
-                    />
-                  ) : null,
-                )}
-              </>
-            )}
-          </MessageContent>
-        </Message>
-      ))}
-      {error && (
-        <ChatErrorMessage
-          error={error}
-          isGenerating={isGenerating}
-          onResend={onResend}
-          onSendWithoutAnonymization={onSendWithoutAnonymization}
-        />
-      )}
-      {showThinkingIndicator &&
-        isGenerating &&
-        !hasVisibleContent(messages) && <ThinkingIndicator />}
-      {onRemoveQueuedMessage &&
-        queuedMessages !== undefined &&
-        queuedMessages.length > 0 && (
-          <QueuedUserMessages
-            messages={queuedMessages}
-            onRemove={onRemoveQueuedMessage}
-          />
-        )}
-    </>
-  );
 };
 
 type QueuedUserMessagesProps = {
@@ -829,10 +974,16 @@ const AssistantTextPart = ({
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
 }) => {
-  const rehypePlugins: PluggableList | undefined =
-    restorationPairs.length > 0
-      ? [[rehypeAnonSpans, restorationPairs]]
-      : undefined;
+  // Stable identity so MessageResponse memo can short-circuit when
+  // nothing actually changed; recomputes only when the pairs array
+  // identity changes (i.e. a fresh stream emitted new restorations).
+  const rehypePlugins = useMemo<PluggableList | undefined>(
+    () =>
+      restorationPairs.length > 0
+        ? [[rehypeAnonSpans, restorationPairs]]
+        : undefined,
+    [restorationPairs],
+  );
   if (rehypePlugins === undefined) {
     return <MessageResponse components={components}>{text}</MessageResponse>;
   }
@@ -868,10 +1019,13 @@ const UserMessageText = ({
    */
   restorationPairs: readonly ChatAnonRestoration[];
 }) => {
-  const rehypePlugins: PluggableList | undefined =
-    restorationPairs.length > 0
-      ? [[rehypeAnonSpans, restorationPairs]]
-      : undefined;
+  const rehypePlugins = useMemo<PluggableList | undefined>(
+    () =>
+      restorationPairs.length > 0
+        ? [[rehypeAnonSpans, restorationPairs]]
+        : undefined,
+    [restorationPairs],
+  );
   if (rehypePlugins === undefined) {
     return (
       <MessageResponse components={USER_TEXT_STREAMDOWN_COMPONENTS}>

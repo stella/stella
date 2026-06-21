@@ -315,6 +315,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
     "./.oxlint-plugins/no-offset-pagination.ts",
+    "./.oxlint-plugins/require-query-limit.ts",
     "./.oxlint-plugins/mcp-security.ts",
     "./.oxlint-plugins/auth-lifecycle.ts",
     "./.oxlint-plugins/stella-toast.ts",
@@ -637,6 +638,12 @@ export default defineConfig({
       },
     },
     {
+      files: [".oxlint-plugins/__fixtures__/require-query-limit.fixture.ts"],
+      rules: {
+        "require-query-limit/require-query-limit": "error",
+      },
+    },
+    {
       files: ["apps/web/src/components/date-picker-popover.tsx"],
       rules: {
         "no-restricted-imports": [
@@ -935,6 +942,20 @@ export default defineConfig({
       excludeFiles: ["apps/api/src/handlers/**/*.test.ts"],
       rules: {
         "require-audit-on-mutation/require-audit-on-mutation": "error",
+      },
+    },
+    {
+      // require-query-limit flags unbounded Drizzle reads (a `findMany`
+      // with no `limit`, or an ordered `select` chain with no `.limit()`)
+      // per conventions-db / conventions-scale. Genuine list reads carry a
+      // `.limit(LIMITS.*)`; reads that are bounded by a single-parent FK
+      // filter (a fixed-cardinality relation) carry an inline disable with a
+      // `// SAFETY:` note explaining the bound. Test files run unbounded
+      // fixtures intentionally and are excluded.
+      files: ["apps/api/src/**/*.ts"],
+      excludeFiles: ["apps/api/src/**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-query-limit/require-query-limit": "error",
       },
     },
     {

@@ -198,6 +198,13 @@ export const checkpointDesktopEditSessionHandler = async ({
       workspaceId: authorizedSession.value.workspaceId,
     });
 
+    // This S3 write stays inside the FOR UPDATE transaction by design (do
+    // not hoist it out to shorten the lock): `key` is the fixed per-session
+    // checkpoint slot, and the write runs only after the row-locked token
+    // check above. Writing before the lock would let a stale or taken-over
+    // token-holder overwrite the checkpoint, desyncing the S3 object from
+    // the persisted checkpointSha256Hex. The lock is held for one write on
+    // a low-frequency, single-session path.
     await getS3().write(key, new Uint8Array(buffer));
 
     const checkpointedAt = new Date();

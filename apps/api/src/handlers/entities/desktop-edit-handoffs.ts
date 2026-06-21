@@ -101,7 +101,7 @@ type BuildDesktopEditHandoffDeepLinkProps = {
   handoffToken: string;
 };
 
-export const buildDesktopEditHandoffDeepLink = ({
+const buildDesktopEditHandoffDeepLink = ({
   apiBaseUrl,
   handoffToken,
 }: BuildDesktopEditHandoffDeepLinkProps) => {

@@ -363,7 +363,7 @@ export const FileTabPanel = ({
                 render={
                   <Button
                     className={cn(
-                      "transition-all",
+                      "transition-[color,background-color,box-shadow]",
                       flashingMinimizeTabId === tab.id &&
                         "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
                     )}
@@ -571,7 +571,7 @@ export const FileTabPanel = ({
     if (isEditingNativeDocx) {
       return (
         <Button
-          className="transition-all"
+          className="transition-colors"
           onClick={() => {
             docxActionsRef.current.get(tab.id)?.finalize();
           }}
@@ -586,7 +586,7 @@ export const FileTabPanel = ({
       return (
         <Button
           className={cn(
-            "transition-all",
+            "transition-[color,background-color,box-shadow]",
             isPromptingDocxUnlock &&
               "bg-primary/10 text-primary ring-primary/60 animate-pulse ring-2",
           )}

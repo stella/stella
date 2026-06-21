@@ -32,7 +32,7 @@ const config = {
 
 const getThreads = createSafeRootHandler(
   config,
-  async function* ({ accessibleWorkspaces, query, safeDb, session, user }) {
+  async function* ({ activeWorkspaceIds, query, safeDb, session, user }) {
     const limit = query.limit ?? LIMITS.chatThreadListPageSizeDefault;
     const cursor = query.cursor
       ? decodeChatThreadListCursor(query.cursor)
@@ -43,9 +43,7 @@ const getThreads = createSafeRootHandler(
       );
     }
 
-    const visibleWorkspaceIds = accessibleWorkspaces
-      .filter((w) => w.status !== "deleting")
-      .map((w) => w.id);
+    const visibleWorkspaceIds = activeWorkspaceIds;
     const conditions: SQL[] = [
       eq(chatThreads.organizationId, session.activeOrganizationId),
       eq(chatThreads.userId, user.id),

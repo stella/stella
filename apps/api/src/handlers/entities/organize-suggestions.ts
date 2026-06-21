@@ -423,13 +423,21 @@ const parentOf = (path: string): string => {
   return segments.join("/");
 };
 
-const remapFolderPath = (
-  current: string,
-  collapsedPath: string,
-  parentPath: string,
-  isFileLeaf: boolean,
-  isPassThrough: boolean,
-): string => {
+type RemapFolderPathOptions = {
+  current: string;
+  collapsedPath: string;
+  parentPath: string;
+  isFileLeaf: boolean;
+  isPassThrough: boolean;
+};
+
+const remapFolderPath = ({
+  current,
+  collapsedPath,
+  parentPath,
+  isFileLeaf,
+  isPassThrough,
+}: RemapFolderPathOptions): string => {
   if (isFileLeaf && current === collapsedPath) {
     return parentPath;
   }
@@ -440,23 +448,30 @@ const remapFolderPath = (
   return current;
 };
 
-const applyCollapseAt = (
-  suggestions: Map<string, GeneratedSuggestion>,
-  collapsedPath: string,
-  isFileLeaf: boolean,
-  isPassThrough: boolean,
-): Map<string, GeneratedSuggestion> | null => {
+type ApplyCollapseAtOptions = {
+  suggestions: Map<string, GeneratedSuggestion>;
+  collapsedPath: string;
+  isFileLeaf: boolean;
+  isPassThrough: boolean;
+};
+
+const applyCollapseAt = ({
+  suggestions,
+  collapsedPath,
+  isFileLeaf,
+  isPassThrough,
+}: ApplyCollapseAtOptions): Map<string, GeneratedSuggestion> | null => {
   const parentPath = parentOf(collapsedPath);
   const next = new Map<string, GeneratedSuggestion>();
   let changed = false;
   for (const [entityId, suggestion] of suggestions) {
-    const replaced = remapFolderPath(
-      suggestion.folderPath,
+    const replaced = remapFolderPath({
+      current: suggestion.folderPath,
       collapsedPath,
       parentPath,
       isFileLeaf,
       isPassThrough,
-    );
+    });
     if (replaced !== suggestion.folderPath) {
       changed = true;
       next.set(entityId, { ...suggestion, folderPath: replaced });
@@ -482,12 +497,12 @@ const collapsePass = ({
     if (children.size + files !== 1) {
       continue;
     }
-    const result = applyCollapseAt(
+    const result = applyCollapseAt({
       suggestions,
-      path,
-      files === 1,
-      children.size === 1,
-    );
+      collapsedPath: path,
+      isFileLeaf: files === 1,
+      isPassThrough: children.size === 1,
+    });
     if (result !== null) {
       return result;
     }

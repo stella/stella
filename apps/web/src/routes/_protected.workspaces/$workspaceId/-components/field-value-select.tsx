@@ -11,39 +11,6 @@ import {
 import type { WorkspacePropertyOption } from "@/lib/types";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 
-type SelectValueContentProps = {
-  value: string | string[] | null;
-  options: WorkspacePropertyOption[];
-  type: "single-select" | "multi-select";
-};
-
-const SelectValueContent = ({
-  value,
-  options,
-  type,
-}: SelectValueContentProps) => {
-  const t = useTranslations();
-
-  if (value === null || (Array.isArray(value) && value.length === 0)) {
-    return type === "multi-select"
-      ? t("workspaces.fields.selectValues")
-      : t("workspaces.fields.selectAValue");
-  }
-
-  if (Array.isArray(value)) {
-    return value.join(", ");
-  }
-
-  const color = options.find((o) => o.value === value)?.color;
-
-  return (
-    <div className="flex items-center gap-x-1.5">
-      <SelectColorIcon color={color} />
-      {value}
-    </div>
-  );
-};
-
 type FieldValueSelectProps =
   | {
       type: "single-select";
@@ -100,5 +67,38 @@ export const FieldValueSelect = ({
         ))}
       </SelectPopup>
     </Select>
+  );
+};
+
+type SelectValueContentProps = {
+  value: string | string[] | null;
+  options: WorkspacePropertyOption[];
+  type: "single-select" | "multi-select";
+};
+
+const SelectValueContent = ({
+  value,
+  options,
+  type,
+}: SelectValueContentProps) => {
+  const t = useTranslations();
+
+  if (value === null || (Array.isArray(value) && value.length === 0)) {
+    return type === "multi-select"
+      ? t("workspaces.fields.selectValues")
+      : t("workspaces.fields.selectAValue");
+  }
+
+  if (Array.isArray(value)) {
+    return value.join(", ");
+  }
+
+  const color = options.find((o) => o.value === value)?.color;
+
+  return (
+    <div className="flex items-center gap-x-1.5">
+      <SelectColorIcon color={color} />
+      {value}
+    </div>
   );
 };

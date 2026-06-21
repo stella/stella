@@ -44,7 +44,7 @@ export const openDesktopEditSessionBodySchema = t.Object({
   propertyId: tSafeId("property"),
 });
 
-export type OpenDesktopEditSessionResponse = {
+type OpenDesktopEditSessionResponse = {
   baseVersionNumber: number;
   downloadUrl: string;
   fileName: string;

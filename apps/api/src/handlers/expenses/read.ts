@@ -13,6 +13,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -23,7 +24,9 @@ import {
 import { brandPersistedExpenseId } from "@/api/lib/safe-id-boundaries";
 
 const readExpensesQuerySchema = t.Object({
-  limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
+  limit: t.Optional(
+    t.Integer({ minimum: 1, maximum: LIMITS.expensesPageSizeMax }),
+  ),
   cursor: t.Optional(t.String({ maxLength: 512 })),
   userId: t.Optional(tUserId),
   matterId: t.Optional(tSafeId("entity")),
@@ -62,7 +65,7 @@ const decodeExpenseCursor = (cursor: string): ExpenseCursor | null => {
 const readExpenses = createSafeHandler(
   config,
   async function* ({ safeDb, session, workspaceId, query }) {
-    const limit = query.limit ?? 100;
+    const limit = query.limit ?? LIMITS.expensesPageSizeDefault;
 
     const conditions = [eq(expenses.workspaceId, workspaceId)];
 

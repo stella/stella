@@ -9,23 +9,53 @@ const ALLOWED_CHARS = /^[abcdefghjkmnpqrstuvwxyz23456789]+$/u;
 
 describe("toDocumentReference", () => {
   test("formats with matter ref, padded seq, and version", () => {
-    expect(toDocumentReference("2026/001", 15, 3)).toBe("2026/001/015.v3");
+    expect(
+      toDocumentReference({
+        matterReference: "2026/001",
+        docSequence: 15,
+        versionNumber: 3,
+      }),
+    ).toBe("2026/001/015.v3");
   });
 
   test("pads single-digit sequence to 3 chars", () => {
-    expect(toDocumentReference("CORP-001", 3, 1)).toBe("CORP-001/003.v1");
+    expect(
+      toDocumentReference({
+        matterReference: "CORP-001",
+        docSequence: 3,
+        versionNumber: 1,
+      }),
+    ).toBe("CORP-001/003.v1");
   });
 
   test("does not truncate sequence exceeding padding", () => {
-    expect(toDocumentReference("001", 1234, 2)).toBe("001/1234.v2");
+    expect(
+      toDocumentReference({
+        matterReference: "001",
+        docSequence: 1234,
+        versionNumber: 2,
+      }),
+    ).toBe("001/1234.v2");
   });
 
   test("handles version 1", () => {
-    expect(toDocumentReference("2026/001", 1, 1)).toBe("2026/001/001.v1");
+    expect(
+      toDocumentReference({
+        matterReference: "2026/001",
+        docSequence: 1,
+        versionNumber: 1,
+      }),
+    ).toBe("2026/001/001.v1");
   });
 
   test("handles bare numeric matter reference", () => {
-    expect(toDocumentReference("001", 42, 2)).toBe("001/042.v2");
+    expect(
+      toDocumentReference({
+        matterReference: "001",
+        docSequence: 42,
+        versionNumber: 2,
+      }),
+    ).toBe("001/042.v2");
   });
 });
 

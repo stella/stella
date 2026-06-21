@@ -1,3 +1,4 @@
+import type { LanguageModel } from "ai";
 import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Static } from "elysia";
@@ -34,7 +35,10 @@ import {
   validateMessage,
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import { compactChatMessagesForModel } from "@/api/handlers/chat/compaction";
+import {
+  compactChatMessagesForModel,
+  shouldCompactChatMessages,
+} from "@/api/handlers/chat/compaction";
 import {
   expandThreadDataScope,
   extractAssistantWorkspaceIds,
@@ -43,6 +47,12 @@ import {
 } from "@/api/handlers/chat/data-scope";
 import { ChatError } from "@/api/handlers/chat/errors";
 import { generateThreadTitle } from "@/api/handlers/chat/generate-thread-title";
+import {
+  chatMessageExistsForThread,
+  loadFullThreadHistory,
+  loadWindowedThreadMessages,
+  resolveTruncationTarget,
+} from "@/api/handlers/chat/history-window";
 import { isExternalMcpToolPart } from "@/api/handlers/chat/mcp-tool-parts";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
 import {
@@ -264,6 +274,7 @@ const sendMessage = createSafeRootHandler(
     const thread = yield* Result.await(
       loadThread({
         initialContextMatterIds: requestedContextMatterIds,
+        isAnonymized: body.sendMode === CHAT_SEND_MODE.anonymized,
         organizationId: session.activeOrganizationId,
         recordAuditEvent,
         safeDb,
@@ -342,8 +353,12 @@ const sendMessage = createSafeRootHandler(
       message: uploadResult.message,
     });
 
-    let messagesForPersistence = thread.data.messages;
+    let messagesForPersistence: ThreadRecord["messages"] = thread.data.messages;
     let deleteMessageIdsBeforeLatest: SafeId<"chatMessage">[] = [];
+    // The incoming message normally is new. Outside the truncation path the
+    // stored list is a bounded window that may exclude an old re-sent/edited
+    // id, so a targeted existence check guards against a duplicate insert.
+    let incomingMessageExists = false;
     if (body.truncateAfterMessageId !== undefined) {
       if (parsedMessage.message.id !== body.truncateAfterMessageId) {
         return Result.err(
@@ -354,10 +369,17 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      const truncateIndex = thread.data.messages.findIndex(
-        (message) => message.id === body.truncateAfterMessageId,
+      // Resolve the target against the full thread history, not the windowed
+      // in-memory list: a replay target can be older than the window. The
+      // retained prefix is needed to recompute the thread data scope.
+      const truncationTarget = yield* Result.await(
+        resolveTruncationTarget({
+          safeDb,
+          threadId: body.threadId,
+          targetMessageId: body.truncateAfterMessageId,
+        }),
       );
-      if (truncateIndex === -1) {
+      if (truncationTarget === null) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -366,15 +388,23 @@ const sendMessage = createSafeRootHandler(
         );
       }
 
-      messagesForPersistence = thread.data.messages.slice(0, truncateIndex + 1);
-      deleteMessageIdsBeforeLatest = thread.data.messages
-        .slice(truncateIndex + 1)
-        .map((message) => message.id);
+      messagesForPersistence = truncationTarget.messagesForPersistence;
+      deleteMessageIdsBeforeLatest =
+        truncationTarget.deleteMessageIdsBeforeLatest;
+    } else {
+      incomingMessageExists = yield* Result.await(
+        chatMessageExistsForThread({
+          messageId: brandPersistedChatMessageId(parsedMessage.message.id),
+          safeDb,
+          threadId: body.threadId,
+        }),
+      );
     }
 
     const latestMessagePlan = planMessagePersistence({
       message: parsedMessage.message,
       storedMessages: messagesForPersistence,
+      incomingMessageExists,
     });
     if (
       body.truncateAfterMessageId !== undefined &&
@@ -954,6 +984,14 @@ const scheduleChatCompactionCheckpoint = ({
   safeDb,
   threadId,
 }: ScheduleChatCompactionCheckpointProps): void => {
+  // Cheap token-estimate gate over the per-send window. For non-anonymized
+  // threads (the only ones that schedule a checkpoint) the window now holds the
+  // full pre-checkpoint history, so it accurately signals whether compaction is
+  // due; the common case is under the trigger and issues no full-history read.
+  if (!shouldCompactChatMessages(messages)) {
+    return;
+  }
+
   const modelResult = resolveChatCompactionModel({
     devModelId,
     organizationId,
@@ -967,11 +1005,56 @@ const scheduleChatCompactionCheckpoint = ({
     return;
   }
 
-  void persistChatCompactionCheckpoint({
+  void runChatCompactionCheckpoint({
     abortSignal,
     boundary,
-    messages,
     model: modelResult.value,
+    safeDb,
+    threadId,
+  }).catch((error: unknown) => {
+    captureError(error, {
+      threadId,
+      feature: "chat.compaction_checkpoint_persist",
+    });
+  });
+};
+
+type RunChatCompactionCheckpointProps = {
+  abortSignal: AbortSignal;
+  boundary: ReturnType<typeof createChatThirdPartyBoundary>;
+  model: LanguageModel;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+};
+
+const runChatCompactionCheckpoint = async ({
+  abortSignal,
+  boundary,
+  model,
+  safeDb,
+  threadId,
+}: RunChatCompactionCheckpointProps): Promise<void> => {
+  // Summarize from the true start of the conversation. The window passed to
+  // the gate above is enough to know a checkpoint is due, but the durable
+  // summary must cover the full unsummarized prefix [0..newFirstKept] with
+  // real boundary message ids, or context summarized into an earlier
+  // checkpoint would be silently dropped. Never feed a synthetic compaction
+  // summary message here: its id is not a real chat_messages row and would
+  // violate the firstKept/firstSummarized FKs.
+  const historyResult = await loadFullThreadHistory({ safeDb, threadId });
+  if (Result.isError(historyResult)) {
+    captureError(historyResult.error, {
+      threadId,
+      feature: "chat.compaction_checkpoint_history",
+    });
+    return;
+  }
+
+  const persistResult = await persistChatCompactionCheckpoint({
+    abortSignal,
+    boundary,
+    messages: historyResult.value,
+    model,
     onSummaryError: (error) => {
       captureError(error, {
         threadId,
@@ -980,22 +1063,13 @@ const scheduleChatCompactionCheckpoint = ({
     },
     safeDb,
     threadId,
-  })
-    .then((result) => {
-      if (Result.isError(result)) {
-        captureError(result.error, {
-          threadId,
-          feature: "chat.compaction_checkpoint_persist",
-        });
-      }
-      return undefined;
-    })
-    .catch((error: unknown) => {
-      captureError(error, {
-        threadId,
-        feature: "chat.compaction_checkpoint_persist",
-      });
+  });
+  if (Result.isError(persistResult)) {
+    captureError(persistResult.error, {
+      threadId,
+      feature: "chat.compaction_checkpoint_persist",
     });
+  }
 };
 
 const isChatStreamResponse = (response: Response): boolean => {
@@ -1081,6 +1155,7 @@ type ThreadRecord = {
 
 type LoadThreadProps = {
   initialContextMatterIds: SafeId<"workspace">[];
+  isAnonymized: boolean;
   organizationId: SafeId<"organization">;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -1102,6 +1177,7 @@ type LoadThreadResult =
 
 const loadThread = async ({
   initialContextMatterIds,
+  isAnonymized,
   organizationId,
   recordAuditEvent,
   safeDb,
@@ -1125,7 +1201,6 @@ const loadThread = async ({
       contextMatterIds: SafeId<"workspace">[];
       dataWorkspaceIds: SafeId<"workspace">[];
       webSearchEnabled: boolean;
-      messages: ThreadRecord["messages"];
     };
 
     const lookup = async () =>
@@ -1143,19 +1218,15 @@ const loadThread = async ({
             dataWorkspaceIds: true,
             webSearchEnabled: true,
           },
-          with: {
-            messages: {
-              columns: {
-                id: true,
-                role: true,
-                content: true,
-              },
-              orderBy: { createdAt: "asc" },
-            },
-          },
         }),
       );
 
+    // Load only the per-send window: when an active compaction checkpoint
+    // exists, the already-summarized [0..firstKept) prefix is dropped, so a
+    // normal send no longer re-reads the whole thread into memory. The
+    // truncation/edit path resolves an older target directly against the DB
+    // (resolveTruncationTarget), so a window miss never makes a target
+    // unfindable.
     const buildExisting = (
       existing: ExistingThreadRow,
     ): Result<LoadThreadResult, HandlerError<400>> => {
@@ -1176,7 +1247,7 @@ const loadThread = async ({
           contextMatterIds: existing.contextMatterIds,
           dataWorkspaceIds: existing.dataWorkspaceIds,
           webSearchEnabled: existing.webSearchEnabled,
-          messages: existing.messages,
+          messages: [],
         },
       });
     };
@@ -1187,9 +1258,16 @@ const loadThread = async ({
       if (Result.isError(existingResult)) {
         return Result.err(existingResult.error);
       }
+      const windowedMessages = yield* Result.await(
+        loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
+      );
+      existingResult.value.data.messages = windowedMessages;
       if (
         shouldRefreshEmptyThreadTitle({
-          messageCount: thread.messages.length,
+          // A non-empty thread always includes at least its first-kept
+          // message in the window, so window length === 0 iff the thread is
+          // empty — the only thing this check needs to know.
+          messageCount: windowedMessages.length,
           title: thread.title,
         })
       ) {
@@ -1266,7 +1344,15 @@ const loadThread = async ({
       // Re-run the lookup under current RLS to disambiguate.
       const recovered = yield* Result.await(lookup());
       if (recovered) {
-        return buildExisting(recovered);
+        const recoveredResult = buildExisting(recovered);
+        if (Result.isError(recoveredResult)) {
+          return Result.err(recoveredResult.error);
+        }
+        const recoveredMessages = yield* Result.await(
+          loadWindowedThreadMessages({ safeDb, threadId, isAnonymized }),
+        );
+        recoveredResult.value.data.messages = recoveredMessages;
+        return Result.ok(recoveredResult.value);
       }
       return Result.err(
         new HandlerError({

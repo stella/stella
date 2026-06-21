@@ -199,6 +199,7 @@ const createTask = createSafeHandler(
               userId: { in: body.assigneeIds },
             },
             columns: { userId: true },
+            limit: LIMITS.workspaceMembersCount,
           });
           const memberIds = new Set(members.map((m) => m.userId));
           const invalidIds = body.assigneeIds.filter(

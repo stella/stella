@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Jelenlegi",
-      "description": "Aktív munkamenetek kezelése",
       "device": "Eszköz",
       "deviceOnOs": "{browser} – {os}",
       "ipAddress": "IP-cím",
@@ -21,25 +20,6 @@
       "description": "Adj hozzá szolgáltatói hitelesítési adatokat az AI-funkciók használatához.",
       "title": "AI-szolgáltató csatlakoztatása"
     }
-  },
-  "anonymize": {
-    "addEntity": "Entitás hozzáadása",
-    "checkAnonymization": "Check anonymisation",
-    "closeAddForm": "Hozzáadási űrlap bezárása",
-    "confirmAll": "Összes megerősítése",
-    "entities": "Entitások",
-    "entityType": "Entitástípus",
-    "extractingText": "Szöveg kinyerése…",
-    "noEntitiesFound": "Nem található entitás",
-    "reject": "Elutasítás",
-    "rejectAll": "Összes elutasítása",
-    "removeEntity": "Entitás eltávolítása",
-    "revise": "Revise anonymisation",
-    "runPipeline": "Folyamat futtatása",
-    "running": "Fut…",
-    "searchMatches": "A dokumentumban keresendő szavak",
-    "searchPlaceholder": "Írjon be keresendő szavakat…",
-    "title": "Anonymisation review"
   },
   "app": {
     "versionMismatch": {
@@ -73,7 +53,6 @@
     "weekStartSunday": "Vasárnap"
   },
   "auth": {
-    "betaNoticeBody": "Elővigyázatosságból a béta időszakban ne töltsön fel érzékeny, privilegizált, személyes, pótolhatatlan vagy éles működéshez kritikus adatokat. A Cloud bemutató szolgáltatás.",
     "betaNoticeTitle": "Béta",
     "checkSpamHint": "Ha nem látja, ellenőrizze a levélszemét mappát.",
     "chooseOrganization": "Válassza ki a szervezetet, amelyben dolgozni szeretne",
@@ -103,7 +82,6 @@
     "selectOrganization": "Válasszon szervezetet",
     "signIn": "Bejelentkezés",
     "signInBeforeInvitation": "A szervezeti meghívó elfogadásához először be kell jelentkeznie.",
-    "signInWithEmail": "Bejelentkezés e-mailben",
     "subtitle": "Dokumentumok, ítélkezési gyakorlat és felülvizsgálat kézben tartva. AI segítségével.",
     "useDifferentEmail": "Másik e-mail-cím használata",
     "weSentCodeTo": "Kódot küldtünk a következő címre: {email}"
@@ -122,8 +100,10 @@
       "activityCode": "Tevékenységkód",
       "codeLabel": "Kód",
       "codeLabelField": "Felirat",
+      "codePlaceholder": "L110",
       "createCode": "Kód létrehozása",
       "inactive": "Inaktív",
+      "labelPlaceholder": "Kutatás",
       "manageCodes": "Kódok kezelése",
       "noCodesYet": "Még nincsenek számlázási kódok",
       "task": "Feladat",
@@ -271,31 +251,14 @@
     "emptyState": "Nem található határozat. Adjon meg egy forrást, és futtasson szinkronizálást a joggyakorlat importálásához.",
     "filters": {
       "court": "Bíróság",
-      "dateFrom": "Dátumtól",
-      "dateTo": "Dátumig",
       "searchPlaceholder": "Keresés ügyszám alapján..."
     },
-    "loading": "Betöltés...",
     "loadingMore": "Betöltés folyamatban...",
-    "sectionTypes": {
-      "argumentation": "Indokolás",
-      "dissent": "Különvélemény",
-      "footer": "Lábléc",
-      "header": "Fejléc",
-      "ruling": "Rendelkező rész",
-      "unknown": "Egyéb"
-    },
     "seo": {
       "browse": "Jogesetek böngészése",
       "countries": "Országok",
       "courts": "Bíróságok",
       "years": "Évek"
-    },
-    "sources": {
-      "empty": "Nincs konfigurált forrás.",
-      "lastSync": "Utolsó szinkronizálás: {date, date, medium}",
-      "neverSynced": "Még nem volt szinkronizálva",
-      "title": "Források"
     },
     "viewer": {
       "abstract": "Kivonat",
@@ -305,7 +268,6 @@
       "legalSentence": "Elvi bírósági határozat",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Népszerű név",
-      "sections": "Szakaszok",
       "source": "Forrás",
       "sourceFields": {
         "decisionCategory": "Döntés kategóriája",
@@ -453,6 +415,9 @@
       "prompts": "Skillek",
       "recentChats": "Legutóbbi chatek"
     },
+    "loadEarlierMessages": "Korábbi üzenetek betöltése",
+    "loadEarlierMessagesError": "A korábbi üzenetek betöltése sikertelen",
+    "loadingEarlierMessages": "Korábbi üzenetek betöltése…",
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
@@ -584,7 +549,6 @@
     "allClauses": "Összes záradék",
     "backToList": "Vissza a záradékokhoz",
     "body": "Szövegtest",
-    "categories": "Kategóriák",
     "categoryDeleteConfirm": "Az ebbe a kategóriába tartozó záradékok kategória nélkülivé válnak.",
     "categoryName": "Kategória neve",
     "categoryNamePlaceholder": "pl. Titoktartás",
@@ -598,7 +562,6 @@
     "createCategory": "Új kategória",
     "createClause": "Új záradék",
     "createFailed": "A záradék létrehozása nem sikerült",
-    "currentVersion": "Jelenlegi",
     "deleteCategory": "Kategória törlése",
     "deleteClause": "Záradék törlése",
     "deleteFailed": "A törlés nem sikerült",
@@ -613,7 +576,6 @@
     "importSuccess": "{count, plural, one {# záradék importálva} other {# záradék importálva}}",
     "importing": "Importálás folyamatban…",
     "languagePlaceholder": "pl. hu",
-    "limitReached": "Záradékkorlát elérve",
     "linkClause": "Záradék csatolása",
     "linkFailed": "A záradék csatolása nem sikerült",
     "linked": "Záradék csatolva",
@@ -621,7 +583,6 @@
     "loadFailed": "A záradékok betöltése nem sikerült",
     "loading": "Záradékok betöltése…",
     "noChanges": "Nincs változás",
-    "noClauses": "Még nincsenek záradékok",
     "noLinkedClauses": "Nincs csatolt záradék",
     "noResults": "Még nincsenek záradékok",
     "noVariants": "Nincs változat",
@@ -631,7 +592,6 @@
     "searchClauses": "Záradékok keresése...",
     "searchPlaceholder": "Záradékok keresése...",
     "selectFile": "JSON-fájl kiválasztása",
-    "selectVariant": "Változat kiválasztása",
     "selectVersionToCompare": "Válasszon egy verziót az összehasonlításhoz",
     "slotName": "Foglalat neve",
     "slotNamePlaceholder": "pl. VersenyTilalom",
@@ -644,7 +604,6 @@
     "unlinkConfirm": "Ezzel a záradék eltávolításra kerül erről a sablonról.",
     "unlinkFailed": "A záradék leválasztása nem sikerült",
     "unlinked": "Záradék leválasztva",
-    "unmappedSlot": "Nincs csatolva",
     "updateFailed": "A záradék frissítése nem sikerült",
     "usageNotes": "Használati megjegyzések",
     "usageNotesPlaceholder": "Mikor használandó ez a záradék? (AI-összeállításhoz)",
@@ -653,8 +612,7 @@
     "variantLabel": "Változat felirata",
     "variantLabelPlaceholder": "pl. Standard",
     "variants": "Változatok",
-    "version": "{version}. verzió",
-    "versionCount": "{count, plural, one {# verzió} other {# verzió}}"
+    "version": "{version}. verzió"
   },
   "common": {
     "accept": "Elfogadás",
@@ -977,7 +935,6 @@
     "acceptAll": "Összes elfogadása",
     "applyAs": "mint",
     "applyDirect": "Közvetlen",
-    "applyMode": "Alkalmazás módja:",
     "applyTracked": "Követett módosítások",
     "areaUnspecified": "Nincs megadva",
     "byArea": "Terület szerint",
@@ -989,11 +946,9 @@
     "hideAccepted": "Elfogadott javaslatok elrejtése",
     "identityAria": "Követett módosítások szerzője: {name}",
     "identitySaved": "Azonosító mentve",
-    "progressAria": "{total} / {reviewed} áttekintve",
     "reject": "Elutasítás",
     "rejectAll": "Összes elutasítása",
     "revert": "Visszaállítás",
-    "reviewed": "áttekintve",
     "savingIdentity": "Mentés…",
     "severityHigh": "Magas",
     "severityLow": "Alacsony",
@@ -1293,7 +1248,6 @@
       "ignoreScopeAlways": "Mindig mellőzni",
       "ignoreScopeDocument": "Mellőzés ebben az ügyben",
       "ignoreScopeMenuAriaLabel": "Mellőzés hatóköre",
-      "ignoreScopeWorkspace": "Mellőzés ebben a munkaterületen",
       "labelPickerAriaLabel": "Entitáscímke",
       "labelPickerEmpty": "Nincs egyező címke.",
       "labelPickerPlaceholder": "Címke",
@@ -1322,7 +1276,6 @@
     "matterPicker": {
       "allMatters": "Összes ügy",
       "description": "Válassza ki, mely ügyekre támaszkodhat ez a chat. Az AI minden kiválasztott ügy tartalmát látja.",
-      "directLabel": "Közvetlen",
       "empty": "Nincs elérhető ügy.",
       "noMatter": "Nincs ügy",
       "noResults": "Egyetlen ügy sem egyezik a következővel: „{query}”.",
@@ -1565,14 +1518,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Fiók",
-    "calendar": "Naptár",
     "chat": "Csevegés",
-    "chatAlreadyOpen": "A csevegés már nyitva van",
-    "clients": "Ügyfelek",
     "contacts": "Kapcsolatok",
-    "inbox": "Beérkező",
-    "invitations": "Meghívók",
     "knowledge": "Tudásbázis",
     "members": "Tagok",
     "myTodos": "Feladataim",
@@ -1580,15 +1527,12 @@
     "pinned": "Rögzített",
     "recents": "Legutóbbiak",
     "search": "Keresés",
-    "searchEmptyState": "Kezdjen el gépelni dokumentumok, ügyek és egyebek kereséséhez.",
-    "searchPlaceholder": "Keresés az összes munkaterületen...",
     "shortcutCategories": {
       "navigation": "Navigáció"
     },
     "sidebar": "Oldalsáv",
     "sidebarDescription": "Megjeleníti a mobil oldalsávot.",
     "templates": "Sablonok",
-    "timeTracking": "Időkövetés",
     "toggleChat": "Csevegés be/ki",
     "toggleSidebar": "Oldalsáv be/ki"
   },
@@ -1618,7 +1562,6 @@
     "catalogueThirdPartyConfirm": "Hozzáadás így is",
     "catalogueThirdPartyDisclaimer": "Ez harmadik féltől származó kód, amelyet {author} adott hozzá. A stella nem vizsgálta át, nem ajánlja és nem tartja karban. Ön felel azért, hogy ellenőrizze: megfelel-e a praxisának és az irodai szabályzatoknak. Hozzáadásával elfogadja, hogy saját felelősségére használja.",
     "catalogueTitle": "Szabja testre az AI-t",
-    "changeAnytime": "Ezt bármikor módosíthatja később.",
     "continue": "Folytatás",
     "creating": {
       "ai": "MI-beállítások mentése...",
@@ -1647,6 +1590,7 @@
     "jurisdictionSuggested": "Javasolt",
     "jurisdictionTitle": "Válassza ki gyakorlati joghatóságait",
     "orgNameLabel": "Csapat neve",
+    "orgNamePlaceholder": "Nagy és Társai",
     "orgSubtitle": "Így találnak meg Önt a kollégái.",
     "orgTitle": "Nevezze el csapatát",
     "skipStep": "Kihagyás",
@@ -1657,8 +1601,7 @@
     "stepJurisdiction": "Joghatóság",
     "stepOrganization": "Csapat",
     "stepTeam": "Meghívás",
-    "termsNotice": "A folytatással elfogadja a <terms>felhasználási feltételeket</terms>.",
-    "welcomeSubtitle": "A beállítás kevesebb mint egy percet vesz igénybe."
+    "termsNotice": "A folytatással elfogadja a <terms>felhasználási feltételeket</terms>."
   },
   "organization": {
     "aiConfig": {
@@ -1818,7 +1761,6 @@
       "message": "Üzenet",
       "task": "Feladat"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Fájltípus",
     "noResults": "Nincs találat erre: „{query}”.",
     "placeholder": "Keresés az összes ügyben...",
@@ -1826,7 +1768,6 @@
     "recentlyOpenedFiles": "Legutóbb megnyitott fájlok",
     "resultCount": "{count, plural, one {# találat} other {# találat}}",
     "summaryAction": "Legjobb találatok összefoglalása",
-    "summaryCitations": "Hivatkozott találatok",
     "summaryError": "Az összefoglaló nem érhető el",
     "summaryLoading": "Találatok összefoglalása...",
     "summaryPrompt": "A legjobb találatok és tartalmuk alapján rövid választ készít.",
@@ -1897,7 +1838,6 @@
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Praxis joghatóságai",
       "profile": "Profil",
-      "profileDescription": "Update name and slug",
       "promptCaching": {
         "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt MI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az MI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak — csak az MI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
         "title": "Prompt gyorsítótárazás",
@@ -1920,7 +1860,6 @@
       "usageLimitTitleEntitlementInactive": "A használati jogosultság nem aktív",
       "usageLimitTitleNoEntitlement": "Használati jogosultság szükséges",
       "usageLimitTitleUsageLimitExceeded": "Elérted az AI-használati korlátot",
-      "usageLoading": "Betöltés…",
       "usageManage": "Hosztolt használat kezelése",
       "usageManageError": "Nem sikerült megnyitni a hosztolt használat kezelését",
       "usageManuallyManaged": "Kézzel kezelt",
@@ -2032,7 +1971,6 @@
     "fieldInputType": "Beviteli típus",
     "fieldLabel": "Címke",
     "fieldLabelPlaceholder": "pl. Teljes név",
-    "fieldOptions": "Lehetőségek",
     "fieldOptionsPlaceholder": "Írjon be egy lehetőséget, majd nyomja meg az Entert",
     "fieldUpdateFailed": "A mezők frissítése nem sikerült",
     "fields": "Mezők",

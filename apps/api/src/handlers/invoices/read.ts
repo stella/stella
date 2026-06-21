@@ -6,6 +6,7 @@ import { invoices } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -16,7 +17,9 @@ import {
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
 const readInvoicesQuerySchema = t.Object({
-  limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
+  limit: t.Optional(
+    t.Integer({ minimum: 1, maximum: LIMITS.invoicesPageSizeMax }),
+  ),
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
 
@@ -47,7 +50,7 @@ const readInvoices = createSafeHandler(
     query: readInvoicesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? 50;
+    const limit = query.limit ?? LIMITS.invoicesPageSizeDefault;
     const conditions = [eq(invoices.workspaceId, workspaceId)];
 
     if (query.cursor) {

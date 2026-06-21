@@ -143,6 +143,16 @@ export const finalizeDesktopEditSessionHandler = async ({
   });
 
   try {
+    // The session + entity FOR UPDATE locks are deliberately held across the
+    // checkpoint S3 read, DOCX validation, and source-object write below.
+    // This keeps new-version creation atomic: the base version's fields and
+    // the entity's currentVersionId are read and committed under one lock, so
+    // a concurrent in-app field edit or checkpoint cannot interleave. Moving
+    // the I/O out of the transaction (read/validate/write first, re-verify
+    // under a second lock) was evaluated and rejected: it silently dropped
+    // concurrent in-app field edits and turned a raced second finalize into a
+    // 500 instead of a clean 409, for only a marginal lock-duration win on
+    // this low-frequency, single-entity path.
     const result = await authorizedSession.value.scopedDb(async (tx) => {
       const lockedSessions = await tx
         .select({

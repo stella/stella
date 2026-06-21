@@ -11,6 +11,7 @@ import type {
   PropertyContent,
 } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 type PropertyForComparison = {
@@ -92,6 +93,7 @@ export const validatePropertyInputs = async function* ({
           workspaceId: { eq: workspaceId },
         },
         columns: { id: true },
+        limit: LIMITS.propertiesCount,
         with: {
           dependencies: {
             columns: {

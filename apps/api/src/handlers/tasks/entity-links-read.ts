@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 const listEntityLinksParamsSchema = workspaceParams({
   taskId: tSafeId("entity"),
@@ -49,7 +50,7 @@ const listEntityLinks = createSafeHandler(
                   columns: { id: true, name: true, kind: true },
                 },
               },
-              limit: 200,
+              limit: LIMITS.taskEntityLinksPerDirectionMax,
             }),
             tx.query.entityLinks.findMany({
               where: {
@@ -64,7 +65,7 @@ const listEntityLinks = createSafeHandler(
                   columns: { id: true, name: true, kind: true },
                 },
               },
-              limit: 200,
+              limit: LIMITS.taskEntityLinksPerDirectionMax,
             }),
           ]),
       ),

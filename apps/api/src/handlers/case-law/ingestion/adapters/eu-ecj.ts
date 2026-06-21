@@ -140,11 +140,17 @@ const CDM_TYPE_MAP: Record<string, string> = {
  */
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
-const queryDecisions = async (
-  dateFrom: string,
-  dateTo: string,
-  signal: AbortSignal,
-): Promise<SparqlResult[]> => {
+type QueryDecisionsOptions = {
+  dateFrom: string;
+  dateTo: string;
+  signal: AbortSignal;
+};
+
+const queryDecisions = async ({
+  dateFrom,
+  dateTo,
+  signal,
+}: QueryDecisionsOptions): Promise<SparqlResult[]> => {
   if (!ISO_DATE.test(dateFrom) || !ISO_DATE.test(dateTo)) {
     throw new AdapterFetchError({
       message: `Invalid date format: ${dateFrom} / ${dateTo}`,
@@ -354,7 +360,11 @@ export const euEcjAdapter: SourceAdapter = {
         const dateTo = dateFrom;
 
         // 1. Query SPARQL for decisions on this date
-        const bindings = await queryDecisions(dateFrom, dateTo, abortSignal);
+        const bindings = await queryDecisions({
+          dateFrom,
+          dateTo,
+          signal: abortSignal,
+        });
 
         const decisions: IngestionResult[] = [];
 

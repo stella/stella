@@ -35,7 +35,9 @@ const decodeCursor = (cursor: string): { date: Date; id: string } | null => {
 export const listClausesQuerySchema = t.Object({
   categoryId: t.Optional(tSafeId("clauseCategory")),
   q: t.Optional(t.String({ minLength: 1 })),
-  limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
+  limit: t.Optional(
+    t.Integer({ minimum: 1, maximum: LIMITS.clausesPageSizeMax }),
+  ),
   cursor: t.Optional(t.String()),
 });
 
@@ -55,7 +57,7 @@ export const listClausesHandler = async function* ({
   organizationId,
   query,
 }: ListClausesProps) {
-  const limit = query.limit ?? 50;
+  const limit = query.limit ?? LIMITS.clausesPageSizeDefault;
 
   const conditions = [eq(clauses.organizationId, organizationId)];
 

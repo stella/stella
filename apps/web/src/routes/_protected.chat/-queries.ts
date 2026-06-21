@@ -229,6 +229,8 @@ type ChatThreadOptionsInput = QueryOptionsInput<
 
 type ThreadFetch = {
   messages: PersistedChatMessage[];
+  /** Cursor for the page before the oldest loaded message; null when none. */
+  olderCursor: string | null;
   contextMatterIds: string[];
   /** ISO timestamp of the most recent message, or null when empty. */
   lastActivityAt: string | null;
@@ -261,6 +263,7 @@ const fetchThreadMessages = async (
     if (allowMissingThread && APIError.is(error) && error.status === 404) {
       return {
         messages: [],
+        olderCursor: null,
         contextMatterIds: [],
         lastActivityAt: null,
         webSearchAvailable: false,
@@ -273,10 +276,44 @@ const fetchThreadMessages = async (
 
   return {
     messages: response.data.messages,
+    olderCursor: response.data.olderCursor,
     contextMatterIds: response.data.contextMatterIds,
     lastActivityAt: response.data.lastActivityAt,
     webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
+  };
+};
+
+type OlderMessagesFetch = {
+  messages: PersistedChatMessage[];
+  olderCursor: string | null;
+};
+
+export const fetchOlderMessages = async ({
+  key,
+  before,
+}: {
+  key: ChatThreadKey;
+  before: string;
+}): Promise<OlderMessagesFetch> => {
+  const response = await api.chat
+    .threads({ threadId: key.threadId })
+    .messages.older.get({
+      query: {
+        before,
+        ...(key.scope === "workspace"
+          ? { workspaceId: toSafeId<"workspace">(key.workspaceId) }
+          : {}),
+      },
+    });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return {
+    messages: response.data.messages,
+    olderCursor: response.data.olderCursor,
   };
 };
 
@@ -553,12 +590,8 @@ export const __resetChatRequestStateForTests = (): void => {
   threadAutoFireState.clear();
 };
 
-const getThreadAutoFireKey = (
-  messages: readonly PersistedChatMessage[],
-): string | null => messages[0]?.id ?? null;
-
 export const createSendAutomaticallyPredicate =
-  () =>
+  (threadId: string) =>
   ({ messages }: { messages: PersistedChatMessage[] }) => {
     if (hasApprovedActiveDocxEditAwaitingClientOutput({ messages })) {
       return false;
@@ -568,10 +601,10 @@ export const createSendAutomaticallyPredicate =
     if (!fingerprint) {
       return false;
     }
-    const threadKey = getThreadAutoFireKey(messages);
-    if (!threadKey) {
-      return false;
-    }
+    // Key the one-fire budget on the stable thread id, not messages[0].id:
+    // loading older history prepends messages, which would otherwise hand the
+    // same assistant-tail fingerprint a fresh budget and re-fire the turn.
+    const threadKey = threadId;
     const state = threadAutoFireState.get(threadKey) ?? {
       fingerprint: null,
       fires: 0,
@@ -582,10 +615,10 @@ export const createSendAutomaticallyPredicate =
       state.fires = 0;
     }
     // Hard cap: any future regression that reopens the loop hits
-    // this ceiling and stops automatically. 3 covers the
-    // legitimate sequential-tool-call case (each tool result lands
-    // with a new fingerprint, so each new fingerprint gets its own
-    // budget).
+    // this ceiling and stops automatically. One fire per fingerprint
+    // is enough — each tool result lands with a new fingerprint (new
+    // message id or tool part), so every legitimate step gets its own
+    // budget.
     if (state.fires >= MAX_AUTO_FIRES_PER_FINGERPRINT) {
       threadAutoFireState.set(threadKey, state);
       return false;
@@ -637,6 +670,13 @@ const getAutoSendFingerprint = (
 
 export type ChatThreadFetched = {
   chat: Chat<PersistedChatMessage>;
+  /**
+   * Cursor for the page of messages immediately older than the
+   * oldest message in `chat`. Null when the thread's full history
+   * is already loaded. Consumers seed local load-older state from
+   * this and replace it with each older-page response's cursor.
+   */
+  olderCursor: string | null;
   /**
    * Persisted contextMatterIds for this thread, fresh from the
    * server. Consumers feed this into local picker state on mount;
@@ -695,6 +735,7 @@ export const chatThreadOptions = ({
     queryFn: async ({ client: queryClient }): Promise<ChatThreadFetched> => {
       const {
         messages,
+        olderCursor,
         contextMatterIds,
         lastActivityAt,
         webSearchAvailable,
@@ -734,11 +775,12 @@ export const chatThreadOptions = ({
             }),
           }),
         }),
-        sendAutomaticallyWhen: createSendAutomaticallyPredicate(),
+        sendAutomaticallyWhen: createSendAutomaticallyPredicate(key.threadId),
       });
 
       return {
         chat,
+        olderCursor,
         contextMatterIds,
         lastActivityAt,
         webSearchAvailable,

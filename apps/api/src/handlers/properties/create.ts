@@ -53,6 +53,8 @@ const createProperty = createSafeHandler(
               ),
             ),
           ];
+          // SAFETY: filtered to an IN-list of dependency property IDs, bounded by LIMITS.propertiesCount per workspace
+          // eslint-disable-next-line require-query-limit/require-query-limit
           const dependencyRows = await tx.query.properties.findMany({
             where: {
               id: { in: dependencyIds },

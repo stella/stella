@@ -161,7 +161,7 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
             role="progressbar"
           >
             <div
-              className="bg-foreground h-full transition-all"
+              className="bg-foreground h-full transition-[width]"
               style={{ width: `${usedPct}%` }}
             />
           </div>

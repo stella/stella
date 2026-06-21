@@ -41,16 +41,21 @@ export const generateVerificationCode = (): string => generateCode();
  *
  * Format: `{matterRef}/{docSeq}.v{version}`
  *
- * Examples:
- * - `toDocumentReference("2026/001", 15, 3)` → `"2026/001/015.v3"`
- * - `toDocumentReference("CORP-001", 3, 1)` → `"CORP-001/003.v1"`
- * - `toDocumentReference("001", 42, 2)` → `"001/042.v2"`
+ * Format: `{matterRef}/{docSeq}.v{version}` →
+ * `{ matterReference: "2026/001", docSequence: 15, versionNumber: 3 }`
+ * produces `"2026/001/015.v3"`.
  */
-export const toDocumentReference = (
-  matterReference: string,
-  docSequence: number,
-  versionNumber: number,
-): string => {
+type DocumentReferenceParams = {
+  matterReference: string;
+  docSequence: number;
+  versionNumber: number;
+};
+
+export const toDocumentReference = ({
+  matterReference,
+  docSequence,
+  versionNumber,
+}: DocumentReferenceParams): string => {
   const paddedSeq = String(docSequence).padStart(3, "0");
   return `${matterReference}/${paddedSeq}.v${versionNumber}`;
 };

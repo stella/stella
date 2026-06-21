@@ -7,6 +7,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { LIMITS } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { getDefaultViews } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
@@ -42,7 +43,8 @@ const readViews = createSafeHandler(
           .select()
           .from(workspaceViews)
           .where(eq(workspaceViews.workspaceId, workspaceId))
-          .orderBy(workspaceViews.position),
+          .orderBy(workspaceViews.position)
+          .limit(LIMITS.viewsCount),
       ),
     );
 
@@ -55,6 +57,7 @@ const readViews = createSafeHandler(
             where: { workspaceId: { eq: workspaceId } },
             columns: { id: true, content: true },
             orderBy: { createdAt: "asc" },
+            limit: LIMITS.propertiesCount,
           }),
         ),
       );
@@ -109,7 +112,8 @@ const readViews = createSafeHandler(
               .select()
               .from(workspaceViews)
               .where(eq(workspaceViews.workspaceId, workspaceId))
-              .orderBy(workspaceViews.position),
+              .orderBy(workspaceViews.position)
+              .limit(LIMITS.viewsCount),
           ),
         );
         return Result.ok(existing.map((view) => toViewResponse(view)));
@@ -124,6 +128,7 @@ const readViews = createSafeHandler(
         tx.query.properties.findMany({
           where: { workspaceId: { eq: workspaceId } },
           columns: { id: true },
+          limit: LIMITS.propertiesCount,
         }),
       ),
     );

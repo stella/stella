@@ -4,6 +4,32 @@ import { Button } from "@stll/ui/components/button";
 
 import { sanitizeHref } from "@/lib/sanitize-href";
 
+export const InboxQuickJump = ({ email }: { email: string }) => {
+  const t = useTranslations();
+  const providers = getProvidersForEmail(email);
+  return (
+    <div className="flex flex-wrap justify-center gap-1">
+      {providers.map((p) => (
+        <Button
+          key={p.name}
+          render={
+            <a
+              href={sanitizeHref(p.url)}
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              <ProviderIcon name={p.name} />
+              {t("auth.openInProvider", { provider: p.name })}
+            </a>
+          }
+          size="sm"
+          variant="ghost"
+        />
+      ))}
+    </div>
+  );
+};
+
 type ProviderName =
   | "Gmail"
   | "Outlook"
@@ -84,30 +110,4 @@ const getProvidersForEmail = (email: string): readonly Provider[] => {
     return [exact];
   }
   return PROVIDERS.filter((p) => isFallbackProvider(p.name));
-};
-
-export const InboxQuickJump = ({ email }: { email: string }) => {
-  const t = useTranslations();
-  const providers = getProvidersForEmail(email);
-  return (
-    <div className="flex flex-wrap justify-center gap-1">
-      {providers.map((p) => (
-        <Button
-          key={p.name}
-          render={
-            <a
-              href={sanitizeHref(p.url)}
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <ProviderIcon name={p.name} />
-              {t("auth.openInProvider", { provider: p.name })}
-            </a>
-          }
-          size="sm"
-          variant="ghost"
-        />
-      ))}
-    </div>
-  );
 };
