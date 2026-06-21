@@ -89,6 +89,36 @@ describe("resolveFormulaFields", () => {
     resolveFormulaFields({ values, fields: [{ path: "rent" }] });
     expect(values).toEqual({ rent: "1000" });
   });
+
+  test("derives a formula per row inside a repeatable array", () => {
+    const values: Record<string, unknown> = {
+      items: [
+        { qty: "2", price: "10" },
+        { qty: "3", price: "5" },
+      ],
+    };
+    resolveFormulaFields({
+      values,
+      fields: [{ path: "items.total", formula: "qty * price" }],
+    });
+    expect(values["items"]).toEqual([
+      { qty: "2", price: "10", total: "20" },
+      { qty: "3", price: "5", total: "15" },
+    ]);
+  });
+
+  test("derives a formula in a nested array container (deal.parties)", () => {
+    const values: Record<string, unknown> = {
+      deal: { parties: [{ base: "100", rate: "2" }] },
+    };
+    resolveFormulaFields({
+      values,
+      fields: [{ path: "deal.parties.amount", formula: "base * rate" }],
+    });
+    expect(values["deal"]).toEqual({
+      parties: [{ base: "100", rate: "2", amount: "200" }],
+    });
+  });
 });
 
 describe("applyFormulaFields", () => {

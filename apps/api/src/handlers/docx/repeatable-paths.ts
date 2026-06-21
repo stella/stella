@@ -10,10 +10,12 @@
  * array and returns `undefined`, so the per-row value is never transformed and
  * the loop expander later substitutes the raw value.
  *
- * {@link mapRepeatablePath} bridges that gap: split the path on the first dot
- * into the container (array) path and the item-relative sub-path, and when the
- * container resolves to an array, run a per-row callback against each item's
- * sub-path value, writing the transformed value back into the row in place.
+ * {@link mapRepeatablePath} bridges that gap: take the shortest dotted prefix
+ * of the path that resolves to an array (so a nested container like
+ * `deal.parties` is found, not the `deal` object) as the container path, with
+ * the remainder as the item-relative sub-path, and run a per-row callback
+ * against each item's sub-path value, writing the transformed value back into
+ * the row in place.
  * The loop expander's `registerItemPatchValues` then flattens the rewritten
  * row value under `__each_<container>_<idx>_<subPath>`.
  *
@@ -53,25 +55,35 @@ export const mapRepeatablePath = (
     containerPath: string;
   }) => void,
 ): RepeatableMapped => {
-  const dot = path.indexOf(".");
-  if (dot === -1) {
-    return false;
-  }
-  const containerPath = path.slice(0, dot);
-  const subPath = path.slice(dot + 1);
-
-  const container = resolvePath(containerPath, values);
-  if (!Array.isArray(container)) {
+  const segments = path.split(".");
+  if (segments.length < 2) {
     return false;
   }
 
-  for (const [index, row] of container.entries()) {
-    if (!isRecord(row)) {
+  // The container is the shortest dotted prefix that resolves to an array, so a
+  // loop over a nested array — `{{#each deal.parties}}` for the field path
+  // `deal.parties.dob` — finds the `deal.parties` array, not the `deal` object.
+  // (`resolvePath` cannot index into an array, so at most one prefix resolves to
+  // an array; once found, deeper prefixes never do.) The remainder is the
+  // item-relative sub-path. Matches the `{{#each}}` array path the loop expander
+  // keys patch values under, so date / formula / composite / dependent values
+  // land where substitution reads them.
+  for (let cut = 1; cut < segments.length; cut += 1) {
+    const containerPath = segments.slice(0, cut).join(".");
+    const container = resolvePath(containerPath, values);
+    if (!Array.isArray(container)) {
       continue;
     }
-    mapRow({ row, subPath, index, containerPath });
+    const subPath = segments.slice(cut).join(".");
+    for (const [index, row] of container.entries()) {
+      if (!isRecord(row)) {
+        continue;
+      }
+      mapRow({ row, subPath, index, containerPath });
+    }
+    return true;
   }
-  return true;
+  return false;
 };
 
 /** Read an item-relative sub-path (e.g. `signer.title`) within a row object,

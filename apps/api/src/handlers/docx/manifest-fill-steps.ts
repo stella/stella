@@ -42,11 +42,11 @@ import type { FieldMeta } from "./types";
  * A date field inside an `{{#each}}` loop keeps a dotted path (`people.dob`)
  * while the value is an array of rows; its raw ISO is stashed per row under an
  * index-qualified key (`people.0.dob`) so a top-level
- * `{{#if people.0.dob > "..."}}` still compares the ISO value. (A condition
- * that references the bare field from *inside* the loop body, `{{#if dob}}`,
- * resolves against the per-row object whose value `applyDateFields` rewrites in
- * place; the flat overlay cannot reach into rows, so that inner-loop case is
- * not covered here.)
+ * `{{#if people.0.dob > "..."}}` compares the ISO value, and the loop expander
+ * overlays the same raw value as the bare sub-path in each row's condition
+ * context (see `applyRowRawOverlay` in block-directives) so a condition
+ * referencing the field from *inside* the loop body, `{{#if dob > "..."}}`,
+ * compares the ISO value too.
  */
 const stashRawDateValues = (
   values: Record<string, unknown>,

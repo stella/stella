@@ -25,6 +25,7 @@ import { evaluateNumericExpression } from "@stll/template-conditions";
 
 import { isRecord } from "@/api/lib/type-guards";
 
+import { mapRepeatablePath, writeRowSubPath } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 
 /** Remove the value at `path` where `resolvePath` would find it: the exact
@@ -69,8 +70,27 @@ export const resolveFormulaFields = ({
     if (field.formula === undefined) {
       continue;
     }
+    const { formula } = field;
+
+    // A formula field inside an `{{#each}}` loop keeps a dotted path
+    // (`items.total`) while the values arrive as rows; evaluate the expression
+    // per row against the row context (so `qty * price` resolves the row's own
+    // fields) and write the derived value back into the row, dropping any
+    // caller-supplied value for the derived field.
+    const mapped = mapRepeatablePath(values, field.path, ({ row, subPath }) => {
+      const result = evaluateNumericExpression(formula, row);
+      writeRowSubPath(
+        row,
+        subPath,
+        result === undefined ? undefined : String(result),
+      );
+    });
+    if (mapped) {
+      continue;
+    }
+
     deleteSubmittedValue(values, field.path);
-    const result = evaluateNumericExpression(field.formula, values);
+    const result = evaluateNumericExpression(formula, values);
     if (result !== undefined) {
       values[field.path] = String(result);
     }

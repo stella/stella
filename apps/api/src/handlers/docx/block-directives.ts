@@ -86,6 +86,32 @@ const isStringRecord = (v: unknown): v is Record<string, string> =>
   v !== null &&
   Object.values(v).every((entry) => typeof entry === "string");
 
+/**
+ * Overlay one loop row's raw (pre-format) values onto its iteration context, so
+ * an inner-loop `{{#if dob > "2028-01-01"}}` compares the original ISO date
+ * rather than the localized display text the date step wrote into the row for
+ * substitution. Raw values are stashed by field path under
+ * `<arrayPath>.<index>.<subPath>` (see {@link CONDITION_RAW_VALUES}); each match
+ * sets the bare item-relative sub-path, which the loop body's condition resolves
+ * the same way it resolves the row's other fields.
+ */
+const applyRowRawOverlay = (
+  itemContext: Record<string, unknown>,
+  rawValues: Record<string, string> | undefined,
+  arrayPath: string,
+  index: number,
+): void => {
+  if (!rawValues) {
+    return;
+  }
+  const prefix = `${arrayPath}.${index}.`;
+  for (const [key, raw] of Object.entries(rawValues)) {
+    if (key.startsWith(prefix)) {
+      itemContext[key.slice(prefix.length)] = raw;
+    }
+  }
+};
+
 // ── Regex patterns ───────────────────────────────────────
 
 // Canonical patterns from @stll/template-conditions (markers.ts).
@@ -702,6 +728,15 @@ export const processBlockDirectives = (
         Object.assign(itemContext, item);
         // Also keep the array accessible by name
         itemContext[block.arrayPath] = item;
+        // Raw (pre-format) date values for this row, so a loop-body
+        // `{{#if dob > "..."}}` compares the ISO date, not the localized text
+        // the date step wrote into the row for substitution.
+        applyRowRawOverlay(
+          itemContext,
+          conditionValues,
+          block.arrayPath,
+          itemIdx,
+        );
       }
 
       // Check if any group paragraph has block directives

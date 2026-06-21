@@ -911,6 +911,32 @@ describe("processBlockDirectives — loops", () => {
     expect(patchValues["__each_sellers_1_name"]).toBe("Bob");
   });
 
+  test("inner-loop condition compares a row's raw date, not the localized text", () => {
+    const xml = WRAP(
+      [
+        P("{{#each people}}"),
+        P('{{#if dob > "2028-01-01"}}'),
+        P("After cutoff"),
+        P("{{/if}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    // `dob` in `data` is the localized text the date step wrote in for
+    // substitution; the raw ISO rides in the condition overlay under the
+    // index-qualified path. The loop body's condition must compare the raw ISO.
+    processBlockDirectives(
+      body,
+      { people: [{ dob: "13. června 2028" }, { dob: "1. ledna 2020" }] },
+      undefined,
+      { "people.0.dob": "2028-06-13", "people.1.dob": "2020-01-01" },
+    );
+
+    // Row 0 (2028-06-13 > 2028-01-01) keeps the line; row 1 (2020-01-01) drops
+    // it. Comparing the localized text instead would mis-order both.
+    expect(bodyTexts(body)).toEqual(["After cutoff"]);
+  });
+
   test("each with zero items removes block", () => {
     const xml = WRAP(
       [
