@@ -284,6 +284,69 @@ describe("resolveLookupFields", () => {
     }
   });
 
+  test("resolves a lookup field inside a repeatable each row", async () => {
+    // Inside `{{#each companies}}` the value arrives as an array of row
+    // objects, so the field path `companies.krs` resolves to undefined at the
+    // top level; each row's sub-path number must be resolved and rendered in
+    // place (the keyed `full` format written as a flat dotted key on the row).
+    const result = await resolveLookupFields({
+      values: {
+        companies: [{ krs: "0000592109" }, { krs: "0000592109" }],
+      },
+      fields: [
+        {
+          path: "companies.krs",
+          lookup: {
+            registry: "krs",
+            formats: [
+              { key: "output_1", template: "[company name]" },
+              { key: "full", template: "[company name], seat in [seat]" },
+            ],
+          },
+        },
+      ],
+      resolve: hitResolver(KRS_HIT),
+    });
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.values["companies"]).toEqual([
+        {
+          krs: "Żabka Polska sp. z o.o.",
+          "krs.full": "Żabka Polska sp. z o.o., seat in Poznań",
+        },
+        {
+          krs: "Żabka Polska sp. z o.o.",
+          "krs.full": "Żabka Polska sp. z o.o., seat in Poznań",
+        },
+      ]);
+    }
+  });
+
+  test("reports a malformed registry number inside a repeatable each row", async () => {
+    const result = await resolveLookupFields({
+      values: { companies: [{ krs: "12345" }] },
+      fields: [
+        {
+          path: "companies.krs",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "" }],
+          },
+        },
+      ],
+      resolve: hitResolver(KRS_HIT),
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors).toEqual([
+        {
+          path: "companies.krs",
+          message: 'Field "companies.krs": "12345" is not a valid KRS number.',
+        },
+      ]);
+    }
+  });
+
   test("renders the template deterministically even when the field is Person + AI", async () => {
     // aiAdapt (Person + AI) changes nothing at lookup time: the author's
     // [token] template is substituted from the hit, no formatter involved.

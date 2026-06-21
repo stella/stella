@@ -31,7 +31,13 @@ import {
 } from "@/api/lib/business-registries/dispatch";
 
 import { replaceResolvedValue } from "./composite-fields";
+import {
+  mapRepeatablePath,
+  readRowSubPath,
+  writeRowSubPath,
+} from "./repeatable-paths";
 import type {
+  FieldLookup,
   FieldMeta,
   LookupRegistry,
   RichPatchValue,
@@ -259,74 +265,158 @@ export const resolveLookupFields = async ({
       continue;
     }
     const incoming = resolvePath(field.path, resolved);
-    if (typeof incoming !== "string" || incoming.trim() === "") {
-      continue;
-    }
-
-    const registryName = LOOKUP_REGISTRY_NAMES[lookup.registry];
-    if (!isPlausibleLookupValue(lookup.registry, incoming)) {
-      errors.push({
-        path: field.path,
-        message: `Field "${field.path}": "${incoming}" is not a valid ${registryName} number.`,
-      });
+    if (incoming === undefined) {
+      // A lookup field inside an `{{#each}}` loop keeps a dotted path
+      // (`companies.krs`) while the value arrives as an array of rows
+      // (`companies: [{ krs }]`); the direct `resolvePath` then returns
+      // undefined, so each row's sub-path registry number is resolved and the
+      // rendering(s) written back in place. Collect the rows first
+      // (mapRepeatablePath is synchronous) and resolve them sequentially, since
+      // resolution is an async, rate-limited external lookup.
+      const rows: { row: Record<string, unknown>; subPath: string }[] = [];
+      const mapped = mapRepeatablePath(
+        resolved,
+        field.path,
+        ({ row, subPath }) => {
+          rows.push({ row, subPath });
+        },
+      );
+      if (mapped) {
+        for (const { row, subPath } of rows) {
+          // oxlint-disable-next-line no-await-in-loop -- sequential: rate-limited external registry lookup that appends to the shared `errors` accumulator
+          await resolveLookupValue({
+            lookup,
+            aiAdapt: field.aiAdapt,
+            path: field.path,
+            incoming: readRowSubPath(row, subPath),
+            resolve,
+            errors,
+            writeDefault: (value) => writeRowSubPath(row, subPath, value),
+            writeKeyed: (key, value) => {
+              // The keyed value is a FLAT dotted key on the row so the loop
+              // expander's `registerItemPatchValues` flattens it to the
+              // `{{companies.krs.<key>}}` marker (the base value at `subPath` is
+              // a string, so a nested walk would miss `<key>`).
+              row[`${subPath}.${key}`] = value;
+            },
+          });
+        }
+      }
       continue;
     }
 
     // oxlint-disable-next-line no-await-in-loop -- sequential: rate-limited external registry lookup that appends to the shared `errors`/`resolved` accumulators
-    const outcome = await resolve({
-      registry: lookup.registry,
-      query: incoming,
+    await resolveLookupValue({
+      lookup,
+      aiAdapt: field.aiAdapt,
+      path: field.path,
+      incoming,
+      resolve,
+      errors,
+      writeDefault: (value) =>
+        replaceResolvedValue(resolved, field.path, value),
+      // The keyed values are written as a FLAT dotted key so the marker
+      // resolves them directly (the base value at `field.path` is a string, so
+      // a nested walk would miss `<key>`); duplicate keys keep the last template.
+      writeKeyed: (key, value) => {
+        resolved[`${field.path}.${key}`] = value;
+      },
     });
-    if (outcome.type === "not-found") {
-      errors.push({
-        path: field.path,
-        message: `Field "${field.path}": no company found in ${registryName} for "${incoming}".`,
-      });
-      continue;
-    }
-    if (outcome.type === "error") {
-      errors.push({
-        path: field.path,
-        message: `Field "${field.path}": ${registryName} lookup failed: ${outcome.message}`,
-      });
-      continue;
-    }
-
-    // The registry is resolved once; every format renders that one hit. The
-    // author's templates render deterministically ([tokens] substituted from
-    // the hit); grammar and wording adjustments happen downstream in the
-    // per-occurrence aiAdapt pass, never at lookup time.
-    const renderHit = (format: string | null | undefined): RichPatchValue => {
-      const text = renderLookupOutput(format, outcome.hit);
-      // The aiAdapt pass rewrites plain string stubs only, so a Person + AI
-      // lookup keeps a plain value (formatting markers stripped); otherwise
-      // **bold** / *italic* spans in the format become formatted runs.
-      return field.aiAdapt === true
-        ? stripLookupMarkdown(text)
-        : lookupValueFromRendered(text);
-    };
-
-    // The formats list is non-empty (isFieldLookup invariant). The first
-    // format is the default for the bare `{{company}}` marker (or its nested
-    // `company.value`); every later format is a keyed `{{company.<key>}}`
-    // rendering of the SAME hit. The keyed values are written as a FLAT dotted
-    // key so the marker resolves them directly (the base value at `field.path`
-    // is a string, so a nested walk would miss `<key>`); duplicate keys keep
-    // the last template.
-    for (const [index, format] of lookup.formats.entries()) {
-      const value = renderHit(format.template);
-      if (index === 0) {
-        replaceResolvedValue(resolved, field.path, value);
-        continue;
-      }
-      resolved[`${field.path}.${format.key}`] = value;
-    }
   }
 
   if (errors.length > 0) {
     return { ok: false, errors };
   }
   return { ok: true, values: resolved };
+};
+
+type ResolveLookupValueArgs = {
+  lookup: FieldLookup;
+  aiAdapt: boolean | undefined;
+  /** Manifest path of the lookup field, used only for error messages. */
+  path: string;
+  /** The submitted registry number for this value (one field, or one loop row). */
+  incoming: unknown;
+  resolve: LookupResolver;
+  errors: LookupFieldError[];
+  /** Write the default-format rendering where the registry number was read. */
+  writeDefault: (value: RichPatchValue) => void;
+  /** Write a keyed-format rendering under its format key (`{{path.key}}`). */
+  writeKeyed: (key: string, value: RichPatchValue) => void;
+};
+
+/**
+ * Resolve one submitted registry number and write its rendering(s) back via the
+ * supplied writers. Shared by the top-level path and the per-row repeatable
+ * path so both validate, look up, and render identically; only where the value
+ * is read/written differs. Pushes a field-named error (and writes nothing) on a
+ * non-string, malformed, not-found, or failed value.
+ */
+const resolveLookupValue = async ({
+  lookup,
+  aiAdapt,
+  path,
+  incoming,
+  resolve,
+  errors,
+  writeDefault,
+  writeKeyed,
+}: ResolveLookupValueArgs): Promise<void> => {
+  if (typeof incoming !== "string" || incoming.trim() === "") {
+    return;
+  }
+
+  const registryName = LOOKUP_REGISTRY_NAMES[lookup.registry];
+  if (!isPlausibleLookupValue(lookup.registry, incoming)) {
+    errors.push({
+      path,
+      message: `Field "${path}": "${incoming}" is not a valid ${registryName} number.`,
+    });
+    return;
+  }
+
+  const outcome = await resolve({ registry: lookup.registry, query: incoming });
+  if (outcome.type === "not-found") {
+    errors.push({
+      path,
+      message: `Field "${path}": no company found in ${registryName} for "${incoming}".`,
+    });
+    return;
+  }
+  if (outcome.type === "error") {
+    errors.push({
+      path,
+      message: `Field "${path}": ${registryName} lookup failed: ${outcome.message}`,
+    });
+    return;
+  }
+
+  // The registry is resolved once; every format renders that one hit. The
+  // author's templates render deterministically ([tokens] substituted from
+  // the hit); grammar and wording adjustments happen downstream in the
+  // per-occurrence aiAdapt pass, never at lookup time.
+  const renderHit = (format: string | null | undefined): RichPatchValue => {
+    const text = renderLookupOutput(format, outcome.hit);
+    // The aiAdapt pass rewrites plain string stubs only, so a Person + AI
+    // lookup keeps a plain value (formatting markers stripped); otherwise
+    // **bold** / *italic* spans in the format become formatted runs.
+    return aiAdapt === true
+      ? stripLookupMarkdown(text)
+      : lookupValueFromRendered(text);
+  };
+
+  // The formats list is non-empty (isFieldLookup invariant). The first format
+  // is the default for the bare `{{company}}` marker (or its nested
+  // `company.value`); every later format is a keyed `{{company.<key>}}`
+  // rendering of the SAME hit; duplicate keys keep the last template.
+  for (const [index, format] of lookup.formats.entries()) {
+    const value = renderHit(format.template);
+    if (index === 0) {
+      writeDefault(value);
+      continue;
+    }
+    writeKeyed(format.key, value);
+  }
 };
 
 /**
