@@ -5,7 +5,7 @@
  * triggers generation and polls until complete.
  */
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 
@@ -15,6 +15,7 @@ import {
   isDecisionAnalysis,
 } from "@stll/legal-ast/analysis";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";
 
 type AnalysisState =
@@ -90,6 +91,7 @@ export const useDecisionAnalysis = (
   // Clear the marker once the route moves on so returning to the
   // original decision lands in `idle` (matching prior behaviour)
   // instead of resuming a poll the user didn't request again.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset generatingFor when decisionId changes; this is a hook (no element to key in a parent) and setGeneratingFor is also called from generate(), so it is neither lift-to-key nor pure derived state
   useEffect(() => {
     setGeneratingFor(null);
   }, [decisionId]);
@@ -138,7 +140,7 @@ export const useDecisionAnalysis = (
 
   // Mirror a `done` result into the decision query cache so route
   // re-renders pick up the persisted analysis without another fetch.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (query.data?.kind !== "done") {
       return;
     }
@@ -153,7 +155,7 @@ export const useDecisionAnalysis = (
   const hasErrorResult = query.data?.kind === "error" || query.isError;
   const refetch = query.refetch;
 
-  const generate = useCallback(() => {
+  const generate = () => {
     if (hasFreshAnalysis) {
       return;
     }
@@ -168,7 +170,7 @@ export const useDecisionAnalysis = (
       return;
     }
     setGeneratingFor(decisionId);
-  }, [decisionId, hasErrorResult, hasFreshAnalysis, isGenerating, refetch]);
+  };
 
   const state: AnalysisState = (() => {
     if (hasFreshAnalysis && isDecisionAnalysis(existingAnalysis)) {

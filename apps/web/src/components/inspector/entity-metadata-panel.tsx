@@ -197,6 +197,7 @@ const EntityMetadataContent = ({
     ]);
   }, [queryClient, workspaceId]);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (workflow-finished refetch), move into handler
   useEffect(() => {
     if (isWorkflowRunning) {
       sawWorkflowRunning.current = true;
@@ -218,6 +219,7 @@ const EntityMetadataContent = ({
     .toSorted()
     .join(",");
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, compute in render
   useEffect(() => {
     const arrivedIds = new Set(
       entityFieldPropertyIdsKey.split(",").filter((id) => id.length > 0),

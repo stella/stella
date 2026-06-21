@@ -1,11 +1,10 @@
-import { useEffect } from "react";
-
 import { useChatEditorExtensions } from "@/components/chat-editor-provider";
 import type {
   ChatMentionOption,
   MentionCategory,
 } from "@/components/chat-mention-extension";
 import { useMentionProviders } from "@/components/chat-mention-providers";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { api } from "@/lib/api";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
@@ -52,7 +51,7 @@ export const useGlobalChatMentionRegistration = () => {
   const mentionProviders = useMentionProviders();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const unregister = registerExtension(GLOBAL_CHAT_MENTION_EXTENSION_ID, {
       mentionSources: [
         {

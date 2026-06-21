@@ -113,6 +113,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     [properties, view.layout.hiddenProperties],
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- effect-triggered action (opens the AI-key gate); move into a route guard or render-time check
   useEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
@@ -155,6 +156,7 @@ export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   // table (the view toolbar's bulk actions menu).
   const rowSelection = useTableStore((s) => s.rowSelection[view.id]);
   const setSelectedEntities = useTableStore((s) => s.setSelectedEntities);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (resolves row selection to entities) synced into the table store; compute in render or a selector
   useEffect(() => {
     const selected = rowSelection ?? {};
     const result: TableTreeNode[] = [];

@@ -12,6 +12,7 @@ import {
   useAIKeyGate,
 } from "@/components/require-ai-key";
 import { DecisionWorkspace } from "@/features/case-law/components/case-viewer/decision-workspace";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
 import type { SafeId } from "@/lib/safe-id";
@@ -85,6 +86,7 @@ function CaseLawInspector({
   const isDragging = useRef(false);
   const lastAutoOpenedDecisionRef = useRef<string | null>(null);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id: fires openChat once per decisionId change via a ref guard. A key prop would remount this pane and reset the user's resized `width`, so keep the in-place effect.
   useEffect(() => {
     if (lastAutoOpenedDecisionRef.current === decisionId) {
       return;
@@ -96,7 +98,7 @@ function CaseLawInspector({
   const showPaneContent = tabs.length > 0 && !minimized;
   const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
     document.documentElement.style.setProperty(
       "--folio-find-replace-right",

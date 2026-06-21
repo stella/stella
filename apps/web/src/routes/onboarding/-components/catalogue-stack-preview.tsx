@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
@@ -53,23 +51,18 @@ export const CatalogueStackPreview = ({
 }: CatalogueStackPreviewProps) => {
   const t = useTranslations();
 
-  const pinned = useMemo(
-    () =>
-      entries.filter((entry) => entry.kind === "native-tool" && entry.pinned),
-    [entries],
+  const pinned = entries.filter(
+    (entry) => entry.kind === "native-tool" && entry.pinned,
   );
-  const pinnedSlugSet = useMemo(
-    () => new Set(pinned.map((entry) => entry.slug)),
-    [pinned],
-  );
+  const pinnedSlugSet = new Set(pinned.map((entry) => entry.slug));
 
-  const stack = useMemo(() => {
+  const stack = (() => {
     const bySlug = new Map(entries.map((entry) => [entry.slug, entry]));
     return selectedSlugs
       .filter((slug) => !pinnedSlugSet.has(slug))
       .map((slug) => bySlug.get(slug))
       .filter((entry): entry is LoadedCatalogueEntry => entry !== undefined);
-  }, [entries, selectedSlugs, pinnedSlugSet]);
+  })();
 
   const total = pinned.length + stack.length;
 

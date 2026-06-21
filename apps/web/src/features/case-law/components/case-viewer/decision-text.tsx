@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef } from "react";
+import { Fragment, useEffect, useRef } from "react";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -7,6 +7,7 @@ import type { Block, DocumentAst, Inline } from "@stll/legal-ast/document-ast";
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 import type { SearchMatchRange, SearchPiece } from "./decision-search";
@@ -634,11 +635,8 @@ export const DecisionText = ({
 }: DecisionTextProps) => {
   const t = useTranslations();
 
-  const ast = useMemo(
-    () => parseDocumentAst(decision.documentAst),
-    [decision.documentAst],
-  );
-  const visibleBlocks = useMemo(() => getVisibleBlocks(ast), [ast]);
+  const ast = parseDocumentAst(decision.documentAst);
+  const visibleBlocks = getVisibleBlocks(ast);
   const articleRef = useRef<HTMLElement>(null);
 
   const caseNumberBlock = ast?.blocks.find(
@@ -646,7 +644,7 @@ export const DecisionText = ({
   );
   const displayRef = caseNumberBlock?.plainText ?? decision.caseNumber;
 
-  const searchPieces = useMemo<SearchPiece[]>(() => {
+  const searchPieces: SearchPiece[] = (() => {
     // If the render falls through to the empty-state message
     // (no visible blocks AND no fulltext) nothing gets drawn on
     // the page, so indexing the reference + supplement would
@@ -724,28 +722,19 @@ export const DecisionText = ({
     }
 
     return pieces;
-  }, [
-    decision.court,
-    decision.fulltext,
-    decision.metadata,
-    displayRef,
-    visibleBlocks,
-  ]);
+  })();
 
-  const searchResults = useMemo(
-    () =>
-      buildSearchResults({
-        pieces: searchPieces,
-        query: searchQuery,
-      }),
-    [searchPieces, searchQuery],
-  );
+  const searchResults = buildSearchResults({
+    pieces: searchPieces,
+    query: searchQuery,
+  });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reports derived match count to a parent callback prop; lift the count to the parent
   useEffect(() => {
     onMatchCountChange?.(searchResults.matchCount);
   }, [onMatchCountChange, searchResults.matchCount]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (searchQuery.trim().length === 0 || searchResults.matchCount === 0) {
       return;
     }

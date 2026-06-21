@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -50,6 +50,7 @@ import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";
 import type { WorkspaceView } from "@/lib/types";
@@ -349,7 +350,7 @@ const ViewTab = ({
   const onReorderRef = useRef(onReorder);
   onReorderRef.current = onReorder;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = containerRef.current;
     if (!el) {
       return undefined;

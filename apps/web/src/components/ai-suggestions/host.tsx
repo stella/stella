@@ -62,6 +62,7 @@ import {
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { PromptEditorContent } from "@/components/prompt-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
 import type { TranslationKey } from "@/i18n/types";
 
@@ -312,7 +313,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   // its decorations. Skip when we have nothing to add — the review
   // store path handles the cleared/transitioning case via its
   // own effect.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!editorView || allSuggestions.length === 0) {
       return;
     }
@@ -320,7 +321,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
   }, [editorView, allSuggestions]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!editorView) {
       return;
     }
@@ -329,7 +330,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   }, [editorView, focusedId]);
 
   // Push folio citation ranges to the decoration plugin.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!editorView) {
       return;
     }
@@ -337,7 +338,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
   }, [editorView, folioCitationRanges]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!editorView) {
       return;
     }
@@ -718,6 +719,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
   // ---- pending-accept flush on unlock --------------------------------------
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (unlock flag → flush queued accepts + setState); move into the unlock handler
   useEffect(() => {
     if (readOnly || !editorView || pendingAccepts.length === 0) {
       return;
@@ -807,7 +809,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   // no panel to close (the thread is always visible alongside the
   // bar), so the binding is skipped — no need to install a global
   // keydown listener that would always be a no-op.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (layout !== "floating") {
       return undefined;
     }
@@ -1098,6 +1100,7 @@ export function PromptBar(props: PromptBarProps) {
   // 1.4s ring; restart when the seq advances.
   const { isPulsing: attention, pulse: triggerAttention } = usePulse(1400);
   const lastAttentionSeq = useRef(attentionPulseSeq);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (attention-pulse seq advance → fire one-shot glow); move into the pulse trigger source
   useEffect(() => {
     if (
       attentionPulseSeq === undefined ||

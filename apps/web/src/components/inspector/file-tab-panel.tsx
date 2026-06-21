@@ -246,6 +246,7 @@ export const FileTabPanel = ({
     },
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconciles the editable markdown draft (user-edited via setMarkdownDraft elsewhere) with server text, deliberately preserving a dirty draft for the same field; not pure derived state, and a key reset would clobber unsaved edits on every refetch, so kept
   useEffect(() => {
     if (!isMarkdownDisplay) {
       markdownDraftSourceFieldIdRef.current = null;

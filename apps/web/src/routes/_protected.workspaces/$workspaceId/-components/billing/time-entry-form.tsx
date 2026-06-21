@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { useForm } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { DurationInput } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input";
 import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import { MatterCombobox } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/matter-combobox";
@@ -112,8 +113,11 @@ export const TimeEntryForm = ({
     resolvedRateOptions(workspaceId, userId, dateWorked),
   );
 
-  // Auto-fill rate when resolved and not overridden
-  useEffect(() => {
+  // Push the resolved rate into the form store whenever it changes, unless
+  // the user has taken over with a manual override. This synchronizes a
+  // query result into TanStack Form's external store; it cannot run during
+  // render because `setFieldValue` mutates that store.
+  useExternalSyncEffect(() => {
     if (rateOverride) {
       return;
     }

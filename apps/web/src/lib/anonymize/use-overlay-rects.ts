@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   mapEntityToSpanSlices,
   mergeAdjacentRects,
@@ -44,7 +45,11 @@ export const useOverlayRects = (
     }
   }
 
-  useEffect(() => {
+  // Measure pdf.js text-layer rects via the Range API into state.
+  // This reads the live pdf.js-rendered DOM (getClientRects), which
+  // can't run during render, so it's a genuine external (DOM)
+  // measurement sync rather than derived state.
+  useExternalSyncEffect(() => {
     if (normalizedRects) {
       return;
     }

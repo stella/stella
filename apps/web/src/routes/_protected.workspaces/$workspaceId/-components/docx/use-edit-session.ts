@@ -5,11 +5,12 @@
  * open (acquire lock + presigned URL) → checkpoint (auto-save) → finalize / cancel.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
 
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { DOCX_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
@@ -127,15 +128,12 @@ export const useEditSession = ({
   } | null>(null);
   const checkpointQueueRef = useRef(Promise.resolve());
   const releaseContextRef = useRef({ workspaceId, entityId, propertyId });
+  releaseContextRef.current = { workspaceId, entityId, propertyId };
   const isMountedRef = useRef(true);
   const isMounted = () => isMountedRef.current;
 
-  useEffect(() => {
-    releaseContextRef.current = { workspaceId, entityId, propertyId };
-  }, [entityId, propertyId, workspaceId]);
-
   // Warn the user before closing the tab with unsaved changes
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const handler = (e: BeforeUnloadEvent) => {
       if (isDirty) {
         e.preventDefault();
@@ -282,12 +280,9 @@ export const useEditSession = ({
     void saveCheckpoint(buffer);
   }, CHECKPOINT_DEBOUNCE_MS);
   const debouncedCheckpointRef = useRef(debouncedCheckpoint);
+  debouncedCheckpointRef.current = debouncedCheckpoint;
 
-  useEffect(() => {
-    debouncedCheckpointRef.current = debouncedCheckpoint;
-  }, [debouncedCheckpoint]);
-
-  useEffect(() => {
+  useMountEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
@@ -301,7 +296,7 @@ export const useEditSession = ({
       const context = releaseContextRef.current;
       void releaseEditSession(context);
     };
-  }, []);
+  });
 
   const markDirtyAndCheckpoint = (buffer: ArrayBuffer) => {
     setIsDirty(true);

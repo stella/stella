@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 
 import {
@@ -14,6 +14,7 @@ import { Button, buttonVariants } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
 import { env } from "@/env";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
 const DEFAULT_SUPPORT_EMAIL = "hello@stll.app";
@@ -414,7 +415,7 @@ const EmptyScreenVideoOverlay = ({
   const tCommon = useTranslations("common");
   const playableVideo = getPlayableVideo(video);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "Escape") {
         return;

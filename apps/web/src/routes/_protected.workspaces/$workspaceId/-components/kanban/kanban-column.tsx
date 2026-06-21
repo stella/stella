@@ -54,6 +54,7 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useExternalFileDrop } from "@/hooks/use-external-file-drop";
 import type {
   EntityKind,
@@ -161,6 +162,7 @@ export const KanbanColumn = ({
   const virtualCards = cardVirtualizer.getVirtualItems();
   const lastVirtualCard = virtualCards.at(-1);
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- load-more trigger; virtualizer onChange isn't equivalent because the re-check must also fire on prop changes (isLoadingMore flipping false, entities.length growing, hasMore toggling), which onChange wouldn't observe
   useEffect(() => {
     if (!hasMore || isLoadingMore || !onLoadMore || !lastVirtualCard) {
       return;
@@ -184,7 +186,7 @@ export const KanbanColumn = ({
   });
   const isFileDragOver = isDropTarget && !isInnerActive;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = columnRef.current;
     const handle = dragHandleRef.current;
     if (!el) {

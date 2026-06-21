@@ -1,7 +1,8 @@
-import { useEffect, useEffectEvent, useRef } from "react";
+import { useEffectEvent, useRef } from "react";
 
 import { useThrottledCallback } from "use-debounce";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { PAGE_ID_ATTRIBUTE } from "@/lib/pdf/consts";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 
@@ -38,7 +39,7 @@ export const usePageVisibility = ({
 
   const throttledUpdate = useThrottledCallback(updateVisiblePages, 150);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const container = containerRef.current;
     if (!container || pageIds.length === 0) {
       return undefined;

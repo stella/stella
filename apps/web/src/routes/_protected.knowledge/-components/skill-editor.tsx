@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -163,6 +163,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       return next;
     });
   };
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reconciles editable form fields (name/description/enabled/command, all user-edited via their own setters elsewhere) with server data on load and after each save-refetch; not pure derived state, and the only-rendering-parent that could carry a key isn't in scope, so kept
   useEffect(() => {
     if (!detail.data) {
       return;
@@ -175,32 +176,19 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     setCommand(detail.data.command ?? slugifyCommand(detail.data.name));
   }, [detail.data]);
 
-  const resources: SkillResource[] = useMemo(() => {
-    if (!detail.data) {
-      return [];
-    }
-    return detail.data.resources;
-  }, [detail.data]);
+  const resources: SkillResource[] = detail.data?.resources ?? [];
 
-  const existingPaths = useMemo(
-    () => new Set(resources.map((entry) => entry.path)),
-    [resources],
-  );
+  const existingPaths = new Set(resources.map((entry) => entry.path));
 
   // A pending folder that gained its first resource is real now; render it
   // from the resource paths instead so it cannot show up twice.
-  const emptyPendingFolders = useMemo(
-    () =>
-      pendingFolders.filter(
-        (folder) =>
-          !resources.some((entry) => entry.path.startsWith(`${folder}/`)),
-      ),
-    [pendingFolders, resources],
+  const emptyPendingFolders = pendingFolders.filter(
+    (folder) => !resources.some((entry) => entry.path.startsWith(`${folder}/`)),
   );
 
   // Every folder path visible in the tree (resource prefixes + pending),
   // for deduplicating new-folder names and validating folder renames.
-  const folderPrefixes = useMemo(() => {
+  const folderPrefixes = (() => {
     const out = new Set<string>(emptyPendingFolders);
     for (const entry of resources) {
       const segments = entry.path.split("/");
@@ -209,7 +197,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       }
     }
     return out;
-  }, [resources, emptyPendingFolders]);
+  })();
 
   const createPendingFolder = (parentPath: string | null) => {
     const prefix = parentPath ? `${parentPath}/` : "";
@@ -314,6 +302,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
   // editable — blank and blueprint drafts arrive here straight from the
   // gallery with nothing else to click first.
   const autoOpenedSkillId = useRef<string | null>(null);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- one-shot tab-open relayed off the query's first data load (no single setter call-site to host it, and useExternalSyncEffect forbids event relays); the only-rendering-parent that could carry a key isn't in scope, so kept
   useEffect(() => {
     if (!detail.data || autoOpenedSkillId.current === skillId) {
       return;
@@ -493,11 +482,8 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     onError: (error) => toastError(error, t("common.unexpectedError")),
   });
 
-  const fileNodes = useMemo(
-    () => buildSkillNodes(resources, emptyPendingFolders),
-    [resources, emptyPendingFolders],
-  );
-  const allFolderIds = useMemo(() => {
+  const fileNodes = buildSkillNodes(resources, emptyPendingFolders);
+  const allFolderIds = (() => {
     const ids = new Set<string>();
     const walk = (siblings: FileTreeNode[]) => {
       for (const node of siblings) {
@@ -509,7 +495,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     };
     walk(fileNodes);
     return ids;
-  }, [fileNodes]);
+  })();
   const allFoldersExpanded = [...allFolderIds].every(
     (id) => !collapsedFolders.has(id),
   );
@@ -911,13 +897,12 @@ function SkillFileTree({
   selected,
   setRenameValue,
 }: SkillFileTreeProps) {
-  const resourceById = useMemo(
-    () => new Map(resources.map((resource) => [resource.id, resource])),
-    [resources],
+  const resourceById = new Map(
+    resources.map((resource) => [resource.id, resource]),
   );
   // Folders default to expanded; `collapsedFolders` tracks the ones the user
   // closed. Translate that to the expanded-set the shared FileTree expects.
-  const expandedIds = useMemo(() => {
+  const expandedIds = (() => {
     const ids = new Set<string>();
     const walk = (siblings: FileTreeNode[]) => {
       for (const node of siblings) {
@@ -932,7 +917,7 @@ function SkillFileTree({
     };
     walk(nodes);
     return ids;
-  }, [nodes, collapsedFolders]);
+  })();
   const selectedId =
     selected.type === "body" ? BODY_NODE_ID : selected.resourceId;
 

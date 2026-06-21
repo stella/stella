@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   useQuery,
@@ -191,6 +191,7 @@ export const CatalogueBrowser = ({
   // Reuse `role` from the canAddCustom block above for team-skill gating.
   const canManageTeam = role === "admin" || role === "owner";
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- syncs the initialKind prop into local filter state on change; cannot lift to key (the only parent, tools.tsx, is out of scope, and a key remount would also reset unrelated local state like query/jurisdictionFilter), and filter is also user-driven via the pills so it is not pure derived state
   useEffect(() => {
     if (initialKind !== undefined) {
       setFilter(initialKind);
@@ -199,7 +200,7 @@ export const CatalogueBrowser = ({
 
   const entries = data.entries;
 
-  const filtered = useMemo(() => {
+  const filtered = (() => {
     const normalised = query.trim().toLowerCase();
     const subset = entries.filter((entry) => {
       if (filter !== "all" && entry.kind !== filter) {
@@ -227,9 +228,9 @@ export const CatalogueBrowser = ({
       }
       return left.displayName.localeCompare(right.displayName);
     });
-  }, [entries, filter, jurisdictionFilter, query]);
+  })();
 
-  const allJurisdictionCodes = useMemo(() => {
+  const allJurisdictionCodes = (() => {
     const set = new Set<string>();
     for (const entry of entries) {
       for (const code of entry.jurisdictions) {
@@ -237,7 +238,7 @@ export const CatalogueBrowser = ({
       }
     }
     return [...set].sort();
-  }, [entries]);
+  })();
 
   const onRowFocus = (entry: CatalogueEntry) => {
     const tabId = toolDetailTabId(entry.kind, entry.slug);

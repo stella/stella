@@ -1,5 +1,3 @@
-import { useMemo } from "react";
-
 import { useSuspenseQuery } from "@tanstack/react-query";
 
 import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
@@ -14,11 +12,9 @@ export const useMatterNameMap = (workspaceId: string) => {
     entitySummariesOptions(workspaceId),
   );
 
-  return useMemo(() => {
-    const map = new Map<string, string>();
-    for (const summary of summaries) {
-      map.set(summary.id, summary.name);
-    }
-    return map;
-  }, [summaries]);
+  const map = new Map<string, string>();
+  for (const summary of summaries) {
+    map.set(summary.id, summary.name);
+  }
+  return map;
 };

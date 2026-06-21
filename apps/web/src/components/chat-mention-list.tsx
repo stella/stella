@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useImperativeHandle,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useImperativeHandle, useMemo, useRef, useState } from "react";
 import type { Ref } from "react";
 
 import { useQuery } from "@tanstack/react-query";
@@ -28,6 +22,7 @@ import type {
   ChatMentionOption,
   ChatReferenceCategory,
 } from "@/components/chat-mention-extension";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
@@ -162,6 +157,7 @@ export const ChatMentionList = ({
   if (latestClientRect) {
     lastClientRectRef.current = latestClientRect;
   }
+  // Stable virtual-anchor identity for the Base UI positioner (Floating UI).
   const anchor = useMemo(
     () => ({
       getBoundingClientRect: () => {
@@ -230,7 +226,7 @@ export const ChatMentionList = ({
   );
 
   // Scroll the selected item into view on index change
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = listRef.current?.querySelector(
       `[data-mention-index="${safeIndex}"]`,
     );

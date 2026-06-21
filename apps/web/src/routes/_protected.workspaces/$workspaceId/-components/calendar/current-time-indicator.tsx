@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
+
+import { useMountEffect } from "@/hooks/use-effect";
 
 /**
  * Red horizontal line showing the current time of day.
@@ -8,7 +10,7 @@ import { useEffect, useState } from "react";
 export const CurrentTimeIndicator = () => {
   const [top, setTop] = useState<number | null>(null);
 
-  useEffect(() => {
+  useMountEffect(() => {
     const update = () => {
       const now = new Date();
       const minutesSinceMidnight = now.getHours() * 60 + now.getMinutes();
@@ -18,7 +20,7 @@ export const CurrentTimeIndicator = () => {
     update();
     const id = setInterval(update, 60_000);
     return () => clearInterval(id);
-  }, []);
+  });
 
   if (top === null) {
     return null;

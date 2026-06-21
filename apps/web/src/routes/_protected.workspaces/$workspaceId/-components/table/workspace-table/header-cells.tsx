@@ -1,5 +1,5 @@
 import type { ReactNode } from "react";
-import { useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import {
   attachClosestEdge,
@@ -16,6 +16,7 @@ import { CheckIcon, GripVerticalIcon, MinusIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { SelectAllState } from "@/routes/_protected.workspaces/$workspaceId/-components/table/select-all.logic";
 import type {
   TableColumn,
@@ -68,7 +69,7 @@ export const DraggableHeaderCell = ({
   const isAddPropertyColumn = header.column.id === addPropertyColId;
   const pinning = getColumnPinningGroup(header.column);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const element = headerRef.current;
     const dragHandle = dragHandleRef.current;
     if (!element) {

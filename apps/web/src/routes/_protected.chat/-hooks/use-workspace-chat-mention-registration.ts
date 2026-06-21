@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
@@ -12,6 +12,7 @@ import {
   CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   getMentionViewScope,
 } from "@/components/chat-mention-helpers";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceEntity } from "@/lib/types";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
@@ -136,7 +137,11 @@ export const useWorkspaceChatMentionRegistration = (
     [createSearchOptions, debouncedSearchEntities, queryClient, workspaceId],
   );
 
-  useEffect(
+  // Tear down the in-flight debounced search whenever its identity changes
+  // or the hook unmounts: cancel the pending timer and settle the dangling
+  // promise so awaiters don't hang. This is lifecycle management of the
+  // debounce timer (an external system), keyed on the debounced callback.
+  useExternalSyncEffect(
     () => () => {
       debouncedSearchEntities.cancel();
       pendingSearchRef.current?.resolve([]);
@@ -145,7 +150,7 @@ export const useWorkspaceChatMentionRegistration = (
     [debouncedSearchEntities],
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const extensionId = getWorkspaceMentionExtensionId(workspaceId);
     const unregister = registerExtension(extensionId, {
       mentionSources: [

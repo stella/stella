@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Loader2Icon, SparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -67,10 +67,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
     props.aiMode === "enabled" ? props.ensureAIAvailable : null;
   const publicPath = props.aiMode === "locked" ? props.publicPath : undefined;
   const requestAuth = props.aiMode === "locked" ? props.requestAuth : undefined;
-  const ast = useMemo(
-    () => parseDocumentAst(decision.documentAst),
-    [decision.documentAst],
-  );
+  const ast = parseDocumentAst(decision.documentAst);
 
   const mainRef = useRef<HTMLDivElement>(null);
   const [panelWidth, setPanelWidth] = useState(220);
@@ -116,7 +113,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
     aiEnabled &&
     analysisState.status === "generating" &&
     analysisState.tree.length === 0;
-  const analysisTree = useMemo(() => {
+  const analysisTree = (() => {
     if (!aiEnabled) {
       return [];
     }
@@ -127,23 +124,20 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
       return analysisState.tree;
     }
     return [];
-  }, [aiEnabled, analysisState]);
+  })();
 
-  const sectionMap = useMemo(() => {
+  const sectionMap = (() => {
     if (analysisTree.length === 0 || !ast) {
       return undefined;
     }
     const anchorIds = ast.blocks.map((b) => b.anchorId);
     return buildSectionMap(analysisTree, anchorIds);
-  }, [analysisTree, ast]);
+  })();
 
-  const flatAnalysisHeadings = useMemo(
-    () => flattenAnalysisHeadings(analysisTree),
-    [analysisTree],
-  );
+  const flatAnalysisHeadings = flattenAnalysisHeadings(analysisTree);
 
   // Analysis outline for the shared rail: category colours + display anchors.
-  const analysisOutline = useMemo(() => {
+  const analysisOutline = (() => {
     const items: OutlineItem[] = [];
     const anchorById = new Map<string, string>();
     for (const heading of flatAnalysisHeadings) {
@@ -156,50 +150,47 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
       anchorById.set(heading.id, getHeadingDisplayAnchorId(heading));
     }
     return { items, anchorById };
-  }, [flatAnalysisHeadings]);
+  })();
 
-  const marginItems = useMemo(
-    () =>
-      flatAnalysisHeadings.flatMap((heading) => {
-        type Item = {
-          kind: "card" | "annotation";
-          id: string;
-          heading?: string;
-          text: string;
-          category: string;
-          depth: number;
-          startAnchorId: string;
-        };
+  const marginItems = flatAnalysisHeadings.flatMap((heading) => {
+    type Item = {
+      kind: "card" | "annotation";
+      id: string;
+      heading?: string;
+      text: string;
+      category: string;
+      depth: number;
+      startAnchorId: string;
+    };
 
-        const items: Item[] = [];
-        const first = heading.annotations.at(0);
+    const items: Item[] = [];
+    const first = heading.annotations.at(0);
 
-        items.push({
-          kind: "card",
-          id: heading.id,
-          heading: heading.label,
-          text: first?.summary ?? "",
-          category: heading.category,
-          depth: heading.depth,
-          startAnchorId: first?.startAnchorId ?? heading.startAnchorId,
-        });
+    items.push({
+      kind: "card",
+      id: heading.id,
+      heading: heading.label,
+      text: first?.summary ?? "",
+      category: heading.category,
+      depth: heading.depth,
+      startAnchorId: first?.startAnchorId ?? heading.startAnchorId,
+    });
 
-        for (const annotation of heading.annotations.slice(first ? 1 : 0)) {
-          items.push({
-            kind: "annotation",
-            id: annotation.id,
-            text: annotation.summary,
-            category: heading.category,
-            depth: heading.depth + 1,
-            startAnchorId: annotation.startAnchorId,
-          });
-        }
+    for (const annotation of heading.annotations.slice(first ? 1 : 0)) {
+      items.push({
+        kind: "annotation",
+        id: annotation.id,
+        text: annotation.summary,
+        category: heading.category,
+        depth: heading.depth + 1,
+        startAnchorId: annotation.startAnchorId,
+      });
+    }
 
-        return items;
-      }),
-    [flatAnalysisHeadings],
-  );
+    return items;
+  });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (auto-kick AI analysis on derived idle state), move into handler / data-loading flow
   useEffect(() => {
     if (aiEnabled && ast && analysisState.status === "idle") {
       void generate();
@@ -207,6 +198,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
   }, [aiEnabled, analysisState.status, ast, generate]);
 
   const reset = useCaseSearchStore((s) => s.reset);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id store reset + derived search state, lift to key prop
   useEffect(() => {
     reset();
     if (initialSearchQuery) {

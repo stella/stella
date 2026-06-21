@@ -50,6 +50,7 @@ import {
 } from "@/components/drag-preview";
 import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { isFileDisplayable } from "@/lib/types";
 import type {
@@ -541,6 +542,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   // (toggleAll → allExpanded → setFolderState → re-render).
   const toggleAllRef = useRef(toggleAll);
   toggleAllRef.current = toggleAll;
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (toggleVersion bump → toggleAll); the trigger is in ViewToolbar's FolderExpandToggle (separate file), but the toggle reads local expandedIds/allFolderIds here, so the action can't be lifted to the button without threading local state up
   useEffect(() => {
     if (toggleVersion === 0) {
       return;
@@ -548,7 +550,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     toggleAllRef.current();
   }, [toggleVersion]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setFolderState({
       allExpanded,
       hasFolders: allFolderIds.size > 0,
@@ -641,33 +643,31 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   // Track whether an entity drag is active and whether any
   // dragged entity is nested (has a parentId). Only show the
   // root drop bar when at least one entity can be moved to root.
-  useEffect(
-    () =>
-      monitorForElements({
-        canMonitor: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
-        onDragStart: ({ source }) => {
-          const entities = source.data["entities"];
-          const parentId = source.data["parentId"];
-          const hasNested = isDragEntityList(entities)
-            ? entities.some((entity) => entity.parentId !== null)
-            : typeof parentId === "string";
-          if (hasNested) {
-            setIsDragActive(true);
-          }
-        },
-        onDrop: () => setIsDragActive(false),
-      }),
-    [],
+  useMountEffect(() =>
+    monitorForElements({
+      canMonitor: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
+      onDragStart: ({ source }) => {
+        const entities = source.data["entities"];
+        const parentId = source.data["parentId"];
+        const hasNested = isDragEntityList(entities)
+          ? entities.some((entity) => entity.parentId !== null)
+          : typeof parentId === "string";
+        if (hasNested) {
+          setIsDragActive(true);
+        }
+      },
+      onDrop: () => setIsDragActive(false),
+    }),
   );
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setFilesystemSelectedIds(selectedIds);
   }, [selectedIds, setFilesystemSelectedIds]);
 
-  useEffect(() => clearFilesystemSelectedIds, [clearFilesystemSelectedIds]);
+  useMountEffect(() => clearFilesystemSelectedIds);
 
   // Dedicated root-level drop bar (visible during drags).
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = rootBarRef.current;
     if (!el) {
       return undefined;
@@ -1218,7 +1218,7 @@ const FilesystemRow = ({
     onToggleFolderRef.current(node.entityId);
   }, 600);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = rowRef.current;
     if (!el) {
       return undefined;

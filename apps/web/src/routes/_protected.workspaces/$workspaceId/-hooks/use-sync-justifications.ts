@@ -1,7 +1,8 @@
-import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type { WorkspaceJustification } from "@/lib/types";
 import { justificationsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
@@ -45,10 +46,7 @@ export const useSyncJustifications = (
   const syncJustifications = useWorkspaceStore(
     (state) => state.syncJustifications,
   );
-  const normalizedEntityIds = useMemo(
-    () => normalizeEntityIds(entityIds),
-    [entityIds],
-  );
+  const normalizedEntityIds = normalizeEntityIds(entityIds);
 
   const { data } = useQuery({
     ...justificationsOptions({
@@ -58,7 +56,7 @@ export const useSyncJustifications = (
     enabled: enabled && normalizedEntityIds.length > 0,
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!data) {
       return;
     }
@@ -96,8 +94,11 @@ export const useSyncJustificationChunks = (
         }),
         enabled,
       })),
-    [enabled, normalizedChunks, workspaceId],
+    [normalizedChunks, workspaceId, enabled],
   );
+  // useQueries memoizes on the `combine` identity, so it must be stable:
+  // a fresh function each render makes `syncedResults` a new array every
+  // render, which would re-fire the store-sync effect below in a loop.
   const combineResults = useCallback(
     (
       results: {
@@ -118,7 +119,7 @@ export const useSyncJustificationChunks = (
     combine: combineResults,
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     for (const result of syncedResults) {
       if (!result.data || result.entityIds.length === 0) {
         continue;

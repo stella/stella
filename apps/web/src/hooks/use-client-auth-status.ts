@@ -17,6 +17,7 @@ export const useClientAuthStatus = (): ClientAuthStatus => {
     isAuthenticated: false,
   });
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- session load on mount with a deliberate dynamic import("@/lib/auth"). This hook runs on public/anon law surfaces, so the lazy import keeps the auth client out of the public bundle; sessionOptions imports authClient statically and would regress that. Not a trivial fetch→setState (custom checking/anonymous/authenticated mapping). Keep.
   useEffect(() => {
     void (async () => {
       const { authClient } = await import("@/lib/auth");

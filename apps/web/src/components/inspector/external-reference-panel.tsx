@@ -41,6 +41,7 @@ import { useExternalSourceStore } from "@/components/chat/external-source-store"
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -148,7 +149,7 @@ const useInspectorFind = ({
   const matchCount = findState.open ? findState.matchCount : 0;
   const activeIndex = findState.open ? findState.activeIndex : 0;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if (!enabled) {
         return;
@@ -633,6 +634,7 @@ export const ExternalReferencePanel = ({
   //    already handles.
   // 2. Dedupe by (url, status) across the inspector's lifetime so
   //    flipping between tabs doesn't re-toast a cached error.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- toast on a 5xx preview error, deduped by (url, status) across the inspector's lifetime. useQuery has no onError in v5; folding this into the queryFn or a global QueryCache handler would change the dedup/timing semantics. Keep.
   useEffect(() => {
     if (!previewError || !APIError.is(previewError)) {
       return;
@@ -764,7 +766,7 @@ export const ExternalReferencePanel = ({
     }
   }, [confirmHref, t]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!findOpen) {
       return;
     }

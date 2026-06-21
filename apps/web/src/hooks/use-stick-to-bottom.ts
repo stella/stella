@@ -1,7 +1,9 @@
-import { createContext, use, useEffect, useRef, useState } from "react";
+import { createContext, use, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { panic } from "better-result";
+
+import { useMountEffect } from "@/hooks/use-effect";
 
 const NEAR_BOTTOM_THRESHOLD_PX = 50;
 
@@ -87,7 +89,7 @@ export const useStickToBottom = () => {
   };
 
   // Track user scroll direction to detect intentional scroll-up.
-  useEffect(() => {
+  useMountEffect(() => {
     const el = scrollRef.current;
     if (!el) {
       return undefined;
@@ -145,10 +147,10 @@ export const useStickToBottom = () => {
       el.removeEventListener("scroll", onScroll);
       el.removeEventListener("wheel", onWheel);
     };
-  }, []);
+  });
 
   // Observe content resizes and auto-scroll when pinned.
-  useEffect(() => {
+  useMountEffect(() => {
     const content = contentRef.current;
     if (!content) {
       return undefined;
@@ -182,7 +184,7 @@ export const useStickToBottom = () => {
 
     observer.observe(content);
     return () => observer.disconnect();
-  }, []);
+  });
 
   return { scrollRef, contentRef, isAtBottom, isScrollable, scrollToBottom };
 };

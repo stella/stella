@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
@@ -11,6 +11,7 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
@@ -57,7 +58,7 @@ export const TaskDetailPanel = ({
     return found?.type === "task" && found.isNew;
   });
   const clearNewFlag = useInspectorStore((s) => s.clearTaskNewFlag);
-  const handleClose = useCallback(() => closeTab(taskId), [closeTab, taskId]);
+  const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
   const userId = useRouteContext({
     from: "/_protected",
@@ -111,6 +112,7 @@ export const TaskDetailPanel = ({
 
   // Auto-assign current user and focus name for new tasks
   const didAutoAssign = useRef(false);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay + data mutation, opens edit and auto-assigns the user on new task; move into the task-create flow
   useEffect(() => {
     if (isNewTask && task) {
       setEditNameValue("");
@@ -207,7 +209,7 @@ export const TaskDetailPanel = ({
   if (task) {
     resolvedStatus = isTaskStatus(task.status) ? task.status : "open";
   }
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (resolvedStatus !== null) {
       useInspectorStore.getState().updateTaskStatus(taskId, resolvedStatus);
     }

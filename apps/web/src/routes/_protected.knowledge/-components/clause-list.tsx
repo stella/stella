@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import {
@@ -110,15 +110,12 @@ export const ClauseList = ({
     300,
   );
 
-  const handleSearchChange = useCallback(
-    (e: React.ChangeEvent<HTMLInputElement>) => {
-      setSearchInput(e.target.value);
-      debouncedSearch(e.target.value);
-    },
-    [debouncedSearch],
-  );
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchInput(e.target.value);
+    debouncedSearch(e.target.value);
+  };
 
-  const handleExport = useCallback(async () => {
+  const handleExport = async () => {
     const response = await api.clauses.export.get({
       query: {},
     });
@@ -147,7 +144,7 @@ export const ClauseList = ({
       type: "application/json",
     });
     downloadFile(blob, "clauses-export.json");
-  }, [t]);
+  };
 
   return (
     <div className="flex min-h-0 flex-1">
@@ -540,7 +537,7 @@ const CategoryFormDialogBody = ({
   const [name, setName] = useState(initial?.name ?? "");
   const [saving, setSaving] = useState(false);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       return;
     }
@@ -587,7 +584,7 @@ const CategoryFormDialogBody = ({
 
     onOpenChange(false);
     onSaved();
-  }, [name, isEdit, initial, t, onOpenChange, onSaved]);
+  };
 
   return (
     <DialogPopup className="sm:max-w-sm">

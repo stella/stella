@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useRef, useState } from "react";
+
+import { useMountEffect } from "@/hooks/use-effect";
 
 /**
  * One-shot attention pulse.
@@ -13,16 +15,13 @@ export const usePulse = (durationMs: number) => {
   const [isPulsing, setIsPulsing] = useState(false);
   const timerRef = useRef<number | null>(null);
 
-  useEffect(
-    () => () => {
-      if (timerRef.current !== null) {
-        window.clearTimeout(timerRef.current);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+    }
+  });
 
-  const pulse = useCallback(() => {
+  const pulse = () => {
     if (timerRef.current !== null) {
       window.clearTimeout(timerRef.current);
     }
@@ -31,7 +30,7 @@ export const usePulse = (durationMs: number) => {
       setIsPulsing(false);
       timerRef.current = null;
     }, durationMs);
-  }, [durationMs]);
+  };
 
   return { isPulsing, pulse };
 };

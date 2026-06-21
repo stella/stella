@@ -29,6 +29,7 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
 
   const pendingRenameTabId = useInspectorStore((s) => s.pendingRenameTabId);
   const clearRenameRequest = useInspectorStore((s) => s.clearRenameRequest);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- store-driven rename request fanned out to multiple consumers (PDF tabs here, chat tabs in chat-tab-panel); the single requestRename() call-site can't pick the consumer or reach its local rename state, so the relay can't move into the handler
   useEffect(() => {
     if (pendingRenameTabId === null) {
       return;
@@ -43,41 +44,38 @@ export const useFileTabRename = ({ tabs }: UseFileTabRenameOptions) => {
     }
   }, [pendingRenameTabId, tabs, startRename, clearRenameRequest]);
 
-  const commitRename = useCallback(
-    (tab: FileTab) => {
-      const trimmed = editValue.trim();
-      if (!trimmed) {
-        setEditingTabId(null);
-        return;
-      }
-
-      const dotIndex = tab.label.lastIndexOf(".");
-      const ext = dotIndex > 0 ? tab.label.slice(dotIndex) : "";
-      const newName = trimmed + ext;
-
+  const commitRename = (tab: FileTab) => {
+    const trimmed = editValue.trim();
+    if (!trimmed) {
       setEditingTabId(null);
+      return;
+    }
 
-      if (newName === tab.label) {
-        return;
-      }
+    const dotIndex = tab.label.lastIndexOf(".");
+    const ext = dotIndex > 0 ? tab.label.slice(dotIndex) : "";
+    const newName = trimmed + ext;
 
-      const previousLabel = tab.label;
-      useInspectorStore.getState().updateLabel(tab.id, newName);
-      renameEntity.mutate(
-        { workspaceId: tab.workspaceId, entityId: tab.entityId, name: newName },
-        {
-          onError: () => {
-            useInspectorStore.getState().updateLabel(tab.id, previousLabel);
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
-          },
+    setEditingTabId(null);
+
+    if (newName === tab.label) {
+      return;
+    }
+
+    const previousLabel = tab.label;
+    useInspectorStore.getState().updateLabel(tab.id, newName);
+    renameEntity.mutate(
+      { workspaceId: tab.workspaceId, entityId: tab.entityId, name: newName },
+      {
+        onError: () => {
+          useInspectorStore.getState().updateLabel(tab.id, previousLabel);
+          stellaToast.add({
+            title: t("errors.actionFailed"),
+            type: "error",
+          });
         },
-      );
-    },
-    [editValue, renameEntity, t],
-  );
+      },
+    );
+  };
 
   return {
     commitRename,

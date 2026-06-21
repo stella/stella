@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
@@ -15,6 +15,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { DragPreviewData } from "@/components/drag-preview";
 import { renderDragPreview } from "@/components/drag-preview";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
@@ -56,7 +57,7 @@ export const CalendarEntityChip = ({
 
   useInspectorFlash(entity.taskId, dragRef);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = dragRef.current;
     if (!el || !isEditable) {
       return undefined;

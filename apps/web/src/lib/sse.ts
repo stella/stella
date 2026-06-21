@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 
@@ -65,7 +66,7 @@ export const useWorkspaceSSE = (
   const onEventRef = useRef(options.onEvent);
   onEventRef.current = options.onEvent;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const source = new EventSource(
       getWorkspaceSSEUrl(workspaceId),
       WORKSPACE_SSE_EVENT_SOURCE_INIT,

@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from "react";
+import { useRef, useState } from "react";
 
 import { AlertTriangleIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -91,40 +91,37 @@ export const InviteStep = ({
   const [error, setError] = useState("");
   const inputRef = useRef<HTMLInputElement>(null);
 
-  const processInput = useCallback(
-    (raw: string) => {
-      const { valid, invalid } = parseInviteEmails(raw, emails);
+  const processInput = (raw: string) => {
+    const { valid, invalid } = parseInviteEmails(raw, emails);
 
-      if (valid.length > 0) {
-        setEmails((prev) => {
-          const next = [...prev, ...valid];
-          onEmailCountChange?.(next.length);
-          return next;
-        });
-      }
+    if (valid.length > 0) {
+      setEmails((prev) => {
+        const next = [...prev, ...valid];
+        onEmailCountChange?.(next.length);
+        return next;
+      });
+    }
 
-      if (invalid.length > 0) {
-        setError(
-          t("onboarding.inviteInvalidEmail", {
-            value: invalid.join(", "),
-          }),
-        );
-        setInput(invalid.join(", "));
-        // Flash the input
-        const el = inputRef.current;
-        if (el) {
-          el.classList.add("ring-2", "ring-destructive");
-          setTimeout(() => {
-            el.classList.remove("ring-2", "ring-destructive");
-          }, 600);
-        }
-      } else {
-        setError("");
-        setInput("");
+    if (invalid.length > 0) {
+      setError(
+        t("onboarding.inviteInvalidEmail", {
+          value: invalid.join(", "),
+        }),
+      );
+      setInput(invalid.join(", "));
+      // Flash the input
+      const el = inputRef.current;
+      if (el) {
+        el.classList.add("ring-2", "ring-destructive");
+        setTimeout(() => {
+          el.classList.remove("ring-2", "ring-destructive");
+        }, 600);
       }
-    },
-    [emails, t, onEmailCountChange],
-  );
+    } else {
+      setError("");
+      setInput("");
+    }
+  };
 
   const removeEmail = (email: string) => {
     setEmails((prev) => {

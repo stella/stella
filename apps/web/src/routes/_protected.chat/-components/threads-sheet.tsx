@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { ReactNode } from "react";
 
 import {
@@ -87,10 +87,7 @@ export const ThreadsSheet = ({
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useInfiniteQuery(groupedChatThreadsOptions(activeOrganizationId));
-  const groupedThreads = useMemo(
-    () => mergeGroupedChatThreadPages(data?.pages),
-    [data?.pages],
-  );
+  const groupedThreads = mergeGroupedChatThreadPages(data?.pages);
 
   return (
     <Sheet onOpenChange={setIsOpen} open={isOpen}>

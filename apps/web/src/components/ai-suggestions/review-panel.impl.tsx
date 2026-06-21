@@ -5,7 +5,7 @@
  * underlying tracked changes are resolved on the editor.
  */
 
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import type { CSSProperties, RefObject } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -174,13 +174,13 @@ export const ReviewPanelImpl = ({
   const [filter, setFilter] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
-  const filtered = useMemo(
-    () =>
-      filterReviewSuggestions(suggestions, { hideAccepted, filter, groupAxis }),
-    [suggestions, hideAccepted, filter, groupAxis],
-  );
+  const filtered = filterReviewSuggestions(suggestions, {
+    hideAccepted,
+    filter,
+    groupAxis,
+  });
 
-  const groups = useMemo(() => {
+  const groups = (() => {
     const groupTone = (items: readonly ReviewSuggestion[]): SeverityTone => {
       const highest = SEVERITY_ORDER.find((sev) =>
         items.some((item) => item.severity === sev),
@@ -233,7 +233,7 @@ export const ReviewPanelImpl = ({
           : area;
       return { key: area, label, items, tone: groupTone(items) };
     });
-  }, [filtered, groupAxis, severityLabels, t]);
+  })();
 
   const pendingCount = suggestions.filter((s) => s.status === "pending").length;
   const total = suggestions.length;

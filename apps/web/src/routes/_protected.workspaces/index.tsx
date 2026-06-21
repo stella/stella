@@ -39,6 +39,7 @@ import {
   EMPTY_SCREEN_MATTERS_VIDEO,
   EmptyScreen,
 } from "@/components/empty-screen";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { pageTitle } from "@/lib/page-title";
@@ -107,6 +108,12 @@ function RouteComponent() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const previousOrganizationIdRef = useRef(activeOrganizationId);
 
+  // On org change this resets local search AND mutates the config store
+  // (resetMatterVisibilityState) and invalidates the workspaces query. A `key`
+  // remount would only reset local state, not the store reset or invalidation,
+  // and this is a router-owned route component with no parent to key, so it
+  // stays an effect.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- org-change reset performs a zustand store reset + query invalidation alongside local state; lift-to-key cannot replicate the store/cache side effects
   useEffect(() => {
     if (previousOrganizationIdRef.current === activeOrganizationId) {
       return;
@@ -150,7 +157,7 @@ function RouteComponent() {
     ? groups.flatMap((g) => (collapsedSet.has(g.groupId) ? [] : g.workspaces))
     : sorted;
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         setSearch("");
@@ -177,7 +184,7 @@ function RouteComponent() {
 
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-  });
+  }, [displayed]);
 
   return (
     <MattersPageContextMenu canCreateMatter={canOpenCreateMatter}>

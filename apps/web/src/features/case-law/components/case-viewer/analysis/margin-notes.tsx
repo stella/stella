@@ -5,8 +5,10 @@
  * "annotation" items are standalone annotation summaries.
  */
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState } from "react";
 import type { RefObject } from "react";
+
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { getCategoryVar } from "./types";
 
@@ -38,6 +40,7 @@ export const MarginNotes = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const heights = useRef(new Map<string, number>());
 
+  // Added/removed from scroll + resize listeners by reference.
   const recalc = useCallback(() => {
     const sc = scrollContainerRef.current;
     const wrapper = containerRef.current;
@@ -70,21 +73,18 @@ export const MarginNotes = ({
     setPositioned(result);
   }, [scrollContainerRef, items]);
 
-  const measureRef = useCallback(
-    (el: HTMLElement | null, id: string) => {
-      if (!el) {
-        return;
-      }
-      const h = el.offsetHeight;
-      if (heights.current.get(id) !== h) {
-        heights.current.set(id, h);
-        requestAnimationFrame(recalc);
-      }
-    },
-    [recalc],
-  );
+  const measureRef = (el: HTMLElement | null, id: string) => {
+    if (!el) {
+      return;
+    }
+    const h = el.offsetHeight;
+    if (heights.current.get(id) !== h) {
+      heights.current.set(id, h);
+      requestAnimationFrame(recalc);
+    }
+  };
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const sc = scrollContainerRef.current;
     if (!sc) {
       return undefined;

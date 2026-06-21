@@ -1,5 +1,7 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useState } from "react";
 import type { RefObject } from "react";
+
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 // Target the typical Word text area (page minus ~1-inch margins on
 // each side at 96 DPI). Fitting to this rather than the full 816px
@@ -101,7 +103,7 @@ export const useDocxWheelZoom = (
   containerRef: RefObject<HTMLElement | null>,
   editorRef: RefObject<ZoomableDocxEditor | null>,
 ) => {
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const container = containerRef.current;
     if (!container) {
       return undefined;

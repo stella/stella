@@ -55,6 +55,7 @@ import type {
   TimeFilter,
 } from "@/components/search-filters.logic";
 import { UserAvatar } from "@/components/user-avatar";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
@@ -358,6 +359,12 @@ export const SearchDialog = ({
   });
   const virtualHits = hitVirtualizer.getVirtualItems();
 
+  // Refresh the recents snapshot from localStorage each time the dialog opens.
+  // The recents are also locally mutated by the result/search handlers, so this
+  // is a triggered read of an external store into shared state, not pure derived
+  // state: a render-time read would re-read on every render and clobber those
+  // local mutations.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- read localStorage recents into locally-mutated state on the open transition; render-time read would clobber in-session mutations
   useEffect(() => {
     if (!open) {
       return;
@@ -713,6 +720,11 @@ export const SearchDialog = ({
   const commandHits = hasTypedQuery && hasResults ? allHits : [];
   const filterEditorIdsKey = filters.editedByUserIds.join("|");
 
+  // Clear any prior AI summary whenever the effective search changes. The
+  // debounced `searchQuery` updates asynchronously (no handler to co-locate
+  // with) and the filter setters fan out across ~7 handlers, so there is no
+  // single trigger site to relay the reset into.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset on debounced searchQuery/filter changes; no single event site (debounced query updates post-commit, filters set in many handlers)
   useEffect(() => {
     summarizeSearchMutation.reset();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset is the stable mutation method needed here
@@ -726,7 +738,7 @@ export const SearchDialog = ({
     searchQuery,
   ]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const root = resultsElement;
     const target = loadMoreRef.current;
     if (!hasQuery || !hasNextPage || !root || !target) {

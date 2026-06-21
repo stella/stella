@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react";
+import { useState } from "react";
 
 import {
   MoreHorizontalIcon,
@@ -148,7 +148,7 @@ const CategoryRow = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
-  const handleDelete = useCallback(async () => {
+  const handleDelete = async () => {
     setDeleting(true);
     const response = await api["template-categories"]({
       categoryId: category.id,
@@ -170,7 +170,7 @@ const CategoryRow = ({
 
     setDeleteOpen(false);
     onCategoriesChanged();
-  }, [category.id, t, onCategoriesChanged]);
+  };
 
   return (
     <div className="group flex items-center">
@@ -300,7 +300,7 @@ const CategoryFormDialogBody = ({
   const [name, setName] = useState(initial?.name ?? "");
   const [saving, setSaving] = useState(false);
 
-  const handleSave = useCallback(async () => {
+  const handleSave = async () => {
     if (!name.trim()) {
       return;
     }
@@ -347,7 +347,7 @@ const CategoryFormDialogBody = ({
 
     onOpenChange(false);
     onSaved();
-  }, [name, isEdit, initial, t, onOpenChange, onSaved]);
+  };
 
   return (
     <DialogPopup className="sm:max-w-sm">

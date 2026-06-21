@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { EditorView } from "prosemirror-view";
 
@@ -36,7 +36,7 @@ export const useAISuggestionThread = ({
 
   // ---- derived state -------------------------------------------------------
 
-  const allSuggestions = useMemo<AISuggestion[]>(() => {
+  const allSuggestions = ((): AISuggestion[] => {
     const out: AISuggestion[] = [];
     for (const m of messages) {
       if (m.role === "assistant") {
@@ -44,9 +44,9 @@ export const useAISuggestionThread = ({
       }
     }
     return out;
-  }, [messages]);
+  })();
 
-  const allCitations = useMemo<AICitation[]>(() => {
+  const allCitations = ((): AICitation[] => {
     const out: AICitation[] = [];
     for (const m of messages) {
       if (m.role === "assistant") {
@@ -54,9 +54,10 @@ export const useAISuggestionThread = ({
       }
     }
     return out;
-  }, [messages]);
+  })();
 
   // Recompute stale status whenever the document changes.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- the pending/stale status is persisted into `messages` (the hook's canonical state, written by several mutators and read by the accept/reject pipeline), reconciled here against the live ProseMirror doc. It cannot be deleted and derived in render without restructuring the whole suggestion data model.
   useEffect(() => {
     if (!editorView || allSuggestions.length === 0) {
       return;
@@ -94,37 +95,29 @@ export const useAISuggestionThread = ({
 
   // ---- mutators ------------------------------------------------------------
 
-  const updateAssistantMessage = useCallback(
-    (
-      id: string,
-      mutate: (m: AssistantThreadMessage) => AssistantThreadMessage,
-    ) => {
-      setMessages((prev) =>
-        prev.map((m) =>
-          m.role === "assistant" && m.id === id ? mutate(m) : m,
-        ),
-      );
-    },
-    [],
-  );
+  const updateAssistantMessage = (
+    id: string,
+    mutate: (m: AssistantThreadMessage) => AssistantThreadMessage,
+  ) => {
+    setMessages((prev) =>
+      prev.map((m) => (m.role === "assistant" && m.id === id ? mutate(m) : m)),
+    );
+  };
 
-  const updateSuggestion = useCallback(
-    (
-      messageId: string,
-      suggestionId: string,
-      mutate: (s: AISuggestion) => AISuggestion,
-    ) => {
-      updateAssistantMessage(messageId, (m) => ({
-        ...m,
-        suggestions: m.suggestions.map((s) =>
-          s.id === suggestionId ? mutate(s) : s,
-        ),
-      }));
-    },
-    [updateAssistantMessage],
-  );
+  const updateSuggestion = (
+    messageId: string,
+    suggestionId: string,
+    mutate: (s: AISuggestion) => AISuggestion,
+  ) => {
+    updateAssistantMessage(messageId, (m) => ({
+      ...m,
+      suggestions: m.suggestions.map((s) =>
+        s.id === suggestionId ? mutate(s) : s,
+      ),
+    }));
+  };
 
-  const applyResultToMessages = useCallback((result: ApplyResult) => {
+  const applyResultToMessages = (result: ApplyResult) => {
     setMessages((prev) =>
       prev.map<ThreadMessage>((m) => {
         if (m.role !== "assistant" || m.suggestions.length === 0) {
@@ -145,7 +138,7 @@ export const useAISuggestionThread = ({
         return suggestionState.changed ? { ...m, suggestions: next } : m;
       }),
     );
-  }, []);
+  };
 
   return {
     messages,

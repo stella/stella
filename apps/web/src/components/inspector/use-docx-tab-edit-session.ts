@@ -10,6 +10,7 @@ import type {
   FileTab,
   InspectorTab,
 } from "@/components/inspector/inspector-store";
+import { useMountEffect } from "@/hooks/use-effect";
 import { DOCX_MIME } from "@/lib/consts";
 import type { DocxBrowserEditorActions } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor";
 import { getDocxEditBlockReason } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.logic";
@@ -74,7 +75,7 @@ export const useDocxTabEditSession = ({
     [docxCompatibilityByTab, editingDocxTabId, t],
   );
 
-  const flashDocxEditButton = useCallback((tabId: string) => {
+  const flashDocxEditButton = (tabId: string) => {
     if (flashDocxEditTimerRef.current !== null) {
       clearTimeout(flashDocxEditTimerRef.current);
     }
@@ -83,19 +84,17 @@ export const useDocxTabEditSession = ({
       setFlashingDocxEditTabId(null);
       flashDocxEditTimerRef.current = null;
     }, 2200);
-  }, []);
+  };
 
-  useEffect(
-    () => () => {
-      if (flashDocxEditTimerRef.current !== null) {
-        clearTimeout(flashDocxEditTimerRef.current);
-      }
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    if (flashDocxEditTimerRef.current !== null) {
+      clearTimeout(flashDocxEditTimerRef.current);
+    }
+  });
 
   const pendingDocxEditTabId = useInspectorStore((s) => s.pendingDocxEditTabId);
   const clearDocxEditRequest = useInspectorStore((s) => s.clearDocxEditRequest);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (pendingDocxEditTabId store flag fires handleStartDocxEdit); move into the action that sets the flag
   useEffect(() => {
     if (pendingDocxEditTabId === null) {
       return;

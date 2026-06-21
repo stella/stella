@@ -1,4 +1,4 @@
-import { useEffect, useRef, useSyncExternalStore } from "react";
+import { useRef, useSyncExternalStore } from "react";
 import type { PropsWithChildren } from "react";
 
 import { HotkeysProvider } from "@tanstack/react-hotkeys";
@@ -13,6 +13,7 @@ import { TooltipProvider } from "@stll/ui/components/tooltip";
 import { DefaultPendingComponent } from "@/components/route-components";
 import { ThemeProvider } from "@/components/theme-provider";
 import { useClientAuthStatus } from "@/hooks/use-client-auth-status";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { bundledEnglishMessages, useI18nStore } from "@/i18n/i18n-store";
 import type Messages from "@/i18n/langs/messages.gen";
 import { AnalyticsProvider, useAnalytics } from "@/lib/analytics/provider";
@@ -63,7 +64,7 @@ const I18nProvider = ({ children }: PropsWithChildren) => {
   // mount does not re-run route loaders.
   const router = useRouter();
   const previousLocaleRef = useRef(locale);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!onPublicSsrPath || previousLocaleRef.current === locale) {
       return;
     }
@@ -114,7 +115,7 @@ const AnalyticsAuthIdentity = () => {
   const analytics = useAnalytics();
   const authStatus = useClientAuthStatus();
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (authStatus.status === "checking") {
       return;
     }
