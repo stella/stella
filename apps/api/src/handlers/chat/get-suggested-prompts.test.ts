@@ -4,7 +4,8 @@ import { cleanSuggestionsText } from "./get-suggested-prompts";
 
 describe("cleanSuggestionsText", () => {
   test("extracts clean prompts from plain lines", () => {
-    const text = "What are the key risks?\nCan you draft a response?\nExplain the governing law section.";
+    const text =
+      "What are the key risks?\nCan you draft a response?\nExplain the governing law section.";
 
     expect(cleanSuggestionsText(text)).toEqual([
       "What are the key risks?",
@@ -14,7 +15,8 @@ describe("cleanSuggestionsText", () => {
   });
 
   test("strips list markers and numbers", () => {
-    const text = "1. What are the key risks?\n2. Can you draft a response?\n- Explain the governing law.";
+    const text =
+      "1. What are the key risks?\n2. Can you draft a response?\n- Explain the governing law.";
 
     expect(cleanSuggestionsText(text)).toEqual([
       "What are the key risks?",
@@ -34,7 +36,8 @@ describe("cleanSuggestionsText", () => {
   });
 
   test("trims whitespace and filters empty lines", () => {
-    const text = "  What are the key risks?  \n\n   \n  Can you draft a response?  ";
+    const text =
+      "  What are the key risks?  \n\n   \n  Can you draft a response?  ";
 
     expect(cleanSuggestionsText(text)).toEqual([
       "What are the key risks?",

@@ -68,6 +68,7 @@ export const ChatInputSurface = ({
     handlePaste,
     isEmpty,
     openFilePicker,
+    placeholder,
     removeFile,
   } = controller;
   const inputDisabled = disabled;
@@ -137,9 +138,9 @@ export const ChatInputSurface = ({
         {isEmpty && attachments.length === 0 && (
           <span
             aria-hidden="true"
-            className="text-foreground-placeholder pointer-events-none absolute start-3 top-2 text-sm"
+            className="text-foreground-placeholder pointer-events-none absolute start-3 top-2 truncate pe-3 text-sm"
           >
-            {t("chat.placeholder")}
+            {placeholder}
           </span>
         )}
       </div>

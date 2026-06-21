@@ -1,11 +1,9 @@
+import { generateText } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
-import { generateText } from "ai";
 
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
-import {
-  buildRecapTranscript,
-} from "@/api/handlers/chat/thread-recap-transcript";
+import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcript";
 import {
   buildRecapMessageWindow,
   RECAP_RECENT_MESSAGE_LIMIT,
@@ -33,12 +31,20 @@ const config = {
 
 type SuggestedPromptsResult = { prompts: string[] };
 
+// Generating a few short suggestion lines needs no chain-of-thought, so
+// reasoning is disabled at the call site below. This cap then only bounds
+// the visible lines (re-capped at 3 in `cleanSuggestionsText` anyway). It
+// stays generous as a safety net: should an upstream ignore the
+// reasoning-off flag, a tight cap would be consumed by thinking tokens and
+// truncate the output to a single word.
+const SUGGESTIONS_MAX_OUTPUT_TOKENS = 512;
+
 const SUGGEST_CLEANUP_STEPS = [
-  /^\d+[.\-)]\s*/u,       // Numbered list: "1. " or "2) " at start (optional trailing space)
-  /^[-*•]\s*/u,           // Bullet point at start
-  /^["'([[]+/u,           // Opening quotes, parens, brackets at start
+  /^\d+[.\-)]\s*/u, // Numbered list: "1. " or "2) " at start (optional trailing space)
+  /^[-*•]\s*/u, // Bullet point at start
+  /^["'([[]+/u, // Opening quotes, parens, brackets at start
   // eslint-disable-next-line sonarjs/slow-regex -- anchored at $, no alternation, safe
-  /[\])"'\s]+$/u,         // Closing quotes, parens, brackets, whitespace at end
+  /[\])"'\s]+$/u, // Closing quotes, parens, brackets, whitespace at end
 ] as const;
 
 const cleanLine = (line: string): string => {
@@ -179,14 +185,16 @@ const getSuggestedPrompts = createSafeRootHandler(
       feature: "chat.suggested_prompts",
       modelRole: "fast",
       orgAIConfig,
-      properties: persistedWorkspaceId ? { workspace_id: persistedWorkspaceId } : {},
+      properties: persistedWorkspaceId
+        ? { workspace_id: persistedWorkspaceId }
+        : {},
       traceId: Bun.randomUUIDv7(),
     });
 
     try {
       const { text } = await generateText({
         abortSignal: AbortSignal.timeout(15_000),
-        maxOutputTokens: 128,
+        maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
         model: getModelForRole("fast", orgAIConfig, {
           promptCachingEnabled,
           scopeKey: threadId,
@@ -194,6 +202,13 @@ const getSuggestedPrompts = createSafeRootHandler(
           serviceTier: "standard",
         }),
         prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
+        // Listing follow-ups is a formatting task, not a reasoning one:
+        // thinking only adds latency and burns the output budget. The
+        // Google-direct path already forces minimal thinking via role
+        // defaults, but OpenRouter-routed models (e.g. Gemini Flash) think
+        // by default, so turn it off here. Keys for inapplicable providers
+        // are ignored.
+        providerOptions: { openrouter: { reasoning: { effort: "none" } } },
         system: SUGGESTIONS_SYSTEM_PROMPT,
         temperature: 0.3,
         ...aiAnalytics.stepCallbacks,

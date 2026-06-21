@@ -161,6 +161,14 @@ export type ChatEditorController = {
   handlePaste: (event: React.ClipboardEvent) => void;
   isEmpty: boolean;
   openFilePicker: () => void;
+  /**
+   * The placeholder string the surface should render. Resolves the
+   * suggested-followup "tab to ask" hint, an explicit override, and the
+   * default in that order. Surfaces render this themselves (see
+   * `ChatInputSurface`); TipTap's own placeholder is suppressed for the
+   * chat editor to avoid a double-rendered overlay.
+   */
+  placeholder: string;
   removeFile: (id: string) => void;
   setContent: (
     content: Parameters<Editor["commands"]["setContent"]>[0],
@@ -1294,6 +1302,7 @@ export const useChatEditor = ({
     handlePaste,
     isEmpty,
     openFilePicker,
+    placeholder: resolvedPlaceholder,
     removeFile,
     setContent,
     setEditable,
