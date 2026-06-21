@@ -256,6 +256,24 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     );
   }
 
+  // A Kanban card belongs to one column, and drop/upload write a single-select
+  // value to the grouping property, so the property must be single-select. A
+  // persisted multi-select grouping (from before the picker was mode-specific,
+  // or after a property type change) would render columns no card can move into,
+  // so fall back to the property prompt.
+  if (
+    grouping.type === "property" &&
+    grouping.property.content.type !== "single-select"
+  ) {
+    return (
+      <EmptyState
+        hint={t("workspaces.kanban.usePropertyHint")}
+        icon={KanbanIcon}
+        message={t("workspaces.kanban.selectPropertyHint")}
+      />
+    );
+  }
+
   // -- Unified grouping: resolve options, then render one board --
 
   const statusLabels: Record<string, string> = isStatusGrouping
