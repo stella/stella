@@ -29,7 +29,10 @@ import {
   setCachedTextWidth,
 } from "./cache";
 import { canPrefetchMeasurement, prefetchMeasurement } from "./measureWorker";
-import { WORKER_FONT_FINGERPRINT_TEXT } from "./measureWorkerProtocol";
+import {
+  countCodePoints,
+  WORKER_FONT_FINGERPRINT_TEXT,
+} from "./measureWorkerProtocol";
 
 // Constants for OOXML unit conversions
 const TWIPS_PER_INCH = 1440;
@@ -333,25 +336,6 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
   };
   setCachedFontMetrics(fontFamily, fontSize, bold, italic, result, fontVariant);
   return result;
-}
-
-/**
- * Count whole code points (not UTF-16 units) so letter spacing is applied once
- * per rendered glyph — astral CJK ideographs are one glyph. Avoids allocating
- * an array on the hot measurement path. Matches `measureRun`'s per-code-point
- * iteration so layout and caret/selection agree on astral text with spacing.
- */
-function countCodePoints(text: string): number {
-  let count = 0;
-  let i = 0;
-  while (i < text.length) {
-    const code = text.codePointAt(i);
-    // codePointAt returns the combined code point at a leading surrogate, so a
-    // value above the BMP spans two UTF-16 units — skip the trailing surrogate.
-    i += code !== undefined && code > 0xff_ff ? 2 : 1;
-    count += 1;
-  }
-  return count;
 }
 
 /**

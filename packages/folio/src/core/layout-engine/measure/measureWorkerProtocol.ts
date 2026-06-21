@@ -45,6 +45,23 @@ export type MeasureRequestEntry = {
 export const WORKER_FONT_FINGERPRINT_TEXT = "HAMBURGEFONTS ivwqy 0123456789";
 
 /**
+ * Count whole code points (not UTF-16 units) so letter spacing is applied once
+ * per rendered glyph — an astral character is one glyph spanning two units.
+ * Shared by the main thread (`measureContainer`) and the worker so their cached
+ * widths agree on astral text with letter spacing. Allocation-free.
+ */
+export function countCodePoints(text: string): number {
+  let count = 0;
+  let i = 0;
+  while (i < text.length) {
+    const code = text.codePointAt(i);
+    i += code !== undefined && code > 0xff_ff ? 2 : 1;
+    count += 1;
+  }
+  return count;
+}
+
+/**
  * Worker → main response for a single entry. Echoes the input keys the
  * proxy needs in order to look up the right cache slot.
  */

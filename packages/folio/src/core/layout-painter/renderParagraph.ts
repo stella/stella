@@ -1405,6 +1405,70 @@ function measureFollowingContentWidth(
 }
 
 /**
+ * Width of the decimal prefix (text before the first ".") that follows a tab,
+ * accumulated per run so a prefix spanning multiple fonts measures each part in
+ * its own font. After the EA split a prefix like `合計12` is a CJK sub-run (EA
+ * font) followed by a Latin sub-run, so measuring the whole prefix in the first
+ * sub-run's font would force the digits into the EA face and drift the decimal
+ * point from the measured tab stop.
+ */
+function measureDecimalPrefixWidth(
+  runs: Run[],
+  tabRunIndex: number,
+  decimalIndex: number,
+  measureText: (
+    text: string,
+    fontSize?: number,
+    fontFamily?: string,
+    style?: TextMeasureStyle,
+  ) => number,
+  context?: RenderContext,
+): number {
+  let width = 0;
+  let consumed = 0;
+  for (
+    let i = tabRunIndex + 1;
+    i < runs.length && consumed < decimalIndex;
+    i++
+  ) {
+    const run = runs[i]!; // SAFETY: i < runs.length
+    if (isTabRun(run) || isLineBreakRun(run)) {
+      break;
+    }
+    // Images contribute no characters to the following text (getTextAfterTab),
+    // so they never shift the decimal offset.
+    if (!isTextRun(run) && !isFieldRun(run) && !isMathRun(run)) {
+      continue;
+    }
+
+    let runText: string;
+    if (isFieldRun(run)) {
+      const resolved = resolveFieldText(run, context);
+      runText = run.allCaps ? resolved.toLocaleUpperCase() : resolved;
+    } else if (isMathRun(run)) {
+      runText = run.plainText;
+    } else {
+      runText = run.allCaps ? run.text.toLocaleUpperCase() : run.text;
+    }
+
+    const take = Math.min(runText.length, decimalIndex - consumed);
+    if (take > 0) {
+      const scale = run.horizontalScale ?? 100;
+      width +=
+        measureText(
+          runText.slice(0, take),
+          run.fontSize ?? 11,
+          run.fontFamily ?? "Calibri",
+          runMeasureStyle(run),
+        ) *
+        (scale / 100);
+    }
+    consumed += runText.length;
+  }
+  return width;
+}
+
+/**
  * Build a stable key for an inline image run.
  * PM positions are preferred because they uniquely identify the source node.
  */
@@ -1766,34 +1830,19 @@ export function renderLine(
       );
       const followingText = getTextAfterTab(runsForLine, i, options?.context);
       const decimalIndex = followingText.indexOf(".");
-      // Resolve the first text/field run after the tab and measure the
-      // decimal prefix in *its* font/style. Defaulting to 11px Calibri
-      // (the `measureText` fallback) drifts on sized/bold/italic runs and
-      // breaks decimal alignment — eigenpal #576 gemini review on PR #512.
-      const firstFollowingRun = (() => {
-        for (let j = i + 1; j < runsForLine.length; j++) {
-          const next = runsForLine[j];
-          if (!next || isTabRun(next) || isLineBreakRun(next)) {
-            return undefined;
-          }
-          if (isTextRun(next) || isFieldRun(next)) {
-            return next;
-          }
-          if (isMathRun(next)) {
-            return next;
-          }
-        }
-        return undefined;
-      })();
+      // Measure the decimal prefix run-by-run so each part uses its own
+      // font/size/style. A single-font pass over the joined prefix drifts on
+      // sized/bold/italic runs (eigenpal #576) and, after the EA split, on
+      // mixed CJK+Latin prefixes (eigenpal/docx-editor follow-up).
       const decimalPrefixWidth =
         decimalIndex !== -1
-          ? measureText(
-              followingText.slice(0, decimalIndex),
-              firstFollowingRun?.fontSize,
-              firstFollowingRun?.fontFamily,
-              firstFollowingRun ? runMeasureStyle(firstFollowingRun) : {},
-            ) *
-            ((firstFollowingRun?.horizontalScale ?? 100) / 100)
+          ? measureDecimalPrefixWidth(
+              runsForLine,
+              i,
+              decimalIndex,
+              measureText,
+              options?.context,
+            )
           : 0;
 
       const tabResult = calculateTabWidth(currentX, tabContext, {
