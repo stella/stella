@@ -51,6 +51,7 @@ import type {
 } from "@/lib/types";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
+import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
@@ -582,7 +583,9 @@ const GroupByControl = ({
   allowNone = false,
 }: GroupByControlProps) => {
   const t = useTranslations();
-  const eligible = properties.filter((p) => p.content.type === "single-select");
+  // Single- and multi-select are both groupable (the counts query unnests
+  // multi-select arrays), so offer both in the picker.
+  const eligible = properties.filter(isGroupableProperty);
 
   const resolvedId =
     allowNone && !groupByPropertyId

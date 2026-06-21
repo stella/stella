@@ -4,13 +4,14 @@ import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
-import { entities } from "@/api/db/schema";
+import { entities, properties } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";
@@ -110,6 +111,37 @@ const readGroupCounts = createSafeHandler(
     }
 
     const propertyId = body.groupByPropertyId;
+    // Validate server-side that the grouping property is a select type. The
+    // frontend already hides non-select groupings, but this read endpoint is a
+    // boundary: grouping a large free-form (text/date/int) column would bucket
+    // every distinct value into an unbounded, expensive response.
+    const propertyRows = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({ content: properties.content })
+          .from(properties)
+          .where(
+            and(
+              eq(properties.id, propertyId),
+              eq(properties.workspaceId, workspaceId),
+            ),
+          )
+          .limit(1),
+      ),
+    );
+    const property = propertyRows.at(0);
+    if (
+      !property ||
+      (property.content.type !== "single-select" &&
+        property.content.type !== "multi-select")
+    ) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Group counts are only supported for select properties",
+        }),
+      );
+    }
     return yield* readPropertyGroupCounts({
       safeDb,
       baseConditions: documentConditions,

@@ -31,10 +31,10 @@ const createContext = ({
     route: "/v1/entities/:workspaceId/group-counts",
   });
 
-// Single-select property path issues two safeDb calls in order: the grouped
-// value counts (LATERAL unnest/scalar union), then the uncategorized NOT EXISTS
-// count. Queue the results in that order so the test fails loudly if the call
-// order changes.
+// Single-select property path issues three safeDb calls in order: the property
+// type lookup (must be a select type), the grouped value counts (LATERAL
+// unnest/scalar union), then the uncategorized NOT EXISTS count. Queue the
+// results in that order so the test fails loudly if the call order changes.
 const createSafeDb =
   (results: unknown[]): GroupCountsCtx["safeDb"] =>
   async <T>() => {
@@ -48,6 +48,7 @@ describe("readGroupCounts", () => {
       createContext({
         body: { groupByPropertyId: propertyId, filters: [] },
         safeDb: createSafeDb([
+          [{ content: { type: "single-select" } }],
           [
             { value: "alpha", count: 2 },
             { value: "beta", count: 1 },
@@ -73,7 +74,11 @@ describe("readGroupCounts", () => {
     const result = await readGroupCounts.handler(
       createContext({
         body: { groupByPropertyId: propertyId, filters: [] },
-        safeDb: createSafeDb([[{ value: "alpha", count: 3 }], [{ count: 0 }]]),
+        safeDb: createSafeDb([
+          [{ content: { type: "single-select" } }],
+          [{ value: "alpha", count: 3 }],
+          [{ count: 0 }],
+        ]),
       }),
     );
 
@@ -83,5 +88,16 @@ describe("readGroupCounts", () => {
     }
 
     expect(result.counts).toEqual([{ value: "alpha", count: 3 }]);
+  });
+
+  test("rejects grouping by a non-select property", async () => {
+    const result = await readGroupCounts.handler(
+      createContext({
+        body: { groupByPropertyId: propertyId, filters: [] },
+        safeDb: createSafeDb([[{ content: { type: "text" } }]]),
+      }),
+    );
+
+    expect("counts" in result).toBe(false);
   });
 });
