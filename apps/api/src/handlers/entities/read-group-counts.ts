@@ -134,7 +134,17 @@ async function* readPropertyGroupCounts({
         CROSS JOIN LATERAL (
           SELECT elem AS group_value
           FROM fields f
-          CROSS JOIN LATERAL jsonb_array_elements_text(f.content->'value') AS elem
+          CROSS JOIN LATERAL jsonb_array_elements_text(
+            -- Guard the unnest against scalars: the planner may evaluate this
+            -- LATERAL before the WHERE filters non-array rows, so feed an empty
+            -- array for non-arrays instead of letting Postgres raise "cannot
+            -- extract elements from a scalar".
+            CASE
+              WHEN jsonb_typeof(f.content->'value') = 'array'
+              THEN f.content->'value'
+              ELSE '[]'::jsonb
+            END
+          ) AS elem
           WHERE f.workspace_id = ${entities.workspaceId}
             AND f.entity_version_id = ${entities.currentVersionId}
             AND f.property_id = ${propertyId}
