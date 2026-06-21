@@ -1,4 +1,4 @@
-import type { APIRequestContext, Page } from "@playwright/test";
+import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -88,7 +88,7 @@ const AUTHENTICATED_ROUTE_PREFIXES = [
 
 test("authenticated routes render without browser errors", async ({
   browserErrors,
-  page,
+  context,
   request,
 }) => {
   test.setTimeout(120_000);
@@ -130,8 +130,8 @@ test("authenticated routes render without browser errors", async ({
     await expectAuthenticatedRouteCoverage(routes);
 
     for (const route of routes) {
-      // eslint-disable-next-line no-await-in-loop -- route smoke must navigate sequentially on one page so browser errors can be attributed to the route that just rendered
-      await smokeRoute({ browserErrors, page, route });
+      // eslint-disable-next-line no-await-in-loop -- each route gets an isolated page so browser errors can be attributed to its direct render without cross-route reload noise
+      await smokeRoute({ browserErrors, context, route });
     }
   } finally {
     await Promise.all(cleanupTasks.map(async (cleanup) => await cleanup()));
@@ -225,6 +225,29 @@ const createDocumentRoute = async (
 };
 
 const smokeRoute = async ({
+  browserErrors,
+  context,
+  route,
+}: {
+  browserErrors: {
+    assertEmpty: (label: string) => void;
+    trackPage: (page: Page) => () => void;
+  };
+  context: BrowserContext;
+  route: SmokeRoute;
+}) => {
+  const page = await context.newPage();
+  const detachPage = browserErrors.trackPage(page);
+
+  try {
+    await renderSmokeRoute({ browserErrors, page, route });
+  } finally {
+    detachPage();
+    await page.close();
+  }
+};
+
+const renderSmokeRoute = async ({
   browserErrors,
   page,
   route,

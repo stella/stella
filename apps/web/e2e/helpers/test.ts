@@ -1,9 +1,10 @@
 import { expect, test as base } from "@playwright/test";
-import type { ConsoleMessage } from "@playwright/test";
+import type { ConsoleMessage, Page } from "@playwright/test";
 
 type BrowserErrorCollector = {
   entries: () => string[];
   assertEmpty: (label: string) => void;
+  trackPage: (page: Page) => () => void;
 };
 
 type BrowserErrorFixtures = {
@@ -30,16 +31,9 @@ const createBrowserErrorCollector = (): BrowserErrorCollector & {
       const collected = errors.splice(0);
       expect(collected, `${label}\n\n${collected.join("\n\n")}`).toEqual([]);
     },
-  };
-};
-
-export const test = base.extend<BrowserErrorFixtures>({
-  browserErrors: [
-    async ({ page }, runFixture) => {
-      const browserErrors = createBrowserErrorCollector();
-
+    trackPage: (page) => {
       const onPageError = (error: Error) => {
-        browserErrors.add(`pageerror: ${error.message}`);
+        errors.push(`pageerror: ${error.message}`);
       };
 
       const onConsole = (message: ConsoleMessage) => {
@@ -52,17 +46,30 @@ export const test = base.extend<BrowserErrorFixtures>({
           return;
         }
 
-        browserErrors.add(`console.error: ${text}`);
+        errors.push(`console.error: ${text}`);
       };
 
       page.on("pageerror", onPageError);
       page.on("console", onConsole);
 
+      return () => {
+        page.off("pageerror", onPageError);
+        page.off("console", onConsole);
+      };
+    },
+  };
+};
+
+export const test = base.extend<BrowserErrorFixtures>({
+  browserErrors: [
+    async ({ page }, runFixture) => {
+      const browserErrors = createBrowserErrorCollector();
+      const detachPage = browserErrors.trackPage(page);
+
       try {
         await runFixture(browserErrors);
       } finally {
-        page.off("pageerror", onPageError);
-        page.off("console", onConsole);
+        detachPage();
       }
 
       browserErrors.assertEmpty("unexpected browser errors");
