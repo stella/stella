@@ -53,10 +53,9 @@ const collectDiscoveredPaths = (discovered: DiscoveredTemplate): Set<string> => 
 
 /** A manifest field that derives its value from somewhere other than a literal
  *  body `{{marker}}` (formula/condition derive a value; AI drafts/adapts;
- *  lookup resolves a registry hit; composite parts join into one marker;
- *  dependent select binds to another field). Such a field can legitimately
- *  survive a save even when discovery no longer reports its path, so it is
- *  never treated as a deleted-marker orphan. */
+ *  lookup resolves a registry hit; composite parts join into one marker). Such a
+ *  field can legitimately survive a save even when discovery no longer reports
+ *  its path, so it is never treated as a deleted-marker orphan. */
 const hasDerivedValueSource = (field: FieldMeta): boolean =>
   field.formula !== undefined ||
   field.condition !== undefined ||
@@ -64,8 +63,7 @@ const hasDerivedValueSource = (field: FieldMeta): boolean =>
   field.aiAdapt === true ||
   field.lookup !== undefined ||
   field.parts !== undefined ||
-  field.format !== undefined ||
-  field.optionsFrom !== undefined;
+  field.format !== undefined;
 
 const saveDocumentBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
@@ -190,7 +188,7 @@ const saveTemplateDocument = createSafeRootHandler(
     // manifest-only field. Such a field has no live marker (discovery did not
     // find its path) and no derived value source, so persisting it would keep
     // the Fill tab prompting for a value the document can never use. Fields with
-    // a derived value source (formula/condition/AI/lookup/composite/dependent)
+    // a derived value source (formula/condition/AI/lookup/composite)
     // are kept: they legitimately lack a literal marker.
     const discoveredPaths = collectDiscoveredPaths(discovered);
     const prunedFieldMetas = fieldMetas.filter(
