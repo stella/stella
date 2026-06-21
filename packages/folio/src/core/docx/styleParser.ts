@@ -844,12 +844,16 @@ function parseTableBorders(
     borders.bottom = bottom;
   }
 
-  const left = parseBorderSpec(findChild(tblBorders, "w", "left"));
+  const left = parseBorderSpec(
+    findChild(tblBorders, "w", "left") ?? findChild(tblBorders, "w", "start"),
+  );
   if (left) {
     borders.left = left;
   }
 
-  const right = parseBorderSpec(findChild(tblBorders, "w", "right"));
+  const right = parseBorderSpec(
+    findChild(tblBorders, "w", "right") ?? findChild(tblBorders, "w", "end"),
+  );
   if (right) {
     borders.right = right;
   }

@@ -186,7 +186,7 @@ describe("pgBorders serializer round-trip", () => {
     expect(xml).toContain('w:frame="true"');
   });
 
-  test("emits each side once and only when set", () => {
+  test("emits each set side, including explicit none/nil overrides", () => {
     const xml = serializeSectionProperties({
       pageBorders: {
         top: { style: "single", size: 4 },
@@ -198,8 +198,23 @@ describe("pgBorders serializer round-trip", () => {
 
     expect(xml).toContain('<w:top w:val="single"');
     expect(xml).toContain('<w:bottom w:val="double"');
+    // An explicit "border off" must round-trip so it overrides an inherited
+    // page border instead of silently re-inheriting it (eigenpal/docx-editor#959).
+    expect(xml).toContain('<w:left w:val="none"/>');
+    expect(xml).toContain('<w:right w:val="nil"/>');
+  });
+
+  test("omits sides that are not set at all", () => {
+    const xml = serializeSectionProperties({
+      pageBorders: {
+        top: { style: "single", size: 4 },
+      },
+    });
+
+    expect(xml).toContain('<w:top w:val="single"');
     expect(xml).not.toContain("<w:left");
     expect(xml).not.toContain("<w:right");
+    expect(xml).not.toContain("<w:bottom");
   });
 
   test("round-trips custom art-border relationship ids", () => {
