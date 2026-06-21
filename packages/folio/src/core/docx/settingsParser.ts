@@ -44,6 +44,24 @@ export function parseSettings(xml: string | null): DocumentSettings {
   if (evenAndOddHeaders && parseBooleanElement(evenAndOddHeaders)) {
     settings.evenAndOddHeaders = true;
   }
+
+  // `w:themeFontLang` selects the concrete typeface for the empty `<a:ea>` /
+  // `<a:cs>` theme slots (see eigenpal/docx-editor#949). Record only the
+  // EastAsian/bidi tags; the primary `w:val` lang does not drive theme fonts.
+  const themeFontLangEl = root ? findChild(root, "w", "themeFontLang") : null;
+  const eastAsiaLang = themeFontLangEl
+    ? getAttribute(themeFontLangEl, "w", "eastAsia") || undefined
+    : undefined;
+  const bidiLang = themeFontLangEl
+    ? getAttribute(themeFontLangEl, "w", "bidi") || undefined
+    : undefined;
+  if (eastAsiaLang || bidiLang) {
+    settings.themeFontLang = {
+      ...(eastAsiaLang ? { eastAsia: eastAsiaLang } : {}),
+      ...(bidiLang ? { bidi: bidiLang } : {}),
+    };
+  }
+
   return settings;
 }
 

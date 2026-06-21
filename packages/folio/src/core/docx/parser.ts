@@ -64,7 +64,7 @@ import {
 import { parseSettings } from "./settingsParser";
 import { parseStylesPackage } from "./styleParser";
 import type { StyleMap } from "./styleParser";
-import { parseTheme } from "./themeParser";
+import { applyThemeFontLang, parseTheme } from "./themeParser";
 import { normalizeTrackedMoveRanges } from "./trackedMoveRangeNormalization";
 import { unzipDocx, getMediaMimeType, mediaToDataUrl } from "./unzip";
 import type { DocxUnzipLimits, RawDocxContent } from "./unzip";
@@ -161,6 +161,14 @@ export async function parseDocx(
     // ========================================================================
     onProgress("Parsing theme...", 15);
     const theme = timeStage("theme", () => parseTheme(raw.themeXml));
+    // Settings must be read before styles so `w:themeFontLang` can fill the
+    // theme's empty EastAsian/complex-script slots (eigenpal/docx-editor#949);
+    // styles, body, and header/footer parsing all resolve theme fonts off this
+    // mutated theme object.
+    const settings = timeStage("settings", () =>
+      parseSettings(raw.settingsXml),
+    );
+    applyThemeFontLang(theme, settings.themeFontLang);
     onProgress("Parsed theme", 20);
 
     // ========================================================================
@@ -187,13 +195,6 @@ export async function parseDocx(
       parseNumbering(raw.numberingXml),
     );
     onProgress("Parsed numbering", 35);
-
-    // Settings (`word/settings.xml`) — currently only used for
-    // `w:defaultTabStop`, but staged here so future settings flow through
-    // the same point. Cheap; no separate progress band.
-    const settings = timeStage("settings", () =>
-      parseSettings(raw.settingsXml),
-    );
 
     // ========================================================================
     // STAGE 6: Build media file map (35-40%)

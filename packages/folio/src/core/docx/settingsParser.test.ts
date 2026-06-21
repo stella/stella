@@ -66,3 +66,33 @@ describe("parseSettings — w:evenAndOddHeaders (§17.10.1)", () => {
     ).toBeUndefined();
   });
 });
+
+describe("parseSettings — w:themeFontLang (§17.15.1.88)", () => {
+  test("reads eastAsia and bidi tags", () => {
+    expect(
+      parseSettings(
+        wrap(
+          `<w:themeFontLang w:val="en-US" w:eastAsia="ja-JP" w:bidi="ar-SA"/>`,
+        ),
+      ).themeFontLang,
+    ).toEqual({ eastAsia: "ja-JP", bidi: "ar-SA" });
+  });
+
+  test("keeps only the EastAsian tag when bidi is absent", () => {
+    expect(
+      parseSettings(wrap(`<w:themeFontLang w:val="en-US" w:eastAsia="ja-JP"/>`))
+        .themeFontLang,
+    ).toEqual({ eastAsia: "ja-JP" });
+  });
+
+  test("is undefined when only the primary (w:val) lang is present", () => {
+    expect(
+      parseSettings(wrap(`<w:themeFontLang w:val="en-US"/>`)).themeFontLang,
+    ).toBeUndefined();
+  });
+
+  test("is undefined when the element is absent", () => {
+    expect(parseSettings(wrap("")).themeFontLang).toBeUndefined();
+    expect(parseSettings(null).themeFontLang).toBeUndefined();
+  });
+});

@@ -203,10 +203,44 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
     fallbackStack: ["MS Mincho", "Noto Serif JP", "serif"],
     singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
   },
+  // Native Japanese typeface names as they appear in `theme1.xml`'s
+  // `<a:font script="Jpan">` entries (full-width "ＭＳ"). Office stores these
+  // rather than the romanized "MS Mincho"/"MS Gothic" names, so map them too.
+  // NOTE: keys are matched against `name.toLowerCase()`, and full-width Latin
+  // letters lowercase too (Ｍ→ｍ, Ｓ→ｓ, Ｐ→ｐ) — so these keys are lowercased.
+  "ｍｓ 明朝": {
+    googleFont: "Noto Serif JP",
+    category: "serif",
+    fallbackStack: ["MS Mincho", "ＭＳ 明朝", "Noto Serif JP", "serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  "ｍｓ ｐ明朝": {
+    googleFont: "Noto Serif JP",
+    category: "serif",
+    fallbackStack: ["MS PMincho", "ＭＳ Ｐ明朝", "Noto Serif JP", "serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
   "ms gothic": {
     googleFont: "Noto Sans JP",
     category: "sans-serif",
     fallbackStack: ["MS Gothic", "Noto Sans JP", "sans-serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  "ｍｓ ゴシック": {
+    googleFont: "Noto Sans JP",
+    category: "sans-serif",
+    fallbackStack: ["MS Gothic", "ＭＳ ゴシック", "Noto Sans JP", "sans-serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  "ｍｓ ｐゴシック": {
+    googleFont: "Noto Sans JP",
+    category: "sans-serif",
+    fallbackStack: [
+      "MS PGothic",
+      "ＭＳ Ｐゴシック",
+      "Noto Sans JP",
+      "sans-serif",
+    ],
     singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
   },
   simhei: {
@@ -225,6 +259,119 @@ const FONT_MAPPINGS: Record<string, FontMapping> = {
     googleFont: "Noto Sans KR",
     category: "sans-serif",
     fallbackStack: ["Malgun Gothic", "Noto Sans KR", "sans-serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  // Native CJK typeface names as stored in `theme1.xml`'s `<a:font script="…">`
+  // entries (port of eigenpal/docx-editor#957). `applyThemeFontLang` resolves
+  // empty `<a:ea>` slots to these native names (not the romanized
+  // "SimSun"/"Malgun Gothic"), so map them to the same Noto families. folio
+  // bundles no CJK webfonts: the Noto family resolves to the viewer's OS face
+  // when present, else the generic serif/sans tail. (CJK has no letter case, so
+  // `.toLowerCase()` leaves these keys unchanged.)
+
+  // Simplified Chinese
+  宋体: {
+    googleFont: "Noto Serif SC",
+    category: "serif",
+    fallbackStack: ["SimSun", "宋体", "Noto Serif SC", "serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  黑体: {
+    googleFont: "Noto Sans SC",
+    category: "sans-serif",
+    fallbackStack: ["SimHei", "黑体", "Noto Sans SC", "sans-serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  微软雅黑: {
+    googleFont: "Noto Sans SC",
+    category: "sans-serif",
+    fallbackStack: [
+      "Microsoft YaHei",
+      "微软雅黑",
+      "Noto Sans SC",
+      "sans-serif",
+    ],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  等线: {
+    googleFont: "Noto Sans SC",
+    category: "sans-serif",
+    fallbackStack: ["DengXian", "等线", "Noto Sans SC", "sans-serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  仿宋: {
+    googleFont: "Noto Serif SC",
+    category: "serif",
+    fallbackStack: ["FangSong", "仿宋", "Noto Serif SC", "serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  楷体: {
+    googleFont: "Noto Serif SC",
+    category: "serif",
+    fallbackStack: ["KaiTi", "楷体", "Noto Serif SC", "serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+
+  // Traditional Chinese
+  新細明體: {
+    googleFont: "Noto Serif TC",
+    category: "serif",
+    fallbackStack: ["PMingLiU", "新細明體", "Noto Serif TC", "serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  細明體: {
+    googleFont: "Noto Serif TC",
+    category: "serif",
+    fallbackStack: ["MingLiU", "細明體", "Noto Serif TC", "serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  微軟正黑體: {
+    googleFont: "Noto Sans TC",
+    category: "sans-serif",
+    fallbackStack: [
+      "Microsoft JhengHei",
+      "微軟正黑體",
+      "Noto Sans TC",
+      "sans-serif",
+    ],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  標楷體: {
+    googleFont: "Noto Serif TC",
+    category: "serif",
+    fallbackStack: ["DFKai-SB", "標楷體", "Noto Serif TC", "serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+
+  // Korean
+  "맑은 고딕": {
+    googleFont: "Noto Sans KR",
+    category: "sans-serif",
+    fallbackStack: ["Malgun Gothic", "맑은 고딕", "Noto Sans KR", "sans-serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  굴림: {
+    googleFont: "Noto Sans KR",
+    category: "sans-serif",
+    fallbackStack: ["Gulim", "굴림", "Noto Sans KR", "sans-serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  돋움: {
+    googleFont: "Noto Sans KR",
+    category: "sans-serif",
+    fallbackStack: ["Dotum", "돋움", "Noto Sans KR", "sans-serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  바탕: {
+    googleFont: "Noto Serif KR",
+    category: "serif",
+    fallbackStack: ["Batang", "바탕", "Noto Serif KR", "serif"],
+    singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
+  },
+  궁서: {
+    googleFont: "Noto Serif KR",
+    category: "serif",
+    fallbackStack: ["Gungsuh", "궁서", "Noto Serif KR", "serif"],
     singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,
   },
 };
@@ -269,6 +416,9 @@ function detectFontCategory(fontName: string): FontCategory {
     lower.includes("bodoni") ||
     lower.includes("cambria") ||
     lower.includes("mincho") ||
+    lower.includes("明朝") ||
+    lower.includes("明體") ||
+    lower.includes("宋") ||
     lower.includes("ming") ||
     lower.includes("song") ||
     lower.includes("serif")
@@ -292,6 +442,41 @@ function detectFontCategory(fontName: string): FontCategory {
 }
 
 /**
+ * Romanized CJK font spellings → the native key already present in
+ * FONT_MAPPINGS (port of eigenpal/docx-editor#957). Word writes either the
+ * native typeface name (the theme path, e.g. `新細明體`) or the romanized name
+ * (run `rFonts`, e.g. `PMingLiU`); both must resolve to the same Noto family +
+ * CSS stack + category. Aliasing keeps a single set of CJK entries instead of
+ * duplicating each under both spellings. (Keys already present directly in
+ * FONT_MAPPINGS — `simsun`, `simhei`, `malgun gothic`, `ms mincho`,
+ * `ms gothic` — are intentionally omitted.)
+ */
+const CJK_FONT_ALIASES: Record<string, string> = {
+  // Simplified Chinese
+  "microsoft yahei": "微软雅黑",
+  dengxian: "等线",
+  fangsong: "仿宋",
+  kaiti: "楷体",
+  // Traditional Chinese
+  pmingliu: "新細明體",
+  mingliu: "細明體",
+  "microsoft jhenghei": "微軟正黑體",
+  "dfkai-sb": "標楷體",
+  // Korean
+  gulim: "굴림",
+  dotum: "돋움",
+  batang: "바탕",
+  gungsuh: "궁서",
+  // Japanese — Meiryo / Yu share Noto Sans/Serif JP with MS Gothic/Mincho
+  meiryo: "ms gothic",
+  メイリオ: "ms gothic",
+  "yu gothic": "ms gothic",
+  游ゴシック: "ms gothic",
+  "yu mincho": "ms mincho",
+  游明朝: "ms mincho",
+};
+
+/**
  * Resolve a DOCX font name to a Google Font and CSS fallback stack
  *
  * @param docxFontName - The font name from the DOCX file
@@ -300,8 +485,9 @@ function detectFontCategory(fontName: string): FontCategory {
 export function resolveFontFamily(docxFontName: string): ResolvedFont {
   const normalizedName = docxFontName.trim().toLowerCase();
 
-  // Check if we have a direct mapping
-  const mapping = FONT_MAPPINGS[normalizedName];
+  // Direct mapping, or a romanized CJK spelling aliased to its native entry.
+  const mapping =
+    FONT_MAPPINGS[CJK_FONT_ALIASES[normalizedName] ?? normalizedName];
 
   if (mapping) {
     return {
@@ -440,9 +626,8 @@ export function buildFontFamilyString(
  * @returns Google Font name or null
  */
 export function getGoogleFontEquivalent(docxFontName: string): string | null {
-  const normalizedName = docxFontName.trim().toLowerCase();
-  const mapping = FONT_MAPPINGS[normalizedName];
-  return mapping?.googleFont ?? null;
+  // Delegate so CJK romanized aliases are honored identically to the CSS path.
+  return resolveFontFamily(docxFontName).googleFont;
 }
 
 /**
