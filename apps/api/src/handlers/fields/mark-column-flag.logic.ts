@@ -31,6 +31,10 @@ type BuildColumnFlagMutationArgs = {
   propertyId: SafeId<"property">;
   flag: string;
   set: boolean;
+  // When removing (`set: false`), restrict removal to cells whose flag was added
+  // by the operation stamped with this timestamp. Powers a precise undo that
+  // can't strip flags (or auto-locks) a human set in an earlier operation.
+  onlyAddedAt?: string;
   targets: readonly ColumnFlagTarget[];
   existingRows: readonly ExistingCellMetadataRow[];
   userId: string;
@@ -58,6 +62,7 @@ export const buildColumnFlagMutation = ({
   propertyId,
   flag,
   set,
+  onlyAddedAt,
   targets,
   existingRows,
   userId,
@@ -141,6 +146,15 @@ export const buildColumnFlagMutation = ({
       continue;
     }
 
+    // Undo precision: only revert the flag this operation added, leaving flags a
+    // human set in an earlier operation untouched.
+    if (
+      onlyAddedAt !== undefined &&
+      existing.flagProvenance?.[flag]?.addedAt !== onlyAddedAt
+    ) {
+      continue;
+    }
+
     const manualFlags = normalizeManualFlags(
       existingFlags.filter((existingFlag) => existingFlag !== flag),
     );
@@ -151,14 +165,21 @@ export const buildColumnFlagMutation = ({
         existingProvenance[manualFlag] ?? { addedBy: userId, addedAt },
       ]),
     );
+    // Drop the auto-lock that this same operation added (matching timestamp);
+    // keep a lock the user or an earlier operation set independently.
+    const lockAddedByThisOp =
+      onlyAddedAt !== undefined &&
+      existing.lockProvenance?.lockedAt === onlyAddedAt;
+    const keepLock = existing.locked === true && !lockAddedByThisOp;
     const metadata: CellMetadata = {
       version: CELL_METADATA_VERSION,
       manualFlags,
       flagProvenance,
-      ...(existing.locked === true && { locked: true }),
-      ...(existing.lockProvenance && {
-        lockProvenance: existing.lockProvenance,
-      }),
+      ...(keepLock && { locked: true }),
+      ...(keepLock &&
+        existing.lockProvenance && {
+          lockProvenance: existing.lockProvenance,
+        }),
     };
 
     insertValues.push({

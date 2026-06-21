@@ -66,9 +66,18 @@ export const PropertyPopover = ({
 
   // `scoped` narrows the batch to the current grouped-view subtable (only
   // meaningful when a group scope is present); `set: false` removes the flag,
-  // which powers the toast's Undo.
+  // which powers the toast's Undo. `onlyAddedAt` (set on undo) reverts just the
+  // cells this mark added, never flags a human verified earlier.
   const markReviewed = useMutation({
-    mutationFn: async ({ scoped, set }: { scoped: boolean; set: boolean }) => {
+    mutationFn: async ({
+      scoped,
+      set,
+      onlyAddedAt,
+    }: {
+      scoped: boolean;
+      set: boolean;
+      onlyAddedAt?: string;
+    }) => {
       // The annotation keeps the narrowed grouping id from widening back to
       // `string` (an un-annotated object literal would); mirrors the
       // kanban-group / group-counts query builders.
@@ -96,6 +105,7 @@ export const PropertyPopover = ({
           flag: VERIFIED_FLAG,
           filters,
           set,
+          ...(onlyAddedAt !== undefined && { onlyAddedAt }),
           ...groupParams,
         });
 
@@ -118,7 +128,11 @@ export const PropertyPopover = ({
           action: {
             label: t("common.undo"),
             onClick: () => {
-              markReviewed.mutate({ scoped, set: false });
+              markReviewed.mutate({
+                scoped,
+                set: false,
+                onlyAddedAt: data.addedAt,
+              });
             },
           },
         });

@@ -98,6 +98,20 @@ type WorkspaceTableProps = {
   outerScrollRef?: RefObject<HTMLDivElement | null>;
 };
 
+// Nearest scrollable ancestor of an element, used as the IntersectionObserver
+// root so the load-more sentinel reports against the real scroll viewport.
+const getScrollableAncestor = (element: HTMLElement): HTMLElement | null => {
+  let current = element.parentElement;
+  while (current) {
+    const { overflowY } = getComputedStyle(current);
+    if (overflowY === "auto" || overflowY === "scroll") {
+      return current;
+    }
+    current = current.parentElement;
+  }
+  return null;
+};
+
 export const WorkspaceTable = ({
   workspaceId,
   table,
@@ -269,10 +283,11 @@ export const WorkspaceTable = ({
   useEffect(() => {
     // Bounded paging for inline sections: only fetch the next page when the
     // sentinel at the end of the rendered rows actually scrolls into the real
-    // outer scroller, not when the auto-height wrapper reports it as visible.
+    // scroll viewport. That viewport is an ancestor `overflow-auto` element, not
+    // the non-scrolling content wrapper passed as `outerScrollRef`, so resolve
+    // it from the sentinel itself (null falls back to the browser viewport).
     const sentinel = loadMoreSentinelRef.current;
-    const root = outerScrollRef?.current;
-    if (!inlineFlow || !hasNextPage || !onLoadMore || !sentinel || !root) {
+    if (!inlineFlow || !hasNextPage || !onLoadMore || !sentinel) {
       return undefined;
     }
 
@@ -285,11 +300,11 @@ export const WorkspaceTable = ({
           onLoadMore();
         }
       },
-      { root, rootMargin: "200px" },
+      { root: getScrollableAncestor(sentinel), rootMargin: "200px" },
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [inlineFlow, hasNextPage, isFetchingNextPage, onLoadMore, outerScrollRef]);
+  }, [inlineFlow, hasNextPage, isFetchingNextPage, onLoadMore]);
   const paddingTop = virtualRows.at(0)?.start ?? 0;
   const paddingBottom =
     rowVirtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0);

@@ -52,6 +52,9 @@ const config = {
     flag: t.Literal(VERIFIED_COLUMN_FLAG),
     filters: t.Array(tConditionNode),
     set: t.Optional(t.Boolean()),
+    // Undo of a prior mark: only remove flags stamped with this operation
+    // timestamp (returned as `addedAt` from the original mark).
+    onlyAddedAt: t.Optional(t.String()),
     // When set, scopes the batch to a single grouped-view subtable using the
     // same group condition the grouped table renders with, so "mark this group
     // as reviewed" touches exactly the rows that group shows.
@@ -77,6 +80,7 @@ type ProcessColumnFlagBatchArgs = {
   propertyId: SafeId<"property">;
   flag: string;
   set: boolean;
+  onlyAddedAt: string | undefined;
   filters: ConditionNode[];
   groupCondition: SQL | null;
   userId: SafeId<"user">;
@@ -91,6 +95,7 @@ const processColumnFlagBatch = async ({
   propertyId,
   flag,
   set,
+  onlyAddedAt,
   filters,
   groupCondition,
   userId,
@@ -194,6 +199,7 @@ const processColumnFlagBatch = async ({
       propertyId: property.id,
       flag,
       set,
+      ...(onlyAddedAt !== undefined && { onlyAddedAt }),
       targets,
       existingRows,
       userId,
@@ -256,6 +262,7 @@ const markColumnFlag = createSafeHandler(
           propertyId: body.propertyId,
           flag: body.flag,
           set: body.set ?? true,
+          onlyAddedAt: body.onlyAddedAt,
           filters: body.filters,
           groupCondition,
           userId: user.id,
@@ -283,7 +290,9 @@ const markColumnFlag = createSafeHandler(
       cursor = txResult.nextCursor;
     }
 
-    return Result.ok({ success: true, updatedCount });
+    // `addedAt` stamps every flag this mark added; the client passes it back as
+    // `onlyAddedAt` to undo precisely.
+    return Result.ok({ success: true, updatedCount, addedAt });
   },
 );
 
