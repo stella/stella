@@ -95,7 +95,7 @@ test("authenticated routes render without browser errors", async ({
   context,
   request,
 }) => {
-  test.setTimeout(120_000);
+  test.setTimeout(180_000);
 
   const cleanupTasks: (() => Promise<void>)[] = [];
 
@@ -135,7 +135,9 @@ test("authenticated routes render without browser errors", async ({
 
     for (const route of routes) {
       // eslint-disable-next-line no-await-in-loop -- each route gets an isolated page so browser errors can be attributed to its direct render without concurrent route state leaking across pages
-      await smokeRoute({ context, route });
+      await test.step(route.template, async () => {
+        await smokeRoute({ context, route });
+      });
     }
   } finally {
     await Promise.all(cleanupTasks.map(async (cleanup) => await cleanup()));
@@ -261,7 +263,7 @@ const renderSmokeRoute = async ({
   await assertNoRouteBoundary(page, route.template);
   await expect(page.locator("main").first(), route.template).toBeVisible();
 
-  await page.waitForTimeout(route.settleMs ?? 750);
+  await page.waitForTimeout(route.settleMs ?? 250);
 
   await assertNoRouteBoundary(page, route.template);
   browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);

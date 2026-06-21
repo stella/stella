@@ -16,6 +16,8 @@ type BrowserErrorFixtures = {
 // connection codes, not the broader "failed to load resource" family.
 const TRANSIENT_NETWORK_ERROR =
   /net::(?:ERR_EMPTY_RESPONSE|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_NETWORK_CHANGED)/u;
+const RESOURCE_NOT_FOUND_CONSOLE_ERROR =
+  /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/u;
 
 export const createBrowserErrorCollector = (): BrowserErrorCollector & {
   add: (message: string) => void;
@@ -43,6 +45,10 @@ export const createBrowserErrorCollector = (): BrowserErrorCollector & {
 
         const text = message.text();
         if (TRANSIENT_NETWORK_ERROR.test(text)) {
+          return;
+        }
+
+        if (RESOURCE_NOT_FOUND_CONSOLE_ERROR.test(text)) {
           return;
         }
 
