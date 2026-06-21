@@ -2134,6 +2134,30 @@ export function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
 }
 
 /**
+ * Negatable boolean run-property keys whose serializer emits an explicit
+ * `w:val="0"` override when the value is `false` (see `serializeTextFormatting`
+ * in `runSerializer.ts`). Each entry pairs a base key with the complex-script
+ * mirror that `marksToTextFormatting` sets alongside it (the bold/italic marks
+ * set `*Cs` too), so a negative override disables both. Keys without a complex
+ * mirror use `null`.
+ */
+const NEGATABLE_STYLE_KEYS: readonly [keyof TextFormatting, keyof TextFormatting | null][] =
+  [
+    ["bold", "boldCs"],
+    ["italic", "italicCs"],
+    ["strike", null],
+    ["doubleStrike", null],
+    ["allCaps", null],
+    ["smallCaps", null],
+    ["hidden", null],
+    ["emboss", null],
+    ["imprint", null],
+    ["shadow", null],
+    ["outline", null],
+    ["rtl", null],
+  ];
+
+/**
  * Drop run formatting values that the run's character style already provides
  * (the `w:rStyle` reference re-imposes them on load), so a styled run
  * serializes back to a style reference instead of baked direct formatting.
@@ -2143,6 +2167,13 @@ export function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
  * is a faithful "came from the style and is unchanged" check. Values that
  * differ (user edits, direct overrides from the source document) stay as
  * direct formatting, which wins over the style per the OOXML cascade.
+ *
+ * When the user *removes* a boolean property the style supplied (e.g. toggling
+ * off bold on text whose `w:rStyle` is bold), that key is no longer present in
+ * `formatting`, so the subtraction loop above never sees it. Without a counter,
+ * the run keeps the style reference and Word re-applies the removed formatting
+ * on load. The second pass emits an explicit negative override (`false`) for
+ * each negatable boolean the style set to `true` but the run no longer carries.
  */
 function subtractCharacterStyleFormatting(
   formatting: TextFormatting,
@@ -2167,6 +2198,17 @@ function subtractCharacterStyleFormatting(
     }
     // SAFETY: dynamic property copy between identical TextFormatting keys.
     (result as Record<string, unknown>)[key] = value;
+  }
+
+  for (const [key, csKey] of NEGATABLE_STYLE_KEYS) {
+    if (styleRPr[key] !== true || formatting[key] !== undefined) {
+      continue;
+    }
+    // SAFETY: dynamic property copy between known boolean TextFormatting keys.
+    (result as Record<string, unknown>)[key] = false;
+    if (csKey !== null) {
+      (result as Record<string, unknown>)[csKey] = false;
+    }
   }
 
   return result;

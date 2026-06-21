@@ -318,4 +318,23 @@ describe("character style under editing", () => {
     expect(run.formatting?.italic).toBe(true);
     expect(run.formatting?.color).toEqual({ rgb: "336699" });
   });
+
+  test("toggling off a style-provided italic emits an explicit negative override", () => {
+    const state = styledState();
+    const italic = schema.marks["italic"];
+    if (!italic) {
+      throw new Error("Expected italic mark type");
+    }
+    // Keep the character style reference but remove the italic the style
+    // supplied, as the toolbar's italic toggle would.
+    const tr = state.tr.removeMark(1, 5, italic);
+    const edited = state.apply(tr);
+    const out = fromProseDoc(edited.doc, wrap());
+    const run = findRun(firstParagraph(out), "Term");
+    // The style reference survives, but the removed italic must serialize as
+    // an explicit negative so Word does not re-impose it from the style.
+    expect(run.formatting?.styleId).toBe("DefinedTerm");
+    expect(run.formatting?.italic).toBe(false);
+    expect(run.formatting?.italicCs).toBe(false);
+  });
 });
