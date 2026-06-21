@@ -116,7 +116,7 @@
       "version": "3.0.74"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.18",
+      "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.19",
       "evidence": {
         "identity": [
           {
@@ -164,13 +164,13 @@
           "value": "node_modules/@ai-sdk/devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/devtools@0.0.18",
+      "purl": "pkg:npm/%40ai-sdk/devtools@0.0.19",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "0.0.18"
+      "version": "0.0.19"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.145",
@@ -290,7 +290,7 @@
       "version": "3.0.82"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.50",
+      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.51",
       "evidence": {
         "identity": [
           {
@@ -347,13 +347,13 @@
           "value": "node_modules/@ai-sdk/mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.50",
+      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.51",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.0.50"
+      "version": "1.0.51"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.39",
@@ -472,63 +472,6 @@
       ],
       "type": "framework",
       "version": "3.0.71"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.27",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/react/node_modules/@ai-sdk/provider-utils/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/react/node_modules/@ai-sdk/provider-utils/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#3"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "provider-utils",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/react/node_modules/@ai-sdk/provider-utils/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.27",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "4.0.27"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.29",
@@ -654,7 +597,7 @@
       "version": "3.0.10"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.199",
+      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.207",
       "evidence": {
         "identity": [
           {
@@ -2061,13 +2004,13 @@
           "value": "node_modules/@ai-sdk/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/react@3.0.199",
+      "purl": "pkg:npm/%40ai-sdk/react@3.0.207",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.199"
+      "version": "3.0.207"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.30",
@@ -2181,6 +2124,9 @@
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
           },
           {
+            "location": "apps/api/src/lib/conditions/parse-stored.ts#9"
+          },
+          {
             "location": "apps/api/src/lib/deepl/client.ts#17"
           },
           {
@@ -2245,6 +2191,9 @@
           },
           {
             "location": "packages/catalogue/src/schema.ts#1"
+          },
+          {
+            "location": "packages/conditions/src/schema.ts#13"
           },
           {
             "location": "packages/folio/src/core/docx/parserEnums.ts#23"
@@ -6889,7 +6838,7 @@
       "version": "0.4.0"
     },
     {
-      "bom-ref": "pkg:npm/@litko/yara-x@0.5.2",
+      "bom-ref": "pkg:npm/@litko/yara-x@0.6.0",
       "evidence": {
         "identity": [
           {
@@ -6940,10 +6889,10 @@
           "value": "node_modules/@litko/yara-x/package.json"
         }
       ],
-      "purl": "pkg:npm/%40litko/yara-x@0.5.2",
+      "purl": "pkg:npm/%40litko/yara-x@0.6.0",
       "scope": "required",
       "type": "library",
-      "version": "0.5.2"
+      "version": "0.6.0"
     },
     {
       "authors": [
@@ -7098,7 +7047,7 @@
           "name": "OpenTelemetry Authors"
         }
       ],
-      "bom-ref": "pkg:npm/@opentelemetry/api-logs@0.218.0",
+      "bom-ref": "pkg:npm/@opentelemetry/api-logs@0.219.0",
       "description": "Public logs API for OpenTelemetry",
       "evidence": {
         "identity": [
@@ -7143,13 +7092,13 @@
           "value": "node_modules/@opentelemetry/api-logs/package.json"
         }
       ],
-      "purl": "pkg:npm/%40opentelemetry/api-logs@0.218.0",
+      "purl": "pkg:npm/%40opentelemetry/api-logs@0.219.0",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "0.218.0"
+      "version": "0.219.0"
     },
     {
       "authors": [
@@ -8641,7 +8590,7 @@
           "name": "Pydantic Team"
         }
       ],
-      "bom-ref": "pkg:npm/@pydantic/genai-prices@0.0.65",
+      "bom-ref": "pkg:npm/@pydantic/genai-prices@0.0.66",
       "description": "Calculate prices for calling LLM inference APIs",
       "evidence": {
         "identity": [
@@ -8693,10 +8642,10 @@
           "value": "node_modules/@pydantic/genai-prices/package.json"
         }
       ],
-      "purl": "pkg:npm/%40pydantic/genai-prices@0.0.65",
+      "purl": "pkg:npm/%40pydantic/genai-prices@0.0.66",
       "scope": "required",
       "type": "library",
-      "version": "0.0.65"
+      "version": "0.0.66"
     },
     {
       "bom-ref": "pkg:npm/@react-email/components@1.0.12",
@@ -8940,6 +8889,9 @@
           },
           {
             "location": "apps/api/src/handlers/properties/preview.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/conditions/contract.ts#9"
           },
           {
             "location": "apps/api/src/lib/custom-schema.ts#1"
@@ -13694,260 +13646,7 @@
       "version": "1.7.1"
     },
     {
-      "bom-ref": "pkg:npm/ai@6.0.197",
-      "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/react/node_modules/ai/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/react/node_modules/ai/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#13"
-          },
-          {
-            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#14"
-          },
-          {
-            "location": "apps/api/src/dev/register-mock-ai.ts#2"
-          },
-          {
-            "location": "apps/api/src/dev/register-mock-ai.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/attachment-validation.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/compaction.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/compaction.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#8"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#14"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/thread-recap.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/chat-tools.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/tool-policy.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/types.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/upload-files.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/upload-files.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/search/ai.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/ai-caching.ts#16"
-          },
-          {
-            "location": "apps/api/src/lib/ai-error.ts#9"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#43"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#44"
-          },
-          {
-            "location": "apps/api/src/lib/ai-output-schema.ts#27"
-          },
-          {
-            "location": "apps/api/src/lib/ai-output-schema.ts#28"
-          },
-          {
-            "location": "apps/api/src/lib/analytics/ai.ts#6"
-          },
-          {
-            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#2"
-          },
-          {
-            "location": "apps/api/src/mcp/tool-utils.ts#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-lib/build-chat-request-message.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#8"
-          },
-          {
-            "location": "apps/web/src/components/ai-elements/message.tsx#6"
-          },
-          {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#5"
-          },
-          {
-            "location": "apps/web/src/components/chat/needs-matter-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/chat/source-chips.tsx#5"
-          },
-          {
-            "location": "apps/web/src/components/chat/source-chips.tsx#6"
-          },
-          {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
-          },
-          {
-            "location": "apps/api/src/dev/register-mock-ai.ts#3"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "ai",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/react/node_modules/ai/package.json"
-        }
-      ],
-      "purl": "pkg:npm/ai@6.0.197",
-      "scope": "required",
-      "tags": [
-        "ai"
-      ],
-      "type": "library",
-      "version": "6.0.197"
-    },
-    {
-      "bom-ref": "pkg:npm/ai@6.0.204",
+      "bom-ref": "pkg:npm/ai@6.0.205",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "evidence": {
         "identity": [
@@ -14191,13 +13890,13 @@
           "value": "node_modules/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/ai@6.0.204",
+      "purl": "pkg:npm/ai@6.0.205",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "6.0.204"
+      "version": "6.0.205"
     },
     {
       "authors": [
@@ -14420,7 +14119,10 @@
             "location": "apps/api/src/db/json-utils.ts#1"
           },
           {
-            "location": "apps/api/src/db/schema.ts#4"
+            "location": "apps/api/src/db/migrate.ts#1"
+          },
+          {
+            "location": "apps/api/src/db/schema.ts#5"
           },
           {
             "location": "apps/api/src/db/scoped.ts#7"
@@ -15898,7 +15600,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@5.78.0",
+      "bom-ref": "pkg:npm/bullmq@5.78.1",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -15956,10 +15658,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@5.78.0",
+      "purl": "pkg:npm/bullmq@5.78.1",
       "scope": "required",
       "type": "library",
-      "version": "5.78.0"
+      "version": "5.78.1"
     },
     {
       "authors": [
@@ -16776,6 +16478,12 @@
             "location": "apps/api/src/db/json-utils.ts#2"
           },
           {
+            "location": "apps/api/src/db/migrate.ts#3"
+          },
+          {
+            "location": "apps/api/src/db/migrate.ts#4"
+          },
+          {
             "location": "apps/api/src/db/rls.ts#1"
           },
           {
@@ -16788,9 +16496,6 @@
             "location": "apps/api/src/db/root.ts#2"
           },
           {
-            "location": "apps/api/src/db/schema.ts#5"
-          },
-          {
             "location": "apps/api/src/db/schema.ts#6"
           },
           {
@@ -16798,6 +16503,9 @@
           },
           {
             "location": "apps/api/src/db/schema.ts#8"
+          },
+          {
+            "location": "apps/api/src/db/schema.ts#9"
           },
           {
             "location": "apps/api/src/db/scoped.ts#8"
@@ -17691,19 +17399,25 @@
             "location": "apps/api/src/db/rls.ts#3"
           },
           {
-            "location": "apps/api/src/db/schema.ts#6"
-          },
-          {
             "location": "apps/api/src/db/schema.ts#7"
           },
           {
             "location": "apps/api/src/db/schema.ts#8"
           },
           {
+            "location": "apps/api/src/db/schema.ts#9"
+          },
+          {
             "location": "apps/api/src/handlers/entities/query-entities.ts#4"
           },
           {
+            "location": "apps/api/src/db/migrate.ts#3"
+          },
+          {
             "location": "apps/api/src/db/root.ts#2"
+          },
+          {
+            "location": "apps/api/src/db/migrate.ts#4"
           }
         ]
       },
@@ -18777,6 +18491,12 @@
             "location": "apps/api/src/lib/auth.ts#16"
           },
           {
+            "location": "apps/api/src/lib/conditions/contract.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/conditions/contract.ts#11"
+          },
+          {
             "location": "apps/api/src/lib/custom-schema.ts#3"
           },
           {
@@ -18890,7 +18610,7 @@
           "name": "Amit Gupta (https://solothought.com)"
         }
       ],
-      "bom-ref": "pkg:npm/fast-xml-parser@5.8.0",
+      "bom-ref": "pkg:npm/fast-xml-parser@5.9.0",
       "description": "Validate XML, Parse XML, Build XML without C/C++ based libraries",
       "evidence": {
         "identity": [
@@ -18935,14 +18655,14 @@
           "value": "node_modules/fast-xml-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/fast-xml-parser@5.8.0",
+      "purl": "pkg:npm/fast-xml-parser@5.9.0",
       "scope": "required",
       "tags": [
         "parse",
         "xml"
       ],
       "type": "library",
-      "version": "5.8.0"
+      "version": "5.9.0"
     },
     {
       "authors": [
@@ -19781,6 +19501,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#6"
           },
           {
@@ -19928,10 +19651,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#23"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#12"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts.tsx#6"
@@ -24268,6 +23988,9 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx#5"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.tsx#2"
+          },
+          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#7"
           },
           {
@@ -24412,7 +24135,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#24"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#13"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#18"
@@ -24847,6 +24570,9 @@
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
           },
           {
+            "location": "apps/api/src/lib/conditions/parse-stored.ts#9"
+          },
+          {
             "location": "apps/api/src/lib/deepl/client.ts#17"
           },
           {
@@ -24911,6 +24637,9 @@
           },
           {
             "location": "packages/catalogue/src/schema.ts#1"
+          },
+          {
+            "location": "packages/conditions/src/schema.ts#13"
           },
           {
             "location": "packages/folio/src/core/docx/parserEnums.ts#23"
