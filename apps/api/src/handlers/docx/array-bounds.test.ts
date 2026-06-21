@@ -41,10 +41,47 @@ describe("checkArrayBounds", () => {
     expect(checkArrayBounds({ lawyers: [] }, m)).toContain('"Lawyers"');
   });
 
-  test("skips non-array values (left for other diagnostics)", () => {
+  test("rejects an omitted required array as length 0 (minItems)", () => {
     const m = manifest([{ path: "lawyers", validation: { minItems: 2 } }]);
-    expect(checkArrayBounds({ lawyers: "not an array" }, m)).toBeNull();
+    // A non-array value and a fully omitted path both count as length 0, so a
+    // positive minItems must reject them (otherwise a required loop renders
+    // zero items).
+    expect(checkArrayBounds({ lawyers: "not an array" }, m)).toContain(
+      "at least 2",
+    );
+    expect(checkArrayBounds({}, m)).toContain("at least 2");
+  });
+
+  test("an omitted array passes maxItems-only bounds (nothing to cap)", () => {
+    const m = manifest([{ path: "lawyers", validation: { maxItems: 3 } }]);
     expect(checkArrayBounds({}, m)).toBeNull();
+    expect(checkArrayBounds({ lawyers: "not an array" }, m)).toBeNull();
+  });
+
+  test("a condition-gated container is not over-rejected when omitted", () => {
+    // A loop whose own container field carries a boolean rule condition may be
+    // legitimately suppressed, so its array being absent is allowed even with a
+    // positive minItems (checkArrayBounds runs before block expansion and
+    // cannot see the document's {{#if}} structure).
+    const m = manifest([
+      {
+        path: "lawyers",
+        validation: { minItems: 2 },
+        condition: 'kind == "firm"',
+      },
+    ]);
+    expect(checkArrayBounds({}, m)).toBeNull();
+    // But a present array under a gated container still honors its bounds.
+    const tooMany = manifest([
+      {
+        path: "lawyers",
+        validation: { maxItems: 1 },
+        condition: 'kind == "firm"',
+      },
+    ]);
+    expect(checkArrayBounds({ lawyers: [{}, {}] }, tooMany)).toContain(
+      "at most 1",
+    );
   });
 
   test("resolves a flat dotted container key (fill_template tool shape)", () => {
