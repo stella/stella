@@ -113,6 +113,7 @@ export const WorkspaceTable = ({
   const inlineFlow = outerScrollRef !== undefined;
   const t = useTranslations();
   const tableWrapperRef = useRef<HTMLDivElement>(null);
+  const loadMoreSentinelRef = useRef<HTMLDivElement>(null);
   const lastSelectedIndex = useRef<number | null>(null);
   const previousHorizontalMaxScroll = useRef<number | null>(null);
   const lastColumnDropPosition = useRef<ColumnDropPosition | null>(null);
@@ -238,7 +239,17 @@ export const WorkspaceTable = ({
   const lastVirtualRow = virtualRows.at(-1);
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- infinite-load trigger that must also re-fire when isFetchingNextPage/hasNextPage flip (not only on virtualizer changes), so it can chain the next page while still parked at the bottom; a virtualizer onChange handler would miss that path, so kept
   useEffect(() => {
-    if (!hasNextPage || isFetchingNextPage || !onLoadMore || !lastVirtualRow) {
+    // Inline (grouped) sections de-virtualize their rows into a non-scrolling
+    // wrapper, so the virtualizer treats every row as visible and would fetch
+    // every page at once. Those sections page via the intersection sentinel
+    // below instead.
+    if (
+      inlineFlow ||
+      !hasNextPage ||
+      isFetchingNextPage ||
+      !onLoadMore ||
+      !lastVirtualRow
+    ) {
       return;
     }
 
@@ -248,12 +259,38 @@ export const WorkspaceTable = ({
       onLoadMore();
     }
   }, [
+    inlineFlow,
     hasNextPage,
     isFetchingNextPage,
     lastVirtualRow,
     onLoadMore,
     rowModel.rows.length,
   ]);
+  useEffect(() => {
+    // Bounded paging for inline sections: only fetch the next page when the
+    // sentinel at the end of the rendered rows actually scrolls into the real
+    // outer scroller, not when the auto-height wrapper reports it as visible.
+    const sentinel = loadMoreSentinelRef.current;
+    const root = outerScrollRef?.current;
+    if (!inlineFlow || !hasNextPage || !onLoadMore || !sentinel || !root) {
+      return undefined;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (
+          entries.some((entry) => entry.isIntersecting) &&
+          hasNextPage &&
+          !isFetchingNextPage
+        ) {
+          onLoadMore();
+        }
+      },
+      { root, rootMargin: "200px" },
+    );
+    observer.observe(sentinel);
+    return () => observer.disconnect();
+  }, [inlineFlow, hasNextPage, isFetchingNextPage, onLoadMore, outerScrollRef]);
   const paddingTop = virtualRows.at(0)?.start ?? 0;
   const paddingBottom =
     rowVirtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0);
@@ -588,6 +625,14 @@ export const WorkspaceTable = ({
                 />
               );
             })}
+            {inlineFlow && hasNextPage && (
+              <div
+                aria-hidden
+                className="pointer-events-none h-px"
+                ref={loadMoreSentinelRef}
+                style={{ gridColumn: "1 / -1" }}
+              />
+            )}
             {!inlineFlow && paddingBottom > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell

@@ -21,10 +21,9 @@ import {
   useTableColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-columns";
 import { workspaceTableFeatures } from "@/routes/_protected.workspaces/$workspaceId/-components/table/table-features";
-import type { TableTreeNode } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { WorkspaceTable } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table";
-import { useTableStore } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
 import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
+import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import { useUpdateView } from "@/routes/_protected.workspaces/$workspaceId/-mutations/views";
 import {
@@ -113,30 +112,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     workspaceId,
     entityIdChunks: justificationEntityIdChunks,
   });
-
-  // Resolve the row selection to entities for chrome outside the
-  // table (the view toolbar's bulk actions menu).
-  const rowSelection = useTableStore((s) => s.rowSelection[view.id]);
-  const setSelectedEntities = useTableStore((s) => s.setSelectedEntities);
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (resolves row selection to entities) synced into the table store; compute in render or a selector
-  useEffect(() => {
-    const selected = rowSelection ?? {};
-    const result: TableTreeNode[] = [];
-    const visit = (nodes: TableTreeNode[] | undefined) => {
-      if (!nodes) {
-        return;
-      }
-
-      for (const node of nodes) {
-        if (selected[node.entityId]) {
-          result.push(node);
-        }
-        visit(node.children);
-      }
-    };
-    visit(treeData);
-    setSelectedEntities(view.id, result);
-  }, [rowSelection, treeData, view.id, setSelectedEntities]);
+  useSyncSelectedEntities({ viewId: view.id, treeData });
 
   const table = useTable({
     features: workspaceTableFeatures,

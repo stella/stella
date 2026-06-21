@@ -1,4 +1,11 @@
-import { type RefObject, useMemo, useRef, useState } from "react";
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import {
   useInfiniteQuery,
@@ -12,6 +19,7 @@ import { useFormatter, useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
+import type { TranslationKey } from "@/i18n/types";
 import type {
   WorkspaceEntity,
   WorkspaceProperty,
@@ -48,6 +56,8 @@ import {
   getWorkspaceGridTemplateColumns,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
 import type { WorkspaceGridStyle } from "@/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals";
+import { useSyncJustificationChunks } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications";
+import { useSyncSelectedEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities";
 import { useTableState } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state";
 import {
   groupCountsOptions,
@@ -61,6 +71,16 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const GROUP_TABLE_PAGE_SIZE = 200;
+
+// Static keys (not `tasks.statusValues.${status}`) so a missing or renamed key
+// fails typecheck instead of silently rendering the raw key at runtime.
+const STATUS_LABEL_KEYS = {
+  open: "tasks.statusValues.open",
+  in_progress: "tasks.statusValues.in_progress",
+  in_review: "tasks.statusValues.in_review",
+  done: "tasks.statusValues.done",
+  cancelled: "tasks.statusValues.cancelled",
+} as const satisfies Record<string, TranslationKey>;
 
 type GroupedTableLayoutProps = {
   workspaceId: string;
@@ -138,6 +158,26 @@ export const GroupedTableLayout = ({
   }, [groupCounts.data]);
   const countsLoaded = groupCounts.data !== undefined;
 
+  // Each section loads its own rows; collect them by group so the row selection
+  // resolves across every group the way the flat table does (the view toolbar
+  // reads the resolved union from the store).
+  const [treeDataByGroup, setTreeDataByGroup] = useState<
+    Record<string, TableTreeNode[]>
+  >({});
+  const reportGroupTreeData = useCallback(
+    (groupKey: string, nodes: TableTreeNode[]) => {
+      setTreeDataByGroup((prev) =>
+        prev[groupKey] === nodes ? prev : { ...prev, [groupKey]: nodes },
+      );
+    },
+    [],
+  );
+  const allTreeData = useMemo(
+    () => Object.values(treeDataByGroup).flat(),
+    [treeDataByGroup],
+  );
+  useSyncSelectedEntities({ viewId: view.id, treeData: allTreeData });
+
   if (groupByPropertyId === null || isUnsupportedBuiltIn) {
     return (
       <EmptyState
@@ -152,8 +192,8 @@ export const GroupedTableLayout = ({
     grouping.type === "status"
       ? Object.fromEntries(
           (
-            ["open", "in_progress", "in_review", "done", "cancelled"] as const
-          ).map((status) => [status, t(`tasks.statusValues.${status}`)]),
+            Object.keys(STATUS_LABEL_KEYS) as (keyof typeof STATUS_LABEL_KEYS)[]
+          ).map((status) => [status, t(STATUS_LABEL_KEYS[status])]),
         )
       : {};
   const entityKindLabels = {
@@ -193,6 +233,7 @@ export const GroupedTableLayout = ({
           groupByPropertyId={groupByPropertyId}
           key={group.value ?? "__uncategorized__"}
           outerScrollRef={scrollRef}
+          reportGroupTreeData={reportGroupTreeData}
           sumProperties={sumProperties}
           tableState={tableState}
           view={view}
@@ -329,6 +370,7 @@ type GroupSectionProps = {
   sumProperties: WorkspaceProperty[];
   tableState: ReturnType<typeof useTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
+  reportGroupTreeData: (groupKey: string, nodes: TableTreeNode[]) => void;
 };
 
 const GroupSection = ({
@@ -342,6 +384,7 @@ const GroupSection = ({
   sumProperties,
   tableState,
   outerScrollRef,
+  reportGroupTreeData,
 }: GroupSectionProps) => {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -371,6 +414,28 @@ const GroupSection = ({
   const loadedCount = entities.length;
 
   const treeData = useMemo(() => toTableEntities(entities), [entities]);
+
+  // Publish this section's rows to the parent so the row selection resolves
+  // across every group; clear them when the section unmounts.
+  const groupKey = group.value ?? "__uncategorized__";
+  useEffect(() => {
+    reportGroupTreeData(groupKey, treeData);
+    return () => reportGroupTreeData(groupKey, NO_ROWS);
+  }, [groupKey, treeData, reportGroupTreeData]);
+
+  // AI cells read justifications from the workspace store; sync each loaded page
+  // so the source hover card and citation highlights work in grouped views too.
+  const justificationEntityIdChunks = useMemo(
+    () =>
+      query.data?.pages.map((page) =>
+        page.entities.map((entity) => entity.entityId),
+      ) ?? [],
+    [query.data],
+  );
+  useSyncJustificationChunks({
+    workspaceId,
+    entityIdChunks: justificationEntityIdChunks,
+  });
 
   const table = useTable({
     features: workspaceTableFeatures,
