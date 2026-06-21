@@ -60,6 +60,11 @@ export const LIMITS = {
   /** Max connector rows returned by the connector catalogue listing
    *  (`GET /mcp/connectors` and the custom-MCP slice of `/catalogue`). */
   mcpConnectorsPageSizeMax: 100,
+  /** Max custom MCP connectors an org can create. Kept well below
+   *  `mcpConnectorsPageSizeMax` so the catalogue listing (curated + this org's
+   *  custom connectors) never silently truncates a connector out of the
+   *  management UI. */
+  mcpCustomConnectorsPerOrgMax: 50,
   /** Max per-user MCP connection rows returned by the connections listing. */
   mcpConnectionsPageSizeMax: 100,
   /** Default/max page sizes for the MCP `list_matters`-style list tools. */

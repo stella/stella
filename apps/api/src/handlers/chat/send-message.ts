@@ -111,7 +111,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
-import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
+import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS, LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
@@ -985,8 +985,15 @@ const scheduleChatCompactionCheckpoint = ({
 }: ScheduleChatCompactionCheckpointProps): void => {
   // Cheap token-estimate gate over the per-send window: the common case is
   // under the trigger, so nothing happens and no full-history read is issued.
-  // Only when the window has crossed the trigger do we form a new checkpoint.
-  if (!shouldCompactChatMessages(messages)) {
+  const windowTriggered = shouldCompactChatMessages(messages);
+  // A window at the per-send cap may hide an unsummarized prefix: for a thread
+  // with no checkpoint, the capped newest slice can stay under the token
+  // trigger while the full history is well over it, so this gate would never
+  // fire and the dropped prefix would land in neither the prompt nor a
+  // checkpoint. Fall through on a capped window too; runChatCompactionCheckpoint
+  // reads the full history and only writes a checkpoint when one is due.
+  const windowAtCap = messages.length >= LIMITS.chatSendHistoryWindowMax;
+  if (!windowTriggered && !windowAtCap) {
     return;
   }
 
@@ -1009,6 +1016,7 @@ const scheduleChatCompactionCheckpoint = ({
     model: modelResult.value,
     safeDb,
     threadId,
+    windowTriggered,
   }).catch((error: unknown) => {
     captureError(error, {
       threadId,
@@ -1023,6 +1031,9 @@ type RunChatCompactionCheckpointProps = {
   model: LanguageModel;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  // True when the per-send window itself crossed the token trigger; false when
+  // the gate fired only because the window is at its size cap.
+  windowTriggered: boolean;
 };
 
 const runChatCompactionCheckpoint = async ({
@@ -1031,7 +1042,30 @@ const runChatCompactionCheckpoint = async ({
   model,
   safeDb,
   threadId,
+  windowTriggered,
 }: RunChatCompactionCheckpointProps): Promise<void> => {
+  // When the gate fired only because the per-send window is at its cap (not
+  // because it crossed the token trigger), an active checkpoint already bounds
+  // the thread and nothing new needs summarizing. Skip the full-history read in
+  // that case; only a thread with no checkpoint can hide an unsummarized prefix
+  // behind the capped window.
+  if (!windowTriggered) {
+    const existingCheckpoint = await readLatestChatCompaction({
+      safeDb,
+      threadId,
+    });
+    if (Result.isError(existingCheckpoint)) {
+      captureError(existingCheckpoint.error, {
+        threadId,
+        feature: "chat.compaction_checkpoint_existing",
+      });
+      return;
+    }
+    if (existingCheckpoint.value !== null) {
+      return;
+    }
+  }
+
   // Summarize from the true start of the conversation. The window passed to
   // the gate above is enough to know a checkpoint is due, but the durable
   // summary must cover the full unsummarized prefix [0..newFirstKept] with

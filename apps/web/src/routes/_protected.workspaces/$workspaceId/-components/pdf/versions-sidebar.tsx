@@ -143,6 +143,9 @@ export function VersionsSidebar({
   // before the prepend grows the container above the viewport. Reset
   // to null once consumed so only a real prepend restores scroll.
   const anchorScrollHeightRef = useRef<number | null>(null);
+  // Guards the one-time scroll-to-bottom below so it runs on the first render
+  // that has versions, not on every update.
+  const didInitialScrollRef = useRef(false);
 
   const triggerLoadOlder = () => {
     const container = viewportRef.current;
@@ -205,6 +208,24 @@ export function VersionsSidebar({
     }
     container.scrollTop += container.scrollHeight - previousScrollHeight;
   }, [topVersionId]);
+
+  // Open the list at the bottom (newest) on the first render that has versions.
+  // The list is chronological (oldest at the top, just below the load-older
+  // sentinel), so without this the viewport starts at the top with the sentinel
+  // on screen and the IntersectionObserver pages the whole history on mount.
+  // Bottom positioning keeps the sentinel off-screen until the user scrolls up
+  // (a full first page far exceeds the viewport whenever older pages exist).
+  useLayoutEffect(() => {
+    if (didInitialScrollRef.current) {
+      return;
+    }
+    const container = viewportRef.current;
+    if (!container || versions.length === 0) {
+      return;
+    }
+    container.scrollTop = container.scrollHeight;
+    didInitialScrollRef.current = true;
+  }, [versions.length]);
 
   const invalidateVersions = async () => {
     await queryClient.invalidateQueries({

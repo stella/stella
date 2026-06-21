@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, count, eq, inArray, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
@@ -15,6 +15,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 const requestBody = t.Object({
   url: t.String({ minLength: 1, maxLength: 2048 }),
@@ -43,6 +44,27 @@ const createMcpConnector = createSafeRootHandler(
         new HandlerError({
           status: 409,
           message: `MCP connector already exists: ${duplicate.displayName}`,
+        }),
+      );
+    }
+
+    // Cap custom connectors per org so the catalogue listing (which bounds its
+    // own read at `mcpConnectorsPageSizeMax`) never silently drops an org's own
+    // connector out of the management UI. Curated connectors have a null
+    // organizationId, so this counts only this org's custom rows.
+    const [connectorCountRow] = yield* Result.await(
+      safeDb((tx) =>
+        tx
+          .select({ total: count() })
+          .from(mcpConnectors)
+          .where(eq(mcpConnectors.organizationId, session.activeOrganizationId)),
+      ),
+    );
+    if ((connectorCountRow?.total ?? 0) >= LIMITS.mcpCustomConnectorsPerOrgMax) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: `MCP connector limit reached (${LIMITS.mcpCustomConnectorsPerOrgMax})`,
         }),
       );
     }
