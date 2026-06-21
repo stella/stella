@@ -24,16 +24,22 @@ type TimesheetWeekViewProps = {
 
 const getDaysInRange = (start: string, end: string): string[] => {
   const days: string[] = [];
-  const current = new Date(`${start}T00:00:00`);
+  let current = new Date(`${start}T00:00:00`);
   const endDate = new Date(`${end}T00:00:00`);
   while (current <= endDate) {
     const y = current.getFullYear();
     const m = String(current.getMonth() + 1).padStart(2, "0");
     const day = String(current.getDate()).padStart(2, "0");
     days.push(`${y}-${m}-${day}`);
-    current.setDate(current.getDate() + 1);
+    current = addDays(current, 1);
   }
   return days;
+};
+
+const addDays = (date: Date, days: number): Date => {
+  const next = new Date(date);
+  next.setDate(next.getDate() + days);
+  return next;
 };
 
 export const TimesheetWeekView = ({

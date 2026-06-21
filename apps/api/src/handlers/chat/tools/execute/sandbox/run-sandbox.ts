@@ -279,10 +279,11 @@ const flushSandboxAdmissionQueue = (): void => {
   }
 
   let queueIndex = 0;
-  while (
-    queueIndex < sandboxAdmissionQueue.length &&
-    activeSandboxCount < MAX_CONCURRENT_SANDBOXES
-  ) {
+  while (queueIndex < sandboxAdmissionQueue.length) {
+    if (activeSandboxCount >= MAX_CONCURRENT_SANDBOXES) {
+      return;
+    }
+
     const waiter = sandboxAdmissionQueue[queueIndex];
     if (!waiter || !canAdmitSandbox(waiter.concurrencyKey)) {
       queueIndex += 1;
