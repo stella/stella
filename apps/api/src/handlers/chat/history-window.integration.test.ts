@@ -260,6 +260,55 @@ describe("loadWindowedThreadMessages", () => {
       ascending.slice(3).map((m) => m.id),
     );
   });
+
+  test("caps at the most recent `limit` rows when no checkpoint exists", async () => {
+    const base = Date.parse("2026-02-15T00:00:00.000Z");
+    const { threadId, messages } = await seedThread(
+      Array.from({ length: 6 }, (_, i) => ({
+        createdAt: new Date(base + i),
+        text: `m${i}`,
+      })),
+    );
+
+    const window = unwrap(
+      await loadWindowedThreadMessages({ safeDb, threadId, limit: 3 }),
+    );
+
+    // Only the most recent 3, ascending — a never-checkpointed (e.g.
+    // anonymized) thread cannot load its full history per send.
+    expect(window.map((m) => m.id)).toEqual(messages.slice(3).map((m) => m.id));
+    expect(windowTexts(window)).toEqual(["m3", "m4", "m5"]);
+  });
+
+  test("caps within the checkpoint window when it exceeds `limit`", async () => {
+    const base = Date.parse("2026-02-20T00:00:00.000Z");
+    const { threadId, messages } = await seedThread(
+      Array.from({ length: 6 }, (_, i) => ({
+        createdAt: new Date(base + i),
+        text: `m${i}`,
+      })),
+    );
+    const [m0, m1] = messages;
+    const m4 = messages[4];
+    const m5 = messages[5];
+    if (!m0 || !m1 || !m4 || !m5) {
+      throw new Error("seed precondition failed");
+    }
+    await seedActiveCheckpoint({
+      threadId,
+      firstSummarizedMessageId: m0.id,
+      lastSummarizedMessageId: m0.id,
+      firstKeptMessageId: m1.id,
+      summarizedMessageCount: 1,
+    });
+
+    const window = unwrap(
+      await loadWindowedThreadMessages({ safeDb, threadId, limit: 2 }),
+    );
+
+    // Within the [m1..m5] checkpoint window, only the most recent 2 load.
+    expect(window.map((m) => m.id)).toEqual([m4.id, m5.id]);
+  });
 });
 
 describe("resolveTruncationTarget", () => {

@@ -180,6 +180,11 @@ export const LIMITS = {
   chatMessagesPageSizeDefault: 50,
   /** Max page size for one chat thread's message history. */
   chatMessagesPageSizeMax: 100,
+  /** Hard cap on the per-send message window loaded for a chat turn. Threads
+   *  that never form a compaction checkpoint (e.g. anonymized threads) rely on
+   *  this so a send cannot load an unbounded history; sized well above the
+   *  compaction trigger so a checkpointed thread's window is unaffected. */
+  chatSendHistoryWindowMax: 500,
   /** Max characters of TypeScript source the chat run-stella-query tool accepts. */
   chatRunCodeMaxLength: 16_000,
   /** Default page size for readonly chat execute functions. */

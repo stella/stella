@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, sql } from "drizzle-orm";
+import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages } from "@/api/db/schema";
@@ -11,6 +11,7 @@ import type {
   ChatMessageRole,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { LIMITS } from "@/api/lib/limits";
 
 export type WindowedThreadMessage = {
   id: SafeId<"chatMessage">;
@@ -21,23 +22,31 @@ export type WindowedThreadMessage = {
 type LoadWindowedThreadMessagesArgs = {
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  /** Upper bound on rows read; defaults to the per-send history window. */
+  limit?: number;
 };
 
 /**
  * Load the per-send message window for a thread, ascending (oldest-first).
  *
- * When an active compaction checkpoint exists, only rows at or after its
- * `firstKeptMessageId` are read; everything before that boundary is already
- * captured in the checkpoint summary, so the per-send read drops the
- * already-summarized prefix. The boundary is resolved in-DB against the
- * checkpoint row's full-precision (createdAt, id) tuple — mirroring the keyset
- * pattern in message-page.ts — so rows that share a millisecond with
- * `firstKeptMessageId` are never skipped. When no checkpoint exists, all rows
- * are read.
+ * The read is hard-capped at the most recent `limit` rows so a single send can
+ * never load an unbounded history. This matters because some threads never form
+ * a compaction checkpoint — anonymized threads skip checkpoint scheduling — so
+ * the boundary filter below would otherwise leave the read unbounded for them.
+ *
+ * When an active checkpoint exists, the window is additionally filtered to rows
+ * at or after its `firstKeptMessageId` (the already-summarized prefix is
+ * dropped); the boundary is resolved in-DB against the checkpoint row's
+ * full-precision (createdAt, id) tuple — mirroring message-page.ts — so
+ * same-millisecond rows are not skipped. The most recent rows are taken
+ * (DESC + limit) and returned ascending, so the model always sees the freshest
+ * context; anything older than the window is summarized in-memory by
+ * compactChatMessagesForModel.
  */
 export const loadWindowedThreadMessages = async ({
   safeDb,
   threadId,
+  limit = LIMITS.chatSendHistoryWindowMax,
 }: LoadWindowedThreadMessagesArgs): Promise<
   Result<WindowedThreadMessage[], SafeDbError>
 > =>
@@ -67,18 +76,14 @@ export const loadWindowedThreadMessages = async ({
                 : undefined,
             ),
           )
-          // SAFETY: token-bounded. With an active checkpoint this reads only the
-          // preserve window [firstKept..now]; a new checkpoint forms once that
-          // window crosses the compaction trigger, so it cannot grow unbounded.
-          // With no checkpoint the thread is necessarily below the trigger (the
-          // first checkpoint would have formed otherwise), so the full read is
-          // bounded too.
-          // eslint-disable-next-line require-query-limit/require-query-limit -- bounded by the compaction preserve window / sub-trigger thread size; see SAFETY above
-          .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
+          // Take the most recent rows (reversed to ascending below) so the read
+          // is hard-bounded even for threads that never checkpoint.
+          .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
+          .limit(limit),
       ),
     );
 
-    return Result.ok(rows);
+    return Result.ok(rows.toReversed());
   });
 
 type LoadFullThreadHistoryArgs = {
