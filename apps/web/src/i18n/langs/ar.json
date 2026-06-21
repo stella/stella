@@ -484,6 +484,7 @@
       "stale": "قديم"
     },
     "suggestionStep": "{current} من {total}",
+    "tabToAsk": "→ للسؤال: «{prompt}»",
     "thinking": "العمل مع السياق",
     "tool": {
       "apply-active-docx-edits": "جارٍ تجهيز تعديلات المستند",

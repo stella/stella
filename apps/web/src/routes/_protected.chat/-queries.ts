@@ -1085,7 +1085,11 @@ export const chatThreadSuggestedPromptsOptions = ({
     enabled,
     staleTime: Number.POSITIVE_INFINITY,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
-    queryKey: chatKeys.suggestedPrompts(activeOrganizationId, threadRef, lastMessageId),
+    queryKey: chatKeys.suggestedPrompts(
+      activeOrganizationId,
+      threadRef,
+      lastMessageId,
+    ),
     queryFn: async () => await fetchThreadSuggestedPrompts(threadRef),
   });
 

@@ -482,7 +482,9 @@ export const useChatEditor = ({
 }): ChatEditorController => {
   const t = useTranslations();
   const defaultPlaceholder = t("chat.placeholder");
-  const tabToAskText = suggestedFollowupPrompt ? t("chat.tabToAsk", { prompt: suggestedFollowupPrompt }) : undefined;
+  const tabToAskText = suggestedFollowupPrompt
+    ? t("chat.tabToAsk", { prompt: suggestedFollowupPrompt })
+    : undefined;
   const resolvedPlaceholder = tabToAskText ?? placeholder ?? defaultPlaceholder;
   const placeholderRef = useRef(resolvedPlaceholder);
   placeholderRef.current = resolvedPlaceholder;

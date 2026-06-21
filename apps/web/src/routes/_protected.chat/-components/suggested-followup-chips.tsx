@@ -50,7 +50,6 @@ export const SuggestedFollowupChips = ({
       className="flex flex-wrap gap-2 pb-2"
     >
       {prompts.map((prompt, index) => (
-        // eslint-disable-next-line react/no-array-index-key
         <Button
           className="h-auto max-w-xs truncate rounded-full px-3 py-1.5 text-xs"
           key={index}
