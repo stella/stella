@@ -1,5 +1,4 @@
 import type {
-  BorderSpec,
   EndnoteProperties,
   FooterReference,
   FootnoteProperties,
@@ -8,68 +7,8 @@ import type {
   SectionProperties,
 } from "../../types/document";
 import { getUnserializedSectionPropertyChildNames } from "../sectionParser";
+import { serializeBorder } from "./borderSerializer";
 import { escapeXml, intAttr } from "./xmlUtils";
-
-function serializeBorder(
-  border: BorderSpec | undefined,
-  elementName: string,
-): string {
-  if (!border || border.style === "none" || border.style === "nil") {
-    return "";
-  }
-
-  const attrs: string[] = [`w:val="${border.style}"`];
-
-  if (border.size !== undefined) {
-    attrs.push(`w:sz="${intAttr(border.size)}"`);
-  }
-  if (border.space !== undefined) {
-    attrs.push(`w:space="${intAttr(border.space)}"`);
-  }
-  if (border.color) {
-    if (border.color.auto) {
-      attrs.push('w:color="auto"');
-    } else if (border.color.rgb) {
-      attrs.push(`w:color="${border.color.rgb}"`);
-    }
-    if (border.color.themeColor) {
-      attrs.push(`w:themeColor="${border.color.themeColor}"`);
-    }
-    if (border.color.themeTint) {
-      attrs.push(`w:themeTint="${border.color.themeTint}"`);
-    }
-    if (border.color.themeShade) {
-      attrs.push(`w:themeShade="${border.color.themeShade}"`);
-    }
-  }
-  if (border.shadow) {
-    attrs.push('w:shadow="true"');
-  }
-  if (border.frame) {
-    attrs.push('w:frame="true"');
-  }
-  if (border.artRelationshipId) {
-    attrs.push(`w:id="${escapeXml(border.artRelationshipId)}"`);
-  }
-  if (border.topLeftArtRelationshipId) {
-    attrs.push(`w:topLeft="${escapeXml(border.topLeftArtRelationshipId)}"`);
-  }
-  if (border.topRightArtRelationshipId) {
-    attrs.push(`w:topRight="${escapeXml(border.topRightArtRelationshipId)}"`);
-  }
-  if (border.bottomLeftArtRelationshipId) {
-    attrs.push(
-      `w:bottomLeft="${escapeXml(border.bottomLeftArtRelationshipId)}"`,
-    );
-  }
-  if (border.bottomRightArtRelationshipId) {
-    attrs.push(
-      `w:bottomRight="${escapeXml(border.bottomRightArtRelationshipId)}"`,
-    );
-  }
-
-  return `<w:${elementName} ${attrs.join(" ")}/>`;
-}
 
 const serializeHeaderReference = (ref: HeaderReference): string =>
   `<w:headerReference w:type="${ref.type}" r:id="${ref.rId}"/>`;

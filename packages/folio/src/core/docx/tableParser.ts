@@ -189,7 +189,9 @@ export function parseBorderSpec(
   const themeShade = getAttribute(element, "w", "themeShade");
   if (color || themeColor || themeTint || themeShade) {
     const colorVal: ColorValue = {};
-    if (color !== null) {
+    if (color === "auto") {
+      colorVal.auto = true;
+    } else if (color !== null) {
       colorVal.rgb = color;
     }
     const validatedThemeColor = narrowEnum(themeColor, ThemeColorSlotSchema);
