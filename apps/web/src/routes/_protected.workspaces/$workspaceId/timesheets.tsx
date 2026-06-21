@@ -33,17 +33,11 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
   // Time tracking is intentionally excluded from the current
-  // product surface — block any entry to /timesheets (StatCard
-  // click, direct URL, deep link) with a "coming soon" toast and
-  // bounce the user back to the workspace overview. Once the
-  // feature is reintroduced, drop this beforeLoad and re-link the
-  // overview StatCard.
+  // product surface. Block any entry to /timesheets (direct URL,
+  // deep link) and bounce the user back to the workspace overview.
+  // Once the feature is reintroduced, drop this beforeLoad and
+  // re-link the overview StatCard.
   beforeLoad: ({ params }) => {
-    stellaToast.add({
-      title: "Coming soon",
-      type: "info",
-      timeout: 4000,
-    });
     throw redirect({
       to: "/workspaces/$workspaceId",
       params: { workspaceId: params.workspaceId },
