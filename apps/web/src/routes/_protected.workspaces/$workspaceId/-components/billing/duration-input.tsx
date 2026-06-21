@@ -77,6 +77,14 @@ export const formatDecimalHours = (minutes: number): string =>
     maximumFractionDigits: 2,
   });
 
+/**
+ * ASCII decimal hours for the editable input hint. The hint must round-trip
+ * through parseDuration, which only accepts ASCII digits and a "." separator;
+ * localized digits or a comma separator would be rejected on blur.
+ */
+const formatDecimalHoursInput = (minutes: number): string =>
+  (minutes / 60).toFixed(2);
+
 type DurationInputProps = {
   value: number;
   onChange: (minutes: number) => void;
@@ -129,7 +137,7 @@ export const DurationInput = ({
       {!isFocused && value > 0 && (
         <span className="text-muted-foreground pointer-events-none absolute end-2 top-1/2 -translate-y-1/2 text-xs">
           {t("billing.decimalHours", {
-            hours: formatDecimalHours(value),
+            hours: formatDecimalHoursInput(value),
           })}
         </span>
       )}
