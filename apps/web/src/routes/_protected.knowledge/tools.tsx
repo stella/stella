@@ -12,6 +12,7 @@ import { registerInspectorView } from "@/components/inspector/view-registry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
+import { ensureCriticalQueryData } from "@/lib/react-query";
 import { CatalogueBrowser } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import {
@@ -20,7 +21,10 @@ import {
   type ToolDetailPayload,
 } from "@/routes/_protected.knowledge/-components/catalogue/tool-detail-view";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
-import { catalogueKeys } from "@/routes/_protected.knowledge/-queries/catalogue";
+import {
+  catalogueKeys,
+  catalogueOptions,
+} from "@/routes/_protected.knowledge/-queries/catalogue";
 import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
 // Tool-detail tabs live next to a route; they auto-close when the
@@ -53,32 +57,36 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
   // longer exists.
   loader: async ({ context }) => {
     const orgId = context.user.activeOrganizationId;
-    if (seededThisSession.has(orgId)) {
-      return;
+
+    if (!seededThisSession.has(orgId)) {
+      const response = await api.skills.seed.post({ queryKey: ["skills"] });
+      // Only mark the org as seeded once the server confirmed — a
+      // transient failure would otherwise pin us into the "already
+      // seeded" branch for the rest of the session and the user would
+      // never get default slash commands without a full reload.
+      if (!response.error) {
+        seededThisSession.add(orgId);
+        // When the server actually wrote rows, invalidate the local
+        // skill/catalogue caches so chat (slash menu) and any open Tools
+        // browser pick the new commands up immediately instead of waiting
+        // for staleTime to lapse. Both queries are keyed by org id.
+        if (response.data.seeded) {
+          await Promise.all([
+            context.queryClient.invalidateQueries({
+              queryKey: knowledgeKeys.skills.all(orgId),
+            }),
+            context.queryClient.invalidateQueries({
+              queryKey: catalogueKeys.all(orgId),
+            }),
+          ]);
+        }
+      }
     }
-    const response = await api.skills.seed.post({ queryKey: ["skills"] });
-    // Only mark the org as seeded once the server confirmed — a
-    // transient failure would otherwise pin us into the "already
-    // seeded" branch for the rest of the session and the user would
-    // never get default slash commands without a full reload.
-    if (response.error) {
-      return;
-    }
-    seededThisSession.add(orgId);
-    // When the server actually wrote rows, invalidate the local
-    // skill/catalogue caches so chat (slash menu) and any open Tools
-    // browser pick the new commands up immediately instead of waiting
-    // for staleTime to lapse. Both queries are keyed by org id.
-    if (response.data.seeded) {
-      await Promise.all([
-        context.queryClient.invalidateQueries({
-          queryKey: knowledgeKeys.skills.all(orgId),
-        }),
-        context.queryClient.invalidateQueries({
-          queryKey: catalogueKeys.all(orgId),
-        }),
-      ]);
-    }
+
+    await Promise.all([
+      ensureCriticalQueryData(context.queryClient, catalogueOptions(orgId)),
+      ensureCriticalQueryData(context.queryClient, organizationSettingsOptions),
+    ]);
   },
   component: ToolsPage,
   pendingComponent: ToolsPagePending,

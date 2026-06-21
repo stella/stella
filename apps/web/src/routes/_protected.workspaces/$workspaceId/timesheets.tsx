@@ -25,11 +25,11 @@ import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
 import { ensureCriticalQueryData } from "@/lib/react-query";
-import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { BillingCodesDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog";
 import { RateManagementDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog";
 import { TimesheetDayView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-day-view";
 import { TimesheetWeekView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
