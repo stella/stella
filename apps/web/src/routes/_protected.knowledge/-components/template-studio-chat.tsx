@@ -63,6 +63,7 @@ import type {
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -271,7 +272,7 @@ const TemplateStudioChatInner = ({
   const [editorReady, setEditorReady] = useState(() =>
     Boolean(editorRef.current?.createAIEditSnapshot()),
   );
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (editorReady) {
       return undefined;
     }
@@ -341,7 +342,7 @@ const TemplateStudioChatInner = ({
   const clearMirrorRequests = useTemplateStudioStore(
     (s) => s.clearMirrorRequests,
   );
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (pendingMirrorRequests.length === 0) {
       return;
     }
@@ -372,7 +373,7 @@ const TemplateStudioChatInner = ({
   // Push suggestion decorations into the live editor. This surface is
   // the only decoration writer in the Studio, so empty pushes (after
   // the last accept/dismiss) are safe and required for clearing.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!editorView) {
       return;
     }
@@ -380,7 +381,7 @@ const TemplateStudioChatInner = ({
     editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
   }, [editorView, suggestions]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!editorView) {
       return;
     }
@@ -391,17 +392,14 @@ const TemplateStudioChatInner = ({
   // Clear this thread's decorations when the surface unmounts (leaving
   // the Studio or swapping to a new thread).
   const getViewForCleanup = useEffectEvent(() => getView());
-  useEffect(
-    () => () => {
-      const view = getViewForCleanup();
-      if (!view || view.isDestroyed) {
-        return;
-      }
-      const meta = setAISuggestionsMeta([]);
-      view.dispatch(view.state.tr.setMeta(meta.key, meta.payload));
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    const view = getViewForCleanup();
+    if (!view || view.isDestroyed) {
+      return;
+    }
+    const meta = setAISuggestionsMeta([]);
+    view.dispatch(view.state.tr.setMeta(meta.key, meta.payload));
+  });
 
   // ---- accept / dismiss -------------------------------------------------------
 
@@ -608,6 +606,7 @@ const TemplateStudioChatInner = ({
   } = useChatSession({ chat, conversationId: threadRef.threadId });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (open AI-key gate on mount/dep change), move into handler
   useEffect(() => {
     openIfAIUnavailable();
   }, [openIfAIUnavailable]);
@@ -647,9 +646,9 @@ const TemplateStudioChatInner = ({
       return;
     });
   });
-  useEffect(() => {
+  useMountEffect(() => {
     dispatchPendingPresetSend();
-  }, []);
+  });
 
   /**
    * Scoped "Suggest fields" preset submit. For the selection scope
@@ -868,7 +867,7 @@ const TemplateStudioChatInner = ({
   // Watch the latest assistant message for streaming apply-tool input
   // and surface completed ops immediately; placements for calls that
   // end denied are discarded.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const message = messages.at(-1);
     if (!message || message.role !== "assistant") {
       return;
@@ -1033,6 +1032,7 @@ const TemplateStudioChatInner = ({
   const lastMessageId = messages.at(-1)?.id ?? null;
   // Auto-open the thread panel as soon as the first message lands so
   // users see streaming without having to click the chevron.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (panel openness follows thread content), compute in render
   useEffect(() => {
     if (hasThreadContent) {
       setPanelOpen(true);

@@ -1524,6 +1524,7 @@ export const TemplateForm = ({
   const [clauseOverrides, setClauseOverrides] = useState<
     Record<string, ClauseBody>
   >({});
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- relays the live form values to a parent callback prop on every change; setValues is driven by many field handlers so this cannot be folded into a single one, lift the values to the parent
   useEffect(() => {
     onValuesChange?.(values);
   }, [values, onValuesChange]);

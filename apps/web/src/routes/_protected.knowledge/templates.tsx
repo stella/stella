@@ -117,7 +117,7 @@ function RouteComponent() {
     setSelectedCategoryId(id);
   };
 
-  const invalidateTemplates = () => {
+  const invalidateTemplates = useCallback(() => {
     queryClient
       .invalidateQueries({
         queryKey: knowledgeKeys.templates.all(activeOrganizationId),
@@ -125,7 +125,7 @@ function RouteComponent() {
       .catch(() => {
         /* fire-and-forget */
       });
-  };
+  }, [queryClient, activeOrganizationId]);
 
   const invalidateCategories = () => {
     queryClient

@@ -119,6 +119,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { api } from "@/lib/api";
@@ -431,7 +432,7 @@ export const TemplateStudioPage = ({
   const actionsRef = useRef<StudioActions | null>(null);
   const setActions = useTemplateStudioStore((s) => s.setActions);
   const patchUi = useTemplateStudioStore((s) => s.patchUi);
-  useEffect(() => {
+  useMountEffect(() => {
     setActions({
       toggleDirectives: () => actionsRef.current?.toggleDirectives(),
       insertField: () => actionsRef.current?.insertField(),
@@ -469,17 +470,17 @@ export const TemplateStudioPage = ({
         actionsRef.current?.setFieldRepeatable(path, repeatable) ?? false,
     });
     return () => setActions(null);
-  }, [setActions]);
-  useEffect(() => {
+  });
+  useExternalSyncEffect(() => {
     patchUi({ metaLabel });
   }, [patchUi, metaLabel]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     patchUi({ showDirectives });
   }, [patchUi, showDirectives]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     patchUi({ hasSelection });
   }, [patchUi, hasSelection]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     patchUi({ isSaving });
   }, [patchUi, isSaving]);
 
@@ -491,6 +492,7 @@ export const TemplateStudioPage = ({
     templateDocxBufferOptions(activeOrganizationId, templateId, presignedUrl),
   );
   const [docBuffer, setDocBuffer] = useState<ArrayBuffer | null>(null);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- latches the docx buffer from the query once and freezes it so a later refetch can't re-initialize the editor mid-edit; driven by async query state, not a single setter call-site, so it cannot move into a handler
   useEffect(() => {
     if (loadedBuffer && docBuffer === null) {
       setDocBuffer(loadedBuffer);
@@ -501,7 +503,7 @@ export const TemplateStudioPage = ({
   // History tab in the global inspector; tear both down when the page unmounts
   // (leaving the studio). Keyed on templateId so editing the manifest in the
   // tab doesn't re-seed and discard in-progress edits.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     init({
       templateId,
       fields: parseFields(manifest),
@@ -521,7 +523,7 @@ export const TemplateStudioPage = ({
   }, [templateId]);
 
   // The eye toggles the preview between accented and plain rendering.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const view = editorViewRef.current;
     const values = fillPreviewRef.current;
     if (!view || values === null) {
@@ -534,7 +536,7 @@ export const TemplateStudioPage = ({
   }, [showDirectives]);
 
   // Warn before a tab close / hard navigation while there are unsaved edits.
-  useEffect(() => {
+  useMountEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
       if (useTemplateStudioStore.getState().isDirty) {
         event.preventDefault();
@@ -542,13 +544,13 @@ export const TemplateStudioPage = ({
     };
     window.addEventListener("beforeunload", onBeforeUnload);
     return () => window.removeEventListener("beforeunload", onBeforeUnload);
-  }, []);
+  });
 
   // Folio defers creating the ProseMirror view until first interaction, so
   // onEditorViewReady never fires and the selection->inspector binding can't
   // read directives. Force the view once the document is loaded (the editor
   // mounts lazily, so poll the ref until it's available).
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!docBuffer) {
       return undefined;
     }
@@ -1255,7 +1257,7 @@ export const TemplateStudioPage = ({
   // Escape, any scroll, and the (custom) context menu all dismiss the
   // popover: the selection survives, only the floating affordance leaves.
   const gestureShown = gesture !== null;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!gestureShown) {
       return undefined;
     }
@@ -1276,7 +1278,7 @@ export const TemplateStudioPage = ({
     };
   }, [gestureShown, hideGesture]);
 
-  useEffect(
+  useExternalSyncEffect(
     () => () => {
       showGesture.cancel();
       enrichGesture.cancel();
@@ -2198,10 +2200,10 @@ const CONCEPT_KEY = {
 /** One-shot reveal: fills in after a short beat and stays (no loop). */
 const useFillReveal = (): boolean => {
   const [filled, setFilled] = useState(false);
-  useEffect(() => {
+  useMountEffect(() => {
     const id = setTimeout(() => setFilled(true), 600);
     return () => clearTimeout(id);
-  }, []);
+  });
   return filled;
 };
 
@@ -2993,13 +2995,10 @@ const TemplateFillFacet = ({
   });
   // Leaving the facet clears the in-document preview (and drops any pending
   // lookup-preview response so it cannot re-set a stale preview).
-  useEffect(
-    () => () => {
-      cancelLookupPreviews();
-      useTemplateStudioStore.getState().actions?.setFillPreview(null);
-    },
-    [],
-  );
+  useMountEffect(() => () => {
+    cancelLookupPreviews();
+    useTemplateStudioStore.getState().actions?.setFillPreview(null);
+  });
   const t = useTranslations();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -3328,8 +3327,7 @@ const applyCachedLookupRenderings = (
         registry: lookup.registry,
         number,
         format: format.template,
-        previewPath:
-          index === 0 ? field.path : `${field.path}.${format.key}`,
+        previewPath: index === 0 ? field.path : `${field.path}.${format.key}`,
       };
       const cached = lookupPreviewCache.get(lookupPreviewKey(request));
       if (cached === undefined) {
@@ -5414,7 +5412,7 @@ const FieldFace = ({
 
   // Clear the in-document preview when the face leaves or switches fields
   // (cancelling any pending lookup preview so it cannot re-set it).
-  useEffect(
+  useExternalSyncEffect(
     () => () => {
       cancelLookupPreviews();
       useTemplateStudioStore.getState().actions?.setFillPreview(null);

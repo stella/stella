@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -98,7 +98,7 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
     data && "links" in data && Array.isArray(data.links) ? data.links : [];
   const outdatedCount = links.filter((link) => link.isOutdated).length;
 
-  const invalidateLinks = () => {
+  const invalidateLinks = useCallback(() => {
     queryClient
       .invalidateQueries({
         queryKey: knowledgeKeys.templates.clauses(
@@ -109,7 +109,7 @@ export const TemplateClausesTab = ({ templateId }: TemplateClausesTabProps) => {
       .catch(() => {
         /* fire-and-forget */
       });
-  };
+  }, [queryClient, activeOrganizationId, templateId]);
 
   const handleSyncAll = useCallback(async () => {
     setSyncingAll(true);

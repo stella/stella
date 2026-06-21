@@ -1,7 +1,8 @@
-import { useEffect, useRef } from "react";
+import { useRef } from "react";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 
@@ -45,7 +46,7 @@ export const FacetBar = <F extends string>({
   const { isPulsing: pulsing, pulse } = usePulse(1400);
   const lastPulseSeq = useRef<number | undefined>(pulseSeq);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (pulseSeq === undefined || pulseSeq === lastPulseSeq.current) {
       return;
     }

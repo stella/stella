@@ -118,9 +118,7 @@ export const TemplateUpload = ({
   };
 
   const mutatePrepare = prepareMutation.mutate;
-  const handlePrepareFileChange = (
-    e: React.ChangeEvent<HTMLInputElement>,
-  ) => {
+  const handlePrepareFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.item(0);
     if (file) {
       if (file.type !== DOCX_MIME) {

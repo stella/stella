@@ -40,7 +40,7 @@ import { useFileTabRename } from "@/components/inspector/use-file-tab-rename";
 import { usePdfTabZoom } from "@/components/inspector/use-pdf-tab-zoom";
 import { useTabContextMenu } from "@/components/inspector/use-tab-context-menu";
 import { getInspectorView } from "@/components/inspector/view-registry";
-import { useMountEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -169,7 +169,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
         (match) => match.routeId === suggestionOwnerRouteId,
       ),
   });
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (!suggestionOwnerRouteActive) {
       clearReviveSuggestion();
     }

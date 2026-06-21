@@ -39,10 +39,9 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
-
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 import { diffClauseBodies } from "./clause-diff";
 import { ClauseDiffView } from "./clause-diff-view";

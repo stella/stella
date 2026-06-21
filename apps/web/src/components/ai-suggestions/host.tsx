@@ -622,6 +622,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   // drop the retry offer so the action button reverts to send (and
   // stays send even if they delete the draft again).
   const composerIsEmpty = editorController.isEmpty;
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (composer becomes non-empty → drop the retry offer); setRetryInput is shared with handleRetry/handleGenerate, so move into the composer-edit handler
   useEffect(() => {
     if (!composerIsEmpty && retryInput !== null) {
       setRetryInput(null);
@@ -1002,6 +1003,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   // When a generation lands new suggestions, jump to the first one so the
   // review starts immediately.
   const seenSuggestionIdsRef = useRef<Set<string>>(new Set());
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (generation lands fresh suggestions → focus the first one); the trigger is async suggestion data, not a single setter call-site, so move into the generation-complete flow
   useEffect(() => {
     const seen = seenSuggestionIdsRef.current;
     const fresh = orderedPending.find((s) => !seen.has(s.id));
@@ -1569,6 +1571,7 @@ export function PromptBar(props: PromptBarProps) {
    */
   const [scopePromptPreset, setScopePromptPreset] =
     useState<AISuggestionPreset | null>(null);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (preset chips lose visibility → cancel the scope chooser); setScopePromptPreset is shared with submitPreset, so move into the visibility-change source
   useEffect(() => {
     if (!presetChipsVisible && scopePromptPreset !== null) {
       setScopePromptPreset(null);
@@ -1956,7 +1959,7 @@ function ThreadPanel(props: ThreadPanelProps) {
 
   // Keep the newest message in view: jump to the bottom whenever the thread
   // grows (a sent prompt appends the user bubble + assistant placeholder).
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const el = transcriptRef.current;
     if (el) {
       el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });

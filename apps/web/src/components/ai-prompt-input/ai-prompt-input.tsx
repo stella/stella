@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useMemo, useRef } from "react";
 
 import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -29,6 +29,7 @@ import {
   PROMPT_EDITOR_SELECTION_CLASS,
   PromptEditorContent,
 } from "@/components/prompt-editor";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import {
   skillCommandsOptions,
   skillsOptions,
@@ -212,7 +213,7 @@ export const AIPromptInput = ({
     },
   });
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (onEditorReady !== undefined) {
       onEditorReady(editor);
     }
@@ -224,7 +225,7 @@ export const AIPromptInput = ({
   // editor's serialized value diverges from `value`. `emitUpdate: false` keeps
   // this from looping back through `onUpdate` → `onChange`; the equality guard
   // makes the editor's own edits a no-op so the caret is never disturbed.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (editor.isDestroyed || readValue(editor) === value) {
       return;
     }
