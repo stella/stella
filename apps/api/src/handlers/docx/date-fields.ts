@@ -22,6 +22,11 @@
 import { formatDate, resolvePath } from "@stll/template-conditions";
 
 import { replaceResolvedValue } from "./composite-fields";
+import {
+  mapRepeatablePath,
+  readRowSubPath,
+  writeRowSubPath,
+} from "./repeatable-paths";
 import type { FieldDateFormat, FieldMeta } from "./types";
 
 export type DateFieldError = {
@@ -49,12 +54,52 @@ export const DATE_FORMAT_EXAMPLE_ISO = "2028-06-13";
 export const formatDateExample = (dateFormat: FieldDateFormat): string =>
   formatDate(DATE_FORMAT_EXAMPLE_ISO, dateFormat) ?? DATE_FORMAT_EXAMPLE_ISO;
 
+/** Format one incoming date value, pushing a field-named error on a non-string
+ *  or malformed value and returning the formatted display string (or null when
+ *  the value is absent/empty/invalid and nothing should be written back). */
+const formatDateValue = (
+  path: string,
+  incoming: unknown,
+  dateFormat: FieldDateFormat,
+  errors: DateFieldError[],
+): string | null => {
+  if (incoming === undefined) {
+    return null;
+  }
+  if (typeof incoming !== "string") {
+    errors.push({
+      path,
+      message: `Field "${path}": expected an ISO date (YYYY-MM-DD).`,
+    });
+    return null;
+  }
+  if (incoming.trim() === "") {
+    return null;
+  }
+  const formatted = formatIsoDate(incoming, dateFormat);
+  if (formatted === null) {
+    errors.push({
+      path,
+      message:
+        `Field "${path}": "${incoming}" is not a valid date ` +
+        "(expected YYYY-MM-DD).",
+    });
+    return null;
+  }
+  return formatted;
+};
+
 /**
  * Format every date field's submitted ISO value per its `dateFormat`,
  * replacing the value where `resolvePath` found it (flat dotted key or
  * nested leaf). Mutates `values` in place. An absent or empty value is left
  * for the fill's unmatched diagnostics; a malformed one is an error naming
  * the field.
+ *
+ * A date field inside an `{{#each}}` loop keeps a dotted path (`people.dob`)
+ * while the value arrives as an array of rows (`people: [{ dob }]`); the direct
+ * `resolvePath` then returns undefined, so each row's sub-path value is
+ * formatted in place instead (see {@link mapRepeatablePath}).
  */
 export const resolveDateFields = ({
   values,
@@ -69,31 +114,26 @@ export const resolveDateFields = ({
     if (field.inputType !== "date" || field.dateFormat === undefined) {
       continue;
     }
+    const dateFormat = field.dateFormat;
     const incoming = resolvePath(field.path, values);
     if (incoming === undefined) {
-      continue;
-    }
-    if (typeof incoming !== "string") {
-      errors.push({
-        path: field.path,
-        message: `Field "${field.path}": expected an ISO date (YYYY-MM-DD).`,
+      mapRepeatablePath(values, field.path, ({ row, subPath }) => {
+        const formatted = formatDateValue(
+          field.path,
+          readRowSubPath(row, subPath),
+          dateFormat,
+          errors,
+        );
+        if (formatted !== null) {
+          writeRowSubPath(row, subPath, formatted);
+        }
       });
       continue;
     }
-    if (incoming.trim() === "") {
-      continue;
+    const formatted = formatDateValue(field.path, incoming, dateFormat, errors);
+    if (formatted !== null) {
+      replaceResolvedValue(values, field.path, formatted);
     }
-    const formatted = formatIsoDate(incoming, field.dateFormat);
-    if (formatted === null) {
-      errors.push({
-        path: field.path,
-        message:
-          `Field "${field.path}": "${incoming}" is not a valid date ` +
-          "(expected YYYY-MM-DD).",
-      });
-      continue;
-    }
-    replaceResolvedValue(values, field.path, formatted);
   }
 
   return errors;

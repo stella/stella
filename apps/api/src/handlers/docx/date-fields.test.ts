@@ -97,6 +97,60 @@ describe("resolveDateFields", () => {
     expect(values["contract"]).toEqual({ date: "13. Juni 2028" });
   });
 
+  test("formats a date field inside an {{#each}} loop per row", () => {
+    // The loop value arrives as an array of rows under the container path while
+    // the manifest keeps the dotted path `people.dob`; each row's dob must be
+    // localized in place so the loop expander substitutes the display text, not
+    // the raw ISO.
+    const values: Record<string, unknown> = {
+      people: [{ dob: "2028-06-13" }, { dob: "2028-02-29" }],
+    };
+    const errors = resolveDateFields({
+      values,
+      fields: [dateField("people.dob", "cs", "long")],
+    });
+    expect(errors).toEqual([]);
+    expect(values["people"]).toEqual([
+      { dob: "13. června 2028" },
+      { dob: "29. února 2028" },
+    ]);
+  });
+
+  test("formats a nested sub-path inside an {{#each}} row", () => {
+    const values: Record<string, unknown> = {
+      events: [{ when: { date: "2028-06-13" } }],
+    };
+    const errors = resolveDateFields({
+      values,
+      fields: [dateField("events.when.date", "de", "long")],
+    });
+    expect(errors).toEqual([]);
+    expect(values["events"]).toEqual([{ when: { date: "13. Juni 2028" } }]);
+  });
+
+  test("rejects an invalid date inside an {{#each}} row naming the field", () => {
+    const values: Record<string, unknown> = {
+      people: [{ dob: "2028-06-13" }, { dob: "2028-02-30" }],
+    };
+    const errors = resolveDateFields({
+      values,
+      fields: [dateField("people.dob", "cs", "long")],
+    });
+    expect(errors).toEqual([
+      {
+        path: "people.dob",
+        message:
+          'Field "people.dob": "2028-02-30" is not a valid date ' +
+          "(expected YYYY-MM-DD).",
+      },
+    ]);
+    // The valid row is still formatted in place.
+    expect(values["people"]).toEqual([
+      { dob: "13. června 2028" },
+      { dob: "2028-02-30" },
+    ]);
+  });
+
   test("rejects an invalid date naming the field", () => {
     const values: Record<string, unknown> = { signature_date: "2028-02-30" };
     const errors = resolveDateFields({

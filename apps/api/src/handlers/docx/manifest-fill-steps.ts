@@ -26,6 +26,7 @@ import { applyDateFields } from "./date-fields";
 import { checkDependentFields } from "./dependent-fields";
 import { applyFormulaFields } from "./formula-fields";
 import { applyLookupFields, type LookupResolver } from "./lookup-fields";
+import { mapRepeatablePath, readRowSubPath } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 
 /**
@@ -37,6 +38,15 @@ import type { FieldMeta } from "./types";
  * compare the ISO value instead of the display string. Non-string or empty
  * values are skipped (nothing to compare, and `applyDateFields` reports the
  * malformed ones). No-op when the manifest declares no formatted date fields.
+ *
+ * A date field inside an `{{#each}}` loop keeps a dotted path (`people.dob`)
+ * while the value is an array of rows; its raw ISO is stashed per row under an
+ * index-qualified key (`people.0.dob`) so a top-level
+ * `{{#if people.0.dob > "..."}}` still compares the ISO value. (A condition
+ * that references the bare field from *inside* the loop body, `{{#if dob}}`,
+ * resolves against the per-row object whose value `applyDateFields` rewrites in
+ * place; the flat overlay cannot reach into rows, so that inner-loop case is
+ * not covered here.)
  */
 const stashRawDateValues = (
   values: Record<string, unknown>,
@@ -48,6 +58,19 @@ const stashRawDateValues = (
       continue;
     }
     const incoming = resolvePath(field.path, values);
+    if (incoming === undefined) {
+      mapRepeatablePath(
+        values,
+        field.path,
+        ({ row, subPath, index, containerPath }) => {
+          const raw = readRowSubPath(row, subPath);
+          if (typeof raw === "string" && raw.trim() !== "") {
+            rawDates[`${containerPath}.${index}.${subPath}`] = raw;
+          }
+        },
+      );
+      continue;
+    }
     if (typeof incoming === "string" && incoming.trim() !== "") {
       rawDates[field.path] = incoming;
     }
