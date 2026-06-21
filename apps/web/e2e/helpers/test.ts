@@ -58,10 +58,13 @@ export const test = base.extend<BrowserErrorFixtures>({
       page.on("pageerror", onPageError);
       page.on("console", onConsole);
 
-      await runFixture(browserErrors);
+      try {
+        await runFixture(browserErrors);
+      } finally {
+        page.off("pageerror", onPageError);
+        page.off("console", onConsole);
+      }
 
-      page.off("pageerror", onPageError);
-      page.off("console", onConsole);
       browserErrors.assertEmpty("unexpected browser errors");
     },
     { auto: true },

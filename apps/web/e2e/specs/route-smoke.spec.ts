@@ -200,14 +200,14 @@ const createDocumentRoute = async (
   );
 
   const entity = await apiGet<{
-    fields: {
+    fields?: {
       id: string;
       propertyId: string;
       content: { type: string };
     }[];
   }>(request, `/entities/${workspace.id}/entity/${uploaded.entityId}`);
 
-  const fileField = entity.fields.find(
+  const fileField = entity.fields?.find(
     (field) =>
       field.propertyId === workspace.filePropertyId &&
       field.content.type === "file",
@@ -236,6 +236,7 @@ const smokeRoute = async ({
   await page.goto(route.path, { waitUntil: "domcontentloaded" });
   await expect(page, route.template).not.toHaveURL(/\/auth(?:\/|$)/u);
   await assertNoRouteBoundary(page, route.template);
+  await expect(page.locator("main").first(), route.template).toBeVisible();
 
   await page.waitForTimeout(route.settleMs ?? 750);
 
