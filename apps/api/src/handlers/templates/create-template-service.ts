@@ -121,6 +121,7 @@ export const createStoredTemplate = async function* ({
     optionsFrom: f.optionsFrom,
     lookup: f.lookup,
     formula: f.formula,
+    condition: f.condition,
     dateFormat: f.dateFormat,
   }));
 
