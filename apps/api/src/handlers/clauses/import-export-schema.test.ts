@@ -36,4 +36,23 @@ describe("isClauseExportPayload — variants", () => {
       ),
     ).toBe(false);
   });
+
+  test("rejects a variant label over the varchar(256) column width", () => {
+    expect(
+      isClauseExportPayload(
+        payloadWith({ variants: [{ label: "x".repeat(257), body }] }),
+      ),
+    ).toBe(false);
+    expect(
+      isClauseExportPayload(
+        payloadWith({ variants: [{ label: "x".repeat(256), body }] }),
+      ),
+    ).toBe(true);
+  });
+
+  test("rejects a clause title over the varchar(256) column width", () => {
+    expect(isClauseExportPayload(payloadWith({ title: "t".repeat(257) }))).toBe(
+      false,
+    );
+  });
 });

@@ -30,11 +30,21 @@ export type ClauseExportPayload = {
   clauses: ClauseExportItem[];
 };
 
+// The clause `title` and variant `label` columns are varchar(256). Reject an
+// over-long value here so a malformed import is a 400 validation error rather
+// than a DB insert that fails mid-transaction and rolls the whole import back
+// as a 500.
+const MAX_TEXT_LENGTH = 256;
+
 const isClauseExportVariantShape = (value: unknown): boolean => {
   if (!isRecord(value)) {
     return false;
   }
-  if (typeof value["label"] !== "string" || !value["label"]) {
+  if (
+    typeof value["label"] !== "string" ||
+    !value["label"] ||
+    value["label"].length > MAX_TEXT_LENGTH
+  ) {
     return false;
   }
   return isClauseBody(value["body"]);
@@ -44,7 +54,11 @@ const isClauseExportItemShape = (value: unknown): boolean => {
   if (!isRecord(value)) {
     return false;
   }
-  if (typeof value["title"] !== "string" || !value["title"]) {
+  if (
+    typeof value["title"] !== "string" ||
+    !value["title"] ||
+    value["title"].length > MAX_TEXT_LENGTH
+  ) {
     return false;
   }
   if (!isClauseBody(value["body"])) {
