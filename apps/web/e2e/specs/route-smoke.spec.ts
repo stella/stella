@@ -91,8 +91,6 @@ const AUTHENTICATED_ROUTE_PREFIXES = [
   "/workspaces",
 ];
 
-const ROUTE_SMOKE_BATCH_SIZE = 4;
-
 test("authenticated routes render without browser errors", async ({
   context,
   request,
@@ -135,11 +133,9 @@ test("authenticated routes render without browser errors", async ({
 
     await expectAuthenticatedRouteCoverage(routes);
 
-    for (const routeBatch of chunkRoutes(routes, ROUTE_SMOKE_BATCH_SIZE)) {
-      // eslint-disable-next-line no-await-in-loop -- small batches keep each route isolated without turning the smoke into a long serial crawl
-      await Promise.all(
-        routeBatch.map(async (route) => await smokeRoute({ context, route })),
-      );
+    for (const route of routes) {
+      // eslint-disable-next-line no-await-in-loop -- each route gets an isolated page so browser errors can be attributed to its direct render without concurrent route state leaking across pages
+      await smokeRoute({ context, route });
     }
   } finally {
     await Promise.all(cleanupTasks.map(async (cleanup) => await cleanup()));
@@ -330,16 +326,3 @@ const isAuthenticatedRouteTemplate = (route: string): boolean =>
   AUTHENTICATED_ROUTE_PREFIXES.some(
     (prefix) => route === prefix || route.startsWith(`${prefix}/`),
   );
-
-const chunkRoutes = (
-  routes: readonly SmokeRoute[],
-  batchSize: number,
-): SmokeRoute[][] => {
-  const batches: SmokeRoute[][] = [];
-
-  for (let index = 0; index < routes.length; index += batchSize) {
-    batches.push(routes.slice(index, index + batchSize));
-  }
-
-  return batches;
-};
