@@ -1031,26 +1031,31 @@ function renderFieldRun(
   };
 
   // A CJK field result is generated text inside one atomic pm range, so the
-  // measurer's per-script EA segmentation must be mirrored for the font only:
-  // the outer span keeps the field's styles + pm range, child spans carry each
-  // segment's font (CJK → EA, the rest inherit the base font). Letter-spaced and
-  // hyperlink fields stay one span, matching splitTextRunsByEastAsia / measurer.
+  // measurer's per-script EA segmentation is mirrored for the font: each script
+  // segment renders through renderTextRun (keeping the field's full styles, and
+  // its own anchor when the field is a hyperlink) with the CJK segments switched
+  // to the EA font. The pm range stays on the grouping wrapper; the segments
+  // carry no pm (the field is atomic). Letter-spaced fields stay one span,
+  // matching splitTextRunsByEastAsia and the measurer.
   if (
     resolvedRun.eastAsiaFontFamily !== undefined &&
     !resolvedRun.letterSpacing &&
-    !resolvedRun.hyperlink &&
     hasCjk(text)
   ) {
-    const wrapper = renderTextRun({ ...resolvedRun, text: "" }, doc);
+    const wrapper = doc.createElement("span");
+    applyPmPositions(wrapper, resolvedRun.pmStart, resolvedRun.pmEnd);
+    // The pm range lives on the wrapper; segments carry none (the field is one
+    // atomic unit), so drop pmStart/pmEnd before spreading into each segment.
+    const { pmStart: _pmStart, pmEnd: _pmEnd, ...segmentBase } = resolvedRun;
     for (const segment of segmentByScript(text)) {
-      const child = doc.createElement("span");
-      if (segment.isCjk) {
-        child.style.fontFamily = resolveFontFamily(
-          resolvedRun.eastAsiaFontFamily,
-        ).cssFallback;
-      }
-      child.textContent = segment.text;
-      wrapper.append(child);
+      const segmentRun: TextRun = {
+        ...segmentBase,
+        text: segment.text,
+        ...(segment.isCjk
+          ? { fontFamily: resolvedRun.eastAsiaFontFamily }
+          : {}),
+      };
+      wrapper.append(renderTextRun(segmentRun, doc));
     }
     return wrapper;
   }
