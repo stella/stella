@@ -78,6 +78,12 @@ const GROUP_TABLE_PAGE_SIZE = 200;
 // group-counts) stay in sync.
 const GROUPED_TABLE_EXCLUDED_KINDS: EntityKind[] = ["folder", "task"];
 
+// Stable key for a group. The null (uncategorized) bucket and real string values
+// live in disjoint namespaces so an option literally named "uncategorized"
+// can't collide with the null bucket.
+const groupKeyFor = (value: string | null): string =>
+  value === null ? "uncategorized" : `value:${value}`;
+
 type GroupedTableLayoutProps = {
   workspaceId: string;
   view: WorkspaceView<"table">;
@@ -258,7 +264,7 @@ export const GroupedTableLayout = ({
           fieldIds={fieldIds}
           group={group}
           groupByPropertyId={groupByPropertyId}
-          key={group.value ?? "__uncategorized__"}
+          key={groupKeyFor(group.value)}
           outerScrollRef={scrollRef}
           reportGroupTreeData={reportGroupTreeData}
           selectAllPreservableRowIds={allRowIds}
@@ -453,7 +459,7 @@ const GroupSection = ({
 
   // Publish this section's rows to the parent so the row selection resolves
   // across every group; clear them when the section unmounts.
-  const groupKey = group.value ?? "__uncategorized__";
+  const groupKey = groupKeyFor(group.value);
   useEffect(() => {
     reportGroupTreeData(groupKey, treeData);
     return () => reportGroupTreeData(groupKey, NO_ROWS);
