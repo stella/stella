@@ -22,7 +22,6 @@
  */
 
 import {
-  forwardRef,
   memo,
   useCallback,
   useEffect,
@@ -30,7 +29,7 @@ import {
   useMemo,
   useRef,
 } from "react";
-import type { CSSProperties } from "react";
+import type { CSSProperties, Ref } from "react";
 
 import { EditorState } from "prosemirror-state";
 import type { EditorState as EditorStateT } from "prosemirror-state";
@@ -79,6 +78,7 @@ export type HiddenHeaderFooterPMsRef = {
 };
 
 export type HiddenHeaderFooterPMsProps = {
+  ref?: Ref<HiddenHeaderFooterPMsRef>;
   /** Loaded document — its `package.headers`/`.footers` drives slot enumeration. */
   document: Document | null;
   /** Document styles, threaded into `headerFooterToProseDoc` for style resolution. */
@@ -212,179 +212,183 @@ const HOST_STYLES: CSSProperties = {
 // =============================================================================
 
 export const HiddenHeaderFooterPMs = memo(
-  forwardRef<HiddenHeaderFooterPMsRef, HiddenHeaderFooterPMsProps>(
-    ({ document, styles, theme, onTransaction }, ref) => {
-      // Stable callback ref so re-renders don't recreate every EditorView.
-      const onTransactionRef = useRef(onTransaction);
-      onTransactionRef.current = onTransaction;
+  ({
+    document,
+    styles,
+    theme,
+    onTransaction,
+    ref,
+  }: HiddenHeaderFooterPMsProps) => {
+    // Stable callback ref so re-renders don't recreate every EditorView.
+    const onTransactionRef = useRef(onTransaction);
+    onTransactionRef.current = onTransaction;
 
-      const hostRef = useRef<HTMLDivElement>(null);
-      const mountedRef = useRef<Map<string, MountedView>>(new Map());
-      const managersRef = useRef<Map<string, ExtensionManager>>(new Map());
-      // Latest document captured in a ref so resolveHf has a stable identity
-      // and the mount-effect doesn't re-run on every body PM transaction
-      // (each pushDocument returns a new Document identity).
-      const documentRef = useRef(document);
-      documentRef.current = document;
+    const hostRef = useRef<HTMLDivElement>(null);
+    const mountedRef = useRef<Map<string, MountedView>>(new Map());
+    const managersRef = useRef<Map<string, ExtensionManager>>(new Map());
+    // Latest document captured in a ref so resolveHf has a stable identity
+    // and the mount-effect doesn't re-run on every body PM transaction
+    // (each pushDocument returns a new Document identity).
+    const documentRef = useRef(document);
+    documentRef.current = document;
 
-      const resolveHf = useCallback(
-        (rId: string, kind: HfPartKind): HeaderFooter | null => {
-          const pkg = documentRef.current?.package;
-          if (!pkg) {
-            return null;
+    const resolveHf = useCallback(
+      (rId: string, kind: HfPartKind): HeaderFooter | null => {
+        const pkg = documentRef.current?.package;
+        if (!pkg) {
+          return null;
+        }
+        const bag = kind === "header" ? pkg.headers : pkg.footers;
+        return bag?.get(rId) ?? null;
+      },
+      [],
+    );
+
+    const headers = document?.package.headers;
+    const footers = document?.package.footers;
+
+    const slots = useMemo<HfPartKey[]>(
+      () => enumerateHfSlotsFromParts({ headers, footers }),
+      // Re-enumerate when the Maps themselves are swapped. Mutations to the
+      // existing Map (e.g. external save) intentionally do NOT trigger
+      // this — the persistent PM is the source of truth while loaded.
+      [headers, footers],
+    );
+
+    useEffect(() => {
+      if (!hostRef.current) {
+        return;
+      }
+      const host = hostRef.current;
+      const want = new Map(slots.map((s) => [s.rId, s] as const));
+      const have = mountedRef.current;
+
+      for (const [rId, mounted] of have) {
+        if (!want.has(rId)) {
+          mounted.view.destroy();
+          mounted.mountNode.remove();
+          have.delete(rId);
+          managersRef.current.delete(rId);
+        }
+      }
+
+      for (const slot of slots) {
+        const hf = resolveHf(slot.rId, slot.kind);
+        if (!hf) {
+          continue;
+        }
+        const existing = have.get(slot.rId);
+        if (existing) {
+          // Same rId is still around. Decide whether the view needs to
+          // adopt new content (truly new document, or undo/redo
+          // restoring an earlier HF state) by comparing the active
+          // HeaderFooter reference. handleDispatchTransaction keeps
+          // appliedHf / appliedContent pointing at the same array
+          // reference the in-place sync wrote, so an in-session
+          // pushDocument that spreads `...existing` survives without
+          // a state rebuild.
+          if (
+            existing.appliedHf === hf &&
+            existing.appliedContent === hf.content
+          ) {
+            continue;
           }
-          const bag = kind === "header" ? pkg.headers : pkg.footers;
-          return bag?.get(rId) ?? null;
+          const mgr = managersRef.current.get(slot.rId);
+          if (!mgr) {
+            continue;
+          }
+          const newState = buildInitialState(hf, styles, theme, mgr);
+          existing.view.updateState(newState);
+          existing.appliedHf = hf;
+          existing.appliedContent = hf.content;
+          continue;
+        }
+
+        const mgr = new ExtensionManager(createStarterKit());
+        mgr.buildSchema();
+        mgr.initializeRuntime();
+        managersRef.current.set(slot.rId, mgr);
+
+        const node = host.ownerDocument.createElement("div");
+        node.dataset["hfRId"] = slot.rId;
+        node.dataset["hfKind"] = slot.kind;
+        host.append(node);
+
+        const state = buildInitialState(hf, styles, theme, mgr);
+        const slotRId = slot.rId;
+        const slotKind = slot.kind;
+        const view: EditorView = new EditorView(node, {
+          state,
+          dispatchTransaction(tr) {
+            const newState = view.state.apply(tr);
+            view.updateState(newState);
+            // INTENTIONALLY no in-place mutation of `appliedHf.content`.
+            // Earlier revisions did `target.content = blocks` here to
+            // keep `Document.package.headers/footers[rId].content`
+            // current with each keystroke, but `appliedHf` is the
+            // same HeaderFooter object referenced by every undo entry
+            // in history that pre-dates this edit session — mutating
+            // it corrupted those snapshots, so a document-undo after
+            // closing HF mode couldn't restore the pre-edit content
+            // (Codex #487 P1). The view's state.doc is now the only
+            // source of truth while the chrome is open; the painter
+            // already reads through `convertHeaderFooterPmDocToContent`
+            // when a view exists, and `handleHeaderFooterSave` flushes
+            // the latest blocks into a brand-new HeaderFooter object
+            // in a brand-new Map on close, so history only ever sees
+            // committed snapshots.
+            onTransactionRef.current?.(
+              slotRId,
+              slotKind,
+              view,
+              tr.docChanged,
+              tr.selectionSet,
+            );
+          },
+        });
+        have.set(slot.rId, {
+          rId: slot.rId,
+          kind: slot.kind,
+          view,
+          mountNode: node,
+          appliedHf: hf,
+          appliedContent: hf.content,
+        });
+      }
+    }, [slots, resolveHf, styles, theme]);
+
+    // Tear everything down on unmount.
+    useEffect(() => {
+      const have = mountedRef.current;
+      const mgrs = managersRef.current;
+      return () => {
+        for (const { view, mountNode } of have.values()) {
+          view.destroy();
+          mountNode.remove();
+        }
+        have.clear();
+        mgrs.clear();
+      };
+    }, []);
+
+    useImperativeHandle(
+      ref,
+      () => ({
+        getView(rId: string): EditorView | null {
+          return mountedRef.current.get(rId)?.view ?? null;
         },
-        [],
-      );
+        listSlots(): HfPartKey[] {
+          return [...mountedRef.current.values()].map(({ rId, kind }) => ({
+            rId,
+            kind,
+          }));
+        },
+      }),
+      [],
+    );
 
-      const headers = document?.package.headers;
-      const footers = document?.package.footers;
-
-      const slots = useMemo<HfPartKey[]>(
-        () => enumerateHfSlotsFromParts({ headers, footers }),
-        // Re-enumerate when the Maps themselves are swapped. Mutations to the
-        // existing Map (e.g. external save) intentionally do NOT trigger
-        // this — the persistent PM is the source of truth while loaded.
-        [headers, footers],
-      );
-
-      useEffect(() => {
-        if (!hostRef.current) {
-          return;
-        }
-        const host = hostRef.current;
-        const want = new Map(slots.map((s) => [s.rId, s] as const));
-        const have = mountedRef.current;
-
-        for (const [rId, mounted] of have) {
-          if (!want.has(rId)) {
-            mounted.view.destroy();
-            mounted.mountNode.remove();
-            have.delete(rId);
-            managersRef.current.delete(rId);
-          }
-        }
-
-        for (const slot of slots) {
-          const hf = resolveHf(slot.rId, slot.kind);
-          if (!hf) {
-            continue;
-          }
-          const existing = have.get(slot.rId);
-          if (existing) {
-            // Same rId is still around. Decide whether the view needs to
-            // adopt new content (truly new document, or undo/redo
-            // restoring an earlier HF state) by comparing the active
-            // HeaderFooter reference. handleDispatchTransaction keeps
-            // appliedHf / appliedContent pointing at the same array
-            // reference the in-place sync wrote, so an in-session
-            // pushDocument that spreads `...existing` survives without
-            // a state rebuild.
-            if (
-              existing.appliedHf === hf &&
-              existing.appliedContent === hf.content
-            ) {
-              continue;
-            }
-            const mgr = managersRef.current.get(slot.rId);
-            if (!mgr) {
-              continue;
-            }
-            const newState = buildInitialState(hf, styles, theme, mgr);
-            existing.view.updateState(newState);
-            existing.appliedHf = hf;
-            existing.appliedContent = hf.content;
-            continue;
-          }
-
-          const mgr = new ExtensionManager(createStarterKit());
-          mgr.buildSchema();
-          mgr.initializeRuntime();
-          managersRef.current.set(slot.rId, mgr);
-
-          const node = host.ownerDocument.createElement("div");
-          node.dataset["hfRId"] = slot.rId;
-          node.dataset["hfKind"] = slot.kind;
-          host.append(node);
-
-          const state = buildInitialState(hf, styles, theme, mgr);
-          const slotRId = slot.rId;
-          const slotKind = slot.kind;
-          const view: EditorView = new EditorView(node, {
-            state,
-            dispatchTransaction(tr) {
-              const newState = view.state.apply(tr);
-              view.updateState(newState);
-              // INTENTIONALLY no in-place mutation of `appliedHf.content`.
-              // Earlier revisions did `target.content = blocks` here to
-              // keep `Document.package.headers/footers[rId].content`
-              // current with each keystroke, but `appliedHf` is the
-              // same HeaderFooter object referenced by every undo entry
-              // in history that pre-dates this edit session — mutating
-              // it corrupted those snapshots, so a document-undo after
-              // closing HF mode couldn't restore the pre-edit content
-              // (Codex #487 P1). The view's state.doc is now the only
-              // source of truth while the chrome is open; the painter
-              // already reads through `convertHeaderFooterPmDocToContent`
-              // when a view exists, and `handleHeaderFooterSave` flushes
-              // the latest blocks into a brand-new HeaderFooter object
-              // in a brand-new Map on close, so history only ever sees
-              // committed snapshots.
-              onTransactionRef.current?.(
-                slotRId,
-                slotKind,
-                view,
-                tr.docChanged,
-                tr.selectionSet,
-              );
-            },
-          });
-          have.set(slot.rId, {
-            rId: slot.rId,
-            kind: slot.kind,
-            view,
-            mountNode: node,
-            appliedHf: hf,
-            appliedContent: hf.content,
-          });
-        }
-      }, [slots, resolveHf, styles, theme]);
-
-      // Tear everything down on unmount.
-      useEffect(() => {
-        const have = mountedRef.current;
-        const mgrs = managersRef.current;
-        return () => {
-          for (const { view, mountNode } of have.values()) {
-            view.destroy();
-            mountNode.remove();
-          }
-          have.clear();
-          mgrs.clear();
-        };
-      }, []);
-
-      useImperativeHandle(
-        ref,
-        () => ({
-          getView(rId: string): EditorView | null {
-            return mountedRef.current.get(rId)?.view ?? null;
-          },
-          listSlots(): HfPartKey[] {
-            return [...mountedRef.current.values()].map(({ rId, kind }) => ({
-              rId,
-              kind,
-            }));
-          },
-        }),
-        [],
-      );
-
-      return <div ref={hostRef} style={HOST_STYLES} />;
-    },
-  ),
+    return <div ref={hostRef} style={HOST_STYLES} />;
+  },
 );
 
 HiddenHeaderFooterPMs.displayName = "HiddenHeaderFooterPMs";
