@@ -7,8 +7,14 @@
 export const getFirstWeekday = (locale: string): number => {
   try {
     const loc = new Intl.Locale(locale);
+    // Newer engines expose getWeekInfo(); older ones a `weekInfo` accessor.
+    // SAFETY: `weekInfo` is the legacy accessor, absent from the lib types.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    const legacy = loc as Intl.Locale & { weekInfo?: Intl.WeekInfo };
     const info =
-      typeof loc.getWeekInfo === "function" ? loc.getWeekInfo() : undefined;
+      typeof loc.getWeekInfo === "function"
+        ? loc.getWeekInfo()
+        : legacy.weekInfo;
     const firstDay = info?.firstDay;
     // Intl reports firstDay as 1 = Monday … 7 = Sunday; map to Date.getDay.
     return typeof firstDay === "number" ? firstDay % 7 : 1;

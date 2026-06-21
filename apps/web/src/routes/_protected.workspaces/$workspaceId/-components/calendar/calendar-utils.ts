@@ -98,6 +98,9 @@ export const getMonthLabels = (
 ): string[] => {
   const fmt = getDateFormatter(locale, {
     month: format,
+    // The grid is Gregorian; pin labels so a Hijri preference does not
+    // mislabel Gregorian months (numerals still follow the locale).
+    calendar: "gregory",
     timeZone: "UTC",
   });
 
@@ -115,6 +118,8 @@ export const formatMonthYearLabel = (
   getDateFormatter(locale, {
     month: "long",
     year: "numeric",
+    // Gregorian grid; keep the header on the Gregorian calendar.
+    calendar: "gregory",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month, 1)));
 

@@ -60,6 +60,7 @@ import {
   isPublicLawPreviewEnabled,
   usePublicLawPreviewEnabled,
 } from "@/hooks/use-public-law-preview";
+import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -259,6 +260,9 @@ export const SearchDialog = ({
 }: SearchDialogProps) => {
   const t = useTranslations();
   const locale = useLocale();
+  // The AI search API caps locale at 16 chars; send the base language, not the
+  // formatting locale (which may carry a region and -u- extensions).
+  const apiLocale = useI18nStore((s) => s.loadedLang);
   const navigate = useNavigate();
   const user = useAuthenticatedUser();
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
@@ -495,7 +499,7 @@ export const SearchDialog = ({
 
     summarizeSearchMutation.mutate({
       query: trimmedQuery,
-      locale,
+      locale: apiLocale,
       ...searchFilterParams,
       limit: 5,
     });
@@ -516,7 +520,7 @@ export const SearchDialog = ({
     createSummaryChatMutation.mutate(
       {
         query: trimmedQuery,
-        locale,
+        locale: apiLocale,
         title: summaryData.title,
         summary: summaryData.summary,
         citations: summaryData.citations,
@@ -548,7 +552,7 @@ export const SearchDialog = ({
     }
 
     refineSearchMutation.mutate(
-      { query: trimmedQuery, locale },
+      { query: trimmedQuery, locale: apiLocale },
       {
         onSuccess: (refined, variables) => {
           debouncedSetQuery.cancel();

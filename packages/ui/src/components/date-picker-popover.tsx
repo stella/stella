@@ -113,6 +113,9 @@ const getMonthLabels = (
 ): string[] => {
   const fmt = new Intl.DateTimeFormat(locale, {
     month: format,
+    // The picker grid is Gregorian; pin labels so a Hijri locale preference
+    // does not mislabel Gregorian months (numerals still follow the locale).
+    calendar: "gregory",
     timeZone: "UTC",
   });
   return Array.from({ length: 12 }, (_, i) =>
@@ -124,6 +127,7 @@ const formatMonthYear = (locale: string, year: number, month: number): string =>
   new Intl.DateTimeFormat(locale, {
     month: "long",
     year: "numeric",
+    calendar: "gregory",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month, 1)));
 
@@ -250,6 +254,7 @@ function DatePickerPopover({
         month: "short",
         day: "numeric",
         year: "numeric",
+        calendar: "gregory",
         timeZone: "UTC",
       })
     : "\u2014";
@@ -261,6 +266,7 @@ function DatePickerPopover({
         month: "long",
         day: "numeric",
         year: "numeric",
+        calendar: "gregory",
         timeZone: "UTC",
       }),
     [locale],
