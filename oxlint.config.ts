@@ -61,6 +61,7 @@ export default defineConfig({
     "react/jsx-no-target-blank": "error",
     "react/jsx-no-script-url": "error",
     "react/button-has-type": "error",
+    "react/checked-requires-onchange-or-readonly": "error",
     "react/no-object-type-as-default-prop": "error",
     // Allow component creation in prop position: i18n rich-text render
     // callbacks (`t.rich({ link: (chunks) => <a/> })`) and IIFE-as-prop
