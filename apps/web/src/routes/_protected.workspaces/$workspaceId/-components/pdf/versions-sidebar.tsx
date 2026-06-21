@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -32,6 +32,7 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { cn } from "@stll/ui/lib/utils";
 
 import { UserAvatar } from "@/components/user-avatar";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { ClientOperationError, toAPIError } from "@/lib/errors";
@@ -157,7 +158,7 @@ export function VersionsSidebar({
   // `isLoadingOlder` without firing while a fetch is in flight.
   // `loadOlderError` keeps the observer detached after a failure so it
   // cannot loop the request; the manual button is the only retry path.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const root = viewportRef.current;
     const target = sentinelRef.current;
     if (!root || !target || !canLoadOlder || isLoadingOlder || loadOlderError) {

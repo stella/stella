@@ -151,6 +151,7 @@ export const VersionsFacet = ({
   // terminating: it stops once the row appears, the cursor runs out, or a
   // fetch errors. Page size is 50, so this only fires for the rare deep-link
   // to a version outside the newest page.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-walks the version pager (drives loadOlder, a fetch, so not a useExternalSyncEffect) until a deep-linked out-of-page version enters the loaded window; resolves a deep link with no user-event site to relocate into
   useEffect(() => {
     if (
       !currentFieldId ||
