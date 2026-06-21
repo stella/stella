@@ -1,4 +1,4 @@
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import type { AnyPgTable } from "drizzle-orm/pg-core";
 
 import { member, organization, user } from "@/api/db/auth-schema";
@@ -401,6 +401,19 @@ export const setupRlsTestData = async (db: TestDatabase, ids: TestIds) => {
       entityId: ids.entityB1,
     },
   ]);
+
+  await db
+    .update(entities)
+    .set({ currentVersionId: ids.entityVersionA1 })
+    .where(eq(entities.id, ids.entityA1));
+  await db
+    .update(entities)
+    .set({ currentVersionId: ids.entityVersionA2 })
+    .where(eq(entities.id, ids.entityA2));
+  await db
+    .update(entities)
+    .set({ currentVersionId: ids.entityVersionB1 })
+    .where(eq(entities.id, ids.entityB1));
 
   const propContent = {
     version: 1 as const,

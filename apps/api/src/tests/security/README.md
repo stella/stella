@@ -40,6 +40,17 @@ bearer/session credentials in URL query strings. EventSource must
 use cookie credentials, and SSE handlers must not authenticate
 from `query.token`.
 
+### `cross-tenant-handlers.test.ts`
+
+Runtime handler invariant test that exercises real Drizzle queries
+through the scoped PGlite fixture. Each registered case authenticates
+as tenant A, supplies a tenant B resource ID through the handler's
+request-shaped params/query/body, and asserts the response is denied
+or empty. This complements static ownership-source linting and lower
+level RLS tests by verifying the user-facing handler cannot leak a
+cross-tenant resource through a missing workspace or organization
+predicate.
+
 ## Why these tests matter
 
 The `SafeId` branded type and env validation schema are the
