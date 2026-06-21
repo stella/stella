@@ -4,6 +4,10 @@ import type { Context } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
 
 import { env } from "@/api/env";
+import {
+  agentAuthConfirmRoute,
+  agentAuthRoute,
+} from "@/api/handlers/agent-auth/routes";
 import { aiAutocompleteRoute } from "@/api/handlers/ai-autocomplete/routes";
 import { aiConfigPublicRoute } from "@/api/handlers/ai-config/routes";
 import { auditLogsRoute } from "@/api/handlers/audit-logs/routes";
@@ -379,6 +383,20 @@ const api = new Elysia()
   })
   .use(authUiRoute)
   .use(authMetadataRoute)
+  .use(
+    new Elysia()
+      .use(
+        rateLimit({
+          scoping: "scoped",
+          duration: API_RATE_LIMITS.agentAuth.duration,
+          max: API_RATE_LIMITS.agentAuth.max,
+          generator: scopedGenerator("agent-auth"),
+          context: new InMemoryRateLimitContext(),
+        }),
+      )
+      .use(agentAuthRoute),
+  )
+  .use(agentAuthConfirmRoute)
   .use(healthRoute)
   .use(verifyRoute)
   .use(hostedUsageWebhookRoute)

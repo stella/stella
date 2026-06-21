@@ -25,6 +25,7 @@ import {
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
 import type {
+  HandlerErrorClaim,
   HandlerErrorCode,
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
@@ -330,6 +331,18 @@ type SafeErrorBody = {
   reason?: string;
   required?: number;
   available?: number;
+  /**
+   * OAuth-style machine-readable error identifier surfaced on the
+   * agent-auth ID-JAG path (e.g. `login_required`,
+   * `interaction_required`, `issuer_not_enabled`). Optional everywhere.
+   */
+  error?: string;
+  /**
+   * Step-up claim ceremony block on an ID-JAG `interaction_required`:
+   * the agent polls the existing `/agent/token` claim grant after a
+   * human completes it. Optional everywhere.
+   */
+  claim?: HandlerErrorClaim;
 };
 
 // The conditional form is intentional: it keeps status unions distributive so
@@ -763,6 +776,8 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
         available: error.usage.available,
       }
     : {}),
+  ...(error.error ? { error: error.error } : {}),
+  ...(error.claim ? { claim: error.claim } : {}),
 });
 
 export const createSafeRootHandler = <

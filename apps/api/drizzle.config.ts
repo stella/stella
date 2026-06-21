@@ -8,7 +8,12 @@ const url = resolveDatabaseUrl() ?? "postgresql://invalid";
 
 export default defineConfig({
   out: "./drizzle",
-  schema: ["./src/db/schema.ts", "./src/db/auth-schema.ts", "./src/db/rls.ts"],
+  schema: [
+    "./src/db/schema.ts",
+    "./src/db/auth-schema.ts",
+    "./src/db/agent-auth-schema.ts",
+    "./src/db/rls.ts",
+  ],
   dialect: "postgresql",
   dbCredentials: { url },
 });

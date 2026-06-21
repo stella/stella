@@ -2,6 +2,12 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import {
+  AGENT_AUTH_IDENTITY_PATH,
+  AGENT_AUTH_IDENTITY_TYPES,
+  getAgentAuthManifestUrl,
+  getAgentAuthUrl,
+} from "@/api/agent-auth/constants";
+import {
   authCapabilitiesRoute,
   authMetadataRoute,
 } from "@/api/handlers/auth/routes";
@@ -33,6 +39,17 @@ describe("OAuth authorization server metadata", () => {
         scopes_supported: v.array(v.string()),
         token_endpoint: v.string(),
         token_endpoint_auth_methods_supported: v.array(v.string()),
+        agent_auth: v.object({
+          skill: v.string(),
+          identity_endpoint: v.string(),
+          claim_endpoint: v.string(),
+          events_endpoint: v.string(),
+          identity_types_supported: v.array(v.string()),
+          identity_assertion: v.object({
+            assertion_types_supported: v.array(v.string()),
+          }),
+          events_supported: v.array(v.string()),
+        }),
       }),
       await response.json(),
     );
@@ -63,6 +80,18 @@ describe("OAuth authorization server metadata", () => {
     expect(body.token_endpoint_auth_methods_supported).toContain(
       "client_secret_basic",
     );
+
+    // auth.md agent_auth profile block (merged onto the RFC 8414 doc).
+    expect(body.agent_auth.skill).toBe(getAgentAuthManifestUrl());
+    expect(body.agent_auth.identity_endpoint).toBe(
+      getAgentAuthUrl(AGENT_AUTH_IDENTITY_PATH),
+    );
+    expect(body.agent_auth.identity_types_supported).toEqual([
+      ...AGENT_AUTH_IDENTITY_TYPES,
+    ]);
+    expect(
+      body.agent_auth.identity_assertion.assertion_types_supported,
+    ).toContain("urn:ietf:params:oauth:token-type:id-jag");
   };
 
   test("serves RFC 8414 metadata from the canonical issuer-specific path", async () => {
