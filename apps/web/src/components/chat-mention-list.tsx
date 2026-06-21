@@ -26,118 +26,6 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
-const CATEGORY_ORDER: ChatReferenceCategory[] = [
-  "entity",
-  "workspace",
-  "decision",
-];
-
-const useCategoryLabel = () => {
-  const t = useTranslations();
-  return (category: ChatReferenceCategory): string => {
-    switch (category) {
-      case "entity":
-        return t("chat.mention.category.entities");
-      case "workspace":
-        return t("common.matters");
-      case "decision":
-        return t("common.caseLaw");
-      default:
-        return category;
-    }
-  };
-};
-
-const MentionIcon = ({
-  id,
-  category,
-  kind,
-  mimeType,
-}: {
-  id: string;
-  category: ChatReferenceCategory;
-  kind: string;
-  mimeType: string | null;
-}) => {
-  const cls = "size-3.5 shrink-0 text-muted-foreground";
-
-  if (category === "workspace") {
-    return (
-      <LayersIcon
-        className="size-3.5 shrink-0"
-        style={{ color: getMatterColor(id) }}
-      />
-    );
-  }
-
-  if (category === "decision") {
-    return <LandmarkIcon className={cls} />;
-  }
-
-  // Entity category: use document/folder icons
-  if (kind === "folder") {
-    return <FolderIcon className={cls} />;
-  }
-  if (mimeType) {
-    return <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />;
-  }
-  return <FileTextIcon className={cls} />;
-};
-
-/** Group items by category, preserving a stable order. */
-const groupByCategory = (
-  items: ChatMentionOption[],
-): { category: ChatReferenceCategory; items: ChatMentionOption[] }[] => {
-  const groups = new Map<ChatReferenceCategory, ChatMentionOption[]>();
-
-  for (const item of items) {
-    const list = groups.get(item.category);
-    if (list) {
-      list.push(item);
-    } else {
-      groups.set(item.category, [item]);
-    }
-  }
-
-  const result: {
-    category: ChatReferenceCategory;
-    items: ChatMentionOption[];
-  }[] = [];
-
-  for (const cat of CATEGORY_ORDER) {
-    const group = groups.get(cat);
-    if (group && group.length > 0) {
-      result.push({ category: cat, items: group });
-    }
-  }
-
-  return result;
-};
-
-type DrillTarget = {
-  workspaceId: string;
-  viewId: string;
-  name: string;
-};
-
-type DrillState =
-  | { kind: "none" }
-  | { kind: "loading"; target: DrillTarget }
-  | { kind: "loaded"; target: DrillTarget; items: ChatMentionOption[] }
-  | { kind: "error"; target: DrillTarget };
-
-type ChatMentionListHandle = ReturnType<
-  NonNullable<SuggestionOptions["render"]>
->;
-
-type ChatMentionListProps = SuggestionProps<ChatMentionOption> & {
-  loadWorkspaceEntities: (
-    workspace: ChatMentionOption,
-    query: string,
-  ) => Promise<ChatMentionOption[]>;
-  ref?: Ref<ChatMentionListHandle>;
-};
-
 export const ChatMentionList = ({
   items,
   command,
@@ -471,4 +359,116 @@ export const ChatMentionList = ({
       </PopoverPopup>
     </Popover>
   );
+};
+
+const CATEGORY_ORDER: ChatReferenceCategory[] = [
+  "entity",
+  "workspace",
+  "decision",
+];
+
+const useCategoryLabel = () => {
+  const t = useTranslations();
+  return (category: ChatReferenceCategory): string => {
+    switch (category) {
+      case "entity":
+        return t("chat.mention.category.entities");
+      case "workspace":
+        return t("common.matters");
+      case "decision":
+        return t("common.caseLaw");
+      default:
+        return category;
+    }
+  };
+};
+
+const MentionIcon = ({
+  id,
+  category,
+  kind,
+  mimeType,
+}: {
+  id: string;
+  category: ChatReferenceCategory;
+  kind: string;
+  mimeType: string | null;
+}) => {
+  const cls = "size-3.5 shrink-0 text-muted-foreground";
+
+  if (category === "workspace") {
+    return (
+      <LayersIcon
+        className="size-3.5 shrink-0"
+        style={{ color: getMatterColor(id) }}
+      />
+    );
+  }
+
+  if (category === "decision") {
+    return <LandmarkIcon className={cls} />;
+  }
+
+  // Entity category: use document/folder icons
+  if (kind === "folder") {
+    return <FolderIcon className={cls} />;
+  }
+  if (mimeType) {
+    return <DocumentIcon className="size-3.5 shrink-0" mimeType={mimeType} />;
+  }
+  return <FileTextIcon className={cls} />;
+};
+
+/** Group items by category, preserving a stable order. */
+const groupByCategory = (
+  items: ChatMentionOption[],
+): { category: ChatReferenceCategory; items: ChatMentionOption[] }[] => {
+  const groups = new Map<ChatReferenceCategory, ChatMentionOption[]>();
+
+  for (const item of items) {
+    const list = groups.get(item.category);
+    if (list) {
+      list.push(item);
+    } else {
+      groups.set(item.category, [item]);
+    }
+  }
+
+  const result: {
+    category: ChatReferenceCategory;
+    items: ChatMentionOption[];
+  }[] = [];
+
+  for (const cat of CATEGORY_ORDER) {
+    const group = groups.get(cat);
+    if (group && group.length > 0) {
+      result.push({ category: cat, items: group });
+    }
+  }
+
+  return result;
+};
+
+type DrillTarget = {
+  workspaceId: string;
+  viewId: string;
+  name: string;
+};
+
+type DrillState =
+  | { kind: "none" }
+  | { kind: "loading"; target: DrillTarget }
+  | { kind: "loaded"; target: DrillTarget; items: ChatMentionOption[] }
+  | { kind: "error"; target: DrillTarget };
+
+type ChatMentionListHandle = ReturnType<
+  NonNullable<SuggestionOptions["render"]>
+>;
+
+type ChatMentionListProps = SuggestionProps<ChatMentionOption> & {
+  loadWorkspaceEntities: (
+    workspace: ChatMentionOption,
+    query: string,
+  ) => Promise<ChatMentionOption[]>;
+  ref?: Ref<ChatMentionListHandle>;
 };

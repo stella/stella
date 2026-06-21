@@ -164,13 +164,13 @@ const main = async () => {
 
     try {
       // oxlint-disable-next-line no-await-in-loop -- ordered, rate-limited backfill: classifies one citation at a time
-      const result = await classifyCitation(
+      const result = await classifyCitation({
         context,
-        citation.citationText,
-        citation.language,
+        citationText: citation.citationText,
+        language: citation.language,
         scopedDb,
-        { ruleCache, dryRun: args.dryRun },
-      );
+        options: { ruleCache, dryRun: args.dryRun },
+      });
 
       if (result.source === "regex") {
         regexMatches++;

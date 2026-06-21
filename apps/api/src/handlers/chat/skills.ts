@@ -189,7 +189,8 @@ const resolveInstalledActiveSkill = async ({
       })
       .from(agentSkillResources)
       .where(eq(agentSkillResources.skillId, skill.id))
-      .orderBy(asc(agentSkillResources.path)),
+      .orderBy(asc(agentSkillResources.path))
+      .limit(LIMITS.agentSkillResourcesPerSkill),
   );
   if (Result.isError(resources)) {
     return Result.err(resources.error);
@@ -348,7 +349,8 @@ export const loadAvailableChatSkill = async ({
       })
       .from(agentSkillResources)
       .where(eq(agentSkillResources.skillId, row.id))
-      .orderBy(agentSkillResources.path),
+      .orderBy(agentSkillResources.path)
+      .limit(LIMITS.agentSkillResourcesPerSkill),
   );
   if (Result.isError(resources)) {
     return Result.err(resources.error);
@@ -400,7 +402,8 @@ export const listAvailableChatSkillResources = async ({
       })
       .from(agentSkillResources)
       .where(eq(agentSkillResources.skillId, row.id))
-      .orderBy(agentSkillResources.path),
+      .orderBy(agentSkillResources.path)
+      .limit(LIMITS.agentSkillResourcesPerSkill),
   );
   return resources;
 };
@@ -510,7 +513,8 @@ const findInstalledSkill = async ({
           eq(agentSkills.slug, skillName),
           or(eq(agentSkills.scope, "team"), eq(agentSkills.userId, userId)),
         ),
-      ),
+      )
+      .limit(LIMITS.agentSkillsPerUser),
   );
   if (Result.isError(rows)) {
     return Result.err(rows.error);

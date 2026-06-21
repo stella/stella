@@ -6,14 +6,14 @@ import { contacts, workspaces } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
+import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { brandPersistedContactId } from "@/api/lib/safe-id-boundaries";
 
-const DEFAULT_LIMIT = 50;
-const MAX_LIMIT = 100;
-
 const readContactsQuerySchema = t.Object({
-  limit: t.Optional(t.Number({ minimum: 1, maximum: 100 })),
+  limit: t.Optional(
+    t.Number({ minimum: 1, maximum: LIMITS.contactsPageSizeMax }),
+  ),
   cursor: t.Optional(t.String()),
   type: t.Optional(t.Union([t.Literal("person"), t.Literal("organization")])),
   q: t.Optional(t.String()),
@@ -48,7 +48,10 @@ const readContacts = createSafeRootHandler(
     query: readContactsQuerySchema,
   },
   async function* ({ safeDb, session, query }) {
-    const limit = Math.min(query.limit ?? DEFAULT_LIMIT, MAX_LIMIT);
+    const limit = Math.min(
+      query.limit ?? LIMITS.contactsPageSizeDefault,
+      LIMITS.contactsPageSizeMax,
+    );
 
     const conditions = [
       eq(contacts.organizationId, session.activeOrganizationId),

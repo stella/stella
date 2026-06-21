@@ -6,6 +6,7 @@ import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -16,7 +17,9 @@ import {
 import { brandPersistedRateTableId } from "@/api/lib/safe-id-boundaries";
 
 const readRateTablesQuerySchema = t.Object({
-  limit: t.Optional(t.Integer({ minimum: 1, maximum: 200 })),
+  limit: t.Optional(
+    t.Integer({ minimum: 1, maximum: LIMITS.rateTablesPageSizeMax }),
+  ),
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
 
@@ -47,7 +50,7 @@ const readRateTables = createSafeHandler(
     query: readRateTablesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? 50;
+    const limit = query.limit ?? LIMITS.rateTablesPageSizeDefault;
     const conditions = [eq(rateTables.workspaceId, workspaceId)];
 
     if (query.cursor) {

@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Bieżąca",
-      "description": "Zarządzaj aktywnymi sesjami",
       "device": "Urządzenie",
       "deviceOnOs": "{browser} na {os}",
       "ipAddress": "Adres IP",
@@ -21,25 +20,6 @@
       "description": "Dodaj dane dostępu dostawcy, aby zacząć używać funkcji AI.",
       "title": "Połącz dostawcę AI"
     }
-  },
-  "anonymize": {
-    "addEntity": "Dodaj podmiot",
-    "checkAnonymization": "Sprawdź anonimizację",
-    "closeAddForm": "Zamknij formularz dodawania",
-    "confirmAll": "Potwierdź wszystkie",
-    "entities": "Elementy",
-    "entityType": "Typ elementu",
-    "extractingText": "Wyodrębnianie tekstu…",
-    "noEntitiesFound": "Nie znaleziono elementów",
-    "reject": "Odrzuć",
-    "rejectAll": "Odrzuć wszystkie",
-    "removeEntity": "Usuń element",
-    "revise": "Popraw anonimizację",
-    "runPipeline": "Uruchom analizę",
-    "running": "Przetwarzanie…",
-    "searchMatches": "Słowa do wyszukania w dokumencie",
-    "searchPlaceholder": "Wpisz słowa do wyszukania…",
-    "title": "Przegląd anonimizacji"
   },
   "app": {
     "versionMismatch": {
@@ -73,7 +53,6 @@
     "weekStartSunday": "Niedziela"
   },
   "auth": {
-    "betaNoticeBody": "Na czas bety, dla ostrożności, nie przesyłaj danych wrażliwych, uprzywilejowanych, osobowych, niemożliwych do odtworzenia ani krytycznych produkcyjnie. Cloud jest usługą demonstracyjną.",
     "betaNoticeTitle": "Beta",
     "checkSpamHint": "Jeśli go nie widzisz, sprawdź folder spam.",
     "chooseOrganization": "Wybierz organizację, w której chcesz pracować",
@@ -103,7 +82,6 @@
     "selectOrganization": "Wybierz organizację",
     "signIn": "Zaloguj się",
     "signInBeforeInvitation": "Musisz się zalogować, zanim będziesz mógł przyjąć zaproszenie do organizacji.",
-    "signInWithEmail": "Zaloguj się e-mailem",
     "subtitle": "Dokumenty, orzecznictwo i przegląd pod kontrolą. Z pomocą AI.",
     "useDifferentEmail": "Użyj innego adresu e-mail",
     "weSentCodeTo": "Wysłaliśmy kod na adres {email}"
@@ -122,8 +100,10 @@
       "activityCode": "Kod czynności",
       "codeLabel": "Kod",
       "codeLabelField": "Etykieta",
+      "codePlaceholder": "L110",
       "createCode": "Utwórz kod",
       "inactive": "Nieaktywny",
+      "labelPlaceholder": "Badania",
       "manageCodes": "Zarządzaj kodami",
       "noCodesYet": "Brak kodów rozliczeniowych",
       "task": "Zadanie",
@@ -271,31 +251,14 @@
     "emptyState": "Brak orzeczeń. Skonfiguruj źródło i uruchom synchronizację, aby zaimportować orzecznictwo.",
     "filters": {
       "court": "Sąd",
-      "dateFrom": "Od",
-      "dateTo": "Do",
       "searchPlaceholder": "Szukaj po sygnaturze akt..."
     },
-    "loading": "Ładowanie...",
     "loadingMore": "Ładowanie kolejnych...",
-    "sectionTypes": {
-      "argumentation": "Uzasadnienie",
-      "dissent": "Zdanie odrębne",
-      "footer": "Stopka",
-      "header": "Nagłówek",
-      "ruling": "Sentencja",
-      "unknown": "Inne"
-    },
     "seo": {
       "browse": "Przeglądaj orzecznictwo",
       "countries": "Kraje",
       "courts": "Sądy",
       "years": "Lata"
-    },
-    "sources": {
-      "empty": "Brak skonfigurowanych źródeł.",
-      "lastSync": "Ostatnia synchronizacja: {date, date, medium}",
-      "neverSynced": "Nigdy nie synchronizowano",
-      "title": "Źródła"
     },
     "viewer": {
       "abstract": "Streszczenie",
@@ -305,7 +268,6 @@
       "legalSentence": "Teza orzeczenia",
       "nalusDisclaimer": "Źródło: NALUS, Trybunał Konstytucyjny Republiki Czeskiej. Bezpłatnie. Niniejsza wersja elektroniczna nie jest autentyczna; autentyczne są wyłącznie oryginały z godłem państwowym i podpisem upoważnionej osoby.",
       "popularName": "Nazwa potoczna",
-      "sections": "Sekcje",
       "source": "Źródło",
       "sourceFields": {
         "decisionCategory": "Kategoria orzeczenia",
@@ -453,6 +415,9 @@
       "prompts": "Umiejętności",
       "recentChats": "Ostatnie chaty"
     },
+    "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
+    "loadEarlierMessagesError": "Nie udało się załadować wcześniejszych wiadomości",
+    "loadingEarlierMessages": "Ładowanie wcześniejszych wiadomości…",
     "maxAttachmentsReached": "Maksymalnie {count} plików na wiadomość",
     "mention": {
       "category": {
@@ -584,7 +549,6 @@
     "allClauses": "Wszystkie klauzule",
     "backToList": "Wróć do listy klauzul",
     "body": "Treść",
-    "categories": "Kategorie",
     "categoryDeleteConfirm": "Klauzule w tej kategorii staną się niekategoryzowane.",
     "categoryName": "Nazwa kategorii",
     "categoryNamePlaceholder": "np. Poufność",
@@ -598,7 +562,6 @@
     "createCategory": "Nowa kategoria",
     "createClause": "Nowa klauzula",
     "createFailed": "Nie udało się utworzyć klauzuli",
-    "currentVersion": "Bieżąca",
     "deleteCategory": "Usuń kategorię",
     "deleteClause": "Usuń klauzulę",
     "deleteFailed": "Nie udało się usunąć",
@@ -613,7 +576,6 @@
     "importSuccess": "{count, plural, one {# klauzula zaimportowana} few {# klauzule zaimportowane} many {# klauzul zaimportowanych} other {# klauzuli zaimportowanej}}",
     "importing": "Importowanie…",
     "languagePlaceholder": "np. en",
-    "limitReached": "Osiągnięto limit klauzul",
     "linkClause": "Powiąż klauzulę",
     "linkFailed": "Nie udało się powiązać klauzuli",
     "linked": "Klauzula powiązana",
@@ -621,7 +583,6 @@
     "loadFailed": "Nie udało się załadować klauzul",
     "loading": "Ładowanie klauzul…",
     "noChanges": "Brak zmian",
-    "noClauses": "Brak klauzul",
     "noLinkedClauses": "Brak powiązanych klauzul",
     "noResults": "Brak klauzul",
     "noVariants": "Brak wariantów",
@@ -631,7 +592,6 @@
     "searchClauses": "Szukaj klauzul...",
     "searchPlaceholder": "Szukaj klauzul...",
     "selectFile": "Wybierz plik JSON",
-    "selectVariant": "Wybierz wariant",
     "selectVersionToCompare": "Wybierz wersję do porównania z bieżącą",
     "slotName": "Nazwa slotu",
     "slotNamePlaceholder": "np. KlauzulaZakaz",
@@ -644,7 +604,6 @@
     "unlinkConfirm": "Spowoduje to usunięcie klauzuli z tego szablonu.",
     "unlinkFailed": "Nie udało się odłączyć klauzuli",
     "unlinked": "Klauzula odłączona",
-    "unmappedSlot": "Niepowiązany",
     "updateFailed": "Nie udało się zaktualizować klauzuli",
     "usageNotes": "Uwagi dotyczące użycia",
     "usageNotesPlaceholder": "Kiedy stosować tę klauzulę? (dla asystenta AI)",
@@ -653,8 +612,7 @@
     "variantLabel": "Etykieta wariantu",
     "variantLabelPlaceholder": "np. Standardowy",
     "variants": "Warianty",
-    "version": "Wersja {version}",
-    "versionCount": "{count, plural, one {# wersja} few {# wersje} many {# wersji} other {# wersji}}"
+    "version": "Wersja {version}"
   },
   "common": {
     "accept": "Akceptuj",
@@ -977,7 +935,6 @@
     "acceptAll": "Zaakceptuj wszystkie",
     "applyAs": "jako",
     "applyDirect": "Bezpośrednio",
-    "applyMode": "Zastosuj jako:",
     "applyTracked": "Śledzenie zmian",
     "areaUnspecified": "Nieokreślony",
     "byArea": "Według obszaru",
@@ -989,11 +946,9 @@
     "hideAccepted": "Ukryj zaakceptowane sugestie",
     "identityAria": "Tożsamość śledzonych zmian dla {name}",
     "identitySaved": "Zapisano tożsamość",
-    "progressAria": "Sprawdzono {reviewed} z {total}",
     "reject": "Odrzuć",
     "rejectAll": "Odrzuć wszystkie",
     "revert": "Cofnij",
-    "reviewed": "sprawdzono",
     "savingIdentity": "Zapisywanie…",
     "severityHigh": "Wysoka",
     "severityLow": "Niska",
@@ -1293,7 +1248,6 @@
       "ignoreScopeAlways": "Zawsze ignoruj",
       "ignoreScopeDocument": "Ignoruj w tej sprawie",
       "ignoreScopeMenuAriaLabel": "Zakres ignorowania",
-      "ignoreScopeWorkspace": "Ignoruj w tym obszarze roboczym",
       "labelPickerAriaLabel": "Etykieta podmiotu",
       "labelPickerEmpty": "Brak pasującej etykiety.",
       "labelPickerPlaceholder": "Etykieta",
@@ -1322,7 +1276,6 @@
     "matterPicker": {
       "allMatters": "Wszystkie sprawy",
       "description": "Wybierz sprawy, na których czat może się opierać. AI widzi treść każdej wybranej sprawy.",
-      "directLabel": "Bezpośrednio",
       "empty": "Brak dostępnych spraw.",
       "noMatter": "Brak sprawy",
       "noResults": "Brak spraw pasujących do „{query}”.",
@@ -1565,14 +1518,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Konto",
-    "calendar": "Kalendarz",
     "chat": "Czat",
-    "chatAlreadyOpen": "Czat jest już otwarty",
-    "clients": "Klienci",
     "contacts": "Kontakty",
-    "inbox": "Skrzynka odbiorcza",
-    "invitations": "Zaproszenia",
     "knowledge": "Wiedza",
     "members": "Członkowie",
     "myTodos": "Moje zadania",
@@ -1580,15 +1527,12 @@
     "pinned": "Przypięte",
     "recents": "Ostatnie",
     "search": "Szukaj",
-    "searchEmptyState": "Zacznij pisać, aby wyszukać dokumenty, sprawy i więcej.",
-    "searchPlaceholder": "Szukaj we wszystkich sprawach...",
     "shortcutCategories": {
       "navigation": "Nawigacja"
     },
     "sidebar": "Panel boczny",
     "sidebarDescription": "Wyświetla mobilny panel boczny.",
     "templates": "Szablony",
-    "timeTracking": "Ewidencja czasu",
     "toggleChat": "Przełącz czat",
     "toggleSidebar": "Przełącz panel boczny"
   },
@@ -1618,7 +1562,6 @@
     "catalogueThirdPartyConfirm": "Dodaj mimo to",
     "catalogueThirdPartyDisclaimer": "To kod strony trzeciej dodany przez {author}. stella go nie sprawdzała, nie rekomenduje i nie utrzymuje. Odpowiadasz za sprawdzenie, czy nadaje się do Twojej praktyki i jest zgodny z zasadami kancelarii. Dodając go, akceptujesz użycie na własne ryzyko.",
     "catalogueTitle": "Dostosuj AI",
-    "changeAnytime": "To ustawienie możesz zmienić w dowolnym momencie.",
     "continue": "Kontynuuj",
     "creating": {
       "ai": "Zapisywanie konfiguracji AI...",
@@ -1647,6 +1590,7 @@
     "jurisdictionSuggested": "Sugerowane",
     "jurisdictionTitle": "Wybierz jurysdykcje swojej praktyki",
     "orgNameLabel": "Nazwa zespołu",
+    "orgNamePlaceholder": "Kowalski i Wspólnicy",
     "orgSubtitle": "Tak Cię znajdą Twoi koledzy.",
     "orgTitle": "Nazwij swój zespół",
     "skipStep": "Pomiń",
@@ -1657,8 +1601,7 @@
     "stepJurisdiction": "Jurysdykcja",
     "stepOrganization": "Zespół",
     "stepTeam": "Zaproszenia",
-    "termsNotice": "Kontynuując, akceptujesz nasze <terms>Warunki korzystania z usługi</terms>.",
-    "welcomeSubtitle": "Konfiguracja zajmie mniej niż minutę."
+    "termsNotice": "Kontynuując, akceptujesz nasze <terms>Warunki korzystania z usługi</terms>."
   },
   "organization": {
     "aiConfig": {
@@ -1818,7 +1761,6 @@
       "message": "Wiadomość",
       "task": "Zadanie"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Typ pliku",
     "noResults": "Brak wyników dla „{query}”.",
     "placeholder": "Przeszukaj wszystkie sprawy...",
@@ -1826,7 +1768,6 @@
     "recentlyOpenedFiles": "Ostatnio otwarte pliki",
     "resultCount": "{count, plural, one {# wynik} few {# wyniki} many {# wyników} other {# wyników}}",
     "summaryAction": "Podsumuj najlepsze wyniki",
-    "summaryCitations": "Cytowane wyniki",
     "summaryError": "Podsumowanie niedostępne",
     "summaryLoading": "Podsumowywanie wyników...",
     "summaryPrompt": "Używa najlepszych wyników i ich treści, aby przygotować krótką odpowiedź.",
@@ -1897,7 +1838,6 @@
       "pendingInvitations": "Oczekujące zaproszenia",
       "practiceJurisdictions": "Jurysdykcje praktyki",
       "profile": "Profil",
-      "profileDescription": "Update name and slug",
       "promptCaching": {
         "description": "Po włączeniu stella dodaje znaczniki cache, dzięki czemu powtarzające się zapytania AI dotyczące tego samego dokumentu lub wątku kosztują ~10× mniej i kończą się szybciej. Cache'owane prompty pozostają u dostawcy AI do 5 minut i są ograniczone do Twojej organizacji. Po wyłączeniu stella przestaje wysyłać znaczniki cache, ale dostawcy mogą nadal cache'ować oportunistycznie — tylko umowa Zero Data Retention z dostawcą całkowicie wyłącza cache'owanie po stronie serwera.",
         "title": "Cache'owanie promptów",
@@ -1920,7 +1860,6 @@
       "usageLimitTitleEntitlementInactive": "Uprawnienie do użycia nie jest aktywne",
       "usageLimitTitleNoEntitlement": "Wymagane uprawnienie do użycia",
       "usageLimitTitleUsageLimitExceeded": "Osiągnięto limit użycia AI",
-      "usageLoading": "Ładowanie…",
       "usageManage": "Zarządzaj użyciem hostowanym",
       "usageManageError": "Nie udało się otworzyć zarządzania użyciem hostowanym",
       "usageManuallyManaged": "Zarządzane ręcznie",
@@ -2032,7 +1971,6 @@
     "fieldInputType": "Typ pola",
     "fieldLabel": "Etykieta",
     "fieldLabelPlaceholder": "np. Imię i nazwisko",
-    "fieldOptions": "Opcje",
     "fieldOptionsPlaceholder": "Wpisz opcję i naciśnij Enter",
     "fieldUpdateFailed": "Nie udało się zaktualizować pól",
     "fields": "Pola",

@@ -1,5 +1,5 @@
 import { createContext, use, useCallback, useRef, useState } from "react";
-import type { RefCallback } from "react";
+import type { RefCallback, RefObject } from "react";
 
 import { panic } from "better-result";
 
@@ -7,6 +7,10 @@ const NEAR_BOTTOM_THRESHOLD_PX = 50;
 
 type StickToBottomContext = {
   scrollRef: RefCallback<HTMLDivElement>;
+  /** The element `scrollRef` is attached to, for consumers that read or
+   *  adjust scroll metrics directly (e.g. load-older anchoring and the
+   *  IntersectionObserver root in the chat transcript). */
+  scrollElementRef: RefObject<HTMLDivElement | null>;
   contentRef: RefCallback<HTMLDivElement>;
   isAtBottom: boolean;
   isScrollable: boolean;
@@ -26,6 +30,15 @@ export const useStickToBottomContext = (): StickToBottomContext => {
   }
   return ctx;
 };
+
+/**
+ * Like {@link useStickToBottomContext} but returns null instead of
+ * panicking when no provider is present. For components that may
+ * render both inside a `Conversation` and inside a bespoke scroll
+ * container (e.g. the file-chat overlay).
+ */
+export const useMaybeStickToBottomContext = (): StickToBottomContext | null =>
+  use(StickToBottomContext);
 
 /**
  * Checks whether the user is actively selecting text inside
@@ -186,5 +199,12 @@ export const useStickToBottom = () => {
     };
   }, []);
 
-  return { scrollRef, contentRef, isAtBottom, isScrollable, scrollToBottom };
+  return {
+    scrollRef,
+    scrollElementRef,
+    contentRef,
+    isAtBottom,
+    isScrollable,
+    scrollToBottom,
+  };
 };

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, asc, eq, isNull, or } from "drizzle-orm";
+import { and, asc, count, eq, isNull, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { anonymizationAllowlistEntries, entities } from "@/api/db/schema";
@@ -8,6 +8,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 
 /**
  * Anonymization allowlist endpoints.
@@ -76,6 +78,8 @@ export const readWorkspaceAnonymizationAllowlist = createSafeHandler(
                   ),
             ),
           )
+          // SAFETY: anonymization allowlist (never-mask overrides) must load fully to avoid over-masking; the workspace + doc-scoped set is bounded by the per-workspace write cap (LIMITS.anonymizationAllowlistEntriesPerWorkspace) enforced in createWorkspaceAnonymizationAllowlistEntry, and org-wide entries are not writable from this endpoint.
+          // eslint-disable-next-line require-query-limit/require-query-limit
           .orderBy(asc(anonymizationAllowlistEntries.canonical)),
       ),
     );
@@ -135,9 +139,23 @@ export const createWorkspaceAnonymizationAllowlistEntry = createSafeHandler(
             .where(eq(entities.id, body.entityId))
             .limit(1);
           if (owner.length === 0 || owner[0]?.workspaceId !== workspaceId) {
-            return { inserted: 0 };
+            return { type: "ok" as const, inserted: 0 };
           }
         }
+
+        // Cap the per-workspace set (workspace + doc-scoped rows) so the
+        // allowlist read stays bounded; org-wide rows are managed elsewhere.
+        const existing = await tx
+          .select({ value: count() })
+          .from(anonymizationAllowlistEntries)
+          .where(eq(anonymizationAllowlistEntries.workspaceId, workspaceId));
+        if (
+          (existing[0]?.value ?? 0) >=
+          LIMITS.anonymizationAllowlistEntriesPerWorkspace
+        ) {
+          return { type: "limit-exceeded" as const };
+        }
+
         const id = createSafeId<"anonymizationAllowlistEntry">();
         const values = {
           id,
@@ -176,10 +194,18 @@ export const createWorkspaceAnonymizationAllowlistEntry = createSafeHandler(
           });
         }
 
-        return { inserted: inserted.length };
+        return { type: "ok" as const, inserted: inserted.length };
       }),
     );
-    return Result.ok(result);
+    if (result.type === "limit-exceeded") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Workspace anonymization allowlist limit reached",
+        }),
+      );
+    }
+    return Result.ok({ inserted: result.inserted });
   },
 );
 

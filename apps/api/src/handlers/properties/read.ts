@@ -2,6 +2,7 @@ import { Result } from "better-result";
 
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { LIMITS } from "@/api/lib/limits";
 import { deserializeAITool } from "@/api/lib/markdown/ai-tool";
 
 const config = {
@@ -16,6 +17,7 @@ const readProperties = createSafeHandler(
         tx.query.properties.findMany({
           where: { workspaceId: { eq: workspaceId } },
           orderBy: { createdAt: "asc" },
+          limit: LIMITS.propertiesCount,
           with: {
             dependencies: {
               columns: {

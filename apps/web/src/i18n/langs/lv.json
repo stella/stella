@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Pašreizējā",
-      "description": "Pārvaldiet aktīvās sesijas",
       "device": "Ierīce",
       "deviceOnOs": "{browser} / {os}",
       "ipAddress": "IP adrese",
@@ -21,25 +20,6 @@
       "description": "Pievienojiet pakalpojumu sniedzēja piekļuves datus, lai sāktu izmantot AI funkcijas.",
       "title": "Pievienot AI pakalpojumu sniedzēju"
     }
-  },
-  "anonymize": {
-    "addEntity": "Pievienot entītiju",
-    "checkAnonymization": "Check anonymisation",
-    "closeAddForm": "Aizvērt pievienošanas veidlapu",
-    "confirmAll": "Apstiprināt visu",
-    "entities": "Entītijas",
-    "entityType": "Entītijas tips",
-    "extractingText": "Teksts tiek izgūts…",
-    "noEntitiesFound": "Entītijas nav atrastas",
-    "reject": "Noraidīt",
-    "rejectAll": "Noraidīt visu",
-    "removeEntity": "Noņemt entītiju",
-    "revise": "Revise anonymisation",
-    "runPipeline": "Palaist procesu",
-    "running": "Notiek izpilde…",
-    "searchMatches": "Dokumentā meklējamie vārdi",
-    "searchPlaceholder": "Ievadiet meklējamos vārdus…",
-    "title": "Anonymisation review"
   },
   "app": {
     "versionMismatch": {
@@ -73,7 +53,6 @@
     "weekStartSunday": "Svētdiena"
   },
   "auth": {
-    "betaNoticeBody": "Piesardzības nolūkos beta periodā neaugšupielādējiet sensitīvus, priviliģētus, personas datus, neaizstājamus vai ražošanai kritiskus datus. Cloud ir demonstrācijas pakalpojums.",
     "betaNoticeTitle": "Beta",
     "checkSpamHint": "Ja to neredzat, pārbaudiet mēstuļu mapi.",
     "chooseOrganization": "Izvēlieties organizāciju, kurā strādāt",
@@ -103,7 +82,6 @@
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",
-    "signInWithEmail": "Pieslēgties ar e-pastu",
     "subtitle": "Dokumenti, tiesu prakse un pārskatīšana kontrolēti. Ar AI palīdzību.",
     "useDifferentEmail": "Izmantot citu e-pasta adresi",
     "weSentCodeTo": "Mēs nosūtījām kodu uz {email}"
@@ -122,8 +100,10 @@
       "activityCode": "Darbības kods",
       "codeLabel": "Kods",
       "codeLabelField": "Etiķete",
+      "codePlaceholder": "L110",
       "createCode": "Izveidot kodu",
       "inactive": "Neaktīvs",
+      "labelPlaceholder": "Izpēte",
       "manageCodes": "Pārvaldīt kodus",
       "noCodesYet": "Nav norēķinu kodu",
       "task": "Uzdevums",
@@ -271,31 +251,14 @@
     "emptyState": "Lēmumi nav atrasti. Konfigurējiet avotu un palaidiet sinhronizāciju, lai importētu tiesu praksi.",
     "filters": {
       "court": "Tiesa",
-      "dateFrom": "No",
-      "dateTo": "Līdz",
       "searchPlaceholder": "Meklēt pēc lietas numura..."
     },
-    "loading": "Ielādē...",
     "loadingMore": "Ielādē vairāk...",
-    "sectionTypes": {
-      "argumentation": "Argumentācija",
-      "dissent": "Atsevišķās domas",
-      "footer": "Kājene",
-      "header": "Galvene",
-      "ruling": "Rezolutīvā daļa",
-      "unknown": "Cits"
-    },
     "seo": {
       "browse": "Pārlūkot judikatūru",
       "countries": "Valstis",
       "courts": "Tiesas",
       "years": "Gadi"
-    },
-    "sources": {
-      "empty": "Nav konfigurētu avotu.",
-      "lastSync": "Pēdējā sinhronizācija: {date, date, medium}",
-      "neverSynced": "Vēl nav sinhronizēts",
-      "title": "Avoti"
     },
     "viewer": {
       "abstract": "Kopsavilkums",
@@ -305,7 +268,6 @@
       "legalSentence": "Tiesību tēze",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populārais nosaukums",
-      "sections": "Sadaļas",
       "source": "Avots",
       "sourceFields": {
         "decisionCategory": "Nolēmuma kategorija",
@@ -453,6 +415,9 @@
       "prompts": "Prasmes",
       "recentChats": "Nesenie čati"
     },
+    "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
+    "loadEarlierMessagesError": "Neizdevās ielādēt vecākus ziņojumus",
+    "loadingEarlierMessages": "Ielādē vecākus ziņojumus…",
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {
       "category": {
@@ -584,7 +549,6 @@
     "allClauses": "Visas klauzulas",
     "backToList": "Atpakaļ uz klauzulu sarakstu",
     "body": "Saturs",
-    "categories": "Kategorijas",
     "categoryDeleteConfirm": "Šīs kategorijas klauzulas kļūs nekategorizētas.",
     "categoryName": "Kategorijas nosaukums",
     "categoryNamePlaceholder": "piem. Konfidencialitāte",
@@ -598,7 +562,6 @@
     "createCategory": "Jauna kategorija",
     "createClause": "Jauna klauzula",
     "createFailed": "Neizdevās izveidot klauzulu",
-    "currentVersion": "Pašreizējā",
     "deleteCategory": "Dzēst kategoriju",
     "deleteClause": "Dzēst klauzulu",
     "deleteFailed": "Neizdevās dzēst",
@@ -613,7 +576,6 @@
     "importSuccess": "{count, plural, zero {# klauzulu importētas} one {# klauzula importēta} other {# klauzulas importētas}}",
     "importing": "Importē…",
     "languagePlaceholder": "piem. lv",
-    "limitReached": "Sasniegts klauzulu limits",
     "linkClause": "Saistīt klauzulu",
     "linkFailed": "Neizdevās saistīt klauzulu",
     "linked": "Klauzula saistīta",
@@ -621,7 +583,6 @@
     "loadFailed": "Neizdevās ielādēt klauzulas",
     "loading": "Ielādē klauzulas…",
     "noChanges": "Nav izmaiņu",
-    "noClauses": "Klauzulu vēl nav",
     "noLinkedClauses": "Nav saistītu klauzulu",
     "noResults": "Klauzulu vēl nav",
     "noVariants": "Nav variantu",
@@ -631,7 +592,6 @@
     "searchClauses": "Meklēt klauzulas...",
     "searchPlaceholder": "Meklēt klauzulas...",
     "selectFile": "Atlasīt JSON failu",
-    "selectVariant": "Atlasīt variantu",
     "selectVersionToCompare": "Atlasiet versiju, ko salīdzināt ar pašreizējo",
     "slotName": "Slota nosaukums",
     "slotNamePlaceholder": "piem. NekonfkurencesSlots",
@@ -644,7 +604,6 @@
     "unlinkConfirm": "Tas noņems klauzulu no šīs veidnes.",
     "unlinkFailed": "Neizdevās atsaistīt klauzulu",
     "unlinked": "Klauzula atsaistīta",
-    "unmappedSlot": "Nav saistīts",
     "updateFailed": "Neizdevās atjaunināt klauzulu",
     "usageNotes": "Lietošanas piezīmes",
     "usageNotesPlaceholder": "Kad vajadzētu izmantot šo klauzulu? (AI montāžai)",
@@ -653,8 +612,7 @@
     "variantLabel": "Varianta etiķete",
     "variantLabelPlaceholder": "piem. Standarta",
     "variants": "Varianti",
-    "version": "{version}. versija",
-    "versionCount": "{count, plural, zero {# versiju} one {# versija} other {# versijas}}"
+    "version": "{version}. versija"
   },
   "common": {
     "accept": "Pieņemt",
@@ -977,7 +935,6 @@
     "acceptAll": "Pieņemt visu",
     "applyAs": "kā",
     "applyDirect": "Tieši",
-    "applyMode": "Lietot kā:",
     "applyTracked": "Izsekotās izmaiņas",
     "areaUnspecified": "Nenorādīts",
     "byArea": "Pēc jomas",
@@ -989,11 +946,9 @@
     "hideAccepted": "Slēpt pieņemtos ieteikumus",
     "identityAria": "Izsekoto izmaiņu identitāte lietotājam {name}",
     "identitySaved": "Identitāte saglabāta",
-    "progressAria": "Pārskatīti {reviewed} no {total}",
     "reject": "Noraidīt",
     "rejectAll": "Noraidīt visu",
     "revert": "Atjaunot",
-    "reviewed": "pārskatīti",
     "savingIdentity": "Saglabā…",
     "severityHigh": "Augsta",
     "severityLow": "Zema",
@@ -1293,7 +1248,6 @@
       "ignoreScopeAlways": "Vienmēr ignorēt",
       "ignoreScopeDocument": "Ignorēt šajā lietā",
       "ignoreScopeMenuAriaLabel": "Ignorēšanas tvērums",
-      "ignoreScopeWorkspace": "Ignorēt šajā darbvietā",
       "labelPickerAriaLabel": "Entītijas etiķete",
       "labelPickerEmpty": "Nav atbilstošas etiķetes.",
       "labelPickerPlaceholder": "Etiķete",
@@ -1322,7 +1276,6 @@
     "matterPicker": {
       "allMatters": "Visas lietas",
       "description": "Izvēlieties lietas, uz kurām šī tērzēšana var balstīties. AI redz saturu no katras atlasītās lietas.",
-      "directLabel": "Tiešs",
       "empty": "Nav pieejamu lietu.",
       "noMatter": "Bez lietas",
       "noResults": "Neviena lieta neatbilst „{query}”.",
@@ -1565,14 +1518,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Konts",
-    "calendar": "Kalendārs",
     "chat": "Tērzēšana",
-    "chatAlreadyOpen": "Saruna jau ir atvērta",
-    "clients": "Klienti",
     "contacts": "Kontakti",
-    "inbox": "Iesūtne",
-    "invitations": "Uzaicinājumi",
     "knowledge": "Zināšanas",
     "members": "Dalībnieki",
     "myTodos": "Mani uzdevumi",
@@ -1580,15 +1527,12 @@
     "pinned": "Piesprausts",
     "recents": "Nesenie",
     "search": "Meklēt",
-    "searchEmptyState": "Sāciet rakstīt, lai meklētu dokumentus, lietas un citu.",
-    "searchPlaceholder": "Meklēt visās darba vidēs...",
     "shortcutCategories": {
       "navigation": "Navigācija"
     },
     "sidebar": "Sānjosla",
     "sidebarDescription": "Parāda mobilo sānjoslu.",
     "templates": "Veidnes",
-    "timeTracking": "Laika uzskaite",
     "toggleChat": "Pārslēgt sarunu",
     "toggleSidebar": "Pārslēgt sānjoslu"
   },
@@ -1618,7 +1562,6 @@
     "catalogueThirdPartyConfirm": "Tomēr pievienot",
     "catalogueThirdPartyDisclaimer": "Šis ir trešās puses kods, ko pievienoja {author}. stella to nav pārskatījusi, apstiprinājusi vai uzturējusi. Jūs esat atbildīgs par pārbaudi, vai tas ir piemērots jūsu praksei un atbilst jūsu biroja politikām. Pievienojot to, jūs piekrītat lietot to uz savu risku.",
     "catalogueTitle": "Pielāgojiet savu MI",
-    "changeAnytime": "Šo iestatījumu varat mainīt jebkurā laikā vēlāk.",
     "continue": "Turpināt",
     "creating": {
       "ai": "Saglabājam MI konfigurāciju...",
@@ -1647,6 +1590,7 @@
     "jurisdictionSuggested": "Ieteikts",
     "jurisdictionTitle": "Izvēlieties savas prakses jurisdikcijas",
     "orgNameLabel": "Komandas nosaukums",
+    "orgNamePlaceholder": "Bērziņš un partneri",
     "orgSubtitle": "Tā kolēģi jūs atradīs.",
     "orgTitle": "Nosauciet savu komandu",
     "skipStep": "Izlaist",
@@ -1657,8 +1601,7 @@
     "stepJurisdiction": "Jurisdikcija",
     "stepOrganization": "Komanda",
     "stepTeam": "Uzaicināt",
-    "termsNotice": "Turpinot jūs piekrītat mūsu <terms>pakalpojumu lietošanas noteikumiem</terms>.",
-    "welcomeSubtitle": "Iestatīšana aizņems mazāk par minūti."
+    "termsNotice": "Turpinot jūs piekrītat mūsu <terms>pakalpojumu lietošanas noteikumiem</terms>."
   },
   "organization": {
     "aiConfig": {
@@ -1818,7 +1761,6 @@
       "message": "Ziņa",
       "task": "Uzdevums"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Faila tips",
     "noResults": "Nav rezultātu meklēšanai \"{query}\".",
     "placeholder": "Meklēt visās lietās...",
@@ -1826,7 +1768,6 @@
     "recentlyOpenedFiles": "Nesen atvērtie faili",
     "resultCount": "{count, plural, zero {# rezultātu} one {# rezultāts} other {# rezultāti}}",
     "summaryAction": "Apkopot labākos rezultātus",
-    "summaryCitations": "Citētie rezultāti",
     "summaryError": "Kopsavilkums nav pieejams",
     "summaryLoading": "Rezultātu apkopošana...",
     "summaryPrompt": "Izmanto labākos rezultātus un to saturu īsai atbildei.",
@@ -1897,7 +1838,6 @@
       "pendingInvitations": "Gaidošie uzaicinājumi",
       "practiceJurisdictions": "Prakses jurisdikcijas",
       "profile": "Profils",
-      "profileDescription": "Update name and slug",
       "promptCaching": {
         "description": "Ja ieslēgts, stella pievieno kešatmiņas iezīmes, lai atkārtoti MI pieprasījumi par to pašu dokumentu vai sarunu izmaksātu ~10× lētāk un beigtos ātrāk. Kešotie pieprasījumi paliek pie MI pakalpojumu sniedzēja līdz 5 minūtēm un ir ierobežoti uz jūsu organizāciju. Izslēdzot stella vairs nesūta kešatmiņas iezīmes, taču pakalpojumu sniedzēji joprojām var kešot oportūnistiski — tikai Zero Data Retention līgums ar pakalpojumu sniedzēju pilnībā izslēdz servera puses kešošanu.",
         "title": "Uzvedņu kešošana",
@@ -1920,7 +1860,6 @@
       "usageLimitTitleEntitlementInactive": "Lietojuma tiesības nav aktīvas",
       "usageLimitTitleNoEntitlement": "Nepieciešamas lietojuma tiesības",
       "usageLimitTitleUsageLimitExceeded": "Sasniegts AI lietojuma limits",
-      "usageLoading": "Notiek ielāde…",
       "usageManage": "Pārvaldīt mitināto lietojumu",
       "usageManageError": "Neizdevās atvērt mitinātā lietojuma pārvaldību",
       "usageManuallyManaged": "Pārvaldīts manuāli",
@@ -2032,7 +1971,6 @@
     "fieldInputType": "Ievades tips",
     "fieldLabel": "Etiķete",
     "fieldLabelPlaceholder": "piem., Pilns vārds",
-    "fieldOptions": "Opcijas",
     "fieldOptionsPlaceholder": "Ievadiet opciju un nospiediet Enter",
     "fieldUpdateFailed": "Neizdevās atjaunināt laukus",
     "fields": "Lauki",

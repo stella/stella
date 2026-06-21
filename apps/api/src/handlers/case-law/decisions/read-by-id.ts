@@ -20,6 +20,7 @@ import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribu
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { LIMITS } from "@/api/lib/limits";
 
 type PublicDecisionLanguageAlternate = {
   caseNumber: string;
@@ -100,7 +101,12 @@ const listPublicDecisionLanguageAlternates = async ({
           redistributableCaseLawSource,
         ),
       )
-      .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id)),
+      .orderBy(asc(caseLawDecisions.language), asc(caseLawDecisions.id))
+      // Bound the per-group read: a languageGroupKey normally holds only this
+      // decision's language variants, but a malformed/over-merged key could
+      // match many rows and make this public read unbounded — the sitemap path
+      // caps the same read for the same reason. Capped variants still dedupe.
+      .limit(LIMITS.caseLawLanguageAlternatesPerGroupMax),
   );
   const dedupedAlternates = dedupeAlternatesByLanguage(alternates);
 

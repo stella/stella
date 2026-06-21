@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "Aktuell",
-      "description": "Verwalten Sie Ihre aktiven Sitzungen",
       "device": "Gerät",
       "deviceOnOs": "{browser} auf {os}",
       "ipAddress": "IP-Adresse",
@@ -21,25 +20,6 @@
       "description": "Füge Provider-Zugangsdaten hinzu, um AI-Funktionen zu nutzen.",
       "title": "AI-Provider verbinden"
     }
-  },
-  "anonymize": {
-    "addEntity": "Entität hinzufügen",
-    "checkAnonymization": "Check anonymisation",
-    "closeAddForm": "Formular zum Hinzufügen schließen",
-    "confirmAll": "Alle bestätigen",
-    "entities": "Entitäten",
-    "entityType": "Entitätstyp",
-    "extractingText": "Text wird extrahiert…",
-    "noEntitiesFound": "Keine Entitäten gefunden",
-    "reject": "Ablehnen",
-    "rejectAll": "Alle ablehnen",
-    "removeEntity": "Entität entfernen",
-    "revise": "Revise anonymisation",
-    "runPipeline": "Pipeline ausführen",
-    "running": "Wird ausgeführt…",
-    "searchMatches": "Im Dokument zu suchende Wörter",
-    "searchPlaceholder": "Wörter zum Suchen eingeben…",
-    "title": "Anonymisation review"
   },
   "app": {
     "versionMismatch": {
@@ -73,7 +53,6 @@
     "weekStartSunday": "Sonntag"
   },
   "auth": {
-    "betaNoticeBody": "Laden Sie während der Beta vorsichtshalber keine sensiblen, privilegierten, personenbezogenen, unersetzlichen oder produktionskritischen Daten hoch. Cloud ist ein Demodienst.",
     "betaNoticeTitle": "Beta",
     "checkSpamHint": "Falls Sie den Code nicht sehen, prüfen Sie Ihren Spam-Ordner.",
     "chooseOrganization": "Wählen Sie die Organisation, in der Sie arbeiten möchten",
@@ -103,7 +82,6 @@
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
-    "signInWithEmail": "Mit E-Mail anmelden",
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
     "useDifferentEmail": "Andere E-Mail verwenden",
     "weSentCodeTo": "Wir haben einen Code an {email} gesendet"
@@ -122,8 +100,10 @@
       "activityCode": "Aktivitätscode",
       "codeLabel": "Code",
       "codeLabelField": "Bezeichnung",
+      "codePlaceholder": "L110",
       "createCode": "Code erstellen",
       "inactive": "Inaktiv",
+      "labelPlaceholder": "Recherche",
       "manageCodes": "Codes verwalten",
       "noCodesYet": "Noch keine Abrechnungscodes",
       "task": "Aufgabe",
@@ -271,31 +251,14 @@
     "emptyState": "Keine Entscheidungen gefunden. Konfigurieren Sie eine Quelle und führen Sie eine Synchronisierung durch, um Rechtsprechung zu importieren.",
     "filters": {
       "court": "Gericht",
-      "dateFrom": "Von",
-      "dateTo": "Bis",
       "searchPlaceholder": "Nach Aktenzeichen suchen..."
     },
-    "loading": "Wird geladen…",
     "loadingMore": "Weitere werden geladen…",
-    "sectionTypes": {
-      "argumentation": "Begründung",
-      "dissent": "Sondervotum",
-      "footer": "Fußzeile",
-      "header": "Kopfzeile",
-      "ruling": "Tenor",
-      "unknown": "Sonstiges"
-    },
     "seo": {
       "browse": "Rechtsprechung durchsuchen",
       "countries": "Länder",
       "courts": "Gerichte",
       "years": "Jahre"
-    },
-    "sources": {
-      "empty": "Keine Quellen konfiguriert.",
-      "lastSync": "Letzte Synchronisierung: {date, date, medium}",
-      "neverSynced": "Noch nie synchronisiert",
-      "title": "Quellen"
     },
     "viewer": {
       "abstract": "Zusammenfassung",
@@ -305,7 +268,6 @@
       "legalSentence": "Leitsatz",
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic.",
       "popularName": "Populärer Name",
-      "sections": "Abschnitte",
       "source": "Quelle",
       "sourceFields": {
         "decisionCategory": "Entscheidungskategorie",
@@ -453,6 +415,9 @@
       "prompts": "Fähigkeiten",
       "recentChats": "Letzte Chats"
     },
+    "loadEarlierMessages": "Ältere Nachrichten laden",
+    "loadEarlierMessagesError": "Ältere Nachrichten konnten nicht geladen werden",
+    "loadingEarlierMessages": "Ältere Nachrichten werden geladen…",
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {
@@ -584,7 +549,6 @@
     "allClauses": "Alle Klauseln",
     "backToList": "Zurück zu Klauseln",
     "body": "Inhalt",
-    "categories": "Kategorien",
     "categoryDeleteConfirm": "Klauseln in dieser Kategorie werden unkategorisiert.",
     "categoryName": "Kategoriename",
     "categoryNamePlaceholder": "z.B. Vertraulichkeit",
@@ -598,7 +562,6 @@
     "createCategory": "Neue Kategorie",
     "createClause": "Neue Klausel",
     "createFailed": "Klausel konnte nicht erstellt werden",
-    "currentVersion": "Aktuell",
     "deleteCategory": "Kategorie löschen",
     "deleteClause": "Klausel löschen",
     "deleteFailed": "Löschen fehlgeschlagen",
@@ -613,7 +576,6 @@
     "importSuccess": "{count, plural, one {# Klausel importiert} other {# Klauseln importiert}}",
     "importing": "Wird importiert …",
     "languagePlaceholder": "z.B. de",
-    "limitReached": "Klausellimit erreicht",
     "linkClause": "Klausel verknüpfen",
     "linkFailed": "Klausel konnte nicht verknüpft werden",
     "linked": "Klausel verknüpft",
@@ -621,7 +583,6 @@
     "loadFailed": "Klauseln konnten nicht geladen werden",
     "loading": "Klauseln werden geladen …",
     "noChanges": "Keine Änderungen",
-    "noClauses": "Noch keine Klauseln",
     "noLinkedClauses": "Keine verknüpften Klauseln",
     "noResults": "Keine Klauseln gefunden",
     "noVariants": "Keine Varianten",
@@ -631,7 +592,6 @@
     "searchClauses": "Klauseln suchen …",
     "searchPlaceholder": "Klauseln suchen …",
     "selectFile": "JSON-Datei auswählen",
-    "selectVariant": "Variante auswählen",
     "selectVersionToCompare": "Version zum Vergleich mit der aktuellen auswählen",
     "slotName": "Slot-Name",
     "slotNamePlaceholder": "z.B. Wettbewerbsverbot",
@@ -644,7 +604,6 @@
     "unlinkConfirm": "Die Klausel wird aus dieser Vorlage entfernt.",
     "unlinkFailed": "Verknüpfung konnte nicht aufgehoben werden",
     "unlinked": "Klausel getrennt",
-    "unmappedSlot": "Nicht verknüpft",
     "updateFailed": "Klausel konnte nicht aktualisiert werden",
     "usageNotes": "Verwendungshinweise",
     "usageNotesPlaceholder": "Wann sollte diese Klausel verwendet werden? (für KI-Zusammenstellung)",
@@ -653,8 +612,7 @@
     "variantLabel": "Variantenbezeichnung",
     "variantLabelPlaceholder": "z.B. Standard",
     "variants": "Varianten",
-    "version": "Version {version}",
-    "versionCount": "{count, plural, one {# Version} other {# Versionen}}"
+    "version": "Version {version}"
   },
   "common": {
     "accept": "Annehmen",
@@ -977,7 +935,6 @@
     "acceptAll": "Alle annehmen",
     "applyAs": "als",
     "applyDirect": "Direkt",
-    "applyMode": "Anwenden als:",
     "applyTracked": "Nachverfolgte Änderungen",
     "areaUnspecified": "Nicht angegeben",
     "byArea": "Nach Bereich",
@@ -989,11 +946,9 @@
     "hideAccepted": "Angenommene Vorschläge ausblenden",
     "identityAria": "Identität für nachverfolgte Änderungen von {name}",
     "identitySaved": "Identität gespeichert",
-    "progressAria": "{reviewed} von {total} geprüft",
     "reject": "Ablehnen",
     "rejectAll": "Alle ablehnen",
     "revert": "Zurücksetzen",
-    "reviewed": "geprüft",
     "savingIdentity": "Wird gespeichert…",
     "severityHigh": "Hoch",
     "severityLow": "Niedrig",
@@ -1293,7 +1248,6 @@
       "ignoreScopeAlways": "Immer ignorieren",
       "ignoreScopeDocument": "In dieser Akte ignorieren",
       "ignoreScopeMenuAriaLabel": "Geltungsbereich",
-      "ignoreScopeWorkspace": "In diesem Arbeitsbereich ignorieren",
       "labelPickerAriaLabel": "Entitätsbezeichnung",
       "labelPickerEmpty": "Keine passende Bezeichnung.",
       "labelPickerPlaceholder": "Bezeichnung",
@@ -1322,7 +1276,6 @@
     "matterPicker": {
       "allMatters": "Alle Akten",
       "description": "Wählen Sie die Akten aus, auf die dieser Chat zurückgreifen kann. Die KI sieht Inhalte aus jeder ausgewählten Akte.",
-      "directLabel": "Direkt",
       "empty": "Keine Akten verfügbar.",
       "noMatter": "Keine Akte",
       "noResults": "Keine Akte stimmt mit „{query}“ überein.",
@@ -1565,14 +1518,8 @@
     "showRaw": "Show raw"
   },
   "navigation": {
-    "account": "Konto",
-    "calendar": "Kalender",
     "chat": "Chat",
-    "chatAlreadyOpen": "Chat ist bereits geöffnet",
-    "clients": "Klienten",
     "contacts": "Kontakte",
-    "inbox": "Posteingang",
-    "invitations": "Einladungen",
     "knowledge": "Wissen",
     "members": "Mitglieder",
     "myTodos": "Meine Aufgaben",
@@ -1580,15 +1527,12 @@
     "pinned": "Angeheftet",
     "recents": "Zuletzt verwendet",
     "search": "Suchen",
-    "searchEmptyState": "Beginnen Sie zu tippen, um Dokumente, Akten und mehr zu suchen.",
-    "searchPlaceholder": "In allen Arbeitsbereichen suchen...",
     "shortcutCategories": {
       "navigation": "Navigation"
     },
     "sidebar": "Seitenleiste",
     "sidebarDescription": "Zeigt die mobile Seitenleiste an.",
     "templates": "Vorlagen",
-    "timeTracking": "Zeiterfassung",
     "toggleChat": "Chat ein-/ausblenden",
     "toggleSidebar": "Seitenleiste ein-/ausblenden"
   },
@@ -1618,7 +1562,6 @@
     "catalogueThirdPartyConfirm": "Trotzdem hinzufügen",
     "catalogueThirdPartyDisclaimer": "Dies ist Drittanbieter-Code von {author}. stella hat ihn nicht geprüft, empfohlen oder gewartet. Sie sind selbst dafür verantwortlich zu prüfen, ob er für Ihre Praxis geeignet ist und den Richtlinien Ihrer Kanzlei entspricht. Mit dem Hinzufügen akzeptieren Sie die Nutzung auf eigenes Risiko.",
     "catalogueTitle": "KI anpassen",
-    "changeAnytime": "Diese Einstellung können Sie jederzeit später ändern.",
     "continue": "Fortfahren",
     "creating": {
       "ai": "KI-Konfiguration wird gespeichert...",
@@ -1647,6 +1590,7 @@
     "jurisdictionSuggested": "Vorgeschlagen",
     "jurisdictionTitle": "Wählen Sie Ihre Praxisjurisdiktionen",
     "orgNameLabel": "Teamname",
+    "orgNamePlaceholder": "Müller & Partner",
     "orgSubtitle": "So finden Ihre Kollegen Sie.",
     "orgTitle": "Benennen Sie Ihr Team",
     "skipStep": "Überspringen",
@@ -1657,8 +1601,7 @@
     "stepJurisdiction": "Jurisdiktion",
     "stepOrganization": "Team",
     "stepTeam": "Einladen",
-    "termsNotice": "Mit dem Fortfahren stimmen Sie unseren <terms>Nutzungsbedingungen</terms> zu.",
-    "welcomeSubtitle": "Die Einrichtung dauert weniger als eine Minute."
+    "termsNotice": "Mit dem Fortfahren stimmen Sie unseren <terms>Nutzungsbedingungen</terms> zu."
   },
   "organization": {
     "aiConfig": {
@@ -1818,7 +1761,6 @@
       "message": "Nachricht",
       "task": "Aufgabe"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "Dateityp",
     "noResults": "Keine Ergebnisse für „{query}“ gefunden.",
     "placeholder": "Suchen …",
@@ -1826,7 +1768,6 @@
     "recentlyOpenedFiles": "Zuletzt geöffnete Dateien",
     "resultCount": "{count, plural, one {# Ergebnis} other {# Ergebnisse}}",
     "summaryAction": "Top-Ergebnisse zusammenfassen",
-    "summaryCitations": "Zitierte Ergebnisse",
     "summaryError": "Zusammenfassung nicht verfügbar",
     "summaryLoading": "Ergebnisse werden zusammengefasst...",
     "summaryPrompt": "Nutzt die Top-Ergebnisse und deren Inhalt für eine kurze Antwort.",
@@ -1897,7 +1838,6 @@
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Praxisjurisdiktionen",
       "profile": "Profil",
-      "profileDescription": "Update name and slug",
       "promptCaching": {
         "description": "Wenn aktiviert, fügt stella Cache-Markierungen hinzu, sodass wiederholte KI-Anfragen über dasselbe Dokument oder denselben Thread ca. 10× weniger kosten und schneller abschließen. Zwischengespeicherte Prompts verbleiben bis zu 5 Minuten beim KI-Anbieter und sind auf Ihre Organisation beschränkt. Beim Deaktivieren sendet stella keine Cache-Markierungen mehr, Anbieter können jedoch weiterhin opportunistisch zwischenspeichern — nur ein Zero-Data-Retention-Vertrag mit dem Anbieter deaktiviert das serverseitige Caching vollständig.",
         "title": "Prompt-Caching",
@@ -1920,7 +1860,6 @@
       "usageLimitTitleEntitlementInactive": "Nutzungsberechtigung ist nicht aktiv",
       "usageLimitTitleNoEntitlement": "Nutzungsberechtigung erforderlich",
       "usageLimitTitleUsageLimitExceeded": "KI-Nutzungslimit erreicht",
-      "usageLoading": "Wird geladen…",
       "usageManage": "Gehostete Nutzung verwalten",
       "usageManageError": "Gehostete Nutzungsverwaltung konnte nicht geöffnet werden",
       "usageManuallyManaged": "Manuell verwaltet",
@@ -2032,7 +1971,6 @@
     "fieldInputType": "Eingabetyp",
     "fieldLabel": "Bezeichnung",
     "fieldLabelPlaceholder": "z. B. Vollständiger Name",
-    "fieldOptions": "Optionen",
     "fieldOptionsPlaceholder": "Option eingeben und Enter drücken",
     "fieldUpdateFailed": "Felder konnten nicht aktualisiert werden",
     "fields": "Felder",

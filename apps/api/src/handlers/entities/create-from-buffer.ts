@@ -115,6 +115,7 @@ export const createEntityFromBuffer = async ({
     tx.query.properties.findMany({
       columns: { id: true, content: true },
       where: { workspaceId: { eq: workspaceId } },
+      limit: LIMITS.propertiesCount,
     }),
   );
   const fileProperty = wsProperties.find((p) => p.content.type === "file");

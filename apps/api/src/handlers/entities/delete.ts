@@ -18,10 +18,14 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { getSearchProvider } from "@/api/lib/search/provider";
 
 const deleteEntitiesBodySchema = t.Object({
-  entityIds: t.Array(tSafeId("entity"), { minItems: 1 }),
+  entityIds: t.Array(tSafeId("entity"), {
+    minItems: 1,
+    maxItems: LIMITS.entitiesPageSizeMax,
+  }),
 });
 
 type DeleteEntitiesBodySchema = Static<typeof deleteEntitiesBodySchema>;
@@ -43,6 +47,8 @@ const deleteEntitiesHandler = async function* ({
 }: DeleteEntitiesHandlerProps) {
   const readOnlyEntities = yield* Result.await(
     safeDb((tx) =>
+      // SAFETY: result pinned to body.entityIds via id IN (...), which the body schema caps at LIMITS.entitiesPageSizeMax, so it cannot return more rows than the (bounded) request enumerated
+      // eslint-disable-next-line require-query-limit/require-query-limit
       tx.query.entities.findMany({
         where: {
           id: { in: body.entityIds },

@@ -94,7 +94,7 @@ export const OrganizationStep = ({
                   field.handleChange(e.target.value);
                   onNameChange(e.target.value);
                 }}
-                placeholder="Smith & Associates"
+                placeholder={t("onboarding.orgNamePlaceholder")}
                 ref={inputRef}
                 value={field.state.value}
               />

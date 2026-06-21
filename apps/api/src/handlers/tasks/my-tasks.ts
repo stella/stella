@@ -1,6 +1,7 @@
 import type { ScopedDb } from "@/api/db";
 import type { SafeId } from "@/api/lib/branded-types";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
+import { LIMITS } from "@/api/lib/limits";
 
 type MyTasksProps = {
   userId: SafeId<"user">;
@@ -12,7 +13,7 @@ export const myTasksHandler = async ({ userId, scopedDb }: MyTasksProps) => {
     tx.query.taskAssignees.findMany({
       where: { userId },
       columns: { entityId: true, role: true },
-      limit: 500,
+      limit: LIMITS.myTasksAssignmentScanLimit,
     }),
   );
 
@@ -77,7 +78,7 @@ export const myTasksHandler = async ({ userId, scopedDb }: MyTasksProps) => {
       orderBy: {
         dueDate: "asc",
       },
-      limit: 200,
+      limit: LIMITS.myTasksMax,
     }),
   );
 };

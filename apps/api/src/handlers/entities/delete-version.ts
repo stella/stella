@@ -13,6 +13,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import { broadcast } from "@/api/lib/sse";
 
 const paramsSchema = workspaceParams({
@@ -65,7 +66,8 @@ export default createSafeHandler(
               eq(entityVersions.workspaceId, workspaceId),
             ),
           )
-          .orderBy(desc(entityVersions.versionNumber)),
+          .orderBy(desc(entityVersions.versionNumber))
+          .limit(LIMITS.versionsPerEntity),
       ),
     );
 
@@ -101,6 +103,8 @@ export default createSafeHandler(
     // Get file fields for S3 cleanup
     const versionFields = yield* Result.await(
       safeDb((tx) =>
+        // SAFETY: one entity version's fields, bounded by LIMITS.propertiesCount via the unique (propertyId, entityVersionId) index
+        // eslint-disable-next-line require-query-limit/require-query-limit
         tx.query.fields.findMany({
           where: { entityVersionId: { eq: params.versionId } },
           columns: { content: true },

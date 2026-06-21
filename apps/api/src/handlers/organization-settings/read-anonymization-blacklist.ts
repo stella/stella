@@ -4,6 +4,7 @@ import { and, asc, eq, isNull } from "drizzle-orm";
 import { anonymizationBlacklistEntries } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
@@ -35,7 +36,11 @@ const readAnonymizationBlacklist = createSafeRootHandler(
               isNull(anonymizationBlacklistEntries.workspaceId),
             ),
           )
-          .orderBy(asc(anonymizationBlacklistEntries.canonical)),
+          .orderBy(asc(anonymizationBlacklistEntries.canonical))
+          // Safe bound: org-wide blacklist writes are capped at this
+          // value in update-anonymization-blacklist.ts, so the read
+          // cannot truncate real data.
+          .limit(LIMITS.anonymizationBlacklistEntriesPerOrganization),
       ),
     );
 

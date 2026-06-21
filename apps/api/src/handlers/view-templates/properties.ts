@@ -154,6 +154,8 @@ export const resolveTemplateProperties = async ({
 
   const existingProperties = await readExistingProperties(tx, workspaceId);
   const systemFileProperty = findSystemFileProperty(existingProperties);
+  // SAFETY: one workspace's property-dependency edges, bounded by its properties (<= LIMITS.propertiesCount per endpoint)
+  // eslint-disable-next-line require-query-limit/require-query-limit
   const existingDependencyEdges = await tx.query.propertyDependencies.findMany({
     where: { workspaceId: { eq: workspaceId } },
     columns: { propertyId: true },
@@ -300,6 +302,7 @@ const readExistingProperties = (
       system: true,
     },
     orderBy: { createdAt: "asc" },
+    limit: LIMITS.propertiesCount,
   });
 
 type ExistingProperty = Awaited<

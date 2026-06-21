@@ -90,6 +90,8 @@ const previewProperty = createSafeHandler(
     if (dependencyIds.length > 0) {
       const dependencyRows = yield* Result.await(
         safeDb((tx) =>
+          // SAFETY: filtered to an IN-list of dependency property IDs, bounded by LIMITS.propertiesCount per workspace
+          // eslint-disable-next-line require-query-limit/require-query-limit
           tx.query.properties.findMany({
             where: {
               id: { in: dependencyIds },

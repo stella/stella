@@ -291,7 +291,8 @@ describe("createSendAutomaticallyPredicate", () => {
   });
 
   test("allows sequential auto sends inside the same assistant message", () => {
-    const shouldSendAutomatically = createSendAutomaticallyPredicate();
+    const shouldSendAutomatically =
+      createSendAutomaticallyPredicate("thread-A");
     const baseMessage = {
       id: "message-A",
       role: "assistant",
@@ -333,5 +334,39 @@ describe("createSendAutomaticallyPredicate", () => {
     expect(
       shouldSendAutomatically({ messages: [secondApprovalResponse] }),
     ).toBeTrue();
+  });
+
+  test("keeps the one-fire budget when older history is prepended", () => {
+    const shouldSendAutomatically =
+      createSendAutomaticallyPredicate("thread-A");
+    const assistantTail = {
+      id: "assistant-1",
+      role: "assistant",
+      parts: [
+        { type: "step-start" },
+        {
+          input: {},
+          output: { content: [] },
+          state: "output-available",
+          toolCallId: "tool-call-1",
+          toolName: "mcp__legaldatahunter-com__discover_countries",
+          type: "dynamic-tool",
+        },
+      ],
+    } satisfies PersistedChatMessage;
+
+    // The tail fires once, then its one-fire budget is spent.
+    expect(shouldSendAutomatically({ messages: [assistantTail] })).toBeTrue();
+    expect(shouldSendAutomatically({ messages: [assistantTail] })).toBeFalse();
+
+    // Loading older history prepends messages (messages[0] changes) while the
+    // thread and assistant tail stay the same. Budgeting on messages[0] would
+    // hand the same tail a fresh budget and re-fire the turn; keying on the
+    // thread id keeps it spent.
+    expect(
+      shouldSendAutomatically({
+        messages: [createMessage("older-1"), assistantTail],
+      }),
+    ).toBeFalse();
   });
 });

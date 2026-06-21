@@ -13,24 +13,6 @@ import { logger } from "@/api/lib/observability/logger";
 const BACKFILL_BATCH_SIZE = 200;
 const ZERO_UUID = "00000000-0000-0000-0000-000000000000";
 
-/** The plain searchable text of a thread: the prose of every `text`
- *  part across all messages, in order, from both the user and the
- *  assistant. Tool-call, reasoning, and data parts carry no
- *  user-meaningful prose and are skipped. Capped so a long
- *  conversation cannot bloat the stored tsv. */
-const extractThreadText = (
-  messages: readonly { content: PersistedChatMessageContent }[],
-): string => {
-  const parts: string[] = [];
-  for (const message of messages) {
-    const messageText = extractMessageSearchText(message.content);
-    if (messageText) {
-      parts.push(messageText);
-    }
-  }
-  return parts.join(" ").slice(0, LIMITS.chatSearchTextMaxLength);
-};
-
 const extractMessageSearchText = (
   content: PersistedChatMessageContent,
 ): string => {
@@ -90,31 +72,35 @@ type ChatSearchMessageRow = {
  *  message text) plus the per-message history search documents.
  *  Tenancy is not stored here; search queries derive it by joining
  *  back to `chat_threads` or through RLS on the owning thread. Safe
- *  to call after any thread mutation; a missing thread is a no-op. */
+ *  to call after any thread mutation; a missing thread is a no-op.
+ *
+ *  Messages are keyset-paginated by `(created_at, id)` in bounded
+ *  pages rather than eager-loaded in one shot: a long thread that is
+ *  re-indexed after every message persist must not re-read its whole
+ *  history into memory on each send. The rolled-up thread text is
+ *  accumulated page by page and stops growing once the thread text cap
+ *  is reached, so the stored thread tsv/text is byte-identical to the
+ *  previous full-history build for any thread under the cap. Per-message
+ *  search documents are still written for every page (all messages stay
+ *  individually searchable), so paging continues past the thread-text
+ *  cap. This is a background derived-document refresh after a thread
+ *  mutation, not on the request hot path. */
 export const upsertChatThreadSearchDocument = async (
   threadId: SafeId<"chatThread">,
 ): Promise<void> => {
   const thread = await rootDb.query.chatThreads.findFirst({
     where: { id: { eq: threadId } },
     columns: { id: true, title: true, updatedAt: true },
-    with: {
-      messages: {
-        columns: {
-          id: true,
-          role: true,
-          content: true,
-          createdAt: true,
-        },
-        orderBy: { createdAt: "asc" },
-      },
-    },
   });
 
   if (!thread) {
     return;
   }
 
-  const searchableText = extractThreadText(thread.messages);
+  const searchableText = await rollUpThreadText({
+    threadId: thread.id,
+    threadUpdatedAt: thread.updatedAt,
+  });
 
   await rootDb.execute(sql`
     INSERT INTO chat_thread_search_documents (
@@ -139,12 +125,94 @@ export const upsertChatThreadSearchDocument = async (
       tsv = EXCLUDED.tsv
     WHERE EXCLUDED.updated_at >= chat_thread_search_documents.updated_at
   `);
+};
 
-  await upsertChatMessageSearchDocuments({
-    messages: thread.messages,
-    threadId: thread.id,
-    threadUpdatedAt: thread.updatedAt,
-  });
+/** Page through a thread's messages by `(created_at, id)`, write the
+ *  per-message search documents for each page, and accumulate the
+ *  rolled-up thread text: the prose of every `text` part across all
+ *  messages, in order, from both the user and the assistant (tool-call,
+ *  reasoning, and data parts carry no user-meaningful prose and are
+ *  skipped). The returned text is byte-identical to a full-history build
+ *  for any thread whose rolled-up text is at or under
+ *  `chatSearchTextMaxLength`: parts are joined with a single space in
+ *  `(created_at, id)` order and the same cap is applied. Once the cap is
+ *  reached we stop accumulating thread text (further messages cannot
+ *  change a `slice(0, cap)` result) but keep paging so every message
+ *  still gets a per-message search document.
+ *
+ *  Note: the previous build ordered messages by `created_at` only, with
+ *  no tiebreaker, so the relative order of same-timestamp messages was
+ *  database-defined (undefined). Adding `id` as a deterministic
+ *  tiebreaker only makes that order stable; there is no defined prior
+ *  order to diverge from. */
+const rollUpThreadText = async ({
+  threadId,
+  threadUpdatedAt,
+}: {
+  threadId: SafeId<"chatThread">;
+  threadUpdatedAt: Date;
+}): Promise<string> => {
+  const textParts: string[] = [];
+  let accumulatedLength = 0;
+  let threadTextFull = false;
+  // Id-only cursor resolved in-DB: comparing against the boundary row's exact
+  // (created_at, id) avoids round-tripping created_at through a JS Date, which
+  // would truncate Postgres microseconds and could re-read or stall on a page
+  // of same-millisecond rows.
+  let cursor: SafeId<"chatMessage"> | undefined;
+
+  for (;;) {
+    const where = cursor
+      ? sql`thread_id = ${threadId}
+          AND (created_at, id) > (select created_at, id from chat_messages where id = ${cursor})`
+      : sql`thread_id = ${threadId}`;
+
+    // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination: each page's WHERE depends on the previous page's last (created_at, id) cursor.
+    const page = await rootDb.execute<ChatSearchMessageRow>(sql`
+      SELECT id, role, content, created_at AS "createdAt"
+      FROM chat_messages
+      WHERE ${where}
+      ORDER BY created_at, id
+      LIMIT ${BACKFILL_BATCH_SIZE}
+    `);
+
+    if (page.length === 0) {
+      break;
+    }
+
+    // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination: per-page writes are ordered with the cursor advance above.
+    await upsertChatMessageSearchDocuments({
+      messages: page,
+      threadId,
+      threadUpdatedAt,
+    });
+
+    for (const message of page) {
+      if (threadTextFull) {
+        break;
+      }
+
+      const messageText = extractMessageSearchText(message.content);
+      if (!messageText) {
+        continue;
+      }
+
+      textParts.push(messageText);
+      // +1 per part beyond the first accounts for the single-space join.
+      accumulatedLength += messageText.length + (textParts.length > 1 ? 1 : 0);
+      if (accumulatedLength >= LIMITS.chatSearchTextMaxLength) {
+        threadTextFull = true;
+      }
+    }
+
+    const last = page.at(-1);
+    if (!last || page.length < BACKFILL_BATCH_SIZE) {
+      break;
+    }
+    cursor = last.id;
+  }
+
+  return textParts.join(" ").slice(0, LIMITS.chatSearchTextMaxLength);
 };
 
 const upsertChatMessageSearchDocuments = async ({

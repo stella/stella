@@ -40,7 +40,11 @@ import {
   sendOrganizationInvitation,
   sendOTPEmail,
 } from "@/api/lib/email";
-import { AUTH_RATE_LIMIT_MAX_WINDOW, AUTH_RATE_LIMITS } from "@/api/lib/limits";
+import {
+  AUTH_RATE_LIMIT_MAX_WINDOW,
+  AUTH_RATE_LIMITS,
+  LIMITS,
+} from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -424,7 +428,7 @@ const createAuth = () => {
               id: { ne: session.id },
             },
             orderBy: { createdAt: "desc" },
-            limit: 10,
+            limit: LIMITS.newDeviceLoginSessionScanLimit,
             columns: {
               ipAddress: true,
               userAgent: true,

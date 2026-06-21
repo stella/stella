@@ -12,6 +12,7 @@ import {
   exchangeAuthorizationCode,
   tokenExpiresAt,
 } from "@/api/handlers/mcp-connectors/oauth";
+import { captureError } from "@/api/lib/analytics";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -266,6 +267,11 @@ const mcpOAuthCallback = createSafeRootHandler(
         );
       }
 
+      captureError(error, {
+        operation: "mcp_oauth_callback",
+        organizationId: session.activeOrganizationId,
+        userId: user.id,
+      });
       return Result.ok(redirect({ status: "error", reason: "unexpected" }));
     }
   },

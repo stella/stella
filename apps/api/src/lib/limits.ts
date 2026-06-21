@@ -7,7 +7,28 @@ export const LIMITS = {
   entitiesWindowSizeDefault: 200,
   entitiesWindowSizeMax: 500,
   workflowEntityBatchSize: 500,
+  /** Generous cap on versions read for one entity's history panel (newest
+   *  first). Versions accumulate one-per-finalize/upload/restore with no
+   *  write-side cap; 1000 is far above realistic editing histories. Cursor
+   *  pagination is the proper long-term fix. */
+  versionsPerEntity: 1000,
+  /** Page size for one entity's version-history listing (newest first).
+   *  The reader loads the most recent page first and walks older pages via
+   *  the `before` cursor, so a heavily-revised entity never loses access to
+   *  older versions. */
+  versionsPageSizeDefault: 50,
+  /** Worst-case file fields scanned across one entity's versions
+   *  (versionsPerEntity * propertiesCount). */
+  versionFieldsScanLimit: 20_000,
+  /** Cap for the deprecated/frozen prompt-shortcuts listing (team + own). */
+  promptShortcutsListMax: 500,
   calendarTasksMax: 200,
+  /** Max tasks returned by the "my tasks" listing. */
+  myTasksMax: 200,
+  /** Max task-assignment rows scanned to resolve the caller's tasks. */
+  myTasksAssignmentScanLimit: 500,
+  /** Max entity-link rows returned per direction for one task. */
+  taskEntityLinksPerDirectionMax: 200,
   entitySummariesPageSize: 200,
   viewsCount: 20,
   viewTemplatesPerUser: 50,
@@ -15,11 +36,22 @@ export const LIMITS = {
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,
   clausesPerOrganization: 500,
+  clausesPageSizeDefault: 50,
+  clausesPageSizeMax: 200,
   shortcutsPerUser: 100,
   agentSkillsPerUser: 100,
   agentSkillsPageSizeDefault: 100,
   agentSkillsPageSizeMax: 250,
+  /** Flat skill catalogue injected into the chat system prompt: team skills
+   *  (org-wide) plus the caller's private skills. Kept >=
+   *  agentSkillsTeamPerOrganization + agentSkillsPerUser so the catalogue never
+   *  truncates and silently hides a skill from the model. */
   agentSkillsChatMetadataMax: 200,
+  /** Per-org cap on team-scoped skills, enforced on create/install. With
+   *  agentSkillsPerUser it keeps team (org-wide) + the caller's private skills
+   *  within agentSkillsChatMetadataMax (100 + 100 <= 200). Mirrors
+   *  mcpCustomConnectorsPerOrgMax kept under its read cap. */
+  agentSkillsTeamPerOrganization: 100,
   agentSkillDescriptionMaxChars: 1000,
   agentSkillCompatibilityMaxChars: 1000,
   agentSkillLicenseMaxChars: 256,
@@ -34,6 +66,24 @@ export const LIMITS = {
   agentSkillResourcesPerSkill: 50,
   agentSkillResourceMaxChars: 100_000,
   mcpGatewayConnectorsMax: 20,
+  /** Max connector rows returned by the connector catalogue listing
+   *  (`GET /mcp/connectors` and the custom-MCP slice of `/catalogue`). */
+  mcpConnectorsPageSizeMax: 100,
+  /** Max custom MCP connectors an org can create. Kept well below
+   *  `mcpConnectorsPageSizeMax` so the catalogue listing (curated + this org's
+   *  custom connectors) never silently truncates a connector out of the
+   *  management UI. */
+  mcpCustomConnectorsPerOrgMax: 50,
+  /** Max per-user MCP connection rows returned by the connections listing. */
+  mcpConnectionsPageSizeMax: 100,
+  /** Default/max page sizes for the MCP `list_matters`-style list tools. */
+  mcpListPageSizeDefault: 25,
+  mcpListPageSizeMax: 100,
+  /** Default/max page sizes for the MCP search tools. */
+  mcpSearchPageSizeDefault: 10,
+  mcpSearchPageSizeMax: 20,
+  /** Default page size for the OpenAI-compatible MCP search tool. */
+  mcpCompatSearchPageSizeDefault: 8,
   mcpGatewaySkillsMax: 100,
   mcpGatewayToolsPerConnectorMax: 100,
   mcpGatewayToolNameMaxChars: 128,
@@ -46,20 +96,34 @@ export const LIMITS = {
   templateClausesPerTemplate: 50,
   templateVersionsPerTemplate: 50,
   rateTablesPerWorkspace: 50,
+  rateTablesPageSizeDefault: 50,
+  rateTablesPageSizeMax: 200,
   rateEntriesPerTable: 200,
+  rateEntriesPageSizeDefault: 200,
+  rateEntriesPageSizeMax: 500,
   timeEntriesPerWorkspace: 50_000,
+  timeEntriesPageSizeDefault: 100,
+  timeEntriesPageSizeMax: 200,
   expensesPerWorkspace: 10_000,
+  expensesPageSizeDefault: 100,
+  expensesPageSizeMax: 200,
   billingCodesPerWorkspace: 500,
+  billingCodesPageSizeDefault: 500,
+  billingCodesPageSizeMax: 1000,
   overviewRecentEntities: 10,
   activeTimersPerUser: 1,
   timeEntryMaxAgeDays: 90,
   billingIncrementMinutes: 6,
   invoicesPerWorkspace: 10_000,
+  invoicesPageSizeDefault: 50,
+  invoicesPageSizeMax: 100,
   exportRowLimit: 10_000,
   exportPdfRowLimit: 5000,
   auditLogPageSizeDefault: 50,
   auditLogPageSizeMax: 200,
   contactsCount: 10_000,
+  contactsPageSizeDefault: 50,
+  contactsPageSizeMax: 100,
   contactRelationshipsCount: 50,
   workspaceContactsCount: 100,
   workspaceMembersCount: 500,
@@ -92,6 +156,10 @@ export const LIMITS = {
   caseLawSearchPageSizeDefault: 20,
   caseLawSearchPageSizeMax: 100,
   caseLawSlugCollisionScanLimit: 1000,
+  /** Max language variants for one decision's languageGroupKey. Bounds the
+   *  alternate-language reads (decision detail + sitemap hreflang) so a
+   *  malformed/over-merged group key cannot load an unbounded set. */
+  caseLawLanguageAlternatesPerGroupMax: 30,
   /** Max URL entries in one sitemap file by protocol. */
   caseLawSitemapUrlLimit: 50_000,
   /** Conservative per-shard case-law sitemap cap; leaves room for hreflang alternates under the XML byte limit. */
@@ -124,6 +192,17 @@ export const LIMITS = {
   chatThreadListPageSizeDefault: 50,
   /** Max page size for the user's chat thread history. */
   chatThreadListPageSizeMax: 100,
+  /** Default page size for one chat thread's message history. The reader
+   *  loads the most recent page first and fetches older pages on demand
+   *  as the user scrolls up, so a long conversation never loads in full. */
+  chatMessagesPageSizeDefault: 50,
+  /** Max page size for one chat thread's message history. */
+  chatMessagesPageSizeMax: 100,
+  /** Hard cap on the per-send message window loaded for a chat turn. Threads
+   *  that never form a compaction checkpoint (e.g. anonymized threads) rely on
+   *  this so a send cannot load an unbounded history; sized well above the
+   *  compaction trigger so a checkpointed thread's window is unaffected. */
+  chatSendHistoryWindowMax: 500,
   /** Max characters of TypeScript source the chat run-stella-query tool accepts. */
   chatRunCodeMaxLength: 16_000,
   /** Default page size for readonly chat execute functions. */
@@ -138,8 +217,14 @@ export const LIMITS = {
   docxStampMaxBytes: 50 * 1024 * 1024,
   /** Max org-wide custom blacklist terms for anonymization. */
   anonymizationBlacklistEntriesPerOrganization: 1000,
+  /** Max workspace-scoped custom blacklist terms for anonymization. */
+  anonymizationBlacklistEntriesPerWorkspace: 1000,
   /** Max variants per org-wide custom blacklist term. */
   anonymizationBlacklistVariantsPerEntry: 20,
+  /** Max workspace-scoped anonymization allowlist (never-mask) entries. */
+  anonymizationAllowlistEntriesPerWorkspace: 1000,
+  /** Recent sessions scanned to detect a new-device/new-IP login. */
+  newDeviceLoginSessionScanLimit: 10,
 } as const;
 
 const CHAT_CONTEXT_FILE_MAX_MEGABYTES = 10;

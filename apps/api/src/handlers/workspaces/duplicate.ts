@@ -396,20 +396,26 @@ const duplicateWorkspace = createSafeHandler(
           tx.query.properties.findMany({
             where: { workspaceId: { eq: sourceWorkspaceId } },
             orderBy: { createdAt: "asc" },
+            limit: LIMITS.propertiesCount,
           }),
+          // SAFETY: one workspace's property dependencies, bounded by propertiesCount² via the unique (propertyId, dependsOnPropertyId) index
+          // eslint-disable-next-line require-query-limit/require-query-limit
           tx.query.propertyDependencies.findMany({
             where: { workspaceId: { eq: sourceWorkspaceId } },
           }),
           tx.query.workspaceViews.findMany({
             where: { workspaceId: { eq: sourceWorkspaceId } },
             orderBy: { position: "asc" },
+            limit: LIMITS.viewsCount,
           }),
           tx.query.workspaceMembers.findMany({
             where: { workspaceId: { eq: sourceWorkspaceId } },
             columns: { userId: true },
+            limit: LIMITS.workspaceMembersCount,
           }),
           tx.query.workspaceContacts.findMany({
             where: { workspaceId: { eq: sourceWorkspaceId } },
+            limit: LIMITS.workspaceContactsCount,
           }),
           includeContent
             ? tx.query.entities.findMany({

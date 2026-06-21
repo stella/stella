@@ -10,6 +10,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
 
+import { buildClauseCategoryPath } from "./category-path";
 import type {
   ClauseExportItem,
   ClauseExportPayload,
@@ -69,35 +70,12 @@ const exportHandler = async function* ({
       tx.query.clauseCategories.findMany({
         where: { organizationId: { eq: organizationId } },
         columns: { id: true, name: true, parentId: true },
+        limit: LIMITS.clauseCategoriesCount,
       }),
     ),
   );
 
   const categoryMap = new Map(allCategories.map((c) => [c.id, c]));
-
-  const buildPath = (
-    catId: SafeId<"clauseCategory"> | null,
-  ): string[] | null => {
-    if (!catId) {
-      return null;
-    }
-    const path: string[] = [];
-    let current: SafeId<"clauseCategory"> | null = catId;
-    const visited = new Set<SafeId<"clauseCategory">>();
-    while (current) {
-      if (visited.has(current)) {
-        break;
-      }
-      visited.add(current);
-      const cat = categoryMap.get(current);
-      if (!cat) {
-        break;
-      }
-      path.unshift(cat.name);
-      current = cat.parentId;
-    }
-    return path.length > 0 ? path : null;
-  };
 
   const items: ClauseExportItem[] = rows.map((row) => ({
     title: row.title,
@@ -109,7 +87,7 @@ const exportHandler = async function* ({
     categoryName: row.categoryId
       ? (categoryMap.get(row.categoryId)?.name ?? null)
       : null,
-    categoryPath: buildPath(row.categoryId),
+    categoryPath: buildClauseCategoryPath(categoryMap, row.categoryId),
   }));
 
   const payload: ClauseExportPayload = {

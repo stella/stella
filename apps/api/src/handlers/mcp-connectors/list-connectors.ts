@@ -12,6 +12,7 @@ import { mcpConnectorUrlIdentity } from "@/api/handlers/mcp-connectors/url-norma
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
+import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -46,7 +47,7 @@ const listMcpConnectors = createSafeRootHandler(
             ),
           )
           .orderBy(desc(mcpConnectors.isCurated), mcpConnectors.displayName)
-          .limit(100),
+          .limit(LIMITS.mcpConnectorsPageSizeMax),
       ),
     );
 

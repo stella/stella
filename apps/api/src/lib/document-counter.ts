@@ -71,7 +71,11 @@ export const allocateEntityStamp = async (
 
   return {
     docSequence,
-    stamp: toDocumentReference(ws.reference, docSequence, 1),
+    stamp: toDocumentReference({
+      matterReference: ws.reference,
+      docSequence,
+      versionNumber: 1,
+    }),
     verificationCode: generateVerificationCode(),
   };
 };

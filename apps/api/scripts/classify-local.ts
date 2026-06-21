@@ -257,11 +257,11 @@ const main = async () => {
         const end = Math.min(text.length, idx + args.citation.length + 200);
         const context = text.slice(start, end);
 
-        const result = await classifyWithLLM(
+        const result = await classifyWithLLM({
           context,
-          args.citation,
-          args.language,
-        );
+          citationText: args.citation,
+          language: args.language,
+        });
 
         if (result.isErr()) {
           console.log("LLM classification failed.");

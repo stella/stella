@@ -2,7 +2,6 @@
   "account": {
     "sessions": {
       "currentSession": "الحالية",
-      "description": "إدارة جلساتك النشطة",
       "device": "الجهاز",
       "deviceOnOs": "{browser} على {os}",
       "ipAddress": "عنوان IP",
@@ -21,25 +20,6 @@
       "description": "أضِف بيانات اعتماد المزوّد لبدء استخدام ميزات AI.",
       "title": "ربط مزوّد AI"
     }
-  },
-  "anonymize": {
-    "addEntity": "إضافة كيان",
-    "checkAnonymization": "فحص إخفاء الهوية",
-    "closeAddForm": "إغلاق نموذج الإضافة",
-    "confirmAll": "تأكيد الكل",
-    "entities": "الكيانات",
-    "entityType": "نوع الكيان",
-    "extractingText": "جارٍ استخراج النص…",
-    "noEntitiesFound": "لم يُعثر على أي كيانات",
-    "reject": "رفض",
-    "rejectAll": "رفض الكل",
-    "removeEntity": "إزالة الكيان",
-    "revise": "مراجعة إخفاء الهوية",
-    "runPipeline": "تشغيل المسار",
-    "running": "جارٍ التشغيل…",
-    "searchMatches": "كلمات للبحث عنها في المستند",
-    "searchPlaceholder": "اكتب الكلمة (الكلمات) للبحث عنها…",
-    "title": "مراجعة إخفاء الهوية"
   },
   "app": {
     "versionMismatch": {
@@ -73,7 +53,6 @@
     "weekStartSunday": "الأحد"
   },
   "auth": {
-    "betaNoticeBody": "كإجراء احترازي أثناء الإصدار التجريبي، لا ترفع بيانات حساسة أو مشمولة بالسرية أو شخصية أو لا يمكن تعويضها أو حرجة للإنتاج. النسخة السحابية خدمة تجريبية.",
     "betaNoticeTitle": "تجريبي",
     "checkSpamHint": "إذا لم تجده، فتحقّق من مجلد البريد غير المرغوب فيه.",
     "chooseOrganization": "اختر المؤسسة التي تريد العمل فيها",
@@ -103,7 +82,6 @@
     "selectOrganization": "اختر مؤسسة",
     "signIn": "تسجيل الدخول",
     "signInBeforeInvitation": "يجب تسجيل الدخول قبل أن تتمكن من قبول دعوة للانضمام إلى مؤسسة.",
-    "signInWithEmail": "تسجيل الدخول بالبريد الإلكتروني",
     "subtitle": "المستندات والسوابق القضائية والمراجعة تحت السيطرة. مدعومة بالذكاء الاصطناعي.",
     "useDifferentEmail": "استخدام بريد إلكتروني مختلف",
     "weSentCodeTo": "أرسلنا رمزًا إلى {email}"
@@ -122,8 +100,10 @@
       "activityCode": "رمز النشاط",
       "codeLabel": "الرمز",
       "codeLabelField": "التسمية",
+      "codePlaceholder": "L110",
       "createCode": "إنشاء رمز",
       "inactive": "غير نشط",
+      "labelPlaceholder": "بحث",
       "manageCodes": "إدارة الرموز",
       "noCodesYet": "لا توجد رموز فوترة بعد",
       "task": "المهمة",
@@ -271,31 +251,14 @@
     "emptyState": "لم يُعثر على أي قرارات. اضبط مصدرًا وشغّل مزامنة لاستيراد السوابق القضائية.",
     "filters": {
       "court": "المحكمة",
-      "dateFrom": "من",
-      "dateTo": "إلى",
       "searchPlaceholder": "البحث برقم القضية..."
     },
-    "loading": "جارٍ التحميل...",
     "loadingMore": "جارٍ تحميل المزيد...",
-    "sectionTypes": {
-      "argumentation": "الحجاج",
-      "dissent": "الرأي المخالف",
-      "footer": "التذييل",
-      "header": "الترويسة",
-      "ruling": "المنطوق",
-      "unknown": "أخرى"
-    },
     "seo": {
       "browse": "تصفّح السوابق القضائية",
       "countries": "الدول",
       "courts": "المحاكم",
       "years": "السنوات"
-    },
-    "sources": {
-      "empty": "لا توجد مصادر مضبوطة.",
-      "lastSync": "آخر مزامنة: {date, date, medium}",
-      "neverSynced": "لم تُزامَن قط",
-      "title": "المصادر"
     },
     "viewer": {
       "abstract": "الملخّص",
@@ -305,7 +268,6 @@
       "legalSentence": "الجملة القانونية",
       "nalusDisclaimer": "المصدر: NALUS، المحكمة الدستورية للجمهورية التشيكية. مجانًا. هذه النسخة الإلكترونية غير رسمية؛ النسخ الأصلية المحمَّلة بشعار الدولة وتوقيع الشخص المخوَّل هي وحدها الرسمية.",
       "popularName": "الاسم الشائع",
-      "sections": "الأقسام",
       "source": "المصدر",
       "sourceFields": {
         "decisionCategory": "فئة القرار",
@@ -453,6 +415,9 @@
       "prompts": "المهارات",
       "recentChats": "المحادثات الحديثة"
     },
+    "loadEarlierMessages": "تحميل الرسائل السابقة",
+    "loadEarlierMessagesError": "تعذّر تحميل الرسائل السابقة",
+    "loadingEarlierMessages": "جارٍ تحميل الرسائل السابقة…",
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mention": {
       "category": {
@@ -584,7 +549,6 @@
     "allClauses": "جميع البنود",
     "backToList": "العودة إلى البنود",
     "body": "النص",
-    "categories": "الفئات",
     "categoryDeleteConfirm": "ستصبح البنود في هذه الفئة غير مصنّفة.",
     "categoryName": "اسم الفئة",
     "categoryNamePlaceholder": "مثال: السرّية",
@@ -598,7 +562,6 @@
     "createCategory": "فئة جديدة",
     "createClause": "بند جديد",
     "createFailed": "تعذّر إنشاء البند",
-    "currentVersion": "الحالي",
     "deleteCategory": "حذف الفئة",
     "deleteClause": "حذف البند",
     "deleteFailed": "تعذّر الحذف",
@@ -613,7 +576,6 @@
     "importSuccess": "{count, plural, zero {لم يُستورد أي بند} one {تم استيراد بند واحد} two {تم استيراد بندين} few {تم استيراد # بنود} many {تم استيراد # بندًا} other {تم استيراد # بند}}",
     "importing": "جارٍ الاستيراد…",
     "languagePlaceholder": "مثال: en",
-    "limitReached": "تم بلوغ حد البنود",
     "linkClause": "ربط البند",
     "linkFailed": "تعذّر ربط البند",
     "linked": "تم ربط البند",
@@ -621,7 +583,6 @@
     "loadFailed": "تعذّر تحميل البنود",
     "loading": "جارٍ تحميل البنود…",
     "noChanges": "لا توجد تغييرات",
-    "noClauses": "لا توجد بنود بعد",
     "noLinkedClauses": "لا توجد بنود مرتبطة",
     "noResults": "لا توجد بنود بعد",
     "noVariants": "لا توجد صيغ",
@@ -631,7 +592,6 @@
     "searchClauses": "البحث في البنود...",
     "searchPlaceholder": "البحث في البنود...",
     "selectFile": "اختر ملف JSON",
-    "selectVariant": "اختر صيغة",
     "selectVersionToCompare": "اختر إصدارًا للمقارنة بالإصدار الحالي",
     "slotName": "اسم الخانة",
     "slotNamePlaceholder": "مثال: NonCompete",
@@ -644,7 +604,6 @@
     "unlinkConfirm": "سيؤدّي هذا إلى إزالة البند من هذا القالب.",
     "unlinkFailed": "تعذّر إلغاء ربط البند",
     "unlinked": "تم إلغاء ربط البند",
-    "unmappedSlot": "غير مرتبط",
     "updateFailed": "تعذّر تحديث البند",
     "usageNotes": "ملاحظات الاستخدام",
     "usageNotesPlaceholder": "متى ينبغي استخدام هذا البند؟ (للتجميع بواسطة AI)",
@@ -653,8 +612,7 @@
     "variantLabel": "تسمية الصيغة",
     "variantLabelPlaceholder": "مثال: قياسي",
     "variants": "الصيغ",
-    "version": "الإصدار {version}",
-    "versionCount": "{count, plural, zero {لا توجد إصدارات} one {إصدار واحد} two {إصداران} few {# إصدارات} many {# إصدارًا} other {# إصدار}}"
+    "version": "الإصدار {version}"
   },
   "common": {
     "accept": "قبول",
@@ -977,7 +935,6 @@
     "acceptAll": "قبول الكل",
     "applyAs": "بصيغة",
     "applyDirect": "مباشر",
-    "applyMode": "التطبيق بصيغة:",
     "applyTracked": "تعقّب التغييرات",
     "areaUnspecified": "غير محدّد",
     "byArea": "حسب المجال",
@@ -989,11 +946,9 @@
     "hideAccepted": "إخفاء الاقتراحات المقبولة",
     "identityAria": "هوية تعقّب التغييرات لـ {name}",
     "identitySaved": "تم حفظ الهوية",
-    "progressAria": "تمت مراجعة {reviewed} من {total}",
     "reject": "رفض",
     "rejectAll": "رفض الكل",
     "revert": "تراجع",
-    "reviewed": "تمت مراجعته",
     "savingIdentity": "جارٍ الحفظ…",
     "severityHigh": "عالية",
     "severityLow": "منخفضة",
@@ -1293,7 +1248,6 @@
       "ignoreScopeAlways": "تجاهُل دائمًا",
       "ignoreScopeDocument": "تجاهُل في هذه القضية",
       "ignoreScopeMenuAriaLabel": "نطاق التجاهُل",
-      "ignoreScopeWorkspace": "تجاهُل في مساحة العمل هذه",
       "labelPickerAriaLabel": "تسمية الكيان",
       "labelPickerEmpty": "لا توجد تسمية مطابقة.",
       "labelPickerPlaceholder": "التسمية",
@@ -1322,7 +1276,6 @@
     "matterPicker": {
       "allMatters": "جميع القضايا",
       "description": "اختر القضايا التي يمكن لهذه المحادثة الاستناد إليها. يرى الذكاء الاصطناعي المحتوى من كل قضية تختارها.",
-      "directLabel": "مباشر",
       "empty": "لا توجد قضايا متاحة.",
       "noMatter": "بلا قضية",
       "noResults": "لا توجد قضية تطابق «{query}».",
@@ -1565,14 +1518,8 @@
     "showRaw": "عرض المصدر الخام"
   },
   "navigation": {
-    "account": "الحساب",
-    "calendar": "التقويم",
     "chat": "المحادثة",
-    "chatAlreadyOpen": "المحادثة مفتوحة بالفعل",
-    "clients": "العملاء",
     "contacts": "جهات الاتصال",
-    "inbox": "صندوق الوارد",
-    "invitations": "الدعوات",
     "knowledge": "المعرفة",
     "members": "الأعضاء",
     "myTodos": "مهامّي",
@@ -1580,15 +1527,12 @@
     "pinned": "المثبّتة",
     "recents": "الأخيرة",
     "search": "بحث",
-    "searchEmptyState": "ابدأ الكتابة للبحث في المستندات والقضايا والمزيد.",
-    "searchPlaceholder": "ابحث في جميع القضايا...",
     "shortcutCategories": {
       "navigation": "التنقّل"
     },
     "sidebar": "الشريط الجانبي",
     "sidebarDescription": "يعرض الشريط الجانبي للجوال.",
     "templates": "القوالب",
-    "timeTracking": "تتبّع الوقت",
     "toggleChat": "تبديل المحادثة",
     "toggleSidebar": "تبديل الشريط الجانبي"
   },
@@ -1618,7 +1562,6 @@
     "catalogueThirdPartyConfirm": "إضافة على أي حال",
     "catalogueThirdPartyDisclaimer": "هذا رمز برمجي من طرف ثالث ساهم به {author}. لم تراجعه stella ولم تُقرّه ولم تتولَّ صيانته. أنت وحدك المسؤول عن التحقق من ملاءمته لممارستك وامتثاله لسياسات مكتبك. بإضافته، فإنك تقبل استخدامه على مسؤوليتك الخاصة.",
     "catalogueTitle": "خصّص الذكاء الاصطناعي الخاص بك",
-    "changeAnytime": "يمكنك تغيير هذا في أي وقت من الإعدادات.",
     "continue": "متابعة",
     "creating": {
       "ai": "جارٍ حفظ إعدادات الذكاء الاصطناعي...",
@@ -1647,6 +1590,7 @@
     "jurisdictionSuggested": "مقترَحة",
     "jurisdictionTitle": "اختر ولاياتك القضائية للممارسة",
     "orgNameLabel": "اسم الفريق",
+    "orgNamePlaceholder": "السالم وشركاه",
     "orgSubtitle": "هكذا سيجدك زملاؤك.",
     "orgTitle": "سمِّ فريقك",
     "skipStep": "تخطّي هذه الخطوة",
@@ -1657,8 +1601,7 @@
     "stepJurisdiction": "الولاية القضائية",
     "stepOrganization": "الفريق",
     "stepTeam": "دعوة",
-    "termsNotice": "بالمتابعة، فإنك توافق على <terms>شروط الخدمة</terms> الخاصة بنا.",
-    "welcomeSubtitle": "يستغرق الإعداد أقل من دقيقة."
+    "termsNotice": "بالمتابعة، فإنك توافق على <terms>شروط الخدمة</terms> الخاصة بنا."
   },
   "organization": {
     "aiConfig": {
@@ -1818,7 +1761,6 @@
       "message": "رسالة",
       "task": "مهمة"
     },
-    "metaSeparator": "{workspace} · {time}",
     "mimeType": "نوع الملف",
     "noResults": "لا نتائج لـ «{query}».",
     "placeholder": "البحث عبر جميع القضايا...",
@@ -1826,7 +1768,6 @@
     "recentlyOpenedFiles": "الملفات المفتوحة مؤخراً",
     "resultCount": "{count, plural, zero {لا نتائج} one {نتيجة واحدة} two {نتيجتان} few {# نتائج} many {# نتيجة} other {# نتيجة}}",
     "summaryAction": "تلخيص أفضل النتائج",
-    "summaryCitations": "النتائج المُستشهَد بها",
     "summaryError": "الملخص غير متاح",
     "summaryLoading": "جارٍ تلخيص النتائج...",
     "summaryPrompt": "استخدم أفضل النتائج ومحتواها لصياغة إجابة قصيرة.",
@@ -1897,7 +1838,6 @@
       "pendingInvitations": "الدعوات المعلَّقة",
       "practiceJurisdictions": "الولايات القضائية للممارسة",
       "profile": "الملف الشخصي",
-      "profileDescription": "تحديث اسم المؤسسة",
       "promptCaching": {
         "description": "عند التفعيل، تضيف stella علامات تخزين مؤقت بحيث تكلّف طلبات الذكاء الاصطناعي المتكررة على المستند أو السلسلة نفسها أقل بنحو 10 أضعاف وتنتهي أسرع. تبقى المطالبات المخزَّنة مؤقتًا لدى مزوّد الذكاء الاصطناعي لمدة تصل إلى 5 دقائق، ضمن نطاق مؤسستك. يؤدي التعطيل إلى إيقاف stella عن إرسال علامات التخزين المؤقت، لكن قد يستمر المزوّدون في التخزين المؤقت انتهازيًا — فقط عقد عدم الاحتفاظ بالبيانات (Zero Data Retention) مع المزوّد يعطّل التخزين المؤقت على جانب الخادم بالكامل.",
         "title": "التخزين المؤقت للمطالبات",
@@ -1920,7 +1860,6 @@
       "usageLimitTitleEntitlementInactive": "استحقاق الاستخدام غير نشط",
       "usageLimitTitleNoEntitlement": "استحقاق الاستخدام مطلوب",
       "usageLimitTitleUsageLimitExceeded": "تم بلوغ حد استخدام الذكاء الاصطناعي",
-      "usageLoading": "جارٍ التحميل…",
       "usageManage": "إدارة الاستخدام المُستضاف",
       "usageManageError": "تعذّر فتح إدارة الاستخدام المُستضافة",
       "usageManuallyManaged": "مُدار يدويًا",
@@ -2032,7 +1971,6 @@
     "fieldInputType": "نوع الإدخال",
     "fieldLabel": "التسمية",
     "fieldLabelPlaceholder": "مثال: الاسم الكامل",
-    "fieldOptions": "الخيارات",
     "fieldOptionsPlaceholder": "اكتب خياراً ثم اضغط Enter",
     "fieldUpdateFailed": "تعذّر تحديث الحقول",
     "fields": "الحقول",

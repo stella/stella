@@ -53,19 +53,25 @@ type ClassificationResult = {
   confidence: number;
 };
 
-/**
- * Classify a citation's polarity using an LLM.
- *
- * @param context - Text surrounding the citation (2-3 sentences)
- * @param citationText - The citation reference itself
- * @param language - ISO language code (e.g. "cs", "sk", "de")
- */
-export const classifyWithLLM = async (
-  context: string,
-  citationText: string,
-  language: string,
-  abortSignal?: AbortSignal,
-): Promise<Result<ClassificationResult, WorkflowIntegrationError>> => {
+type ClassifyWithLLMOptions = {
+  /** Text surrounding the citation (2-3 sentences). */
+  context: string;
+  /** The citation reference itself. */
+  citationText: string;
+  /** ISO language code (e.g. "cs", "sk", "de"). */
+  language: string;
+  abortSignal?: AbortSignal | undefined;
+};
+
+/** Classify a citation's polarity using an LLM. */
+export const classifyWithLLM = async ({
+  context,
+  citationText,
+  language,
+  abortSignal,
+}: ClassifyWithLLMOptions): Promise<
+  Result<ClassificationResult, WorkflowIntegrationError>
+> => {
   const aiAnalytics = createAIAnalyticsCallbacks({
     feature: "case-law.polarity",
     modelRole: "fast",

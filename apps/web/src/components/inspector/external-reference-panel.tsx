@@ -913,7 +913,7 @@ export const ExternalReferencePanel = ({
                           total: String(matchCount),
                         });
                       }
-                      return t("folio.findReplace.noResults");
+                      return t("common.noResults");
                     })();
                   }
                   return "";

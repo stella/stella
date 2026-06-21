@@ -38,7 +38,8 @@ type InstallSkillProps = {
 type InstallSkillTransactionResult =
   | { id: SafeId<"agentSkill">; type: "installed" }
   | { type: "insert-failed" }
-  | { type: "limit-reached" };
+  | { type: "limit-reached" }
+  | { type: "team-limit-reached" };
 
 export const installSkill = async ({
   enabled = true,
@@ -71,6 +72,22 @@ export const installSkill = async ({
           );
           if (userCount >= LIMITS.agentSkillsPerUser) {
             return { type: "limit-reached" };
+          }
+
+          // Team skills are org-wide visible in the chat skill catalogue; cap
+          // them per-org too (not just per-user) so the catalogue cannot grow
+          // past agentSkillsChatMetadataMax and silently hide skills.
+          if (scope === "team") {
+            const teamCount = await innerTx.$count(
+              agentSkills,
+              and(
+                eq(agentSkills.organizationId, session.activeOrganizationId),
+                eq(agentSkills.scope, "team"),
+              ),
+            );
+            if (teamCount >= LIMITS.agentSkillsTeamPerOrganization) {
+              return { type: "team-limit-reached" };
+            }
           }
 
           const rows = await innerTx
@@ -162,6 +179,15 @@ export const installSkill = async ({
       new HandlerError({
         status: 400,
         message: "Skill limit reached for this user",
+      }),
+    );
+  }
+
+  if (insertResult.value.type === "team-limit-reached") {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Team skill limit reached for this organization",
       }),
     );
   }
