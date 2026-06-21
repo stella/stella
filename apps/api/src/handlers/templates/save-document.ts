@@ -36,7 +36,9 @@ const buildVersionS3Key = (
 /** Every path discovery still found in the saved body, including nested
  *  loop-item paths (prefixed by their array root). A path absent from this set
  *  has no live `{{marker}}` (or condition/each reference) in the document. */
-const collectDiscoveredPaths = (discovered: DiscoveredTemplate): Set<string> => {
+const collectDiscoveredPaths = (
+  discovered: DiscoveredTemplate,
+): Set<string> => {
   const paths = new Set<string>();
   const visit = (field: DiscoveredField, prefix: string): void => {
     const fullPath = prefix ? `${prefix}.${field.path}` : field.path;
@@ -51,19 +53,38 @@ const collectDiscoveredPaths = (discovered: DiscoveredTemplate): Set<string> => 
   return paths;
 };
 
-/** A manifest field that derives its value from somewhere other than a literal
- *  body `{{marker}}` (formula/condition derive a value; AI drafts/adapts;
- *  lookup resolves a registry hit; composite parts join into one marker). Such a
- *  field can legitimately survive a save even when discovery no longer reports
- *  its path, so it is never treated as a deleted-marker orphan. */
-const hasDerivedValueSource = (field: FieldMeta): boolean =>
+/** A manifest field whose value is derived without any literal body `{{marker}}`
+ *  at all (formula/condition derive a value from other fields; AI drafts/adapts
+ *  in place). Such a field can legitimately survive a save even when discovery
+ *  reports no path for it, so it is never treated as a deleted-marker orphan.
+ *
+ *  Lookup and composite fields are deliberately NOT here: they are marker-backed
+ *  (a lookup fills `{{field}}` and its keyed `{{field.key}}` renderings; a
+ *  composite joins its parts into one `{{field}}` marker), so a Studio edit that
+ *  removes their last live marker must prune them like any other field. See
+ *  {@link hasLiveMarker}. */
+export const hasDerivedValueSource = (field: FieldMeta): boolean =>
   field.formula !== undefined ||
   field.condition !== undefined ||
   field.aiPrompt !== undefined ||
-  field.aiAdapt === true ||
-  field.lookup !== undefined ||
-  field.parts !== undefined ||
-  field.format !== undefined;
+  field.aiAdapt === true;
+
+/** Whether discovery still found a live `{{marker}}` backing this field. The
+ *  bare `field.path` covers plain, composite, and the default lookup rendering.
+ *  A lookup also renders keyed `{{field.key}}` markers off the SAME hit, and a
+ *  keyed marker can outlive the bare one inside an `{{#each}}` loop (where
+ *  `field.path` is the item-relative path `companies.krs` and only
+ *  `companies.krs.full` survives discovery), so a live keyed-format path keeps
+ *  the field too. */
+export const hasLiveMarker = (
+  field: FieldMeta,
+  discoveredPaths: Set<string>,
+): boolean =>
+  discoveredPaths.has(field.path) ||
+  (field.lookup?.formats.some((format) =>
+    discoveredPaths.has(`${field.path}.${format.key}`),
+  ) ??
+    false);
 
 const saveDocumentBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
@@ -182,18 +203,19 @@ const saveTemplateDocument = createSafeRootHandler(
       dateFormat: sourceFieldByPath.get(f.path)?.dateFormat,
     }));
 
-    // Drop orphaned plain fields: a Studio edit can delete a `{{field}}` marker
-    // from the body without a separate field-delete action, but the client
-    // manifest still carries that field, so the merge re-adds it as a
-    // manifest-only field. Such a field has no live marker (discovery did not
-    // find its path) and no derived value source, so persisting it would keep
-    // the Fill tab prompting for a value the document can never use. Fields with
-    // a derived value source (formula/condition/AI/lookup/composite)
-    // are kept: they legitimately lack a literal marker.
+    // Drop orphaned fields: a Studio edit can delete a `{{field}}` marker from
+    // the body without a separate field-delete action, but the client manifest
+    // still carries that field, so the merge re-adds it as a manifest-only
+    // field. Such a field has no live marker (discovery did not find its path or
+    // any keyed lookup-format path) and no marker-less derived value source, so
+    // persisting it would keep the Fill tab prompting for a value the document
+    // can never use. Marker-backed lookup/composite fields are pruned once their
+    // last marker is gone; only genuinely marker-less derived fields
+    // (formula/condition/AI) survive without one.
     const discoveredPaths = collectDiscoveredPaths(discovered);
     const prunedFieldMetas = fieldMetas.filter(
       (field) =>
-        discoveredPaths.has(field.path) || hasDerivedValueSource(field),
+        hasLiveMarker(field, discoveredPaths) || hasDerivedValueSource(field),
     );
 
     const manifest: TemplateManifest = {
