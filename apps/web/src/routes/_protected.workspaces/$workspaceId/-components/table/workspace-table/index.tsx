@@ -96,6 +96,10 @@ type WorkspaceTableProps = {
   // scroll boxes break the sticky group header). In this mode rows render
   // directly rather than virtualized — group pages are bounded.
   outerScrollRef?: RefObject<HTMLDivElement | null>;
+  // Union of every section's row ids, so a grouped section's select-all keeps
+  // selections in other sections (they share one selection) while still dropping
+  // stale ids. Omitted by the flat table.
+  selectAllPreservableRowIds?: string[];
 };
 
 // Nearest scrollable ancestor of an element, used as the IntersectionObserver
@@ -123,6 +127,7 @@ export const WorkspaceTable = ({
   stickyColumnHeader = true,
   fillHeight = true,
   outerScrollRef,
+  selectAllPreservableRowIds,
 }: WorkspaceTableProps) => {
   const inlineFlow = outerScrollRef !== undefined;
   const t = useTranslations();
@@ -206,9 +211,12 @@ export const WorkspaceTable = ({
       getNextSelectAllRowSelection({
         selectableRowIds,
         rowSelection: table.state.rowSelection,
+        ...(selectAllPreservableRowIds && {
+          preservableRowIds: selectAllPreservableRowIds,
+        }),
       }),
     );
-  }, [selectableRowIds, table]);
+  }, [selectableRowIds, selectAllPreservableRowIds, table]);
 
   const rowLabels = useMemo(() => {
     // Compute logical row labels that account for collapsed

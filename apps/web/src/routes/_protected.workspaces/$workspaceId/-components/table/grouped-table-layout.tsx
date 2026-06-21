@@ -19,7 +19,6 @@ import { useFormatter, useTranslations } from "use-intl";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
-import type { TranslationKey } from "@/i18n/types";
 import type {
   EntityKind,
   WorkspaceEntity,
@@ -78,16 +77,6 @@ const GROUP_TABLE_PAGE_SIZE = 200;
 // group-counts) stay in sync.
 const GROUPED_TABLE_EXCLUDED_KINDS: EntityKind[] = ["folder", "task"];
 
-// Static keys (not `tasks.statusValues.${status}`) so a missing or renamed key
-// fails typecheck instead of silently rendering the raw key at runtime.
-const STATUS_LABEL_KEYS = {
-  open: "tasks.statusValues.open",
-  in_progress: "tasks.statusValues.in_progress",
-  in_review: "tasks.statusValues.in_review",
-  done: "tasks.statusValues.done",
-  cancelled: "tasks.statusValues.cancelled",
-} as const satisfies Record<string, TranslationKey>;
-
 type GroupedTableLayoutProps = {
   workspaceId: string;
   view: WorkspaceView<"table">;
@@ -138,12 +127,15 @@ export const GroupedTableLayout = ({
     [properties, groupByPropertyId, view.layout.hiddenProperties],
   );
 
-  // Created-by and other built-ins beyond "kind" have no server-side
-  // grouping condition, so they fall back to a flat selection prompt
-  // (matches the kanban view's behaviour for unsupported groupings).
-  const isUnsupportedBuiltIn =
-    grouping.type === "built-in" &&
-    groupByPropertyId !== getInternalPropertyId("kind");
+  // Only "kind" and property groupings are supported for a document table.
+  // Status grouping is task-only, so on a document table (which excludes tasks)
+  // group-counts would report task buckets while the row fetch returns nothing;
+  // created-by and other built-ins have no server-side grouping condition. Both
+  // fall back to a flat selection prompt, matching the kanban view's behaviour.
+  const isUnsupportedGrouping =
+    grouping.type === "status" ||
+    (grouping.type === "built-in" &&
+      groupByPropertyId !== getInternalPropertyId("kind"));
 
   // One query for every group's count, so a group only fires its row query
   // when it actually has rows (empty groups never round-trip).
@@ -153,7 +145,7 @@ export const GroupedTableLayout = ({
       filters: view.layout.filters,
       groupByPropertyId: groupByPropertyId ?? "",
     }),
-    enabled: groupByPropertyId !== null && !isUnsupportedBuiltIn,
+    enabled: groupByPropertyId !== null && !isUnsupportedGrouping,
   });
   const countByValue = useMemo(() => {
     const map = new Map<string | null, number>();
@@ -183,8 +175,15 @@ export const GroupedTableLayout = ({
     [treeDataByGroup],
   );
   useSyncSelectedEntities({ viewId: view.id, treeData: allTreeData });
+  // Every row id across all sections, so a section's select-all keeps the other
+  // sections' selections (they share one selection) without resurrecting stale
+  // ids.
+  const allRowIds = useMemo(
+    () => allTreeData.map((node) => node.entityId),
+    [allTreeData],
+  );
 
-  if (groupByPropertyId === null || isUnsupportedBuiltIn) {
+  if (groupByPropertyId === null || isUnsupportedGrouping) {
     return (
       <EmptyState
         icon={TableIcon}
@@ -194,15 +193,9 @@ export const GroupedTableLayout = ({
     );
   }
 
-  const statusLabels =
-    grouping.type === "status"
-      ? Object.fromEntries(
-          Object.entries(STATUS_LABEL_KEYS).map(([status, key]) => [
-            status,
-            t(key),
-          ]),
-        )
-      : {};
+  // Status grouping is rejected above (isUnsupportedGrouping), so a document
+  // table never needs status labels.
+  const statusLabels = {};
   const entityKindLabels = {
     document: t("search.kinds.document"),
     folder: t("search.kinds.folder"),
@@ -255,6 +248,7 @@ export const GroupedTableLayout = ({
           key={group.value ?? "__uncategorized__"}
           outerScrollRef={scrollRef}
           reportGroupTreeData={reportGroupTreeData}
+          selectAllPreservableRowIds={allRowIds}
           sumProperties={sumProperties}
           tableState={tableState}
           view={view}
@@ -392,6 +386,7 @@ type GroupSectionProps = {
   tableState: ReturnType<typeof useTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
   reportGroupTreeData: (groupKey: string, nodes: TableTreeNode[]) => void;
+  selectAllPreservableRowIds: string[];
 };
 
 const GroupSection = ({
@@ -406,6 +401,7 @@ const GroupSection = ({
   tableState,
   outerScrollRef,
   reportGroupTreeData,
+  selectAllPreservableRowIds,
 }: GroupSectionProps) => {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -528,6 +524,7 @@ const GroupSection = ({
                 }
               }}
               outerScrollRef={outerScrollRef}
+              selectAllPreservableRowIds={selectAllPreservableRowIds}
               showAddRow={false}
               stickyColumnHeader={false}
               table={table}
