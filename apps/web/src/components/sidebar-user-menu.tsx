@@ -315,7 +315,7 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
               <a
                 aria-label={t("selfhost.viewReleaseNotes")}
                 href={CHANGELOG_URL}
-                rel="noopener"
+                rel="noreferrer"
                 target="_blank"
               />
             }

@@ -58,6 +58,7 @@ export default defineConfig({
     "react/style-prop-object": "error",
     "react/jsx-no-comment-textnodes": "error",
     "react/iframe-missing-sandbox": "error",
+    "react/jsx-no-target-blank": "error",
     "react/jsx-no-script-url": "error",
     "react/button-has-type": "error",
     "react/no-object-type-as-default-prop": "error",
