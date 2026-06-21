@@ -217,7 +217,21 @@ export const GroupedTableLayout = ({
     statusLabels,
     entityKindLabels,
   });
-  const groups = getEntityGroups(options, t("common.uncategorized"));
+  const optionGroups = getEntityGroups(options, t("common.uncategorized"));
+  // group-counts buckets the actual stored values, which can include values no
+  // longer in the property's option list (a renamed/deleted option, or an
+  // unreconciled AI value). Those rows are not "uncategorized" (they carry a
+  // value), so without a section for each such value they would silently vanish
+  // when grouping is enabled. Append a group for every counted value that has
+  // no option group.
+  const knownValues = new Set(optionGroups.map((group) => group.value));
+  const staleGroups: EntityGroup[] = [];
+  for (const value of countByValue.keys()) {
+    if (value !== null && !knownValues.has(value)) {
+      staleGroups.push({ label: value, value });
+    }
+  }
+  const groups = [...optionGroups, ...staleGroups];
 
   return (
     // Flex column so empty categories can sink below populated ones via
