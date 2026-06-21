@@ -15,6 +15,11 @@ import { renderComposite, resolvePath } from "@stll/template-conditions";
 
 import { isRecord } from "@/api/lib/type-guards";
 
+import {
+  mapRepeatablePath,
+  readRowSubPath,
+  writeRowSubPath,
+} from "./repeatable-paths";
 import type { FieldMeta, FieldPart, RichPatchValue } from "./types";
 
 export type CompositeFieldError = {
@@ -123,11 +128,84 @@ export const replaceResolvedValue = (
 };
 
 /**
+ * Validate one composite value (the object of part values for a single field
+ * or one loop row) and render it through the field's format. Pushes
+ * field-named errors and returns the rendered string, or null when the value
+ * is absent/a string (passes through) or failed validation (so the caller
+ * leaves it unchanged).
+ */
+const assembleCompositeValue = ({
+  path,
+  parts,
+  format,
+  incoming,
+  errors,
+}: {
+  path: string;
+  parts: readonly FieldPart[];
+  format: string;
+  incoming: unknown;
+  errors: CompositeFieldError[];
+}): string | null => {
+  if (incoming === undefined || typeof incoming === "string") {
+    return null;
+  }
+  if (!isRecord(incoming)) {
+    errors.push({
+      path,
+      partKey: null,
+      message: `Field "${path}": expected an object of part values or a string.`,
+    });
+    return null;
+  }
+
+  const partKeys = new Set(parts.map((part) => part.key));
+  const partValues: Record<string, string> = {};
+  let fieldValid = true;
+
+  for (const key of Object.keys(incoming)) {
+    if (!partKeys.has(key)) {
+      errors.push({
+        path,
+        partKey: key,
+        message: `Field "${path}": unknown part "${key}".`,
+      });
+      fieldValid = false;
+    }
+  }
+
+  for (const part of parts) {
+    const raw = incoming[part.key];
+    const error = validatePart(path, part, raw);
+    if (error) {
+      errors.push(error);
+      fieldValid = false;
+      continue;
+    }
+    if (typeof raw === "string") {
+      partValues[part.key] = raw;
+    }
+  }
+
+  if (!fieldValid) {
+    return null;
+  }
+  return renderCompositeFormat(format, partValues);
+};
+
+/**
  * Assemble composite field values: for every manifest field with
  * `parts` + `format` whose incoming value is an object of part values,
  * validate each part and replace the object with the rendered string.
  * A plain string value passes through unchanged (backward compatible);
  * an absent value is left for the fill's unmatched diagnostics.
+ *
+ * A composite field inside an `{{#each}}` loop keeps a dotted path
+ * (`parties.signer`) while the value is an array of rows
+ * (`parties: [{ signer: { title, name } }]`); the direct `resolvePath` then
+ * returns undefined, so each row's sub-path object is assembled in place
+ * (see {@link mapRepeatablePath}) and the loop expander flattens the rendered
+ * string under `__each_<container>_<idx>_<leaf>`.
  */
 export const resolveCompositeFields = ({
   values,
@@ -147,54 +225,36 @@ export const resolveCompositeFields = ({
   const errors: CompositeFieldError[] = [];
 
   for (const field of compositeFields) {
-    const incoming = resolvePath(field.path, resolved);
-    if (incoming === undefined || typeof incoming === "string") {
+    const parts = field.parts ?? [];
+    const format = field.format;
+    if (format === undefined) {
       continue;
     }
-    if (!isRecord(incoming)) {
-      errors.push({
-        path: field.path,
-        partKey: null,
-        message: `Field "${field.path}": expected an object of part values or a string.`,
+    const incoming = resolvePath(field.path, resolved);
+    if (incoming === undefined) {
+      mapRepeatablePath(resolved, field.path, ({ row, subPath }) => {
+        const rendered = assembleCompositeValue({
+          path: field.path,
+          parts,
+          format,
+          incoming: readRowSubPath(row, subPath),
+          errors,
+        });
+        if (rendered !== null) {
+          writeRowSubPath(row, subPath, rendered);
+        }
       });
       continue;
     }
-
-    const parts = field.parts ?? [];
-    const partKeys = new Set(parts.map((part) => part.key));
-    const partValues: Record<string, string> = {};
-    let fieldValid = true;
-
-    for (const key of Object.keys(incoming)) {
-      if (!partKeys.has(key)) {
-        errors.push({
-          path: field.path,
-          partKey: key,
-          message: `Field "${field.path}": unknown part "${key}".`,
-        });
-        fieldValid = false;
-      }
-    }
-
-    for (const part of parts) {
-      const raw = incoming[part.key];
-      const error = validatePart(field.path, part, raw);
-      if (error) {
-        errors.push(error);
-        fieldValid = false;
-        continue;
-      }
-      if (typeof raw === "string") {
-        partValues[part.key] = raw;
-      }
-    }
-
-    if (fieldValid && field.format !== undefined) {
-      replaceResolvedValue(
-        resolved,
-        field.path,
-        renderCompositeFormat(field.format, partValues),
-      );
+    const rendered = assembleCompositeValue({
+      path: field.path,
+      parts,
+      format,
+      incoming,
+      errors,
+    });
+    if (rendered !== null) {
+      replaceResolvedValue(resolved, field.path, rendered);
     }
   }
 

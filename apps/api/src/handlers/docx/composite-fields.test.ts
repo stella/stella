@@ -146,6 +146,62 @@ describe("resolveCompositeFields", () => {
     }
   });
 
+  test("assembles a composite field inside an {{#each}} loop per row", () => {
+    // The loop value arrives as an array of rows under the container path while
+    // the manifest keeps the dotted composite path `parties.signer`; each row's
+    // signer object must be rendered in place so the loop expander flattens the
+    // assembled string under __each_parties_<idx>_signer.
+    const field: FieldMeta = {
+      path: "parties.signer",
+      label: "Signer",
+      parts: [
+        { key: "title", inputType: "select", options: ["adw.", "rad. praw."] },
+        { key: "name", inputType: "text" },
+      ],
+      format: "{{title}} {{name}}",
+    };
+    const result = resolveCompositeFields({
+      values: {
+        parties: [
+          { signer: { title: "adw.", name: "Anna Nowak" } },
+          { signer: { title: "rad. praw.", name: "Jan Kowalski" } },
+        ],
+      },
+      fields: [field],
+    });
+
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.values["parties"]).toEqual([
+        { signer: "adw. Anna Nowak" },
+        { signer: "rad. praw. Jan Kowalski" },
+      ]);
+    }
+  });
+
+  test("rejects an invalid part inside an {{#each}} row", () => {
+    const field: FieldMeta = {
+      path: "parties.signer",
+      parts: [
+        { key: "title", inputType: "select", options: ["adw."] },
+        { key: "name", inputType: "text" },
+      ],
+      format: "{{title}} {{name}}",
+    };
+    const result = resolveCompositeFields({
+      values: {
+        parties: [{ signer: { title: "dr hab.", name: "Jan Kowalski" } }],
+      },
+      fields: [field],
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors[0]?.path).toBe("parties.signer");
+      expect(result.errors[0]?.partKey).toBe("title");
+    }
+  });
+
   test("resolves a flat dotted key", () => {
     const field: FieldMeta = { ...lawyerField, path: "counsel.lead" };
     const result = resolveCompositeFields({
