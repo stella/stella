@@ -108,9 +108,14 @@ sync — never derived state, an event relay, or a fetch.
 useExternalSyncEffect(() => editorRef.current?.setZoom(zoom), [zoom]);
 ```
 
-When the external lifecycle is "set up once per DOM node," prefer a **callback
-ref** over an effect (it ties setup/teardown to the node, not to a render) — see
-the `ResizeObserver`/fit-zoom pattern in the docx viewers.
+When the external lifecycle is "set up once per DOM node," use a **callback
+ref** over an effect (it ties setup/teardown to the node, not to a render) —
+see the `ResizeObserver`/fit-zoom pattern in the docx viewers. This is the
+canonical shape for `ResizeObserver`, `IntersectionObserver`, DOM listeners,
+and imperative widgets whose lifecycle belongs to a specific element. Keep an
+effect only when the component does not own the node/ref API yet, or when the
+work is truly "push a changing React value into an already-attached external
+system."
 
 ## useLayoutEffect
 

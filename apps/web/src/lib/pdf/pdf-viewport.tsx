@@ -3,6 +3,7 @@ import {
   useEffect,
   useEffectEvent,
   useId,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -123,7 +124,7 @@ const PDFViewerContent = ({
   );
 
   const effectiveScale = scale + scaleOffset;
-  const pageIds = pages.keys().toArray();
+  const pageIds = useMemo(() => pages.keys().toArray(), [pages]);
   const viewportStyle: PDFViewportStyle = {
     "--pdf-page-filter": shouldInvert ? "invert(1) hue-rotate(180deg)" : "none",
     "--scale-factor": effectiveScale,
