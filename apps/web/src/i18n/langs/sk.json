@@ -2046,7 +2046,7 @@
     "createDocument": "Vytvoriť dokument",
     "createDocumentAnyway": "Aj tak vytvoriť",
     "createInStudio": "Vytvoriť v stella",
-    "createInStudioHint": "Šablónu napíšte v editore a na miesta, kam patria hodnoty, vložte {{polia}}.",
+    "createInStudioHint": "Šablónu napíšte v editore a na miesta, kam patria hodnoty, vložte '{{polia}}'.",
     "dateChipFirstOfNextMonth": "Prvý deň budúceho mesiaca",
     "dateChipPlus30Days": "O 30 dní",
     "dateFormatStyle": "Formát dátumu",

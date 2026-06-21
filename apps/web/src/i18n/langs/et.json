@@ -2046,7 +2046,7 @@
     "createDocument": "Loo dokument",
     "createDocumentAnyway": "Loo ikkagi",
     "createInStudio": "Loo stellas",
-    "createInStudioHint": "Kirjuta mall redaktoris ja lisa {{väljad}} sinna, kuhu kuuluvad väärtused.",
+    "createInStudioHint": "Kirjuta mall redaktoris ja lisa '{{väljad}}' sinna, kuhu kuuluvad väärtused.",
     "dateChipFirstOfNextMonth": "Järgmise kuu esimene päev",
     "dateChipPlus30Days": "30 päeva pärast",
     "dateFormatStyle": "Kuupäeva vorming",

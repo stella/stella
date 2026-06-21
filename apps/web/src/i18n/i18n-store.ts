@@ -97,6 +97,8 @@ export const isSupportedLanguage = isUiLocale;
 
 export const resolveSupportedLanguage = resolveUiLocale;
 
+const normalizeLocale = (value: string): string => value.replace("_", "-");
+
 const detectLang = (): SupportedLanguage => {
   const languages =
     typeof navigator !== "undefined" && "languages" in navigator

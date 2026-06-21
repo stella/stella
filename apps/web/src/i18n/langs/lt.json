@@ -2046,7 +2046,7 @@
     "createDocument": "Sukurti dokumentą",
     "createDocumentAnyway": "Vis tiek sukurti",
     "createInStudio": "Kurti su stella",
-    "createInStudioHint": "Parašykite šabloną redaktoriuje ir įterpkite {{laukus}} ten, kur turi būti reikšmės.",
+    "createInStudioHint": "Parašykite šabloną redaktoriuje ir įterpkite '{{laukus}}' ten, kur turi būti reikšmės.",
     "dateChipFirstOfNextMonth": "Kito mėnesio pirma diena",
     "dateChipPlus30Days": "Po 30 dienų",
     "dateFormatStyle": "Datos formatas",

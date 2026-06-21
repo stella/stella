@@ -2046,7 +2046,7 @@
     "createDocument": "Dokument erstellen",
     "createDocumentAnyway": "Trotzdem erstellen",
     "createInStudio": "In stella erstellen",
-    "createInStudioHint": "Schreiben Sie die Vorlage im Editor und fügen Sie {{Felder}} dort ein, wo Werte stehen sollen.",
+    "createInStudioHint": "Schreiben Sie die Vorlage im Editor und fügen Sie '{{Felder}}' dort ein, wo Werte stehen sollen.",
     "dateChipFirstOfNextMonth": "Erster des nächsten Monats",
     "dateChipPlus30Days": "In 30 Tagen",
     "dateFormatStyle": "Datumsformat",

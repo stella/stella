@@ -2046,7 +2046,7 @@
     "createDocument": "Utwórz dokument",
     "createDocumentAnyway": "Utwórz mimo to",
     "createInStudio": "Utwórz w stella",
-    "createInStudioHint": "Napisz szablon w edytorze i wstaw {{pola}} tam, gdzie mają znaleźć się wartości.",
+    "createInStudioHint": "Napisz szablon w edytorze i wstaw '{{pola}}' tam, gdzie mają znaleźć się wartości.",
     "dateChipFirstOfNextMonth": "Pierwszy dzień następnego miesiąca",
     "dateChipPlus30Days": "Za 30 dni",
     "dateFormatStyle": "Format daty",

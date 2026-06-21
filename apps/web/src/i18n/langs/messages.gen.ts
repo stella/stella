@@ -5,7 +5,6 @@ type Messages = {
   "account": {
     "sessions": {
       "currentSession": "Current";
-      "description": "Manage your active sessions";
       "device": "Device";
       "deviceOnOs": "{browser} on {os}";
       "ipAddress": "IP address";
@@ -27,25 +26,6 @@ type Messages = {
     "refinePlaceholder": "How should the AI adjust the wording?";
     "regenerate": "Regenerate";
   };
-  "anonymize": {
-    "addEntity": "Add entity";
-    "checkAnonymization": "Check anonymization";
-    "closeAddForm": "Close add form";
-    "confirmAll": "Confirm all";
-    "entities": "Entities";
-    "entityType": "Entity type";
-    "extractingText": "Extracting text…";
-    "noEntitiesFound": "No entities found";
-    "reject": "Reject";
-    "rejectAll": "Reject all";
-    "removeEntity": "Remove entity";
-    "revise": "Revise anonymization";
-    "runPipeline": "Run pipeline";
-    "running": "Running…";
-    "searchMatches": "Words to find in the document";
-    "searchPlaceholder": "Type word(s) to find…";
-    "title": "Anonymization review";
-  };
   "app": {
     "versionMismatch": {
       "dismiss": "Dismiss update notice";
@@ -54,20 +34,30 @@ type Messages = {
     };
   };
   "appearance": {
+    "calendar": "Calendar";
+    "calendarGregorian": "Gregorian";
+    "calendarHijri": "Hijri (Umm al-Qura)";
     "cool": "Cool";
     "dark": "Dark";
     "flexoki": "Flexoki";
     "light": "Light";
     "neutral": "Neutral";
     "nord": "Nord";
+    "numbers": "Numbers";
+    "numbersEastern": "Eastern (٠١٢٣)";
+    "numbersWestern": "Western (0123)";
     "palette": "Palette";
     "system": "System";
     "theme": "Theme";
     "title": "Appearance";
     "warm": "Warm";
+    "weekStart": "First day of week";
+    "weekStartAuto": "Automatic";
+    "weekStartMonday": "Monday";
+    "weekStartSaturday": "Saturday";
+    "weekStartSunday": "Sunday";
   };
   "auth": {
-    "betaNoticeBody": "As a precaution during beta, do not upload sensitive, privileged, personal, irreplaceable, or production-critical data. Cloud is a demo service.";
     "betaNoticeTitle": "Beta";
     "checkSpamHint": "If you don't see it, check your spam folder.";
     "chooseOrganization": "Choose which organization to work in";
@@ -97,7 +87,6 @@ type Messages = {
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
-    "signInWithEmail": "Sign in with email";
     "subtitle": "Documents, case law, and review under control. Powered by AI.";
     "useDifferentEmail": "Use a different email";
     "weSentCodeTo": "We sent a code to {email}";
@@ -116,8 +105,10 @@ type Messages = {
       "activityCode": "Activity code";
       "codeLabel": "Code";
       "codeLabelField": "Label";
+      "codePlaceholder": "L110";
       "createCode": "Create code";
       "inactive": "Inactive";
+      "labelPlaceholder": "Research";
       "manageCodes": "Manage codes";
       "noCodesYet": "No billing codes yet";
       "task": "Task";
@@ -264,31 +255,14 @@ type Messages = {
     "emptyState": "No decisions found. Configure a source and run a sync to import case law.";
     "filters": {
       "court": "Court";
-      "dateFrom": "From";
-      "dateTo": "To";
       "searchPlaceholder": "Search by case number...";
     };
-    "loading": "Loading...";
     "loadingMore": "Loading more...";
-    "sectionTypes": {
-      "argumentation": "Argumentation";
-      "dissent": "Dissent";
-      "footer": "Footer";
-      "header": "Header";
-      "ruling": "Ruling";
-      "unknown": "Other";
-    };
     "seo": {
       "browse": "Browse case law";
       "countries": "Countries";
       "courts": "Courts";
       "years": "Years";
-    };
-    "sources": {
-      "empty": "No sources configured.";
-      "lastSync": "Last sync: {date, date, medium}";
-      "neverSynced": "Never synced";
-      "title": "Sources";
     };
     "viewer": {
       "abstract": "Abstract";
@@ -298,7 +272,6 @@ type Messages = {
       "legalSentence": "Legal sentence";
       "nalusDisclaimer": "Source: NALUS, Constitutional Court of the Czech Republic. Free of charge. This electronic version is not authentic; only originals with the state emblem and signature of the authorized person are authentic.";
       "popularName": "Popular name";
-      "sections": "Sections";
       "source": "Source";
       "sourceFields": {
         "decisionCategory": "Decision category";
@@ -446,6 +419,9 @@ type Messages = {
       "prompts": "Skills";
       "recentChats": "Recent chats";
     };
+    "loadEarlierMessages": "Load earlier messages";
+    "loadEarlierMessagesError": "Couldn't load earlier messages";
+    "loadingEarlierMessages": "Loading earlier messages…";
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
       "category": {
@@ -583,7 +559,6 @@ type Messages = {
     "allClauses": "All clauses";
     "backToList": "Back to clauses";
     "body": "Body";
-    "categories": "Categories";
     "categoryDeleteConfirm": "Clauses in this category will become uncategorized.";
     "categoryName": "Category name";
     "categoryNamePlaceholder": "e.g. Confidentiality";
@@ -600,7 +575,6 @@ type Messages = {
     "createCategory": "New category";
     "createClause": "New clause";
     "createFailed": "Failed to create clause";
-    "currentVersion": "Current";
     "deleteCategory": "Delete category";
     "deleteClause": "Delete clause";
     "deleteFailed": "Failed to delete";
@@ -626,7 +600,6 @@ type Messages = {
     "loadFailed": "Failed to load clauses";
     "loading": "Loading clauses…";
     "noChanges": "No changes";
-    "noClauses": "No clauses yet";
     "noLinkedClauses": "No linked clauses";
     "noResults": "No clauses yet";
     "noVariants": "No variants";
@@ -639,7 +612,6 @@ type Messages = {
     "searchClauses": "Search clauses...";
     "searchPlaceholder": "Search clauses...";
     "selectFile": "Select JSON file";
-    "selectVariant": "Select variant";
     "selectVersionToCompare": "Select a version to compare with current";
     "slotCustom": "Custom slot name…";
     "slotName": "Slot name";
@@ -814,6 +786,7 @@ type Messages = {
     "newRow": "New row";
     "next": "Next";
     "noResults": "No results";
+    "none": "None";
     "notes": "Notes";
     "open": "Open";
     "openInNewTab": "Open in new tab";
@@ -859,6 +832,7 @@ type Messages = {
     "type": "Type";
     "typeNameToConfirm": "Type the name to confirm";
     "uncategorized": "Uncategorized";
+    "undo": "Undo";
     "unexpectedError": "An unexpected error occurred. Please contact support.";
     "unpin": "Unpin";
     "uploadFiles": "Upload files";
@@ -1009,7 +983,6 @@ type Messages = {
     "acceptAll": "Accept all";
     "applyAs": "as";
     "applyDirect": "Direct";
-    "applyMode": "Apply as:";
     "applyTracked": "Tracked changes";
     "areaUnspecified": "Unspecified";
     "byArea": "By area";
@@ -1021,11 +994,9 @@ type Messages = {
     "hideAccepted": "Hide accepted suggestions";
     "identityAria": "Tracked-change identity for {name}";
     "identitySaved": "Identity saved";
-    "progressAria": "{reviewed} of {total} reviewed";
     "reject": "Reject";
     "rejectAll": "Reject all";
     "revert": "Revert";
-    "reviewed": "reviewed";
     "savingIdentity": "Saving…";
     "severityHigh": "High";
     "severityLow": "Low";
@@ -1299,6 +1270,7 @@ type Messages = {
     "syncing": "Syncing";
     "tableBordersAll": "All borders";
     "tableBordersNone": "No borders";
+    "textDirection": "Text direction";
     "textEditingMenu": "Text editing menu";
     "textFormattingGroup": "Text formatting";
     "toggleTrackChanges": "Toggle Track Changes";
@@ -1326,7 +1298,6 @@ type Messages = {
       "ignoreScopeAlways": "Always ignore";
       "ignoreScopeDocument": "Ignore in this matter";
       "ignoreScopeMenuAriaLabel": "Ignore scope";
-      "ignoreScopeWorkspace": "Ignore in this workspace";
       "labelPickerAriaLabel": "Entity label";
       "labelPickerEmpty": "No matching label.";
       "labelPickerPlaceholder": "Label";
@@ -1355,7 +1326,6 @@ type Messages = {
     "matterPicker": {
       "allMatters": "All matters";
       "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.";
-      "directLabel": "Direct";
       "empty": "No matters available.";
       "noMatter": "No matter";
       "noResults": "No matter matches “{query}”.";
@@ -1599,14 +1569,8 @@ type Messages = {
     "showRaw": "Show raw";
   };
   "navigation": {
-    "account": "Account";
-    "calendar": "Calendar";
     "chat": "Chat";
-    "chatAlreadyOpen": "Chat is already open";
-    "clients": "Clients";
     "contacts": "Contacts";
-    "inbox": "Inbox";
-    "invitations": "Invitations";
     "knowledge": "Knowledge";
     "members": "Members";
     "myTodos": "My tasks";
@@ -1614,15 +1578,12 @@ type Messages = {
     "pinned": "Pinned";
     "recents": "Recents";
     "search": "Search";
-    "searchEmptyState": "Start typing to search documents, matters, and more.";
-    "searchPlaceholder": "Search across all workspaces...";
     "shortcutCategories": {
       "navigation": "Navigation";
     };
     "sidebar": "Sidebar";
     "sidebarDescription": "Displays the mobile sidebar.";
     "templates": "Templates";
-    "timeTracking": "Time tracking";
     "toggleChat": "Toggle chat";
     "toggleSidebar": "Toggle sidebar";
   };
@@ -1652,7 +1613,6 @@ type Messages = {
     "catalogueThirdPartyConfirm": "Add anyway";
     "catalogueThirdPartyDisclaimer": "This is third-party code contributed by {author}. stella has not reviewed, endorsed, or maintained it. You are solely responsible for verifying it is suitable for your practice and compliant with your firm's policies. By adding it, you accept that you use it at your own risk.";
     "catalogueTitle": "Customize your AI";
-    "changeAnytime": "You can change this anytime in settings.";
     "continue": "Continue";
     "creating": {
       "ai": "Saving AI configuration...";
@@ -1681,6 +1641,7 @@ type Messages = {
     "jurisdictionSuggested": "Suggested";
     "jurisdictionTitle": "Pick your practice jurisdictions";
     "orgNameLabel": "Team name";
+    "orgNamePlaceholder": "Smith & Associates";
     "orgSubtitle": "This is how your colleagues will find you.";
     "orgTitle": "Name your team";
     "skipStep": "Skip this step";
@@ -1692,7 +1653,6 @@ type Messages = {
     "stepOrganization": "Team";
     "stepTeam": "Invite";
     "termsNotice": "By continuing, you agree to our <terms>Terms of Service</terms>.";
-    "welcomeSubtitle": "Set up takes less than a minute.";
   };
   "organization": {
     "aiConfig": {
@@ -1852,7 +1812,6 @@ type Messages = {
       "message": "Message";
       "task": "Task";
     };
-    "metaSeparator": "{workspace} · {time}";
     "mimeType": "File type";
     "noResults": "No results found for \"{query}\".";
     "placeholder": "Search across all matters...";
@@ -1860,7 +1819,6 @@ type Messages = {
     "recentlyOpenedFiles": "Recently opened files";
     "resultCount": "{count, plural, one {# result} other {# results}}";
     "summaryAction": "Summarize top results";
-    "summaryCitations": "Cited results";
     "summaryError": "Summary unavailable";
     "summaryLoading": "Summarizing results...";
     "summaryPrompt": "Use the top results and their content to draft a short answer.";
@@ -1931,7 +1889,6 @@ type Messages = {
       "pendingInvitations": "Pending invitations";
       "practiceJurisdictions": "Practice jurisdictions";
       "profile": "Profile";
-      "profileDescription": "Update organization name";
       "promptCaching": {
         "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically — only a Zero Data Retention contract with the provider fully disables server-side caching.";
         "title": "Prompt caching";
@@ -1954,7 +1911,6 @@ type Messages = {
       "usageLimitTitleEntitlementInactive": "Usage entitlement is not active";
       "usageLimitTitleNoEntitlement": "Usage entitlement required";
       "usageLimitTitleUsageLimitExceeded": "AI usage limit reached";
-      "usageLoading": "Loading…";
       "usageManage": "Manage hosted usage";
       "usageManageError": "Could not open hosted usage management";
       "usageManuallyManaged": "Manually managed";
@@ -2093,7 +2049,7 @@ type Messages = {
     "createDocument": "Create document";
     "createDocumentAnyway": "Create anyway";
     "createInStudio": "Create in stella";
-    "createInStudioHint": "Write the template in the editor and add {{fields}} where values should go.";
+    "createInStudioHint": "Write the template in the editor and add '{{fields}}' where values should go.";
     "dateChipFirstOfNextMonth": "First of next month";
     "dateChipPlus30Days": "In 30 days";
     "dateFormatStyle": "Date format";
@@ -2784,6 +2740,8 @@ type Messages = {
       "keepEmpty": "Keep Empty";
       "manualColumn": "Manual column";
       "markAllAsReviewed": "Mark all as reviewed";
+      "markThisGroupAsReviewed": "Mark this group as reviewed";
+      "markedAsReviewed": "{count, plural, one {# cell marked as reviewed} other {# cells marked as reviewed}}";
       "multiSelect": "Multi Select";
       "nameProperty": "Name property";
       "newColumn": "New column";
@@ -2902,6 +2860,7 @@ type Messages = {
       "filterByPlaceholder": "Filter by…";
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}";
       "groupBy": "Group by:";
+      "groupItemCount": "{count, plural, one {# item} other {# items}}";
       "hideColumn": "Hide column";
       "layouts": {
         "calendar": "Calendar";

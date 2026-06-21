@@ -38,7 +38,13 @@ export const LANGUAGES = [
   },
   { code: "ak", englishName: "Akan", endonym: "Akan", uiAvailable: false },
   { code: "am", englishName: "Amharic", endonym: "አማርኛ", uiAvailable: false },
-  { code: "ar", englishName: "Arabic", endonym: "العربية", uiAvailable: false },
+  {
+    code: "ar",
+    englishName: "Arabic",
+    endonym: "العربية",
+    uiAvailable: true,
+    uiLocale: "ar",
+  },
   {
     code: "an",
     englishName: "Aragonese",

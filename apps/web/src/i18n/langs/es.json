@@ -2046,7 +2046,7 @@
     "createDocument": "Crear documento",
     "createDocumentAnyway": "Crear de todos modos",
     "createInStudio": "Crear en stella",
-    "createInStudioHint": "Redacte la plantilla en el editor y añada {{campos}} donde deban ir los valores.",
+    "createInStudioHint": "Redacte la plantilla en el editor y añada '{{campos}}' donde deban ir los valores.",
     "dateChipFirstOfNextMonth": "Primer día del próximo mes",
     "dateChipPlus30Days": "En 30 días",
     "dateFormatStyle": "Formato de fecha",

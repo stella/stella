@@ -2046,7 +2046,7 @@
     "createDocument": "Create document",
     "createDocumentAnyway": "Create anyway",
     "createInStudio": "Create in stella",
-    "createInStudioHint": "Write the template in the editor and add {{fields}} where values should go.",
+    "createInStudioHint": "Write the template in the editor and add '{{fields}}' where values should go.",
     "dateChipFirstOfNextMonth": "First of next month",
     "dateChipPlus30Days": "In 30 days",
     "dateFormatStyle": "Date format",

@@ -2046,7 +2046,7 @@
     "createDocument": "Créer le document",
     "createDocumentAnyway": "Créer quand même",
     "createInStudio": "Créer dans stella",
-    "createInStudioHint": "Rédigez le modèle dans l'éditeur et ajoutez des {{champs}} là où les valeurs doivent apparaître.",
+    "createInStudioHint": "Rédigez le modèle dans l'éditeur et ajoutez des '{{champs}}' là où les valeurs doivent apparaître.",
     "dateChipFirstOfNextMonth": "Premier jour du mois prochain",
     "dateChipPlus30Days": "Dans 30 jours",
     "dateFormatStyle": "Format de date",

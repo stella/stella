@@ -2046,7 +2046,7 @@
     "createDocument": "Izveidot dokumentu",
     "createDocumentAnyway": "Tomēr izveidot",
     "createInStudio": "Izveidot ar stella",
-    "createInStudioHint": "Uzrakstiet veidni redaktorā un ievietojiet {{laukus}} tur, kur jābūt vērtībām.",
+    "createInStudioHint": "Uzrakstiet veidni redaktorā un ievietojiet '{{laukus}}' tur, kur jābūt vērtībām.",
     "dateChipFirstOfNextMonth": "Nākamā mēneša pirmā diena",
     "dateChipPlus30Days": "Pēc 30 dienām",
     "dateFormatStyle": "Datuma formāts",
