@@ -61,6 +61,7 @@ export default defineConfig({
     "react/jsx-no-script-url": "error",
     "react/button-has-type": "error",
     "react/no-object-type-as-default-prop": "error",
+    "react/react-compiler": "error",
     // Allow component creation in prop position: i18n rich-text render
     // callbacks (`t.rich({ link: (chunks) => <a/> })`) and IIFE-as-prop
     // element builders are idiomatic here and are not remounted components.
