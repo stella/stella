@@ -24,3 +24,8 @@ export {
   type DeriveBlockIdInput,
   type FolioBlockId,
 } from "./core/types/block-id";
+export { createDocx } from "./core/docx/rezip";
+export {
+  createEmptyDocument,
+  type CreateEmptyDocumentOptions,
+} from "./core/utils/createDocument";
