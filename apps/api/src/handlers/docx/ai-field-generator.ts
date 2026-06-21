@@ -20,7 +20,7 @@ import {
 } from "@/api/handlers/docx/ai-skill-tools";
 import type { AiConditionDecider } from "@/api/handlers/docx/resolve-ai-conditions";
 import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
-import { getModelForRole } from "@/api/lib/ai-models";
+import { getModelForRole, hasInstanceProvider } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
@@ -54,7 +54,9 @@ export const buildAiFieldGenerator = ({
   /** When present, model usage is metered and failures are captured. */
   aiAnalytics?: AiFieldAnalytics | undefined;
 }): AiFieldGenerator | undefined => {
-  if (!orgAIConfig) {
+  // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
+  // fields unfilled) only when neither can supply a model.
+  if (!orgAIConfig && !hasInstanceProvider()) {
     return undefined;
   }
   return async ({ prompt, values, documentText }) => {
@@ -127,7 +129,9 @@ export const buildAiConditionDecider = ({
   /** When present, model usage is metered and failures are captured. */
   aiAnalytics?: AiFieldAnalytics | undefined;
 }): AiConditionDecider | undefined => {
-  if (!orgAIConfig) {
+  // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
+  // fields unfilled) only when neither can supply a model.
+  if (!orgAIConfig && !hasInstanceProvider()) {
     return undefined;
   }
   return async ({ prompt, values }) => {
@@ -238,7 +242,9 @@ export const buildAiOccurrenceAdapter = ({
   /** When present, model usage is metered and failures are captured. */
   aiAnalytics?: AiFieldAnalytics | undefined;
 }): AiOccurrenceAdapter | undefined => {
-  if (!orgAIConfig) {
+  // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
+  // fields unfilled) only when neither can supply a model.
+  if (!orgAIConfig && !hasInstanceProvider()) {
     return undefined;
   }
   return async (input) => {

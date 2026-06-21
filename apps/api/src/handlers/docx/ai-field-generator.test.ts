@@ -32,6 +32,7 @@ void mock.module("ai", () => ({
 
 void mock.module("@/api/lib/ai-models", () => ({
   getModelForRole: () => ({ modelId: "test-model" }),
+  hasInstanceProvider: () => false,
 }));
 
 void mock.module("@/api/lib/ai-output-schema", () => ({
