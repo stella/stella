@@ -14,7 +14,10 @@ import { containsNull } from "@/api/handlers/templates/fill";
 import { fillStoredTemplateDocx } from "@/api/handlers/templates/template-fill-service";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  assertUsageAvailableForHandler,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -59,7 +62,6 @@ const config = {
   permissions: { template: ["create"], entity: ["create"] },
   params: fillToWorkspaceParamsSchema,
   body: fillToWorkspaceBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 /**
@@ -154,6 +156,23 @@ const fillTemplateToWorkspace = createSafeHandler(
       traceId: Bun.randomUUIDv7(),
     });
 
+    // The fill service runs this only when the manifest declares AI fields,
+    // before any model call, so a deterministic fill never spends AI quota.
+    // Gated on `orgAIConfig` because the generators below are no-ops without
+    // it (no model call, no cost), matching the static preflight that used to
+    // run unconditionally for this route.
+    const assertUsageAvailable = orgAIConfig
+      ? async () =>
+          await assertUsageAvailableForHandler({
+            metering: { actionType: "chat", modelRole: "fast" },
+            organizationId,
+            orgAIConfig,
+            workspaceId,
+            userId: user.id,
+            safeDb,
+          })
+      : undefined;
+
     const filled = yield* Result.await(
       Result.tryPromise({
         try: async () =>
@@ -163,6 +182,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             scopedDb,
             organizationId,
             clauseOverrides: body.clauseOverrides,
+            assertUsageAvailable,
             generateAiValue: buildAiFieldGenerator({
               orgAIConfig,
               organizationId,
@@ -190,6 +210,12 @@ const fillTemplateToWorkspace = createSafeHandler(
           }),
       }),
     );
+
+    if ("usageRejection" in filled) {
+      // The preflight rejected the AI fill (over quota / no entitlement);
+      // surface the framework's exact 402/500 error body unchanged.
+      return Result.err(filled.usageRejection);
+    }
 
     if ("error" in filled) {
       return Result.err(

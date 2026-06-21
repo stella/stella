@@ -19,9 +19,13 @@ import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData, type TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  assertUsageAvailableForHandler,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
@@ -49,6 +53,27 @@ type FillProps = {
   query: { format?: "docx" | "pdf" };
 };
 
+/** Serialize a usage-limit `HandlerError` to the same JSON body the framework
+ *  preflight returns (message plus the 402 usage detail), for this route's
+ *  raw-Response download path. */
+const usageRejectionResponse = (error: HandlerError<402 | 500>): Response =>
+  new Response(
+    JSON.stringify({
+      message: error.message,
+      ...(error.usage
+        ? {
+            reason: error.usage.reason,
+            required: error.usage.required,
+            available: error.usage.available,
+          }
+        : {}),
+    }),
+    {
+      status: error.status,
+      headers: { "Content-Type": "application/json" },
+    },
+  );
+
 export const containsNull = (value: unknown): boolean => {
   if (value === null) {
     return true;
@@ -60,6 +85,44 @@ export const containsNull = (value: unknown): boolean => {
     return Object.values(value).some(containsNull);
   }
   return false;
+};
+
+type TemplateFillUsageArgs = {
+  /** Org AI (BYOK) config; null when the org has no usable AI config, in which
+   *  case the generators are no-ops and no model call (or quota) occurs. */
+  orgAIConfig: OrgAIConfig | null;
+  /** Whether the manifest declares any AI-drafted/adapted field. */
+  hasAiFields: boolean;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  safeDb: SafeDb;
+};
+
+/**
+ * Usage preflight for the template-fill routes, gated on a model call actually
+ * running (an org AI config plus a manifest AI field). A deterministic fill
+ * spends no AI quota, so the static `requiresUsage` config is omitted and this
+ * runs in-handler instead. Returns the framework's 402/500 `HandlerError` (the
+ * caller returns it as `Result.err`) or `null` to proceed.
+ */
+export const assertTemplateFillUsage = async ({
+  orgAIConfig,
+  hasAiFields,
+  organizationId,
+  userId,
+  safeDb,
+}: TemplateFillUsageArgs): Promise<HandlerError<402 | 500> | null> => {
+  if (!orgAIConfig || !hasAiFields) {
+    return null;
+  }
+  return await assertUsageAvailableForHandler({
+    metering: { actionType: "chat", modelRole: "fast" },
+    organizationId,
+    orgAIConfig,
+    workspaceId: null,
+    userId,
+    safeDb,
+  });
 };
 
 export const fillHandler = async ({
@@ -136,6 +199,20 @@ export const fillHandler = async ({
     manifest && (hasAiDraftFields || hasAiAdaptFields)
       ? await loadOrgAIConfig(organizationId)
       : null;
+
+  // This download route streams its own Response, so a usage rejection is
+  // serialized to the same body the framework preflight emits (message plus
+  // usage detail) here.
+  const usageRejection = await assertTemplateFillUsage({
+    orgAIConfig,
+    hasAiFields: Boolean(hasAiDraftFields) || Boolean(hasAiAdaptFields),
+    organizationId,
+    userId,
+    safeDb,
+  });
+  if (usageRejection !== null) {
+    return usageRejectionResponse(usageRejection);
+  }
 
   // Resolve registry lookups, assemble composite (multipart) values,
   // evaluate formula (derived) fields, and check dependent (optionsFrom)
@@ -322,7 +399,6 @@ const config = {
   permissions: { template: ["create"] },
   body: fillBodySchema,
   query: fillQuerySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const fillTemplateHandler = createSafeRootHandler(

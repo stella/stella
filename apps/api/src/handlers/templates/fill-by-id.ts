@@ -40,7 +40,7 @@ import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
-import { containsNull } from "./fill";
+import { assertTemplateFillUsage, containsNull } from "./fill";
 
 const fillByIdBodySchema = t.Object({
   values: t.String(),
@@ -198,6 +198,17 @@ const fillByIdHandler = async function* ({
     manifest && (hasAiDraftFields || hasAiAdaptFields)
       ? await loadOrgAIConfig(organizationId)
       : null;
+
+  const usageRejection = await assertTemplateFillUsage({
+    orgAIConfig,
+    hasAiFields: Boolean(hasAiDraftFields) || Boolean(hasAiAdaptFields),
+    organizationId,
+    userId,
+    safeDb,
+  });
+  if (usageRejection !== null) {
+    return Result.err(usageRejection);
+  }
 
   // Resolve registry lookups, assemble composite (multipart) values,
   // evaluate formula (derived) fields, and check dependent (optionsFrom)
@@ -414,7 +425,6 @@ const config = {
   params: fillByIdParamsSchema,
   body: fillByIdBodySchema,
   query: fillByIdQuerySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const fillTemplateById = createSafeRootHandler(

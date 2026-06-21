@@ -19,6 +19,18 @@ export type HandlerErrorStatusCode =
 
 export type HandlerErrorCode = ChatTransportErrorCode;
 
+/**
+ * Structured 402 usage-limit detail surfaced alongside the message so the
+ * frontend renders an "x of y units left" modal without parsing the text.
+ * Only the usage-limit preflight populates these; every other `HandlerError`
+ * leaves them unset and `safeErrorBody` omits them.
+ */
+export type HandlerErrorUsageDetail = {
+  reason: UsageLimitExceededReason;
+  required: number;
+  available: number;
+};
+
 export type HandlerErrorProps<
   TStatus extends HandlerErrorStatusCode = HandlerErrorStatusCode,
 > = {
@@ -26,6 +38,7 @@ export type HandlerErrorProps<
   status: TStatus;
   message: string;
   cause?: unknown;
+  usage?: HandlerErrorUsageDetail | undefined;
 };
 
 // TaggedError(...) cannot reference the class type parameter in the base
@@ -36,11 +49,13 @@ export class HandlerError<
 > extends TaggedError("HandlerError")<HandlerErrorProps>() {
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
+  declare usage?: HandlerErrorUsageDetail | undefined;
 
   constructor(props: HandlerErrorProps<TStatus>) {
     super(props);
     this.code = props.code;
     this.status = props.status;
+    this.usage = props.usage;
   }
 }
 

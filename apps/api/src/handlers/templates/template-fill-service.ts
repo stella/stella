@@ -6,6 +6,8 @@
  * already-tested functions.
  */
 
+import { panic } from "better-result";
+
 import type { ScopedDb } from "@/api/db";
 import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
@@ -192,7 +194,16 @@ export const describeStoredTemplate = async ({
   };
 };
 
-type FillServiceOptions = {
+/**
+ * Usage preflight hook invoked once the manifest is read and the template is
+ * known to declare AI fields, before any model call runs. Returns a rejection
+ * marker (an over-quota / no-entitlement signal the caller maps to its HTTP
+ * response) or `null` to proceed. Lets a caller gate AI quota on a model call
+ * actually running without re-reading the template manifest itself.
+ */
+type FillUsagePreflight<TRejection> = () => Promise<TRejection | null>;
+
+type FillServiceOptions<TRejection = never> = {
   templateId: SafeId<"template">;
   values: FillValues;
   scopedDb: ScopedDb;
@@ -208,6 +219,10 @@ type FillServiceOptions = {
   decideAiCondition?: AiConditionDecider | undefined;
   /** Optional model-backed per-occurrence adapter for aiAdapt fields. */
   adaptAiValue?: AiOccurrenceAdapter | undefined;
+  /** Optional usage preflight run only when the manifest declares AI fields,
+   *  before any model call. A non-null return aborts the fill with a
+   *  `{ usageRejection }` result the caller surfaces as its own response. */
+  assertUsageAvailable?: FillUsagePreflight<TRejection> | undefined;
 };
 
 type FilledDocx = {
@@ -227,7 +242,7 @@ type FilledDocx = {
  * at every boundary. Backs the fill-to-workspace route (which persists the
  * bytes as a matter document) and the chat tools' text fill below.
  */
-export const fillStoredTemplateDocx = async ({
+export const fillStoredTemplateDocx = async <TRejection = never>({
   templateId,
   values,
   scopedDb,
@@ -236,7 +251,10 @@ export const fillStoredTemplateDocx = async ({
   generateAiValue,
   decideAiCondition,
   adaptAiValue,
-}: FillServiceOptions): Promise<FilledDocx | { error: string }> => {
+  assertUsageAvailable,
+}: FillServiceOptions<TRejection>): Promise<
+  FilledDocx | { error: string } | { usageRejection: TRejection }
+> => {
   const loaded = await loadTemplate(templateId, scopedDb);
   if (!loaded) {
     return { error: "Template not found." };
@@ -284,6 +302,21 @@ export const fillStoredTemplateDocx = async ({
     });
     if (stepError !== null) {
       return { error: stepError };
+    }
+
+    // Gate the AI usage preflight on a model call actually running: the
+    // generators below are no-ops unless the manifest declares AI fields, so a
+    // deterministic fill spends no quota and must not be rejected for it.
+    if (assertUsageAvailable) {
+      const hasAiFields = manifest.fields.some(
+        (field) => Boolean(field.aiPrompt) || field.aiAdapt === true,
+      );
+      if (hasAiFields) {
+        const usageRejection = await assertUsageAvailable();
+        if (usageRejection !== null) {
+          return { usageRejection };
+        }
+      }
     }
 
     const documentText = await documentTextForAiFields(
@@ -367,6 +400,11 @@ export const fillStoredTemplateWithText = async (
   options: FillServiceOptions,
 ): Promise<FillTemplateWithDocxResult> => {
   const filled = await fillStoredTemplateDocx(options);
+  if ("usageRejection" in filled) {
+    // Unreachable: this caller does not pass `assertUsageAvailable`, so the
+    // service never returns a usage rejection (TRejection is `never`).
+    panic("fillStoredTemplateWithText received an unexpected usage rejection");
+  }
   if ("error" in filled) {
     return filled;
   }
@@ -390,6 +428,11 @@ export const fillStoredTemplate = async (
   options: FillServiceOptions,
 ): Promise<FillTemplateResult> => {
   const filled = await fillStoredTemplateDocx(options);
+  if ("usageRejection" in filled) {
+    // Unreachable: this caller does not pass `assertUsageAvailable`, so the
+    // service never returns a usage rejection (TRejection is `never`).
+    panic("fillStoredTemplate received an unexpected usage rejection");
+  }
   if ("error" in filled) {
     return filled;
   }

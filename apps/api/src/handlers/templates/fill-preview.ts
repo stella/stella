@@ -31,7 +31,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { containsNull } from "./fill";
+import { assertTemplateFillUsage, containsNull } from "./fill";
 
 const fillPreviewBodySchema = t.Object({
   values: t.String(),
@@ -136,6 +136,17 @@ const fillPreviewHandler = async function* ({
     manifest && (hasAiDraftFields || hasAiAdaptFields)
       ? await loadOrgAIConfig(organizationId)
       : null;
+
+  const usageRejection = await assertTemplateFillUsage({
+    orgAIConfig,
+    hasAiFields: Boolean(hasAiDraftFields) || Boolean(hasAiAdaptFields),
+    organizationId,
+    userId,
+    safeDb,
+  });
+  if (usageRejection !== null) {
+    return Result.err(usageRejection);
+  }
 
   // Resolve registry lookups, assemble composite (multipart) values,
   // evaluate formula (derived) fields, and check dependent (optionsFrom)
@@ -251,7 +262,6 @@ const config = {
   permissions: { workspace: ["read"] },
   params: fillPreviewParamsSchema,
   body: fillPreviewBodySchema,
-  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 const fillTemplatePreview = createSafeRootHandler(
