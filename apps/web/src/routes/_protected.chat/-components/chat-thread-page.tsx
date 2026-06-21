@@ -344,7 +344,7 @@ export const ChatThreadPage = ({
         }}
       >
         <div className="relative flex w-full flex-1 flex-col overflow-hidden">
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
+          <div className="bg-background absolute inset-x-0 top-0 z-10 mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
             <div className="flex min-w-0 items-center gap-2">
               <NewChatButton
                 hasMessages={messages.length > 0}
@@ -381,7 +381,7 @@ export const ChatThreadPage = ({
           </div>
 
           <Conversation>
-            <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-28">
+            <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pt-14 pb-36">
               {messages.length === 0 && !isGenerating && !error ? (
                 <div className="m-auto w-full max-w-md px-4">
                   <PromptSuggestions
@@ -436,6 +436,7 @@ export const ChatThreadPage = ({
           />
           <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-5xl px-4 pb-4">
             <SuggestedFollowupChips
+              key={messages.at(-1)?.id ?? "none"}
               isGenerating={isGenerating}
               isEmpty={controller.isEmpty}
               lastMessageId={messages.at(-1)?.id ?? null}

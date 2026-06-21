@@ -45,13 +45,15 @@ describe("cleanSuggestionsText", () => {
     ]);
   });
 
-  test("limits to 3 prompts", () => {
-    const text = "First prompt?\nSecond prompt?\nThird prompt?\nFourth prompt?";
+  test("limits to 4 prompts", () => {
+    const text =
+      "First prompt?\nSecond prompt?\nThird prompt?\nFourth prompt?\nFifth prompt?";
 
     expect(cleanSuggestionsText(text)).toEqual([
       "First prompt?",
       "Second prompt?",
       "Third prompt?",
+      "Fourth prompt?",
     ]);
   });
 

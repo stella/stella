@@ -23,6 +23,9 @@ type SuggestedActionsProps = {
   surface?: "plain" | "floating" | "overlay";
   /** Keyboard hint surfaced on each chip via `aria-keyshortcuts`. */
   keyShortcut?: string;
+  /** Trailing node rendered as the last item in the stack (e.g. a
+   * show-more/less toggle). */
+  footer?: ReactNode;
   className?: string;
 };
 
@@ -51,6 +54,7 @@ export const SuggestedActions = ({
   label,
   surface = "plain",
   keyShortcut,
+  footer,
   className,
 }: SuggestedActionsProps) => {
   if (actions.length === 0) {
@@ -85,6 +89,7 @@ export const SuggestedActions = ({
           </Button>
         </span>
       ))}
+      {footer}
     </div>
   );
 };

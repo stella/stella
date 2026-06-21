@@ -16,8 +16,12 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
+// How many follow-up suggestions to generate. The composer shows the
+// first and reveals the rest behind a toggle.
+const MAX_SUGGESTIONS = 4;
+
 const SUGGESTIONS_SYSTEM_PROMPT = `You write a list of suggested follow-up prompts for someone in a legal workspace chat.
-Based on the conversation transcript, suggest up to 3 short, natural, and distinct follow-up questions or next steps that the user might want to ask next.
+Based on the conversation transcript, suggest up to ${MAX_SUGGESTIONS} short, natural, and distinct follow-up questions or next steps that the user might want to ask next.
 
 Make each suggestion a concise, single-sentence prompt (e.g., "What are the key risks?", "Can you draft a response?", "Explain the governing law section.").
 Do not include headings, bullet points, numbering, or introductory text. Respond only with the suggested prompts, one per line.
@@ -62,7 +66,7 @@ export const cleanSuggestionsText = (text: string): string[] => {
     .map(cleanLine)
     .filter((line) => line.length > 0);
 
-  return Array.from(new Set(lines)).slice(0, 3);
+  return Array.from(new Set(lines)).slice(0, MAX_SUGGESTIONS);
 };
 
 const getSuggestedPrompts = createSafeRootHandler(
