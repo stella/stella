@@ -455,6 +455,7 @@
         "@fontsource/caladea": "^5.2.8",
         "@fontsource/carlito": "^5.2.8",
         "@fontsource/cousine": "^5.2.7",
+        "@fontsource/noto-sans-arabic": "^5.2.7",
         "@fontsource/tinos": "^5.2.7",
         "@stll/docx-core": "workspace:*",
         "@stll/docx-utils": "workspace:*",
@@ -1003,6 +1004,8 @@
     "@fontsource/carlito": ["@fontsource/carlito@5.2.8", "", {}, "sha512-EbsNaWvGUWiuSAv/9+n9lHMi2hfPabhw5rY7r+B84XDb0fvkw+3bCksrcEBE3sQDIKgAsIjDzzSbb0+GYJlvEQ=="],
 
     "@fontsource/cousine": ["@fontsource/cousine@5.2.7", "", {}, "sha512-2l6qNHghWeQDGqaR1QmS8iR1YWzhZczcVQpR/MJVNSKE8bELI6v2Rqe+d4pFfG+5PY9QhvZ+aKriqlbKubcR8g=="],
+
+    "@fontsource/noto-sans-arabic": ["@fontsource/noto-sans-arabic@5.2.10", "", {}, "sha512-Hgj3NwQJ0NquIADW3hFboFjsts4UvEOJQ8tOX0bhQZgpNKHsMawjv/1SZnq0QvRbP6efHTZM/A1k7tdy9S6sbA=="],
 
     "@fontsource/tinos": ["@fontsource/tinos@5.2.7", "", {}, "sha512-F+rSTz0CNDZ/nx3BlmVA+wlbfCR1gwXeJTkGxb6pwu5KjeWVyaZ6ioInm533pw2Ha7472Lwb4vLjzo1zT0RXmA=="],
 
