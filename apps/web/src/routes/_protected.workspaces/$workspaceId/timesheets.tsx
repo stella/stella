@@ -24,6 +24,8 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
+import { ensureCriticalQueryData } from "@/lib/react-query";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 import { BillingCodesDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog";
 import { RateManagementDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog";
 import { TimesheetDayView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-day-view";
@@ -37,10 +39,22 @@ export const Route = createFileRoute(
   // deep link) and bounce the user back to the workspace overview.
   // Once the feature is reintroduced, drop this beforeLoad and
   // re-link the overview StatCard.
-  beforeLoad: ({ params }) => {
+  beforeLoad: async ({ context, params }) => {
+    const qc = context.queryClient;
+    const opts = viewsOptions(params.workspaceId);
+    const views = await ensureCriticalQueryData(qc, opts);
+
+    const firstView = views.at(0);
+    if (!firstView) {
+      throw redirect({ to: "/workspaces", replace: true });
+    }
+
     throw redirect({
-      to: "/workspaces/$workspaceId",
-      params: { workspaceId: params.workspaceId },
+      to: "/workspaces/$workspaceId/$viewId",
+      params: {
+        workspaceId: params.workspaceId,
+        viewId: firstView.id,
+      },
       // Replace `/timesheets` rather than push the overview on top
       // of it. Pushing creates a back-button loop: Back from the
       // overview returns to `/timesheets`, which immediately
