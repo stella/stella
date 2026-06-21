@@ -45,7 +45,12 @@ export const FontFamilyExtension = createMarkExtension({
         return ["span", 0];
       }
       const quotedFont = fontName.includes(" ") ? `"${fontName}"` : fontName;
-      return ["span", { style: `font-family: ${quotedFont}, sans-serif` }, 0];
+      // "Noto Sans Arabic" catches Arabic glyphs the Latin font lacks.
+      return [
+        "span",
+        { style: `font-family: ${quotedFont}, "Noto Sans Arabic", sans-serif` },
+        0,
+      ];
     },
   },
   onSchemaReady(ctx: ExtensionContext): ExtensionRuntime {

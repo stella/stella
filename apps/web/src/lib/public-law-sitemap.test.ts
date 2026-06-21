@@ -604,13 +604,15 @@ describe("public law sitemap", () => {
   });
 
   test("app provider preserves browser time zones for app timestamps", async () => {
-    const source = await readSource("apps/web/src/app-providers.tsx");
+    const timeZoneSource = await readSource("apps/web/src/i18n/time-zone.ts");
 
-    expect(source).toContain('const SERVER_I18N_TIME_ZONE = "UTC"');
-    expect(source).toContain(
+    expect(timeZoneSource).toContain('const SERVER_I18N_TIME_ZONE = "UTC"');
+    expect(timeZoneSource).toContain(
       "Intl.DateTimeFormat().resolvedOptions().timeZone",
     );
-    expect(source).toContain("timeZone={resolveAppI18nTimeZone()}");
+
+    const providerSource = await readSource("apps/web/src/app-providers.tsx");
+    expect(providerSource).toContain("timeZone={resolveAppTimeZone()}");
   });
 
   test("case-law list keeps date-only legal dates in UTC", async () => {

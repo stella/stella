@@ -11,6 +11,7 @@ import {
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
+import { getLocaleWeekInfo, getWeekendDays } from "@stll/ui/lib/week";
 
 // ---------------------------------------------------------------------------
 // Calendar utilities
@@ -29,35 +30,14 @@ type CalendarWeekday = {
 };
 
 const toISODate = (d: Date): string => d.toISOString().slice(0, 10);
-const DEFAULT_WEEKEND_DAYS = new Set([0, 6]); // Sunday, Saturday
 
 const getFirstDayOfWeek = (locale: string): number => {
-  try {
-    const loc = new Intl.Locale(locale);
-    const info =
-      typeof loc.getWeekInfo === "function" ? loc.getWeekInfo() : undefined;
-    if (info) {
-      return info.firstDay === 7 ? 6 : info.firstDay - 1;
-    }
-  } catch {
-    // fall back to Monday
+  const info = getLocaleWeekInfo(locale);
+  if (!info) {
+    return 0;
   }
-  return 0;
-};
-
-const getWeekendDays = (locale: string): ReadonlySet<number> => {
-  try {
-    const loc = new Intl.Locale(locale);
-    const info =
-      typeof loc.getWeekInfo === "function" ? loc.getWeekInfo() : undefined;
-    const weekend = info?.weekend;
-    if (Array.isArray(weekend) && weekend.length > 0) {
-      return new Set(weekend.map((day) => day % 7));
-    }
-  } catch {
-    // fall back to Saturday/Sunday
-  }
-  return DEFAULT_WEEKEND_DAYS;
+  // Convert Intl's 1=Mon … 7=Sun firstDay to the picker's 0=Mon … 6=Sun index.
+  return info.firstDay === 7 ? 6 : info.firstDay - 1;
 };
 
 const getMonthDays = (
@@ -113,6 +93,9 @@ const getMonthLabels = (
 ): string[] => {
   const fmt = new Intl.DateTimeFormat(locale, {
     month: format,
+    // The picker grid is Gregorian; pin labels so a Hijri locale preference
+    // does not mislabel Gregorian months (numerals still follow the locale).
+    calendar: "gregory",
     timeZone: "UTC",
   });
   return Array.from({ length: 12 }, (_, i) =>
@@ -124,6 +107,7 @@ const formatMonthYear = (locale: string, year: number, month: number): string =>
   new Intl.DateTimeFormat(locale, {
     month: "long",
     year: "numeric",
+    calendar: "gregory",
     timeZone: "UTC",
   }).format(new Date(Date.UTC(year, month, 1)));
 
@@ -250,6 +234,7 @@ function DatePickerPopover({
         month: "short",
         day: "numeric",
         year: "numeric",
+        calendar: "gregory",
         timeZone: "UTC",
       })
     : "\u2014";
@@ -261,6 +246,7 @@ function DatePickerPopover({
         month: "long",
         day: "numeric",
         year: "numeric",
+        calendar: "gregory",
         timeZone: "UTC",
       }),
     [locale],

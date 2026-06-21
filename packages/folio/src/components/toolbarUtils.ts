@@ -169,6 +169,7 @@ export function applyFormattingAction(
       case "alignment":
       case "applyStyle":
       case "lineSpacing":
+      case "toggleDirection":
         // Paragraph-level actions — not handled by this run-formatting
         // dispatcher; the paragraph handler picks them up elsewhere.
         break;

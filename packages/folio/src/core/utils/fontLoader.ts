@@ -54,6 +54,8 @@ const BUNDLED_FONTS = new Set([
   "Arial",
   "Times New Roman",
   "Courier New",
+  // Arabic-script coverage for the Latin Croscore fonts.
+  "Noto Sans Arabic",
 ]);
 
 /**

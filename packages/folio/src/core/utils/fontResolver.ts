@@ -482,6 +482,17 @@ const CJK_FONT_ALIASES: Record<string, string> = {
  * @param docxFontName - The font name from the DOCX file
  * @returns Resolved font information
  */
+// The bundled Latin (Croscore) faces carry no Arabic glyphs, so weave a
+// bundled Arabic face into every fallback chain just before the generic
+// family. Latin text keeps its named font; Arabic runs fall through to Noto.
+const ARABIC_FALLBACK = '"Noto Sans Arabic"';
+const TRAILING_GENERIC =
+  /,\s*(?<generic>sans-serif|serif|monospace|cursive)\s*$/u;
+const withArabicFallback = (stack: string): string =>
+  TRAILING_GENERIC.test(stack)
+    ? stack.replace(TRAILING_GENERIC, `, ${ARABIC_FALLBACK}, $<generic>`)
+    : `${stack}, ${ARABIC_FALLBACK}`;
+
 export function resolveFontFamily(docxFontName: string): ResolvedFont {
   const normalizedName = docxFontName.trim().toLowerCase();
 
@@ -500,7 +511,9 @@ export function resolveFontFamily(docxFontName: string): ResolvedFont {
         : mapping.fallbackStack;
     return {
       googleFont: mapping.googleFont,
-      cssFallback: fallbackStack.map(quoteFontName).join(", "),
+      cssFallback: withArabicFallback(
+        fallbackStack.map(quoteFontName).join(", "),
+      ),
       originalFont: docxFontName,
       hasGoogleEquivalent: true,
       singleLineRatio: mapping.singleLineRatio,
@@ -513,7 +526,9 @@ export function resolveFontFamily(docxFontName: string): ResolvedFont {
 
   return {
     googleFont: null,
-    cssFallback: `${quoteFontName(docxFontName)}, ${defaultFallback}`,
+    cssFallback: withArabicFallback(
+      `${quoteFontName(docxFontName)}, ${defaultFallback}`,
+    ),
     originalFont: docxFontName,
     hasGoogleEquivalent: false,
     singleLineRatio: DEFAULT_SINGLE_LINE_RATIO,

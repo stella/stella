@@ -1,5 +1,4 @@
-import { useLocale } from "use-intl";
-
+import { useI18nStore } from "@/i18n/i18n-store";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 
 export type ChatUserContext = {
@@ -33,7 +32,8 @@ export const getWordEditShortcut = (user: WordEditUser): string =>
 /** Collect user context for the chat transport. */
 export const useChatUserContext = (): ChatUserContext => {
   const user = useAuthenticatedUser();
-  const locale = useLocale();
+  // Base language (e.g. "ar"), not the formatting locale with -u- extensions.
+  const locale = useI18nStore((s) => s.loadedLang);
   return {
     userName: user.name ?? "",
     locale,

@@ -32,17 +32,28 @@ type Messages = {
     };
   };
   "appearance": {
+    "calendar": "Calendar";
+    "calendarGregorian": "Gregorian";
+    "calendarHijri": "Hijri (Umm al-Qura)";
     "cool": "Cool";
     "dark": "Dark";
     "flexoki": "Flexoki";
     "light": "Light";
     "neutral": "Neutral";
     "nord": "Nord";
+    "numbers": "Numbers";
+    "numbersEastern": "Eastern (٠١٢٣)";
+    "numbersWestern": "Western (0123)";
     "palette": "Palette";
     "system": "System";
     "theme": "Theme";
     "title": "Appearance";
     "warm": "Warm";
+    "weekStart": "First day of week";
+    "weekStartAuto": "Automatic";
+    "weekStartMonday": "Monday";
+    "weekStartSaturday": "Saturday";
+    "weekStartSunday": "Sunday";
   };
   "auth": {
     "betaNoticeTitle": "Beta";
@@ -1212,6 +1223,7 @@ type Messages = {
     "somethingWentWrong": "Something went wrong";
     "synced": "Synced";
     "syncing": "Syncing";
+    "textDirection": "Text direction";
     "textEditingMenu": "Text editing menu";
     "textFormattingGroup": "Text formatting";
     "toggleTrackChanges": "Toggle Track Changes";

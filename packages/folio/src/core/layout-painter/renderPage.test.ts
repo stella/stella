@@ -436,7 +436,7 @@ describe("render page fingerprint", () => {
 describe("page font fallback", () => {
   test("uses the same metric-compatible Calibri fallback as text measurement", () => {
     expect(getDefaultPageFontFamily()).toBe(
-      "Calibri, Carlito, Arial, Helvetica, sans-serif",
+      'Calibri, Carlito, Arial, Helvetica, "Noto Sans Arabic", sans-serif',
     );
   });
 });

@@ -1,10 +1,11 @@
-import { createTranslator } from "use-intl/core";
+import { createFormatter, createTranslator } from "use-intl/core";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
 import { getStorageKey } from "@/consts";
 import en from "@/i18n/langs/en.json";
 import type Messages from "@/i18n/langs/messages.gen";
+import { resolveAppTimeZone, SERVER_I18N_TIME_ZONE } from "@/i18n/time-zone";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 type LocalizedMessages<T> = {
@@ -13,6 +14,7 @@ type LocalizedMessages<T> = {
 
 export const supportedLanguages = [
   "en",
+  "ar",
   "cs",
   "de",
   "es",
@@ -34,6 +36,7 @@ const supportedLanguageSet: ReadonlySet<string> = new Set(supportedLanguages);
 
 const messageLoaders = {
   en: () => en,
+  ar: async () => (await import("@/i18n/langs/ar.json")).default,
   cs: async () => (await import("@/i18n/langs/cs.json")).default,
   de: async () => (await import("@/i18n/langs/de.json")).default,
   es: async () => (await import("@/i18n/langs/es.json")).default,
@@ -49,6 +52,7 @@ const messageLoaders = {
 
 export const LANG_ENDONYMS = {
   en: "English",
+  ar: "العربية",
   cs: "Čeština",
   de: "Deutsch",
   es: "Español",
@@ -61,6 +65,29 @@ export const LANG_ENDONYMS = {
   "pt-BR": "Português (Brasil)",
   sk: "Slovenčina",
 } as const satisfies Record<SupportedLanguage, string>;
+
+export type TextDirection = "ltr" | "rtl";
+
+// Per-locale base writing direction. The map is kept complete by `satisfies`,
+// so adding a right-to-left language (e.g. Arabic) is a single new row here.
+const LANG_DIR = {
+  en: "ltr",
+  ar: "rtl",
+  cs: "ltr",
+  de: "ltr",
+  es: "ltr",
+  et: "ltr",
+  fr: "ltr",
+  hu: "ltr",
+  lt: "ltr",
+  lv: "ltr",
+  pl: "ltr",
+  "pt-BR": "ltr",
+  sk: "ltr",
+} as const satisfies Record<SupportedLanguage, TextDirection>;
+
+export const getLangDir = (lang: SupportedLanguage): TextDirection =>
+  LANG_DIR[lang];
 
 export const isSupportedLanguage = (
   value: string,
@@ -108,7 +135,38 @@ const detectLang = (): SupportedLanguage => {
   return "en";
 };
 
+/**
+ * Region subtag of the first browser locale that maps to a supported language
+ * (e.g. "SA" from "ar-SA"). Drives region-specific formatting and, crucially,
+ * the first day of the week (Saudi starts Sunday, the UAE Monday, generic
+ * Arabic Saturday). Empty when the browser provides no region.
+ */
+const detectRegion = (): string => {
+  const languages =
+    typeof navigator !== "undefined" && "languages" in navigator
+      ? navigator.languages
+      : [];
+
+  for (const candidate of languages) {
+    const normalized = normalizeLocale(candidate);
+    if (!resolveSupportedLanguage(normalized)) {
+      continue;
+    }
+    try {
+      const region = new Intl.Locale(normalized).region;
+      if (region) {
+        return region;
+      }
+    } catch {
+      // Malformed tag; keep scanning.
+    }
+  }
+
+  return "";
+};
+
 const defaultLanguage = detectLang();
+const defaultRegion = detectRegion();
 const defaultMessages = en;
 
 /**
@@ -129,6 +187,74 @@ let translator = createTranslator({
 
 export const getTranslator = () => translator;
 
+export type CalendarPreference = "auto" | "gregory" | "islamic-umalqura";
+export type NumberingPreference = "auto" | "latn" | "arab";
+export type WeekStartPreference = "auto" | "saturday" | "sunday" | "monday";
+
+const WEEK_START_KEYWORD = {
+  saturday: "sat",
+  sunday: "sun",
+  monday: "mon",
+} as const satisfies Record<Exclude<WeekStartPreference, "auto">, string>;
+
+type FormattingLocaleOptions = {
+  lang: SupportedLanguage;
+  region: string;
+  calendar: CalendarPreference;
+  numberingSystem: NumberingPreference;
+  weekStart: WeekStartPreference;
+};
+
+/**
+ * BCP-47 locale used for formatting. The base carries the detected region
+ * (e.g. ar-SA) so date/number formatting and the first day of the week follow
+ * the country; Unicode (-u-) extensions carry the calendar, an explicit
+ * first-day-of-week override (fw), and the number system. "auto" resolves to
+ * Gregorian (the safe default for legal dates, even in Arabic) and to Eastern
+ * Arabic-Indic digits for Arabic / Western digits elsewhere. A region-less,
+ * all-default non-Arabic locale keeps its plain tag, so most callers are
+ * unaffected.
+ */
+export const buildFormattingLocale = ({
+  lang,
+  region,
+  calendar,
+  numberingSystem,
+  weekStart,
+}: FormattingLocaleOptions): string => {
+  // Skip the detected region when the language already encodes one (e.g.
+  // pt-BR): appending would build an invalid tag like "pt-BR-BR".
+  const base = region && !lang.includes("-") ? `${lang}-${region}` : lang;
+  const calendarSystem = calendar === "auto" ? "gregory" : calendar;
+  const autoNumbers = lang === "ar" ? "arab" : "latn";
+  const numbers = numberingSystem === "auto" ? autoNumbers : numberingSystem;
+
+  // Unicode extension keywords, kept in canonical (alphabetical) order: ca, fw, nu.
+  const keywords: string[] = [];
+  // Pin Arabic to an explicit calendar (some CLDR regions default to a
+  // non-Gregorian one) and carry any non-Gregorian opt-in.
+  if (calendarSystem !== "gregory" || lang === "ar") {
+    keywords.push(`ca-${calendarSystem}`);
+  }
+  if (weekStart !== "auto") {
+    keywords.push(`fw-${WEEK_START_KEYWORD[weekStart]}`);
+  }
+  if (numbers !== "latn") {
+    keywords.push(`nu-${numbers}`);
+  }
+  return keywords.length > 0 ? `${base}-u-${keywords.join("-")}` : base;
+};
+
+// Locale-aware formatter for non-React code (utilities, store logic), mirroring
+// getTranslator. React components should use use-intl's useFormatter, which
+// reads the same locale from the provider. Both are kept in sync by the store.
+let formatter = createFormatter({
+  locale: "en",
+  timeZone: SERVER_I18N_TIME_ZONE,
+});
+
+export const getFormatter = () => formatter;
+
 type State = {
   lang: SupportedLanguage;
   messages: LocaleMessages;
@@ -138,11 +264,20 @@ type State = {
   // later language switch (which flips isLoaded false while the new locale
   // streams in) cannot send the app back to the boot spinner and unmount it.
   hasLoadedOnce: boolean;
+  // Detected browser region subtag (e.g. "SA"); not persisted — re-detected
+  // each boot. Drives region-specific formatting and the first day of week.
+  region: string;
+  calendar: CalendarPreference;
+  numberingSystem: NumberingPreference;
+  weekStart: WeekStartPreference;
 };
 
 type Actions = {
   setLang: (lang: SupportedLanguage) => Promise<void>;
   loadMessages: (lang: SupportedLanguage) => Promise<void>;
+  setCalendar: (calendar: CalendarPreference) => void;
+  setNumberingSystem: (numberingSystem: NumberingPreference) => void;
+  setWeekStart: (weekStart: WeekStartPreference) => void;
 };
 
 let loadRequestId = 0;
@@ -152,17 +287,60 @@ const setDocumentLanguage = (lang: SupportedLanguage): void => {
     return;
   }
   document.documentElement.lang = lang;
+  document.documentElement.dir = getLangDir(lang);
 };
 
-const applyMessages = (
-  lang: SupportedLanguage,
-  messages: LocaleMessages,
-): void => {
+const refreshFormatter = (formattingLocale: string): void => {
+  formatter = createFormatter({
+    locale: formattingLocale,
+    timeZone: resolveAppTimeZone(),
+  });
+};
+
+type ApplyMessagesArgs = {
+  lang: SupportedLanguage;
+  messages: LocaleMessages;
+  region: string;
+  calendar: CalendarPreference;
+  numberingSystem: NumberingPreference;
+  weekStart: WeekStartPreference;
+};
+
+const applyMessages = ({
+  lang,
+  messages,
+  region,
+  calendar,
+  numberingSystem,
+  weekStart,
+}: ApplyMessagesArgs): void => {
   translator = createTranslator({
     locale: lang,
     messages,
   });
+  refreshFormatter(
+    buildFormattingLocale({
+      lang,
+      region,
+      calendar,
+      numberingSystem,
+      weekStart,
+    }),
+  );
   setDocumentLanguage(lang);
+};
+
+/** Rebuild the non-React formatter from the current store state. */
+const recomputeFormatterForState = (state: State): void => {
+  refreshFormatter(
+    buildFormattingLocale({
+      lang: state.loadedLang,
+      region: state.region,
+      calendar: state.calendar,
+      numberingSystem: state.numberingSystem,
+      weekStart: state.weekStart,
+    }),
+  );
 };
 
 export const useI18nStore = create<State & Actions>()(
@@ -178,12 +356,20 @@ export const useI18nStore = create<State & Actions>()(
       // otherwise), which keeps the boot-spinner gate honest: a persisted
       // non-English locale cannot skip the spinner before its bundle arrives.
       hasLoadedOnce: false,
+      region: defaultRegion,
+      calendar: "auto",
+      numberingSystem: "auto",
+      weekStart: "auto",
 
       loadMessages: async (lang) => {
         const state = get();
         if (state.loadedLang === lang && state.isLoaded) {
           set({ lang, hasLoadedOnce: true });
           setDocumentLanguage(lang);
+          // The bundle is already loaded (e.g. English on boot), but rehydrated
+          // formatting prefs still need to reach the shared formatter, which
+          // was initialized as plain English/UTC.
+          recomputeFormatterForState(get());
           return;
         }
 
@@ -199,7 +385,14 @@ export const useI18nStore = create<State & Actions>()(
           }
 
           const fallback = get();
-          applyMessages(fallback.loadedLang, fallback.messages);
+          applyMessages({
+            lang: fallback.loadedLang,
+            messages: fallback.messages,
+            region: fallback.region,
+            calendar: fallback.calendar,
+            numberingSystem: fallback.numberingSystem,
+            weekStart: fallback.weekStart,
+          });
           set({
             lang: fallback.loadedLang,
             isLoaded: true,
@@ -212,7 +405,15 @@ export const useI18nStore = create<State & Actions>()(
           return;
         }
 
-        applyMessages(lang, messages);
+        const { region, calendar, numberingSystem, weekStart } = get();
+        applyMessages({
+          lang,
+          messages,
+          region,
+          calendar,
+          numberingSystem,
+          weekStart,
+        });
         set({
           lang,
           messages,
@@ -225,11 +426,31 @@ export const useI18nStore = create<State & Actions>()(
       setLang: async (lang) => {
         await get().loadMessages(lang);
       },
+
+      setCalendar: (calendar) => {
+        set({ calendar });
+        recomputeFormatterForState(get());
+      },
+
+      setNumberingSystem: (numberingSystem) => {
+        set({ numberingSystem });
+        recomputeFormatterForState(get());
+      },
+
+      setWeekStart: (weekStart) => {
+        set({ weekStart });
+        recomputeFormatterForState(get());
+      },
     }),
     {
       name: getStorageKey("i18n"),
       version: 0,
-      partialize: (state) => ({ lang: state.lang }),
+      partialize: (state) => ({
+        lang: state.lang,
+        calendar: state.calendar,
+        numberingSystem: state.numberingSystem,
+        weekStart: state.weekStart,
+      }),
       onRehydrateStorage: () => (state) => {
         if (!state) {
           return;
@@ -248,6 +469,22 @@ export const useI18nStore = create<State & Actions>()(
     },
   ),
 );
+
+/**
+ * The current formatting locale for non-React code (region plus calendar,
+ * number-system, and first-day-of-week extensions). React reads the same value
+ * through use-intl's useLocale().
+ */
+export const getFormattingLocale = (): string => {
+  const state = useI18nStore.getState();
+  return buildFormattingLocale({
+    lang: state.loadedLang,
+    region: state.region,
+    calendar: state.calendar,
+    numberingSystem: state.numberingSystem,
+    weekStart: state.weekStart,
+  });
+};
 
 const waitForHydration = async (): Promise<void> => {
   if (useI18nStore.persist.hasHydrated()) {

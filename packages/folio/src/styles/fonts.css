@@ -37,3 +37,8 @@
 @import "@fontsource/cousine/400-italic.css";
 @import "@fontsource/cousine/700.css";
 @import "@fontsource/cousine/700-italic.css";
+
+/* Noto Sans Arabic — Arabic-script coverage for the Latin fonts above.
+   The WOFF2 only downloads when Arabic glyphs are actually rendered. */
+@import "@fontsource/noto-sans-arabic/400.css";
+@import "@fontsource/noto-sans-arabic/700.css";

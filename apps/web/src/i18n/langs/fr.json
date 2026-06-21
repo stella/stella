@@ -29,17 +29,28 @@
     }
   },
   "appearance": {
+    "calendar": "Calendrier",
+    "calendarGregorian": "Grégorien",
+    "calendarHijri": "Hégire (Umm al-Qura)",
     "cool": "Froid",
     "dark": "Sombre",
     "flexoki": "Flexoki",
     "light": "Clair",
     "neutral": "Neutre",
     "nord": "Nord",
+    "numbers": "Chiffres",
+    "numbersEastern": "Orientaux (٠١٢٣)",
+    "numbersWestern": "Occidentaux (0123)",
     "palette": "Palette",
     "system": "Système",
     "theme": "Thème",
     "title": "Apparence",
-    "warm": "Chaud"
+    "warm": "Chaud",
+    "weekStart": "Premier jour de la semaine",
+    "weekStartAuto": "Automatique",
+    "weekStartMonday": "Lundi",
+    "weekStartSaturday": "Samedi",
+    "weekStartSunday": "Dimanche"
   },
   "auth": {
     "betaNoticeTitle": "Bêta",
@@ -1209,6 +1220,7 @@
     "somethingWentWrong": "Une erreur s’est produite",
     "synced": "Synchronisé",
     "syncing": "Synchronisation",
+    "textDirection": "Sens du texte",
     "textEditingMenu": "Menu d’édition de texte",
     "textFormattingGroup": "Mise en forme du texte",
     "toggleTrackChanges": "Activer le suivi des modifications",

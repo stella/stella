@@ -432,6 +432,18 @@
 }
 
 /* ============================================================================
+ * DOCUMENT DIRECTION
+ * ============================================================================ */
+
+/* The document canvas is its own bidi context: per-paragraph dir handles RTL
+ * content. Reset to LTR so an RTL app/UI direction does not flip the base
+ * direction of Latin (non-bidi) paragraphs. Scoped to the canvas so the Folio
+ * chrome (toolbar, menus) keeps following the app direction. */
+.paged-editor {
+  direction: ltr;
+}
+
+/* ============================================================================
  * READONLY MODE
  * ============================================================================ */
 

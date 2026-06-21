@@ -17,6 +17,7 @@ import {
   ChevronDownIcon,
   ItalicIcon,
   MoreHorizontalIcon,
+  PilcrowIcon,
   Redo2Icon,
   UnderlineIcon,
   Undo2Icon,
@@ -178,6 +179,12 @@ export function FormattingBar(props: FormattingBarProps) {
     },
     [disabled, onFormat],
   );
+
+  const handleToggleDirection = useCallback(() => {
+    if (!disabled && onFormat) {
+      onFormat({ type: "toggleDirection" });
+    }
+  }, [disabled, onFormat]);
 
   const handleBulletList = useCallback(() => {
     if (!disabled && onFormat) {
@@ -440,6 +447,15 @@ export function FormattingBar(props: FormattingBarProps) {
             onChange={handleAlignmentChange}
             disabled={disabled}
           />
+          <ToolbarButton
+            onClick={handleToggleDirection}
+            active={currentFormatting.bidi}
+            disabled={disabled}
+            title={t("textDirection")}
+            ariaLabel={t("textDirection")}
+          >
+            <PilcrowIcon size={ICON_SIZE} />
+          </ToolbarButton>
         </ToolbarGroup>
       )}
 

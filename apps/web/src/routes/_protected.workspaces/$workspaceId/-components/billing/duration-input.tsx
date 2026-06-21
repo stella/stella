@@ -5,6 +5,8 @@ import { useTranslations } from "use-intl";
 import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
 
+import { getFormatter } from "@/i18n/i18n-store";
+
 const BILLING_INCREMENT = 6;
 
 const RE_HM = /^(?:(?<hours>\d+)h)?\s*(?:(?<mins>\d+)m)?$/iu;
@@ -70,6 +72,17 @@ export const formatMinutes = (minutes: number): string => {
 };
 
 export const formatDecimalHours = (minutes: number): string =>
+  getFormatter().number(minutes / 60, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+
+/**
+ * ASCII decimal hours for the editable input hint. The hint must round-trip
+ * through parseDuration, which only accepts ASCII digits and a "." separator;
+ * localized digits or a comma separator would be rejected on blur.
+ */
+const formatDecimalHoursInput = (minutes: number): string =>
   (minutes / 60).toFixed(2);
 
 type DurationInputProps = {
@@ -124,7 +137,7 @@ export const DurationInput = ({
       {!isFocused && value > 0 && (
         <span className="text-muted-foreground pointer-events-none absolute end-2 top-1/2 -translate-y-1/2 text-xs">
           {t("billing.decimalHours", {
-            hours: formatDecimalHours(value),
+            hours: formatDecimalHoursInput(value),
           })}
         </span>
       )}

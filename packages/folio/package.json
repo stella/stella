@@ -31,6 +31,7 @@
     "@fontsource/caladea": "^5.2.8",
     "@fontsource/carlito": "^5.2.8",
     "@fontsource/cousine": "^5.2.7",
+    "@fontsource/noto-sans-arabic": "^5.2.7",
     "@fontsource/tinos": "^5.2.7",
     "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",

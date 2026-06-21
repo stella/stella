@@ -26,6 +26,7 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
+import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 import {
   rateEntriesOptions,
   ratesKeys,
@@ -569,7 +570,7 @@ const RateEntriesView = ({
                       name={entry.userName}
                     />
                     <span className="text-sm tabular-nums">
-                      {formatCurrency(
+                      {formatCurrencyAmount(
                         entry.hourlyRate,
                         table?.currency ?? "USD",
                       )}
@@ -582,7 +583,7 @@ const RateEntriesView = ({
                       {t("billing.rates.defaultRate")}
                     </span>
                     <span className="text-sm tabular-nums">
-                      {formatCurrency(
+                      {formatCurrencyAmount(
                         entry.hourlyRate,
                         table?.currency ?? "USD",
                       )}
@@ -787,19 +788,4 @@ const CreateRateEntryForm = ({
       </div>
     </form>
   );
-};
-
-// --- Helpers ---
-
-const formatCurrency = (cents: number, currency: string): string => {
-  const amount = cents / 100;
-  try {
-    return new Intl.NumberFormat(undefined, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 2,
-    }).format(amount);
-  } catch {
-    return `${amount.toFixed(2)} ${currency}`;
-  }
 };

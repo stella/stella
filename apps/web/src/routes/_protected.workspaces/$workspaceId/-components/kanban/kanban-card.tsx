@@ -4,7 +4,7 @@ import { draggable } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { centerUnderPointer } from "@atlaskit/pragmatic-drag-and-drop/element/center-under-pointer";
 import { setCustomNativeDragPreview } from "@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview";
 import { CalendarIcon } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import {
   Avatar,
@@ -381,7 +381,7 @@ const KanbanEntityMetadataBadges = ({
   showDueDate,
 }: KanbanEntityMetadataBadgesProps) => {
   const t = useTranslations();
-  const locale = useLocale();
+  const format = useFormatter();
   const status = showStatus ? entity.status : null;
   const priority = showPriority ? entity.priority : null;
   const dueDate = showDueDate ? entity.dueDate : null;
@@ -463,7 +463,7 @@ const KanbanEntityMetadataBadges = ({
         <span className="bg-muted/60 flex max-w-full min-w-0 items-center gap-1 rounded px-1.5 py-0.5">
           <CalendarIcon className="size-3 shrink-0" />
           <span className="truncate">
-            {new Date(dueDate).toLocaleDateString(locale, {
+            {format.dateTime(new Date(dueDate), {
               day: "numeric",
               month: "short",
               year: "numeric",
@@ -485,6 +485,8 @@ const KanbanCardFieldValue = ({
   content,
   property,
 }: KanbanCardFieldValueProps) => {
+  const format = useFormatter();
+
   if (
     content.type === "error" ||
     content.type === "pending" ||
@@ -511,7 +513,7 @@ const KanbanCardFieldValue = ({
     }
     return (
       <span className="text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none">
-        {new Date(content.value).toLocaleDateString(undefined, {
+        {format.dateTime(new Date(content.value), {
           day: "numeric",
           month: "short",
           year: "numeric",
@@ -522,7 +524,7 @@ const KanbanCardFieldValue = ({
   }
 
   if (content.type === "int") {
-    const value = new Intl.NumberFormat().format(content.value);
+    const value = format.number(content.value);
     return (
       <span className="text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 text-xs leading-none">
         {content.currency ? `${value} ${content.currency}` : value}

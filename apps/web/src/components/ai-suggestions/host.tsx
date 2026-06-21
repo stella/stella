@@ -1696,7 +1696,7 @@ function CitationChip(props: CitationChipProps) {
             onClick={() => onActivate(citation)}
             aria-label={t("chat.openCitation", { label: citation.label })}
           >
-            [{citation.label}]
+            <bdi>[{citation.label}]</bdi>
           </button>
         }
       />

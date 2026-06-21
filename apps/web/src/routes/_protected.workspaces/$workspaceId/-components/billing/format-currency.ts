@@ -1,3 +1,10 @@
+import { getFormatter } from "@/i18n/i18n-store";
+
+// NOTE: cents / 100 assumes a 2-decimal minor unit, which is wrong for
+// currencies with a different exponent (KWD has 3, JPY has 0). Fixing that is
+// a billing money-model change tracked separately; this module only makes the
+// formatting locale-aware.
+
 /**
  * Formats a monetary amount given in cents into a localized
  * currency string.
@@ -50,12 +57,12 @@ const formatCurrency = ({
   fallback: string;
 }): string => {
   try {
-    return new Intl.NumberFormat(undefined, {
+    return getFormatter().number(amount, {
       style: "currency",
       currency,
       minimumFractionDigits,
-      maximumFractionDigits,
-    }).format(amount);
+      ...(maximumFractionDigits === undefined ? {} : { maximumFractionDigits }),
+    });
   } catch {
     // Persisted billing currency codes are only length-validated today.
     return fallback;

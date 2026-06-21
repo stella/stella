@@ -212,7 +212,9 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
       <header className="flex items-start justify-between gap-4 border-b px-6 py-4">
         <div>
           <p className="text-muted-foreground text-xs">{decision.court}</p>
-          <h1 className="text-xl font-semibold">{decision.caseNumber}</h1>
+          <h1 className="text-xl font-semibold">
+            <bdi>{decision.caseNumber}</bdi>
+          </h1>
         </div>
         {aiEnabled ? (
           <Button

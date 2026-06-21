@@ -12,8 +12,7 @@ import { escapeCSV } from "@/api/lib/csv";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { extractLangFromRequest } from "@/api/lib/locale";
-import type { SupportedLang } from "@/api/lib/locale";
+import { extractFormattingLocale } from "@/api/lib/locale";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseViewLayout } from "@/api/lib/views-schema";
@@ -206,10 +205,7 @@ export const buildExportColumns = (
   return [...ordered, ...byId.values()];
 };
 
-export const formatExportDate = (
-  value: string,
-  locale: SupportedLang,
-): string => {
+export const formatExportDate = (value: string, locale: string): string => {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) {
     return value;
@@ -226,7 +222,7 @@ export const formatExportDate = (
 const formatExportNumber = (
   value: number,
   currency: string | null,
-  locale: SupportedLang,
+  locale: string,
 ): string => {
   if (!currency) {
     return new Intl.NumberFormat(locale).format(value);
@@ -248,7 +244,7 @@ const formatExportNumber = (
 
 export const formatFieldContent = (
   content: FieldContent | undefined,
-  locale: SupportedLang,
+  locale: string,
 ): string => {
   if (!content) {
     return "";
@@ -283,7 +279,7 @@ export const formatFieldContent = (
 const formatMetadataColumn = (
   column: Extract<ExportColumn, { type: "metadata" }>,
   entity: QueryEntityResult,
-  locale: SupportedLang,
+  locale: string,
 ): string => {
   switch (column.id) {
     case "_created-by":
@@ -321,7 +317,7 @@ const buildNumberExportCell = (
 
 const buildPropertyExportCell = (
   content: FieldContent | undefined,
-  locale: SupportedLang,
+  locale: string,
   style: ExportCellStyle,
 ): ExportCell => {
   if (content?.type !== "int") {
@@ -339,7 +335,7 @@ const buildPropertyExportCell = (
 const buildMetadataExportCell = (
   column: Extract<ExportColumn, { type: "metadata" }>,
   entity: QueryEntityResult,
-  locale: SupportedLang,
+  locale: string,
 ): ExportCell => {
   if (column.id === "_version") {
     return buildNumberExportCell(entity.version, String(entity.version), null);
@@ -368,7 +364,7 @@ const getExportCellStyle = (
 export const buildExportTable = (
   columns: ExportColumn[],
   entities: QueryEntityResult[],
-  locale: SupportedLang,
+  locale: string,
 ): ExportTable => ({
   columns,
   rows: entities.map((entity) => {
@@ -525,8 +521,8 @@ const exportTableView = createSafeHandler(
       }),
     );
 
-    const lang = extractLangFromRequest(request);
-    const table = buildExportTable(columns, queryResult.entities, lang);
+    const locale = extractFormattingLocale(request);
+    const table = buildExportTable(columns, queryResult.entities, locale);
     const exportName = workspace?.name ?? view.name;
     const body =
       query.format === "csv"

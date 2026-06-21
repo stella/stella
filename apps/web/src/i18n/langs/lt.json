@@ -29,17 +29,28 @@
     }
   },
   "appearance": {
+    "calendar": "Kalendorius",
+    "calendarGregorian": "Grigaliaus",
+    "calendarHijri": "Hidžra (Umm al Kura)",
     "cool": "Vėsūs",
     "dark": "Tamsus",
     "flexoki": "Flexoki",
     "light": "Šviesus",
     "neutral": "Neutralus",
     "nord": "Nord",
+    "numbers": "Skaitmenys",
+    "numbersEastern": "Rytietiški (٠١٢٣)",
+    "numbersWestern": "Vakarietiški (0123)",
     "palette": "Paletė",
     "system": "Sisteminė",
     "theme": "Tema",
     "title": "Išvaizda",
-    "warm": "Šilti"
+    "warm": "Šilti",
+    "weekStart": "Pirmoji savaitės diena",
+    "weekStartAuto": "Automatiškai",
+    "weekStartMonday": "Pirmadienis",
+    "weekStartSaturday": "Šeštadienis",
+    "weekStartSunday": "Sekmadienis"
   },
   "auth": {
     "betaNoticeTitle": "Beta",
@@ -1209,6 +1220,7 @@
     "somethingWentWrong": "Kažkas nepavyko",
     "synced": "Sinchronizuota",
     "syncing": "Sinchronizuojama",
+    "textDirection": "Teksto kryptis",
     "textEditingMenu": "Teksto redagavimo meniu",
     "textFormattingGroup": "Teksto formatavimas",
     "toggleTrackChanges": "Perjungti keitimų sekimą",

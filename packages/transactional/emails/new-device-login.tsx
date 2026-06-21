@@ -11,7 +11,7 @@ import {
   Text,
 } from "@react-email/components";
 
-import { getTranslator } from "../i18n/translate";
+import { getEmailDirection, getTranslator } from "../i18n/translate";
 import type { SupportedLang } from "../i18n/translate";
 
 type Props = {
@@ -35,7 +35,7 @@ export const Email = ({
   const t = getTranslator(lang);
 
   return (
-    <Html lang={lang}>
+    <Html lang={lang} dir={getEmailDirection(lang)}>
       <Head />
       <Preview>{t("newDeviceLogin.preview", { device })}</Preview>
       <Body style={styles["body"]}>

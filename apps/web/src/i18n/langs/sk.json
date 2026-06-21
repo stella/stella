@@ -29,17 +29,28 @@
     }
   },
   "appearance": {
+    "calendar": "Kalendár",
+    "calendarGregorian": "Gregoriánsky",
+    "calendarHijri": "Hidžra (Umm al-Kúra)",
     "cool": "Studené",
     "dark": "Tmavý",
     "flexoki": "Flexoki",
     "light": "Svetlý",
     "neutral": "Neutrálny",
     "nord": "Nord",
+    "numbers": "Číslice",
+    "numbersEastern": "Východné (٠١٢٣)",
+    "numbersWestern": "Západné (0123)",
     "palette": "Paleta",
     "system": "Systém",
     "theme": "Vzhľad",
     "title": "Vzhľad",
-    "warm": "Teplé"
+    "warm": "Teplé",
+    "weekStart": "Prvý deň v týždni",
+    "weekStartAuto": "Automaticky",
+    "weekStartMonday": "Pondelok",
+    "weekStartSaturday": "Sobota",
+    "weekStartSunday": "Nedeľa"
   },
   "auth": {
     "betaNoticeTitle": "Beta",
@@ -1209,6 +1220,7 @@
     "somethingWentWrong": "Niečo sa pokazilo",
     "synced": "Synchronizované",
     "syncing": "Synchronizuje sa",
+    "textDirection": "Smer textu",
     "textEditingMenu": "Menu úprav textu",
     "textFormattingGroup": "Formátovanie textu",
     "toggleTrackChanges": "Prepnúť sledovanie zmien",
