@@ -32,6 +32,12 @@ const langMessages = {
 
 export type SupportedLang = keyof typeof langMessages;
 
+const RTL_LANGS = new Set<SupportedLang>(["ar"]);
+
+/** Document direction for an email's `<Html>` so RTL locales lay out correctly. */
+export const getEmailDirection = (lang: SupportedLang): "rtl" | "ltr" =>
+  RTL_LANGS.has(lang) ? "rtl" : "ltr";
+
 export const getTranslator = (lang: SupportedLang) =>
   createTranslator({
     locale: lang,
