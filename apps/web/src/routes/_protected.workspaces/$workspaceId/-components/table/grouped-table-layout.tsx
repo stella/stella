@@ -30,6 +30,7 @@ import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import {
   getEntityGroups,
   getKanbanGroupingPropertyId,
+  isGroupableProperty,
   resolveGroupOptions,
   resolveKanbanGrouping,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
@@ -127,15 +128,18 @@ export const GroupedTableLayout = ({
     [properties, groupByPropertyId, view.layout.hiddenProperties],
   );
 
-  // Only "kind" and property groupings are supported for a document table.
-  // Status grouping is task-only, so on a document table (which excludes tasks)
-  // group-counts would report task buckets while the row fetch returns nothing;
-  // created-by and other built-ins have no server-side grouping condition. Both
-  // fall back to a flat selection prompt, matching the kanban view's behaviour.
+  // Only "kind" and single/multi-select property groupings are supported for a
+  // document table. Status grouping is task-only, so on a document table (which
+  // excludes tasks) group-counts would report task buckets while the row fetch
+  // returns nothing. Created-by and other built-ins have no server-side grouping
+  // condition. A property whose type changed away from select (the layout keeps
+  // the id) would bucket every distinct scalar into an unbounded set of groups.
+  // All fall back to a flat selection prompt, matching the kanban view.
   const isUnsupportedGrouping =
     grouping.type === "status" ||
     (grouping.type === "built-in" &&
-      groupByPropertyId !== getInternalPropertyId("kind"));
+      groupByPropertyId !== getInternalPropertyId("kind")) ||
+    (grouping.type === "property" && !isGroupableProperty(grouping.property));
 
   // One query for every group's count, so a group only fires its row query
   // when it actually has rows (empty groups never round-trip).
@@ -425,9 +429,14 @@ const GroupSection = ({
     enabled: hasRows,
   });
 
+  // When a group empties (its last row moved/deleted), the count is 0 and the
+  // query is disabled, but React Query can still hold cached pages for this key.
+  // Drop them when the group has no rows so stale rows aren't published to the
+  // selection union or rendered.
   const entities = useMemo(
-    () => query.data?.pages.flatMap((page) => page.entities) ?? [],
-    [query.data],
+    () =>
+      hasRows ? (query.data?.pages.flatMap((page) => page.entities) ?? []) : [],
+    [hasRows, query.data],
   );
   const loadedCount = entities.length;
 
