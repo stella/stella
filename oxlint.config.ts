@@ -1416,6 +1416,7 @@ export default defineConfig({
         "no-dangerous-type-assertions/no-dangerous-type-assertions": "off",
         "security-guards/no-unsanitized-href": "off",
         "security-guards/no-unscoped-user-query": "off",
+        "vitest/no-focused-tests": "error",
         "vitest/prefer-importing-vitest-globals": "off",
         // bun:test globals (describe/test/expect/it/…) resolve as `error` type
         // when test files are excluded from the main tsconfig (packages/folio).
