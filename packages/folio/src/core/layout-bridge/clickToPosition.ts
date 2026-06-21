@@ -67,11 +67,12 @@ export function snapPastTrailingSurrogate(
   text: string,
   offset: number,
 ): number {
-  if (offset < text.length) {
-    const codeUnit = text.codePointAt(offset);
-    if (codeUnit >= 0xdc_00 && codeUnit <= 0xdf_ff) {
-      return offset + 1;
-    }
+  // codePointAt at a low-surrogate index returns that surrogate's code unit
+  // (it only combines when read at the leading surrogate); guard undefined for
+  // the out-of-range case the length check already excludes.
+  const codeUnit = offset < text.length ? text.codePointAt(offset) : undefined;
+  if (codeUnit !== undefined && codeUnit >= 0xdc_00 && codeUnit <= 0xdf_ff) {
+    return offset + 1;
   }
   return offset;
 }
