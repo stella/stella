@@ -220,7 +220,7 @@ export default defineConfig({
     "unicorn/no-immediate-mutation": "off",
     "unicorn/prefer-ternary": "off",
     "unicorn/no-array-reduce": "error",
-    "unicorn/no-array-sort": "off",
+    "unicorn/no-array-sort": "error",
     "unicorn/no-useless-spread": "off",
     "oxc/no-map-spread": "error",
     "unicorn/no-await-expression-member": "off",
