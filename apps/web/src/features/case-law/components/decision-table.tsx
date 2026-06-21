@@ -162,7 +162,7 @@ const renderCaseNumberCell = (decision: Decision) => {
           }}
           to="/law/$country/cases/$court/$language/$slug"
         >
-          {caseNumber}
+          <bdi>{caseNumber}</bdi>
         </Link>
       ) : (
         <Link
@@ -174,7 +174,7 @@ const renderCaseNumberCell = (decision: Decision) => {
           }}
           to="/law/$country/cases/$court/$slug"
         >
-          {caseNumber}
+          <bdi>{caseNumber}</bdi>
         </Link>
       )}
       {headline && (
