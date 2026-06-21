@@ -15,11 +15,12 @@ type SuggestedActionsProps = {
   /** Accessible group label (callers pass a translated string). */
   label: string;
   /**
-   * `plain` suits a solid background (the chat composer); `floating`
-   * gives each chip an opaque surface + shadow so it stays legible over
-   * document/editor content.
+   * `plain` suits a solid background. `floating` gives each chip an opaque
+   * surface so it reads cleanly over document/editor content. `overlay` is
+   * translucent with a slight backdrop blur, for floating over scrolling
+   * text that should stay faintly visible behind the chips.
    */
-  surface?: "plain" | "floating";
+  surface?: "plain" | "floating" | "overlay";
   /** Keyboard hint surfaced on each chip via `aria-keyshortcuts`. */
   keyShortcut?: string;
   className?: string;
@@ -30,6 +31,12 @@ type SuggestedActionsProps = {
 // document content rather than going translucent on hover.
 const FLOATING_SURFACE_CLASS =
   "border-foreground/15 border shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)] [--suggested-surface:var(--color-white)] dark:[--suggested-surface:var(--popover)] bg-(--suggested-surface)";
+
+// Translucent + slightly blurred backdrop for the `overlay` surface: chips
+// float over scrolling content (the chat message list) and stay readable
+// while the text behind shows through, blurred.
+const OVERLAY_SURFACE_CLASS =
+  "border-foreground/10 bg-background/70 border shadow-sm backdrop-blur-sm";
 
 /**
  * Vertical stack of click-to-run "suggested action" chips. Stacking
@@ -61,6 +68,7 @@ export const SuggestedActions = ({
           className={cn(
             "inline-flex max-w-full rounded-full",
             surface === "floating" && FLOATING_SURFACE_CLASS,
+            surface === "overlay" && OVERLAY_SURFACE_CLASS,
           )}
           key={action.id}
         >
@@ -70,7 +78,7 @@ export const SuggestedActions = ({
             onClick={() => onSelect(action.id)}
             size="sm"
             type="button"
-            variant={surface === "floating" ? "ghost" : "outline"}
+            variant={surface === "plain" ? "outline" : "ghost"}
           >
             {action.icon}
             <span className="min-w-0 truncate">{action.label}</span>

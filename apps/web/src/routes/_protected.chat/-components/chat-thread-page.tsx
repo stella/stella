@@ -343,7 +343,7 @@ export const ChatThreadPage = ({
           handleDeny,
         }}
       >
-        <div className="flex w-full flex-1 flex-col overflow-hidden">
+        <div className="relative flex w-full flex-1 flex-col overflow-hidden">
           <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
             <div className="flex min-w-0 items-center gap-2">
               <NewChatButton
@@ -381,7 +381,7 @@ export const ChatThreadPage = ({
           </div>
 
           <Conversation>
-            <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4">
+            <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-28">
               {messages.length === 0 && !isGenerating && !error ? (
                 <div className="m-auto w-full max-w-md px-4">
                   <PromptSuggestions
@@ -426,7 +426,7 @@ export const ChatThreadPage = ({
                 </>
               )}
             </ConversationContent>
-            <ConversationScrollButton />
+            <ConversationScrollButton className="bottom-28" />
           </Conversation>
 
           <ChatAnonymizationLayer
@@ -434,7 +434,7 @@ export const ChatThreadPage = ({
             enabled={anonymized}
             workspaceId={workspaceId ?? threadRef.threadId}
           />
-          <div className="mx-auto w-full max-w-5xl px-4 pb-4">
+          <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-5xl px-4 pb-4">
             <SuggestedFollowupChips
               isGenerating={isGenerating}
               isEmpty={controller.isEmpty}

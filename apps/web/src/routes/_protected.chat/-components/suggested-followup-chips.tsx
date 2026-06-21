@@ -50,6 +50,7 @@ export const SuggestedFollowupChips = ({
       className="pb-2"
       label="Suggested follow-up prompts"
       onSelect={onSelect}
+      surface="overlay"
     />
   );
 };
