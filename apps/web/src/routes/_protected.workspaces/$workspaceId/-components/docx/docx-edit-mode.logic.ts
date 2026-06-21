@@ -31,14 +31,15 @@ export const resolveCheckpointAutosaveStatus = ({
 
 type BuildAnonymizationDetectionKeyOptions = {
   text: string;
-  excludedCanonicals: ReadonlySet<string>;
+  excludedCanonicals: Iterable<string>;
 };
 
 /**
  * Cache key for the detection heartbeat. Exclusions are part of
  * the key because marking an entity as a false positive must rerun
- * detection against the same text with the new allowlist. The set
- * is sorted so the key is stable regardless of insertion order.
+ * detection against the same text with the new allowlist. Accepts
+ * any iterable (set or already-deduped array) and sorts it so the
+ * key is stable regardless of order.
  */
 export const buildAnonymizationDetectionKey = ({
   text,
@@ -131,7 +132,7 @@ export const buildExcludedCanonicalsSet = (
 ): Set<string> => {
   const set = new Set<string>();
   for (const entry of entries) {
-    set.add(entry.canonical.toLocaleLowerCase());
+    set.add(entry.canonical.toLowerCase());
   }
   return set;
 };
@@ -166,7 +167,7 @@ export const mergeAnonymizationTerms = ({
     excludedCanonicals.size === 0
       ? workspaceTerms
       : workspaceTerms.filter(
-          (term) => !excludedCanonicals.has(term.canonical.toLocaleLowerCase()),
+          (term) => !excludedCanonicals.has(term.canonical.toLowerCase()),
         );
   return [...filteredWorkspace, ...detectedTerms];
 };

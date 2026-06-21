@@ -295,19 +295,28 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
       if (cancelled) {
         return;
       }
+      // Cheap in-flight short-circuit before serializing the doc:
+      // `view.state.doc.textContent` walks the whole ProseMirror
+      // tree, so on large DOCX files we must not pay it every 2s
+      // tick while a worker request is still pending. The decision
+      // helper repeats this guard for its own correctness, but the
+      // expensive read has to stay behind it.
+      const now = Date.now();
+      if (now < inFlightUntil) {
+        return;
+      }
       const text = view.state.doc.textContent;
       const excluded = excludedCanonicalsRef.current;
-      const excludedSet = new Set(excluded);
       const cacheKey = buildAnonymizationDetectionKey({
         text,
-        excludedCanonicals: excludedSet,
+        excludedCanonicals: excluded,
       });
       const decision = decideAnonymizationDetectionRun({
         text,
         cacheKey,
         lastDeliveredKey,
         inFlightUntil,
-        now: Date.now(),
+        now,
       });
       if (decision.action === "skip") {
         return;
