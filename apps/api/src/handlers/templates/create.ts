@@ -83,10 +83,23 @@ const createTemplateHandler = async function* ({
     );
   }
 
-  const clientManifest =
-    manifestJson !== null && manifestJson !== undefined
-      ? parseClientManifest(manifestJson)
-      : null;
+  // A manifest is optional, but a *supplied* one that is malformed JSON or
+  // fails field validation must fail fast: the wizard sends the field config
+  // (labels, required flags, formulas, input types) here, so silently treating
+  // an invalid manifest as "none" would drop those settings. `null` therefore
+  // only means "omitted".
+  let clientManifest: ClientTemplateManifest | null = null;
+  if (manifestJson !== null && manifestJson !== undefined) {
+    clientManifest = parseClientManifest(manifestJson);
+    if (clientManifest === null) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Invalid template field configuration.",
+        }),
+      );
+    }
+  }
 
   return yield* createStoredTemplate({
     safeDb,
