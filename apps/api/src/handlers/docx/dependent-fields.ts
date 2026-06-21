@@ -145,14 +145,17 @@ export const validateDependentFields = ({
     const allowed =
       sourceValues.length > 0 ? sourceValues : (field.options ?? []);
 
-    const repeatable = mapRepeatablePath(values, field.path, ({ row, subPath }) =>
-      checkDependentValue({
-        value: readRowSubPath(row, subPath),
-        allowed,
-        path: field.path,
-        optionsFrom: source,
-        errors,
-      }),
+    const repeatable = mapRepeatablePath(
+      values,
+      field.path,
+      ({ row, subPath }) =>
+        checkDependentValue({
+          value: readRowSubPath(row, subPath),
+          allowed,
+          path: field.path,
+          optionsFrom: source,
+          errors,
+        }),
     );
     if (repeatable) {
       continue;

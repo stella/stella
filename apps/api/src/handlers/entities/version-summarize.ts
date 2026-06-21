@@ -26,7 +26,14 @@ const config = {
  */
 const versionSummarize = createSafeHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, session, user, orgAIConfig }) {
+  async function* ({
+    safeDb,
+    workspaceId,
+    params,
+    session,
+    user,
+    orgAIConfig,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     const sources = yield* loadEntityVersionDiffSources({

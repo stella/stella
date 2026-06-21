@@ -13,8 +13,8 @@ import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/handlers/templates/template-fill-service";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";

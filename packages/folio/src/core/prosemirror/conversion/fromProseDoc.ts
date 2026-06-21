@@ -2141,21 +2141,23 @@ export function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
  * set `*Cs` too), so a negative override disables both. Keys without a complex
  * mirror use `null`.
  */
-const NEGATABLE_STYLE_KEYS: readonly [keyof TextFormatting, keyof TextFormatting | null][] =
-  [
-    ["bold", "boldCs"],
-    ["italic", "italicCs"],
-    ["strike", null],
-    ["doubleStrike", null],
-    ["allCaps", null],
-    ["smallCaps", null],
-    ["hidden", null],
-    ["emboss", null],
-    ["imprint", null],
-    ["shadow", null],
-    ["outline", null],
-    ["rtl", null],
-  ];
+const NEGATABLE_STYLE_KEYS: readonly [
+  keyof TextFormatting,
+  keyof TextFormatting | null,
+][] = [
+  ["bold", "boldCs"],
+  ["italic", "italicCs"],
+  ["strike", null],
+  ["doubleStrike", null],
+  ["allCaps", null],
+  ["smallCaps", null],
+  ["hidden", null],
+  ["emboss", null],
+  ["imprint", null],
+  ["shadow", null],
+  ["outline", null],
+  ["rtl", null],
+];
 
 /**
  * Drop run formatting values that the run's character style already provides
