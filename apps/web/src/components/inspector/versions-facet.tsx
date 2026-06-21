@@ -8,7 +8,7 @@
  * the selection). Compare is owned by the document route.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
@@ -142,6 +142,34 @@ export const VersionsFacet = ({
     olderCursorRef.current = older.olderCursor;
     setOlderCursor(older.olderCursor);
   }, [entityId, t, workspaceId]);
+
+  // When the document viewer deep-links to a field from a version older than
+  // the newest page (switch to an old version, then reload), the preview
+  // resolves via the field-file lookup, but that version is not in
+  // `accumulated`, so the sidebar shows no selected row or version actions
+  // for it. Walk older pages until the active version surfaces. Self-
+  // terminating: it stops once the row appears, the cursor runs out, or a
+  // fetch errors. Page size is 50, so this only fires for the rare deep-link
+  // to a version outside the newest page.
+  useEffect(() => {
+    if (
+      !currentFieldId ||
+      olderCursor === null ||
+      isLoadingOlder ||
+      loadOlderError ||
+      accumulated.some((version) => version.file?.fieldId === currentFieldId)
+    ) {
+      return;
+    }
+    void loadOlder();
+  }, [
+    accumulated,
+    currentFieldId,
+    isLoadingOlder,
+    loadOlder,
+    loadOlderError,
+    olderCursor,
+  ]);
 
   if (!data) {
     return null;
