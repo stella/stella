@@ -17,6 +17,7 @@ import { resolvePath } from "@stll/template-conditions";
 
 import { isRecord } from "@/api/lib/type-guards";
 
+import { mapRepeatablePath, readRowSubPath } from "./repeatable-paths";
 import type { FieldMeta } from "./types";
 
 export type DependentFieldError = {
@@ -76,10 +77,54 @@ export const collectSourceValues = (
 };
 
 /**
+ * Append a dependent-field error when `value` is a non-empty string outside
+ * `allowed`. Absent, empty, and non-string values are left for the fill's
+ * required/unmatched diagnostics (non-strings belong to other machinery:
+ * composite assembly, `#each` arrays). An empty `allowed` accepts any value
+ * (the source supplied nothing and there are no static options to fall back
+ * to).
+ */
+const checkDependentValue = ({
+  value,
+  allowed,
+  path,
+  optionsFrom,
+  errors,
+}: {
+  value: unknown;
+  allowed: readonly string[];
+  path: string;
+  optionsFrom: string;
+  errors: DependentFieldError[];
+}): void => {
+  if (typeof value !== "string" || value.trim() === "") {
+    return;
+  }
+  if (allowed.length === 0 || allowed.includes(value)) {
+    return;
+  }
+  errors.push({
+    path,
+    optionsFrom,
+    message:
+      `Field "${path}": value "${value}" is not among ` +
+      `the values of "${optionsFrom}".`,
+  });
+};
+
+/**
  * Validate every dependent (optionsFrom) field's value against the source
  * field's submitted values. An absent or empty value is left for the fill's
  * required/unmatched diagnostics; non-string values belong to other machinery
  * (composite assembly, `#each` arrays) and are skipped likewise.
+ *
+ * A dependent select inside an `{{#each}}` group keeps a flat manifest path
+ * (`people.lead`) while the fill form submits the loop as an array of rows
+ * (`people: [{ name, lead }]`). A direct `resolvePath` walk into that array
+ * returns `undefined` and would skip the field, so the repeatable case maps
+ * the dependent path through each row (via {@link mapRepeatablePath}) and
+ * validates every row's sub-path value, mirroring how `collectSourceValues`
+ * already gathers `optionsFrom` across array items.
  */
 export const validateDependentFields = ({
   values,
@@ -95,24 +140,30 @@ export const validateDependentFields = ({
     if (source === undefined) {
       continue;
     }
-    const value = resolvePath(field.path, values);
-    if (typeof value !== "string" || value.trim() === "") {
-      continue;
-    }
 
     const sourceValues = collectSourceValues(source, values);
     const allowed =
       sourceValues.length > 0 ? sourceValues : (field.options ?? []);
-    if (allowed.length === 0 || allowed.includes(value)) {
+
+    const repeatable = mapRepeatablePath(values, field.path, ({ row, subPath }) =>
+      checkDependentValue({
+        value: readRowSubPath(row, subPath),
+        allowed,
+        path: field.path,
+        optionsFrom: source,
+        errors,
+      }),
+    );
+    if (repeatable) {
       continue;
     }
 
-    errors.push({
+    checkDependentValue({
+      value: resolvePath(field.path, values),
+      allowed,
       path: field.path,
       optionsFrom: source,
-      message:
-        `Field "${field.path}": value "${value}" is not among ` +
-        `the values of "${source}".`,
+      errors,
     });
   }
 

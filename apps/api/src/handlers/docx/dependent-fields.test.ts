@@ -138,6 +138,48 @@ describe("validateDependentFields", () => {
     });
     expect(errors).toHaveLength(1);
   });
+
+  test("rejects an invalid value in a repeatable row's dependent select", () => {
+    const field: FieldMeta = {
+      path: "people.lead",
+      inputType: "select",
+      optionsFrom: "people.name",
+    };
+
+    const errors = validateDependentFields({
+      values: {
+        people: [
+          { name: "Alice", lead: "Alice" },
+          { name: "Bob", lead: "Mallory" },
+        ],
+      },
+      fields: [field],
+    });
+
+    expect(errors).toHaveLength(1);
+    expect(errors[0]?.path).toBe("people.lead");
+    expect(errors[0]?.message).toContain('"Mallory"');
+  });
+
+  test("accepts every valid value across repeatable rows", () => {
+    const field: FieldMeta = {
+      path: "people.lead",
+      inputType: "select",
+      optionsFrom: "people.name",
+    };
+
+    expect(
+      validateDependentFields({
+        values: {
+          people: [
+            { name: "Alice", lead: "Bob" },
+            { name: "Bob", lead: "Alice" },
+          ],
+        },
+        fields: [field],
+      }),
+    ).toEqual([]);
+  });
 });
 
 describe("checkDependentFields", () => {
