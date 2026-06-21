@@ -1,9 +1,10 @@
 import { panic, Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
-import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
-import { entities, fields } from "@/api/db/schema";
+import {
+  buildKanbanGroupCondition,
+  tGroupByPropertyId,
+} from "@/api/handlers/entities/kanban-group-condition";
 import { queryEntities } from "@/api/handlers/entities/query-entities";
 import {
   decodeEntitiesWindowCursor,
@@ -13,34 +14,9 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 import { tViewSortSchema } from "@/api/lib/views-schema";
-
-const STATUS_GROUP_ID = "_status";
-const KIND_GROUP_ID = "_kind";
-const TASK_STATUS_VALUES = [
-  "open",
-  "in_progress",
-  "in_review",
-  "done",
-  "cancelled",
-] as const;
-const TASK_STATUS_SQL_VALUES = TASK_STATUS_VALUES.map(
-  (status) => sql`${status}`,
-);
-const ENTITY_KIND_VALUES = [
-  "document",
-  "folder",
-  "task",
-  "message",
-  "link",
-] as const;
-type EntityKindValue = (typeof ENTITY_KIND_VALUES)[number];
-
-const isEntityKindValue = (value: string): value is EntityKindValue =>
-  ENTITY_KIND_VALUES.some((kind) => kind === value);
 
 const readKanbanGroupBodySchema = t.Object({
   filters: t.Optional(t.Array(tConditionNode)),
@@ -58,11 +34,7 @@ const readKanbanGroupBodySchema = t.Object({
       maxItems: LIMITS.propertiesCount,
     }),
   ),
-  groupByPropertyId: t.Union([
-    t.Literal(STATUS_GROUP_ID),
-    t.Literal(KIND_GROUP_ID),
-    tSafeId("property"),
-  ]),
+  groupByPropertyId: tGroupByPropertyId,
   groupValue: t.Nullable(t.String({ maxLength: 1000 })),
   includeTotalCount: t.Optional(t.Boolean()),
 });
@@ -71,93 +43,6 @@ const config = {
   permissions: { workspace: ["read"] },
   body: readKanbanGroupBodySchema,
 } satisfies HandlerConfig;
-
-const invalidKanbanGroup = () =>
-  new HandlerError({ status: 400, message: "Invalid Kanban group" });
-
-const buildStatusGroupCondition = (groupValue: string | null): SQL => {
-  const taskCondition = eq(entities.kind, "task");
-  if (groupValue === null) {
-    return (
-      and(
-        taskCondition,
-        sql`(${entities.status} IS NULL OR ${entities.status} NOT IN (${sql.join(TASK_STATUS_SQL_VALUES, sql`, `)}))`,
-      ) ?? taskCondition
-    );
-  }
-
-  return and(taskCondition, eq(entities.status, groupValue)) ?? taskCondition;
-};
-
-const buildKindGroupCondition = (
-  groupValue: string | null,
-): Result<SQL, HandlerError> => {
-  if (groupValue === null) {
-    return Result.err(invalidKanbanGroup());
-  }
-
-  if (!isEntityKindValue(groupValue)) {
-    return Result.err(invalidKanbanGroup());
-  }
-
-  return Result.ok(eq(entities.kind, groupValue));
-};
-
-const buildPropertyGroupCondition = (
-  propertyId: string,
-  groupValue: string | null,
-): SQL => {
-  if (groupValue === null) {
-    return sql`NOT EXISTS (
-      SELECT 1 FROM ${fields}
-      WHERE ${fields.workspaceId} = ${entities.workspaceId}
-        AND ${fields.entityVersionId} = ${entities.currentVersionId}
-        AND ${fields.propertyId} = ${propertyId}
-        AND (
-          (
-            jsonb_typeof(${fields.content}->'value') = 'array'
-            AND jsonb_array_length(${fields.content}->'value') > 0
-          )
-          OR (
-            jsonb_typeof(${fields.content}->'value') != 'array'
-            AND COALESCE(${fields.content}->>'value', '') != ''
-          )
-        )
-    )`;
-  }
-
-  return sql`EXISTS (
-    SELECT 1 FROM ${fields}
-    WHERE ${fields.workspaceId} = ${entities.workspaceId}
-      AND ${fields.entityVersionId} = ${entities.currentVersionId}
-      AND ${fields.propertyId} = ${propertyId}
-      AND (
-        (
-          jsonb_typeof(${fields.content}->'value') = 'array'
-          AND ${fields.content}->'value' ? ${groupValue}
-        )
-        OR ${fields.content}->>'value' = ${groupValue}
-      )
-  )`;
-};
-
-const buildKanbanGroupCondition = ({
-  groupByPropertyId,
-  groupValue,
-}: {
-  groupByPropertyId: string;
-  groupValue: string | null;
-}): Result<SQL, HandlerError> => {
-  if (groupByPropertyId === STATUS_GROUP_ID) {
-    return Result.ok(buildStatusGroupCondition(groupValue));
-  }
-
-  if (groupByPropertyId === KIND_GROUP_ID) {
-    return buildKindGroupCondition(groupValue);
-  }
-
-  return Result.ok(buildPropertyGroupCondition(groupByPropertyId, groupValue));
-};
 
 const readKanbanGroup = createSafeHandler(
   config,

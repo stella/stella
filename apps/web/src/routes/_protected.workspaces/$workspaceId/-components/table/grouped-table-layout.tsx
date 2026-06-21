@@ -27,6 +27,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import type { EntityGroup } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
+import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import {
   DEFAULT_TABLE_COLUMN_MIN_SIZE,
   useTableColumns,
@@ -420,23 +421,32 @@ const GroupSection = ({
         !isLoadingRows && (
           // The table flows inline in the shared outer scroll (no nested scroll
           // box), so its rows render directly and the sticky group header stacks
-          // cleanly above the columns.
-          <WorkspaceTable
-            contentMode={tableState.contentMode}
-            fillHeight={false}
-            hasNextPage={query.hasNextPage}
-            isFetchingNextPage={query.isFetchingNextPage}
-            onLoadMore={() => {
-              if (query.hasNextPage && !query.isFetchingNextPage) {
-                void query.fetchNextPage();
-              }
+          // cleanly above the columns. The group scope lets each column header's
+          // "mark as reviewed" target just this subtable.
+          <GroupScopeProvider
+            value={{
+              groupByPropertyId,
+              groupValue: group.value,
+              label: group.label,
             }}
-            outerScrollRef={outerScrollRef}
-            showAddRow={false}
-            stickyColumnHeader={false}
-            table={table}
-            workspaceId={workspaceId}
-          />
+          >
+            <WorkspaceTable
+              contentMode={tableState.contentMode}
+              fillHeight={false}
+              hasNextPage={query.hasNextPage}
+              isFetchingNextPage={query.isFetchingNextPage}
+              onLoadMore={() => {
+                if (query.hasNextPage && !query.isFetchingNextPage) {
+                  void query.fetchNextPage();
+                }
+              }}
+              outerScrollRef={outerScrollRef}
+              showAddRow={false}
+              stickyColumnHeader={false}
+              table={table}
+              workspaceId={workspaceId}
+            />
+          </GroupScopeProvider>
         )}
     </section>
   );

@@ -38,6 +38,7 @@ describe("mark column flag metadata planning", () => {
       workspaceId: WORKSPACE_ID,
       propertyId: PROPERTY_ID,
       flag: "verified",
+      set: true,
       targets: [target],
       existingRows: [
         {
@@ -121,6 +122,7 @@ describe("mark column flag metadata planning", () => {
       workspaceId: WORKSPACE_ID,
       propertyId: PROPERTY_ID,
       flag: "verified",
+      set: true,
       targets: [target],
       existingRows: [
         {
@@ -158,6 +160,7 @@ describe("mark column flag metadata planning", () => {
       workspaceId: WORKSPACE_ID,
       propertyId: PROPERTY_ID,
       flag: "verified",
+      set: true,
       targets: [target],
       existingRows: [
         {
@@ -168,6 +171,138 @@ describe("mark column flag metadata planning", () => {
           },
         },
       ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation).toEqual({
+      auditEvents: [],
+      insertValues: [],
+      updatedCount: 0,
+    });
+  });
+
+  test("removes the requested flag while preserving other flags and locks", () => {
+    const target = createTarget("ent_undo", "ver_undo");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: false,
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: ["needs-review", "verified"],
+            flagProvenance: {
+              "needs-review": {
+                addedBy: "user_existing",
+                addedAt: "2026-05-28T07:00:00.000Z",
+              },
+              verified: {
+                addedBy: "user_existing",
+                addedAt: "2026-05-28T07:30:00.000Z",
+              },
+            },
+            locked: true,
+            lockProvenance: {
+              lockedBy: "user_lock",
+              lockedAt: LOCKED_AT,
+              reason: "explicit",
+            },
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation.updatedCount).toBe(1);
+    expect(mutation.insertValues).toEqual([
+      {
+        workspaceId: WORKSPACE_ID,
+        entityVersionId: target.entityVersionId,
+        propertyId: PROPERTY_ID,
+        metadata: {
+          version: 1,
+          manualFlags: ["needs-review"],
+          flagProvenance: {
+            "needs-review": {
+              addedBy: "user_existing",
+              addedAt: "2026-05-28T07:00:00.000Z",
+            },
+          },
+          locked: true,
+          lockProvenance: {
+            lockedBy: "user_lock",
+            lockedAt: LOCKED_AT,
+            reason: "explicit",
+          },
+        },
+        createdBy: USER_ID,
+        updatedBy: USER_ID,
+      },
+    ]);
+    expect(mutation.auditEvents).toEqual([
+      {
+        action: "update",
+        resourceType: "field",
+        resourceId: `${target.entityVersionId}:${PROPERTY_ID}`,
+        changes: {
+          manualFlags: {
+            old: ["needs-review", "verified"],
+            new: ["needs-review"],
+          },
+        },
+        metadata: {
+          entityId: target.entityId,
+          entityVersionId: target.entityVersionId,
+          propertyId: PROPERTY_ID,
+          bulk: true,
+        },
+      },
+    ]);
+  });
+
+  test("skips removal for cells without the requested flag", () => {
+    const target = createTarget("ent_no_flag", "ver_no_flag");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: false,
+      targets: [target],
+      existingRows: [
+        {
+          entityVersionId: target.entityVersionId,
+          metadata: {
+            version: 1,
+            manualFlags: ["needs-review"],
+          },
+        },
+      ],
+      userId: USER_ID,
+      addedAt: ADDED_AT,
+    });
+
+    expect(mutation).toEqual({
+      auditEvents: [],
+      insertValues: [],
+      updatedCount: 0,
+    });
+  });
+
+  test("skips removal for cells without an existing metadata row", () => {
+    const target = createTarget("ent_no_row", "ver_no_row");
+    const mutation = buildColumnFlagMutation({
+      workspaceId: WORKSPACE_ID,
+      propertyId: PROPERTY_ID,
+      flag: "verified",
+      set: false,
+      targets: [target],
+      existingRows: [],
       userId: USER_ID,
       addedAt: ADDED_AT,
     });

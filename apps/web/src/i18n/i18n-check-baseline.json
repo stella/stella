@@ -11,6 +11,7 @@
     "folio.findReplace.noResults",
     "folio.historyGroup",
     "folio.somethingWentWrong",
+    "folio.undo",
     "knowledge.agentSkills.formDescription",
     "knowledge.agentSkills.formName",
     "knowledge.agentSkills.renameFile",
@@ -238,6 +239,19 @@
     ],
     "common.type": [
       "fr"
+    ],
+    "common.undo": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "common.urlIdentifier": [
       "cs",
@@ -1156,6 +1170,32 @@
       "fr"
     ],
     "workspaces.properties.editConditionsWhen": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.properties.markedAsReviewed": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.properties.markThisGroupAsReviewed": [
       "cs",
       "de",
       "es",

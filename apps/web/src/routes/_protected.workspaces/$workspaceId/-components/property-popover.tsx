@@ -31,6 +31,7 @@ import {
   SortProperty,
   toSortHint,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/sort-property";
+import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import type { TableHeader } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { useUpdateProperty } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
@@ -56,14 +57,25 @@ export const PropertyPopover = ({
 }: PropertyPopoverProps) => {
   const t = useTranslations();
   const { workspaceId, id, name } = property;
+  const groupScope = useGroupScope();
   const [isOpen, setIsOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
   const updateProperty = useUpdateProperty();
   const startWorkflow = useStartWorkflow(workspaceId);
   const queryClient = useQueryClient();
 
-  const markAllReviewed = useMutation({
-    mutationFn: async () => {
+  // `scoped` narrows the batch to the current grouped-view subtable (only
+  // meaningful when a group scope is present); `set: false` removes the flag,
+  // which powers the toast's Undo.
+  const markReviewed = useMutation({
+    mutationFn: async ({ scoped, set }: { scoped: boolean; set: boolean }) => {
+      const groupParams =
+        scoped && groupScope
+          ? {
+              groupByPropertyId: groupScope.groupByPropertyId,
+              groupValue: groupScope.groupValue,
+            }
+          : {};
       const response = await api
         .fields({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["metadata-batch"].patch({
@@ -71,6 +83,8 @@ export const PropertyPopover = ({
           propertyId: toSafeId<"property">(id),
           flag: VERIFIED_FLAG,
           filters,
+          set,
+          ...groupParams,
         });
 
       if (response.error) {
@@ -78,11 +92,25 @@ export const PropertyPopover = ({
       }
       return response.data;
     },
-    onSuccess: () => {
+    onSuccess: (data, { scoped, set }) => {
       void queryClient.invalidateQueries({
         queryKey: entitiesKeys.all(workspaceId),
       });
       setIsOpen(false);
+      if (set && data.updatedCount > 0) {
+        stellaToast.add({
+          title: t("workspaces.properties.markedAsReviewed", {
+            count: data.updatedCount,
+          }),
+          type: "success",
+          action: {
+            label: t("common.undo"),
+            onClick: () => {
+              markReviewed.mutate({ scoped, set: false });
+            },
+          },
+        });
+      }
     },
     onError: (error) => {
       stellaToast.add({
@@ -240,11 +268,25 @@ export const PropertyPopover = ({
                   {t("workspaces.properties.rerunColumn")}
                 </Button>
               )}
+              {groupScope && (
+                <Button
+                  className="justify-start gap-1.5 font-normal"
+                  disabled={markReviewed.isPending}
+                  onClick={() => {
+                    markReviewed.mutate({ scoped: true, set: true });
+                  }}
+                  size="sm"
+                  variant="ghost"
+                >
+                  <CheckCircle2Icon />
+                  {t("workspaces.properties.markThisGroupAsReviewed")}
+                </Button>
+              )}
               <Button
                 className="justify-start gap-1.5 font-normal"
-                disabled={markAllReviewed.isPending}
+                disabled={markReviewed.isPending}
                 onClick={() => {
-                  markAllReviewed.mutate();
+                  markReviewed.mutate({ scoped: false, set: true });
                 }}
                 size="sm"
                 variant="ghost"

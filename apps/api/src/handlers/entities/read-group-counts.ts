@@ -75,7 +75,8 @@ const readGroupCounts = createSafeHandler(
     if (body.groupByPropertyId === STATUS_GROUP_ID) {
       // Status groups are task-only. Task entities whose status is null or not a
       // recognized task status collapse into the uncategorized (null) bucket;
-      // mirrors buildStatusGroupCondition's value logic from read-kanban-group.
+      // mirrors buildStatusGroupCondition's value logic from
+      // kanban-group-condition.
       const statusBucketExpr = sql<string | null>`CASE
         WHEN ${entities.status} IN (${sql.join(TASK_STATUS_SQL_VALUES, sql`, `)})
         THEN ${entities.status}
@@ -117,7 +118,7 @@ type ReadPropertyGroupCountsArgs = {
 // value it carries (a 2-element multi-select counts toward 2 values). The
 // uncategorized (null) bucket is computed separately as the count of base
 // entities with no non-empty value for the property — the NOT EXISTS form from
-// read-kanban-group — and appended only when non-zero.
+// kanban-group-condition — and appended only when non-zero.
 async function* readPropertyGroupCounts({
   safeDb,
   baseConditions,
