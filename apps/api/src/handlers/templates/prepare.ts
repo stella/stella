@@ -3,7 +3,7 @@ import { t } from "elysia";
 
 import { prepareTemplateFromDocument } from "@/api/handlers/templates/prepare-template";
 import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -17,6 +17,7 @@ const prepareBodySchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   body: prepareBodySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 /**
@@ -28,7 +29,8 @@ const config = {
  */
 const prepareTemplate = createSafeRootHandler(
   config,
-  async function* ({ session, body }) {
+  async function* ({ session, body, safeDb, orgAIConfig, user }) {
+    const organizationId = session.activeOrganizationId;
     const { file } = body;
     if (file.type !== DOCX_MIME_TYPE) {
       return Result.err(
@@ -39,12 +41,25 @@ const prepareTemplate = createSafeRootHandler(
       );
     }
 
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId: null,
+      },
+      feature: "templates.prepare",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
+
     const prepared = yield* Result.await(
       Result.tryPromise({
         try: async () => {
-          const orgAIConfig = await loadOrgAIConfig(
-            session.activeOrganizationId,
-          );
           const buffer = Buffer.from(await file.arrayBuffer());
           return await prepareTemplateFromDocument({
             buffer,
@@ -52,16 +67,19 @@ const prepareTemplate = createSafeRootHandler(
               await suggestTemplateFields({
                 documentText,
                 orgAIConfig,
-                organizationId: session.activeOrganizationId,
+                organizationId,
+                aiAnalytics,
               }),
           });
         },
-        catch: (cause) =>
-          new HandlerError({
+        catch: (cause) => {
+          aiAnalytics.captureError(cause);
+          return new HandlerError({
             status: 500,
             message: "Failed to prepare template from document",
             cause,
-          }),
+          });
+        },
       }),
     );
 

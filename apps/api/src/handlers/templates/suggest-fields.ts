@@ -2,7 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -17,6 +17,7 @@ const suggestFieldsBodySchema = t.Object({
 const config = {
   permissions: { workspace: ["read"] },
   body: suggestFieldsBodySchema,
+  requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
 
 /**
@@ -29,32 +30,48 @@ const config = {
  */
 const suggestFields = createSafeRootHandler(
   config,
-  async function* ({ session, body }) {
+  async function* ({ session, body, safeDb, orgAIConfig, user }) {
+    const organizationId = session.activeOrganizationId;
     const { text, instructions } = body;
     const trimmed = text.trim();
     if (trimmed.length === 0) {
       return Result.ok({ suggestions: [] });
     }
 
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId: null,
+      },
+      feature: "templates.suggestFields",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
+
     const suggestions = yield* Result.await(
       Result.tryPromise({
-        try: async () => {
-          const orgAIConfig = await loadOrgAIConfig(
-            session.activeOrganizationId,
-          );
-          return await suggestTemplateFields({
+        try: async () =>
+          await suggestTemplateFields({
             documentText: trimmed,
             instructions,
             orgAIConfig,
-            organizationId: session.activeOrganizationId,
-          });
-        },
-        catch: (cause) =>
-          new HandlerError({
+            organizationId,
+            aiAnalytics,
+          }),
+        catch: (cause) => {
+          aiAnalytics.captureError(cause);
+          return new HandlerError({
             status: 500,
             message: "Failed to suggest template fields",
             cause,
-          }),
+          });
+        },
       }),
     );
 

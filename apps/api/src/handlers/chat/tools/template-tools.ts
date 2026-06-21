@@ -208,6 +208,7 @@ export const createTemplateTools = ({
           instructions: instructions ?? undefined,
           orgAIConfig: orgAIConfig ?? null,
           organizationId,
+          aiAnalytics,
         });
         return { suggestions };
       },

@@ -18,6 +18,7 @@ import type { FieldSuggestion } from "@/api/handlers/docx/apply-field-suggestion
 import { getModelForRole } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { strictOutputSchema } from "@/api/lib/ai-output-schema";
+import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import type { SafeId } from "@/api/lib/branded-types";
 
 const SUGGEST_TIMEOUT_MS = 45_000;
@@ -93,11 +94,13 @@ export const suggestTemplateFields = async ({
   instructions,
   orgAIConfig,
   organizationId,
+  aiAnalytics,
 }: {
   documentText: string;
   instructions?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
+  aiAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
 }): Promise<SuggestedTemplateField[]> => {
   try {
     const result = streamText({
@@ -115,6 +118,7 @@ export const suggestTemplateFields = async ({
         schema: strictOutputSchema(fieldSuggestionsSchema),
       }),
       system: SYSTEM_PROMPT,
+      ...aiAnalytics.stepCallbacks,
     });
     const { suggestions } = await result.output;
     // The schema models "absent" as null (OpenAI strict mode); FieldSuggestion
