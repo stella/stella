@@ -18,11 +18,12 @@ const KIND_GROUP_ID = "_kind";
 // Folders and tasks are not rows in a document table view; the flat window query
 // excludes them, so the grouped counts must too.
 const TABLE_EXCLUDED_ENTITY_KINDS = ["folder", "task"] satisfies EntityKind[];
-// Cap the distinct value buckets a property grouping returns. A select property
-// normally has far fewer options, but stale cells (arbitrary AI/manual values no
-// longer in the option list) could otherwise produce an unbounded bucket set and
-// a section-per-bucket render fan-out. Keep the most-populated buckets.
-const MAX_GROUP_VALUE_BUCKETS = 200;
+// Cap the stale (out-of-options) value buckets a property grouping returns.
+// Configured options are always kept (ordered first); stale cells (arbitrary
+// AI/manual values no longer in the option list) could otherwise produce an
+// unbounded bucket set and a section-per-bucket render fan-out, so keep only the
+// most-populated stale buckets.
+const MAX_STALE_GROUP_VALUE_BUCKETS = 200;
 const TASK_STATUS_VALUES = [
   "open",
   "in_progress",
@@ -151,6 +152,9 @@ const readGroupCounts = createSafeHandler(
       safeDb,
       baseConditions: documentConditions,
       propertyId,
+      // Configured option values are kept regardless of the bucket cap; only
+      // stale (out-of-options) values are capped.
+      optionValues: property.content.options.map((option) => option.value),
     });
   },
 );
@@ -159,6 +163,7 @@ type ReadPropertyGroupCountsArgs = {
   safeDb: SafeDb;
   baseConditions: SQL | undefined;
   propertyId: string;
+  optionValues: string[];
 };
 
 // One GROUP BY over the base set joined LATERAL to its group values for the
@@ -172,8 +177,15 @@ async function* readPropertyGroupCounts({
   safeDb,
   baseConditions,
   propertyId,
+  optionValues,
 }: ReadPropertyGroupCountsArgs) {
   const baseWhere = baseConditions ?? sql`true`;
+  // Configured option values, ordered first so the bucket cap can only drop
+  // stale (out-of-options) values, never a real option a row still uses.
+  const optionValuesSql = sql`ARRAY[${sql.join(
+    optionValues.map((value) => sql`${value}`),
+    sql`, `,
+  )}]::text[]`;
 
   const valueRows = yield* Result.await(
     safeDb((tx) =>
@@ -209,8 +221,8 @@ async function* readPropertyGroupCounts({
         ) AS group_values
         WHERE ${baseWhere}
         GROUP BY group_value
-        ORDER BY count(*) DESC
-        LIMIT ${MAX_GROUP_VALUE_BUCKETS}
+        ORDER BY (group_value = ANY(${optionValuesSql})) DESC, count(*) DESC
+        LIMIT ${optionValues.length + MAX_STALE_GROUP_VALUE_BUCKETS}
       `),
     ),
   );
