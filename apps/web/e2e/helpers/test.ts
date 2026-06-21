@@ -19,6 +19,18 @@ const TRANSIENT_NETWORK_ERROR =
 const RESOURCE_NOT_FOUND_CONSOLE_ERROR =
   /^Failed to load resource: the server responded with a status of 404 \(Not Found\)$/u;
 
+// Static assets (lazy route chunks, styles, fonts, images) must never 404: a
+// missing chunk surfaces only as this console error while the shell still
+// renders, so those stay fatal. Smoke specs deliberately probe non-existent
+// records (random thread/entity ids), so 404s from data/API requests are
+// tolerated.
+const STATIC_ASSET_URL =
+  /\.(?:js|mjs|cjs|css|map|woff2?|ttf|otf|eot|png|jpe?g|gif|svg|webp|avif|ico)(?:[?#]|$)/u;
+
+const isToleratedResourceNotFound = (message: ConsoleMessage): boolean =>
+  RESOURCE_NOT_FOUND_CONSOLE_ERROR.test(message.text()) &&
+  !STATIC_ASSET_URL.test(message.location().url);
+
 export const createBrowserErrorCollector = (): BrowserErrorCollector & {
   add: (message: string) => void;
 } => {
@@ -48,7 +60,7 @@ export const createBrowserErrorCollector = (): BrowserErrorCollector & {
           return;
         }
 
-        if (RESOURCE_NOT_FOUND_CONSOLE_ERROR.test(text)) {
+        if (isToleratedResourceNotFound(message)) {
           return;
         }
 

@@ -206,7 +206,7 @@ function ProfilePageBody() {
             <Select
               disabled={updateTimezone.isPending}
               onValueChange={(tz) => {
-                if (!tz || tz === currentTz) {
+                if (!tz || tz === storedTz) {
                   return;
                 }
 

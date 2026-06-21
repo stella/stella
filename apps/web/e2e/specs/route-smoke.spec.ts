@@ -24,30 +24,74 @@ const ROUTE_TREE_PATH = path.resolve(
   "../../src/routeTree.gen.ts",
 );
 
+type RouteExpectation =
+  | { kind: "rendersInPlace" }
+  | { kind: "redirectsTo"; to: string }
+  | { kind: "settles" };
+
 type SmokeRoute = {
   template: string;
   path: string;
   settleMs?: number;
+  // Where the route settles. Defaults to rendering in place (the pathname stays
+  // put). `redirectsTo` pins a deterministic beforeLoad/Navigate target so a
+  // regression that silently bounces the page to another route is caught.
+  // `settles` covers routes whose destination depends on env or runtime data
+  // (freshly minted ids, dev-only gates), where only "left /auth and rendered"
+  // is assertable.
+  expectation?: RouteExpectation;
 };
 
 const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
   { template: "/chat", path: "/chat" },
   { template: "/chat/$threadId", path: `/chat/${randomUUID()}` },
-  { template: "/chat/new", path: "/chat/new" },
+  {
+    template: "/chat/new",
+    path: "/chat/new",
+    expectation: { kind: "settles" },
+  },
   { template: "/contacts", path: "/contacts" },
-  { template: "/dev/autocomplete", path: "/dev/autocomplete" },
+  {
+    template: "/dev/autocomplete",
+    path: "/dev/autocomplete",
+    expectation: { kind: "settles" },
+  },
   { template: "/knowledge", path: "/knowledge" },
   { template: "/knowledge/clauses", path: "/knowledge/clauses" },
-  { template: "/knowledge/mcp", path: "/knowledge/mcp" },
-  { template: "/knowledge/prompts", path: "/knowledge/prompts" },
-  { template: "/knowledge/skills", path: "/knowledge/skills" },
+  {
+    template: "/knowledge/mcp",
+    path: "/knowledge/mcp",
+    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
+  },
+  {
+    template: "/knowledge/prompts",
+    path: "/knowledge/prompts",
+    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
+  },
+  {
+    template: "/knowledge/skills",
+    path: "/knowledge/skills",
+    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
+  },
   { template: "/knowledge/templates", path: "/knowledge/templates" },
   { template: "/knowledge/tools", path: "/knowledge/tools" },
-  { template: "/settings", path: "/settings" },
-  { template: "/settings/account/beta", path: "/settings/account/beta" },
+  {
+    template: "/settings",
+    path: "/settings",
+    expectation: { kind: "redirectsTo", to: "/settings/account/profile" },
+  },
+  {
+    template: "/settings/account/beta",
+    path: "/settings/account/beta",
+    expectation: { kind: "settles" },
+  },
   { template: "/settings/account/desktop", path: "/settings/account/desktop" },
   { template: "/settings/account/profile", path: "/settings/account/profile" },
-  { template: "/settings/organization", path: "/settings/organization" },
+  {
+    template: "/settings/organization",
+    path: "/settings/organization",
+    expectation: { kind: "redirectsTo", to: "/settings/organization/members" },
+  },
   { template: "/settings/organization/ai", path: "/settings/organization/ai" },
   {
     template: "/settings/organization/anonymization",
@@ -56,6 +100,7 @@ const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
   {
     template: "/settings/organization/catalogue",
     path: "/settings/organization/catalogue",
+    expectation: { kind: "redirectsTo", to: "/knowledge/tools" },
   },
   {
     template: "/settings/organization/matter-numbering",
@@ -81,16 +126,6 @@ const INTENTIONALLY_NOT_SMOKED = new Set([
   "/workspaces/$workspaceId/invoices/$invoiceId",
 ]);
 
-const AUTHENTICATED_ROUTE_PREFIXES = [
-  "/chat",
-  "/contacts",
-  "/dev/autocomplete",
-  "/knowledge",
-  "/settings",
-  "/todos",
-  "/workspaces",
-];
-
 test("authenticated routes render without browser errors", async ({
   context,
   request,
@@ -112,7 +147,7 @@ test("authenticated routes render without browser errors", async ({
 
     const documentRoute = await createDocumentRoute(request, workspace);
 
-    const routes = [
+    const routes: SmokeRoute[] = [
       ...STATIC_AUTHENTICATED_ROUTES,
       ...createWorkspaceRoutes(workspace),
       {
@@ -123,6 +158,7 @@ test("authenticated routes render without browser errors", async ({
         template: "/workspaces/$workspaceId/entities/$entityId",
         path: `/workspaces/${workspace.id}/entities/${documentRoute.entityId}`,
         settleMs: 1500,
+        expectation: { kind: "settles" },
       },
       {
         template: "/workspaces/$workspaceId/$viewId/document",
@@ -152,10 +188,12 @@ const createWorkspaceRoutes = (workspace: TestWorkspace): SmokeRoute[] => [
   {
     template: "/chat/workspaces/$workspaceId/new",
     path: `/chat/workspaces/${workspace.id}/new`,
+    expectation: { kind: "settles" },
   },
   {
     template: "/workspaces/$workspaceId",
     path: `/workspaces/${workspace.id}`,
+    expectation: { kind: "settles" },
   },
   {
     template: "/workspaces/$workspaceId/expenses",
@@ -168,6 +206,7 @@ const createWorkspaceRoutes = (workspace: TestWorkspace): SmokeRoute[] => [
   {
     template: "/workspaces/$workspaceId/timesheets",
     path: `/workspaces/${workspace.id}/timesheets`,
+    expectation: { kind: "settles" },
   },
   {
     template: "/workspaces/$workspaceId/$viewId",
@@ -266,7 +305,29 @@ const renderSmokeRoute = async ({
   await page.waitForTimeout(route.settleMs ?? 250);
 
   await assertNoRouteBoundary(page, route.template);
+  assertFinalDestination(page, route);
   browserErrors.assertEmpty(`unexpected browser errors on ${route.template}`);
+};
+
+// A route counts as smoked only if it settled on its own component or its
+// declared redirect target; bouncing to an unrelated route means the component
+// under test never rendered. `settles` routes opt out because their final URL
+// depends on env or runtime data.
+const assertFinalDestination = (page: Page, route: SmokeRoute) => {
+  const expectation = route.expectation ?? { kind: "rendersInPlace" };
+  if (expectation.kind === "settles") {
+    return;
+  }
+
+  const expectedPath =
+    expectation.kind === "redirectsTo"
+      ? expectation.to
+      : new URL(route.path, page.url()).pathname;
+
+  expect(
+    new URL(page.url()).pathname,
+    `${route.template} settled on an unexpected route`,
+  ).toBe(expectedPath);
 };
 
 const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
@@ -304,27 +365,17 @@ const readAuthenticatedRouteTemplates = async (): Promise<string[]> => {
 
   return body
     .split("\n")
-    .map(parseRouteTreeLine)
+    .map(parseAuthenticatedRouteTemplate)
     .filter((route): route is string => route !== null)
-    .filter(isAuthenticatedRouteTemplate)
     .toSorted();
 };
 
-const parseRouteTreeLine = (line: string): string | null => {
-  const trimmed = line.trimStart();
-  if (!trimmed.startsWith("'")) {
-    return null;
-  }
+// The generated route tree types every authenticated `to` path against a
+// `Protected*` route (the `_protected` layout). Deriving the smoke set from
+// that structural marker, rather than a hand-maintained prefix allow-list,
+// means a newly added authenticated top-level section fails this spec until it
+// is either smoked or placed in INTENTIONALLY_NOT_SMOKED.
+const PROTECTED_ROUTE_LINE = /^'(?<path>[^']+)':\s*typeof\s+Protected/u;
 
-  const routeEnd = trimmed.indexOf("':", 1);
-  if (routeEnd === -1) {
-    return null;
-  }
-
-  return trimmed.slice(1, routeEnd);
-};
-
-const isAuthenticatedRouteTemplate = (route: string): boolean =>
-  AUTHENTICATED_ROUTE_PREFIXES.some(
-    (prefix) => route === prefix || route.startsWith(`${prefix}/`),
-  );
+const parseAuthenticatedRouteTemplate = (line: string): string | null =>
+  PROTECTED_ROUTE_LINE.exec(line.trimStart())?.groups?.["path"] ?? null;
