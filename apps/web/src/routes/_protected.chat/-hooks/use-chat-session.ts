@@ -1,4 +1,11 @@
-import { createElement, useCallback, useEffect, useRef, useState } from "react";
+import {
+  createElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type { ComponentProps } from "react";
 
 import { useChat } from "@ai-sdk/react";
@@ -154,142 +161,171 @@ export const useChatSession = ({
     setQueuedMessages(next);
   }, []);
 
-  const withSendModeSnapshot = (
-    options: ChatSendMessageOptions,
-  ): ChatSendMessageOptions => {
-    const sendMode = getSendMode?.();
-    if (sendMode === undefined) {
-      return options;
-    }
-    return {
-      ...options,
-      body: {
-        sendMode,
-        ...options?.body,
-      },
-    };
-  };
+  const withSendModeSnapshot = useCallback(
+    (options: ChatSendMessageOptions): ChatSendMessageOptions => {
+      const sendMode = getSendMode?.();
+      if (sendMode === undefined) {
+        return options;
+      }
+      return {
+        ...options,
+        body: {
+          sendMode,
+          ...options?.body,
+        },
+      };
+    },
+    [getSendMode],
+  );
 
-  const enqueueMessage = (
-    message: ChatSendMessageInput,
-    options: ChatSendMessageOptions,
-  ) => {
-    replaceQueuedMessages([
-      ...queueRef.current,
-      { id: uuidv7(), message, options, ...describeQueuedMessage(message) },
-    ]);
-  };
+  const enqueueMessage = useCallback(
+    (message: ChatSendMessageInput, options: ChatSendMessageOptions) => {
+      replaceQueuedMessages([
+        ...queueRef.current,
+        { id: uuidv7(), message, options, ...describeQueuedMessage(message) },
+      ]);
+    },
+    [replaceQueuedMessages],
+  );
 
-  const takeOldestQueuedMessage = () => {
+  const takeOldestQueuedMessage = useCallback(() => {
     const next = queueRef.current.at(0);
     if (!next) {
       return null;
     }
     replaceQueuedMessages(queueRef.current.slice(1));
     return next;
-  };
+  }, [replaceQueuedMessages]);
 
-  const sendMessage = async (
-    message: ChatSendMessageInput,
-    options?: ChatSendMessageOptions,
-  ) => {
-    if (conversationIdRef.current !== conversationId) {
-      conversationIdRef.current = conversationId;
-      isGeneratingRef.current = false;
-      wasGeneratingRef.current = false;
-      replaceQueuedMessages([]);
-    }
-
-    const requestOptions = withSendModeSnapshot(options);
-    if (isGeneratingRef.current) {
-      enqueueMessage(message, requestOptions);
-      return;
-    }
-
-    // When the queue is gated after an errored turn, a manual send
-    // should resume the queue without reordering the transcript:
-    // append the new prompt, then dispatch the oldest waiting one.
-    if (queueRef.current.length > 0) {
-      enqueueMessage(message, requestOptions);
-      const next = takeOldestQueuedMessage();
-      if (next) {
-        isGeneratingRef.current = true;
-        await sendChatMessage(next.message, next.options);
+  const sendMessage = useCallback(
+    async (message: ChatSendMessageInput, options?: ChatSendMessageOptions) => {
+      if (conversationIdRef.current !== conversationId) {
+        conversationIdRef.current = conversationId;
+        isGeneratingRef.current = false;
+        wasGeneratingRef.current = false;
+        replaceQueuedMessages([]);
       }
-      return;
-    }
 
-    await sendChatMessage(message, requestOptions);
-  };
+      const requestOptions = withSendModeSnapshot(options);
+      if (isGeneratingRef.current) {
+        enqueueMessage(message, requestOptions);
+        return;
+      }
 
-  const removeQueuedMessage = (id: string) => {
-    replaceQueuedMessages(queueRef.current.filter((entry) => entry.id !== id));
-  };
+      // When the queue is gated after an errored turn, a manual send
+      // should resume the queue without reordering the transcript:
+      // append the new prompt, then dispatch the oldest waiting one.
+      if (queueRef.current.length > 0) {
+        enqueueMessage(message, requestOptions);
+        const next = takeOldestQueuedMessage();
+        if (next) {
+          isGeneratingRef.current = true;
+          await sendChatMessage(next.message, next.options);
+        }
+        return;
+      }
 
-  const resendLatestMessage = async ({
-    messageId,
-    sendMode,
-  }: ResendLatestMessageOptions = {}) => {
-    await regenerate({
-      ...(messageId === undefined ? {} : { messageId }),
-      ...(sendMode === undefined ? {} : { body: { sendMode } }),
-    });
-  };
-
-  const handleApprove = (id: string, _toolName?: ApprovalToolName) => {
-    addToolApprovalResponse({ id, approved: true });
-  };
-  const handleAllowInConversation = (
-    id: string,
-    toolName: ApprovalToolName,
-  ) => {
-    const next = new Set(conversationApprovedTools).add(
-      getToolApprovalGrant(toolName),
-    );
-    setConversationApprovedTools(next);
-    writeStoredApprovedTools(
-      getConversationApprovedToolsStorageKey(conversationId),
-      next,
-      "session",
-    );
-    dispatchApprovedToolsChanged({
+      await sendChatMessage(message, requestOptions);
+    },
+    [
       conversationId,
-      scope: "session",
-    });
-    addToolApprovalResponse({ id, approved: true });
-  };
-  const handleAlwaysAllow = (id: string, toolName: ApprovalToolName) => {
-    const approvalKey = getAlwaysApprovalKey({
+      enqueueMessage,
+      replaceQueuedMessages,
+      sendChatMessage,
+      takeOldestQueuedMessage,
+      withSendModeSnapshot,
+    ],
+  );
+
+  const removeQueuedMessage = useCallback(
+    (id: string) => {
+      replaceQueuedMessages(
+        queueRef.current.filter((entry) => entry.id !== id),
+      );
+    },
+    [replaceQueuedMessages],
+  );
+
+  const resendLatestMessage = useCallback(
+    async ({ messageId, sendMode }: ResendLatestMessageOptions = {}) => {
+      await regenerate({
+        ...(messageId === undefined ? {} : { messageId }),
+        ...(sendMode === undefined ? {} : { body: { sendMode } }),
+      });
+    },
+    [regenerate],
+  );
+
+  const handleApprove = useCallback(
+    (id: string, _toolName?: ApprovalToolName) => {
+      addToolApprovalResponse({ id, approved: true });
+    },
+    [addToolApprovalResponse],
+  );
+  const handleAllowInConversation = useCallback(
+    (id: string, toolName: ApprovalToolName) => {
+      const next = new Set(conversationApprovedTools).add(
+        getToolApprovalGrant(toolName),
+      );
+      setConversationApprovedTools(next);
+      writeStoredApprovedTools(
+        getConversationApprovedToolsStorageKey(conversationId),
+        next,
+        "session",
+      );
+      dispatchApprovedToolsChanged({
+        conversationId,
+        scope: "session",
+      });
+      addToolApprovalResponse({ id, approved: true });
+    },
+    [addToolApprovalResponse, conversationApprovedTools, conversationId],
+  );
+  const handleAlwaysAllow = useCallback(
+    (id: string, toolName: ApprovalToolName) => {
+      const approvalKey = getAlwaysApprovalKey({
+        mcpConnectorIdentities,
+        organizationId,
+        toolName,
+      });
+      if (approvalKey === null) {
+        addToolApprovalResponse({ id, approved: true });
+        return;
+      }
+
+      const nextStored = new Set(
+        readStoredStrings(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
+      ).add(approvalKey);
+      setAlwaysApprovedTools(
+        new Set(alwaysApprovedTools).add(getToolApprovalGrant(toolName)),
+      );
+      writeStoredApprovedStrings(
+        CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
+        nextStored,
+      );
+      dispatchApprovedToolsChanged({ scope: "local" });
+      addToolApprovalResponse({ id, approved: true });
+    },
+    [
+      addToolApprovalResponse,
+      alwaysApprovedTools,
       mcpConnectorIdentities,
       organizationId,
-      toolName,
-    });
-    if (approvalKey === null) {
-      addToolApprovalResponse({ id, approved: true });
-      return;
-    }
-
-    const nextStored = new Set(
-      readStoredStrings(CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY),
-    ).add(approvalKey);
-    setAlwaysApprovedTools(
-      new Set(alwaysApprovedTools).add(getToolApprovalGrant(toolName)),
-    );
-    writeStoredApprovedStrings(
-      CHAT_ALWAYS_APPROVED_TOOLS_STORAGE_KEY,
-      nextStored,
-    );
-    dispatchApprovedToolsChanged({ scope: "local" });
-    addToolApprovalResponse({ id, approved: true });
-  };
-  const handleDeny = (id: string) =>
-    addToolApprovalResponse({ id, approved: false });
-  const handleAskUserSubmit = (toolCallId: string, output: AskUserOutput) =>
-    addToolOutput({
-      tool: "ask-user",
-      toolCallId,
-      output,
-    });
+    ],
+  );
+  const handleDeny = useCallback(
+    (id: string) => addToolApprovalResponse({ id, approved: false }),
+    [addToolApprovalResponse],
+  );
+  const handleAskUserSubmit = useCallback(
+    (toolCallId: string, output: AskUserOutput) =>
+      addToolOutput({
+        tool: "ask-user",
+        toolCallId,
+        output,
+      }),
+    [addToolOutput],
+  );
 
   /**
    * Edit an already-answered ask-user card and replay the model
@@ -309,196 +345,212 @@ export const useChatSession = ({
    * backend drops persisted downstream turns before preparing the next
    * model context.
    */
-  const handleAskUserEditAndRerun = async (
-    toolCallId: string,
-    output: AskUserOutput,
-  ) => {
-    let targetIndex = -1;
-    for (let i = 0; i < messages.length; i += 1) {
-      const candidate = messages[i];
-      if (!candidate || candidate.role !== "assistant") {
-        continue;
-      }
-      const hasPart = candidate.parts.some(
-        (part) =>
-          part.type === "tool-ask-user" && part.toolCallId === toolCallId,
-      );
-      if (hasPart) {
-        targetIndex = i;
-        break;
-      }
-    }
-    if (targetIndex === -1) {
-      return;
-    }
-    const targetMessage = messages[targetIndex];
-    if (!targetMessage || targetMessage.role !== "assistant") {
-      return;
-    }
-
-    // SAFETY: spreading inside `.map` is flagged by no-map-spread,
-    // but slice's elements are shared refs with the original
-    // `messages` array — mutating in place would corrupt the
-    // SDK's history. The spread builds a new message object that
-    // owns the rewritten parts array.
-    const truncated = messages
-      .slice(0, targetIndex + 1)
-      // eslint-disable-next-line oxc/no-map-spread -- intentionally builds a new message object to avoid mutating SDK history
-      .map((message) => {
-        if (message.role !== "assistant") {
-          return message;
+  const handleAskUserEditAndRerun = useCallback(
+    async (toolCallId: string, output: AskUserOutput) => {
+      let targetIndex = -1;
+      for (let i = 0; i < messages.length; i += 1) {
+        const candidate = messages[i];
+        if (!candidate || candidate.role !== "assistant") {
+          continue;
         }
-        // Reset the matching ask-user part so `addToolOutput` can
-        // overwrite its output without the SDK no-op'ing because
-        // the state is already `output-available`. Using the
-        // `input-available` shape keeps the input visible so the
-        // card body stays consistent during the brief frame
-        // between truncation and the next `addToolOutput` call.
-        const nextParts = message.parts.map((part) => {
-          if (
-            part.type === "tool-ask-user" &&
-            part.toolCallId === toolCallId &&
-            part.state === "output-available"
-          ) {
-            return {
-              type: "tool-ask-user" as const,
-              toolCallId: part.toolCallId,
-              state: "input-available" as const,
-              input: part.input,
-            };
+        const hasPart = candidate.parts.some(
+          (part) =>
+            part.type === "tool-ask-user" && part.toolCallId === toolCallId,
+        );
+        if (hasPart) {
+          targetIndex = i;
+          break;
+        }
+      }
+      if (targetIndex === -1) {
+        return;
+      }
+      const targetMessage = messages[targetIndex];
+      if (!targetMessage || targetMessage.role !== "assistant") {
+        return;
+      }
+
+      // SAFETY: spreading inside `.map` is flagged by no-map-spread,
+      // but slice's elements are shared refs with the original
+      // `messages` array — mutating in place would corrupt the
+      // SDK's history. The spread builds a new message object that
+      // owns the rewritten parts array.
+      const truncated = messages
+        .slice(0, targetIndex + 1)
+        // eslint-disable-next-line oxc/no-map-spread -- intentionally builds a new message object to avoid mutating SDK history
+        .map((message) => {
+          if (message.role !== "assistant") {
+            return message;
           }
-          return part;
+          // Reset the matching ask-user part so `addToolOutput` can
+          // overwrite its output without the SDK no-op'ing because
+          // the state is already `output-available`. Using the
+          // `input-available` shape keeps the input visible so the
+          // card body stays consistent during the brief frame
+          // between truncation and the next `addToolOutput` call.
+          const nextParts = message.parts.map((part) => {
+            if (
+              part.type === "tool-ask-user" &&
+              part.toolCallId === toolCallId &&
+              part.state === "output-available"
+            ) {
+              return {
+                type: "tool-ask-user" as const,
+                toolCallId: part.toolCallId,
+                state: "input-available" as const,
+                input: part.input,
+              };
+            }
+            return part;
+          });
+          return { ...message, parts: nextParts };
         });
-        return { ...message, parts: nextParts };
+      setMessages(truncated);
+      const replayOptions = withSendModeSnapshot({
+        body: { truncateAfterMessageId: targetMessage.id },
       });
-    setMessages(truncated);
-    const replayOptions = withSendModeSnapshot({
-      body: { truncateAfterMessageId: targetMessage.id },
-    });
-    await addToolOutput({
-      tool: "ask-user",
-      toolCallId,
-      output,
-      ...(replayOptions === undefined ? {} : { options: replayOptions }),
-    });
-  };
+      await addToolOutput({
+        tool: "ask-user",
+        toolCallId,
+        output,
+        ...(replayOptions === undefined ? {} : { options: replayOptions }),
+      });
+    },
+    [addToolOutput, messages, setMessages, withSendModeSnapshot],
+  );
 
   const { data: workspacesNavigation, isPending: isLoadingMatters } = useQuery(
     workspacesNavigationOptions(organizationId),
   );
-  const createDocumentMatters: readonly NeedsMatterMatter[] =
-    workspacesNavigation?.workspaces.map((w) => ({
-      id: w.id,
-      name: w.name,
-      color: w.color,
-      client: w.client?.displayName
-        ? { displayName: w.client.displayName }
-        : null,
-    })) ?? [];
+  const createDocumentMatters: readonly NeedsMatterMatter[] = useMemo(
+    () =>
+      workspacesNavigation?.workspaces.map((w) => ({
+        id: w.id,
+        name: w.name,
+        color: w.color,
+        client: w.client?.displayName
+          ? { displayName: w.client.displayName }
+          : null,
+      })) ?? [],
+    [workspacesNavigation],
+  );
 
   const queryClient = useQueryClient();
-  const handleCreateDocumentResolve = async (
-    toolCallId: string,
-    matterId: string,
-    input: CreateDocumentInput,
-  ) => {
-    const response = await api
-      .entities({ workspaceId: toSafeId<"workspace">(matterId) })
-      ["create-from-legal-source"].post({
-        queryKey: entitiesKeys.all(matterId),
-        name: input.name,
-        source: input.source,
-      });
+  const handleCreateDocumentResolve = useCallback(
+    async (
+      toolCallId: string,
+      matterId: string,
+      input: CreateDocumentInput,
+    ) => {
+      const response = await api
+        .entities({ workspaceId: toSafeId<"workspace">(matterId) })
+        ["create-from-legal-source"].post({
+          queryKey: entitiesKeys.all(matterId),
+          name: input.name,
+          source: input.source,
+        });
 
-    if (response.error) {
-      const apiError = toAPIError(response.error);
-      const failure: CreateDocumentOutput = {
-        success: false,
-        message: apiError.message,
-      };
+      if (response.error) {
+        const apiError = toAPIError(response.error);
+        const failure: CreateDocumentOutput = {
+          success: false,
+          message: apiError.message,
+        };
+        await addToolOutput({
+          tool: "create-document",
+          toolCallId,
+          output: failure,
+        });
+        return;
+      }
+
+      // Prime the file-bytes cache the moment the server returns —
+      // there's typically a multi-second gap before the user clicks
+      // "Open in editor", and the docx editor's biggest mount cost
+      // is the presigned URL roundtrip + S3 download. We kick this
+      // off as a fire-and-forget; failures are silent because the
+      // editor will retry the same query on mount.
+      if (typeof response.data.fieldId === "string") {
+        void queryClient.prefetchQuery(
+          fileOptions({
+            workspaceId: matterId,
+            fieldId: response.data.fieldId,
+            purpose: "native-display",
+          }),
+        );
+      }
+
       await addToolOutput({
         tool: "create-document",
         toolCallId,
-        output: failure,
+        output: response.data,
       });
-      return;
-    }
+    },
+    [addToolOutput, queryClient],
+  );
 
-    // Prime the file-bytes cache the moment the server returns —
-    // there's typically a multi-second gap before the user clicks
-    // "Open in editor", and the docx editor's biggest mount cost
-    // is the presigned URL roundtrip + S3 download. We kick this
-    // off as a fire-and-forget; failures are silent because the
-    // editor will retry the same query on mount.
-    if (typeof response.data.fieldId === "string") {
-      void queryClient.prefetchQuery(
-        fileOptions({
-          workspaceId: matterId,
-          fieldId: response.data.fieldId,
-          purpose: "native-display",
+  const handleOpenCreatedDocument = useCallback(
+    async (output: CreateDocumentSuccess) => {
+      // Old chat threads predate `entityId`/`workspaceId` on the
+      // tool output. Without them we can't open the file, so bail —
+      // the card surfaces this by hiding the open affordance.
+      if (!output.entityId || !output.workspaceId) {
+        return;
+      }
+      // Pin this chat thread in the workspace inspector. Inherit
+      // Keep the user on the chat surface and let the global
+      // InspectorPanel (mounted on every protected route) host the
+      // file. Tabs carry their own `workspaceId`, so a doc that
+      // lives in workspace B while the chat is bound to workspace A
+      // (or to no workspace at all) still renders correctly without
+      // a route change. Skip pinning the chat as a separate inspector
+      // tab — the user is already in this chat as the main surface,
+      // so a duplicate chat tab in the side panel reads as confusing
+      // ("the doc AND the same chat I am in"). `openEntityInInspector`
+      // resolves the file field and synchronously calls `openFile`,
+      // so the tab is in the store by the time we read it; we then
+      // ask the panel to start folio edit mode for whichever PDF tab
+      // carries the entity.
+      await openEntityInInspector(
+        output.entityId,
+        output.fileName,
+        output.workspaceId,
+      );
+      const tab = useInspectorStore
+        .getState()
+        .tabs.find(
+          (candidate) =>
+            candidate.type === "pdf" && candidate.entityId === output.entityId,
+        );
+      if (tab) {
+        useInspectorStore.getState().requestDocxEdit(tab.id);
+      }
+    },
+    [],
+  );
+  const streamdownComponents = useMemo(
+    () => ({
+      a: (props: ComponentProps<"a">) =>
+        createElement(StreamdownMentionLink, {
+          ...props,
+          interactive: true,
+          workspaceId,
         }),
-      );
-    }
+      "stll-anon": (props: ComponentProps<"button"> & { ph?: string }) =>
+        createElement(AnonymizedSpan, props),
+    }),
+    [workspaceId],
+  );
 
-    await addToolOutput({
-      tool: "create-document",
-      toolCallId,
-      output: response.data,
-    });
-  };
+  const approvalPendingMessageId = useMemo(
+    () => getCurrentApprovalPendingMessageId(messages),
+    [messages],
+  );
 
-  const handleOpenCreatedDocument = async (output: CreateDocumentSuccess) => {
-    // Old chat threads predate `entityId`/`workspaceId` on the
-    // tool output. Without them we can't open the file, so bail —
-    // the card surfaces this by hiding the open affordance.
-    if (!output.entityId || !output.workspaceId) {
-      return;
-    }
-    // Pin this chat thread in the workspace inspector. Inherit
-    // Keep the user on the chat surface and let the global
-    // InspectorPanel (mounted on every protected route) host the
-    // file. Tabs carry their own `workspaceId`, so a doc that
-    // lives in workspace B while the chat is bound to workspace A
-    // (or to no workspace at all) still renders correctly without
-    // a route change. Skip pinning the chat as a separate inspector
-    // tab — the user is already in this chat as the main surface,
-    // so a duplicate chat tab in the side panel reads as confusing
-    // ("the doc AND the same chat I am in"). `openEntityInInspector`
-    // resolves the file field and synchronously calls `openFile`,
-    // so the tab is in the store by the time we read it; we then
-    // ask the panel to start folio edit mode for whichever PDF tab
-    // carries the entity.
-    await openEntityInInspector(
-      output.entityId,
-      output.fileName,
-      output.workspaceId,
-    );
-    const tab = useInspectorStore
-      .getState()
-      .tabs.find(
-        (candidate) =>
-          candidate.type === "pdf" && candidate.entityId === output.entityId,
-      );
-    if (tab) {
-      useInspectorStore.getState().requestDocxEdit(tab.id);
-    }
-  };
-  const streamdownComponents = {
-    a: (props: ComponentProps<"a">) =>
-      createElement(StreamdownMentionLink, {
-        ...props,
-        interactive: true,
-        workspaceId,
-      }),
-    "stll-anon": (props: ComponentProps<"button"> & { ph?: string }) =>
-      createElement(AnonymizedSpan, props),
-  };
-
-  const approvalPendingMessageId = getCurrentApprovalPendingMessageId(messages);
-
-  const hasRunningToolCall = hasRunningToolCallInLatestAssistantMessage({
-    messages,
-  });
+  const hasRunningToolCall = useMemo(
+    () => hasRunningToolCallInLatestAssistantMessage({ messages }),
+    [messages],
+  );
   const isGenerating =
     status === "submitted" || status === "streaming" || hasRunningToolCall;
   // These refs are also written optimistically in `sendMessage`/the drain

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useCallback, useMemo, useRef } from "react";
 
 import { useQueries, useQuery } from "@tanstack/react-query";
 
@@ -78,27 +78,41 @@ export const useSyncJustificationChunks = (
     (state) => state.syncJustifications,
   );
   const syncedResultsRef = useRef(new Set<string>());
-  const normalizedChunks = entityIdChunks
-    .map((entityIds) => normalizeEntityIds(entityIds))
-    .filter((entityIds) => entityIds.length > 0);
-  const queries = normalizedChunks.map((entityIds) => ({
-    ...justificationsOptions({
-      workspaceId,
-      entityIds,
-    }),
-    enabled,
-  }));
-  const combineResults = (
-    results: {
-      data: WorkspaceJustification[] | undefined;
-      dataUpdatedAt: number;
-    }[],
-  ) =>
-    results.map((result, index) => ({
-      data: result.data,
-      dataUpdatedAt: result.dataUpdatedAt,
-      entityIds: normalizedChunks.at(index) ?? [],
-    }));
+  const normalizedChunks = useMemo(
+    () =>
+      entityIdChunks
+        .map((entityIds) => normalizeEntityIds(entityIds))
+        .filter((entityIds) => entityIds.length > 0),
+    [entityIdChunks],
+  );
+  const queries = useMemo(
+    () =>
+      normalizedChunks.map((entityIds) => ({
+        ...justificationsOptions({
+          workspaceId,
+          entityIds,
+        }),
+        enabled,
+      })),
+    [normalizedChunks, workspaceId, enabled],
+  );
+  // useQueries memoizes on the `combine` identity, so it must be stable:
+  // a fresh function each render makes `syncedResults` a new array every
+  // render, which would re-fire the store-sync effect below in a loop.
+  const combineResults = useCallback(
+    (
+      results: {
+        data: WorkspaceJustification[] | undefined;
+        dataUpdatedAt: number;
+      }[],
+    ) =>
+      results.map((result, index) => ({
+        data: result.data,
+        dataUpdatedAt: result.dataUpdatedAt,
+        entityIds: normalizedChunks.at(index) ?? [],
+      })),
+    [normalizedChunks],
+  );
 
   const syncedResults = useQueries({
     queries,

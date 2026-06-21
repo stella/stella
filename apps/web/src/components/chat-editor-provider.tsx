@@ -4,6 +4,7 @@ import {
   useCallback,
   useEffect,
   useEffectEvent,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -227,7 +228,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const [extensionVersion, setExtensionVersion] = useState(0);
   const [activeThreadKey, setActiveThreadKey] = useState<string | null>(null);
 
-  const getMentionItems = () => {
+  const getMentionItems = useCallback(() => {
     const items: ChatMentionOption[] = [];
 
     for (const { registration } of registrationsRef.current.values()) {
@@ -241,9 +242,9 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     }
 
     return items;
-  };
+  }, []);
 
-  const getPluginRegistrations = () => {
+  const getPluginRegistrations = useCallback(() => {
     const plugins: ChatInputPluginRegistration[] = [];
 
     for (const { registration } of registrationsRef.current.values()) {
@@ -255,9 +256,9 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     }
 
     return plugins;
-  };
+  }, []);
 
-  const searchMentionItems = async (query: string) => {
+  const searchMentionItems = useCallback(async (query: string) => {
     const items: ChatMentionOption[] = [];
 
     // Mention sources are independent; query them in parallel and append
@@ -285,31 +286,31 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     }
 
     return items;
-  };
+  }, []);
 
-  const registerExtension = (
-    id: string,
-    registration: ChatInputExtensionRegistration,
-  ) => {
-    const token = Symbol(id);
-    registrationsRef.current.set(id, {
-      registration,
-      token,
-    });
-    setExtensionVersion((value) => value + 1);
-
-    return () => {
-      const current = registrationsRef.current.get(id);
-      if (current === undefined || current.token !== token) {
-        return;
-      }
-
-      registrationsRef.current.delete(id);
+  const registerExtension = useCallback(
+    (id: string, registration: ChatInputExtensionRegistration) => {
+      const token = Symbol(id);
+      registrationsRef.current.set(id, {
+        registration,
+        token,
+      });
       setExtensionVersion((value) => value + 1);
-    };
-  };
 
-  const registerActiveEditor = (handle: ActiveChatEditorHandle) => {
+      return () => {
+        const current = registrationsRef.current.get(id);
+        if (current === undefined || current.token !== token) {
+          return;
+        }
+
+        registrationsRef.current.delete(id);
+        setExtensionVersion((value) => value + 1);
+      };
+    },
+    [],
+  );
+
+  const registerActiveEditor = useCallback((handle: ActiveChatEditorHandle) => {
     activeEditorRef.current = handle;
     setActiveThreadKey(handle.threadKey);
 
@@ -323,24 +324,24 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
         current === handle.threadKey ? null : current,
       );
     };
-  };
+  }, []);
 
-  const insertMentionIntoThread = (
-    threadRef: ChatThreadRef,
-    mention: ChatMentionOption,
-  ) => {
-    const threadKey = getChatThreadKey(threadRef);
-    const activeEditor = activeEditorRef.current;
+  const insertMentionIntoThread = useCallback(
+    (threadRef: ChatThreadRef, mention: ChatMentionOption) => {
+      const threadKey = getChatThreadKey(threadRef);
+      const activeEditor = activeEditorRef.current;
 
-    if (activeEditor?.threadKey === threadKey) {
-      activeEditor.insertMention(mention);
-      return;
-    }
+      if (activeEditor?.threadKey === threadKey) {
+        activeEditor.insertMention(mention);
+        return;
+      }
 
-    useChatDraftStore.getState().insertMention(threadKey, mention);
-  };
+      useChatDraftStore.getState().insertMention(threadKey, mention);
+    },
+    [],
+  );
 
-  const focusThread = (threadRef: ChatThreadRef) => {
+  const focusThread = useCallback((threadRef: ChatThreadRef) => {
     const threadKey = getChatThreadKey(threadRef);
     const activeEditor = activeEditorRef.current;
 
@@ -349,19 +350,32 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     }
 
     activeEditor.focus();
-  };
+  }, []);
 
-  const contextValue: ChatEditorManagerContextValue = {
-    activeThreadKey,
-    extensionVersion,
-    focusThread,
-    getMentionItems,
-    getPluginRegistrations,
-    insertMentionIntoThread,
-    registerActiveEditor,
-    registerExtension,
-    searchMentionItems,
-  };
+  const contextValue = useMemo<ChatEditorManagerContextValue>(
+    () => ({
+      activeThreadKey,
+      extensionVersion,
+      focusThread,
+      getMentionItems,
+      getPluginRegistrations,
+      insertMentionIntoThread,
+      registerActiveEditor,
+      registerExtension,
+      searchMentionItems,
+    }),
+    [
+      activeThreadKey,
+      extensionVersion,
+      focusThread,
+      getMentionItems,
+      getPluginRegistrations,
+      insertMentionIntoThread,
+      registerActiveEditor,
+      registerExtension,
+      searchMentionItems,
+    ],
+  );
 
   return (
     <ChatEditorManagerContext value={contextValue}>
@@ -508,14 +522,14 @@ export const useChatEditor = ({
     resolve: (items: ChatMentionOption[]) => void;
   } | null>(null);
 
-  const markDraftStarted = () => {
+  const markDraftStarted = useCallback(() => {
     if (draftStartedThreadKeyRef.current === threadKey) {
       return;
     }
 
     draftStartedThreadKeyRef.current = threadKey;
     onDraftStart?.();
-  };
+  }, [onDraftStart, threadKey]);
   markDraftStartedRef.current = markDraftStarted;
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- ref reset on id change, not external-system sync
@@ -523,45 +537,48 @@ export const useChatEditor = ({
     messageHistoryIndexRef.current = null;
   }, [sentMessageHistoryHtml, threadKey]);
 
-  const fetchWorkspaceEntities = async (
-    workspace: ChatMentionOption,
-    query: string,
-  ) => {
-    if (!workspace.sourceViewId) {
-      return [];
-    }
+  const fetchWorkspaceEntities = useCallback(
+    async (workspace: ChatMentionOption, query: string) => {
+      if (!workspace.sourceViewId) {
+        return [];
+      }
 
-    const views = await queryClient.ensureQueryData(viewsOptions(workspace.id));
-    const activeView =
-      views.find((view) => view.id === workspace.sourceViewId) ?? null;
+      const views = await queryClient.ensureQueryData(
+        viewsOptions(workspace.id),
+      );
+      const activeView =
+        views.find((view) => view.id === workspace.sourceViewId) ?? null;
 
-    if (!activeView) {
-      return [];
-    }
+      if (!activeView) {
+        return [];
+      }
 
-    const { filters, sorts } = getMentionViewScope(activeView.layout);
-    const search = query.trim();
-    const options = entitiesOptions({
-      workspaceId: workspace.id,
-      filters,
-      sorts,
-      ...(search && { search }),
-      page: 1,
-      pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
-    });
-    if (pendingWorkspaceEntitySearchRef.current) {
-      pendingWorkspaceEntitySearchRef.current.queryKey = options.queryKey;
-    }
-    const data = await queryClient.fetchQuery(options);
-    const sourceWorkspaceId =
-      threadRef.scope === "workspace" && threadRef.workspaceId === workspace.id
-        ? undefined
-        : workspace.id;
+      const { filters, sorts } = getMentionViewScope(activeView.layout);
+      const search = query.trim();
+      const options = entitiesOptions({
+        workspaceId: workspace.id,
+        filters,
+        sorts,
+        ...(search && { search }),
+        page: 1,
+        pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+      });
+      if (pendingWorkspaceEntitySearchRef.current) {
+        pendingWorkspaceEntitySearchRef.current.queryKey = options.queryKey;
+      }
+      const data = await queryClient.fetchQuery(options);
+      const sourceWorkspaceId =
+        threadRef.scope === "workspace" &&
+        threadRef.workspaceId === workspace.id
+          ? undefined
+          : workspace.id;
 
-    return data.entities.map((entity) =>
-      buildEntityMentionOption({ entity, sourceWorkspaceId }),
-    );
-  };
+      return data.entities.map((entity) =>
+        buildEntityMentionOption({ entity, sourceWorkspaceId }),
+      );
+    },
+    [queryClient, threadRef],
+  );
   const debouncedFetchWorkspaceEntities = useDebouncedCallback(
     async ({
       query,
@@ -591,64 +608,66 @@ export const useChatEditor = ({
     },
     CHAT_MENTION_SEARCH_DEBOUNCE_MS,
   );
-  const loadWorkspaceEntities = async (
-    workspace: ChatMentionOption,
-    query: string,
-  ) => {
-    const previous = pendingWorkspaceEntitySearchRef.current;
-    if (previous) {
-      debouncedFetchWorkspaceEntities.cancel();
-      pendingWorkspaceEntitySearchRef.current = null;
-      if (previous.queryKey) {
-        await queryClient.cancelQueries({
-          exact: true,
-          queryKey: previous.queryKey,
-        });
+  const loadWorkspaceEntities = useCallback(
+    async (workspace: ChatMentionOption, query: string) => {
+      const previous = pendingWorkspaceEntitySearchRef.current;
+      if (previous) {
+        debouncedFetchWorkspaceEntities.cancel();
+        pendingWorkspaceEntitySearchRef.current = null;
+        if (previous.queryKey) {
+          await queryClient.cancelQueries({
+            exact: true,
+            queryKey: previous.queryKey,
+          });
+        }
       }
-    }
 
-    if (!workspace.sourceViewId) {
-      return [];
-    }
+      if (!workspace.sourceViewId) {
+        return [];
+      }
 
-    const views = await queryClient.ensureQueryData(viewsOptions(workspace.id));
-    const activeView =
-      views.find((view) => view.id === workspace.sourceViewId) ?? null;
-
-    if (!activeView) {
-      return [];
-    }
-
-    const { filters, sorts } = getMentionViewScope(activeView.layout);
-    const search = query.trim();
-    const options = entitiesOptions({
-      workspaceId: workspace.id,
-      filters,
-      sorts,
-      ...(search && { search }),
-      page: 1,
-      pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
-    });
-    const cachedData = queryClient.getQueryData<EntityMentionPage>(
-      options.queryKey,
-    );
-    if (cachedData) {
-      const sourceWorkspaceId =
-        threadRef.scope === "workspace" &&
-        threadRef.workspaceId === workspace.id
-          ? undefined
-          : workspace.id;
-
-      return cachedData.entities.map((entity) =>
-        buildEntityMentionOption({ entity, sourceWorkspaceId }),
+      const views = await queryClient.ensureQueryData(
+        viewsOptions(workspace.id),
       );
-    }
+      const activeView =
+        views.find((view) => view.id === workspace.sourceViewId) ?? null;
 
-    return await new Promise<ChatMentionOption[]>((resolve) => {
-      pendingWorkspaceEntitySearchRef.current = { queryKey: null, resolve };
-      void debouncedFetchWorkspaceEntities({ query, resolve, workspace });
-    });
-  };
+      if (!activeView) {
+        return [];
+      }
+
+      const { filters, sorts } = getMentionViewScope(activeView.layout);
+      const search = query.trim();
+      const options = entitiesOptions({
+        workspaceId: workspace.id,
+        filters,
+        sorts,
+        ...(search && { search }),
+        page: 1,
+        pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
+      });
+      const cachedData = queryClient.getQueryData<EntityMentionPage>(
+        options.queryKey,
+      );
+      if (cachedData) {
+        const sourceWorkspaceId =
+          threadRef.scope === "workspace" &&
+          threadRef.workspaceId === workspace.id
+            ? undefined
+            : workspace.id;
+
+        return cachedData.entities.map((entity) =>
+          buildEntityMentionOption({ entity, sourceWorkspaceId }),
+        );
+      }
+
+      return await new Promise<ChatMentionOption[]>((resolve) => {
+        pendingWorkspaceEntitySearchRef.current = { queryKey: null, resolve };
+        void debouncedFetchWorkspaceEntities({ query, resolve, workspace });
+      });
+    },
+    [debouncedFetchWorkspaceEntities, queryClient, threadRef],
+  );
 
   useExternalSyncEffect(
     () => () => {
@@ -714,97 +733,105 @@ export const useChatEditor = ({
   // `SlashShortcutRow` contract `buildChatSlashItems` consumes.
   // `body` (the prompt text) now lives on the skill row, where
   // shortcuts called it `prompt`.
-  const slashShortcutRows = commandSkills.flatMap((row) =>
-    row.command === null
-      ? []
-      : [
-          {
-            id: row.id,
-            scope: row.scope,
-            name: row.name,
-            command: row.command,
-            prompt: row.body,
-          },
-        ],
+  const slashShortcutRows = useMemo(
+    () =>
+      commandSkills.flatMap((row) =>
+        row.command === null
+          ? []
+          : [
+              {
+                id: row.id,
+                scope: row.scope,
+                name: row.name,
+                command: row.command,
+                prompt: row.body,
+              },
+            ],
+      ),
+    [commandSkills],
   );
-  const slashItems: SlashItem[] = buildChatSlashItems({
-    shortcuts: slashShortcutRows,
-    skillPages: skillPageRows,
-  });
+  const slashItems = useMemo<SlashItem[]>(
+    () =>
+      buildChatSlashItems({
+        shortcuts: slashShortcutRows,
+        skillPages: skillPageRows,
+      }),
+    [slashShortcutRows, skillPageRows],
+  );
   const slashItemsRef = useRef(slashItems);
   slashItemsRef.current = slashItems;
 
-  const handleMessageHistoryKeyDown = (
-    state: EditorState,
-    event: KeyboardEvent,
-  ) => {
-    if (
-      (event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
-      event.isComposing
-    ) {
-      return false;
-    }
-
-    if (isSuggestionPluginActive(state)) {
-      return false;
-    }
-
-    if (attachmentsRef.current.length > 0) {
-      return false;
-    }
-
-    const targetEditor = editorRef.current;
-    if (targetEditor === null) {
-      return false;
-    }
-
-    const history = sentMessageHistoryHtmlRef.current;
-    const currentIndex = messageHistoryIndexRef.current;
-    if (history.length === 0) {
-      return false;
-    }
-
-    if (event.key === "ArrowDown" && currentIndex === null) {
-      return false;
-    }
-
-    const currentHtml = getEditorHtml(targetEditor);
-    if (currentIndex === null && currentHtml !== "") {
-      return false;
-    }
-
-    if (currentIndex !== null) {
-      const isAtHistoryBoundary =
-        event.key === "ArrowUp"
-          ? isSelectionAtStart(state)
-          : isSelectionAtEnd(state);
-      if (!isAtHistoryBoundary) {
+  const handleMessageHistoryKeyDown = useCallback(
+    (state: EditorState, event: KeyboardEvent) => {
+      if (
+        (event.key !== "ArrowUp" && event.key !== "ArrowDown") ||
+        event.isComposing
+      ) {
         return false;
       }
-    }
 
-    let nextIndex: number | null = null;
-    if (event.key === "ArrowUp") {
-      nextIndex = Math.min((currentIndex ?? -1) + 1, history.length - 1);
-    } else if (currentIndex !== null && currentIndex > 0) {
-      nextIndex = currentIndex - 1;
-    }
-    const nextHtml = nextIndex === null ? "" : (history.at(nextIndex) ?? "");
+      if (isSuggestionPluginActive(state)) {
+        return false;
+      }
 
-    event.preventDefault();
-    isNavigatingHistoryRef.current = true;
-    try {
-      targetEditor.commands.setContent(nextHtml);
-      targetEditor.commands.focus("end");
-    } finally {
-      isNavigatingHistoryRef.current = false;
-    }
-    messageHistoryIndexRef.current = nextIndex;
-    if (nextHtml !== "") {
-      markDraftStartedRef.current?.();
-    }
-    return true;
-  };
+      if (attachmentsRef.current.length > 0) {
+        return false;
+      }
+
+      const targetEditor = editorRef.current;
+      if (targetEditor === null) {
+        return false;
+      }
+
+      const history = sentMessageHistoryHtmlRef.current;
+      const currentIndex = messageHistoryIndexRef.current;
+      if (history.length === 0) {
+        return false;
+      }
+
+      if (event.key === "ArrowDown" && currentIndex === null) {
+        return false;
+      }
+
+      const currentHtml = getEditorHtml(targetEditor);
+      if (currentIndex === null && currentHtml !== "") {
+        return false;
+      }
+
+      if (currentIndex !== null) {
+        const isAtHistoryBoundary =
+          event.key === "ArrowUp"
+            ? isSelectionAtStart(state)
+            : isSelectionAtEnd(state);
+        if (!isAtHistoryBoundary) {
+          return false;
+        }
+      }
+
+      let nextIndex: number | null = null;
+      if (event.key === "ArrowUp") {
+        nextIndex = Math.min((currentIndex ?? -1) + 1, history.length - 1);
+      } else if (currentIndex !== null && currentIndex > 0) {
+        nextIndex = currentIndex - 1;
+      }
+      const nextHtml = nextIndex === null ? "" : (history.at(nextIndex) ?? "");
+
+      event.preventDefault();
+      isNavigatingHistoryRef.current = true;
+      try {
+        targetEditor.commands.setContent(nextHtml);
+        targetEditor.commands.focus("end");
+      } finally {
+        isNavigatingHistoryRef.current = false;
+      }
+      messageHistoryIndexRef.current = nextIndex;
+      if (nextHtml !== "") {
+        markDraftStartedRef.current?.();
+      }
+      return true;
+    },
+    [],
+  );
 
   const editor = useEditor({
     autofocus: false,
@@ -929,19 +956,22 @@ export const useChatEditor = ({
 
   editorRef.current = editor;
 
-  const syncEditorPlugins = (targetEditor: Editor) => {
-    const nextPlugins = getPluginRegistrations();
+  const syncEditorPlugins = useCallback(
+    (targetEditor: Editor) => {
+      const nextPlugins = getPluginRegistrations();
 
-    if (activePluginKeysRef.current.length > 0) {
-      targetEditor.unregisterPlugin(activePluginKeysRef.current);
-    }
+      if (activePluginKeysRef.current.length > 0) {
+        targetEditor.unregisterPlugin(activePluginKeysRef.current);
+      }
 
-    for (const plugin of nextPlugins) {
-      targetEditor.registerPlugin(plugin.plugin);
-    }
+      for (const plugin of nextPlugins) {
+        targetEditor.registerPlugin(plugin.plugin);
+      }
 
-    activePluginKeysRef.current = nextPlugins.map((plugin) => plugin.key);
-  };
+      activePluginKeysRef.current = nextPlugins.map((plugin) => plugin.key);
+    },
+    [getPluginRegistrations],
+  );
 
   useExternalSyncEffect(() => {
     if (!isUsableEditor(editor)) {
@@ -976,59 +1006,66 @@ export const useChatEditor = ({
     return undefined;
   }, [draftDoc, editor]);
 
-  const focus = () => {
+  const focus = useCallback(() => {
     if (!isUsableEditor(editor)) {
       return;
     }
     editor.commands.focus("end");
-  };
+  }, [editor]);
 
-  const blur = () => {
+  const blur = useCallback(() => {
     if (!isUsableEditor(editor)) {
       return;
     }
     editor.commands.blur();
-  };
+  }, [editor]);
 
-  const setEditable = (editable: boolean) => {
-    if (!isUsableEditor(editor)) {
-      return;
-    }
-    editor.setEditable(editable);
-  };
+  const setEditable = useCallback(
+    (editable: boolean) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+      editor.setEditable(editable);
+    },
+    [editor],
+  );
 
-  const setContent = (
-    content: Parameters<Editor["commands"]["setContent"]>[0],
-  ) => {
-    if (!isUsableEditor(editor)) {
-      return;
-    }
-    editor.commands.setContent(content);
-  };
+  const setContent = useCallback(
+    (content: Parameters<Editor["commands"]["setContent"]>[0]) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+      editor.commands.setContent(content);
+    },
+    [editor],
+  );
 
-  const insertMention = (mention: ChatMentionOption) => {
-    if (!isUsableEditor(editor)) {
-      return;
-    }
+  const insertMention = useCallback(
+    (mention: ChatMentionOption) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
 
-    markDraftStarted();
-    editor
-      .chain()
-      .focus()
-      .insertContent({
-        type: "mention",
-        attrs: {
-          id: mention.id,
-          label: mention.label,
-          category: mention.category,
-          kind: mention.kind,
-          mimeType: mention.mimeType,
-          sourceWorkspaceId: mention.sourceWorkspaceId,
-        },
-      })
-      .insertContent(" ")
-      .run();
-  };
+      markDraftStarted();
+      editor
+        .chain()
+        .focus()
+        .insertContent({
+          type: "mention",
+          attrs: {
+            id: mention.id,
+            label: mention.label,
+            category: mention.category,
+            kind: mention.kind,
+            mimeType: mention.mimeType,
+            sourceWorkspaceId: mention.sourceWorkspaceId,
+          },
+        })
+        .insertContent(" ")
+        .run();
+    },
+    [editor, markDraftStarted],
+  );
 
   useExternalSyncEffect(
     () =>
@@ -1040,160 +1077,180 @@ export const useChatEditor = ({
     [focus, insertMention, registerActiveEditor, threadKey],
   );
 
-  const updateAttachments = (nextAttachments: ChatDraftAttachment[]) => {
-    if (!isUsableEditor(editor)) {
-      return;
-    }
-
-    const doc = editor.getJSON();
-
-    setDraft(
-      threadKey,
-      createChatDraftState({
-        attachments: nextAttachments,
-        doc,
-      }),
-    );
-
-    if (nextAttachments.length > 0) {
-      markDraftStarted();
-    }
-  };
-
-  const addFiles = (files: FileList | File[]) => {
-    const nextAttachments = [...attachmentsRef.current];
-
-    for (const file of Array.from(files)) {
-      if (nextAttachments.length >= CHAT_FILES_PER_MESSAGE) {
-        break;
+  const updateAttachments = useCallback(
+    (nextAttachments: ChatDraftAttachment[]) => {
+      if (!isUsableEditor(editor)) {
+        return;
       }
 
-      if (
-        !ALLOWED_CHAT_FILE_MIME_TYPES.has(file.type) ||
-        file.size > CHAT_MAX_FILE_BYTES
-      ) {
-        continue;
-      }
+      const doc = editor.getJSON();
 
-      fileIdCounterRef.current += 1;
-      nextAttachments.push({
-        file,
-        filename: file.name,
-        id: `chat-file-${fileIdCounterRef.current}`,
-        mimeType: file.type,
-      });
-    }
-
-    updateAttachments(nextAttachments);
-  };
-
-  const removeFile = (id: string) => {
-    updateAttachments(
-      attachmentsRef.current.filter((attachment) => attachment.id !== id),
-    );
-  };
-
-  const handleDrop = (event: React.DragEvent) => {
-    event.preventDefault();
-    if (event.dataTransfer.files.length === 0) {
-      return;
-    }
-
-    addFiles(event.dataTransfer.files);
-  };
-
-  const handleDragOver = (event: React.DragEvent) => {
-    event.preventDefault();
-  };
-
-  const handlePaste = (event: React.ClipboardEvent) => {
-    const files: File[] = [];
-
-    for (const item of event.clipboardData.items) {
-      if (item.kind !== "file") {
-        continue;
-      }
-
-      const file = item.getAsFile();
-      if (file !== null) {
-        files.push(file);
-      }
-    }
-
-    if (files.length === 0) {
-      // Plain-text paste collapsing happens earlier inside
-      // ProseMirror via `editorProps.handlePaste`; nothing to do
-      // at the React layer here.
-      return;
-    }
-
-    event.preventDefault();
-    addFiles(files);
-  };
-
-  const handleFileInputChange = (
-    event: React.ChangeEvent<HTMLInputElement>,
-  ) => {
-    const { files } = event.target;
-    if (files !== null && files.length > 0) {
-      addFiles(files);
-    }
-
-    event.target.value = "";
-  };
-
-  const openFilePicker = () => {
-    fileInputRef.current?.click();
-  };
-
-  const submit = async (
-    send: (draft: ChatInputDraft) => Promise<void> | void,
-  ) => {
-    if (!isUsableEditor(editor)) {
-      return;
-    }
-    const html = editor.isEmpty ? "" : editor.getHTML().trim();
-    const doc = editor.getJSON();
-    const files = attachmentsRef.current;
-
-    if (!html && files.length === 0) {
-      return;
-    }
-
-    clearDraft(threadKey);
-    editor.commands.clearContent();
-    setIsEmpty(true);
-    draftStartedThreadKeyRef.current = null;
-
-    try {
-      await send({ files, html });
-    } catch (error) {
       setDraft(
         threadKey,
         createChatDraftState({
-          attachments: files,
+          attachments: nextAttachments,
           doc,
         }),
       );
-      // The editor may have been destroyed during `await send(...)`;
-      if (!editor.isDestroyed) {
-        isApplyingStoredDraftRef.current = true;
-        editor.commands.setContent(doc);
-        isApplyingStoredDraftRef.current = false;
-        setIsEmpty(editor.isEmpty);
-        if (!editor.isEmpty || files.length > 0) {
-          draftStartedThreadKeyRef.current = threadKey;
+
+      if (nextAttachments.length > 0) {
+        markDraftStarted();
+      }
+    },
+    [editor, markDraftStarted, setDraft, threadKey],
+  );
+
+  const addFiles = useCallback(
+    (files: FileList | File[]) => {
+      const nextAttachments = [...attachmentsRef.current];
+
+      for (const file of Array.from(files)) {
+        if (nextAttachments.length >= CHAT_FILES_PER_MESSAGE) {
+          break;
+        }
+
+        if (
+          !ALLOWED_CHAT_FILE_MIME_TYPES.has(file.type) ||
+          file.size > CHAT_MAX_FILE_BYTES
+        ) {
+          continue;
+        }
+
+        fileIdCounterRef.current += 1;
+        nextAttachments.push({
+          file,
+          filename: file.name,
+          id: `chat-file-${fileIdCounterRef.current}`,
+          mimeType: file.type,
+        });
+      }
+
+      updateAttachments(nextAttachments);
+    },
+    [updateAttachments],
+  );
+
+  const removeFile = useCallback(
+    (id: string) => {
+      updateAttachments(
+        attachmentsRef.current.filter((attachment) => attachment.id !== id),
+      );
+    },
+    [updateAttachments],
+  );
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent) => {
+      event.preventDefault();
+      if (event.dataTransfer.files.length === 0) {
+        return;
+      }
+
+      addFiles(event.dataTransfer.files);
+    },
+    [addFiles],
+  );
+
+  const handleDragOver = useCallback((event: React.DragEvent) => {
+    event.preventDefault();
+  }, []);
+
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent) => {
+      const files: File[] = [];
+
+      for (const item of event.clipboardData.items) {
+        if (item.kind !== "file") {
+          continue;
+        }
+
+        const file = item.getAsFile();
+        if (file !== null) {
+          files.push(file);
         }
       }
-      throw error;
-    }
-  };
+
+      if (files.length === 0) {
+        // Plain-text paste collapsing happens earlier inside
+        // ProseMirror via `editorProps.handlePaste`; nothing to do
+        // at the React layer here.
+        return;
+      }
+
+      event.preventDefault();
+      addFiles(files);
+    },
+    [addFiles],
+  );
+
+  const handleFileInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const { files } = event.target;
+      if (files !== null && files.length > 0) {
+        addFiles(files);
+      }
+
+      event.target.value = "";
+    },
+    [addFiles],
+  );
+
+  const openFilePicker = useCallback(() => {
+    fileInputRef.current?.click();
+  }, []);
+
+  const submit = useCallback(
+    async (send: (draft: ChatInputDraft) => Promise<void> | void) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+      const html = editor.isEmpty ? "" : editor.getHTML().trim();
+      const doc = editor.getJSON();
+      const files = attachmentsRef.current;
+
+      if (!html && files.length === 0) {
+        return;
+      }
+
+      clearDraft(threadKey);
+      editor.commands.clearContent();
+      setIsEmpty(true);
+      draftStartedThreadKeyRef.current = null;
+
+      try {
+        await send({ files, html });
+      } catch (error) {
+        setDraft(
+          threadKey,
+          createChatDraftState({
+            attachments: files,
+            doc,
+          }),
+        );
+        // The editor may have been destroyed during `await send(...)`;
+        if (!editor.isDestroyed) {
+          isApplyingStoredDraftRef.current = true;
+          editor.commands.setContent(doc);
+          isApplyingStoredDraftRef.current = false;
+          setIsEmpty(editor.isEmpty);
+          if (!editor.isEmpty || files.length > 0) {
+            draftStartedThreadKeyRef.current = threadKey;
+          }
+        }
+        throw error;
+      }
+    },
+    [clearDraft, editor, setDraft, threadKey],
+  );
 
   const canSubmit = !isEmpty || attachments.length > 0;
 
-  const setSubmitHandler = (handler: (() => Promise<void>) | null) => {
-    submitHandlerRef.current = handler;
-  };
+  const setSubmitHandler = useCallback(
+    (handler: (() => Promise<void>) | null) => {
+      submitHandlerRef.current = handler;
+    },
+    [],
+  );
 
   return {
     attachments,

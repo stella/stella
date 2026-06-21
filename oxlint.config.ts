@@ -559,6 +559,13 @@ export default defineConfig({
           "error",
           { allowedFiles: ["apps/web/src/hooks/use-effect.ts"] },
         ],
+        // useExternalSyncEffect takes a dependency array, so exhaustive-deps
+        // must inspect it like useEffect. useMountEffect is deliberately
+        // dependency-less (mount-only) and is left unregistered.
+        "react-hooks/exhaustive-deps": [
+          "error",
+          { additionalHooks: "(useExternalSyncEffect)" },
+        ],
         "@tanstack/query/exhaustive-deps": "error",
         "@tanstack/query/infinite-query-property-order": "error",
         "@tanstack/query/mutation-property-order": "error",
