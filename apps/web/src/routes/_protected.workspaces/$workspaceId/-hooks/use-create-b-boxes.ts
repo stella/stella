@@ -1,4 +1,4 @@
-import { useEffectEvent, useRef } from "react";
+import { useCallback, useRef } from "react";
 
 import {
   useIsMutating,
@@ -82,17 +82,22 @@ export const useCreateBBoxes = ({
     },
   });
 
-  return useEffectEvent(() => {
+  const pendingRef = useRef(pendingMutationsCount);
+  pendingRef.current = pendingMutationsCount;
+  const mutateRef = useRef(mutation.mutate);
+  mutateRef.current = mutation.mutate;
+
+  return useCallback(() => {
     if (!aiAvailability?.available) {
       return;
     }
 
-    if (pendingMutationsCount > 0) {
+    if (pendingRef.current > 0) {
       return;
     }
 
-    mutation.mutate();
-  });
+    mutateRef.current();
+  }, [aiAvailability?.available]);
 };
 
 export const useIsCreatingBBoxes = () => {

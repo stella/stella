@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useEffectEvent,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -224,10 +218,8 @@ export const ExistingFileOrganizerDialog = ({
     let cancelled = false;
     const fetchSuggestions = async () => {
       setSuggestionStatus("generating");
-      const {
-        locale: requestLocale,
-        userInstructions: trimmedInstructions,
-      } = getSuggestionRequestContext();
+      const { locale: requestLocale, userInstructions: trimmedInstructions } =
+        getSuggestionRequestContext();
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["organize-suggestions"].post({

@@ -646,7 +646,11 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
   // Track the last valid drop position so drops in the
   // gap between columns still work (monitors always fire).
   const lastPosition = useRef<ColumnDragPosition | null>(null);
-  const handleColumnReorder = useEffectEvent(onReorderColumn);
+  const handleColumnReorder = useEffectEvent(
+    (sourceValue: string, targetValue: string, edge: Edge | null) => {
+      onReorderColumn?.(sourceValue, targetValue, edge);
+    },
+  );
 
   useMountEffect(() => {
     const el = scrollRef.current;
