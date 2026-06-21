@@ -343,15 +343,13 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
  */
 function countCodePoints(text: string): number {
   let count = 0;
-  for (let i = 0; i < text.length; i++) {
-    count++;
+  let i = 0;
+  while (i < text.length) {
     const code = text.codePointAt(i);
-    if (code >= 0xd8_00 && code <= 0xdb_ff && i + 1 < text.length) {
-      const next = text.codePointAt(i + 1);
-      if (next >= 0xdc_00 && next <= 0xdf_ff) {
-        i++;
-      }
-    }
+    // codePointAt returns the combined code point at a leading surrogate, so a
+    // value above the BMP spans two UTF-16 units — skip the trailing surrogate.
+    i += code !== undefined && code > 0xff_ff ? 2 : 1;
+    count += 1;
   }
   return count;
 }
