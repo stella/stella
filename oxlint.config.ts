@@ -1,4 +1,6 @@
 import { defineConfig } from "oxlint";
+import core from "ultracite/oxlint/core";
+import react from "ultracite/oxlint/react";
 
 import {
   libraryIgnorePatterns,
@@ -6,9 +8,6 @@ import {
   libraryRules,
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
-
-import core from "ultracite/oxlint/core";
-import react from "ultracite/oxlint/react";
 
 // All workspaces run oxlint from the repo root via:
 //   cd ../.. && oxlint -c oxlint.config.ts --type-aware <workspace-dir>
@@ -307,6 +306,8 @@ export default defineConfig({
     "./.oxlint-plugins/no-nanoid.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
     "./.oxlint-plugins/no-raw-use-effect.ts",
+    "./.oxlint-plugins/no-ref-mirror.ts",
+    "./.oxlint-plugins/no-shared-suspense-query.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
@@ -373,6 +374,18 @@ export default defineConfig({
       // otherwise scoped to apps/web/src, which the fixtures dir is not.
       files: [".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx"],
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-ref-mirror.fixture.tsx"],
+      rules: { "no-ref-mirror/no-ref-mirror": "error" },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-shared-suspense-query.fixture.tsx",
+      ],
+      rules: {
+        "no-shared-suspense-query/no-shared-suspense-query": "error",
+      },
     },
     {
       files: ["**/scripts/**"],
@@ -576,6 +589,51 @@ export default defineConfig({
         "@tanstack/query/no-rest-destructuring": "error",
         "@tanstack/query/no-unstable-deps": "error",
         "@tanstack/query/stable-query-client": "error",
+        "no-ref-mirror/no-ref-mirror": [
+          "error",
+          {
+            // Existing render-body ref mirrors. Keep the rule as a ratchet:
+            // new files cannot add this pattern, while these legacy files are
+            // kept only when the mutable ref is not an effect-callback shim.
+            allowedFiles: [
+              {
+                path: "apps/web/src/components/chat-editor-provider.tsx",
+                reason:
+                  "Tiptap extension callbacks and ordinary editor event handlers read latest placeholder, attachments, and slash items; useEffectEvent is not for third-party plugin/event callbacks.",
+              },
+              {
+                path: "apps/web/src/components/inspector/versions-facet.tsx",
+                reason:
+                  "Older-version paging updates the seeded query identity during render so in-flight page responses can be discarded before the passive-effect window; useEffectEvent would not protect this async race.",
+              },
+              {
+                path: "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts",
+                reason:
+                  "Older-message paging updates the seeded Chat identity during render so stale in-flight page responses are discarded across thread switches and same-thread refetches.",
+              },
+              {
+                path: "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx",
+                reason:
+                  "Form refs bridge synchronous onChange/onBlur ordering before React commits, so validation reads the latest field values and touched state inside ordinary event handlers.",
+              },
+              {
+                path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx",
+                reason:
+                  "Debounced metadata flush needs the latest server base and in-flight mutation base; the callback is scheduled from user input, not installed by an effect.",
+              },
+              {
+                path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx",
+                reason:
+                  "Rapid dependency edits compose against latest optimistic state during event handlers and transitions; this is mutable optimistic state, not stale effect callback plumbing.",
+              },
+              {
+                path: "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes.ts",
+                reason:
+                  "Returned callback identity must stay stable for downstream effect deps while reading latest pending mutation count; callers invoke it directly, not from an effect-installed callback.",
+              },
+            ],
+          },
+        ],
         "no-restricted-imports": [
           "error",
           {
@@ -863,6 +921,16 @@ export default defineConfig({
         "unicorn/prefer-dom-node-remove": "off",
         "unicorn/prefer-dom-node-append": "off",
         "unicorn/prefer-modern-dom-apis": "off",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/routes/_protected.settings/route.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx",
+      ],
+      rules: {
+        "no-shared-suspense-query/no-shared-suspense-query": "error",
       },
     },
     {

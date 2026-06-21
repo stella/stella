@@ -20,7 +20,7 @@
  * sidepeek doesn't have to context-switch.
  */
 
-import { useEffect, useRef } from "react";
+import { useEffect, useEffectEvent, useRef } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
@@ -55,12 +55,9 @@ export const SuggestionsFacet = ({
   // can no-op on.
   const fallbackEditorRef = useRef<DocxEditorRef | null>(null);
 
-  // Latch the latest callback so the effect dep list can stay
-  // narrow (`[registration]`) — the callback ref doesn't drive
-  // re-runs and the parent passing a new function on every render
-  // can't loop us.
-  const onMissingEditorRef = useRef(onMissingEditor);
-  onMissingEditorRef.current = onMissingEditor;
+  const dispatchMissingEditor = useEffectEvent(() => {
+    onMissingEditor?.();
+  });
   // Latch the dispatch itself: once we've kicked the caller for a
   // missing editor, don't ask again until either this facet
   // unmounts or a registration appears. Without this guard the
@@ -97,8 +94,7 @@ export const SuggestionsFacet = ({
     if (hasDispatchedRef.current) {
       return;
     }
-    const dispatch = onMissingEditorRef.current;
-    if (!dispatch) {
+    if (!hasOnMissingEditor) {
       // No callback (this tab isn't active). Don't latch — when
       // the tab becomes active later, the callback appears and
       // `hasOnMissingEditor` flipping triggers a re-run that
@@ -107,7 +103,7 @@ export const SuggestionsFacet = ({
       return;
     }
     hasDispatchedRef.current = true;
-    dispatch();
+    dispatchMissingEditor();
   }, [registration, hasOnMissingEditor, entityId]);
 
   return (

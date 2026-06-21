@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { createFileRoute, Link, Outlet } from "@tanstack/react-router";
 import {
   FlaskConicalIcon,
@@ -109,8 +109,8 @@ const ORGANIZATION_SECTION = {
 
 function SettingsLayout() {
   const t = useTranslations();
-  const { data: role } = useSuspenseQuery(roleOptions);
-  const showOrganization = managementRoles.includes(role);
+  const { data: role } = useQuery({ ...roleOptions, throwOnError: true });
+  const showOrganization = role !== undefined && managementRoles.includes(role);
 
   // No `Section` annotation: it would widen labelKey to the full
   // TranslationKey union, whose ICU-variable members make t() demand a

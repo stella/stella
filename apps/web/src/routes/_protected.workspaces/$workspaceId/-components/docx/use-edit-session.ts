@@ -5,7 +5,7 @@
  * open (acquire lock + presigned URL) → checkpoint (auto-save) → finalize / cancel.
  */
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffectEvent, useRef, useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { useDebouncedCallback } from "use-debounce";
@@ -279,14 +279,15 @@ export const useEditSession = ({
   const debouncedCheckpoint = useDebouncedCallback((buffer: ArrayBuffer) => {
     void saveCheckpoint(buffer);
   }, CHECKPOINT_DEBOUNCE_MS);
-  const debouncedCheckpointRef = useRef(debouncedCheckpoint);
-  debouncedCheckpointRef.current = debouncedCheckpoint;
+  const cancelDebouncedCheckpoint = useEffectEvent(() => {
+    debouncedCheckpoint.cancel();
+  });
 
   useMountEffect(() => {
     isMountedRef.current = true;
     return () => {
       isMountedRef.current = false;
-      debouncedCheckpointRef.current.cancel();
+      cancelDebouncedCheckpoint();
       const session = sessionRef.current;
       if (!session) {
         return;

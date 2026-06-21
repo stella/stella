@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useMemo, useState } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
@@ -32,18 +32,16 @@ export const useOverlayRects = (
   // eslint-disable-next-line typescript-eslint/promise-function-async -- store selector returns promise as value, not as async result
   const renderPromise = usePDFStore((s) => s.renderPromises.get(pageId));
 
-  const [normalizedRects, setNormalizedRects] = useState<Map<
-    number,
-    OverlayRect[]
-  > | null>(null);
-
-  const prevOverlaysRef = useRef(overlays);
-  if (prevOverlaysRef.current !== overlays) {
-    prevOverlaysRef.current = overlays;
-    if (normalizedRects !== null) {
-      setNormalizedRects(null);
-    }
-  }
+  type NormalizedRectsCache = {
+    source: typeof overlays;
+    rects: Map<number, OverlayRect[]>;
+  };
+  const [normalizedRectsCache, setNormalizedRectsCache] =
+    useState<NormalizedRectsCache | null>(null);
+  const normalizedRects =
+    normalizedRectsCache !== null && normalizedRectsCache.source === overlays
+      ? normalizedRectsCache.rects
+      : null;
 
   // Measure pdf.js text-layer rects via the Range API into state.
   // This reads the live pdf.js-rendered DOM (getClientRects), which
@@ -121,7 +119,7 @@ export const useOverlayRects = (
       }
     }
 
-    setNormalizedRects(result);
+    setNormalizedRectsCache({ source: overlays, rects: result });
   }, [
     normalizedRects,
     overlays,

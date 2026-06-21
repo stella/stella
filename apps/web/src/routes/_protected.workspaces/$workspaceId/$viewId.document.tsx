@@ -2,6 +2,7 @@ import {
   lazy,
   Suspense,
   useEffect,
+  useEffectEvent,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -864,8 +865,7 @@ const VersionDropZone = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
 
-  const isUploadingRef = useRef(isUploading);
-  isUploadingRef.current = isUploading;
+  const canStartUpload = useEffectEvent(() => !isUploading);
 
   useExternalSyncEffect(() => {
     const el = dropRef.current;
@@ -879,7 +879,7 @@ const VersionDropZone = ({
       onDragLeave: () => setIsDropTarget(false),
       onDrop: ({ source }) => {
         setIsDropTarget(false);
-        if (isUploadingRef.current) {
+        if (!canStartUpload()) {
           return;
         }
         const files = getFiles({ source });

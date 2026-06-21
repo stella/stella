@@ -319,8 +319,14 @@ export function AppSidebar(props: AppSidebarProps) {
     ),
   ];
 
-  const navTargetsRef = useRef(navTargets);
-  navTargetsRef.current = navTargets;
+  const runNavTarget = useEffectEvent((index: number): boolean => {
+    const navTarget = navTargets.at(index);
+    if (!navTarget) {
+      return false;
+    }
+    navTarget.action();
+    return true;
+  });
 
   useExternalSyncEffect(() => {
     if (!showNavBadges) {
@@ -340,12 +346,8 @@ export function AppSidebar(props: AppSidebarProps) {
       if (Number.isNaN(digit)) {
         return;
       }
-      if (digit >= 1 && digit <= navTargetsRef.current.length) {
-        const navTarget = navTargetsRef.current[digit - 1];
-        if (navTarget) {
-          e.preventDefault();
-          navTarget.action();
-        }
+      if (digit >= 1 && runNavTarget(digit - 1)) {
+        e.preventDefault();
       }
     };
 

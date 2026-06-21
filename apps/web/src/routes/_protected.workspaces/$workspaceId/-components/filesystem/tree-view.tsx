@@ -1168,6 +1168,11 @@ const FilesystemRow = ({
     onStartEditing(null);
   };
 
+  const isBulkSelected = selectedIds.size > 1 && isSelected;
+  const bulkEntitiesRef = useRef<WorkspaceEntity[] | undefined>(undefined);
+  const getBulkSelectedEntities = () =>
+    isBulkSelected ? getSelectedEntities(selectedIds) : undefined;
+
   const handleContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -1175,6 +1180,7 @@ const FilesystemRow = ({
     if (!isSelected) {
       onSelect(node.entityId, false);
     }
+    bulkEntitiesRef.current = getBulkSelectedEntities();
     const x = e.clientX;
     const y = e.clientY;
     setMenuState({
@@ -1196,27 +1202,48 @@ const FilesystemRow = ({
   const { isDropTarget: isExternalDropTarget, pendingDrop } =
     useVersionOrNewFileDrop({ entity: node, workspaceId, rowRef });
 
-  // Store volatile values in refs so the effect doesn't
-  // re-register drag/drop handlers on every render.
-  // Re-registering mid-drag tears down the active drop target
-  // and causes drops to silently fail.
-  const expandedRef = useRef(expanded);
-  expandedRef.current = expanded;
-  const ancestorIdsRef = useRef(ancestorIds);
-  ancestorIdsRef.current = ancestorIds;
-  const moveEntityRef = useRef(moveEntity);
-  moveEntityRef.current = moveEntity;
-  const onToggleFolderRef = useRef(onToggleFolder);
-  onToggleFolderRef.current = onToggleFolder;
-  const selectedIdsRef = useRef(selectedIds);
-  selectedIdsRef.current = selectedIds;
-  const getSelectedDragItemsRef = useRef(getSelectedDragItems);
-  getSelectedDragItemsRef.current = getSelectedDragItems;
-  const getSelectedEntitiesRef = useRef(getSelectedEntities);
-  getSelectedEntitiesRef.current = getSelectedEntities;
+  const isExpanded = useEffectEvent(() => expanded);
+  const isAncestor = useEffectEvent((entityId: string) =>
+    ancestorIds.has(entityId),
+  );
+  const getCurrentSelectedIds = useEffectEvent(() => selectedIds);
+  const getCurrentSelectedDragItems = useEffectEvent((ids: Set<string>) =>
+    getSelectedDragItems(ids),
+  );
+  const getCurrentSelectedEntities = useEffectEvent((ids: Set<string>) =>
+    getSelectedEntities(ids),
+  );
+  const toggleCurrentFolder = useEffectEvent(() => {
+    onToggleFolder(node.entityId);
+  });
+  const moveEntitiesToFolder = useEffectEvent((entityIds: string[]) => {
+    for (const entityId of entityIds) {
+      if (isAncestor(entityId)) {
+        continue;
+      }
+      if (entityId === node.entityId) {
+        continue;
+      }
+      moveEntity.mutate(
+        {
+          workspaceId,
+          entityId,
+          parentId: node.entityId,
+        },
+        {
+          onError: () => {
+            stellaToast.add({
+              title: t("errors.actionFailed"),
+              type: "error",
+            });
+          },
+        },
+      );
+    }
+  });
 
   const scheduleAutoExpand = useDebouncedCallback(() => {
-    onToggleFolderRef.current(node.entityId);
+    toggleCurrentFolder();
   }, 600);
 
   useExternalSyncEffect(() => {
@@ -1228,7 +1255,7 @@ const FilesystemRow = ({
       draggable({
         element: el,
         getInitialData: () => {
-          const sel = selectedIdsRef.current;
+          const sel = getCurrentSelectedIds();
           const isMulti = sel.size > 1 && sel.has(node.entityId);
           // When the dragged item is part of a multi-selection,
           // include all selected entity IDs in the drag data.
@@ -1236,7 +1263,7 @@ const FilesystemRow = ({
           // Include metadata for each entity so drop targets
           // (e.g. the chat panel) can create mentions for all.
           const entities = isMulti
-            ? getSelectedEntitiesRef.current(sel).map((e) => ({
+            ? getCurrentSelectedEntities(sel).map((e) => ({
                 entityId: e.entityId,
                 name: getEntityName(e),
                 kind: e.kind,
@@ -1267,9 +1294,9 @@ const FilesystemRow = ({
           setCustomNativeDragPreview({
             nativeSetDragImage,
             render: ({ container }) => {
-              const sel = selectedIdsRef.current;
+              const sel = getCurrentSelectedIds();
               if (sel.size > 1 && sel.has(node.entityId)) {
-                const items = getSelectedDragItemsRef.current(sel);
+                const items = getCurrentSelectedDragItems(sel);
                 return renderMultiDragPreview(container, items);
               }
               return renderDragPreview(container, {
@@ -1295,13 +1322,13 @@ const FilesystemRow = ({
                 return (
                   entityId !== null &&
                   entityId !== node.entityId &&
-                  !ancestorIdsRef.current.has(entityId)
+                  !isAncestor(entityId)
                 );
               },
               getData: () => ({ entityId: node.entityId }),
               onDragEnter: () => {
                 setIsFolderDropTarget(true);
-                if (!expandedRef.current) {
+                if (!isExpanded()) {
                   scheduleAutoExpand();
                 }
               },
@@ -1316,29 +1343,7 @@ const FilesystemRow = ({
                 if (!entityIds) {
                   return;
                 }
-                for (const entityId of entityIds) {
-                  if (ancestorIdsRef.current.has(entityId)) {
-                    continue;
-                  }
-                  if (entityId === node.entityId) {
-                    continue;
-                  }
-                  moveEntityRef.current.mutate(
-                    {
-                      workspaceId,
-                      entityId,
-                      parentId: node.entityId,
-                    },
-                    {
-                      onError: () => {
-                        stellaToast.add({
-                          title: t("errors.actionFailed"),
-                          type: "error",
-                        });
-                      },
-                    },
-                  );
-                }
+                moveEntitiesToFolder(entityIds);
               },
             }),
           ]
@@ -1455,8 +1460,6 @@ const FilesystemRow = ({
     </>
   );
 
-  const isBulkSelected = selectedIds.size > 1 && isSelected;
-
   const openInInspector = (() => {
     if (isBulkSelected) {
       const entities = getSelectedEntities(selectedIds);
@@ -1510,23 +1513,6 @@ const FilesystemRow = ({
     return undefined;
   })();
 
-  // Capture bulk entities at context-menu-open time. Base UI's Menu
-  // steals focus on open, which can trigger a click event that clears
-  // selectedIds before RowActions re-renders. Using a ref preserves
-  // the selection snapshot from when the menu was triggered.
-  const bulkEntitiesRef = useRef<WorkspaceEntity[] | undefined>(undefined);
-  if (isContextOpen && isBulkSelected) {
-    bulkEntitiesRef.current = getSelectedEntities(selectedIds);
-  } else if (!isContextOpen) {
-    bulkEntitiesRef.current = undefined;
-  }
-  let bulkEntities: WorkspaceEntity[] | undefined;
-  if (isContextOpen) {
-    bulkEntities = bulkEntitiesRef.current;
-  } else if (isBulkSelected) {
-    bulkEntities = getSelectedEntities(selectedIds);
-  }
-
   const rowActionsNode = (
     <span className="flex justify-end">
       <RowActions
@@ -1536,7 +1522,9 @@ const FilesystemRow = ({
         onOpenChange={(o) => {
           if (!o) {
             setMenuState({ type: "closed" });
+            bulkEntitiesRef.current = undefined;
           } else if (menuState.type === "closed") {
+            bulkEntitiesRef.current = getBulkSelectedEntities();
             // Trigger-button click: Base UI positions the menu against
             // the trigger element, so no virtual anchor is needed.
             setMenuState({ type: "trigger" });
@@ -1545,7 +1533,7 @@ const FilesystemRow = ({
         onRename={startEditing}
         onSubfolderCreated={onSubfolderCreated}
         open={isContextOpen}
-        selectedEntities={bulkEntities}
+        selectedEntities={isContextOpen ? bulkEntitiesRef.current : undefined}
         workspaceId={workspaceId}
       />
     </span>

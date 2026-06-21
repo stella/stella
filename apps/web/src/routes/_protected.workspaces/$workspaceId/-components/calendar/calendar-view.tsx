@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef, useState } from "react";
+import { useEffectEvent, useLayoutEffect, useRef, useState } from "react";
 import type { UIEvent } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -148,7 +148,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
   );
   const monthScrollRef = useRef<HTMLDivElement>(null);
   const monthAnchorRefs = useRef(new Map<string, HTMLElement>());
-  const latestViewDate = useRef(viewDate);
+  const getCurrentViewDate = useEffectEvent(() => viewDate);
   const pendingScrollMonthKey = useRef<string | null>(null);
   const pendingScrollAdjustment = useRef<{
     key: string;
@@ -158,7 +158,6 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
 
   const year = viewDate.getUTCFullYear();
   const month = viewDate.getUTCMonth();
-  latestViewDate.current = viewDate;
   const monthWeeks = getMonthWeekRows(locale, monthWindowStart);
   const monthAnchors = getMonthAnchors(locale, monthWindowStart);
 
@@ -363,7 +362,7 @@ export const CalendarView = ({ view, workspaceId }: CalendarViewProps) => {
       return;
     }
 
-    const target = startOfUTCMonth(latestViewDate.current);
+    const target = startOfUTCMonth(getCurrentViewDate());
     const key = getUTCMonthKey(target);
     pendingScrollMonthKey.current = key;
     setMonthWindowStart((start) =>
