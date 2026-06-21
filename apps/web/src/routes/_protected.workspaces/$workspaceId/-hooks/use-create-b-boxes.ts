@@ -82,8 +82,6 @@ export const useCreateBBoxes = ({
     },
   });
 
-  // Refs keep callback identity stable — avoids re-triggering
-  // effects in PeekJustification that list this as a dependency.
   const pendingRef = useRef(pendingMutationsCount);
   pendingRef.current = pendingMutationsCount;
   const mutateRef = useRef(mutation.mutate);

@@ -60,7 +60,6 @@ export const useExternalFileDrop = ({
   const [isDropTarget, setIsDropTarget] = useState(false);
   const [isInnerActive, setIsInnerActive] = useState(false);
 
-  // Store callback in a ref to avoid re-registering the drop target
   const onDropRef = useRef(onDrop);
   onDropRef.current = onDrop;
   const onDropTreeRef = useRef(onDropTree);

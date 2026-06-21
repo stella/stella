@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 
 import { combine } from "@atlaskit/pragmatic-drag-and-drop/combine";
 import {
@@ -127,10 +127,10 @@ export const ExistingFileOrganizerDialog = ({
     return window.localStorage.getItem(userInstructionsKey) ?? "";
   });
   const [showInstructions, setShowInstructions] = useState(false);
-  const userInstructionsRef = useRef(userInstructions);
-  userInstructionsRef.current = userInstructions;
-  const localeRef = useRef(locale);
-  localeRef.current = locale;
+  const getSuggestionRequestContext = useEffectEvent(() => ({
+    locale,
+    userInstructions: userInstructions.trim(),
+  }));
   const [rows, setRows] = useState<ExistingOrganizerRow[]>([]);
   const [suggestionStatus, setSuggestionStatus] =
     useState<SuggestionStatus>("idle");
@@ -220,7 +220,8 @@ export const ExistingFileOrganizerDialog = ({
     let cancelled = false;
     const fetchSuggestions = async () => {
       setSuggestionStatus("generating");
-      const trimmedInstructions = userInstructionsRef.current.trim();
+      const { locale: requestLocale, userInstructions: trimmedInstructions } =
+        getSuggestionRequestContext();
       const response = await api
         .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
         ["organize-suggestions"].post({
@@ -233,7 +234,7 @@ export const ExistingFileOrganizerDialog = ({
             entityId: toSafeId<"entity">(file.entityId),
             originalName: file.originalName,
           })),
-          locale: localeRef.current,
+          locale: requestLocale,
           ...(trimmedInstructions.length > 0
             ? { userInstructions: trimmedInstructions }
             : {}),
@@ -896,11 +897,8 @@ const OrganizerTreePreview = ({
   const root = useMemo(() => buildOrganizerTree(rows), [rows]);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isRootOver, setIsRootOver] = useState(false);
-
-  const onMoveFileRef = useRef(onMoveFile);
-  onMoveFileRef.current = onMoveFile;
-  const onMoveFolderRef = useRef(onMoveFolder);
-  onMoveFolderRef.current = onMoveFolder;
+  const handleMoveFile = useEffectEvent(onMoveFile);
+  const handleMoveFolder = useEffectEvent(onMoveFolder);
 
   useMountEffect(() => {
     const el = containerRef.current;
@@ -930,9 +928,9 @@ const OrganizerTreePreview = ({
           return;
         }
         if (data.kind === "file") {
-          onMoveFileRef.current(data.rowId, "");
+          handleMoveFile(data.rowId, "");
         } else {
-          onMoveFolderRef.current(data.folderPath, "");
+          handleMoveFolder(data.folderPath, "");
         }
       },
     });
@@ -1003,11 +1001,8 @@ const OrganizerFolderNode = ({
   const [isEditing, setIsEditing] = useState(false);
 
   const t = useTranslations();
-
-  const onMoveFileRef = useRef(onMoveFile);
-  onMoveFileRef.current = onMoveFile;
-  const onMoveFolderRef = useRef(onMoveFolder);
-  onMoveFolderRef.current = onMoveFolder;
+  const handleMoveFile = useEffectEvent(onMoveFile);
+  const handleMoveFolder = useEffectEvent(onMoveFolder);
 
   useExternalSyncEffect(() => {
     const el = headerRef.current;
@@ -1052,9 +1047,9 @@ const OrganizerFolderNode = ({
             return;
           }
           if (data.kind === "file") {
-            onMoveFileRef.current(data.rowId, folder.path);
+            handleMoveFile(data.rowId, folder.path);
           } else if (data.folderPath !== folder.path) {
-            onMoveFolderRef.current(data.folderPath, folder.path);
+            handleMoveFolder(data.folderPath, folder.path);
           }
         },
       }),

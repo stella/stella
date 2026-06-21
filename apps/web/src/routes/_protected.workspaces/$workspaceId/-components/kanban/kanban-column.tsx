@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useRef, useState } from "react";
 import type { ChangeEvent } from "react";
 
 import {
@@ -175,9 +175,7 @@ export const KanbanColumn = ({
 
   const isDraggable = columnValue !== null && onReorderColumn !== undefined;
 
-  // Store callbacks in refs to keep effect deps stable.
-  const onDropRef = useRef(onDrop);
-  onDropRef.current = onDrop;
+  const handleEntityDrop = useEffectEvent(onDrop);
 
   const { isDropTarget, isInnerActive } = useExternalFileDrop({
     externalRef: columnRef,
@@ -252,7 +250,7 @@ export const KanbanColumn = ({
           if (typeof entityId !== "string") {
             return;
           }
-          onDropRef.current(entityId);
+          handleEntityDrop(entityId);
         },
       }),
     ];

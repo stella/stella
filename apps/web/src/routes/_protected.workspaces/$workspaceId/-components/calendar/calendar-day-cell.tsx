@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffectEvent, useRef, useState } from "react";
 
 import { dropTargetForElements } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
 import { PlusIcon, SquareCheckIcon } from "lucide-react";
@@ -81,8 +81,7 @@ export const CalendarDayCell = ({
   const dropRef = useRef<HTMLDivElement>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
 
-  const onDropRef = useRef(onDrop);
-  onDropRef.current = onDrop;
+  const handleEntityDrop = useEffectEvent(onDrop);
 
   useExternalSyncEffect(() => {
     const el = dropRef.current;
@@ -99,7 +98,7 @@ export const CalendarDayCell = ({
         const entityId = source.data["entityId"];
         const kind = source.data["kind"];
         if (typeof entityId === "string") {
-          onDropRef.current(
+          handleEntityDrop(
             entityId,
             typeof kind === "string" ? kind : "document",
           );

@@ -2,6 +2,7 @@ import {
   Fragment,
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -540,14 +541,13 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   // Only react to `toggleVersion` changes; `toggleAll` is
   // intentionally excluded to avoid an infinite loop
   // (toggleAll → allExpanded → setFolderState → re-render).
-  const toggleAllRef = useRef(toggleAll);
-  toggleAllRef.current = toggleAll;
+  const handleToggleAll = useEffectEvent(toggleAll);
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (toggleVersion bump → toggleAll); the trigger is in ViewToolbar's FolderExpandToggle (separate file), but the toggle reads local expandedIds/allFolderIds here, so the action can't be lifted to the button without threading local state up
   useEffect(() => {
     if (toggleVersion === 0) {
       return;
     }
-    toggleAllRef.current();
+    handleToggleAll();
   }, [toggleVersion]);
 
   useExternalSyncEffect(() => {
@@ -637,8 +637,21 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const [isRootDropTarget, setIsRootDropTarget] = useState(false);
   const [isDragActive, setIsDragActive] = useState(false);
   const rootBarRef = useRef<HTMLDivElement>(null);
-  const moveEntityRefRoot = useRef(moveEntity);
-  moveEntityRefRoot.current = moveEntity;
+  const handleMoveEntitiesToRoot = useEffectEvent((entityIds: string[]) => {
+    for (const entityId of entityIds) {
+      moveEntity.mutate(
+        { workspaceId, entityId, parentId: null },
+        {
+          onError: () => {
+            stellaToast.add({
+              title: t("errors.actionFailed"),
+              type: "error",
+            });
+          },
+        },
+      );
+    }
+  });
 
   // Track whether an entity drag is active and whether any
   // dragged entity is nested (has a parentId). Only show the
@@ -683,22 +696,10 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
         if (!entityIds) {
           return;
         }
-        for (const entityId of entityIds) {
-          moveEntityRefRoot.current.mutate(
-            { workspaceId, entityId, parentId: null },
-            {
-              onError: () => {
-                stellaToast.add({
-                  title: t("errors.actionFailed"),
-                  type: "error",
-                });
-              },
-            },
-          );
-        }
+        handleMoveEntitiesToRoot(entityIds);
       },
     });
-  }, [workspaceId, t]);
+  }, []);
 
   if (data.length === 0) {
     return (

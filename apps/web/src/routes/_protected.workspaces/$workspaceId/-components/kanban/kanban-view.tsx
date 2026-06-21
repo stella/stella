@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
@@ -646,8 +646,11 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
   // Track the last valid drop position so drops in the
   // gap between columns still work (monitors always fire).
   const lastPosition = useRef<ColumnDragPosition | null>(null);
-  const onReorderRef = useRef(onReorderColumn);
-  onReorderRef.current = onReorderColumn;
+  const handleColumnReorder = useEffectEvent(
+    (sourceValue: string, targetValue: string, edge: Edge | null) => {
+      onReorderColumn?.(sourceValue, targetValue, edge);
+    },
+  );
 
   useMountEffect(() => {
     const el = scrollRef.current;
@@ -693,7 +696,7 @@ const KanbanBoard = ({ children, onReorderColumn }: KanbanBoardProps) => {
           const pos = lastPosition.current;
           lastPosition.current = null;
           if (pos) {
-            onReorderRef.current?.(pos.sourceValue, pos.targetValue, pos.edge);
+            handleColumnReorder(pos.sourceValue, pos.targetValue, pos.edge);
           }
         },
       }),
