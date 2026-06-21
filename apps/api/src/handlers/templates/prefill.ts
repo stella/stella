@@ -257,6 +257,9 @@ const prefillTemplate = createSafeRootHandler(
                 organizationId: { eq: organizationId },
                 workspaceId: { in: activeWorkspaceIds },
               },
+              // One extractedContent row per entity, and entityIds is capped at
+              // MAX_PICKED_ENTITIES above, so the result set stays bounded.
+              limit: MAX_PICKED_ENTITIES,
               columns: { ciphertext: true, iv: true },
               with: {
                 entity: { columns: { name: true } },

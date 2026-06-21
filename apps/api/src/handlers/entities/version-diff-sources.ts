@@ -89,6 +89,10 @@ export const loadEntityVersionDiffSources = async function* ({
   ];
   const fields = yield* Result.await(
     safeDb((tx) =>
+      // SAFETY: at most two version ids (current + previous); each version's
+      // fields are bounded by LIMITS.propertiesCount via the unique
+      // (propertyId, entityVersionId) index.
+      // eslint-disable-next-line require-query-limit/require-query-limit
       tx.query.fields.findMany({
         where: { entityVersionId: { in: versionIds } },
         columns: { entityVersionId: true, content: true },

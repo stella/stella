@@ -122,6 +122,28 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS = 120_000;
 
+/**
+ * Dev model overrides (`body.devModelId`) are local-only: reject them outside
+ * dev, otherwise validate the override against the org's provider config.
+ */
+const assertDevModelOverride = (
+  devModelId: string | undefined,
+  orgAIConfig: OrgAIConfig | null,
+): Result<void, HandlerError<400>> => {
+  if (!devModelId) {
+    return Result.ok(undefined);
+  }
+  if (!env.isDev) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Dev model overrides are only available locally.",
+      }),
+    );
+  }
+  return validateDevModelOverride(devModelId, orgAIConfig);
+};
+
 const config = {
   permissions: { chat: ["create"] },
   body: sendMessageBodySchema,
@@ -145,17 +167,7 @@ const sendMessage = createSafeRootHandler(
   }) {
     yield* requireAIAvailable(orgAIConfig);
 
-    if (body.devModelId && !env.isDev) {
-      return yield* Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Dev model overrides are only available locally.",
-        }),
-      );
-    }
-    if (body.devModelId) {
-      yield* validateDevModelOverride(body.devModelId, orgAIConfig);
-    }
+    yield* assertDevModelOverride(body.devModelId, orgAIConfig);
 
     const accessibleWorkspaceIds = activeWorkspaceIds;
     /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
