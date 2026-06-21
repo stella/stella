@@ -222,7 +222,9 @@ export const buildFormattingLocale = ({
   numberingSystem,
   weekStart,
 }: FormattingLocaleOptions): string => {
-  const base = region ? `${lang}-${region}` : lang;
+  // Skip the detected region when the language already encodes one (e.g.
+  // pt-BR): appending would build an invalid tag like "pt-BR-BR".
+  const base = region && !lang.includes("-") ? `${lang}-${region}` : lang;
   const calendarSystem = calendar === "auto" ? "gregory" : calendar;
   const autoNumbers = lang === "ar" ? "arab" : "latn";
   const numbers = numberingSystem === "auto" ? autoNumbers : numberingSystem;

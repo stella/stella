@@ -1,6 +1,7 @@
 import { beforeEach, expect, test } from "bun:test";
 
 import {
+  buildFormattingLocale,
   getLangDir,
   supportedLanguages,
   useI18nStore,
@@ -91,6 +92,21 @@ test("cold boot in English latches the spinner off synchronously", async () => {
 test("every supported language resolves to a known writing direction", () => {
   for (const lang of supportedLanguages) {
     expect(["ltr", "rtl"]).toContain(getLangDir(lang));
+  }
+});
+
+test("buildFormattingLocale never builds an invalid tag for any language + region", () => {
+  // "pt-BR" already encodes a region; appending another (e.g. "BR") would
+  // build "pt-BR-BR", which Intl.Locale rejects.
+  for (const lang of supportedLanguages) {
+    const tag = buildFormattingLocale({
+      lang,
+      region: "BR",
+      calendar: "islamic-umalqura",
+      numberingSystem: "arab",
+      weekStart: "sunday",
+    });
+    expect(() => new Intl.Locale(tag)).not.toThrow();
   }
 });
 
