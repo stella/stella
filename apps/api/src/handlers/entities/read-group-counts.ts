@@ -1,10 +1,11 @@
 import { Result } from "better-result";
-import { and, eq, isNotNull, sql } from "drizzle-orm";
+import { and, eq, isNotNull, notInArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
+import type { EntityKind } from "@/api/db/schema-validators";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -13,6 +14,9 @@ import { buildFilterConditions } from "@/api/lib/entity-filters";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";
+// Folders and tasks are not rows in a document table view; the flat window query
+// excludes them, so the grouped counts must too.
+const TABLE_EXCLUDED_ENTITY_KINDS = ["folder", "task"] satisfies EntityKind[];
 const TASK_STATUS_VALUES = [
   "open",
   "in_progress",
@@ -54,6 +58,14 @@ const readGroupCounts = createSafeHandler(
       isNotNull(entities.currentVersionId),
       ...buildFilterConditions(body.filters ?? []),
     );
+    // The grouped table is a document table: it never renders folders or tasks
+    // (the flat window query excludes them too), so the counts must exclude them
+    // to stay in sync with the rows. The status branch is task-only and keeps
+    // the base conditions.
+    const documentConditions = and(
+      baseConditions,
+      notInArray(entities.kind, TABLE_EXCLUDED_ENTITY_KINDS),
+    );
 
     if (body.groupByPropertyId === KIND_GROUP_ID) {
       // `kind` is never null, so every base entity lands in exactly one bucket.
@@ -65,7 +77,7 @@ const readGroupCounts = createSafeHandler(
               count: sql<number>`count(*)::int`,
             })
             .from(entities)
-            .where(baseConditions)
+            .where(documentConditions)
             .groupBy(entities.kind),
         ),
       );
@@ -100,7 +112,7 @@ const readGroupCounts = createSafeHandler(
     const propertyId = body.groupByPropertyId;
     return yield* readPropertyGroupCounts({
       safeDb,
-      baseConditions,
+      baseConditions: documentConditions,
       propertyId,
     });
   },

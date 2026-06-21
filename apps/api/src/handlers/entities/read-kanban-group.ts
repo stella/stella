@@ -34,6 +34,13 @@ const readKanbanGroupBodySchema = t.Object({
       maxItems: LIMITS.propertiesCount,
     }),
   ),
+  // Document-table grouping passes ["folder", "task"] to match the flat window
+  // query; the kanban board omits it so status columns keep their tasks.
+  excludedKinds: t.Optional(
+    t.Array(t.UnionEnum(["document", "folder", "task", "message", "link"]), {
+      maxItems: 5,
+    }),
+  ),
   groupByPropertyId: tGroupByPropertyId,
   groupValue: t.Nullable(t.String({ maxLength: 1000 })),
   includeTotalCount: t.Optional(t.Boolean()),
@@ -74,6 +81,7 @@ const readKanbanGroup = createSafeHandler(
         limit: limit + 1,
         fieldMode: body.fieldMode ?? "full",
         fieldIds: body.fieldIds ?? [],
+        excludedKinds: body.excludedKinds ?? [],
         extraConditions: [conditionResult.value],
         includeTotalCount,
       }),

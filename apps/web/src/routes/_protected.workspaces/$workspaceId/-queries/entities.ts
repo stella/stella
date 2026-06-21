@@ -242,6 +242,7 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
                 ? key.groupByPropertyId
                 : toSafeId<"property">(key.groupByPropertyId),
             groupValue: key.groupValue,
+            excludedKinds: key.excludedKinds ?? [],
             includeTotalCount: key.includeTotalCount ?? false,
             ...(pageParam !== undefined && { cursor: pageParam }),
           },

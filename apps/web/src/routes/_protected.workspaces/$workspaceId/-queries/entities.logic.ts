@@ -29,7 +29,7 @@ export type FilesystemEntitiesKey = Omit<
   "page" | "pageSize" | "excludedKinds" | "previewableForAi"
 >;
 
-export type KanbanGroupKey = Omit<EntitiesWindowKey, "excludedKinds"> & {
+export type KanbanGroupKey = EntitiesWindowKey & {
   groupByPropertyId: string;
   groupValue: string | null;
   includeTotalCount?: boolean;
@@ -143,6 +143,7 @@ export const entitiesKeys = {
     limit,
     fieldMode,
     fieldIds,
+    excludedKinds,
     groupByPropertyId,
     groupValue,
     includeTotalCount,
@@ -160,6 +161,7 @@ export const entitiesKeys = {
           normalizedFieldMode === "visible"
             ? normalizeVisibleFieldIds(fieldIds)
             : [],
+        excludedKinds: excludedKinds?.toSorted() ?? [],
         groupByPropertyId,
         groupValue,
         includeTotalCount: includeTotalCount ?? false,

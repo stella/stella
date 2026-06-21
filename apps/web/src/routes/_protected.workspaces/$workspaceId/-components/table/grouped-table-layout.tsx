@@ -21,6 +21,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import type { TranslationKey } from "@/i18n/types";
 import type {
+  EntityKind,
   WorkspaceEntity,
   WorkspaceProperty,
   WorkspaceView,
@@ -71,6 +72,11 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 const GROUP_TABLE_PAGE_SIZE = 200;
+
+// A grouped document table never lists folders or tasks as rows, matching the
+// flat window query; passed to the kanban-group endpoint so its rows (and the
+// group-counts) stay in sync.
+const GROUPED_TABLE_EXCLUDED_KINDS: EntityKind[] = ["folder", "task"];
 
 // Static keys (not `tasks.statusValues.${status}`) so a missing or renamed key
 // fails typecheck instead of silently rendering the raw key at runtime.
@@ -402,6 +408,7 @@ const GroupSection = ({
       limit: GROUP_TABLE_PAGE_SIZE,
       fieldMode: "visible",
       fieldIds,
+      excludedKinds: GROUPED_TABLE_EXCLUDED_KINDS,
       groupByPropertyId,
       groupValue: group.value,
     }),
@@ -545,6 +552,11 @@ const GroupHeader = ({
   const format = useFormatter();
   const count = totalCount ?? loadedCount;
   const ChevronIcon = collapsed ? ChevronRightIcon : ChevronDownIcon;
+  // The per-group rollups sum only the rows loaded so far, while the count comes
+  // from the server and is always exact. Show the sums only once every row in
+  // the group is loaded, so a partially-scrolled large group never displays a
+  // misleading subtotal next to a complete count.
+  const sumsComplete = totalCount !== null && loadedCount >= totalCount;
 
   return (
     <div
@@ -590,6 +602,7 @@ const GroupHeader = ({
         </span>
       </button>
       {!empty &&
+        sumsComplete &&
         sumProperties.map((property) => {
           const sum = sumIntProperty(entities, property.id);
           return (
