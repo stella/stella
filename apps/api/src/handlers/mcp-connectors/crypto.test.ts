@@ -60,10 +60,21 @@ describe("encryptMcpSecret / decryptMcpSecret", () => {
   });
 
   test("roundtrips arbitrary secret payloads (invariant over the value space)", async () => {
+    // Generate valid Unicode scalar values only. Code points in the UTF-16
+    // surrogate range (0xD800-0xDFFF) are not UTF-8 roundtrip-safe (a lone
+    // surrogate becomes U+FFFD), which would make this fuzz nondeterministic;
+    // skip the surrogate gap so every generated payload survives encrypt/decrypt.
+    const SURROGATE_START = 0xd8_00;
+    const SURROGATE_COUNT = 0x8_00;
+    const SCALAR_VALUE_COUNT = 0x11_00_00 - SURROGATE_COUNT;
+    const randomScalarValue = () => {
+      const code = Math.floor(Math.random() * SCALAR_VALUE_COUNT);
+      return code < SURROGATE_START ? code : code + SURROGATE_COUNT;
+    };
     const payloads = Array.from({ length: 64 }, () => {
       const length = Math.floor(Math.random() * 256);
       return Array.from({ length }, () =>
-        String.fromCodePoint(Math.floor(Math.random() * 2 ** 16)),
+        String.fromCodePoint(randomScalarValue()),
       ).join("");
     });
 

@@ -127,8 +127,6 @@ export const upsertChatThreadSearchDocument = async (
   `);
 };
 
-type KeysetCursor = { createdAt: Date; id: SafeId<"chatMessage"> };
-
 /** Page through a thread's messages by `(created_at, id)`, write the
  *  per-message search documents for each page, and accumulate the
  *  rolled-up thread text: the prose of every `text` part across all
@@ -157,12 +155,16 @@ const rollUpThreadText = async ({
   const textParts: string[] = [];
   let accumulatedLength = 0;
   let threadTextFull = false;
-  let cursor: KeysetCursor | undefined;
+  // Id-only cursor resolved in-DB: comparing against the boundary row's exact
+  // (created_at, id) avoids round-tripping created_at through a JS Date, which
+  // would truncate Postgres microseconds and could re-read or stall on a page
+  // of same-millisecond rows.
+  let cursor: SafeId<"chatMessage"> | undefined;
 
   for (;;) {
     const where = cursor
       ? sql`thread_id = ${threadId}
-          AND (created_at, id) > (${cursor.createdAt}, ${cursor.id})`
+          AND (created_at, id) > (select created_at, id from chat_messages where id = ${cursor})`
       : sql`thread_id = ${threadId}`;
 
     // eslint-disable-next-line no-await-in-loop -- sequential keyset pagination: each page's WHERE depends on the previous page's last (created_at, id) cursor.
@@ -207,7 +209,7 @@ const rollUpThreadText = async ({
     if (!last || page.length < BACKFILL_BATCH_SIZE) {
       break;
     }
-    cursor = { createdAt: last.createdAt, id: last.id };
+    cursor = last.id;
   }
 
   return textParts.join(" ").slice(0, LIMITS.chatSearchTextMaxLength);
