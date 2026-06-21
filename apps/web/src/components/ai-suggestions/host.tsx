@@ -346,7 +346,11 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   // ---- generate ------------------------------------------------------------
 
   const handleGenerate = useCallback(
-    async (input: { prompt: string; presetId?: string; pastedText?: string }) => {
+    async (input: {
+      prompt: string;
+      presetId?: string;
+      pastedText?: string;
+    }) => {
       if (generating) {
         return;
       }
