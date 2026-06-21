@@ -16,6 +16,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "@stll/conditions": "workspace:*",
     "better-result": "catalog:"
   },
   "devDependencies": {

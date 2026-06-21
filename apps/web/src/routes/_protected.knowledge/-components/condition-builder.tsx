@@ -2,9 +2,9 @@ import { PlusIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import type {
-  ConditionGroup,
-  ConditionOperator,
-  ConditionRule,
+  CompareOp,
+  ConditionNode,
+  GroupNode,
 } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
@@ -51,6 +51,35 @@ export const toRuleFields = (
     options: f.options,
   }));
 
+// ── Local rule model ⇄ @stll/conditions AST ───────────────
+// The editor edits flat all/any rows in a friendly { field, operator, value }
+// shape, but reads and emits the canonical @stll/conditions ConditionNode tree
+// (one CompareNode per row, or a `contains` PredicateNode), so there is a
+// single stored condition AST. `serializeCondition` renders that tree to the
+// `{{#if}}` expression.
+
+type LocalOperator = "==" | "!=" | ">" | "<" | ">=" | "<=" | "contains";
+
+type LocalRule = {
+  variable: string;
+  operator: LocalOperator;
+  value: string | number | boolean;
+};
+
+const OPERATOR_TO_COMPARE: Record<
+  Exclude<LocalOperator, "contains">,
+  CompareOp
+> = { "==": "eq", "!=": "neq", ">": "gt", "<": "lt", ">=": "gte", "<=": "lte" };
+
+const COMPARE_TO_OPERATOR: Record<CompareOp, LocalOperator> = {
+  eq: "==",
+  neq: "!=",
+  gt: ">",
+  lt: "<",
+  gte: ">=",
+  lte: "<=",
+};
+
 /** Operator-label keys, narrowed against the catalogue. All are plain (no ICU
  *  arguments), so `t(labelKey)` is callable with a single argument. */
 type OperatorLabelKey = TranslationKey &
@@ -71,10 +100,9 @@ type OperatorLabelKey = TranslationKey &
     | "templates.conditionOpOnOrBefore"
   );
 
-/** A friendly operator label mapped to the canonical engine operator that
- *  `serializeCondition` emits. */
+/** A friendly operator label mapped to the editor's row operator. */
 type OperatorChoice = {
-  operator: ConditionOperator;
+  operator: LocalOperator;
   labelKey: OperatorLabelKey;
 };
 
@@ -125,28 +153,74 @@ const operatorsForType = (
   }
 };
 
-/** Default operator when no field is chosen, matching the canonical default. */
-const DEFAULT_OPERATOR: ConditionOperator = "==";
+/** Default operator when no field is chosen. */
+const DEFAULT_OPERATOR: LocalOperator = "==";
 
-const defaultOperatorForType = (
-  inputType: RuleInputType,
-): ConditionOperator => {
+const defaultOperatorForType = (inputType: RuleInputType): LocalOperator => {
   const first = operatorsForType(inputType).at(0);
   return first ? first.operator : DEFAULT_OPERATOR;
 };
 
-const emptyRule = (): ConditionRule => ({
-  kind: "rule",
+const emptyRule = (): LocalRule => ({
   variable: "",
   operator: DEFAULT_OPERATOR,
   value: "",
 });
 
-export const emptyGroup = (): ConditionGroup => ({
-  kind: "group",
-  match: "all",
-  children: [emptyRule()],
+/** A row only edits scalar values; collapse an (unexpected) array literal. */
+const scalarLiteral = (
+  value: string | number | boolean | string[],
+): string | number | boolean =>
+  Array.isArray(value) ? value.join(",") : value;
+
+const ruleToNode = (rule: LocalRule): ConditionNode =>
+  rule.operator === "contains"
+    ? {
+        type: "predicate",
+        operand: { type: "path", path: rule.variable },
+        op: "contains",
+        value: String(rule.value),
+      }
+    : {
+        type: "compare",
+        left: { type: "path", path: rule.variable },
+        op: OPERATOR_TO_COMPARE[rule.operator],
+        right: { type: "literal", value: rule.value },
+      };
+
+const nodeToRule = (node: ConditionNode): LocalRule => {
+  if (node.type === "compare") {
+    return {
+      variable: node.left.type === "path" ? node.left.path : "",
+      operator: COMPARE_TO_OPERATOR[node.op],
+      value:
+        node.right.type === "literal" ? scalarLiteral(node.right.value) : "",
+    };
+  }
+  if (node.type === "predicate" && node.op === "contains") {
+    return {
+      variable: node.operand.type === "path" ? node.operand.path : "",
+      operator: "contains",
+      value: typeof node.value === "string" ? node.value : "",
+    };
+  }
+  return emptyRule();
+};
+
+// Flat editor: every child is a leaf row (compare / contains), never a subgroup.
+const groupToRules = (group: GroupNode): LocalRule[] =>
+  group.children.filter((child) => child.type !== "group").map(nodeToRule);
+
+const rulesToGroup = (
+  rules: readonly LocalRule[],
+  combinator: GroupNode["combinator"],
+): GroupNode => ({
+  type: "group",
+  combinator,
+  children: rules.map(ruleToNode),
 });
+
+export const emptyGroup = (): GroupNode => rulesToGroup([emptyRule()], "and");
 
 const inputClass =
   "flex h-9 rounded-md border bg-transparent px-3 py-1 text-sm";
@@ -159,19 +233,18 @@ export const ConditionGroupEditor = ({
   onChange,
 }: {
   fields: readonly RuleField[];
-  group: ConditionGroup;
-  onChange: (group: ConditionGroup) => void;
+  group: GroupNode;
+  onChange: (group: GroupNode) => void;
 }) => {
   const t = useTranslations();
-  const rules = group.children.filter(
-    (child): child is ConditionRule => child.kind === "rule",
-  );
+  const rules = groupToRules(group);
+  const { combinator } = group;
 
-  const setRule = (index: number, patch: Partial<ConditionRule>) => {
-    const next = rules.map((rule, i) =>
-      i === index ? { ...rule, ...patch } : rule,
-    );
-    onChange({ ...group, children: next });
+  const emit = (nextRules: readonly LocalRule[]) =>
+    onChange(rulesToGroup(nextRules, combinator));
+
+  const setRule = (index: number, patch: Partial<LocalRule>) => {
+    emit(rules.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)));
   };
 
   // Changing the field can change its type, which changes the valid operator
@@ -200,12 +273,11 @@ export const ConditionGroupEditor = ({
           aria-label={t("templates.conditionMatch")}
           className={inputClass}
           onChange={(e) =>
-            onChange({
-              ...group,
-              match: e.target.value === "any" ? "any" : "all",
-            })
+            onChange(
+              rulesToGroup(rules, e.target.value === "any" ? "or" : "and"),
+            )
           }
-          value={group.match}
+          value={combinator === "or" ? "any" : "all"}
         >
           <option value="all">{t("templates.conditionMatchAll")}</option>
           <option value="any">{t("templates.conditionMatchAny")}</option>
@@ -220,12 +292,7 @@ export const ConditionGroupEditor = ({
         <RuleRow
           fields={fields}
           key={index}
-          onRemove={() =>
-            onChange({
-              ...group,
-              children: rules.filter((_, i) => i !== index),
-            })
-          }
+          onRemove={() => emit(rules.filter((_, i) => i !== index))}
           onSetField={(path) => setField(index, path)}
           onSetRule={(patch) => setRule(index, patch)}
           removable={rules.length > 1}
@@ -235,9 +302,7 @@ export const ConditionGroupEditor = ({
 
       <Button
         className="self-start"
-        onClick={() =>
-          onChange({ ...group, children: [...rules, emptyRule()] })
-        }
+        onClick={() => emit([...rules, emptyRule()])}
         size="sm"
         type="button"
         variant="outline"
@@ -260,10 +325,10 @@ const RuleRow = ({
   onRemove,
 }: {
   fields: readonly RuleField[];
-  rule: ConditionRule;
+  rule: LocalRule;
   removable: boolean;
   onSetField: (path: string) => void;
-  onSetRule: (patch: Partial<ConditionRule>) => void;
+  onSetRule: (patch: Partial<LocalRule>) => void;
   onRemove: () => void;
 }) => {
   const t = useTranslations();

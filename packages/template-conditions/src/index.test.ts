@@ -149,19 +149,19 @@ describe("evaluateCondition", () => {
     ).toBe(true);
   });
 
-  test("ordering on a non-ISO / mixed operand is false (no throw)", () => {
-    // Date string vs number → false
+  test("ordered comparison falls back to lexicographic for non-numeric operands", () => {
+    // A non-numeric ordered comparison stringifies both sides and compares
+    // lexicographically, matching the shared @stll/conditions evaluator (and the
+    // SQL filter side). ISO dates sort chronologically as a happy consequence.
     expect(
       evaluateCondition('signed >= "2026-06-13"', { signed: 20_260_613 }),
-    ).toBe(false);
-    // Non-ISO date-ish string vs ISO → false (not chronologically comparable)
+    ).toBe(true); // "20260613" >= "2026-06-13"
     expect(
       evaluateCondition('signed >= "2026-06-13"', { signed: "13/06/2026" }),
-    ).toBe(false);
-    // Plain word vs ISO → false
+    ).toBe(false); // "13/06/2026" < "2026-06-13"
     expect(evaluateCondition('signed < "2026-06-13"', { signed: "soon" })).toBe(
       false,
-    );
+    ); // "soon" > "2026-06-13"
   });
 
   test("numeric ordering still works alongside date support", () => {
@@ -205,8 +205,9 @@ describe("evaluateCondition", () => {
     );
   });
 
-  test("contains on a non-string, non-array left is false", () => {
-    expect(evaluateCondition('n contains "1"', { n: 12 })).toBe(false);
+  test("contains substring-matches a stringified scalar left", () => {
+    expect(evaluateCondition('n contains "1"', { n: 12 })).toBe(true); // "12" ⊇ "1"
+    expect(evaluateCondition('n contains "9"', { n: 12 })).toBe(false);
     expect(evaluateCondition('flag contains "x"', { flag: true })).toBe(false);
     expect(evaluateCondition('missing contains "x"', {})).toBe(false);
   });

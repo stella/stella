@@ -68,8 +68,8 @@ import {
   serializeCondition,
 } from "@stll/template-conditions";
 import type {
-  ConditionGroup,
   DeterministicFieldConfig,
+  GroupNode,
 } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -4184,7 +4184,7 @@ const ConditionFieldEditor = ({
   const t = useTranslations();
   const upsertField = useTemplateStudioStore((s) => s.upsertField);
   const derived = conditionSourceOf(field);
-  const [group, setGroup] = useState<ConditionGroup>(emptyGroup);
+  const [group, setGroup] = useState<GroupNode>(emptyGroup);
   // Clicking "Rule" with no expression yet keeps the derived source at "asked"
   // (no `condition` is written until Done), so track the picked tab locally to
   // reveal the right editor immediately.
@@ -4511,7 +4511,7 @@ const ConditionRuleBuilder = ({
   const t = useTranslations();
   const upsertField = useTemplateStudioStore((s) => s.upsertField);
   const [open, setOpen] = useState(false);
-  const [group, setGroup] = useState<ConditionGroup>(emptyGroup);
+  const [group, setGroup] = useState<GroupNode>(emptyGroup);
   const ruleFields = toRuleFields(fields);
 
   // Building a rule does not point the block at a raw expression; it creates a
