@@ -947,12 +947,14 @@ export const useChatEditor = ({
           return true;
         }
 
-        // ArrowRight + empty editor + suggested followup: accept the suggestion
-        // without auto-submitting (so the user can review and press Enter).
-        // Tab is intentionally avoided — it is a standard navigation key that
-        // keyboard-only and screen-reader users depend on to move focus.
+        // ArrowRight or Tab + empty editor + suggested followup: accept the
+        // suggestion without auto-submitting (so the user can review and press
+        // Enter). Tab is intercepted only in this narrow state — a suggestion
+        // on offer and the input empty — so it still moves focus normally (for
+        // keyboard and screen-reader users) everywhere else, including the
+        // moment the suggestion is gone.
         if (
-          event.key === "ArrowRight" &&
+          (event.key === "ArrowRight" || event.key === "Tab") &&
           !event.shiftKey &&
           !event.altKey &&
           !event.ctrlKey &&
