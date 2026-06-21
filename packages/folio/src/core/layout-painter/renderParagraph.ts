@@ -1030,6 +1030,31 @@ function renderFieldRun(
     text,
   };
 
+  // A CJK field result is generated text inside one atomic pm range, so the
+  // measurer's per-script EA segmentation must be mirrored for the font only:
+  // the outer span keeps the field's styles + pm range, child spans carry each
+  // segment's font (CJK → EA, the rest inherit the base font). Letter-spaced and
+  // hyperlink fields stay one span, matching splitTextRunsByEastAsia / measurer.
+  if (
+    resolvedRun.eastAsiaFontFamily !== undefined &&
+    !resolvedRun.letterSpacing &&
+    !resolvedRun.hyperlink &&
+    hasCjk(text)
+  ) {
+    const wrapper = renderTextRun({ ...resolvedRun, text: "" }, doc);
+    for (const segment of segmentByScript(text)) {
+      const child = doc.createElement("span");
+      if (segment.isCjk) {
+        child.style.fontFamily = resolveFontFamily(
+          resolvedRun.eastAsiaFontFamily,
+        ).cssFallback;
+      }
+      child.textContent = segment.text;
+      wrapper.append(child);
+    }
+    return wrapper;
+  }
+
   return renderTextRun(resolvedRun, doc);
 }
 
@@ -1215,6 +1240,10 @@ export function splitTextRunsByEastAsia(runs: Run[]): Run[] {
     if (
       !isTextRun(run) ||
       run.eastAsiaFontFamily === undefined ||
+      // A letter-spaced run stays one span: CSS letter-spacing would not bridge
+      // the gap between per-script sibling spans, so it keeps the base font for
+      // CJK too (the measurer skips the EA path identically, so widths agree).
+      run.letterSpacing ||
       !hasCjk(run.text)
     ) {
       result.push(run);

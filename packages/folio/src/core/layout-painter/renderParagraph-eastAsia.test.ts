@@ -102,4 +102,17 @@ describe("splitTextRunsByEastAsia", () => {
 
     expect(result.every((r) => r.bold === true)).toBe(true);
   });
+
+  test("does not split a letter-spaced run (keeps the base font, CSS spacing intact)", () => {
+    const run = textRun({
+      text: "A世B",
+      fontFamily: "Latin",
+      eastAsiaFontFamily: "Mincho",
+      letterSpacing: 5,
+      pmStart: 0,
+      pmEnd: 3,
+    });
+
+    expect(splitTextRunsByEastAsia([run])).toEqual([run]);
+  });
 });

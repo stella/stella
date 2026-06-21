@@ -2877,6 +2877,9 @@ function runContentKey(run: Run): string {
   if (run.fontFamily) {
     parts.push(`ff:${run.fontFamily}`);
   }
+  if (run.eastAsiaFontFamily) {
+    parts.push(`ea:${run.eastAsiaFontFamily}`);
+  }
   if (run.fontSize !== undefined) {
     parts.push(`fs:${run.fontSize}`);
   }

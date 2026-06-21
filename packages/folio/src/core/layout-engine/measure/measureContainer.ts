@@ -367,7 +367,15 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   }
   const measuredText = applyTextTransform(text, style);
 
-  if (style.eastAsiaFontFamily && hasCjk(measuredText)) {
+  // Letter spacing is left to a single span: CSS letter-spacing does not add a
+  // gap across the per-script sibling spans the painter would emit, so a
+  // letter-spaced run keeps the base font for CJK too (measurement and painting
+  // agree; the EA typeface is the trade-off for that narrow case).
+  if (
+    style.eastAsiaFontFamily &&
+    !style.letterSpacing &&
+    hasCjk(measuredText)
+  ) {
     return measureMixedScriptWidth(measuredText, style);
   }
 
@@ -577,10 +585,11 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
   const baseFont = buildFontString(style);
   ctx.font = baseFont;
   // CJK code points measure with the EA font (matching the painter); the rest
-  // keep the base font. Only built when an EA font is present so the common
-  // path keeps a single `ctx.font` assignment.
+  // keep the base font. Only built when an EA font is present and the run has no
+  // letter spacing (which the painter leaves to a single base-font span), so the
+  // common path keeps a single `ctx.font` assignment.
   const eastAsiaFont =
-    style.eastAsiaFontFamily !== undefined
+    style.eastAsiaFontFamily !== undefined && !style.letterSpacing
       ? buildFontString({ ...style, fontFamily: style.eastAsiaFontFamily })
       : undefined;
 

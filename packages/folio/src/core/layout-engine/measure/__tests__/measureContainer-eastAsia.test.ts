@@ -54,24 +54,7 @@ describe("measureTextWidth with eastAsiaFontFamily", () => {
     );
   });
 
-  test("applies letter spacing once across the whole mixed string", () => {
-    withFakeTextMeasure(
-      () => {
-        // glyphs 10 (base) + 100 (EA) = 110, plus letterSpacing 5 * (2 - 1) = 5
-        expect(
-          measureTextWidth("Aあ", {
-            fontFamily: "FolioBaseTestFont",
-            eastAsiaFontFamily: "FolioEaTestFont",
-            fontSize: 12,
-            letterSpacing: 5,
-          }),
-        ).toBe(115);
-      },
-      { charWidth: eaAwareCharWidth },
-    );
-  });
-
-  test("counts letter spacing by code point for astral CJK, matching measureRun", () => {
+  test("gates the EA font off for letter-spaced runs so measure matches measureRun", () => {
     withFakeTextMeasure(
       () => {
         const style = {
@@ -80,11 +63,29 @@ describe("measureTextWidth with eastAsiaFontFamily", () => {
           fontSize: 12,
           letterSpacing: 5,
         };
-        // "A𠀀B" is 3 code points → 2 spacing gaps (not 3 from UTF-16 length).
-        // glyphs 10 (base) + 100 (EA) + 10 (base) = 120, plus 5 * 2 = 10.
-        expect(measureTextWidth("A𠀀B", style)).toBe(130);
-        // Caret/selection measurement must arrive at the same total.
-        expect(measureRun("A𠀀B", style).width).toBe(130);
+        // CSS letter-spacing cannot bridge the painter's per-script sibling
+        // spans, so a letter-spaced run keeps the base font for CJK too. "Aあ":
+        // both at base (10 + 10) + 5 * (2 - 1) = 25 — not the EA width.
+        expect(measureTextWidth("Aあ", style)).toBe(25);
+        expect(measureRun("Aあ", style).width).toBe(25);
+      },
+      { charWidth: eaAwareCharWidth },
+    );
+  });
+
+  test("counts letter spacing by code point for astral text (base font), matching measureRun", () => {
+    withFakeTextMeasure(
+      () => {
+        const style = {
+          fontFamily: "FolioBaseTestFont",
+          eastAsiaFontFamily: "FolioEaTestFont",
+          fontSize: 12,
+          letterSpacing: 5,
+        };
+        // "A𠀀B" is 3 code points → 2 gaps (not 3 from UTF-16 length); base font
+        // throughout (letter-spaced): glyphs 10 + 10 + 10 = 30, plus 5 * 2 = 10.
+        expect(measureTextWidth("A𠀀B", style)).toBe(40);
+        expect(measureRun("A𠀀B", style).width).toBe(40);
       },
       { charWidth: eaAwareCharWidth },
     );
