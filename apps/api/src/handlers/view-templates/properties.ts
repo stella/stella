@@ -688,6 +688,9 @@ const collectLayoutPropertyIds = (layout: ViewLayout): Set<string> => {
     for (const id of layout.columnPinning) {
       add(id);
     }
+    if (layout.groupByPropertyId) {
+      add(layout.groupByPropertyId);
+    }
   }
 
   if (layout.type === "kanban" && layout.groupByPropertyId) {
@@ -733,6 +736,9 @@ const remapLayoutPropertyIds = (
   if (layout.type === "table") {
     layout.columnOrder = layout.columnOrder.map(remap);
     layout.columnPinning = layout.columnPinning.map(remap);
+    if (layout.groupByPropertyId) {
+      layout.groupByPropertyId = remap(layout.groupByPropertyId);
+    }
   }
 
   if (layout.type === "kanban" && layout.groupByPropertyId) {
