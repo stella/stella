@@ -21,6 +21,7 @@ export const useSyncSelectedEntities = ({
     (state) => state.setSelectedEntities,
   );
 
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (resolves row selection to entities) synced into the table store; compute in render or a selector
   useEffect(() => {
     const selected = rowSelection ?? {};
     const result: TableTreeNode[] = [];

@@ -288,7 +288,7 @@ export const WorkspaceTable = ({
     onLoadMore,
     rowModel.rows.length,
   ]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     // Bounded paging for inline sections: only fetch the next page when the
     // sentinel at the end of the rendered rows actually scrolls into the real
     // scroll viewport. That viewport is an ancestor `overflow-auto` element, not

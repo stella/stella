@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo } from "react";
+import { lazy, Suspense, useMemo } from "react";
 
 import {
   useSuspenseInfiniteQuery,
@@ -10,6 +10,7 @@ import { TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { useAIKeyGate } from "@/components/require-ai-key";
+import { useMountEffect } from "@/hooks/use-effect";
 import type { WorkspaceView } from "@/lib/types";
 import {
   EmptyState,
@@ -52,9 +53,9 @@ type TableLayoutProps = {
 export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const { openIfAIUnavailable } = useAIKeyGate();
 
-  useEffect(() => {
+  useMountEffect(() => {
     openIfAIUnavailable();
-  }, [openIfAIUnavailable]);
+  });
 
   if (view.layout.groupByPropertyId) {
     return <GroupedTableLayout view={view} workspaceId={workspaceId} />;

@@ -192,6 +192,7 @@
       "de"
     ],
     "common.none": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -241,6 +242,7 @@
       "fr"
     ],
     "common.undo": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -1183,6 +1185,7 @@
       "sk"
     ],
     "workspaces.properties.markedAsReviewed": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -1196,6 +1199,7 @@
       "sk"
     ],
     "workspaces.properties.markThisGroupAsReviewed": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -1352,6 +1356,7 @@
       "sk"
     ],
     "workspaces.views.groupItemCount": [
+      "ar",
       "cs",
       "de",
       "es",
