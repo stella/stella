@@ -7,9 +7,8 @@
 export const getFirstWeekday = (locale: string): number => {
   try {
     const loc = new Intl.Locale(locale);
-    // Newer engines expose getWeekInfo(); older ones a `weekInfo` accessor.
-    // SAFETY: `weekInfo` is the legacy accessor, absent from the lib types.
-    // oxlint-disable-next-line typescript/no-unsafe-type-assertion
+    // Newer engines expose getWeekInfo(); older ones the legacy `weekInfo`
+    // accessor, which the lib types omit.
     const legacy = loc as Intl.Locale & { weekInfo?: Intl.WeekInfo };
     const info =
       typeof loc.getWeekInfo === "function"
