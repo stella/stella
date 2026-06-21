@@ -19,6 +19,7 @@ import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData, type TemplateData } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { hasInstanceProvider } from "@/api/lib/ai-models";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
@@ -112,7 +113,12 @@ export const assertTemplateFillUsage = async ({
   userId,
   safeDb,
 }: TemplateFillUsageArgs): Promise<HandlerError<402 | 500> | null> => {
-  if (!orgAIConfig || !hasAiFields) {
+  // Skip only when there is no AI field to bill, or no provider could run a
+  // model at all. With an instance provider but no org BYOK, the fill still
+  // calls the fast model (getModelForRole resolves the instance provider), so
+  // the quota check must apply — a null org config is not "no model call". The
+  // metering layer prices the instance-provider call (non-BYOK rate).
+  if (!hasAiFields || (!orgAIConfig && !hasInstanceProvider())) {
     return null;
   }
   return await assertUsageAvailableForHandler({

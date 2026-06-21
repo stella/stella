@@ -13,11 +13,14 @@ import { INPUT_TYPES, isFieldMeta } from "@/api/handlers/docx/types";
 import { validateDocxBuffer } from "@/api/handlers/entities/validate-docx-buffer";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import { createStoredTemplate } from "@/api/handlers/templates/create-template-service";
+import { recordTemplateFill } from "@/api/handlers/templates/record-use";
 import {
   describeStoredTemplate,
   fillStoredTemplateWithText,
 } from "@/api/handlers/templates/template-fill-service";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { hasInstanceProvider } from "@/api/lib/ai-models";
+import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -406,19 +409,22 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
 
   // Gate AI quota the same way the web/chat fill paths do: the service runs
   // this only when the manifest declares AI fields, before any model call, so a
-  // deterministic fill never spends quota. Gated on `orgAIConfig` because the
-  // generators below are no-ops without it (no model call, no cost).
-  const assertUsageAvailable = orgAIConfig
-    ? async () =>
-        await assertUsageAvailableForHandler({
-          metering: { actionType: "chat", modelRole: "fast" },
-          organizationId: context.organizationId,
-          orgAIConfig,
-          workspaceId: null,
-          userId: context.userId,
-          safeDb: context.safeDb,
-        })
-    : undefined;
+  // deterministic fill never spends quota. Gated on a usable provider — org
+  // BYOK or the deployment's instance provider — since the generators run the
+  // fast model in either case; a null org config flows through to the metering
+  // layer (instance-provider rate).
+  const assertUsageAvailable =
+    orgAIConfig || hasInstanceProvider()
+      ? async () =>
+          await assertUsageAvailableForHandler({
+            metering: { actionType: "chat", modelRole: "fast" },
+            organizationId: context.organizationId,
+            orgAIConfig,
+            workspaceId: null,
+            userId: context.userId,
+            safeDb: context.safeDb,
+          })
+      : undefined;
 
   const filled = await fillStoredTemplateWithText({
     templateId: brandPersistedTemplateId(parsed.output.template_id),
@@ -436,6 +442,25 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   if ("error" in filled) {
     return errorResult(filled.error);
   }
+
+  // Record the execution (fill row + EXECUTE audit) like the REST fill routes,
+  // so agent-driven fills appear in the audit trail. Best-effort: a successful
+  // render is not discarded if the bookkeeping write fails (it is captured).
+  await context
+    .scopedDb(
+      async (tx) =>
+        await recordTemplateFill({
+          tx,
+          templateId: brandPersistedTemplateId(parsed.output.template_id),
+          organizationId: context.organizationId,
+          userId: context.userId,
+          format: "docx",
+          unmatchedCount: filled.unmatchedPlaceholders.length,
+          unusedCount: filled.unusedValues.length,
+          recordAuditEvent: context.recordAuditEvent,
+        }),
+    )
+    .catch(captureError);
 
   const truncated = filled.text.length > TEMPLATE_FILL_TEXT_MAX_CHARS;
 

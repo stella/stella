@@ -13,6 +13,7 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 const describeStoredTemplateMock = mock();
 const fillStoredTemplateWithTextMock = mock();
 const createStoredTemplateMock = mock();
+const recordTemplateFillMock = mock();
 const configureTemplateFieldsMock = mock();
 const loadOrgAIConfigMock = mock();
 const captureErrorMock = mock();
@@ -35,6 +36,11 @@ void mock.module("@/api/handlers/templates/template-fill-service", () => ({
 
 void mock.module("@/api/handlers/templates/create-template-service", () => ({
   createStoredTemplate: createStoredTemplateMock,
+}));
+
+void mock.module("@/api/handlers/templates/record-use", () => ({
+  recordTemplateFill: recordTemplateFillMock,
+  recordTemplateUse: mock(),
 }));
 
 void mock.module(
@@ -122,6 +128,7 @@ describe("MCP template tools", () => {
     describeStoredTemplateMock.mockReset();
     fillStoredTemplateWithTextMock.mockReset();
     createStoredTemplateMock.mockReset();
+    recordTemplateFillMock.mockReset();
     configureTemplateFieldsMock.mockReset();
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(null);
@@ -362,6 +369,16 @@ describe("MCP template tools", () => {
       unmatchedPlaceholders: ["landlord.signature"],
       unusedValues: [],
     });
+    // The execution is recorded (fill row + audit) so agent fills are audited.
+    expect(recordTemplateFillMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        templateId: "t1",
+        organizationId: toSafeId<"organization">("org_1"),
+        format: "docx",
+        unmatchedCount: 1,
+        unusedCount: 0,
+      }),
+    );
   });
 
   test("fill_template surfaces an AI usage rejection as an error", async () => {

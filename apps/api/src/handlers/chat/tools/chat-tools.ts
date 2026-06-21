@@ -293,6 +293,7 @@ export const getChatTools = ({
         organizationId,
         userId,
         orgAIConfig,
+        recordAuditEvent,
       })
     : {};
 

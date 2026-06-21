@@ -12,6 +12,7 @@ import {
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { containsNull } from "@/api/handlers/templates/fill";
 import { fillStoredTemplateDocx } from "@/api/handlers/templates/template-fill-service";
+import { hasInstanceProvider } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import {
@@ -158,20 +159,22 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     // The fill service runs this only when the manifest declares AI fields,
     // before any model call, so a deterministic fill never spends AI quota.
-    // Gated on `orgAIConfig` because the generators below are no-ops without
-    // it (no model call, no cost), matching the static preflight that used to
-    // run unconditionally for this route.
-    const assertUsageAvailable = orgAIConfig
-      ? async () =>
-          await assertUsageAvailableForHandler({
-            metering: { actionType: "chat", modelRole: "fast" },
-            organizationId,
-            orgAIConfig,
-            workspaceId,
-            userId: user.id,
-            safeDb,
-          })
-      : undefined;
+    // Gated on a usable provider — org BYOK or the deployment's instance
+    // provider — because the generators below run the fast model in either
+    // case, so an instance-provider fill must still be quota-checked. A null
+    // org config flows through to the metering layer (instance-provider rate).
+    const assertUsageAvailable =
+      orgAIConfig || hasInstanceProvider()
+        ? async () =>
+            await assertUsageAvailableForHandler({
+              metering: { actionType: "chat", modelRole: "fast" },
+              organizationId,
+              orgAIConfig,
+              workspaceId,
+              userId: user.id,
+              safeDb,
+            })
+        : undefined;
 
     const filled = yield* Result.await(
       Result.tryPromise({

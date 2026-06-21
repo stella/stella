@@ -8,13 +8,16 @@ import {
   buildAiFieldGenerator,
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
+import { recordTemplateFill } from "@/api/handlers/templates/record-use";
 import { suggestTemplateFields } from "@/api/handlers/templates/suggest-template-fields";
 import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/handlers/templates/template-fill-service";
 import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
@@ -34,6 +37,8 @@ type CreateTemplateToolsArgs = {
   userId: SafeId<"user">;
   /** Org AI config from the chat turn; enables AI-fillable fields when set. */
   orgAIConfig?: OrgAIConfig | null | undefined;
+  /** Records the EXECUTE audit event for a fill when present. */
+  recordAuditEvent?: AuditRecorder | undefined;
 };
 
 /**
@@ -49,6 +54,7 @@ export const createTemplateTools = ({
   organizationId,
   userId,
   orgAIConfig,
+  recordAuditEvent,
 }: CreateTemplateToolsArgs) => {
   // Meter the nested fill generation alongside the rest of the chat turn.
   // workspaceId is null: a chat fill is org-scoped, not bound to a matter.
@@ -160,16 +166,38 @@ export const createTemplateTools = ({
           ),
         }),
       ),
-      execute: async ({ templateId, values }) =>
-        await fillStoredTemplate({
-          templateId: brandPersistedTemplateId(templateId),
+      execute: async ({ templateId, values }) => {
+        const branded = brandPersistedTemplateId(templateId);
+        const result = await fillStoredTemplate({
+          templateId: branded,
           values,
           scopedDb,
           organizationId,
           generateAiValue,
           decideAiCondition,
           adaptAiValue,
-        }),
+        });
+        if (!("error" in result)) {
+          // Record the execution (fill row + EXECUTE audit) like the REST fill
+          // routes, so agent-driven fills appear in the audit trail.
+          // Best-effort: a successful render is not discarded if the
+          // bookkeeping write fails (it is captured).
+          await scopedDb(
+            async (tx) =>
+              await recordTemplateFill({
+                tx,
+                templateId: branded,
+                organizationId,
+                userId,
+                format: "text",
+                unmatchedCount: result.unmatchedPlaceholders.length,
+                unusedCount: result.unusedValues.length,
+                recordAuditEvent,
+              }),
+          ).catch(captureError);
+        }
+        return result;
+      },
     }),
 
     [SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]: tool({
