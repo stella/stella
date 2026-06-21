@@ -364,6 +364,26 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("fill_template surfaces an AI usage rejection as an error", async () => {
+    // The fill service runs the usage preflight only when the template declares
+    // AI fields; an over-quota org gets a rejection the MCP tool surfaces
+    // instead of spending model calls.
+    fillStoredTemplateWithTextMock.mockResolvedValue({
+      usageRejection: { message: "Monthly AI usage limit reached." },
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1", values: { "tenant.name": "ACME" } },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(result.content).toEqual([
+      { type: "text", text: "Monthly AI usage limit reached." },
+    ]);
+  });
+
   test("create_template validates the DOCX and returns the new template id", async () => {
     createStoredTemplateMock.mockImplementation(async function* () {
       yield* [];

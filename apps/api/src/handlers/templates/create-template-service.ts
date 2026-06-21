@@ -21,6 +21,7 @@ import {
 } from "@/api/handlers/docx/template-manifest";
 import type { FieldMeta, TemplateManifest } from "@/api/handlers/docx/types";
 import { detectTemplateLanguagesFromDocx } from "@/api/handlers/templates/template-languages";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -243,7 +244,11 @@ export const createStoredTemplate = async function* ({
     }),
   );
 
+  // The DOCX is uploaded before the locked count/insert, so a rejected create
+  // (limit reached, or a lost race for the last slot) leaves an unreferenced
+  // object behind. Best-effort delete it so failed creates don't accrue S3 junk.
   if (!txResult.ok) {
+    getS3().delete(s3Key).catch(captureError);
     return Result.err(
       new HandlerError({
         status: 400,
@@ -252,6 +257,7 @@ export const createStoredTemplate = async function* ({
     );
   }
   if (!txResult.row) {
+    getS3().delete(s3Key).catch(captureError);
     return Result.err(
       new HandlerError({
         status: 500,

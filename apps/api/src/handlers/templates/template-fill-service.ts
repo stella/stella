@@ -396,14 +396,12 @@ export type FillTemplateWithDocxResult =
     }
   | { error: string };
 
-export const fillStoredTemplateWithText = async (
-  options: FillServiceOptions,
-): Promise<FillTemplateWithDocxResult> => {
+export const fillStoredTemplateWithText = async <TRejection = never>(
+  options: FillServiceOptions<TRejection>,
+): Promise<FillTemplateWithDocxResult | { usageRejection: TRejection }> => {
   const filled = await fillStoredTemplateDocx(options);
   if ("usageRejection" in filled) {
-    // Unreachable: this caller does not pass `assertUsageAvailable`, so the
-    // service never returns a usage rejection (TRejection is `never`).
-    panic("fillStoredTemplateWithText received an unexpected usage rejection");
+    return filled;
   }
   if ("error" in filled) {
     return filled;

@@ -19,6 +19,7 @@ import {
 } from "@/api/handlers/templates/template-fill-service";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
@@ -403,15 +404,35 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
     aiAnalytics,
   });
 
+  // Gate AI quota the same way the web/chat fill paths do: the service runs
+  // this only when the manifest declares AI fields, before any model call, so a
+  // deterministic fill never spends quota. Gated on `orgAIConfig` because the
+  // generators below are no-ops without it (no model call, no cost).
+  const assertUsageAvailable = orgAIConfig
+    ? async () =>
+        await assertUsageAvailableForHandler({
+          metering: { actionType: "chat", modelRole: "fast" },
+          organizationId: context.organizationId,
+          orgAIConfig,
+          workspaceId: null,
+          userId: context.userId,
+          safeDb: context.safeDb,
+        })
+    : undefined;
+
   const filled = await fillStoredTemplateWithText({
     templateId: brandPersistedTemplateId(parsed.output.template_id),
     values: parsed.output.values,
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
+    assertUsageAvailable,
     generateAiValue,
     decideAiCondition,
     adaptAiValue,
   });
+  if ("usageRejection" in filled) {
+    return errorResult(filled.usageRejection.message);
+  }
   if ("error" in filled) {
     return errorResult(filled.error);
   }
@@ -431,9 +452,19 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   });
 };
 
+// base64 encodes 3 bytes per 4 chars, so bound the encoded length to the doc
+// size limit and reject an oversized upload at parse time, before it is decoded
+// into a Buffer.
+const MAX_DOCX_BASE64_LENGTH =
+  Math.ceil(FILE_SIZE_LIMIT_BYTES.document / 3) * 4;
+
 const createTemplateArgsSchema = v.strictObject({
   name: v.pipe(v.string(), v.minLength(1), v.maxLength(256)),
-  docx_base64: v.pipe(v.string(), v.minLength(1)),
+  docx_base64: v.pipe(
+    v.string(),
+    v.minLength(1),
+    v.maxLength(MAX_DOCX_BASE64_LENGTH),
+  ),
   // Validated structurally below with isFieldMeta — the same validator the REST
   // manifest overlay uses — so the JSON-schema-level shape stays loose here.
   fields: v.optional(v.array(v.unknown())),
