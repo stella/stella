@@ -218,6 +218,22 @@ export const AIPromptInput = ({
     }
   }, [editor, onEditorReady]);
 
+  // `useEditor` only reads `content` once at creation, so a controlled `value`
+  // that changes from outside (switching the edited prompt, or a parent reset)
+  // would leave the editor showing stale text. Re-sync the document when the
+  // editor's serialized value diverges from `value`. `emitUpdate: false` keeps
+  // this from looping back through `onUpdate` → `onChange`; the equality guard
+  // makes the editor's own edits a no-op so the caret is never disturbed.
+  useEffect(() => {
+    if (editor.isDestroyed || readValue(editor) === value) {
+      return;
+    }
+    editor.commands.setContent(initialContent, { emitUpdate: false });
+    // `readValue`/`initialContent` derive solely from `value`/`valueFormat`,
+    // which are the tracked deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editor, value, valueFormat]);
+
   return (
     <div className={cn("relative w-full", className)}>
       {variant === "minimal" ? (
