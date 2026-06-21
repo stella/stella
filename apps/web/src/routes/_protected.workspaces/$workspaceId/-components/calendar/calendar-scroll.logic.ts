@@ -1,4 +1,4 @@
-import { getFirstWeekday } from "@/i18n/week";
+import { getFirstWeekday, getWeekendDays } from "@/i18n/week";
 
 import type { CalendarDay } from "./calendar-utils";
 import { formatMonthYearLabel } from "./calendar-utils";
@@ -68,7 +68,10 @@ const addUTCDays = (date: Date, amount: number): Date => {
   return next;
 };
 
-const getContinuousWeekDays = (weekStart: Date): CalendarDay[] => {
+const getContinuousWeekDays = (
+  weekStart: Date,
+  weekend: ReadonlySet<number>,
+): CalendarDay[] => {
   const today = toUTCDateKey(new Date());
 
   return Array.from({ length: 7 }, (_, index) => {
@@ -77,7 +80,6 @@ const getContinuousWeekDays = (weekStart: Date): CalendarDay[] => {
     const month = date.getUTCMonth();
     const startsMonth = date.getUTCDate() === 1;
     const monthTone = month % 2 === 0 ? "muted" : null;
-    const dayOfWeek = date.getUTCDay();
 
     return {
       date: key,
@@ -85,7 +87,7 @@ const getContinuousWeekDays = (weekStart: Date): CalendarDay[] => {
       isToday: key === today,
       ...(startsMonth && { startsMonth }),
       ...(monthTone && { monthTone }),
-      isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+      isWeekend: weekend.has(date.getUTCDay()),
     };
   });
 };
@@ -116,6 +118,7 @@ export const getMonthWeekRows = (
   windowStart: Date,
 ): CalendarWeekRow[] => {
   const firstWeekday = getFirstWeekday(locale);
+  const weekend = getWeekendDays(locale);
   const anchors = getMonthAnchors(locale, windowStart);
   const anchorsByWeek = new Map<string, MonthAnchor[]>();
 
@@ -150,7 +153,7 @@ export const getMonthWeekRows = (
     rows.push({
       key,
       anchors: anchorsByWeek.get(key) ?? [],
-      days: getContinuousWeekDays(weekStart),
+      days: getContinuousWeekDays(weekStart, weekend),
     });
   }
 

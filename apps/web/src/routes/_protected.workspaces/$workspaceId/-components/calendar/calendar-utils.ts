@@ -20,7 +20,7 @@ export type CalendarDay = {
   startsMonth?: boolean;
   /** Alternating visual band for continuous month scrolling. */
   monthTone?: "muted";
-  /** Saturday or Sunday, derived from the actual day of week. */
+  /** Falls on the locale's weekend, derived from the actual day of week. */
   isWeekend: boolean;
 };
 
@@ -36,6 +36,7 @@ export const getMonthDays = (
   year: number,
   month: number,
   firstWeekday: number,
+  weekend: ReadonlySet<number>,
 ): CalendarDay[] => {
   const today = todayISO();
   const days: CalendarDay[] = [];
@@ -59,7 +60,7 @@ export const getMonthDays = (
       date: iso,
       isCurrentMonth: d.getUTCMonth() === month,
       isToday: iso === today,
-      isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+      isWeekend: weekend.has(dayOfWeek),
     });
   }
 
@@ -74,6 +75,7 @@ export const getMonthDays = (
 export const getWeekDays = (
   referenceDate: Date,
   firstWeekday: number,
+  weekend: ReadonlySet<number>,
 ): CalendarDay[] => {
   const today = todayISO();
   const dow = (referenceDate.getUTCDay() - firstWeekday + 7) % 7;
@@ -90,7 +92,7 @@ export const getWeekDays = (
       date: iso,
       isCurrentMonth: true,
       isToday: iso === today,
-      isWeekend: dayOfWeek === 0 || dayOfWeek === 6,
+      isWeekend: weekend.has(dayOfWeek),
     });
   }
   return days;
