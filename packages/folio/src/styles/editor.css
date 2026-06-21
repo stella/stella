@@ -20,11 +20,6 @@
 /* Maps Stella's semantic tokens to --doc-* aliases.
  * Adapts automatically to light/dark and palette overrides (Nord, Flexoki). */
 .folio-root {
-  /* The document is its own bidi context: per-paragraph dir handles RTL
-   * content. Reset to LTR so an RTL app/UI direction does not flip the base
-   * direction of Latin (non-bidi) document paragraphs. */
-  direction: ltr;
-
   --doc-page: var(--background);
   --doc-canvas: var(--background);
   --doc-canvas-text: var(--foreground);
@@ -434,6 +429,18 @@
 .layout-table-edge-handle-right:hover,
 .layout-table-edge-handle-right.dragging {
   background-color: rgba(37, 99, 235, 0.5);
+}
+
+/* ============================================================================
+ * DOCUMENT DIRECTION
+ * ============================================================================ */
+
+/* The document canvas is its own bidi context: per-paragraph dir handles RTL
+ * content. Reset to LTR so an RTL app/UI direction does not flip the base
+ * direction of Latin (non-bidi) paragraphs. Scoped to the canvas so the Folio
+ * chrome (toolbar, menus) keeps following the app direction. */
+.paged-editor {
+  direction: ltr;
 }
 
 /* ============================================================================
