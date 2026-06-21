@@ -26,6 +26,10 @@ import {
   CZ_JUDGE_NAME_RE as SIGNATURE_RE,
   CZ_JUDGE_TITLE_RE as PREDSEDA_RE,
 } from "./cz-patterns";
+import {
+  inlinesToPlainText,
+  walkInlines as walkInlinesShared,
+} from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -224,67 +228,7 @@ type RawChunk =
 const walkInlines = (
   $: cheerio.CheerioAPI,
   el: cheerio.Cheerio<AnyNode>,
-): Inline[] => {
-  const inlines: Inline[] = [];
-
-  el.contents().each((_, node) => {
-    if (isText(node)) {
-      const text = $(node).text();
-      if (text) {
-        inlines.push({ type: "text", text });
-      }
-      return;
-    }
-
-    if (!isTag(node)) {
-      return;
-    }
-
-    const tag = node.tagName.toLowerCase();
-    const $node = $(node);
-
-    if (tag === "style" || tag === "script") {
-      return;
-    }
-
-    if (tag === "br") {
-      inlines.push({ type: "line-break" });
-      return;
-    }
-
-    if (tag === "b" || tag === "strong") {
-      const children = walkInlines($, $node);
-      if (children.length > 0) {
-        inlines.push({ type: "bold", children });
-      }
-      return;
-    }
-
-    if (tag === "i" || tag === "em") {
-      const children = walkInlines($, $node);
-      if (children.length > 0) {
-        inlines.push({ type: "italic", children });
-      }
-      return;
-    }
-
-    if (tag === "a") {
-      const href = sanitizeUrl($node.attr("href") ?? "");
-      const children = walkInlines($, $node);
-      if (href && children.length > 0) {
-        inlines.push({ type: "link", href, children });
-      } else if (children.length > 0) {
-        inlines.push(...children);
-      }
-      return;
-    }
-
-    // Unwrap presentational wrappers
-    inlines.push(...walkInlines($, $node));
-  });
-
-  return inlines;
-};
+): Inline[] => walkInlinesShared($, el, { sanitizeHref: sanitizeUrl });
 
 const isCentered = (el: cheerio.Cheerio<AnyNode>): boolean => {
   if (el.attr("align") === "center") {
@@ -503,34 +447,6 @@ export const extractRawChunks = ($: cheerio.CheerioAPI): RawChunk[] => {
 // ── Pass 2: raw chunks -> semantic blocks ──────────────────
 
 // ── Helpers (must precede classifyBlocks) ─────────────────
-
-const inlinesToPlainText = (inlines: readonly Inline[]): string => {
-  let text = "";
-  for (const inline of inlines) {
-    switch (inline.type) {
-      case "text": {
-        text += inline.text;
-        break;
-      }
-      case "bold":
-      case "italic": {
-        text += inlinesToPlainText(inline.children);
-        break;
-      }
-      case "link": {
-        text += inlinesToPlainText(inline.children);
-        break;
-      }
-      case "line-break": {
-        text += "\n";
-        break;
-      }
-      default:
-        break;
-    }
-  }
-  return text;
-};
 
 export const blocksToPlainText = (blocks: readonly Block[]): string =>
   blocks

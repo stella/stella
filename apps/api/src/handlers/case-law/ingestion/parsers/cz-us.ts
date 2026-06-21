@@ -44,7 +44,6 @@
  */
 
 import * as cheerio from "cheerio";
-import { type AnyNode, isText } from "domhandler";
 
 import type {
   Block,
@@ -61,6 +60,7 @@ import {
   CZ_JUDGE_NAME_RE as JUDGE_NAME_RE,
   CZ_JUDGE_TITLE_RE as SIGNATURE_RE,
 } from "./cz-patterns";
+import { inlinesToPlainText, stripInlinePrefix } from "./shared-inlines";
 
 // ── Public API ─────────────────────────────────────────────
 
@@ -199,85 +199,6 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
   });
 
   return refs;
-};
-
-// ── Inline walking (HTML fallback) ────────────────────────
-
-const _walkInlines = (
-  $: cheerio.CheerioAPI,
-  el: cheerio.Cheerio<AnyNode>,
-): Inline[] => {
-  const inlines: Inline[] = [];
-
-  el.contents().each((_, node) => {
-    if (isText(node)) {
-      const text = $(node).text();
-      if (text) {
-        inlines.push({ type: "text", text });
-      }
-      return;
-    }
-
-    // oxlint-disable-next-line typescript/no-unsafe-enum-comparison -- isTag() also matches script/style; literal "tag" skips those, and domhandler does not re-export ElementType
-    if (node.type !== "tag") {
-      return;
-    }
-
-    const tag = node.tagName.toLowerCase();
-    const $node = $(node);
-
-    if (tag === "br") {
-      inlines.push({ type: "line-break" });
-      return;
-    }
-
-    if (tag === "b" || tag === "strong") {
-      const children = _walkInlines($, $node);
-      if (children.length > 0) {
-        inlines.push({ type: "bold", children });
-      }
-      return;
-    }
-
-    if (tag === "i" || tag === "em") {
-      const children = _walkInlines($, $node);
-      if (children.length > 0) {
-        inlines.push({ type: "italic", children });
-      }
-      return;
-    }
-
-    if (tag === "a") {
-      const href = $node.attr("href");
-      const children = _walkInlines($, $node);
-      if (href && children.length > 0) {
-        inlines.push({ type: "link", href, children });
-      } else if (children.length > 0) {
-        inlines.push(...children);
-      }
-      return;
-    }
-
-    // Unwrap presentational wrappers (span, font, etc.)
-    inlines.push(..._walkInlines($, $node));
-  });
-
-  return inlines;
-};
-
-const inlinesToPlainText = (inlines: readonly Inline[]): string => {
-  let text = "";
-  for (const node of inlines) {
-    if (node.type === "text") {
-      text += node.text;
-    } else if (node.type === "line-break") {
-      text += "\n";
-    } else {
-      // bold | italic | link — all carry children
-      text += inlinesToPlainText(node.children);
-    }
-  }
-  return text;
 };
 
 /** Create a simple text inline helper. */
@@ -550,68 +471,6 @@ const makeAnchorId = (prefix: string, index: number): string =>
 /**
  * Strip a character-counted prefix from inlines.
  */
-const stripInlinePrefix = (
-  inlines: readonly Inline[],
-  charCount: number,
-): Inline[] => {
-  if (charCount <= 0) {
-    return [...inlines];
-  }
-
-  const result: Inline[] = [];
-  let remaining = charCount;
-
-  for (const node of inlines) {
-    if (remaining <= 0) {
-      result.push(node);
-      continue;
-    }
-
-    if (node.type === "text") {
-      if (node.text.length <= remaining) {
-        remaining -= node.text.length;
-      } else {
-        const rest = node.text.slice(remaining);
-        remaining = 0;
-        if (rest) {
-          result.push({ type: "text", text: rest });
-        }
-      }
-      continue;
-    }
-
-    if (node.type === "line-break") {
-      remaining -= 1;
-      continue;
-    }
-
-    // Remaining variants (bold | italic | link) all carry children.
-    const nodeTextLen = inlinesToPlainText(node.children).length;
-    if (nodeTextLen <= remaining) {
-      remaining -= nodeTextLen;
-    } else {
-      const stripped = stripInlinePrefix(node.children, remaining);
-      remaining = 0;
-      if (stripped.length > 0) {
-        result.push({ ...node, children: stripped });
-      }
-    }
-  }
-
-  // Trim leading whitespace from the first text node
-  const first = result[0];
-  if (result.length > 0 && first?.type === "text") {
-    const trimmed = first.text.trimStart();
-    if (trimmed) {
-      result[0] = { type: "text", text: trimmed };
-    } else {
-      result.shift();
-    }
-  }
-
-  return result;
-};
-
 /**
  * Classify extracted lines into semantic blocks.
  *
