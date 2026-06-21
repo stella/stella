@@ -58,6 +58,25 @@ function runToFontStyle(run: TextRun | TabRun): FontStyle {
 }
 
 /**
+ * A click in the second half of an astral glyph can resolve to the UTF-16
+ * offset between its surrogate pair (`measureRun` emits a 0-width entry for the
+ * trailing surrogate). Nudge such an offset forward to the code-point boundary
+ * so ProseMirror never receives — or edits inside — a half-pair position.
+ */
+export function snapPastTrailingSurrogate(
+  text: string,
+  offset: number,
+): number {
+  if (offset < text.length) {
+    const codeUnit = text.codePointAt(offset);
+    if (codeUnit >= 0xdc_00 && codeUnit <= 0xdf_ff) {
+      return offset + 1;
+    }
+  }
+  return offset;
+}
+
+/**
  * Slice the runs that are part of a specific line.
  * Returns only the text portions that belong to the line.
  */
@@ -361,7 +380,10 @@ function findCharacterInLine(
       if (adjustedX <= runEndX) {
         // Click is within this run - find exact character
         const localX = adjustedX - currentX;
-        const charInRun = findCharAtX(localX, measurement.charWidths);
+        const charInRun = snapPastTrailingSurrogate(
+          text,
+          findCharAtX(localX, measurement.charWidths),
+        );
         const charOffset = currentCharOffset + charInRun;
         return { charOffset, pmPosition: pmStart + charOffset };
       }
