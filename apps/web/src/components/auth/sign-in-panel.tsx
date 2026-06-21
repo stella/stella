@@ -41,7 +41,7 @@ const renderTermsLink = (chunks: ReactNode) => (
   <a
     className="hover:text-foreground underline"
     href={termsUrl}
-    rel="noopener"
+    rel="noreferrer"
     target="_blank"
   >
     {chunks}
