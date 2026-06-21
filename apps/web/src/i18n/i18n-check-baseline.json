@@ -90,6 +90,7 @@
       "fr"
     ],
     "billing.codes.codePlaceholder": [
+      "ar",
       "cs",
       "de",
       "es",
@@ -110,15 +111,6 @@
       "es",
       "fr",
       "pt-BR"
-    ],
-    "caseLaw.sectionTypes.argumentation": [
-      "fr"
-    ],
-    "caseLaw.sources.title": [
-      "fr"
-    ],
-    "caseLaw.viewer.sections": [
-      "fr"
     ],
     "caseLaw.viewer.source": [
       "fr"
@@ -520,9 +512,6 @@
       "fr",
       "pt-BR"
     ],
-    "inspector.matterPicker.directLabel": [
-      "fr"
-    ],
     "inspector.metadata.version": [
       "de",
       "fr"
@@ -887,13 +876,7 @@
       "fr",
       "sk"
     ],
-    "navigation.clients": [
-      "fr"
-    ],
     "navigation.contacts": [
-      "fr"
-    ],
-    "navigation.invitations": [
       "fr"
     ],
     "navigation.shortcutCategories.navigation": [
