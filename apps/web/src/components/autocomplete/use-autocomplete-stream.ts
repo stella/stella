@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from "react";
+import { useLayoutEffect } from "react";
 
 import type { Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
@@ -147,8 +147,12 @@ export const useAutocompleteStream = (
   view: EditorView | null,
   options: UseAutocompleteStreamOptions,
 ): void => {
-  const optionsRef = useRef(options);
-  optionsRef.current = options;
+  const {
+    debounceMs = DEFAULT_DEBOUNCE_MS,
+    enabled,
+    language,
+    minPrefixChars = DEFAULT_MIN_PREFIX_CHARS,
+  } = options;
 
   useLayoutEffect(() => {
     const noop = () => {
@@ -157,13 +161,10 @@ export const useAutocompleteStream = (
     if (view === null) {
       return noop;
     }
-    if (!optionsRef.current.enabled) {
+    if (!enabled) {
       return noop;
     }
 
-    const debounceMs = optionsRef.current.debounceMs ?? DEFAULT_DEBOUNCE_MS;
-    const minPrefixChars =
-      optionsRef.current.minPrefixChars ?? DEFAULT_MIN_PREFIX_CHARS;
     const aliveRef = { value: true };
 
     let inflight: AbortController | null = null;
@@ -223,7 +224,7 @@ export const useAutocompleteStream = (
           body: JSON.stringify({
             prefix,
             suffix: suffix.length > 0 ? suffix : undefined,
-            language: optionsRef.current.language,
+            language,
           }),
           signal: controller.signal,
         });
@@ -305,5 +306,5 @@ export const useAutocompleteStream = (
       }
       restoreDispatchTransaction();
     };
-  }, [view, options.enabled]);
+  }, [view, enabled, debounceMs, language, minPrefixChars]);
 };

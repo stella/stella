@@ -5,7 +5,7 @@ import {
   draggable,
   dropTargetForElements,
 } from "@atlaskit/pragmatic-drag-and-drop/element/adapter";
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import {
   BookmarkIcon,
   BookmarkPlusIcon,
@@ -165,7 +165,7 @@ export const ViewSwitcher = ({
 }: ViewSwitcherProps) => {
   const t = useTranslations();
   const canCreateView = usePermissions({ view: ["create"] });
-  const { data: views } = useSuspenseQuery(viewsOptions(workspaceId));
+  const { data: views = [] } = useQuery(viewsOptions(workspaceId));
   const createView = useCreateView(workspaceId);
   const reorderViews = useReorderViews(workspaceId);
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);

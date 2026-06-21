@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import { useState } from "react";
 
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import {
   AlignJustifyIcon,
@@ -77,7 +77,7 @@ type ViewToolbarProps = {
 };
 
 export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
-  const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
+  const { data: properties = [] } = useQuery(propertiesOptions(workspaceId));
   const updateView = useUpdateView(workspaceId);
   const { filters, sorts, hiddenProperties } = view.layout;
   const folderState = useWorkspaceStore((s) => s.folderState);
