@@ -550,6 +550,34 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
     }
   }
 
+  // Migrate a pre-field-model `<st:conditions>` section (named conditions were
+  // standalone before they became boolean condition-fields). Each legacy entry
+  // becomes a synthetic boolean field { path: name, condition: expression },
+  // skipped when a real field already owns that path, so the new field-based
+  // model round-trips old manifests: manifestNamedConditions resurfaces them
+  // and buildFieldXml re-persists them on the next save.
+  const conditionsEl = getFirstElementChild(root, "conditions");
+  if (conditionsEl) {
+    const existingPaths = new Set(fields.map((f) => f.path));
+    for (const c of getElementChildren(conditionsEl, "condition")) {
+      const name = c.getAttribute("name");
+      if (name === null || existingPaths.has(name)) {
+        continue;
+      }
+      const field: FieldMeta = {
+        path: name,
+        inputType: "boolean",
+        condition: c.getAttribute("expression") ?? "",
+      };
+      const label = c.getAttribute("label");
+      if (label !== null) {
+        field.label = label;
+      }
+      fields.push(field);
+      existingPaths.add(name);
+    }
+  }
+
   return { version, fields };
 };
 

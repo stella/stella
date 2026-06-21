@@ -157,6 +157,89 @@ describe("readManifest", () => {
     expect(field?.condition).toBe('client_type == "company"');
   });
 
+  test("migrates a legacy <st:conditions> section into boolean condition-fields", async () => {
+    const { manifestNamedConditions } = await import("./manifest-conditions");
+
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>',
+    );
+    zip.file(
+      "customXml/item1.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<st:template xmlns:st="${MANIFEST_NS}" version="1">` +
+        "<st:fields>" +
+        '<st:field path="client_type" inputType="text"/>' +
+        "</st:fields>" +
+        "<st:conditions>" +
+        '<st:condition name="is_company"' +
+        ' expression="client_type == &quot;company&quot;" label="Is a company"/>' +
+        "</st:conditions>" +
+        "</st:template>",
+    );
+    const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+
+    const result = await readManifest(buf);
+    expect(result).not.toBeNull();
+
+    // The legacy condition becomes a synthetic boolean condition-field.
+    const migrated = result?.fields.find((f) => f.path === "is_company");
+    expect(migrated?.inputType).toBe("boolean");
+    expect(migrated?.condition).toBe('client_type == "company"');
+    expect(migrated?.label).toBe("Is a company");
+
+    // It surfaces as a named condition `{{#if is_company}}` resolves against.
+    expect(manifestNamedConditions(result!)).toContainEqual({
+      name: "is_company",
+      expression: 'client_type == "company"',
+      label: "Is a company",
+    });
+
+    // It re-persists on the next save (round-trips via buildFieldXml).
+    const docx = await createMinimalDocx();
+    const rewritten = await writeManifest(docx, result!);
+    const reread = await readManifest(rewritten);
+    const persisted = reread?.fields.find((f) => f.path === "is_company");
+    expect(persisted?.inputType).toBe("boolean");
+    expect(persisted?.condition).toBe('client_type == "company"');
+  });
+
+  test("a legacy condition never overrides an existing field with the same path", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>',
+    );
+    zip.file(
+      "customXml/item1.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<st:template xmlns:st="${MANIFEST_NS}" version="1">` +
+        "<st:fields>" +
+        '<st:field path="is_company" inputType="boolean"' +
+        ' condition="amount &gt; 1000"/>' +
+        "</st:fields>" +
+        "<st:conditions>" +
+        '<st:condition name="is_company" expression="stale_rule"/>' +
+        "</st:conditions>" +
+        "</st:template>",
+    );
+    const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+
+    const result = await readManifest(buf);
+    const matches = result?.fields.filter((f) => f.path === "is_company");
+    expect(matches).toHaveLength(1);
+    expect(matches?.at(0)?.condition).toBe("amount > 1000");
+  });
+
   test("preserves empty-string labels", async () => {
     const docx = await createMinimalDocx();
     const manifest: TemplateManifest = {
