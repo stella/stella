@@ -16,7 +16,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
-import { toSafeId } from "@/lib/safe-id";
+import { type SafeId, toSafeId } from "@/lib/safe-id";
 import type {
   ConditionNode,
   PropertyDependency,
@@ -69,10 +69,22 @@ export const PropertyPopover = ({
   // which powers the toast's Undo.
   const markReviewed = useMutation({
     mutationFn: async ({ scoped, set }: { scoped: boolean; set: boolean }) => {
-      const groupParams =
+      // The annotation keeps the narrowed grouping id from widening back to
+      // `string` (an un-annotated object literal would); mirrors the
+      // kanban-group / group-counts query builders.
+      const groupParams:
+        | {
+            groupByPropertyId: "_status" | "_kind" | SafeId<"property">;
+            groupValue: string | null;
+          }
+        | Record<never, never> =
         scoped && groupScope
           ? {
-              groupByPropertyId: groupScope.groupByPropertyId,
+              groupByPropertyId:
+                groupScope.groupByPropertyId === "_status" ||
+                groupScope.groupByPropertyId === "_kind"
+                  ? groupScope.groupByPropertyId
+                  : toSafeId<"property">(groupScope.groupByPropertyId),
               groupValue: groupScope.groupValue,
             }
           : {};
