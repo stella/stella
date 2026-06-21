@@ -1,7 +1,7 @@
 import { expect, test as base } from "@playwright/test";
 import type { ConsoleMessage, Page } from "@playwright/test";
 
-type BrowserErrorCollector = {
+export type BrowserErrorCollector = {
   entries: () => string[];
   assertEmpty: (label: string) => void;
   trackPage: (page: Page) => () => void;
@@ -17,7 +17,7 @@ type BrowserErrorFixtures = {
 const TRANSIENT_NETWORK_ERROR =
   /net::(?:ERR_EMPTY_RESPONSE|ERR_CONNECTION_RESET|ERR_CONNECTION_CLOSED|ERR_NETWORK_CHANGED)/u;
 
-const createBrowserErrorCollector = (): BrowserErrorCollector & {
+export const createBrowserErrorCollector = (): BrowserErrorCollector & {
   add: (message: string) => void;
 } => {
   const errors: string[] = [];

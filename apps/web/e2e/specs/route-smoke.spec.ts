@@ -4,7 +4,12 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { apiDelete, apiGet, apiPut, apiUploadDocx } from "../helpers/api";
-import { expect, test } from "../helpers/test";
+import {
+  type BrowserErrorCollector,
+  createBrowserErrorCollector,
+  expect,
+  test,
+} from "../helpers/test";
 import {
   type TestWorkspace,
   createTestWorkspace,
@@ -86,8 +91,9 @@ const AUTHENTICATED_ROUTE_PREFIXES = [
   "/workspaces",
 ];
 
+const ROUTE_SMOKE_BATCH_SIZE = 4;
+
 test("authenticated routes render without browser errors", async ({
-  browserErrors,
   context,
   request,
 }) => {
@@ -129,9 +135,11 @@ test("authenticated routes render without browser errors", async ({
 
     await expectAuthenticatedRouteCoverage(routes);
 
-    for (const route of routes) {
-      // eslint-disable-next-line no-await-in-loop -- each route gets an isolated page so browser errors can be attributed to its direct render without cross-route reload noise
-      await smokeRoute({ browserErrors, context, route });
+    for (const routeBatch of chunkRoutes(routes, ROUTE_SMOKE_BATCH_SIZE)) {
+      // eslint-disable-next-line no-await-in-loop -- small batches keep each route isolated without turning the smoke into a long serial crawl
+      await Promise.all(
+        routeBatch.map(async (route) => await smokeRoute({ context, route })),
+      );
     }
   } finally {
     await Promise.all(cleanupTasks.map(async (cleanup) => await cleanup()));
@@ -225,18 +233,14 @@ const createDocumentRoute = async (
 };
 
 const smokeRoute = async ({
-  browserErrors,
   context,
   route,
 }: {
-  browserErrors: {
-    assertEmpty: (label: string) => void;
-    trackPage: (page: Page) => () => void;
-  };
   context: BrowserContext;
   route: SmokeRoute;
 }) => {
   const page = await context.newPage();
+  const browserErrors = createBrowserErrorCollector();
   const detachPage = browserErrors.trackPage(page);
 
   try {
@@ -252,7 +256,7 @@ const renderSmokeRoute = async ({
   page,
   route,
 }: {
-  browserErrors: { assertEmpty: (label: string) => void };
+  browserErrors: Pick<BrowserErrorCollector, "assertEmpty">;
   page: Page;
   route: SmokeRoute;
 }) => {
@@ -326,3 +330,16 @@ const isAuthenticatedRouteTemplate = (route: string): boolean =>
   AUTHENTICATED_ROUTE_PREFIXES.some(
     (prefix) => route === prefix || route.startsWith(`${prefix}/`),
   );
+
+const chunkRoutes = (
+  routes: readonly SmokeRoute[],
+  batchSize: number,
+): SmokeRoute[][] => {
+  const batches: SmokeRoute[][] = [];
+
+  for (let index = 0; index < routes.length; index += batchSize) {
+    batches.push(routes.slice(index, index + batchSize));
+  }
+
+  return batches;
+};
