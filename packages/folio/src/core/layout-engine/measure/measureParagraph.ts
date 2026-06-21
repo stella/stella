@@ -35,6 +35,7 @@ import {
 } from "./floatingZones";
 import { getListMarkerInlineWidth } from "./listMarkerWidth";
 import {
+  buildRunFontStyle,
   measureTextWidth,
   measureRun,
   getFontMetrics,
@@ -132,20 +133,7 @@ type LineState = {
  * (FieldRun page numbers, etc.) consistent with TextRun handling.
  */
 function runToFontStyle(run: TextRun | TabRun | FieldRun | MathRun): FontStyle {
-  return {
-    fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
-    fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
-    ...(run.bold !== undefined ? { bold: run.bold } : {}),
-    ...(run.italic !== undefined ? { italic: run.italic } : {}),
-    ...(run.letterSpacing !== undefined
-      ? { letterSpacing: run.letterSpacing }
-      : {}),
-    ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
-    ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
-    ...(run.horizontalScale !== undefined
-      ? { horizontalScale: run.horizontalScale }
-      : {}),
-  };
+  return buildRunFontStyle(run, DEFAULT_FONT_FAMILY, DEFAULT_FONT_SIZE);
 }
 
 /**
@@ -1082,20 +1070,14 @@ export function measureParagraph(
       // Measure the field at its resolved value when known so the line breaker
       // agrees with the painter; otherwise the cached fallback text.
       const fallback = fieldMeasureText(run, options?.fieldValues);
-      const style: FontStyle = {
-        fontFamily: run.fontFamily ?? DEFAULT_FONT_FAMILY,
-        fontSize: run.fontSize ?? DEFAULT_FONT_SIZE,
-        ...(run.bold !== undefined ? { bold: run.bold } : {}),
-        ...(run.italic !== undefined ? { italic: run.italic } : {}),
-        ...(run.letterSpacing !== undefined
-          ? { letterSpacing: run.letterSpacing }
-          : {}),
-        ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
-        ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
-        ...(run.horizontalScale !== undefined
-          ? { horizontalScale: run.horizontalScale }
-          : {}),
-      };
+      // Use the shared builder so the field result measures with the same fields
+      // the painter renders — notably eastAsiaFontFamily, so a CJK field result
+      // (DATE/TIME/PAGEREF/REF) wraps and tab-positions with its East-Asian font.
+      const style = buildRunFontStyle(
+        run,
+        DEFAULT_FONT_FAMILY,
+        DEFAULT_FONT_SIZE,
+      );
       updateMaxFont(style);
 
       const fieldWidth = measureTextWidth(fallback, style);

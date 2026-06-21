@@ -199,6 +199,12 @@ export type DocumentSettings = {
    * it is a document-wide flag; absent means odd/even share one header.
    */
   evenAndOddHeaders?: boolean;
+  /**
+   * `w:themeFontLang` (§17.15.1.88) — language Word uses to fill empty
+   * `<a:ea>`/`<a:cs>` theme font slots from the script-specific
+   * `<a:font script="…">` entries. Absent for non-CJK/bidi docs.
+   */
+  themeFontLang?: { eastAsia?: string; bidi?: string };
 };
 
 /**

@@ -16,6 +16,12 @@ import { panic } from "better-result";
 import { resolveFontFamily } from "../../utils/fontResolver";
 import { DOCX_BOLD_FONT_WEIGHT } from "../../utils/fontWeights";
 import {
+  hasCjk,
+  isCjkCodePoint,
+  segmentByScript,
+} from "../../utils/scriptSegments";
+import type { RunFormatting } from "../types";
+import {
   getCachedFontMetrics,
   getCachedTextWidth,
   getTextWidthCacheGeneration,
@@ -23,7 +29,10 @@ import {
   setCachedTextWidth,
 } from "./cache";
 import { canPrefetchMeasurement, prefetchMeasurement } from "./measureWorker";
-import { WORKER_FONT_FINGERPRINT_TEXT } from "./measureWorkerProtocol";
+import {
+  countCodePoints,
+  WORKER_FONT_FINGERPRINT_TEXT,
+} from "./measureWorkerProtocol";
 
 // Constants for OOXML unit conversions
 const TWIPS_PER_INCH = 1440;
@@ -42,6 +51,13 @@ const DEFAULT_DESCENT_RATIO = 0.2;
  */
 export type FontStyle = {
   fontFamily?: string;
+  /**
+   * East-Asian font for CJK code points. When set, `measureTextWidth` /
+   * `measureRun` measure CJK code points with this font and the rest with
+   * `fontFamily`, matching the painter's per-script span split so wrapping
+   * and click positioning stay in sync.
+   */
+  eastAsiaFontFamily?: string;
   fontSize?: number; // in points
   bold?: boolean;
   italic?: boolean;
@@ -50,6 +66,38 @@ export type FontStyle = {
   fontVariant?: "small-caps";
   horizontalScale?: number;
 };
+
+/**
+ * Build a measurement `FontStyle` from a run's formatting. Single source of
+ * truth for run → FontStyle so every measurement path (layout line-breaking,
+ * click-to-position, selection rects) carries the same fields — notably
+ * `eastAsiaFontFamily`, which must reach the measurer for CJK click/selection
+ * offsets to match what was wrapped and painted. Callers pass their own family
+ * and size fallbacks for runs that declare neither.
+ */
+export function buildRunFontStyle(
+  run: RunFormatting,
+  fallbackFontFamily: string,
+  fallbackFontSize: number,
+): FontStyle {
+  return {
+    fontFamily: run.fontFamily ?? fallbackFontFamily,
+    ...(run.eastAsiaFontFamily !== undefined
+      ? { eastAsiaFontFamily: run.eastAsiaFontFamily }
+      : {}),
+    fontSize: run.fontSize ?? fallbackFontSize,
+    ...(run.bold !== undefined ? { bold: run.bold } : {}),
+    ...(run.italic !== undefined ? { italic: run.italic } : {}),
+    ...(run.letterSpacing !== undefined
+      ? { letterSpacing: run.letterSpacing }
+      : {}),
+    ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
+    ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
+    ...(run.horizontalScale !== undefined
+      ? { horizontalScale: run.horizontalScale }
+      : {}),
+  };
+}
 
 /**
  * Typography metrics for a font
@@ -303,6 +351,18 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   }
   const measuredText = applyTextTransform(text, style);
 
+  // Letter spacing is left to a single span: CSS letter-spacing does not add a
+  // gap across the per-script sibling spans the painter would emit, so a
+  // letter-spaced run keeps the base font for CJK too (measurement and painting
+  // agree; the EA typeface is the trade-off for that narrow case).
+  if (
+    style.eastAsiaFontFamily &&
+    !style.letterSpacing &&
+    hasCjk(measuredText)
+  ) {
+    return measureMixedScriptWidth(measuredText, style);
+  }
+
   const ctx = getCanvasContext();
   const font = buildFontString(style);
   const letterSpacing = style.letterSpacing ?? 0;
@@ -323,8 +383,11 @@ export function measureTextWidth(text: string, style: FontStyle): number {
   let width = metrics.width;
 
   // Apply letter spacing if specified
-  if (letterSpacing && measuredText.length > 1) {
-    width += letterSpacing * (measuredText.length - 1);
+  if (letterSpacing) {
+    const codePoints = countCodePoints(measuredText);
+    if (codePoints > 1) {
+      width += letterSpacing * (codePoints - 1);
+    }
   }
 
   const scaledWidth = width * horizontalScale;
@@ -362,6 +425,70 @@ export function measureTextWidth(text: string, style: FontStyle): number {
     horizontalScale,
   );
   return scaledWidth;
+}
+
+/**
+ * Build a glyph-advance-only style for one script segment: keep the properties
+ * that change advance width (family, size, bold/italic, small-caps) and drop
+ * letter spacing, horizontal scale, transform, and the EA font so the segment
+ * takes the single-font path (no double-counting, no recursion).
+ */
+function glyphAdvanceStyle(
+  style: FontStyle,
+  fontFamily: string | undefined,
+): FontStyle {
+  const result: FontStyle = {};
+  if (fontFamily !== undefined) {
+    result.fontFamily = fontFamily;
+  }
+  if (style.fontSize !== undefined) {
+    result.fontSize = style.fontSize;
+  }
+  if (style.bold !== undefined) {
+    result.bold = style.bold;
+  }
+  if (style.italic !== undefined) {
+    result.italic = style.italic;
+  }
+  if (style.fontVariant !== undefined) {
+    result.fontVariant = style.fontVariant;
+  }
+  return result;
+}
+
+/**
+ * Width of text whose CJK code points use `style.eastAsiaFontFamily` and whose
+ * other code points use `style.fontFamily`. Each script segment is measured
+ * with its own font (reusing the single-font cache); letter spacing and
+ * horizontal scale are applied once over the whole string so the total matches
+ * the painter, which renders the same segments as sibling spans.
+ */
+function measureMixedScriptWidth(
+  measuredText: string,
+  style: FontStyle,
+): number {
+  const letterSpacing = style.letterSpacing ?? 0;
+  const horizontalScale = getHorizontalScaleFactor(style);
+
+  let glyphWidth = 0;
+  for (const segment of segmentByScript(measuredText)) {
+    const fontFamily = segment.isCjk
+      ? style.eastAsiaFontFamily
+      : style.fontFamily;
+    glyphWidth += measureTextWidth(
+      segment.text,
+      glyphAdvanceStyle(style, fontFamily),
+    );
+  }
+
+  let width = glyphWidth;
+  if (letterSpacing) {
+    const codePoints = countCodePoints(measuredText);
+    if (codePoints > 1) {
+      width += letterSpacing * (codePoints - 1);
+    }
+  }
+  return width * horizontalScale;
 }
 
 /**
@@ -439,29 +566,48 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
   }
 
   const ctx = getCanvasContext();
-  ctx.font = buildFontString(style);
+  const baseFont = buildFontString(style);
+  ctx.font = baseFont;
+  // CJK code points measure with the EA font (matching the painter); the rest
+  // keep the base font. Only built when an EA font is present and the run has no
+  // letter spacing (which the painter leaves to a single base-font span), so the
+  // common path keeps a single `ctx.font` assignment.
+  const eastAsiaFont =
+    style.eastAsiaFontFamily !== undefined && !style.letterSpacing
+      ? buildFontString({ ...style, fontFamily: style.eastAsiaFontFamily })
+      : undefined;
 
   const letterSpacing = style.letterSpacing ?? 0;
+  const scale = getHorizontalScaleFactor(style);
   const charWidths: number[] = [];
   let totalWidth = 0;
 
-  // Measure each character individually for click positioning
-  for (let i = 0; i < text.length; i++) {
-    // SAFETY: i < text.length in for loop
-    const char = applyTextTransform(text[i]!, style);
-    const charMetrics = ctx.measureText(char);
+  // Measure each character for click positioning. Iterate whole code points so
+  // an astral CJK ideograph (a surrogate pair) gets the EA font and a real
+  // width; `charWidths` stays one entry per UTF-16 unit (the second unit of an
+  // astral pair carries 0) so it keeps aligning with ProseMirror offsets.
+  let offset = 0;
+  for (const char of text) {
+    // SAFETY: for...of over a string yields whole code points.
+    const cp = char.codePointAt(0)!;
+    const measured = applyTextTransform(char, style);
+    if (eastAsiaFont !== undefined) {
+      ctx.font = isCjkCodePoint(cp) ? eastAsiaFont : baseFont;
+    }
+    let charWidth = ctx.measureText(measured).width;
 
-    // Use advance width for individual characters
-    let charWidth = charMetrics.width;
-
-    // Add letter spacing after each character except the last
-    if (letterSpacing && i < text.length - 1) {
+    // Add letter spacing after each code point except the last.
+    if (letterSpacing && offset + char.length < text.length) {
       charWidth += letterSpacing;
     }
 
-    charWidth *= getHorizontalScaleFactor(style);
+    charWidth *= scale;
     charWidths.push(charWidth);
+    if (char.length === 2) {
+      charWidths.push(0);
+    }
     totalWidth += charWidth;
+    offset += char.length;
   }
 
   return {

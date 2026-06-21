@@ -40,6 +40,7 @@ import {
   parseRotationDegrees,
   rotatedBoundingBox,
 } from "../utils/rotationBoundingBox";
+import { hasCjk, segmentByScript } from "../utils/scriptSegments";
 import { getAutomaticTextColorForBackground } from "./documentColors";
 import {
   applyImageVisualAttrs,
@@ -1029,6 +1030,50 @@ function renderFieldRun(
     text,
   };
 
+  // A CJK field result is generated text inside one atomic pm range, so the
+  // measurer's per-script EA segmentation is mirrored for the font: each script
+  // segment renders through renderTextRun (keeping the field's full styles, and
+  // its own anchor when the field is a hyperlink) with the CJK segments switched
+  // to the EA font. The pm range stays on the grouping wrapper; the segments
+  // carry no pm (the field is atomic). Letter-spaced fields stay one span,
+  // matching splitTextRunsByEastAsia and the measurer.
+  if (
+    resolvedRun.eastAsiaFontFamily !== undefined &&
+    !resolvedRun.letterSpacing &&
+    hasCjk(text)
+  ) {
+    const wrapper = doc.createElement("span");
+    applyPmPositions(wrapper, resolvedRun.pmStart, resolvedRun.pmEnd);
+    // horizontalScale lives on the wrapper (inline-block so the reserved width
+    // the render loop sets via reserveScaledAdvance applies, scaleX so the
+    // segments scale uniformly); the segments drop it to avoid double-scaling.
+    if (resolvedRun.horizontalScale && resolvedRun.horizontalScale !== 100) {
+      wrapper.style.display = "inline-block";
+      wrapper.style.transform = `scaleX(${resolvedRun.horizontalScale / 100})`;
+      wrapper.style.transformOrigin = "left center";
+    }
+    // The pm range lives on the wrapper; segments carry none (the field is one
+    // atomic unit), so drop pmStart/pmEnd (and the wrapper-applied scale) before
+    // spreading into each segment.
+    const {
+      pmStart: _pmStart,
+      pmEnd: _pmEnd,
+      horizontalScale: _horizontalScale,
+      ...segmentBase
+    } = resolvedRun;
+    for (const segment of segmentByScript(text)) {
+      const segmentRun: TextRun = {
+        ...segmentBase,
+        text: segment.text,
+        ...(segment.isCjk
+          ? { fontFamily: resolvedRun.eastAsiaFontFamily }
+          : {}),
+      };
+      wrapper.append(renderTextRun(segmentRun, doc));
+    }
+    return wrapper;
+  }
+
   return renderTextRun(resolvedRun, doc);
 }
 
@@ -1199,6 +1244,52 @@ export function sliceRunsForLine(
 }
 
 /**
+ * Split each text run carrying an East-Asian font into per-script sub-runs, so
+ * CJK code points render with `eastAsiaFontFamily` and the rest with
+ * `fontFamily`. Each sub-run gets a contiguous, exact `pmStart`/`pmEnd` (the
+ * same offset math as `sliceRunsForLine`), keeping PM position mapping,
+ * selection rects, and click-to-caret correct. The measurer segments the same
+ * way, so the per-run advances sum to the measured run width. Non-text runs and
+ * runs without CJK pass through unchanged (the common path).
+ */
+export function splitTextRunsByEastAsia(runs: Run[]): Run[] {
+  const result: Run[] = [];
+
+  for (const run of runs) {
+    if (
+      !isTextRun(run) ||
+      run.eastAsiaFontFamily === undefined ||
+      // A letter-spaced run stays one span: CSS letter-spacing would not bridge
+      // the gap between per-script sibling spans, so it keeps the base font for
+      // CJK too (the measurer skips the EA path identically, so widths agree).
+      run.letterSpacing ||
+      !hasCjk(run.text)
+    ) {
+      result.push(run);
+      continue;
+    }
+
+    let offset = 0;
+    for (const segment of segmentByScript(run.text)) {
+      result.push({
+        ...run,
+        text: segment.text,
+        ...(segment.isCjk ? { fontFamily: run.eastAsiaFontFamily } : {}),
+        ...(run.pmStart !== undefined
+          ? {
+              pmStart: run.pmStart + offset,
+              pmEnd: run.pmStart + offset + segment.text.length,
+            }
+          : {}),
+      });
+      offset += segment.text.length;
+    }
+  }
+
+  return result;
+}
+
+/**
  * Options for rendering a line with justify support
  */
 type RenderLineOptions = {
@@ -1250,6 +1341,9 @@ function runMeasureStyle(run: TextRun | FieldRun | MathRun): TextMeasureStyle {
       ? { letterSpacing: run.letterSpacing }
       : {}),
     ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
+    ...(run.eastAsiaFontFamily !== undefined
+      ? { eastAsiaFontFamily: run.eastAsiaFontFamily }
+      : {}),
   };
 }
 
@@ -1325,6 +1419,70 @@ function measureFollowingContentWidth(
 }
 
 /**
+ * Width of the decimal prefix (text before the first ".") that follows a tab,
+ * accumulated per run so a prefix spanning multiple fonts measures each part in
+ * its own font. After the EA split a prefix like `合計12` is a CJK sub-run (EA
+ * font) followed by a Latin sub-run, so measuring the whole prefix in the first
+ * sub-run's font would force the digits into the EA face and drift the decimal
+ * point from the measured tab stop.
+ */
+function measureDecimalPrefixWidth(
+  runs: Run[],
+  tabRunIndex: number,
+  decimalIndex: number,
+  measureText: (
+    text: string,
+    fontSize?: number,
+    fontFamily?: string,
+    style?: TextMeasureStyle,
+  ) => number,
+  context?: RenderContext,
+): number {
+  let width = 0;
+  let consumed = 0;
+  for (
+    let i = tabRunIndex + 1;
+    i < runs.length && consumed < decimalIndex;
+    i++
+  ) {
+    const run = runs[i]!; // SAFETY: i < runs.length
+    if (isTabRun(run) || isLineBreakRun(run)) {
+      break;
+    }
+    // Images contribute no characters to the following text (getTextAfterTab),
+    // so they never shift the decimal offset.
+    if (!isTextRun(run) && !isFieldRun(run) && !isMathRun(run)) {
+      continue;
+    }
+
+    let runText: string;
+    if (isFieldRun(run)) {
+      const resolved = resolveFieldText(run, context);
+      runText = run.allCaps ? resolved.toLocaleUpperCase() : resolved;
+    } else if (isMathRun(run)) {
+      runText = run.plainText;
+    } else {
+      runText = run.allCaps ? run.text.toLocaleUpperCase() : run.text;
+    }
+
+    const take = Math.min(runText.length, decimalIndex - consumed);
+    if (take > 0) {
+      const scale = run.horizontalScale ?? 100;
+      width +=
+        measureText(
+          runText.slice(0, take),
+          run.fontSize ?? 11,
+          run.fontFamily ?? "Calibri",
+          runMeasureStyle(run),
+        ) *
+        (scale / 100);
+    }
+    consumed += runText.length;
+  }
+  return width;
+}
+
+/**
  * Build a stable key for an inline image run.
  * PM positions are preferred because they uniquely identify the source node.
  */
@@ -1388,6 +1546,9 @@ type TextMeasureStyle = {
   italic?: boolean;
   letterSpacing?: number;
   smallCaps?: boolean;
+  /** EA font for CJK code points; segments the measured text by script when set
+   * (and the run has no letter spacing), mirroring measureContainer. */
+  eastAsiaFontFamily?: string;
 };
 
 function applyLetterSpacingToMeasuredWidth(
@@ -1431,18 +1592,35 @@ function createTextMeasurer(
     const cssFallback = resolveFontFamily(fontFamily).cssFallback;
     // Convert pt to px for canvas (1pt = 96/72 px)
     const fontSizePx = (fontSize * 96) / 72;
-    const fontParts: string[] = [];
+    const fontPrefixParts: string[] = [];
     if (style.italic) {
-      fontParts.push("italic");
+      fontPrefixParts.push("italic");
     }
     if (style.smallCaps) {
-      fontParts.push("small-caps");
+      fontPrefixParts.push("small-caps");
     }
     if (style.bold) {
-      fontParts.push(DOCX_BOLD_FONT_WEIGHT);
+      fontPrefixParts.push(DOCX_BOLD_FONT_WEIGHT);
     }
-    fontParts.push(`${fontSizePx}px`, cssFallback);
-    ctx.font = fontParts.join(" ");
+    fontPrefixParts.push(`${fontSizePx}px`);
+    const fontPrefix = fontPrefixParts.join(" ");
+
+    // CJK code points measure with the EA font (matching the per-script sub-spans
+    // the painter emits and measureContainer's segmentation). Gated off for
+    // letter-spaced runs, which keep a single base-font span.
+    if (style.eastAsiaFontFamily && !style.letterSpacing && hasCjk(text)) {
+      const eaFallback = resolveFontFamily(
+        style.eastAsiaFontFamily,
+      ).cssFallback;
+      let segmentedWidth = 0;
+      for (const segment of segmentByScript(text)) {
+        ctx.font = `${fontPrefix} ${segment.isCjk ? eaFallback : cssFallback}`;
+        segmentedWidth += ctx.measureText(segment.text).width;
+      }
+      return segmentedWidth;
+    }
+
+    ctx.font = `${fontPrefix} ${cssFallback}`;
     return applyLetterSpacingToMeasuredWidth(
       ctx.measureText(text).width,
       text,
@@ -1477,7 +1655,7 @@ export function renderLine(
   lineEl.style.lineHeight = `${line.lineHeight}px`;
 
   // Get runs for this line
-  const runsForLine = sliceRunsForLine(block, line);
+  const runsForLine = splitTextRunsByEastAsia(sliceRunsForLine(block, line));
   // OOXML `<m:oMathPara>` (display math) defaults to `jc="centerGroup"` —
   // Word renders display math centred on its own paragraph. When the line
   // holds a single block math run, centre it horizontally so the equation
@@ -1666,34 +1844,19 @@ export function renderLine(
       );
       const followingText = getTextAfterTab(runsForLine, i, options?.context);
       const decimalIndex = followingText.indexOf(".");
-      // Resolve the first text/field run after the tab and measure the
-      // decimal prefix in *its* font/style. Defaulting to 11px Calibri
-      // (the `measureText` fallback) drifts on sized/bold/italic runs and
-      // breaks decimal alignment — eigenpal #576 gemini review on PR #512.
-      const firstFollowingRun = (() => {
-        for (let j = i + 1; j < runsForLine.length; j++) {
-          const next = runsForLine[j];
-          if (!next || isTabRun(next) || isLineBreakRun(next)) {
-            return undefined;
-          }
-          if (isTextRun(next) || isFieldRun(next)) {
-            return next;
-          }
-          if (isMathRun(next)) {
-            return next;
-          }
-        }
-        return undefined;
-      })();
+      // Measure the decimal prefix run-by-run so each part uses its own
+      // font/size/style. A single-font pass over the joined prefix drifts on
+      // sized/bold/italic runs (eigenpal #576) and, after the EA split, on
+      // mixed CJK+Latin prefixes (eigenpal/docx-editor follow-up).
       const decimalPrefixWidth =
         decimalIndex !== -1
-          ? measureText(
-              followingText.slice(0, decimalIndex),
-              firstFollowingRun?.fontSize,
-              firstFollowingRun?.fontFamily,
-              firstFollowingRun ? runMeasureStyle(firstFollowingRun) : {},
-            ) *
-            ((firstFollowingRun?.horizontalScale ?? 100) / 100)
+          ? measureDecimalPrefixWidth(
+              runsForLine,
+              i,
+              decimalIndex,
+              measureText,
+              options?.context,
+            )
           : 0;
 
       const tabResult = calculateTabWidth(currentX, tabContext, {
@@ -1891,14 +2054,7 @@ export function renderLine(
         run.allCaps ? fieldText.toLocaleUpperCase() : fieldText,
         fontSize,
         fontFamily,
-        {
-          ...(run.bold !== undefined ? { bold: run.bold } : {}),
-          ...(run.italic !== undefined ? { italic: run.italic } : {}),
-          ...(run.letterSpacing !== undefined
-            ? { letterSpacing: run.letterSpacing }
-            : {}),
-          ...(run.smallCaps !== undefined ? { smallCaps: run.smallCaps } : {}),
-        },
+        runMeasureStyle(run),
       );
       reserveScaledAdvance(runEl, measuredWidth, run.horizontalScale);
       currentX += measuredWidth * ((run.horizontalScale ?? 100) / 100);
