@@ -486,10 +486,11 @@ const CJK_FONT_ALIASES: Record<string, string> = {
 // bundled Arabic face into every fallback chain just before the generic
 // family. Latin text keeps its named font; Arabic runs fall through to Noto.
 const ARABIC_FALLBACK = '"Noto Sans Arabic"';
-const TRAILING_GENERIC = /,\s*(sans-serif|serif|monospace|cursive)\s*$/u;
+const TRAILING_GENERIC =
+  /,\s*(?<generic>sans-serif|serif|monospace|cursive)\s*$/u;
 const withArabicFallback = (stack: string): string =>
   TRAILING_GENERIC.test(stack)
-    ? stack.replace(TRAILING_GENERIC, `, ${ARABIC_FALLBACK}, $1`)
+    ? stack.replace(TRAILING_GENERIC, `, ${ARABIC_FALLBACK}, $<generic>`)
     : `${stack}, ${ARABIC_FALLBACK}`;
 
 export function resolveFontFamily(docxFontName: string): ResolvedFont {

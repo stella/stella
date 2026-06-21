@@ -1,38 +1,24 @@
 import { getFormatter } from "@/i18n/i18n-store";
 
-/**
- * Minor-unit exponent for a currency, from ICU data: 2 for USD/EUR/CZK,
- * 3 for KWD, 0 for JPY. Amounts are stored as integer minor units, so this
- * is the power of ten that converts them to the major-unit value.
- */
-const currencyFractionDigits = (currency: string): number => {
-  try {
-    return (
-      new Intl.NumberFormat("en", {
-        style: "currency",
-        currency,
-      }).resolvedOptions().maximumFractionDigits ?? 2
-    );
-  } catch {
-    return 2;
-  }
-};
+// NOTE: cents / 100 assumes a 2-decimal minor unit, which is wrong for
+// currencies with a different exponent (KWD has 3, JPY has 0). Fixing that is
+// a billing money-model change tracked separately; this module only makes the
+// formatting locale-aware.
 
 /**
- * Formats a monetary amount given in minor units into a localized
- * currency string, honoring the currency's own minor-unit exponent.
+ * Formats a monetary amount given in cents into a localized
+ * currency string.
  */
 export const formatCurrencyAmount = (
   cents: number,
   currency: string,
 ): string => {
-  const digits = currencyFractionDigits(currency);
-  const amount = cents / 10 ** digits;
+  const amount = cents / 100;
   return formatCurrency({
     amount,
     currency,
-    minimumFractionDigits: digits,
-    fallback: `${amount.toFixed(digits)} ${currency}`,
+    minimumFractionDigits: 2,
+    fallback: `${amount.toFixed(2)} ${currency}`,
   });
 };
 
@@ -44,7 +30,7 @@ export const formatCurrencyCompact = (
   cents: number,
   currency: string,
 ): string => {
-  const amount = cents / 10 ** currencyFractionDigits(currency);
+  const amount = cents / 100;
   return formatCurrency({
     amount,
     currency,

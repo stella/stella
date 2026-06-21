@@ -14,7 +14,6 @@ import type {
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
 import { getProviderIcon } from "@/components/ai-provider-icons";
-import { getFormatter } from "@/i18n/i18n-store";
 
 // "Typical call" = one chat turn through an agent loop with tool
 // calls: large system prompt + tool schemas + a few intermediate
@@ -36,44 +35,47 @@ const modelOptionsForProvider = (
   return optionsByProvider[provider] ?? [];
 };
 
+type IntlFormatter = ReturnType<typeof useFormatter>;
+
 const formatPerMTok = (
   raw: number | TieredPrices | undefined,
   markup: number,
+  format: IntlFormatter,
 ): string => {
   if (raw === undefined) {
     return "—";
   }
   if (typeof raw === "number") {
-    return formatUsd(raw * markup);
+    return formatUsd(raw * markup, format);
   }
   // Tiered: show base price; range is rare and noisy in a compact panel.
-  return formatUsd(raw.base * markup);
+  return formatUsd(raw.base * markup, format);
 };
 
-const formatUsd = (value: number): string => {
+const formatUsd = (value: number, format: IntlFormatter): string => {
   if (value === 0) {
-    return formatUsdValue(value, { minimumFractionDigits: 0 });
+    return formatUsdValue(value, format, { minimumFractionDigits: 0 });
   }
   if (value < 0.01) {
     // Two significant digits for sub-cent prices (mirrors toPrecision(2)).
-    return formatUsdValue(value, {
+    return formatUsdValue(value, format, {
       minimumSignificantDigits: 2,
       maximumSignificantDigits: 2,
     });
   }
   if (value < 1) {
-    return formatUsdValue(value, {
+    return formatUsdValue(value, format, {
       minimumFractionDigits: 3,
       maximumFractionDigits: 3,
     });
   }
   if (value < 100) {
-    return formatUsdValue(value, {
+    return formatUsdValue(value, format, {
       minimumFractionDigits: 2,
       maximumFractionDigits: 2,
     });
   }
-  return formatUsdValue(value, {
+  return formatUsdValue(value, format, {
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   });
@@ -87,8 +89,12 @@ type UsdDigitsOptions = {
 };
 
 // Onboarding pricing is quoted in USD; only the formatting localizes.
-const formatUsdValue = (value: number, digits: UsdDigitsOptions): string =>
-  getFormatter().number(value, {
+const formatUsdValue = (
+  value: number,
+  format: IntlFormatter,
+  digits: UsdDigitsOptions,
+): string =>
+  format.number(value, {
     style: "currency",
     currency: "USD",
     ...digits,
@@ -130,7 +136,7 @@ const lookupPrice = (modelId: string): LookupResult | null => {
   return null;
 };
 
-const buildRow = (modelId: string): ModelRow => {
+const buildRow = (modelId: string, format: IntlFormatter): ModelRow => {
   const result = lookupPrice(modelId);
   if (!result) {
     return {
@@ -145,9 +151,9 @@ const buildRow = (modelId: string): ModelRow => {
   const price: ModelPrice = calc.model_price;
   return {
     modelId,
-    inputPerM: formatPerMTok(price.input_mtok, markup),
-    outputPerM: formatPerMTok(price.output_mtok, markup),
-    perCall: formatUsd(calc.total_price * markup),
+    inputPerM: formatPerMTok(price.input_mtok, markup, format),
+    outputPerM: formatPerMTok(price.output_mtok, markup, format),
+    perCall: formatUsd(calc.total_price * markup, format),
     hasPrice: true,
   };
 };
@@ -164,7 +170,9 @@ export const PricesPanel = ({ providers, roleModels }: PricesPanelProps) => {
 
   const groups = providers.map((provider) => ({
     provider,
-    rows: modelOptionsForProvider(provider).map((modelId) => buildRow(modelId)),
+    rows: modelOptionsForProvider(provider).map((modelId) =>
+      buildRow(modelId, format),
+    ),
   }));
 
   const selectedKeys = new Set<string>();
@@ -183,7 +191,7 @@ export const PricesPanel = ({ providers, roleModels }: PricesPanelProps) => {
       {
         role,
         provider: selection.provider,
-        ...buildRow(selection.modelId),
+        ...buildRow(selection.modelId, format),
       },
     ];
   });

@@ -173,12 +173,8 @@ export const buildFormattingLocale = (
   numberingSystem: NumberingPreference,
 ): string => {
   const calendarSystem = calendar === "auto" ? "gregory" : calendar;
-  const numbers =
-    numberingSystem === "auto"
-      ? lang === "ar"
-        ? "arab"
-        : "latn"
-      : numberingSystem;
+  const autoNumbers = lang === "ar" ? "arab" : "latn";
+  const numbers = numberingSystem === "auto" ? autoNumbers : numberingSystem;
 
   const keywords: string[] = [];
   // Pin Arabic to an explicit calendar (some CLDR regions default to a

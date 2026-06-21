@@ -9,8 +9,9 @@ export const getFirstWeekday = (locale: string): number => {
     const loc = new Intl.Locale(locale);
     const info =
       typeof loc.getWeekInfo === "function" ? loc.getWeekInfo() : undefined;
+    const firstDay = info?.firstDay;
     // Intl reports firstDay as 1 = Monday … 7 = Sunday; map to Date.getDay.
-    return info ? info.firstDay % 7 : 1;
+    return typeof firstDay === "number" ? firstDay % 7 : 1;
   } catch {
     return 1;
   }

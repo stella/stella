@@ -60,6 +60,7 @@ import {
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
+import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
@@ -117,12 +118,17 @@ type UpcomingMenuState = {
 // ── Helpers ───────────────────────────────────────────────
 
 /**
- * Get the single-letter day abbreviation for a given
- * weekday index (0 = Monday) in the user's locale.
+ * Get the single-letter day abbreviation for a column index, where column 0
+ * is the locale's first weekday (Monday in most of Europe, Saturday in the
+ * Gulf, Sunday in the US).
  */
-const getLocaleDayLabel = (dayIndex: number, locale: string) => {
-  // Jan 5, 2026 is a Monday
-  const date = new Date(2026, 0, 5 + dayIndex);
+const getLocaleDayLabel = (
+  dayIndex: number,
+  locale: string,
+  firstWeekday: number,
+) => {
+  // Jan 4, 2026 is a Sunday (getDay() === 0); offset to the first weekday.
+  const date = new Date(2026, 0, 4 + firstWeekday + dayIndex);
   return date.toLocaleDateString(locale, { weekday: "narrow" }).toUpperCase();
 };
 
@@ -132,6 +138,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const t = useTranslations();
   const tWorkspaces = useTranslations("workspaces");
   const locale = useLocale();
+  const firstWeekday = getFirstWeekday(locale);
   const lang = useI18nStore((s) => s.lang);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -268,9 +275,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
     return () => document.removeEventListener("visibilitychange", onVisible);
   });
 
-  // getWeekStart reads `new Date()`, so the `today` key forces a recompute
-  // across day boundaries (the compiler can't infer that); `locale` drives the
-  // first weekday.
+  // `today` forces a recompute at day rollover; getWeekStart reads the current
+  // date itself, so the `today` dependency is intentional despite not being
+  // referenced. `locale` drives the first weekday.
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   const weekStart = useMemo(() => getWeekStart(locale), [today, locale]);
   const weekEnd = useMemo(() => {
     const end = new Date(weekStart);
@@ -347,8 +355,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           const d = parts[2] ?? 1;
           const entryDate = new Date(y, m - 1, d);
           const dayOfWeek = entryDate.getDay();
-          // Convert Sunday=0 to index 6, Monday=1 to 0
-          const dayIdx = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
+          // Column 0 is the locale's first weekday.
+          const dayIdx = (dayOfWeek - firstWeekday + 7) % 7;
           const hours = entry.durationMinutes / 60;
           daily[dayIdx] = (daily[dayIdx] ?? 0) + hours;
 
@@ -369,7 +377,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
           dailyEntries,
         };
       });
-  }, [members, timeEntries]);
+  }, [members, timeEntries, firstWeekday]);
 
   const totalHoursThisWeek = useMemo(
     () =>
@@ -701,7 +709,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                     className="text-muted-foreground w-7 text-center text-[0.625rem]"
                     key={i}
                   >
-                    {getLocaleDayLabel(i, lang)}
+                    {getLocaleDayLabel(i, lang, firstWeekday)}
                   </span>
                 ))}
               </div>
@@ -799,7 +807,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                   <div className="p-2">
                                     <p className="text-muted-foreground mb-2 text-xs font-medium">
                                       {member.name} ·{" "}
-                                      {getLocaleDayLabel(dayIdx, lang)}
+                                      {getLocaleDayLabel(
+                                        dayIdx,
+                                        lang,
+                                        firstWeekday,
+                                      )}
                                       {" · "}
                                       {Math.round(hours * 10) / 10}h
                                     </p>
