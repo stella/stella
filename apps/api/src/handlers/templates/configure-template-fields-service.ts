@@ -61,9 +61,6 @@ export const configureTemplateFields = async function* ({
         },
         columns: {
           id: true,
-          s3Key: true,
-          manifest: true,
-          currentVersion: true,
         },
       }),
     ),
@@ -75,56 +72,80 @@ export const configureTemplateFields = async function* ({
     );
   }
 
-  const buffer = Buffer.from(await getS3().file(existing.s3Key).arrayBuffer());
-
-  // Prefer the manifest embedded in the stored DOCX; fall back to the DB column
-  // and finally to a fresh discovery so a manifest-less raw upload can still be
-  // configured. The marker bytes are left untouched throughout.
-  const embedded = await readManifest(buffer);
-  const baseManifest = embedded ?? existing.manifest ?? null;
-
-  const baseFields: FieldMeta[] =
-    baseManifest?.fields ??
-    mergeManifestWithDiscovery(null, await discoverTemplate(buffer)).map(
-      (f) => ({ path: f.path }),
-    );
-
-  const fieldPaths = new Set(baseFields.map((f) => f.path));
-  const unknownPath = fields.find((f) => !fieldPaths.has(f.path));
-  if (unknownPath) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message:
-          `No field "${unknownPath.path}" in this template. ` +
-          "Configure only paths that exist as {{markers}} (call " +
-          "describe_template to list them).",
-      }),
-    );
-  }
-
-  const overlayByPath = new Map(fields.map((f) => [f.path, f]));
-  const mergedFields: FieldMeta[] = [];
-  for (const f of baseFields) {
-    const override = overlayByPath.get(f.path);
-    mergedFields.push(override ? { ...f, ...override } : f);
-  }
-
-  const manifest: TemplateManifest = {
-    version: baseManifest?.version ?? 1,
-    fields: mergedFields,
-  };
-
-  // Re-embed the manifest into the same object; markers and every other part
-  // of the DOCX are preserved by writeManifest.
-  const updatedDocx = await writeManifest(buffer, manifest);
-  await getS3().write(existing.s3Key, new Uint8Array(updatedDocx));
-
-  yield* Result.await(
+  // All S3 I/O (read the stored DOCX, re-embed the manifest, write it back) and
+  // the row updates happen under the advisory lock, after re-reading s3Key /
+  // currentVersion fresh. Reading the buffer and writing it back *outside* the
+  // lock let a concurrent save-document commit a new vN+1 (a fresh per-version
+  // s3Key) between this read and write, so the manifest would be embedded into
+  // the now-stale object while templates.s3Key points elsewhere, diverging the
+  // DB manifest from the bytes the row references. Mirrors save-document.ts.
+  const txResult = yield* Result.await(
     safeDb(async (tx) => {
       await tx.execute(
         sql`SELECT pg_advisory_xact_lock(hashtext(${templateId}))`,
       );
+
+      // Re-read under the lock: a concurrent save that already committed will
+      // have bumped currentVersion and rotated s3Key, so both are read fresh.
+      const [locked] = await tx
+        .select({
+          s3Key: templates.s3Key,
+          manifest: templates.manifest,
+          currentVersion: templates.currentVersion,
+        })
+        .from(templates)
+        .where(
+          and(
+            eq(templates.id, templateId),
+            eq(templates.organizationId, organizationId),
+          ),
+        );
+      if (!locked) {
+        return { ok: false as const, reason: "not-found" as const };
+      }
+
+      const buffer = Buffer.from(
+        await getS3().file(locked.s3Key).arrayBuffer(),
+      );
+
+      // Prefer the manifest embedded in the stored DOCX; fall back to the DB
+      // column and finally to a fresh discovery so a manifest-less raw upload
+      // can still be configured. The marker bytes are left untouched throughout.
+      const embedded = await readManifest(buffer);
+      const baseManifest = embedded ?? locked.manifest ?? null;
+
+      const baseFields: FieldMeta[] =
+        baseManifest?.fields ??
+        mergeManifestWithDiscovery(null, await discoverTemplate(buffer)).map(
+          (f) => ({ path: f.path }),
+        );
+
+      const fieldPaths = new Set(baseFields.map((f) => f.path));
+      const unknownPath = fields.find((f) => !fieldPaths.has(f.path));
+      if (unknownPath) {
+        return {
+          ok: false as const,
+          reason: "unknown-path" as const,
+          path: unknownPath.path,
+        };
+      }
+
+      const overlayByPath = new Map(fields.map((f) => [f.path, f]));
+      const mergedFields: FieldMeta[] = [];
+      for (const f of baseFields) {
+        const override = overlayByPath.get(f.path);
+        mergedFields.push(override ? { ...f, ...override } : f);
+      }
+
+      const manifest: TemplateManifest = {
+        version: baseManifest?.version ?? 1,
+        fields: mergedFields,
+      };
+
+      // Re-embed the manifest into the locked object; markers and every other
+      // part of the DOCX are preserved by writeManifest.
+      const updatedDocx = await writeManifest(buffer, manifest);
+      await getS3().write(locked.s3Key, new Uint8Array(updatedDocx));
 
       await tx
         .update(templates)
@@ -145,7 +166,7 @@ export const configureTemplateFields = async function* ({
         .where(
           and(
             eq(templateVersions.templateId, templateId),
-            eq(templateVersions.version, existing.currentVersion),
+            eq(templateVersions.version, locked.currentVersion),
           ),
         );
 
@@ -158,8 +179,27 @@ export const configureTemplateFields = async function* ({
           fieldCount: { old: null, new: mergedFields.length },
         },
       });
+
+      return { ok: true as const, manifest };
     }),
   );
 
-  return Result.ok({ manifest });
+  if (!txResult.ok) {
+    if (txResult.reason === "not-found") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Template not found" }),
+      );
+    }
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message:
+          `No field "${txResult.path}" in this template. ` +
+          "Configure only paths that exist as {{markers}} (call " +
+          "describe_template to list them).",
+      }),
+    );
+  }
+
+  return Result.ok({ manifest: txResult.manifest });
 };
