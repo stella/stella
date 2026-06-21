@@ -18,6 +18,7 @@ import {
   fillStoredTemplateWithText,
 } from "@/api/handlers/templates/template-fill-service";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
@@ -371,17 +372,35 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   // they do in the chat tools and web fill routes; a missing config simply
   // leaves those fields unfilled rather than erroring.
   const orgAIConfig = await loadOrgAIConfig(context.organizationId);
+  const aiAnalytics = createAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId: context.organizationId,
+      safeDb: context.safeDb,
+      serviceTier: "standard",
+      userId: context.userId,
+      workspaceId: null,
+    },
+    feature: "templates.fill",
+    modelRole: "fast",
+    orgAIConfig,
+    properties: { organization_id: context.organizationId },
+    traceId: Bun.randomUUIDv7(),
+  });
   const generateAiValue = buildAiFieldGenerator({
     orgAIConfig,
     organizationId: context.organizationId,
+    aiAnalytics,
   });
   const decideAiCondition = buildAiConditionDecider({
     orgAIConfig,
     organizationId: context.organizationId,
+    aiAnalytics,
   });
   const adaptAiValue = buildAiOccurrenceAdapter({
     orgAIConfig,
     organizationId: context.organizationId,
+    aiAnalytics,
   });
 
   const filled = await fillStoredTemplateWithText({
@@ -525,7 +544,7 @@ const handleConfigureTemplateFieldsTool: McpToolHandler = async ({
   context,
 }) => {
   const hasPermission = roles[context.memberRole].authorize({
-    template: ["create"],
+    template: ["update"],
   });
   if (!hasPermission.success) {
     return errorResult("Forbidden");
