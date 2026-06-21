@@ -280,7 +280,7 @@ describe("loadWindowedThreadMessages", () => {
     expect(windowTexts(window)).toEqual(["m3", "m4", "m5"]);
   });
 
-  test("caps within the checkpoint window when it exceeds `limit`", async () => {
+  test("loads the full checkpoint window even when it exceeds `limit` (boundary preserved)", async () => {
     const base = Date.parse("2026-02-20T00:00:00.000Z");
     const { threadId, messages } = await seedThread(
       Array.from({ length: 6 }, (_, i) => ({
@@ -288,10 +288,8 @@ describe("loadWindowedThreadMessages", () => {
         text: `m${i}`,
       })),
     );
-    const [m0, m1] = messages;
-    const m4 = messages[4];
-    const m5 = messages[5];
-    if (!m0 || !m1 || !m4 || !m5) {
+    const [m0, m1, m2, m3, m4, m5] = messages;
+    if (!m0 || !m1 || !m2 || !m3 || !m4 || !m5) {
       throw new Error("seed precondition failed");
     }
     await seedActiveCheckpoint({
@@ -302,12 +300,20 @@ describe("loadWindowedThreadMessages", () => {
       summarizedMessageCount: 1,
     });
 
+    // Even with a tiny limit, the checkpoint window [m1..m5] loads in full and
+    // keeps firstKept (m1) so applyChatCompactionCheckpoint can anchor the
+    // stored summary; the row cap applies only to the no-checkpoint case.
     const window = unwrap(
       await loadWindowedThreadMessages({ safeDb, threadId, limit: 2 }),
     );
 
-    // Within the [m1..m5] checkpoint window, only the most recent 2 load.
-    expect(window.map((m) => m.id)).toEqual([m4.id, m5.id]);
+    expect(window.map((m) => m.id)).toEqual([
+      m1.id,
+      m2.id,
+      m3.id,
+      m4.id,
+      m5.id,
+    ]);
   });
 });
 

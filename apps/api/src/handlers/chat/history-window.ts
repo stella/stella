@@ -29,19 +29,22 @@ type LoadWindowedThreadMessagesArgs = {
 /**
  * Load the per-send message window for a thread, ascending (oldest-first).
  *
- * The read is hard-capped at the most recent `limit` rows so a single send can
- * never load an unbounded history. This matters because some threads never form
- * a compaction checkpoint — anonymized threads skip checkpoint scheduling — so
- * the boundary filter below would otherwise leave the read unbounded for them.
+ * Two cases, each bounded differently:
  *
- * When an active checkpoint exists, the window is additionally filtered to rows
- * at or after its `firstKeptMessageId` (the already-summarized prefix is
- * dropped); the boundary is resolved in-DB against the checkpoint row's
- * full-precision (createdAt, id) tuple — mirroring message-page.ts — so
- * same-millisecond rows are not skipped. The most recent rows are taken
- * (DESC + limit) and returned ascending, so the model always sees the freshest
- * context; anything older than the window is summarized in-memory by
- * compactChatMessagesForModel.
+ *  - Active checkpoint: load the full preserve window — rows at or after
+ *    `firstKeptMessageId` — with NO row cap. That window is token-bounded by
+ *    the compaction cycle (a new checkpoint forms once [firstKept..now] crosses
+ *    the trigger), and it must always include `firstKeptMessageId` so
+ *    applyChatCompactionCheckpoint can anchor the stored summary; a row cap
+ *    could drop the boundary on a long run of short post-checkpoint messages
+ *    and silently lose all earlier summarized context. The boundary is resolved
+ *    in-DB against the checkpoint row's full-precision (createdAt, id) tuple —
+ *    mirroring message-page.ts — so same-millisecond rows are not skipped.
+ *
+ *  - No checkpoint (e.g. anonymized threads, which skip checkpoint scheduling):
+ *    hard-cap at the most recent `limit` rows so the per-send read stays
+ *    bounded. Anything older than the cap is summarized in-memory by
+ *    compactChatMessagesForModel.
  */
 export const loadWindowedThreadMessages = async ({
   safeDb,
@@ -56,6 +59,33 @@ export const loadWindowedThreadMessages = async ({
     );
     const firstKeptMessageId = checkpoint?.firstKeptMessageId ?? null;
 
+    if (firstKeptMessageId) {
+      const rows = yield* Result.await(
+        safeDb((tx) =>
+          tx
+            .select({
+              id: chatMessages.id,
+              role: chatMessages.role,
+              content: chatMessages.content,
+            })
+            .from(chatMessages)
+            .where(
+              and(
+                eq(chatMessages.threadId, threadId),
+                sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (select b.created_at, b.id from chat_messages b where b.id = ${firstKeptMessageId})`,
+              ),
+            )
+            // SAFETY: token-bounded by the compaction preserve window; a new
+            // checkpoint forms once [firstKept..now] crosses the trigger, so it
+            // cannot grow unbounded. Intentionally NOT row-capped: firstKept
+            // must remain in the result for the stored summary to anchor.
+            // eslint-disable-next-line require-query-limit/require-query-limit -- token-bounded preserve window; see SAFETY above
+            .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
+        ),
+      );
+      return Result.ok(rows);
+    }
+
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -65,19 +95,9 @@ export const loadWindowedThreadMessages = async ({
             content: chatMessages.content,
           })
           .from(chatMessages)
-          .where(
-            and(
-              eq(chatMessages.threadId, threadId),
-              // Mirrors message-page.ts: compare the full-precision
-              // (createdAt, id) tuple in-DB against the boundary row (looked up
-              // by id) so same-millisecond rows are not skipped.
-              firstKeptMessageId
-                ? sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (select b.created_at, b.id from chat_messages b where b.id = ${firstKeptMessageId})`
-                : undefined,
-            ),
-          )
-          // Take the most recent rows (reversed to ascending below) so the read
-          // is hard-bounded even for threads that never checkpoint.
+          .where(eq(chatMessages.threadId, threadId))
+          // Take the most recent rows (reversed to ascending below) so a
+          // never-checkpointed thread's read stays hard-bounded.
           .orderBy(desc(chatMessages.createdAt), desc(chatMessages.id))
           .limit(limit),
       ),
