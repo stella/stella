@@ -7,6 +7,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 
 // Matter-specific kinds may only live at workspace scope, so a fact
 // about one matter can never be saved as user (cross-matter) memory.
@@ -84,6 +85,18 @@ const createMemory = createSafeRootHandler(
       );
     }
 
+    // Stored memory is replayed into future system prompts, so refuse
+    // content carrying model-control sequences at the boundary.
+    const sanitized = sanitizeMemoryContent(body.content);
+    if (Result.isError(sanitized)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Memory content contains disallowed sequences",
+        }),
+      );
+    }
+
     const created = yield* Result.await(
       safeDb(async (tx) => {
         const [row] = await tx
@@ -94,7 +107,7 @@ const createMemory = createSafeRootHandler(
             userId: body.scope === "user" ? user.id : null,
             workspaceId,
             kind: body.kind,
-            content: body.content,
+            content: sanitized.value,
             language: body.language ?? null,
             source: "user",
             pinned: body.pinned ?? false,

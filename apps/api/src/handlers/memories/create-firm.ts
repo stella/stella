@@ -6,6 +6,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 
 const config = {
   // Firm-wide memory is governance-gated: only roles granted
@@ -23,6 +24,19 @@ const config = {
 const createFirmMemory = createSafeRootHandler(
   config,
   async function* ({ body, recordAuditEvent, safeDb, session, user }) {
+    // Firm memory is replayed into every member's chat prompt, so this is
+    // the highest-blast-radius write; refuse model-control sequences here
+    // even though only admins reach this route.
+    const sanitized = sanitizeMemoryContent(body.content);
+    if (Result.isError(sanitized)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Memory content contains disallowed sequences",
+        }),
+      );
+    }
+
     const created = yield* Result.await(
       safeDb(async (tx) => {
         const [row] = await tx
@@ -33,7 +47,7 @@ const createFirmMemory = createSafeRootHandler(
             userId: null,
             workspaceId: null,
             kind: body.kind,
-            content: body.content,
+            content: sanitized.value,
             language: body.language ?? null,
             source: "user",
             pinned: body.pinned ?? false,

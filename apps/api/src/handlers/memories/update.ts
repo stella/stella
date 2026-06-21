@@ -10,6 +10,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 
 const config = {
   permissions: { chat: ["update"] },
@@ -62,6 +63,22 @@ const updateMemory = createSafeRootHandler(
       }
     }
 
+    // An edited body re-enters future prompts, so re-run the same
+    // fail-closed sanitizer the create paths use.
+    let sanitizedContent: string | undefined;
+    if (body.content !== undefined) {
+      const sanitized = sanitizeMemoryContent(body.content);
+      if (Result.isError(sanitized)) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Memory content contains disallowed sequences",
+          }),
+        );
+      }
+      sanitizedContent = sanitized.value;
+    }
+
     const archiving = body.status === "archived";
     const activating = body.status === "active";
 
@@ -72,7 +89,9 @@ const updateMemory = createSafeRootHandler(
           .set({
             ...(body.status !== undefined ? { status: body.status } : {}),
             ...(body.pinned !== undefined ? { pinned: body.pinned } : {}),
-            ...(body.content !== undefined ? { content: body.content } : {}),
+            ...(sanitizedContent !== undefined
+              ? { content: sanitizedContent }
+              : {}),
             ...(archiving ? { archivedAt: new Date() } : {}),
             ...(activating ? { archivedAt: null } : {}),
           })

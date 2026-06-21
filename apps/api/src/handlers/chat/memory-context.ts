@@ -14,6 +14,7 @@ import { and, desc, eq, inArray, or } from "drizzle-orm";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { aiMemories } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { stripPromptUnsafeChars } from "@/api/lib/prompt-safety";
 
 // Hard caps so a firm with thousands of memories cannot blow the
 // context window or the prompt-cache budget on this one block.
@@ -117,7 +118,17 @@ const renderMemoryBlock = ({
   const bullets: string[] = [];
   let usedChars = 0;
   for (const row of grouped) {
-    const bullet = `- [${row.kind}] ${row.content}`;
+    // Defence in depth: every write path sanitizes on the way in, but
+    // strip invisible/control chars and flatten to one line again here so
+    // a row that predates the write-time guard still renders as a single,
+    // inert bullet rather than smuggling a fresh instruction line.
+    const safeContent = stripPromptUnsafeChars(row.content)
+      .replace(/\s+/gu, " ")
+      .trim();
+    if (safeContent.length === 0) {
+      continue;
+    }
+    const bullet = `- [${row.kind}] ${safeContent}`;
     if (usedChars + bullet.length > MEMORY_BLOCK_MAX_CHARS) {
       break;
     }

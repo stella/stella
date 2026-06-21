@@ -54,11 +54,24 @@ type SanitizeForPromptOptions = {
 const DEFAULT_OPEN = "<<<UNTRUSTED>>>";
 const DEFAULT_CLOSE = "<<<END_UNTRUSTED>>>";
 
-const ROLE_MARKERS: readonly RegExp[] = [
+// Structural model-control tokens (ChatML, Llama [INST]/<<SYS>>). These
+// never occur in legitimate prose, so callers that store rather than wrap
+// text can treat their presence as a hard signal and reject fail-closed.
+const MODEL_ROLE_CONTROL_TOKENS: readonly RegExp[] = [
   /<\|[^|]{0,128}\|>/gu,
   /\[\/?INST\]/giu,
   /<<\/?SYS>>/gu,
-  /^[ \t]*(?:system|assistant|user|tool|developer)[ \t]*:/gimu,
+];
+
+// A line that opens with a chat role prefix. Strippable in wrapped prompts,
+// but too coincidental with real text (e.g. "Developer: Acme Ltd") to use
+// as a reject signal; callers should collapse newlines first instead.
+const ROLE_PREFIX_LINE =
+  /^[ \t]*(?:system|assistant|user|tool|developer)[ \t]*:/gimu;
+
+const ROLE_MARKERS: readonly RegExp[] = [
+  ...MODEL_ROLE_CONTROL_TOKENS,
+  ROLE_PREFIX_LINE,
 ];
 
 const INVISIBLE_OVERRIDES =
@@ -97,6 +110,30 @@ const stripControlChars = (input: string): string => {
   }
   return chunks.join("");
 };
+
+/**
+ * Remove the characters that have no legitimate place in prompt text and
+ * are the classic obfuscation/exfiltration carriers: ASCII control codes
+ * and Unicode bidi / zero-width overrides. Leaves visible content intact.
+ *
+ * Use this when persisting or rendering untrusted text that is not wrapped
+ * by {@link sanitizeForPrompt} (which applies the same strip internally).
+ */
+export const stripPromptUnsafeChars = (text: string): string =>
+  stripControlChars(text).replace(INVISIBLE_OVERRIDES, "");
+
+/**
+ * True when the text carries a structural model-control token (ChatML
+ * `<|...|>`, Llama `[INST]` / `<<SYS>>`). These never appear in real prose,
+ * so a caller storing text for later prompt injection can reject on a hit
+ * rather than silently stripping. Does not flag bare `role:` prefixes —
+ * those collide with legitimate content; collapse newlines instead.
+ */
+export const containsModelRoleControlTokens = (text: string): boolean =>
+  MODEL_ROLE_CONTROL_TOKENS.some((pattern) => {
+    pattern.lastIndex = 0;
+    return pattern.test(text);
+  });
 
 const TRUNCATION_SUFFIX = "…[truncated]";
 
@@ -145,8 +182,7 @@ export const sanitizeForPrompt = (
   const open = promptDelimiter(options?.open, DEFAULT_OPEN, "open");
   const close = promptDelimiter(options?.close, DEFAULT_CLOSE, "close");
 
-  let cleaned: string = stripControlChars(text);
-  cleaned = cleaned.replace(INVISIBLE_OVERRIDES, "");
+  let cleaned: string = stripPromptUnsafeChars(text);
   for (const pattern of ROLE_MARKERS) {
     cleaned = cleaned.replace(pattern, "");
   }

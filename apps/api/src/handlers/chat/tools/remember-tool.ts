@@ -7,6 +7,7 @@ import type { SafeDb } from "@/api/db";
 import { aiMemories } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 
 export const REMEMBER_TOOL_NAME = "remember";
 
@@ -95,6 +96,17 @@ export const createRememberTool = ({
         });
       }
 
+      // The stored content is replayed into future system prompts across
+      // this scope, so refuse anything carrying model-control sequences
+      // before it can become a persistent injection vector.
+      const sanitized = sanitizeMemoryContent(content);
+      if (Result.isError(sanitized)) {
+        throw new ChatToolError({
+          message:
+            "That memory could not be saved because it contained control or model-instruction sequences.",
+        });
+      }
+
       const memoryWorkspaceId =
         resolvedScope === "workspace" ? workspaceId : null;
 
@@ -105,7 +117,7 @@ export const createRememberTool = ({
           userId: resolvedScope === "user" ? userId : null,
           workspaceId: memoryWorkspaceId,
           kind: resolvedKind,
-          content,
+          content: sanitized.value,
           // Workspace memory is derived from this matter's content, so
           // gate later RLS reads on the same workspace.
           sourceDataWorkspaceIds: memoryWorkspaceId ? [memoryWorkspaceId] : [],

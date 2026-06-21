@@ -15,6 +15,7 @@ import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
+import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const MEMORY_EXTRACTOR_TASK = "memory.extractor" as const;
@@ -224,11 +225,17 @@ const normalizeCandidates = (
     if (normalized.length >= MAX_CANDIDATES) {
       break;
     }
-    const content = candidate.content.trim().slice(0, MAX_CONTENT_LENGTH);
-    if (content.length === 0) {
+    // These candidates were produced from untrusted matter/chat text, so
+    // drop any that carry an injection signal before they reach the
+    // suggestions queue; the sanitizer also trims and flattens.
+    const sanitized = sanitizeMemoryContent(candidate.content);
+    if (Result.isError(sanitized)) {
       continue;
     }
-    normalized.push({ kind: candidate.kind, content });
+    normalized.push({
+      kind: candidate.kind,
+      content: sanitized.value.slice(0, MAX_CONTENT_LENGTH),
+    });
   }
   return normalized;
 };
