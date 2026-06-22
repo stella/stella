@@ -69,6 +69,18 @@ export const CLIPBOARD_TYPES = {
   PLAIN: "text/plain",
 } as const;
 
+const SKIPPED_CLIPBOARD_ELEMENTS = new Set([
+  "script",
+  "style",
+  "iframe",
+  "object",
+  "embed",
+  "form",
+  "textarea",
+  "svg",
+  "math",
+]);
+
 /**
  * Extract image files from clipboard data (if present).
  */
@@ -447,24 +459,132 @@ export function isEditorHtml(html: string): boolean {
 }
 
 /**
+ * Strip every HTML comment, including unterminated comments.
+ */
+function stripHtmlComments(html: string): string {
+  let result = "";
+  let cursor = 0;
+
+  while (cursor < html.length) {
+    const start = html.indexOf("<!--", cursor);
+    if (start === -1) {
+      result += html.slice(cursor);
+      break;
+    }
+
+    result += html.slice(cursor, start);
+    const end = html.indexOf("-->", start + 4);
+    if (end === -1) {
+      break;
+    }
+
+    cursor = end + 3;
+  }
+
+  return result;
+}
+
+const ASCII_UPPER_A = 65;
+const ASCII_UPPER_Z = 90;
+const ASCII_LOWERCASE_OFFSET = 32;
+
+function toAsciiLowerCode(code: number): number {
+  if (code < ASCII_UPPER_A || code > ASCII_UPPER_Z) {
+    return code;
+  }
+
+  return code + ASCII_LOWERCASE_OFFSET;
+}
+
+function indexOfAsciiCaseInsensitive(
+  text: string,
+  search: string,
+  fromIndex: number,
+): number {
+  const maxStart = text.length - search.length;
+
+  for (let index = fromIndex; index <= maxStart; index++) {
+    let matches = true;
+
+    for (let offset = 0; offset < search.length; offset++) {
+      const textCode = toAsciiLowerCode(text.codePointAt(index + offset) ?? -1);
+      const searchCode = search.codePointAt(offset) ?? -1;
+
+      if (textCode !== searchCode) {
+        matches = false;
+        break;
+      }
+    }
+
+    if (matches) {
+      return index;
+    }
+  }
+
+  return -1;
+}
+
+/**
+ * Remove paired namespace blocks such as Word/Office `<w:...>` and `<o:...>`
+ * tags without regex backtracking on hostile clipboard HTML.
+ */
+function stripPairedNamespaceTags(html: string, prefix: string): string {
+  const open = `<${prefix}`;
+  const close = `</${prefix}`;
+  let result = "";
+  let cursor = 0;
+
+  while (cursor < html.length) {
+    const start = indexOfAsciiCaseInsensitive(html, open, cursor);
+    if (start === -1) {
+      result += html.slice(cursor);
+      break;
+    }
+
+    const openTagEnd = html.indexOf(">", start);
+    if (openTagEnd === -1) {
+      result += html.slice(cursor);
+      break;
+    }
+    const openingTag = html.slice(start, openTagEnd).trimEnd();
+    if (openingTag.endsWith("/")) {
+      result += html.slice(cursor, start);
+      cursor = openTagEnd + 1;
+      continue;
+    }
+
+    const closeStart = indexOfAsciiCaseInsensitive(html, close, openTagEnd + 1);
+    const closeTagEnd = closeStart === -1 ? -1 : html.indexOf(">", closeStart);
+    if (closeTagEnd === -1) {
+      result += html.slice(cursor);
+      break;
+    }
+
+    result += html.slice(cursor, start);
+    cursor = closeTagEnd + 1;
+  }
+
+  return result;
+}
+
+/**
  * Clean Microsoft Word HTML
  */
 export function cleanWordHtml(html: string): string {
   let cleaned = html;
 
-  // Remove Word-specific comments
-  cleaned = cleaned.replace(/<!--\[if[\s\S]*?<!\[endif\]-->/gi, "");
-  cleaned = cleaned.replace(/<!--[\s\S]*?-->/g, "");
+  // Remove Word-specific comments and any other HTML comments.
+  cleaned = stripHtmlComments(cleaned);
 
   // Remove XML declarations
   cleaned = cleaned.replace(/<\?xml[^>]*>/gi, "");
 
-  // Remove o: (Office) namespace tags
-  cleaned = cleaned.replace(/<o:[^>]*>[\s\S]*?<\/o:[^>]*>/gi, "");
+  // Remove o: (Office) namespace tags.
+  cleaned = stripPairedNamespaceTags(cleaned, "o:");
   cleaned = cleaned.replace(/<o:[^>]*\/>/gi, "");
 
-  // Remove w: (Word) namespace tags
-  cleaned = cleaned.replace(/<w:[^>]*>[\s\S]*?<\/w:[^>]*>/gi, "");
+  // Remove w: (Word) namespace tags.
+  cleaned = stripPairedNamespaceTags(cleaned, "w:");
   cleaned = cleaned.replace(/<w:[^>]*\/>/gi, "");
 
   cleaned = cleanWordAttributes(cleaned);
@@ -561,6 +681,9 @@ function processNode(
 
   const element = node;
   const tagName = element.tagName.toLowerCase();
+  if (SKIPPED_CLIPBOARD_ELEMENTS.has(tagName)) {
+    return;
+  }
 
   // Merge formatting from this element
   const formatting = { ...inheritedFormatting, ...extractFormatting(element) };

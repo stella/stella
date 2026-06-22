@@ -1,7 +1,41 @@
 import { describe, expect, test } from "bun:test";
 
 import type { Run } from "../../types/document";
-import { getClipboardImageFiles, runsToClipboardContent } from "../clipboard";
+import {
+  cleanWordHtml,
+  getClipboardImageFiles,
+  runsToClipboardContent,
+} from "../clipboard";
+
+const withDomParserStub = (run: () => void): void => {
+  const originalParser = globalThis.DOMParser;
+  Object.defineProperty(globalThis, "DOMParser", {
+    configurable: true,
+    value: class {
+      parseFromString(html: string) {
+        return {
+          body: {
+            innerHTML: html,
+            querySelectorAll: () => [],
+          },
+        };
+      }
+    },
+  });
+
+  try {
+    run();
+  } finally {
+    if (originalParser) {
+      Object.defineProperty(globalThis, "DOMParser", {
+        configurable: true,
+        value: originalParser,
+      });
+    } else {
+      Reflect.deleteProperty(globalThis, "DOMParser");
+    }
+  }
+};
 
 describe("getClipboardImageFiles", () => {
   test("returns image files from clipboardData.files", () => {
@@ -136,5 +170,34 @@ describe("runsToClipboardContent", () => {
     expect(html).not.toContain(scriptScheme);
     expect(html).not.toContain("color: #000000;background");
     expect(html).not.toContain("background-color:");
+  });
+});
+
+describe("cleanWordHtml", () => {
+  test("removes unterminated comments without leaving a stray opener", () => {
+    withDomParserStub(() => {
+      expect(cleanWordHtml("safe<!--dangling")).toBe("safe");
+    });
+  });
+
+  test("strips many unterminated Office namespace openers in linear time", () => {
+    withDomParserStub(() => {
+      const evil = "<o:p>".repeat(100_000);
+      const start = performance.now();
+      cleanWordHtml(evil);
+      expect(performance.now() - start).toBeLessThan(5000);
+    });
+  });
+
+  test("removes self-closing namespace tags without stripping later content", () => {
+    withDomParserStub(() => {
+      expect(cleanWordHtml("a<o:p/>keep</o:p>tail")).toContain("keep");
+    });
+  });
+
+  test("keeps original indices when stripping namespace tags after expanded lowercase characters", () => {
+    withDomParserStub(() => {
+      expect(cleanWordHtml("İ<o:p>junk</o:p>B")).toBe("İB");
+    });
   });
 });

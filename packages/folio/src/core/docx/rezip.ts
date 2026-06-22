@@ -1654,7 +1654,7 @@ export function updateCoreProperties(
     // Update dcterms:modified
     if (result.includes("<dcterms:modified")) {
       result = result.replace(
-        /<dcterms:modified[^>]*>[^<]*<\/dcterms:modified>/u,
+        /<dcterms:modified[^<>]*>[^<]*<\/dcterms:modified>/u,
         `<dcterms:modified xsi:type="dcterms:W3CDTF">${now}</dcterms:modified>`,
       );
     } else {
