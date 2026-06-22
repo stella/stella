@@ -136,6 +136,16 @@ const getLocaleDayLabel = (
   return date.toLocaleDateString(locale, { weekday: "narrow" }).toUpperCase();
 };
 
+// Round to one decimal and render the locale's translated `hour` unit, so the
+// suffix follows the active language rather than a hardcoded English "h".
+const formatHours = (hours: number) =>
+  getFormatter().number(Math.round(hours * 10) / 10, {
+    style: "unit",
+    unit: "hour",
+    unitDisplay: "short",
+    maximumFractionDigits: 1,
+  });
+
 // ── Main component ───────────────────────────────────────
 
 export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
@@ -476,7 +486,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               params: { workspaceId },
             });
           }}
-          value={`${getFormatter().number(Math.round(totalHoursThisWeek * 10) / 10)}h`}
+          value={formatHours(totalHoursThisWeek)}
         />
       </div>
 
@@ -804,7 +814,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                     {cell}
                                   </PopoverTrigger>
                                   <TooltipPopup>
-                                    {Math.round(hours * 10) / 10}h
+                                    {formatHours(hours)}
                                   </TooltipPopup>
                                 </TooltipRoot>
                                 <PopoverPopup className="w-56" sideOffset={8}>
@@ -817,7 +827,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                         firstWeekday,
                                       )}
                                       {" · "}
-                                      {Math.round(hours * 10) / 10}h
+                                      {formatHours(hours)}
                                     </p>
                                     {entries.length > 0 ? (
                                       <div className="space-y-1.5">
@@ -830,9 +840,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                               {entry.description}
                                             </span>
                                             <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                                              {Math.round(entry.hours * 10) /
-                                                10}
-                                              h
+                                              {formatHours(entry.hours)}
                                             </span>
                                           </div>
                                         ))}
@@ -850,7 +858,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         })}
                       </div>
                       <span className="text-muted-foreground w-10 shrink-0 text-end text-xs tabular-nums">
-                        {total > 0 ? `${total}h` : ""}
+                        {total > 0 ? formatHours(total) : ""}
                       </span>
                     </div>
                   );
@@ -865,7 +873,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium tabular-nums">
                     {totalHoursThisWeek > 0
-                      ? `${Math.round(totalHoursThisWeek * 10) / 10}h`
+                      ? formatHours(totalHoursThisWeek)
                       : ""}
                   </span>
                   {prevWeekHours !== null &&
