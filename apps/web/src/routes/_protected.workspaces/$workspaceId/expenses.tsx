@@ -8,7 +8,6 @@ import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
-import { getFormattingLocale } from "@/i18n/i18n-store";
 import { startOfWeek } from "@/i18n/week";
 import { ExpenseListView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view";
 
@@ -88,10 +87,10 @@ function ExpensesPage() {
     setCurrentDate(new Date());
   };
 
-  const dateLabel = `${monday.toLocaleDateString(getFormattingLocale(), {
+  const dateLabel = `${monday.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
-  })} – ${sunday.toLocaleDateString(getFormattingLocale(), {
+  })} – ${sunday.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
