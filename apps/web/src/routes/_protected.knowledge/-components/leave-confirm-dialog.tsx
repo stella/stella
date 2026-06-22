@@ -11,6 +11,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 
 /** Confirmation shown when leaving a detail view with unsaved/un-versioned
  *  changes. The "keep editing" action cancels; the secondary and primary
@@ -36,7 +37,7 @@ export const LeaveConfirmDialog = ({
         </AlertDialogHeader>
         <AlertDialogFooter className="justify-between sm:justify-between">
           <AlertDialogClose render={<Button variant="ghost" />}>
-            <ArrowLeftIcon className="rtl:-scale-x-100" />
+            <DirectionalIcon icon={ArrowLeftIcon} />
             {cancelLabel}
           </AlertDialogClose>
           <div className="flex items-center gap-2">

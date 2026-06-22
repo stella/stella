@@ -33,6 +33,7 @@ import {
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Field, FieldError } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
@@ -82,7 +83,7 @@ function InvoiceDetailPage() {
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <Link params={{ workspaceId }} to="/workspaces/$workspaceId/invoices">
           <Button size="icon" variant="ghost">
-            <ArrowLeftIcon className="size-4 rtl:-scale-x-100" />
+            <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
           </Button>
         </Link>
         <h1 className="text-sm font-medium">

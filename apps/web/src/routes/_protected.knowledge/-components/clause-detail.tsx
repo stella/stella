@@ -44,6 +44,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import {
   DropdownMenu,
@@ -483,7 +484,7 @@ const ClauseHeader = ({
         size="icon-sm"
         variant="ghost"
       >
-        <ArrowLeftIcon className="rtl:-scale-x-100" />
+        <DirectionalIcon icon={ArrowLeftIcon} />
       </Button>
 
       {editingTitle && canEdit ? (

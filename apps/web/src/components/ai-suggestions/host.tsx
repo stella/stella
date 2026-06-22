@@ -57,6 +57,7 @@ import type {
   AISuggestionSeverity,
 } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import {
   Tooltip,
   TooltipPopup,
@@ -1436,7 +1437,7 @@ export function SuggestionStepper({
         size="icon-sm"
         variant="ghost"
       >
-        <ChevronLeftIcon className="rtl:-scale-x-100" />
+        <DirectionalIcon icon={ChevronLeftIcon} />
       </Button>
       <span className="text-muted-foreground min-w-12 text-center text-xs tabular-nums">
         {t("chat.suggestionStep", {
@@ -1450,7 +1451,7 @@ export function SuggestionStepper({
         size="icon-sm"
         variant="ghost"
       >
-        <ChevronRightIcon className="rtl:-scale-x-100" />
+        <DirectionalIcon icon={ChevronRightIcon} />
       </Button>
       <Button className="ms-1" onClick={onDismiss} size="sm" variant="ghost">
         {t("folio.dismiss")}

@@ -3,6 +3,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Frame } from "@stll/ui/components/frame";
 import {
   SortableHead,
@@ -434,12 +435,13 @@ const MattersTableGroup = ({
           colSpan={columns.length}
         >
           <div className="flex items-center gap-2">
-            <ChevronRightIcon
+            <DirectionalIcon
               className={cn(
                 "text-muted-foreground size-3.5 shrink-0 transition-transform",
                 !collapsed && "rotate-90",
-                collapsed && "rtl:-scale-x-100",
               )}
+              flip={collapsed}
+              icon={ChevronRightIcon}
             />
             {group.type === "client" && (
               <span

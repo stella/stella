@@ -2,6 +2,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import {
   Popover,
   PopoverPopup,
@@ -40,10 +41,10 @@ export const CalendarHeader = ({
         {t("common.today")}
       </Button>
       <Button onClick={onNavigatePrev} size="icon-sm" variant="ghost">
-        <ChevronLeftIcon className="rtl:-scale-x-100" />
+        <DirectionalIcon icon={ChevronLeftIcon} />
       </Button>
       <Button onClick={onNavigateNext} size="icon-sm" variant="ghost">
-        <ChevronRightIcon className="rtl:-scale-x-100" />
+        <DirectionalIcon icon={ChevronRightIcon} />
       </Button>
       <Popover>
         <PopoverTrigger
@@ -68,7 +69,7 @@ export const CalendarHeader = ({
               size="icon-xs"
               variant="ghost"
             >
-              <ChevronLeftIcon className="rtl:-scale-x-100" />
+              <DirectionalIcon icon={ChevronLeftIcon} />
             </Button>
             <span className="text-xs font-medium">{year}</span>
             <Button
@@ -78,7 +79,7 @@ export const CalendarHeader = ({
               size="icon-xs"
               variant="ghost"
             >
-              <ChevronRightIcon className="rtl:-scale-x-100" />
+              <DirectionalIcon icon={ChevronRightIcon} />
             </Button>
           </div>
           <div className="grid grid-cols-3 gap-1">

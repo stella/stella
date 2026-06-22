@@ -11,6 +11,7 @@ import {
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import {
   Select,
   SelectItem,
@@ -255,7 +256,7 @@ function TimesheetsPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronLeftIcon className="size-4 rtl:-scale-x-100" />
+              <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
             </Button>
             <span className="min-w-[10rem] text-center text-sm">
               {dateLabel}
@@ -268,7 +269,7 @@ function TimesheetsPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronRightIcon className="size-4 rtl:-scale-x-100" />
+              <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
             </Button>
           </div>
         </div>

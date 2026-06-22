@@ -21,6 +21,7 @@ import { useTranslations } from "use-intl";
 
 import { markerPattern } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 import { UserAvatar } from "@/components/user-avatar";
@@ -237,7 +238,7 @@ export const VersionRow = ({
               {isDiffOpen ? (
                 <ChevronDownIcon className="size-3" />
               ) : (
-                <ChevronRightIcon className="size-3 rtl:-scale-x-100" />
+                <DirectionalIcon className="size-3" icon={ChevronRightIcon} />
               )}
               {t("fileDetail.showDiff")}
             </Button>

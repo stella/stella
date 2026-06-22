@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -440,7 +441,7 @@ const OutdatedChanges = ({
           {isDiffOpen ? (
             <ChevronDownIcon className="size-3" />
           ) : (
-            <ChevronRightIcon className="size-3 rtl:-scale-x-100" />
+            <DirectionalIcon className="size-3" icon={ChevronRightIcon} />
           )}
           {t("fileDetail.showDiff")}
         </Button>

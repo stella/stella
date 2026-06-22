@@ -1,6 +1,7 @@
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
 
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 import type { WorkspaceGroup } from "@/routes/_protected.workspaces/-types";
@@ -33,12 +34,13 @@ export const ClientGroupHeader = ({
       onClick={onToggle}
       type="button"
     >
-      <ChevronRightIcon
+      <DirectionalIcon
         className={cn(
           "text-muted-foreground size-3.5 shrink-0 transition-transform",
           !collapsed && "rotate-90",
-          collapsed && "rtl:-scale-x-100",
         )}
+        flip={collapsed}
+        icon={ChevronRightIcon}
       />
       <h3 className="text-sm font-semibold">
         {group.type === "personal" ? (

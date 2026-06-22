@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import {
@@ -511,7 +512,7 @@ const RateEntriesView = ({
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Button className="size-7" onClick={onBack} size="icon" variant="ghost">
-          <ArrowLeftIcon className="size-4 rtl:-scale-x-100" />
+          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
         </Button>
         <h3 className="text-sm font-medium">
           {table?.name ?? t("billing.rates.rateEntries")}

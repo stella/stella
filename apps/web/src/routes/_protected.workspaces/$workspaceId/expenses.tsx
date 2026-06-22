@@ -5,6 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
@@ -113,7 +114,7 @@ function ExpensesPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronLeftIcon className="size-4 rtl:-scale-x-100" />
+              <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
             </Button>
             <span className="min-w-[10rem] text-center text-sm">
               {dateLabel}
@@ -124,7 +125,7 @@ function ExpensesPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronRightIcon className="size-4 rtl:-scale-x-100" />
+              <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
             </Button>
           </div>
         </div>

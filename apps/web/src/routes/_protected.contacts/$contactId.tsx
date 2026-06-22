@@ -11,6 +11,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -160,7 +161,7 @@ function ContactDetailPage() {
           size="icon-xs"
           variant="ghost"
         >
-          <ArrowLeftIcon className="size-4 rtl:-scale-x-100" />
+          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
         </Button>
         <div className="flex items-center gap-2">
           {contact.type === "person" ? (

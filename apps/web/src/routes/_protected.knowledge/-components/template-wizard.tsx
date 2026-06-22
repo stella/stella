@@ -12,6 +12,7 @@ import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -526,7 +527,7 @@ export const ConfigureStep = ({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-2">
         <Button onClick={onBack} size="sm" variant="ghost">
-          <ArrowLeftIcon className="rtl:-scale-x-100" />
+          <DirectionalIcon icon={ArrowLeftIcon} />
           {t("templates.backToList")}
         </Button>
       </div>
@@ -591,7 +592,10 @@ export const ConfigureStep = ({
                       {isExpanded ? (
                         <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
                       ) : (
-                        <ChevronRightIcon className="text-muted-foreground size-4 shrink-0 rtl:-scale-x-100" />
+                        <DirectionalIcon
+                          className="text-muted-foreground size-4 shrink-0"
+                          icon={ChevronRightIcon}
+                        />
                       )}
                       <span className="min-w-0 flex-1 font-medium">
                         {field.label || field.path}

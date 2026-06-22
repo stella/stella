@@ -16,6 +16,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Label } from "@stll/ui/components/label";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -344,12 +345,13 @@ const FolderPicker = ({
               }}
               type="button"
             >
-              <ChevronRightIcon
+              <DirectionalIcon
                 className={cn(
                   "size-3 transition-transform",
                   isExpanded && "rotate-90",
-                  !isExpanded && "rtl:-scale-x-100",
                 )}
+                flip={!isExpanded}
+                icon={ChevronRightIcon}
               />
             </button>
           ) : (

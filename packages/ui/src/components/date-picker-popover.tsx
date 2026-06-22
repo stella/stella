@@ -5,6 +5,7 @@ import { useCallback, useMemo, useRef, useState } from "react";
 import { CalendarIcon, ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import {
   Popover,
   PopoverPopup,
@@ -473,7 +474,7 @@ function DatePickerPopover({
               size="icon-xs"
               variant="ghost"
             >
-              <ChevronLeftIcon className="rtl:-scale-x-100" />
+              <DirectionalIcon icon={ChevronLeftIcon} />
             </Button>
             <button
               className={cn(
@@ -502,7 +503,7 @@ function DatePickerPopover({
               size="icon-xs"
               variant="ghost"
             >
-              <ChevronRightIcon className="rtl:-scale-x-100" />
+              <DirectionalIcon icon={ChevronRightIcon} />
             </Button>
           </div>
 

@@ -14,6 +14,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 
 import { TemplateForm } from "@/routes/_protected.knowledge/-components/template-form";
@@ -88,7 +89,7 @@ const NewDocumentFromTemplateDialogBody = ({
                 type="button"
                 variant="ghost"
               >
-                <ArrowLeftIcon className="rtl:-scale-x-100" />
+                <DirectionalIcon icon={ArrowLeftIcon} />
                 {t("common.goBack")}
               </Button>
             </div>

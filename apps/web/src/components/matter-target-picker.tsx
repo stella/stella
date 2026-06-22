@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
@@ -234,12 +235,13 @@ const FolderPicker = ({
               }}
               type="button"
             >
-              <ChevronRightIcon
+              <DirectionalIcon
                 className={cn(
                   "size-3 transition-transform",
                   isExpanded && "rotate-90",
-                  !isExpanded && "rtl:-scale-x-100",
                 )}
+                flip={!isExpanded}
+                icon={ChevronRightIcon}
               />
             </button>
           ) : (

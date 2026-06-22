@@ -23,6 +23,7 @@ import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio";
 import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import {
   Popover,
@@ -937,9 +938,9 @@ const RedlinePreview = ({
     "bg-destructive/10 text-destructive line-through decoration-destructive/70 px-1 py-0.5 rounded-sm";
 
   const arrow = (
-    <ArrowRightIcon
-      aria-hidden="true"
-      className="text-foreground-ghost mx-1 inline size-3.5 align-middle rtl:-scale-x-100"
+    <DirectionalIcon
+      className="text-foreground-ghost mx-1 inline size-3.5 align-middle"
+      icon={ArrowRightIcon}
     />
   );
 

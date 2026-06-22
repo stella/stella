@@ -29,6 +29,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { Textarea } from "@stll/ui/components/textarea";
@@ -752,7 +753,10 @@ const UserInstructionsSection = ({
           {expanded ? (
             <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
           ) : (
-            <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0 rtl:-scale-x-100" />
+            <DirectionalIcon
+              className="text-muted-foreground size-3.5 shrink-0"
+              icon={ChevronRightIcon}
+            />
           )}
           <span className="shrink-0 font-medium">
             {t("workspaces.importOrganizer.instructionsTitle")}
@@ -1082,7 +1086,7 @@ const OrganizerFolderNode = ({
           {isExpanded ? (
             <ChevronDownIcon className="size-3.5" />
           ) : (
-            <ChevronRightIcon className="size-3.5 rtl:-scale-x-100" />
+            <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
           )}
         </button>
         <div
@@ -1297,7 +1301,10 @@ const DeleteFoldersSection = ({
         {expanded ? (
           <ChevronDownIcon className="text-muted-foreground size-3.5" />
         ) : (
-          <ChevronRightIcon className="text-muted-foreground size-3.5 rtl:-scale-x-100" />
+          <DirectionalIcon
+            className="text-muted-foreground size-3.5"
+            icon={ChevronRightIcon}
+          />
         )}
         <Trash2Icon className="text-muted-foreground size-4" />
         <span className="font-medium">

@@ -15,6 +15,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -241,7 +242,10 @@ export const ChatMentionList = ({
               size="sm"
               variant="ghost"
             >
-              <ArrowLeftIcon className="size-3.5 shrink-0 rtl:-scale-x-100" />
+              <DirectionalIcon
+                className="size-3.5 shrink-0"
+                icon={ArrowLeftIcon}
+              />
               <LayersIcon className="size-3.5 shrink-0" />
               <span className="truncate">{drillTarget.name}</span>
             </Button>
@@ -323,7 +327,10 @@ export const ChatMentionList = ({
                             size="icon-sm"
                             variant="ghost"
                           >
-                            <ChevronRightIcon className="size-3.5 rtl:-scale-x-100" />
+                            <DirectionalIcon
+                              className="size-3.5"
+                              icon={ChevronRightIcon}
+                            />
                           </Button>
                         )}
                       </div>

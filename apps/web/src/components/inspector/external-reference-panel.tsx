@@ -29,6 +29,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Skeleton } from "@stll/ui/components/skeleton";
@@ -928,7 +929,7 @@ export const ExternalReferencePanel = ({
                 title={t("folio.findReplace.previousShortcut")}
                 variant="ghost"
               >
-                <ChevronLeftIcon className="size-3.5 rtl:-scale-x-100" />
+                <DirectionalIcon className="size-3.5" icon={ChevronLeftIcon} />
               </Button>
               <Button
                 aria-label={t("folio.findReplace.next")}
@@ -938,7 +939,7 @@ export const ExternalReferencePanel = ({
                 title={t("folio.findReplace.nextShortcut")}
                 variant="ghost"
               >
-                <ChevronRightIcon className="size-3.5 rtl:-scale-x-100" />
+                <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
               </Button>
               <Button
                 aria-label={t("folio.findReplace.close")}

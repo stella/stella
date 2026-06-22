@@ -13,6 +13,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useChatMatters } from "@/components/chat/chat-matters-context";
@@ -394,7 +395,10 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
         {canOpen && (
           <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px]">
             {t("chat.createDocument.openInFolio")}
-            <ArrowRightIcon className="size-3 shrink-0 rtl:-scale-x-100" />
+            <DirectionalIcon
+              className="size-3 shrink-0"
+              icon={ArrowRightIcon}
+            />
           </span>
         )}
       </div>
