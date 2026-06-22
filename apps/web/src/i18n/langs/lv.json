@@ -445,7 +445,7 @@
     "pastedChars": "Ielīmēts · {count} rakstz.",
     "pastedText": {
       "expand": "Rādīt pilnu tekstu",
-      "fromClipboard": "Ielīmēti {count, plural, zero {# rakstzīmju} one {# rakstzīme} other {# rakstzīmes}}",
+      "fromClipboard": "{count, plural, zero {Ielīmētas # rakstzīmju} one {Ielīmēta # rakstzīme} other {Ielīmētas # rakstzīmes}}",
       "fromPromptFallback": "Prasme"
     },
     "placeholder": "Ierakstiet jautājumu šeit, / prasmēm, @ konteksta pievienošanai",
