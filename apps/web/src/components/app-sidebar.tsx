@@ -849,9 +849,12 @@ const MatterItem = ({
           >
             <MatterIcon color={ws.color} id={ws.id} />
             <span className="flex min-w-0 flex-col">
-              <span className="truncate">{ws.name}</span>
+              <span className="truncate" dir="auto">
+                {ws.name}
+              </span>
               <span
                 className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100"
+                dir="auto"
                 title={formatFullTimestamp(ws.lastActivityAt)}
               >
                 {ws.client
