@@ -61,6 +61,11 @@
       background-position: -200% 0;
     }
   }
+  @keyframes skeleton-rtl {
+    to {
+      background-position: 200% 0;
+    }
+  }
   @keyframes caret-blink {
     0%,
     70%,
@@ -1049,6 +1054,12 @@
    * <bdi>, so this does not regress embedded Latin spacing. */
   html[dir="rtl"] * {
     letter-spacing: normal !important;
+  }
+
+  /* The skeleton shimmer sweeps a fixed physical direction; mirror it
+   * under RTL so the highlight travels with the reading direction. */
+  html[dir="rtl"] [data-slot="skeleton"] {
+    animation-name: skeleton-rtl;
   }
 
   /* https://tailwindcss.com/docs/upgrade-guide#buttons-use-the-default-cursor */
