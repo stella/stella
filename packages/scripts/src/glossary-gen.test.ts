@@ -107,4 +107,23 @@ describe("parseGlossary", () => {
       ),
     ).toThrow(/unknown locale "xx"/u);
   });
+
+  test("rejects an unknown locale in forbidden", () => {
+    expect(() =>
+      parseGlossary(
+        JSON.stringify({
+          verbs: [
+            {
+              id: "save",
+              en: "Save",
+              forbidden: { xx: ["Foo"] },
+              translations: fill("S"),
+            },
+          ],
+          legalConcepts: [],
+          ptBR: [],
+        }),
+      ),
+    ).toThrow(/unknown locale "xx" in/u);
+  });
 });

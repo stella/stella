@@ -125,6 +125,11 @@ const parseTerm = (value: unknown, where: string): Term => {
   if (isRecord(rawForbidden)) {
     const forbidden: Record<string, string[]> = {};
     for (const [locale, words] of Object.entries(rawForbidden)) {
+      if (!LOCALE_SET.has(locale)) {
+        return panic(
+          `${where} (${id}): unknown locale "${locale}" in \`forbidden\``,
+        );
+      }
       if (Array.isArray(words)) {
         forbidden[locale] = words.filter(
           (word): word is string => typeof word === "string",

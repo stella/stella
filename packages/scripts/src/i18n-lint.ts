@@ -145,6 +145,25 @@ const OMITTED_CARDINAL_PLURALS: Record<string, Set<string>> = {
   sk: new Set(["many"]),
 };
 
+// Resolving Intl.PluralRules is comparatively expensive and the same locale
+// recurs across thousands of keys, so memoize the category list per locale+type.
+const pluralCategoryCache = new Map<string, readonly string[]>();
+const pluralCategories = (
+  locale: string,
+  type: "cardinal" | "ordinal",
+): readonly string[] => {
+  const cacheKey = `${locale}:${type}`;
+  const cached = pluralCategoryCache.get(cacheKey);
+  if (cached) {
+    return cached;
+  }
+  const categories = new Intl.PluralRules(locale, {
+    type,
+  }).resolvedOptions().pluralCategories;
+  pluralCategoryCache.set(cacheKey, categories);
+  return categories;
+};
+
 /**
  * Plural categories the target locale requires (per CLDR) but the value omits,
  * reported as `arg#category`. Exact selectors (`=0`, `=1`) do not count, and
@@ -160,12 +179,10 @@ export const findMissingPluralCategories = (
   }
 
   const omitted = OMITTED_CARDINAL_PLURALS[locale];
-  const cardinal = new Intl.PluralRules(locale, { type: "cardinal" })
-    .resolvedOptions()
-    .pluralCategories.filter((category) => !omitted?.has(category));
-  const ordinal = new Intl.PluralRules(locale, {
-    type: "ordinal",
-  }).resolvedOptions().pluralCategories;
+  const cardinal = pluralCategories(locale, "cardinal").filter(
+    (category) => !omitted?.has(category),
+  );
+  const ordinal = pluralCategories(locale, "ordinal");
 
   const missing: string[] = [];
   const walk = (elements: MessageFormatElement[]): void => {
