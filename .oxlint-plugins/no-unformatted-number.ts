@@ -111,10 +111,13 @@ export default {
               return;
             }
             const expr = node.expression;
-            // A bare `{numericName}` rendered as element text (whether it is the
-            // sole child or sits alongside text/siblings, e.g. `{hours}h`) shows
-            // Latin digits too, so flag it the same as String()/template forms.
-            const isTextChild = node.parent?.type === "JSXElement";
+            // A bare `{numericName}` rendered as element/fragment text (whether
+            // it is the sole child or sits alongside text/siblings, e.g.
+            // `{hours}h` or `<>{count} left</>`) shows Latin digits too, so flag
+            // it the same as String()/template forms.
+            const isTextChild =
+              node.parent?.type === "JSXElement" ||
+              node.parent?.type === "JSXFragment";
             if (
               isStringCall(expr) ||
               isNumericTemplate(expr) ||
