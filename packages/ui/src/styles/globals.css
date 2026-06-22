@@ -1056,6 +1056,14 @@
     letter-spacing: normal !important;
   }
 
+  /* Arabic script sits taller and needs more leading than Latin; bump the
+   * inherited line-height under RTL so dense legal copy stays readable.
+   * Inherited (not !important) so component line-clamp/leading utilities
+   * still win where they set their own value. */
+  html[dir="rtl"] {
+    line-height: 1.6;
+  }
+
   /* The skeleton shimmer sweeps a fixed physical direction; mirror it
    * under RTL so the highlight travels with the reading direction. */
   html[dir="rtl"] [data-slot="skeleton"] {
