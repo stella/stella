@@ -298,6 +298,7 @@ export default defineConfig({
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
+    "./.oxlint-plugins/require-dir-on-free-text-input.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -571,6 +572,18 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-locale-format/no-raw-locale-format": "error",
+      },
+    },
+    {
+      // Bidirectional: free-text inputs need an explicit `dir` (auto).
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/require-dir-on-free-text-input.fixture.tsx",
+      ],
+      rules: {
+        "require-dir-on-free-text-input/require-dir-on-free-text-input":
+          "error",
       },
     },
     {
