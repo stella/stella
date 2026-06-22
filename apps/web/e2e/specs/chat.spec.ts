@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test } from "../helpers/test";
 
 // The seeded e2e user (test@stella.dev) is an org owner whose org has NO
 // usage_entitlements row — the dark-launch default every production org

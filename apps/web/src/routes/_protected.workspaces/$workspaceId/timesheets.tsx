@@ -24,29 +24,37 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
+import { ensureCriticalQueryData } from "@/lib/react-query";
 import { BillingCodesDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog";
 import { RateManagementDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog";
 import { TimesheetDayView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-day-view";
 import { TimesheetWeekView } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-week-view";
+import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
   // Time tracking is intentionally excluded from the current
-  // product surface — block any entry to /timesheets (StatCard
-  // click, direct URL, deep link) with a "coming soon" toast and
-  // bounce the user back to the workspace overview. Once the
-  // feature is reintroduced, drop this beforeLoad and re-link the
-  // overview StatCard.
-  beforeLoad: ({ params }) => {
-    stellaToast.add({
-      title: "Coming soon",
-      type: "info",
-      timeout: 4000,
-    });
+  // product surface. Block any entry to /timesheets (direct URL,
+  // deep link) and bounce the user back to the workspace overview.
+  // Once the feature is reintroduced, drop this beforeLoad and
+  // re-link the overview StatCard.
+  beforeLoad: async ({ context, params }) => {
+    const qc = context.queryClient;
+    const opts = viewsOptions(params.workspaceId);
+    const views = await ensureCriticalQueryData(qc, opts);
+
+    const firstView = views.at(0);
+    if (!firstView) {
+      throw redirect({ to: "/workspaces", replace: true });
+    }
+
     throw redirect({
-      to: "/workspaces/$workspaceId",
-      params: { workspaceId: params.workspaceId },
+      to: "/workspaces/$workspaceId/$viewId",
+      params: {
+        workspaceId: params.workspaceId,
+        viewId: firstView.id,
+      },
       // Replace `/timesheets` rather than push the overview on top
       // of it. Pushing creates a back-button loop: Back from the
       // overview returns to `/timesheets`, which immediately

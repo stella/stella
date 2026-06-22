@@ -40,6 +40,10 @@ function BetaFeaturesPage() {
               <Checkbox
                 checked={publicLawPreview}
                 onCheckedChange={(next) => {
+                  if (next === publicLawPreview) {
+                    return;
+                  }
+
                   setPublicLawPreview(next);
                 }}
               />

@@ -227,7 +227,7 @@ const createAuth = () => {
       useSecureCookies: !env.isDev,
     },
     rateLimit: {
-      enabled: true,
+      enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
       window: AUTH_RATE_LIMITS.global.window,
       max: AUTH_RATE_LIMITS.global.max,
       customStorage: createAuthRateLimitStorage(

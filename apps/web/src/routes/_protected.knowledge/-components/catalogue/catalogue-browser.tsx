@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import {
   useQuery,
@@ -190,13 +190,6 @@ export const CatalogueBrowser = ({
   const [blueprintGalleryOpen, setBlueprintGalleryOpen] = useState(false);
   // Reuse `role` from the canAddCustom block above for team-skill gating.
   const canManageTeam = role === "admin" || role === "owner";
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- syncs the initialKind prop into local filter state on change; cannot lift to key (the only parent, tools.tsx, is out of scope, and a key remount would also reset unrelated local state like query/jurisdictionFilter), and filter is also user-driven via the pills so it is not pure derived state
-  useEffect(() => {
-    if (initialKind !== undefined) {
-      setFilter(initialKind);
-    }
-  }, [initialKind]);
 
   const entries = data.entries;
 
