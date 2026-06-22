@@ -30,6 +30,9 @@ import { COMMON_TIMEZONES } from "@/lib/timezones";
 type OTPPanelProps = {
   className?: string;
   email: string;
+  // Dev-only: the mirrored code is prefilled so sign-in does not require
+  // copying it from the email. Always undefined in production.
+  initialOtp?: string | undefined;
   redirectTo: string;
   surface?: "frame" | "bare";
   onUseDifferentEmail?: () => void;
@@ -42,6 +45,7 @@ const OTP_EXPIRED_MESSAGE = "OTP expired";
 export function OTPPanel({
   className,
   email,
+  initialOtp,
   redirectTo,
   surface = "frame",
   onUseDifferentEmail,
@@ -50,7 +54,7 @@ export function OTPPanel({
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
-  const [otp, setOtp] = useState("");
+  const [otp, setOtp] = useState(initialOtp ?? "");
   const invalidateSession = useInvalidateSession();
   const isOtpComplete = otp.length === OTP_LENGTH;
   const { isPulsing: isOtpPulsing, pulse: pulseOtp } = usePulse(600);
