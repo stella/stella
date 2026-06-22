@@ -428,10 +428,12 @@ const InvoiceDetail = ({
                     </td>
                     <td className="px-4 py-2 text-end tabular-nums">
                       {format.number(entry.billedMinutes / 60, {
+                        style: "unit",
+                        unit: "hour",
+                        unitDisplay: "short",
                         minimumFractionDigits: 1,
                         maximumFractionDigits: 1,
                       })}
-                      h
                     </td>
                     <td className="px-4 py-2 text-end tabular-nums">
                       {formatCurrencyAmount(
