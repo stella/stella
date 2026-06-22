@@ -47,6 +47,8 @@ import {
 import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
 import { toAPIError, toAuthClientError } from "@/lib/errors";
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
 import { sessionOptions } from "@/routes/-queries";
@@ -212,7 +214,10 @@ function ProfilePageBody() {
   const verifyDeleteMutation = useMutation({
     mutationFn: async (payload: {
       code: string;
-      reassignments?: { entityId: string; reassignedUserId: string }[];
+      reassignments?: {
+        entityId: SafeId<"entity">;
+        reassignedUserId: string;
+      }[];
     }) => {
       setOtpError(null);
       const res = await api.me.delete.verify.post(payload);
@@ -292,6 +297,18 @@ function ProfilePageBody() {
 
   const pendingTasks = pendingTasksData?.tasks ?? [];
   const pendingMembers = pendingTasksData?.members ?? [];
+  const allPendingTasksHaveReassignments = pendingTasks.every((task) => {
+    const reassignedUserId = reassignments[task.entityId];
+    if (!reassignedUserId) {
+      return false;
+    }
+
+    return pendingMembers.some(
+      (member) =>
+        member.workspaceId === task.workspaceId &&
+        member.userId === reassignedUserId,
+    );
+  });
   let dialogStep = step;
   if (step === "loading" && pendingTasksData) {
     dialogStep = pendingTasks.length > 0 ? "tasks" : "confirm";
@@ -577,7 +594,7 @@ function ProfilePageBody() {
                     reassignments: Object.entries(reassignments)
                       .filter(([_, val]) => !!val)
                       .map(([entityId, reassignedUserId]) => ({
-                        entityId,
+                        entityId: toSafeId<"entity">(entityId),
                         reassignedUserId,
                       })),
                   })
@@ -593,7 +610,11 @@ function ProfilePageBody() {
               <Button
                 variant="destructive"
                 onClick={() => sendOtpMutation.mutate()}
-                disabled={sendOtpMutation.isPending || dialogStep === "loading"}
+                disabled={
+                  sendOtpMutation.isPending ||
+                  dialogStep === "loading" ||
+                  (dialogStep === "tasks" && !allPendingTasksHaveReassignments)
+                }
                 loading={sendOtpMutation.isPending}
               >
                 {t("settings.account.sendOtpCode")}

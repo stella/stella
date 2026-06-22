@@ -35,11 +35,9 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
+import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  brandPersistedEntityId,
-  brandPersistedUserId,
-} from "@/api/lib/safe-id-boundaries";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 /**
  * Fetches the user email by ID.
@@ -256,11 +254,15 @@ export const verifyAndDeleteUser = async (
   currentUserId: string,
   email: string,
   code: string,
-  reassignments?: readonly { entityId: string; reassignedUserId: string }[],
+  reassignments?: readonly {
+    entityId: SafeId<"entity">;
+    reassignedUserId: string;
+  }[],
 ): Promise<Result<void, HandlerError>> =>
   await Result.tryPromise({
     try: async () => {
       const identifier = `delete-account:${email}`;
+      let s3KeysToDelete: string[] = [];
 
       await rootDb.transaction(async (tx) => {
         // Lock the user row to serialize deletion of this account
@@ -404,58 +406,54 @@ export const verifyAndDeleteUser = async (
           .where(eq(workspaceMembers.userId, currentUserId));
 
         // 5. Task assignee records (reassign where requested, otherwise cascade)
-        const reassignmentItems = (reassignments ?? []).map((item) => ({
-          entityId: brandPersistedEntityId(item.entityId),
-          reassignedUserId: item.reassignedUserId,
-        }));
+        const reassignmentItems = [...(reassignments ?? [])];
+        const currentTaskAssignments = await tx
+          .select({
+            entityId: taskAssignees.entityId,
+            workspaceId: taskAssignees.workspaceId,
+          })
+          .from(taskAssignees)
+          .where(eq(taskAssignees.userId, currentUserId));
 
-        if (reassignmentItems.length > 0) {
-          const reassignmentEntityIds = reassignmentItems.map(
-            (item) => item.entityId,
-          );
-          const reassignmentUserIds = reassignmentItems.map(
-            (item) => item.reassignedUserId,
-          );
+        if (currentTaskAssignments.length > 0) {
           const targetByEntityId = new Map(
             reassignmentItems.map((item) => [
               item.entityId,
               item.reassignedUserId,
             ]),
           );
+          const missingAssignment = currentTaskAssignments.find(
+            (assignment) => !targetByEntityId.has(assignment.entityId),
+          );
+          if (missingAssignment) {
+            throw new HandlerError({
+              status: 400,
+              message:
+                "All pending task assignments must be reassigned before deleting your account.",
+            });
+          }
 
-          const assignments = await tx
-            .select({
-              entityId: taskAssignees.entityId,
-              workspaceId: taskAssignees.workspaceId,
-            })
-            .from(taskAssignees)
-            .where(
-              and(
-                inArray(taskAssignees.entityId, reassignmentEntityIds),
-                eq(taskAssignees.userId, currentUserId),
-              ),
-            );
-
-          const workspaceIds = assignments.map(
+          const reassignmentUserIds = reassignmentItems.map(
+            (item) => item.reassignedUserId,
+          );
+          const workspaceIds = currentTaskAssignments.map(
             (assignment) => assignment.workspaceId,
           );
           const validMembershipKeys = new Set(
-            workspaceIds.length > 0
-              ? (
-                  await tx
-                    .select({
-                      userId: workspaceMembers.userId,
-                      workspaceId: workspaceMembers.workspaceId,
-                    })
-                    .from(workspaceMembers)
-                    .where(
-                      and(
-                        inArray(workspaceMembers.workspaceId, workspaceIds),
-                        inArray(workspaceMembers.userId, reassignmentUserIds),
-                      ),
-                    )
-                ).map((row) => `${row.workspaceId}:${row.userId}`)
-              : [],
+            (
+              await tx
+                .select({
+                  userId: workspaceMembers.userId,
+                  workspaceId: workspaceMembers.workspaceId,
+                })
+                .from(workspaceMembers)
+                .where(
+                  and(
+                    inArray(workspaceMembers.workspaceId, workspaceIds),
+                    inArray(workspaceMembers.userId, reassignmentUserIds),
+                  ),
+                )
+            ).map((row) => `${row.workspaceId}:${row.userId}`),
           );
           const existingReassignmentKeys = new Set(
             (
@@ -467,34 +465,48 @@ export const verifyAndDeleteUser = async (
                 .from(taskAssignees)
                 .where(
                   and(
-                    inArray(taskAssignees.entityId, reassignmentEntityIds),
+                    inArray(
+                      taskAssignees.entityId,
+                      currentTaskAssignments.map(
+                        (assignment) => assignment.entityId,
+                      ),
+                    ),
                     inArray(taskAssignees.userId, reassignmentUserIds),
                   ),
                 )
             ).map((row) => `${row.entityId}:${row.userId}`),
           );
 
-          type ReassignmentUpdate = {
-            entityId: (typeof reassignmentItems)[number]["entityId"];
+          const updates: {
+            entityId: SafeId<"entity">;
             reassignedUserId: string;
-          };
-
-          const updates: ReassignmentUpdate[] = [];
-          const deletes: ReassignmentUpdate["entityId"][] = [];
-          for (const assignment of assignments) {
+          }[] = [];
+          for (const assignment of currentTaskAssignments) {
             const reassignedUserId = targetByEntityId.get(assignment.entityId);
             if (!reassignedUserId) {
-              continue;
+              throw new HandlerError({
+                status: 400,
+                message:
+                  "All pending task assignments must be reassigned before deleting your account.",
+              });
             }
 
             const membershipKey = `${assignment.workspaceId}:${reassignedUserId}`;
             const assignmentKey = `${assignment.entityId}:${reassignedUserId}`;
-            if (
-              !validMembershipKeys.has(membershipKey) ||
-              existingReassignmentKeys.has(assignmentKey)
-            ) {
-              deletes.push(assignment.entityId);
-              continue;
+            if (!validMembershipKeys.has(membershipKey)) {
+              throw new HandlerError({
+                status: 400,
+                message:
+                  "Task reassignment target must be a member of the task workspace.",
+              });
+            }
+
+            if (existingReassignmentKeys.has(assignmentKey)) {
+              throw new HandlerError({
+                status: 400,
+                message:
+                  "Selected task reassignment target is already assigned to one of the tasks.",
+              });
             }
 
             updates.push({
@@ -503,22 +515,13 @@ export const verifyAndDeleteUser = async (
             });
           }
 
-          if (deletes.length > 0) {
-            await tx
-              .delete(taskAssignees)
-              .where(
-                and(
-                  inArray(taskAssignees.entityId, deletes),
-                  eq(taskAssignees.userId, currentUserId),
-                ),
-              );
-          }
-
           await Promise.all(
             updates.map((item) =>
               tx
                 .update(taskAssignees)
-                .set({ userId: item.reassignedUserId })
+                .set({
+                  userId: item.reassignedUserId,
+                })
                 .where(
                   and(
                     eq(taskAssignees.entityId, item.entityId),
@@ -563,7 +566,7 @@ export const verifyAndDeleteUser = async (
           .where(eq(userFiles.userId, currentUserId));
 
         if (files.length > 0) {
-          const s3Keys = files.flatMap((file) =>
+          s3KeysToDelete = files.flatMap((file) =>
             file.thumbnailFileId
               ? [
                   file.s3Key,
@@ -575,14 +578,6 @@ export const verifyAndDeleteUser = async (
                 ]
               : [file.s3Key],
           );
-          const deleteResult = await deleteS3Keys(s3Keys);
-          if (Result.isError(deleteResult)) {
-            throw new HandlerError({
-              status: 500,
-              message: "Failed to delete user files from storage",
-              cause: deleteResult.error,
-            });
-          }
         }
         await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
 
@@ -623,6 +618,17 @@ export const verifyAndDeleteUser = async (
           })
           .where(eq(user.id, currentUserId));
       });
+
+      if (s3KeysToDelete.length > 0) {
+        const deleteResult = await deleteS3Keys(s3KeysToDelete);
+        if (Result.isError(deleteResult)) {
+          throw new HandlerError({
+            status: 500,
+            message: "Failed to delete user files from storage",
+            cause: deleteResult.error,
+          });
+        }
+      }
     },
     catch: (err) =>
       err instanceof HandlerError

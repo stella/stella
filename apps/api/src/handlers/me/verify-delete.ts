@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import {
   checkUserOrganizationOwnership,
   getUserEmail,
@@ -14,8 +15,8 @@ export const deleteAccountVerifyBody = t.Object({
   reassignments: t.Optional(
     t.Array(
       t.Object({
-        entityId: t.String(),
-        reassignedUserId: t.String(),
+        entityId: tSafeId("entity"),
+        reassignedUserId: tUserId,
       }),
     ),
   ),
