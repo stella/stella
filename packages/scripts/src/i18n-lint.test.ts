@@ -82,6 +82,14 @@ describe("findMissingPluralCategories", () => {
     ).toEqual([]);
   });
 
+  test("does not require the dormant es/fr/pt-BR `many` (exact millions)", () => {
+    for (const locale of ["es", "fr", "pt-BR"]) {
+      expect(
+        findMissingPluralCategories("{n, plural, one {#} other {#}}", locale),
+      ).toEqual([]);
+    }
+  });
+
   test("does not count exact selectors like =0 toward CLDR categories", () => {
     expect(
       findMissingPluralCategories(

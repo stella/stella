@@ -137,12 +137,17 @@ export const findIcuError = (value: string): string | null => {
   return result instanceof Error ? result.message : null;
 };
 
-// CLDR lists `many` for Czech/Slovak cardinals, but it only applies to
-// fractional counts (e.g. 1.5); integer UI counts use one/few/other, and
-// TERMINOLOGY.md tells translators to omit it. Don't require it here.
+// CLDR lists a `many` cardinal that never triggers for the integer counts UI
+// strings show: it is fractional-only in cs/sk/lt (e.g. 1.5) and
+// exact-millions-only in es/fr/pt-BR (1 000 000). The `other` branch covers the
+// realistic range and translators are told to omit it, so don't require it.
 const OMITTED_CARDINAL_PLURALS: Record<string, Set<string>> = {
   cs: new Set(["many"]),
   sk: new Set(["many"]),
+  lt: new Set(["many"]),
+  es: new Set(["many"]),
+  fr: new Set(["many"]),
+  "pt-BR": new Set(["many"]),
 };
 
 // Resolving Intl.PluralRules is comparatively expensive and the same locale
