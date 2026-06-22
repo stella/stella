@@ -15,6 +15,11 @@ type SuggestedActionsProps = {
   /** Accessible group label (callers pass a translated string). */
   label: string;
   /**
+   * `horizontal` lays the chips out in a single scrolling row (each chip
+   * keeps its full label); `vertical` stacks them, truncating long labels.
+   */
+  orientation?: "horizontal" | "vertical";
+  /**
    * `plain` suits a solid background. `floating` gives each chip an opaque
    * surface so it reads cleanly over document/editor content. `overlay` is
    * translucent with a slight backdrop blur, for floating over scrolling
@@ -23,9 +28,6 @@ type SuggestedActionsProps = {
   surface?: "plain" | "floating" | "overlay";
   /** Keyboard hint surfaced on each chip via `aria-keyshortcuts`. */
   keyShortcut?: string;
-  /** Trailing node rendered as the last item in the stack (e.g. a
-   * show-more/less toggle). */
-  footer?: ReactNode;
   className?: string;
 };
 
@@ -42,35 +44,43 @@ const OVERLAY_SURFACE_CLASS =
   "border-foreground/10 bg-background/70 border shadow-sm backdrop-blur-sm";
 
 /**
- * Vertical stack of click-to-run "suggested action" chips. Stacking
- * (rather than a wrapping row) keeps long labels on their own line and
- * truncating, so the list never overflows its container. Shared by the
+ * A row (or stack) of click-to-run "suggested action" chips. Shared by the
  * chat composer's follow-up prompts and the template studio's prompt
- * presets.
+ * presets. Horizontal chips scroll sideways so the list never wraps or
+ * overflows its container.
  */
 export const SuggestedActions = ({
   actions,
   onSelect,
   label,
+  orientation = "horizontal",
   surface = "plain",
   keyShortcut,
-  footer,
   className,
 }: SuggestedActionsProps) => {
   if (actions.length === 0) {
     return null;
   }
 
+  const horizontal = orientation === "horizontal";
+
   return (
     <div
       aria-label={label}
-      className={cn("flex max-w-full flex-col items-start gap-1.5", className)}
+      className={cn(
+        "flex max-w-full gap-1.5",
+        horizontal
+          ? "[scrollbar-width:none] overflow-x-auto [&::-webkit-scrollbar]:hidden"
+          : "flex-col items-start",
+        className,
+      )}
       role="group"
     >
       {actions.map((action) => (
         <span
           className={cn(
-            "inline-flex max-w-full rounded-full",
+            "inline-flex rounded-full",
+            horizontal ? "shrink-0" : "max-w-full",
             surface === "floating" && FLOATING_SURFACE_CLASS,
             surface === "overlay" && OVERLAY_SURFACE_CLASS,
           )}
@@ -78,18 +88,22 @@ export const SuggestedActions = ({
         >
           <Button
             aria-keyshortcuts={keyShortcut}
-            className="text-foreground h-9 max-w-full gap-2 rounded-full px-3 text-[13px] font-medium"
+            className={cn(
+              "text-foreground h-9 gap-2 rounded-full px-3 text-[13px] font-medium",
+              !horizontal && "max-w-full",
+            )}
             onClick={() => onSelect(action.id)}
             size="sm"
             type="button"
             variant={surface === "plain" ? "outline" : "ghost"}
           >
             {action.icon}
-            <span className="min-w-0 truncate">{action.label}</span>
+            <span className={cn(!horizontal && "min-w-0 truncate")}>
+              {action.label}
+            </span>
           </Button>
         </span>
       ))}
-      {footer}
     </div>
   );
 };
