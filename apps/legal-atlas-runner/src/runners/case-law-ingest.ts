@@ -135,6 +135,71 @@ const CITATION_AUTHORITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const IDLE_THRESHOLD = 3;
 const IDLE_DELAY_MS = 24 * 60 * 60 * 1000;
 
+// Liveness watchdog. A self-scheduling timer measures how late it fires
+// versus its interval; sustained lag means the event loop is starved (a
+// runaway cycle or a wedged connection pool) and the daemon is making no
+// progress. After enough consecutive starved ticks it exits so ECS can
+// relaunch a fresh task, instead of sitting alive-but-stuck forever (the
+// per-adapter retry/backoff only recovers from *thrown* errors, not from
+// awaits that never settle). Thresholds are well above any healthy pause:
+// idle adapters keep the loop responsive, so lag stays near zero.
+const WATCHDOG_TICK_MS = 10_000;
+const WATCHDOG_LAG_THRESHOLD_MS = 90_000;
+const WATCHDOG_MAX_STARVED_TICKS = 3;
+
+type Semaphore = {
+  acquire: (signal?: AbortSignal) => Promise<void>;
+  release: () => void;
+};
+
+/**
+ * Fair counting semaphore: bounds how many holders run concurrently and
+ * hands the slot to the longest-waiting acquirer on release. An optional
+ * abort signal removes a pending waiter and rejects with AbortError.
+ */
+const createSemaphore = (label: string, capacity: number): Semaphore => {
+  const max = Math.max(1, capacity);
+  let active = 0;
+  const queue: (() => void)[] = [];
+
+  const acquire = async (signal?: AbortSignal): Promise<void> => {
+    if (signal?.aborted) {
+      throw new DOMException(`${label} acquisition aborted`, "AbortError");
+    }
+    if (active < max) {
+      active++;
+      await Promise.resolve();
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const entry = () => {
+        signal?.removeEventListener("abort", onAbort);
+        active++;
+        resolve();
+      };
+      const onAbort = () => {
+        const idx = queue.indexOf(entry);
+        if (idx !== -1) {
+          queue.splice(idx, 1);
+        }
+        reject(new DOMException(`${label} acquisition aborted`, "AbortError"));
+      };
+      queue.push(entry);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  };
+
+  const release = (): void => {
+    active--;
+    const next = queue.shift();
+    if (next) {
+      next();
+    }
+  };
+
+  return { acquire, release };
+};
+
 /**
  * Max adapters doing DB-heavy work (insert + search index +
  * citation extraction) simultaneously. The pipeline acquires
@@ -146,49 +211,64 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
   1,
   LEGAL_ATLAS_RUNNER_ENV.maxConcurrentDbWrites,
 );
+const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
 
-let activeDbSlots = 0;
-const dbSlotQueue: (() => void)[] = [];
-
-const acquireDbSlot = async (signal?: AbortSignal): Promise<void> => {
-  if (signal?.aborted) {
-    throw new DOMException("DB slot acquisition aborted", "AbortError");
-  }
-  if (activeDbSlots < MAX_CONCURRENT_DB_WRITES) {
-    activeDbSlots++;
-    await Promise.resolve();
-    return;
-  }
-  await new Promise<void>((resolve, reject) => {
-    const entry = () => {
-      signal?.removeEventListener("abort", onAbort);
-      activeDbSlots++;
-      resolve();
-    };
-    const onAbort = () => {
-      const idx = dbSlotQueue.indexOf(entry);
-      if (idx !== -1) {
-        dbSlotQueue.splice(idx, 1);
-      }
-      reject(new DOMException("DB slot acquisition aborted", "AbortError"));
-    };
-    dbSlotQueue.push(entry);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-};
-
-const releaseDbSlot = (): void => {
-  activeDbSlots--;
-  const next = dbSlotQueue.shift();
-  if (next) {
-    return next();
-  }
-};
+/**
+ * Max adapter cycles running concurrently. Unlike the DB-write slot, this
+ * also covers the fetch + finaldoc-enrich + AST-parse phase, which is
+ * CPU-heavy and otherwise unbounded: every source would crawl its backlog
+ * at once and saturate a small worker, so no page completes within its
+ * cycle budget. Bounding cycles lets a few sources make real progress and
+ * advance their cursors instead of collapsing under N-way contention.
+ */
+const MAX_CONCURRENT_ADAPTER_CYCLES = Math.max(
+  1,
+  LEGAL_ATLAS_RUNNER_ENV.maxConcurrentAdapterCycles,
+);
+const cycleSemaphore = createSemaphore(
+  "adapter cycle",
+  MAX_CONCURRENT_ADAPTER_CYCLES,
+);
 
 const writeHeartbeat = () => {
   void Bun.write(HEARTBEAT_PATH, new Date().toISOString()).catch(() => {
     // Non-fatal; health check will notice staleness
   });
+};
+
+/**
+ * Start the event-loop liveness watchdog (daemon mode only). Self-schedules
+ * every WATCHDOG_TICK_MS and compares actual delay to the expected interval;
+ * each tick whose lag exceeds WATCHDOG_LAG_THRESHOLD_MS counts as starved,
+ * and WATCHDOG_MAX_STARVED_TICKS in a row triggers a process exit so ECS
+ * relaunches a healthy task. A single fast tick clears the streak.
+ */
+const startEventLoopWatchdog = (): void => {
+  let starvedTicks = 0;
+  let expectedAt = performance.now() + WATCHDOG_TICK_MS;
+
+  const tick = () => {
+    const lag = performance.now() - expectedAt;
+    if (lag > WATCHDOG_LAG_THRESHOLD_MS) {
+      starvedTicks++;
+      logError(
+        `[watchdog] event loop starved: lag=${Math.round(lag)}ms ` +
+          `(${starvedTicks}/${WATCHDOG_MAX_STARVED_TICKS})`,
+      );
+      if (starvedTicks >= WATCHDOG_MAX_STARVED_TICKS) {
+        logError(
+          "[watchdog] sustained event-loop starvation; exiting for ECS restart",
+        );
+        process.exit(1);
+      }
+    } else {
+      starvedTicks = 0;
+    }
+    expectedAt = performance.now() + WATCHDOG_TICK_MS;
+    setTimeout(tick, WATCHDOG_TICK_MS);
+  };
+
+  setTimeout(tick, WATCHDOG_TICK_MS);
 };
 
 // Adapters to skip. Set DISABLED_ADAPTERS env var to a
@@ -329,7 +409,7 @@ const runOneCycle = async (
     result = await runIngestionPipeline({
       source,
       scopedDb: ingestionDb,
-      dbSlot: { acquire: acquireDbSlot, release: releaseDbSlot },
+      dbSlot: dbWriteSemaphore,
       signal: AbortSignal.timeout(cycleMs),
       ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
       ...(bounds.maxDecisions !== undefined && {
@@ -412,8 +492,20 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
 
   while (true) {
     try {
-      // oxlint-disable-next-line no-await-in-loop -- continuous daemon: each adapter cycle must finish before the next so the persisted cursor advances in order
-      const { outcome, inserted } = await runOneCycle(adapterKey, name);
+      // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
+      // the DB-write slot, so without this every source crawls its backlog
+      // at once and saturates the worker. Held only for the cycle and
+      // released before the inter-cycle delay, so idle adapters free the slot.
+      // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
+      await cycleSemaphore.acquire();
+      let cycle: CycleResult;
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
+        cycle = await runOneCycle(adapterKey, name);
+      } finally {
+        cycleSemaphore.release();
+      }
+      const { outcome, inserted } = cycle;
 
       if (outcome === "failed") {
         consecutiveFailures++;
@@ -559,6 +651,7 @@ export const runCaseLawIngest = async (
   // All adapters: independent concurrent loops.
   daemonMode = true;
   logInfo("Ingestion daemon started.");
+  startEventLoopWatchdog();
   await refreshS3();
   await refreshCorpusS3();
   writeHeartbeat();
