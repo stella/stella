@@ -43,8 +43,10 @@ import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { useDevStore } from "@/lib/dev-store";
 import { toAPIError } from "@/lib/errors";
+import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
+import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { roleOptions } from "@/routes/-queries";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
@@ -276,6 +278,7 @@ export const ChatThreadPage = ({
     seedWebSearch,
   ]);
   const controller = useChatEditor({
+    reservedCommands: true,
     sentMessageHistoryHtml,
     suggestedFollowupPrompt,
     threadRef,
@@ -479,6 +482,33 @@ export const ChatThreadPage = ({
                 void stop();
               }}
               onSubmit={async (draft) => {
+                const reservedCommand = matchReservedChatCommand(draft.html);
+                if (reservedCommand?.id === "new") {
+                  // Abort any live stream first: `chatThreadOptions` keeps the
+                  // in-flight Chat alive in the query cache, so navigating away
+                  // would leave it streaming against the abandoned thread.
+                  void stop();
+                  controller.setContent("");
+                  if (threadRef.scope === "workspace") {
+                    void navigate({
+                      to: "/chat/workspaces/$workspaceId/new",
+                      params: { workspaceId: threadRef.workspaceId },
+                      replace: true,
+                    });
+                  } else {
+                    void navigate({
+                      to: "/chat/new",
+                      replace: true,
+                    });
+                  }
+                  return;
+                }
+                if (reservedCommand?.id === "model") {
+                  controller.setContent("");
+                  useModelSelectorStore.getState().open();
+                  return;
+                }
+
                 if (!(await ensureAIAvailable())) {
                   return;
                 }

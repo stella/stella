@@ -429,6 +429,11 @@
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
+    "modelSelector": {
+      "defaultLabel": "Vaikimisi (vestluse roll)",
+      "description": "Valige aktiivse vestlusseansi jaoks kasutatav tehisintellekti mudel.",
+      "title": "Vali vestlusmudel"
+    },
     "moveToMain": "Vii põhivaatesse",
     "moveToSide": "Vii külgpaneeli",
     "newChat": "Uus vestlus",

@@ -7,6 +7,7 @@ import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import { PromptSlashList } from "@/components/chat/prompt-slash-list";
 import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
+import type { ReservedChatCommand } from "@/lib/reserved-chat-commands";
 
 export type SlashSkillScope = PromptScope | "built-in";
 
@@ -21,13 +22,27 @@ export type SlashSkill = {
 
 export type SlashItem =
   | { kind: "prompt"; prompt: ChatPrompt }
-  | { kind: "skill"; skill: SlashSkill };
+  | { kind: "skill"; skill: SlashSkill }
+  | { kind: "command"; command: ReservedChatCommand };
 
 const insertSlashItem = (
   editor: Editor,
   range: { from: number; to: number },
   item: SlashItem,
 ) => {
+  if (item.kind === "command") {
+    insertPastedTextChip(
+      editor,
+      {
+        label: item.command.name,
+        source: "command",
+        text: item.command.command,
+      },
+      { replaceRange: range },
+    );
+    return;
+  }
+
   if (item.kind === "prompt") {
     insertPastedTextChip(
       editor,
@@ -104,6 +119,10 @@ const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
     return items;
   }
   return items.filter((item) => {
+    if (item.kind === "command") {
+      const { name, command } = item.command;
+      return matchesQuery(name, trimmed) || matchesQuery(command, trimmed);
+    }
     if (item.kind === "prompt") {
       const { name, command, body } = item.prompt;
       return (

@@ -429,6 +429,11 @@
       },
       "loadError": "Az entitások betöltése sikertelen"
     },
+    "modelSelector": {
+      "defaultLabel": "Alapértelmezett (csevegési szerepkör)",
+      "description": "Válassza ki az aktív csevegési munkamenethez használt AI-modellt.",
+      "title": "Csevegési modell kiválasztása"
+    },
     "moveToMain": "Áthelyezés a fő nézetbe",
     "moveToSide": "Áthelyezés az oldalsó panelbe",
     "newChat": "Új csevegés",

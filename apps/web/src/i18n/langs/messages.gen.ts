@@ -432,6 +432,11 @@ type Messages = {
       };
       "loadError": "Failed to load entities";
     };
+    "modelSelector": {
+      "defaultLabel": "Default (chat role)";
+      "description": "Choose the AI model used for the active chat session.";
+      "title": "Select Chat Model";
+    };
     "moveToMain": "Move to main view";
     "moveToSide": "Move to side panel";
     "newChat": "New chat";

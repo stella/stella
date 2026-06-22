@@ -429,6 +429,11 @@
       },
       "loadError": "Falha ao carregar entidades"
     },
+    "modelSelector": {
+      "defaultLabel": "Padrão (função de chat)",
+      "description": "Escolha o modelo de IA usado para a sessão de chat ativa.",
+      "title": "Selecionar modelo de chat"
+    },
     "moveToMain": "Mover para a visualização principal",
     "moveToSide": "Mover para o painel lateral",
     "newChat": "Novo bate-papo",

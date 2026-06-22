@@ -429,6 +429,11 @@
       },
       "loadError": "Entitäten konnten nicht geladen werden"
     },
+    "modelSelector": {
+      "defaultLabel": "Standard (Chat-Rolle)",
+      "description": "Wählen Sie das KI-Modell aus, das für die aktive Chat-Sitzung verwendet werden soll.",
+      "title": "Chat-Modell auswählen"
+    },
     "moveToMain": "In Hauptansicht verschieben",
     "moveToSide": "In Seitenleiste verschieben",
     "newChat": "Neuer Chat",

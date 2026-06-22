@@ -24,16 +24,25 @@ const SECTION_LABEL_KEYS = {
   "built-in": "knowledge.agentSkills.builtInSection",
 } satisfies Record<SlashSectionKey, TranslationKey>;
 
-const getItemKey = (item: SlashItem): string =>
-  item.kind === "prompt"
-    ? `prompt:${item.prompt.id}`
-    : `skill:${item.skill.id}`;
+const getItemKey = (item: SlashItem): string => {
+  if (item.kind === "prompt") {
+    return `prompt:${item.prompt.id}`;
+  }
+  if (item.kind === "skill") {
+    return `skill:${item.skill.id}`;
+  }
+  return `command:${item.command.id}`;
+};
 
-const getItemName = (item: SlashItem): string =>
-  item.kind === "prompt" ? item.prompt.name : item.skill.name;
-
-const getItemSecondary = (item: SlashItem): string =>
-  item.kind === "prompt" ? item.prompt.body : item.skill.description;
+const getItemName = (item: SlashItem): string => {
+  if (item.kind === "prompt") {
+    return item.prompt.name;
+  }
+  if (item.kind === "skill") {
+    return item.skill.name;
+  }
+  return item.command.name;
+};
 
 type PromptSlashListHandle = ReturnType<
   NonNullable<SuggestionOptions["render"]>
@@ -50,6 +59,15 @@ export const PromptSlashList = ({
   ref,
 }: PromptSlashListProps) => {
   const t = useTranslations();
+  const getItemSecondary = (item: SlashItem): string => {
+    if (item.kind === "prompt") {
+      return item.prompt.body;
+    }
+    if (item.kind === "skill") {
+      return item.skill.description;
+    }
+    return t(item.command.descriptionKey);
+  };
   const [isOpen, setIsOpen] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState(0);
   const listRef = useRef<HTMLDivElement>(null);

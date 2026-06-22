@@ -371,6 +371,8 @@ type Actions = {
    * across multiple matters.
    */
   setChatContext: (tabId: string, matterIds: string[]) => void;
+  resetChatTabId: (oldId: ChatThreadId, newId: ChatThreadId) => void;
+
   /**
    * Open (or update) a registry-backed view. Generic entrypoint
    * for non-workspace routes: pass the registered `type` plus the
@@ -1352,6 +1354,17 @@ export const useInspectorStore = create<State & Actions>()(
         const tab = state.tabs.find((t) => t.id === tabId);
         if (tab?.type === "chat") {
           tab.contextMatterIds = matterIds;
+        }
+      }),
+
+    resetChatTabId: (oldId, newId) =>
+      set((state) => {
+        const tab = state.tabs.find((t) => t.id === oldId);
+        if (tab && tab.type === "chat") {
+          tab.id = newId;
+        }
+        if (state.activeId === oldId) {
+          state.activeId = newId;
         }
       }),
 

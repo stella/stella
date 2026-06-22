@@ -429,6 +429,11 @@
       },
       "loadError": "Neizdevās ielādēt entītijas"
     },
+    "modelSelector": {
+      "defaultLabel": "Noklusējuma (tērzēšanas loma)",
+      "description": "Izvēlieties AI modeli, kas tiks izmantots aktīvajai tērzēšanas sesijai.",
+      "title": "Atlasīt tērzēšanas modeli"
+    },
     "moveToMain": "Pārvietot uz galveno skatu",
     "moveToSide": "Pārvietot uz sānu paneli",
     "newChat": "Jauna saruna",

@@ -3,6 +3,7 @@ import type {
   SlashSkillScope,
 } from "@/components/chat/prompt-slash-extension";
 import type { ChatPrompt } from "@/lib/prompts/types";
+import { getReservedChatCommands } from "@/lib/reserved-chat-commands";
 
 type SlashShortcutRow = Pick<
   ChatPrompt,
@@ -41,12 +42,26 @@ const CHAT_VISIBLE_INSTALLED_SKILL_LIMIT = 200;
 type BuildChatSlashItemsInput = {
   shortcuts: readonly SlashShortcutRow[];
   skillPages: readonly SlashSkillPage[] | undefined;
+  /**
+   * Reserved `/new` and `/model` commands only have submit handling on the chat
+   * composers, so they stay off by default to keep them out of other editors
+   * (workspace property prompts, template studio) that reuse this builder.
+   */
+  includeReservedCommands?: boolean;
 };
 
 export const buildChatSlashItems = ({
   shortcuts,
   skillPages,
+  includeReservedCommands = false,
 }: BuildChatSlashItemsInput): SlashItem[] => {
+  const commandItems: SlashItem[] = includeReservedCommands
+    ? getReservedChatCommands().map((command) => ({
+        kind: "command" as const,
+        command,
+      }))
+    : [];
+
   const promptItems: SlashItem[] = shortcuts.map((shortcut) => ({
     kind: "prompt" as const,
     prompt: {
@@ -86,7 +101,7 @@ export const buildChatSlashItems = ({
       },
     }));
 
-  return [...promptItems, ...skillItems];
+  return [...commandItems, ...promptItems, ...skillItems];
 };
 
 const getChatVisibleInstalledSkillRows = (

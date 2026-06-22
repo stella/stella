@@ -60,6 +60,8 @@ import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-l
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
+import { useModelSelectorStore } from "@/lib/model-selector-store";
+import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
@@ -1037,6 +1039,7 @@ const FileChatOverlayInner = ({
 
   const editorController = useChatEditor({
     placeholder: filePlaceholder,
+    reservedCommands: true,
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -1292,6 +1295,23 @@ const FileChatOverlayInner = ({
             void stop();
           }}
           onSubmit={({ prompt }) => {
+            const reservedCommand = matchReservedChatCommand(prompt);
+            if (reservedCommand?.id === "new") {
+              // Mirror the New Chat button: abort any live stream before
+              // rotating, or the old Chat keeps streaming in the query cache.
+              void stop();
+              shouldFocusComposerAfterNewThreadRef.current = true;
+              setPanelOpen(false);
+              onNewThread();
+              editorController.setContent("");
+              return;
+            }
+            if (reservedCommand?.id === "model") {
+              editorController.setContent("");
+              useModelSelectorStore.getState().open();
+              return;
+            }
+
             void ensureAIAvailable().then((available) => {
               if (!available) {
                 return;

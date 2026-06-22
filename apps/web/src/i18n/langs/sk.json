@@ -429,6 +429,11 @@
       },
       "loadError": "Nepodarilo sa načítať entity"
     },
+    "modelSelector": {
+      "defaultLabel": "Predvolené (rola chatu)",
+      "description": "Vyberte model AI používaný pre aktívnu reláciu chatu.",
+      "title": "Vybrať model chatu"
+    },
     "moveToMain": "Presunúť do hlavného zobrazenia",
     "moveToSide": "Presunúť do bočného panela",
     "newChat": "Nový chat",

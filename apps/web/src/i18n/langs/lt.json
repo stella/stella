@@ -429,6 +429,11 @@
       },
       "loadError": "Nepavyko įkelti objektų"
     },
+    "modelSelector": {
+      "defaultLabel": "Numatytasis (pokalbio vaidmuo)",
+      "description": "Pasirinkite AI modelį, naudojamą aktyviai pokalbių sesijai.",
+      "title": "Pasirinkti pokalbių modelį"
+    },
     "moveToMain": "Perkelti į pagrindinį rodinį",
     "moveToSide": "Perkelti į šoninį skydelį",
     "newChat": "Naujas pokalbis",

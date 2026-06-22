@@ -60,11 +60,13 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
-import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { type ChatThreadRef, createChatThreadId } from "@/lib/chat-thread-ref";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useDevStore } from "@/lib/dev-store";
+import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
+import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
@@ -143,13 +145,15 @@ export const ChatTabPanel = ({
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const chatContextLabel = useChatContextLabel(tab, activeOrganizationId);
 
-  const { openChat, setChatContext, updateLabel } = useInspectorStore(
-    useShallow((s) => ({
-      openChat: s.openChat,
-      setChatContext: s.setChatContext,
-      updateLabel: s.updateLabel,
-    })),
-  );
+  const { openChat, resetChatTabId, setChatContext, updateLabel } =
+    useInspectorStore(
+      useShallow((s) => ({
+        openChat: s.openChat,
+        resetChatTabId: s.resetChatTabId,
+        setChatContext: s.setChatContext,
+        updateLabel: s.updateLabel,
+      })),
+    );
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
@@ -256,6 +260,7 @@ export const ChatTabPanel = ({
   const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
   const editorController = useChatEditor({
     placeholder: t("chat.contextPlaceholder", { context: chatContextLabel }),
+    reservedCommands: true,
     suggestedFollowupPrompt,
     threadRef,
   });
@@ -431,6 +436,22 @@ export const ChatTabPanel = ({
               void stop();
             }}
             onSubmit={({ prompt }) => {
+              const reservedCommand = matchReservedChatCommand(prompt);
+              if (reservedCommand?.id === "new") {
+                // Abort any live stream first: rotating the tab id remounts the
+                // panel onto a fresh thread while the old Chat would keep
+                // streaming in the query cache.
+                void stop();
+                resetChatTabId(tab.id, createChatThreadId());
+                editorController.setContent("");
+                return;
+              }
+              if (reservedCommand?.id === "model") {
+                editorController.setContent("");
+                useModelSelectorStore.getState().open();
+                return;
+              }
+
               void ensureAIAvailable().then((available) => {
                 if (!available) {
                   return;
