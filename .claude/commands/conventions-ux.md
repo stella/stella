@@ -172,13 +172,15 @@ shipping — flipping `documentElement.dir` is not enough on its own.
   `left-/right-`, `text-left/right`, `border-l/-r`, `rounded-l/-r`.
   Physical directional classes do not flip under `dir="rtl"`. Enforced by
   the `no-physical-properties` oxlint rule.
-- **Mirror direction, not identity.** Add `rtl:-scale-x-100` to directional
-  glyphs (chevrons, arrows, back/forward, next/prev, breadcrumb separators,
-  pagination, drawer toggles). Do NOT mirror brand marks/logos, the media
-  play triangle, checkmarks, or anything whose meaning is orientation-free.
-  Disclosure chevrons (those that `rotate-90` on expand) must mirror **only
-  while collapsed** — an always-on mirror composes with the rotation and
-  points the expanded state the wrong way.
+- **Mirror direction, not identity.** Render directional glyphs (chevrons,
+  arrows, back/forward, next/prev, breadcrumb separators, pagination, drawer
+  toggles) through `<DirectionalIcon icon={...} />` (`@stll/ui`), which
+  centralizes the `rtl:-scale-x-100` mirror. Do NOT mirror brand marks/logos,
+  the media play triangle, checkmarks, or anything whose meaning is
+  orientation-free. For disclosure chevrons that `rotate-90` on expand, pass
+  `flip={!isExpanded}` so the mirror applies only while collapsed — an
+  always-on mirror composes with the rotation and points the expanded state
+  the wrong way.
 - **Format through the central locale.** Route all numbers, dates, and
   relative times through `useFormatter()`/`getFormatter()` (or pass
   `getFormattingLocale()`); never a bare `Intl.*` / `.toLocale*String()`

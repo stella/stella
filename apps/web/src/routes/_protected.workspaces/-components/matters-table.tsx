@@ -419,6 +419,7 @@ const MattersTableGroup = ({
   onToggle,
 }: MattersTableGroupProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const firstWs = group.workspaces.at(0);
 
   if (!firstWs) {
@@ -477,7 +478,7 @@ const MattersTableGroup = ({
                 "text-muted-foreground text-[0.625rem] tabular-nums",
               )}
             >
-              {group.workspaces.length}
+              {format.number(group.workspaces.length)}
             </span>
             {group.type === "client" && group.responsibleAttorneyName && (
               <span className="text-muted-foreground ms-auto truncate text-xs font-normal">

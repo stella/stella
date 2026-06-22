@@ -71,7 +71,8 @@ const isNumericExpr = (node) => {
       node.type === "OptionalMemberExpression") &&
     node.property.type === "Identifier"
   ) {
-    return isNumericName(node.property.name);
+    // `.length` is the most common count source (arrays/strings).
+    return node.property.name === "length" || isNumericName(node.property.name);
   }
   return false;
 };

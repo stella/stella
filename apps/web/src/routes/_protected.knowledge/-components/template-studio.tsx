@@ -45,7 +45,7 @@ import { TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
 import {
@@ -3827,6 +3827,7 @@ const GuidanceNote = ({
   onBlur: () => void;
   placeholder: string;
 }) => {
+  const format = useFormatter();
   const overRecommended = value.length > GUIDANCE_RECOMMENDED_LENGTH;
   return (
     <div className="flex flex-col gap-1.5">
@@ -3848,7 +3849,7 @@ const GuidanceNote = ({
           overRecommended ? "text-warning" : "text-muted-foreground",
         )}
       >
-        {value.length}
+        {format.number(value.length)}
       </span>
     </div>
   );

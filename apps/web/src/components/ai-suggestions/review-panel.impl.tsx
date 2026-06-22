@@ -16,7 +16,7 @@ import {
   LoaderCircleIcon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { diffWordSegments } from "@stll/folio";
 import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio";
@@ -138,6 +138,7 @@ export const ReviewPanelImpl = ({
   embedded = false,
 }: ReviewPanelProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const severityLabels = useSeverityLabels();
 
   // The selector must return a stable reference for the same
@@ -594,7 +595,7 @@ export const ReviewPanelImpl = ({
                 />
                 <span>{group.label}</span>
                 <span className="text-foreground-ghost tabular-nums">
-                  {group.items.length}
+                  {format.number(group.items.length)}
                 </span>
                 <span
                   aria-hidden="true"

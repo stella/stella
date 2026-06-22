@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { getDocumentAstMetadata } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/components/button";
@@ -150,6 +150,7 @@ const getPopularName = (meta: Record<string, unknown>): string | null => {
 
 export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const [expanded, setExpanded] = useState(false);
 
   const astMeta = getDocumentAstMetadata(decision.documentAst);
@@ -268,7 +269,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
       {decision.citationsFrom.length > 0 && (
         <div>
           <h4 className="text-muted-foreground mb-1 text-xs font-semibold">
-            {`${t("caseLaw.viewer.cites")} (${decision.citationsFrom.length})`}
+            {`${t("caseLaw.viewer.cites")} (${format.number(decision.citationsFrom.length)})`}
           </h4>
           <ul className="space-y-1">
             {decision.citationsFrom.slice(0, 10).map((citation) => (
@@ -283,7 +284,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
       {decision.citationsTo.length > 0 && (
         <div>
           <h4 className="text-muted-foreground mb-1 text-xs font-semibold">
-            {`${t("caseLaw.viewer.citedBy")} (${decision.citationsTo.length})`}
+            {`${t("caseLaw.viewer.citedBy")} (${format.number(decision.citationsTo.length)})`}
           </h4>
           <ul className="space-y-1">
             {decision.citationsTo.slice(0, 10).map((citation) => (

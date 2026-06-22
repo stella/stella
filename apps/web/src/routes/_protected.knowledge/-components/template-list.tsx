@@ -17,7 +17,7 @@ import {
   WandSparklesIcon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
@@ -137,6 +137,7 @@ export const TemplateList = ({
   onDeleted,
 }: TemplateListProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const canCreateTemplate = usePermissions({ template: ["create"] });
   const assignCategory = useAssignTemplateCategory();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -294,7 +295,7 @@ export const TemplateList = ({
               {t("knowledge.sections.templates.title")}
             </h2>
             <span className="text-muted-foreground text-sm tabular-nums">
-              {visibleTemplates.length}
+              {format.number(visibleTemplates.length)}
             </span>
             {tagFilter && (
               <span className="bg-muted text-foreground flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium">

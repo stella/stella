@@ -5,7 +5,12 @@
 // a regression makes them unused and CI fails. Lines without a directive
 // cover the allow-list and must keep passing.
 
-declare const x: { count: number; totalAmount: number; name: string };
+declare const x: {
+  count: number;
+  totalAmount: number;
+  name: string;
+  items: unknown[];
+};
 declare function getFormatter(): { number: (n: number) => string };
 
 // --- Flagged: a number reaching the DOM without the formatter ---
@@ -20,6 +25,10 @@ export const _template = () => (
 export const _bare = () => (
   // oxlint-disable-next-line no-unformatted-number/no-unformatted-number
   <span>{x.count}</span>
+);
+export const _length = () => (
+  // oxlint-disable-next-line no-unformatted-number/no-unformatted-number
+  <span>{x.items.length}</span>
 );
 
 // --- Allowed: formatted, non-numeric, or a non-display attribute ---

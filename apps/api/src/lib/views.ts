@@ -225,6 +225,11 @@ const DEFAULT_NAME_SETS: Record<
  * read we detect an un-renamed default — its stored name still matches a
  * seeded name for its layout type, in any language — and return the current
  * language's name. User-renamed views fall through unchanged.
+ *
+ * Caveat: if a user deliberately renames a view to a string that collides
+ * with another language's default for that layout type (e.g. renaming a
+ * table view to "Table"), the rename is treated as a default and
+ * re-localized on read. Acceptable given the low collision likelihood.
  */
 export const localizeDefaultViewName = ({
   lang,

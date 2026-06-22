@@ -984,13 +984,14 @@ const VariantsTab = ({
   onRefresh: () => void;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const [addOpen, setAddOpen] = useState(false);
 
   return (
     <div className="mt-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-muted-foreground text-sm">
-          {String(variants.length)}
+          {format.number(variants.length)}
         </span>
         <Button onClick={() => setAddOpen(true)} size="sm" variant="outline">
           <PlusIcon />
