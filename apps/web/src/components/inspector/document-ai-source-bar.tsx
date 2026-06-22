@@ -6,7 +6,7 @@ import {
   ChevronRightIcon,
   LoaderCircleIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
@@ -47,6 +47,7 @@ export const DocumentAiSourceBar = ({
   workspaceId: string;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const openFile = useInspectorStore((s) => s.openFile);
 
   const propertiesQuery = useQuery(propertiesOptions(workspaceId));
@@ -418,7 +419,7 @@ export const DocumentAiSourceBar = ({
           <DirectionalIcon className="size-3.5" icon={ChevronLeftIcon} />
         </Button>
         <span className="text-muted-foreground min-w-8 text-center text-[10px] tabular-nums">
-          {currentIdx + 1} / {slots.length}
+          {format.number(currentIdx + 1)} / {format.number(slots.length)}
         </span>
         <Button
           disabled={!nextSlot}

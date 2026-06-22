@@ -4926,6 +4926,7 @@ const OutlineRow = ({
   count?: number;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const actions = useTemplateStudioStore((s) => s.actions);
 
   const jump = () => {
@@ -4960,7 +4961,7 @@ const OutlineRow = ({
             <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
               {count > 1 ? (
                 <span className="text-muted-foreground text-[10px] tabular-nums">
-                  {count}×
+                  {format.number(count)}×
                 </span>
               ) : null}
               <FieldCapabilityIcons field={field} />

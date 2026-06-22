@@ -2,7 +2,7 @@ import { useDeferredValue, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { ChevronDownIcon, LayersIcon, SearchIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import {
   Menu,
@@ -64,6 +64,7 @@ export const ChatMatterPicker = ({
   onChange,
 }: ChatMatterPickerProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const [search, setSearch] = useState("");
   const deferredSearch = useDeferredValue(search);
   const searchRef = useRef<HTMLInputElement>(null);
@@ -250,7 +251,7 @@ export const ChatMatterPicker = ({
             className="bg-muted text-foreground rounded-sm px-1 text-[10px] font-medium tabular-nums"
             style={extraCountStyle}
           >
-            +{extraCount}
+            +{format.number(extraCount)}
           </span>
         )}
         <ChevronDownIcon
@@ -395,6 +396,7 @@ const ClientMatterToggle = ({
   isSelected,
   onToggle,
 }: ClientMatterToggleProps) => {
+  const format = useFormatter();
   const groupAllSelected = group.allMatters.every((m) => isSelected(m.id));
   const groupSelectedCount = group.allMatters.filter((m) =>
     isSelected(m.id),
@@ -411,7 +413,8 @@ const ClientMatterToggle = ({
         <span className="min-w-0 truncate">{group.label}</span>
         {groupSelectedCount > 0 && !groupAllSelected && (
           <span className="text-muted-foreground ms-auto shrink-0 text-[10px] tabular-nums">
-            {groupSelectedCount}/{group.allMatters.length}
+            {format.number(groupSelectedCount)}/
+            {format.number(group.allMatters.length)}
           </span>
         )}
       </span>

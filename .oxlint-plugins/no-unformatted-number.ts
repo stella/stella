@@ -107,28 +107,23 @@ export default {
       create(context) {
         return {
           JSXExpressionContainer(node) {
-            const expr = node.expression;
-            if (
-              (isStringCall(expr) || isNumericTemplate(expr)) &&
-              !inNonDisplayAttr(node)
-            ) {
-              context.report({ node, messageId: "unformatted" });
-            }
-          },
-          JSXElement(node) {
-            const kids = node.children.filter(
-              (child) =>
-                !(child.type === "JSXText" && child.value.trim().length === 0),
-            );
-            if (kids.length !== 1) {
+            if (inNonDisplayAttr(node)) {
               return;
             }
-            const child = kids[0];
+            const expr = node.expression;
+            // A bare `{numericName}` rendered as element/fragment text (whether
+            // it is the sole child or sits alongside text/siblings, e.g.
+            // `{hours}h` or `<>{count} left</>`) shows Latin digits too, so flag
+            // it the same as String()/template forms.
+            const isTextChild =
+              node.parent?.type === "JSXElement" ||
+              node.parent?.type === "JSXFragment";
             if (
-              child.type === "JSXExpressionContainer" &&
-              isNumericExpr(child.expression)
+              isStringCall(expr) ||
+              isNumericTemplate(expr) ||
+              (isTextChild && isNumericExpr(expr))
             ) {
-              context.report({ node: child, messageId: "unformatted" });
+              context.report({ node, messageId: "unformatted" });
             }
           },
         };

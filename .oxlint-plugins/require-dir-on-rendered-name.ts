@@ -43,6 +43,12 @@ const meaningfulChildren = (children) =>
     (child) => !(child.type === "JSXText" && child.value.trim().length === 0),
   );
 
+const isNameExpr = (expr) =>
+  (expr.type === "MemberExpression" ||
+    expr.type === "OptionalMemberExpression") &&
+  expr.property.type === "Identifier" &&
+  NAME_PROPS.has(expr.property.name);
+
 export default {
   meta: { name: "require-dir-on-rendered-name" },
   rules: {
@@ -54,6 +60,10 @@ export default {
             "User-provided name rendered without bidi isolation reorders " +
             'under RTL (e.g. ".Tatra Motor a.s"). Add dir="auto" to the ' +
             "element (or wrap the value in <bdi>).",
+          missingBidi:
+            "User-provided name rendered alongside other content reorders " +
+            "under RTL; wrap it in <bdi> (dir on the parent would also " +
+            "reorder its siblings).",
         },
       },
       create(context) {
@@ -66,25 +76,26 @@ export default {
             ) {
               return;
             }
-            if (hasDirAttr(opening)) {
-              return;
-            }
             const kids = meaningfulChildren(node.children);
-            if (kids.length !== 1) {
+            const nameKids = kids.filter(
+              (child) =>
+                child.type === "JSXExpressionContainer" &&
+                isNameExpr(child.expression),
+            );
+            if (nameKids.length === 0) {
               return;
             }
-            const child = kids[0];
-            if (child.type !== "JSXExpressionContainer") {
+            // Sole child: dir="auto" on the element isolates it.
+            if (kids.length === 1) {
+              if (!hasDirAttr(opening)) {
+                context.report({ node: opening, messageId: "missingDir" });
+              }
               return;
             }
-            const expr = child.expression;
-            if (
-              (expr.type === "MemberExpression" ||
-                expr.type === "OptionalMemberExpression") &&
-              expr.property.type === "Identifier" &&
-              NAME_PROPS.has(expr.property.name)
-            ) {
-              context.report({ node: opening, messageId: "missingDir" });
+            // Mixed children: dir on the element would reorder the siblings too,
+            // so the name itself must be wrapped in <bdi>.
+            for (const child of nameKids) {
+              context.report({ node: child, messageId: "missingBidi" });
             }
           },
         };

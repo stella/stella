@@ -1,7 +1,7 @@
 import { useCallback } from "react";
 
 import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/components/input";
 import {
@@ -30,6 +30,7 @@ export const DecisionFilters = ({
   facets,
 }: DecisionFiltersProps) => {
   const t = useTranslations();
+  const format = useFormatter();
 
   /** Update a single filter key, omitting it when empty. */
   const updateFilter = useCallback(
@@ -95,7 +96,7 @@ export const DecisionFilters = ({
             <SelectItem value="">{t("common.all")}</SelectItem>
             {countryBuckets.map((b) => (
               <SelectItem key={b.value} value={b.value}>
-                {b.value} ({b.count})
+                {b.value} ({format.number(b.count)})
               </SelectItem>
             ))}
           </SelectPopup>
@@ -122,7 +123,7 @@ export const DecisionFilters = ({
             <SelectItem value="">{t("common.all")}</SelectItem>
             {courtBuckets.map((b) => (
               <SelectItem key={b.value} value={b.value}>
-                {b.value} ({b.count})
+                {b.value} ({format.number(b.count)})
               </SelectItem>
             ))}
           </SelectPopup>

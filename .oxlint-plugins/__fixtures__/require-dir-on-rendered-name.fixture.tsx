@@ -25,6 +25,12 @@ export const _file = () => (
   // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
   <span>{x.fileName}</span>
 );
+export const _nameWithSibling = () => (
+  <span>
+    {/* oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name */}
+    {x.displayName} <small>(archived)</small>
+  </span>
+);
 
 // --- Allowed: dir present, <bdi>, or a non-name expression ---
 export const _ok1 = () => <span dir="auto">{x.displayName}</span>;

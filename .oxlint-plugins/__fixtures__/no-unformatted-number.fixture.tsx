@@ -30,6 +30,14 @@ export const _length = () => (
   // oxlint-disable-next-line no-unformatted-number/no-unformatted-number
   <span>{x.items.length}</span>
 );
+export const _bareWithSibling = () => (
+  // oxlint-disable-next-line no-unformatted-number/no-unformatted-number
+  <span>{x.count} left</span>
+);
+export const _bareInFragment = () => (
+  // oxlint-disable-next-line no-unformatted-number/no-unformatted-number
+  <>{x.count} left</>
+);
 
 // --- Allowed: formatted, non-numeric, or a non-display attribute ---
 export const _formatted = () => <span>{getFormatter().number(x.count)}</span>;

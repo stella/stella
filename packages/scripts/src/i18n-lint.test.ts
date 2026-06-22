@@ -244,4 +244,33 @@ describe("terminology", () => {
       findForbiddenTerms("Open this matter", "Sachenrecht gilt", "de", rules),
     ).toEqual([]);
   });
+
+  test("matches an Arabic forbidden term carrying proclitics (ال/و prefixes)", () => {
+    const arRules = buildForbiddenRules(
+      parseGlossary(
+        JSON.stringify({
+          verbs: [],
+          legalConcepts: [
+            {
+              id: "matter",
+              en: "Matter",
+              forbidden: { ar: ["قضية"] },
+              translations: fill("x"),
+            },
+          ],
+          ptBR: [],
+        }),
+      ),
+    );
+    // bare, ال-prefixed, and و+ال-prefixed forms all count.
+    expect(
+      findForbiddenTerms("Open this matter", "افتح قضية", "ar", arRules),
+    ).toEqual(["قضية"]);
+    expect(
+      findForbiddenTerms("Open this matter", "افتح القضية", "ar", arRules),
+    ).toEqual(["قضية"]);
+    expect(
+      findForbiddenTerms("Open this matter", "والقضية مفتوحة", "ar", arRules),
+    ).toEqual(["قضية"]);
+  });
 });
