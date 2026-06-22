@@ -72,6 +72,11 @@ export default {
             'Numeric input (inputMode "numeric"/"decimal") must use dir="ltr": ' +
             "a value with no strong directional character inherits the " +
             "surrounding RTL direction and edits backwards.",
+          rawNeedsDir:
+            "Raw <input>/<textarea> bypasses the shared <Input>/<Textarea> bidi " +
+            "handling, so it must set `dir` explicitly: use " +
+            "`dir={contentDir(value)}` for free text (or migrate to the shared " +
+            '<Input>/<Textarea>), or `dir="ltr"` for fixed-direction fields.',
         },
       },
       create(context) {
@@ -128,6 +133,15 @@ export default {
                 node: dirAttr ?? node,
                 messageId: "numericDir",
               });
+              return;
+            }
+            // Raw lowercase <input>/<textarea> do not run useContentDir (only
+            // the shared <Input>/<Textarea> do), so a free-text raw control with
+            // no `dir` silently inherits the surrounding direction.
+            const isRawElement =
+              node.name.name === "input" || node.name.name === "textarea";
+            if (isRawElement && dirAttr === undefined) {
+              context.report({ node, messageId: "rawNeedsDir" });
             }
           },
         };
