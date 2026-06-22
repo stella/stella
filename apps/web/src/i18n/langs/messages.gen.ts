@@ -44,6 +44,7 @@ type Messages = {
     "neutral": "Neutral";
     "nord": "Nord";
     "numbers": "Numbers";
+    "numbersAuto": "Automatic";
     "numbersEastern": "Eastern (٠١٢٣)";
     "numbersWestern": "Western (0123)";
     "palette": "Palette";

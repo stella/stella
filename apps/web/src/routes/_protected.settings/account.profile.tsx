@@ -338,13 +338,10 @@ const LocalePreferences = () => {
   const numberingSystem = useI18nStore((s) => s.numberingSystem);
   const setNumberingSystem = useI18nStore((s) => s.setNumberingSystem);
 
-  // "auto" resolves to a concrete value for the select, mirroring the
-  // formatting-locale defaults in i18n-store: Gregorian everywhere, and
-  // Eastern Arabic-Indic digits for Arabic / Western elsewhere.
+  // The calendar select collapses "auto" to its resolved value because it has
+  // no Auto option; the numbering select binds to the raw store value so its
+  // own Auto option can round-trip.
   const activeCalendar = calendar === "auto" ? "gregory" : calendar;
-  const autoNumbering = lang === "ar" ? "arab" : "latn";
-  const activeNumbering =
-    numberingSystem === "auto" ? autoNumbering : numberingSystem;
 
   return (
     <Frame>
@@ -436,12 +433,15 @@ const LocalePreferences = () => {
                 setNumberingSystem(value);
               }
             }}
-            value={activeNumbering}
+            value={numberingSystem}
           >
             <SelectTrigger className="w-56" id="numbers-select">
               <SelectValue />
             </SelectTrigger>
             <SelectPopup>
+              <SelectItem value="auto">
+                {t("appearance.numbersAuto")}
+              </SelectItem>
               <SelectItem value="latn">
                 {t("appearance.numbersWestern")}
               </SelectItem>
