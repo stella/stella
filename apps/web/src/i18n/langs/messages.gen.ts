@@ -1326,7 +1326,7 @@ type Messages = {
     "hidePane": "Hide pane";
     "matterPicker": {
       "allMatters": "All matters";
-      "description": "Pick the matters this chat can draw on. The AI sees content from every matter you select.";
+      "description": "Pick the matters this chat can draw on.";
       "empty": "No matters available.";
       "noMatter": "No matter";
       "noResults": "No matter matches “{query}”.";

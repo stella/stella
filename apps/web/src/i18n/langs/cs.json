@@ -1323,7 +1323,7 @@
     "hidePane": "Skrýt panel",
     "matterPicker": {
       "allMatters": "Všechny spisy",
-      "description": "Vyberte spisy, ze kterých chat čerpá. AI vidí obsah všech vybraných spisů.",
+      "description": "Vyberte spisy, ze kterých chat čerpá.",
       "empty": "Žádné dostupné spisy.",
       "noMatter": "Žádný spis",
       "noResults": "Žádný spis neodpovídá „{query}“.",

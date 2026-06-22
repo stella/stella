@@ -1323,7 +1323,7 @@
     "hidePane": "Slėpti polangį",
     "matterPicker": {
       "allMatters": "Visos bylos",
-      "description": "Pasirinkite bylas, kuriomis šis pokalbis gali remtis. DI mato kiekvienos pasirinktos bylos turinį.",
+      "description": "Pasirinkite bylas, kuriomis šis pokalbis gali remtis.",
       "empty": "Bylų nėra.",
       "noMatter": "Be bylos",
       "noResults": "Pagal „{query}“ bylų nerasta.",

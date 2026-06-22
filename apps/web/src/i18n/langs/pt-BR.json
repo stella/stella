@@ -1323,7 +1323,7 @@
     "hidePane": "Ocultar painel",
     "matterPicker": {
       "allMatters": "Todos os casos",
-      "description": "Escolha os casos que este chat pode usar. A IA vê o conteúdo de todos os casos selecionados.",
+      "description": "Escolha os casos que este chat pode usar.",
       "empty": "Nenhum caso disponível.",
       "noMatter": "Nenhum caso",
       "noResults": "Nenhum caso corresponde a “{query}”.",

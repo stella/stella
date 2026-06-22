@@ -1323,7 +1323,7 @@
     "hidePane": "Ukryj panel",
     "matterPicker": {
       "allMatters": "Wszystkie sprawy",
-      "description": "Wybierz sprawy, na których czat może się opierać. AI widzi treść każdej wybranej sprawy.",
+      "description": "Wybierz sprawy, na których czat może się opierać.",
       "empty": "Brak dostępnych spraw.",
       "noMatter": "Brak sprawy",
       "noResults": "Brak spraw pasujących do „{query}”.",
