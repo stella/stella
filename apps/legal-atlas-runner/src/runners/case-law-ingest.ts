@@ -147,6 +147,14 @@ const WATCHDOG_TICK_MS = 10_000;
 const WATCHDOG_LAG_THRESHOLD_MS = 90_000;
 const WATCHDOG_MAX_STARVED_TICKS = 3;
 
+// Hard wall-clock ceiling on a single held cycle. The lag watchdog catches a
+// CPU-starved loop, but a cycle wedged on an await that ignores the per-cycle
+// signal (e.g. a DB call before/after the pipeline's AbortSignal) leaves the
+// loop responsive AND keeps its concurrency slot, which would park every other
+// adapter. If a cycle outlives this ceiling — well above the longest adapter
+// maxCycleMs (30m) plus slack — the worker is wedged: exit so ECS relaunches.
+const CYCLE_HARD_DEADLINE_MS = 45 * 60 * 1000;
+
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
   release: () => void;
@@ -190,6 +198,9 @@ const createSemaphore = (label: string, capacity: number): Semaphore => {
   };
 
   const release = (): void => {
+    if (active === 0) {
+      panic(`${label} semaphore released without an active acquisition`);
+    }
     active--;
     const next = queue.shift();
     if (next) {
@@ -265,10 +276,12 @@ const startEventLoopWatchdog = (): void => {
       starvedTicks = 0;
     }
     expectedAt = performance.now() + WATCHDOG_TICK_MS;
-    setTimeout(tick, WATCHDOG_TICK_MS);
+    // unref: the watchdog observes the loop, it must not be the sole handle
+    // keeping the process alive once everything else has finished.
+    setTimeout(tick, WATCHDOG_TICK_MS).unref();
   };
 
-  setTimeout(tick, WATCHDOG_TICK_MS);
+  setTimeout(tick, WATCHDOG_TICK_MS).unref();
 };
 
 // Adapters to skip. Set DISABLED_ADAPTERS env var to a
@@ -511,10 +524,25 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
       await cycleSemaphore.acquire();
       let cycle: CycleResult;
+      // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
+      // ignore the per-cycle abort signal (the source lookup before it is
+      // created, the event write after the pipeline); if one wedges on a
+      // broken connection the cycle never returns, the finally never runs, and
+      // the slot parks every other adapter. The lag watchdog can't see an
+      // I/O-wait hang (the loop stays responsive), so bound it here: if a cycle
+      // outlives the ceiling, exit so ECS relaunches a healthy task.
+      const deadline = setTimeout(() => {
+        logError(
+          `[${adapterKey}] cycle exceeded ${CYCLE_HARD_DEADLINE_MS}ms hard deadline (wedged await); exiting for ECS restart`,
+        );
+        process.exit(1);
+      }, CYCLE_HARD_DEADLINE_MS);
+      deadline.unref();
       try {
         // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
         cycle = await runOneCycle(adapterKey, name);
       } finally {
+        clearTimeout(deadline);
         cycleSemaphore.release();
       }
       const { outcome, inserted, pagesProcessed } = cycle;
