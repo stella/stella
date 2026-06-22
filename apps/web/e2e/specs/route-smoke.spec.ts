@@ -300,7 +300,11 @@ const renderSmokeRoute = async ({
   await page.goto(route.path, { waitUntil: "domcontentloaded" });
   await expect(page, route.template).not.toHaveURL(/\/auth(?:\/|$)/u);
   await assertNoRouteBoundary(page, route.template);
-  await expect(page.locator("main").first(), route.template).toBeVisible();
+  // Cold-compiled route chunks can take longer than the default 10s expect
+  // timeout to paint <main> on a fresh CI runner.
+  await expect(page.locator("main").first(), route.template).toBeVisible({
+    timeout: 30_000,
+  });
 
   await page.waitForTimeout(route.settleMs ?? 250);
 
