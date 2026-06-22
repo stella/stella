@@ -458,7 +458,7 @@ export function UiPlayground() {
                         </PopoverDescription>
                         <Separator />
                         <Label>Owner</Label>
-                        <Input defaultValue="M. Novak" />
+                        <Input defaultValue="M. Novak" dir="auto" />
                         <Button size="sm">Apply</Button>
                       </div>
                     </PopoverPopup>
@@ -482,7 +482,7 @@ export function UiPlayground() {
                 >
                   <Field>
                     <FieldLabel>Matter name</FieldLabel>
-                    <Input defaultValue="Supply agreement review" />
+                    <Input defaultValue="Supply agreement review" dir="auto" />
                     <FieldDescription>
                       Visible labels and helper text stay close to the control.
                     </FieldDescription>
@@ -490,13 +490,20 @@ export function UiPlayground() {
 
                   <Field>
                     <FieldLabel>Reference</FieldLabel>
-                    <Input aria-invalid defaultValue="12345678901234567890" />
+                    <Input
+                      aria-invalid
+                      defaultValue="12345678901234567890"
+                      dir="auto"
+                    />
                     <FieldError match>Reference is too long.</FieldError>
                   </Field>
 
                   <Field>
                     <FieldLabel>Notes</FieldLabel>
-                    <Textarea defaultValue="Counterparty requested a narrow confidentiality carve-out." />
+                    <Textarea
+                      defaultValue="Counterparty requested a narrow confidentiality carve-out."
+                      dir="auto"
+                    />
                   </Field>
 
                   <InputGroup>
@@ -666,11 +673,14 @@ export function UiPlayground() {
                       <DialogPanel className="space-y-4">
                         <Field>
                           <FieldLabel>Email</FieldLabel>
-                          <Input defaultValue="anna@example.com" />
+                          <Input defaultValue="anna@example.com" dir="auto" />
                         </Field>
                         <Field>
                           <FieldLabel>Message</FieldLabel>
-                          <Textarea defaultValue="Please review the latest draft." />
+                          <Textarea
+                            defaultValue="Please review the latest draft."
+                            dir="auto"
+                          />
                         </Field>
                       </DialogPanel>
                       <DialogFooter>

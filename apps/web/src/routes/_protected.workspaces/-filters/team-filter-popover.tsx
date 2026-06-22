@@ -113,6 +113,7 @@ export const TeamFilterPopover = ({
           {t("workspaces.filters.team.members")}
         </p>
         <Input
+          dir="auto"
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t("workspaces.filters.team.searchMembers")}
           size="sm"

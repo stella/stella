@@ -198,6 +198,7 @@ export const TimeEntryForm = ({
               {(field) => (
                 <Input
                   className="flex-1"
+                  dir="auto"
                   inputMode="decimal"
                   onBlur={() => {
                     const cents = Math.round(
@@ -218,6 +219,7 @@ export const TimeEntryForm = ({
               {(field) => (
                 <Input
                   className="w-20"
+                  dir="auto"
                   maxLength={3}
                   onChange={(e) =>
                     field.handleChange(e.currentTarget.value.toUpperCase())
@@ -241,6 +243,7 @@ export const TimeEntryForm = ({
         <form.Field name="narrative">
           {(field) => (
             <Textarea
+              dir="auto"
               onChange={(e) => field.handleChange(e.currentTarget.value)}
               placeholder={t("billing.narrativePlaceholder")}
               rows={3}
@@ -255,6 +258,7 @@ export const TimeEntryForm = ({
         <form.Field name="invoiceNarrative">
           {(field) => (
             <Textarea
+              dir="auto"
               onChange={(e) => field.handleChange(e.currentTarget.value)}
               placeholder={t("billing.invoiceNarrativePlaceholder")}
               rows={2}

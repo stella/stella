@@ -157,6 +157,7 @@ export function MarkdownFolioEditor({
         <Textarea
           aria-label={t("markdownEditor.rawLabel")}
           className="min-h-0 flex-1 resize-none rounded-none border-0 font-mono text-xs focus-visible:ring-0"
+          dir="auto"
           onChange={(event) => onRawChange(event.currentTarget.value)}
           readOnly={readOnly}
           value={rawText}

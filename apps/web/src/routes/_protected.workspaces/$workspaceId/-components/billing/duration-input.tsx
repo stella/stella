@@ -123,6 +123,7 @@ export const DurationInput = ({
       <Input
         autoFocus={autoFocus}
         className="tabular-nums"
+        dir="auto"
         onBlur={handleBlur}
         onChange={(e) => setDisplayValue(e.currentTarget.value)}
         onFocus={handleFocus}

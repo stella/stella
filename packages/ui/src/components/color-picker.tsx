@@ -268,6 +268,7 @@ function ColorPickerContent({
             <input
               aria-label="Custom hex color"
               className="border-input bg-background text-foreground h-6 flex-1 rounded border px-1.5 font-mono text-[11px] outline-none"
+              dir="auto"
               maxLength={6}
               onChange={(e) => handleInputChange(e.target.value)}
               onKeyDown={(e) => e.stopPropagation()}

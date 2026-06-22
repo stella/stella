@@ -653,6 +653,7 @@ export const AnonymizationFacet = ({
       >
         <Input
           autoComplete="off"
+          dir="auto"
           disabled={createMutation.isPending}
           onChange={(event) => setPendingValue(event.target.value)}
           placeholder={t("inspector.anonymization.addPlaceholder")}

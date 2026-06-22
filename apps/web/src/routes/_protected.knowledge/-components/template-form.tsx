@@ -731,6 +731,7 @@ const CompositeFieldRow = ({
             <Input
               aria-label={partLabel}
               className="min-w-36 flex-1"
+              dir="auto"
               key={part.key}
               name={`${field.path}.${part.key}`}
               onBlur={() => onBlur?.(field.path)}
@@ -878,6 +879,7 @@ const FieldRenderer = ({
         <FieldControl
           render={
             <Textarea
+              dir="auto"
               name={field.path}
               onBlur={handleBlur}
               onChange={(e) => onChange(field.path, e.target.value)}
@@ -955,6 +957,7 @@ const FieldRenderer = ({
       <FieldControl
         render={
           <Input
+            dir="auto"
             name={field.path}
             onBlur={handleBlur}
             onChange={(e) => onChange(field.path, e.target.value)}
@@ -1444,6 +1447,7 @@ const RegistryAutofillControl = ({
       </Select>
       <Input
         className="w-44"
+        dir="auto"
         onChange={(e) => setCompanyId(e.target.value)}
         onKeyDown={(e) => {
           if (e.key === "Enter") {

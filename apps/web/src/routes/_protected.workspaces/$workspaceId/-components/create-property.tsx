@@ -647,6 +647,7 @@ const PropertyComposerBody = ({
           autoComplete="off"
           autoFocus
           className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-base font-semibold tracking-tight"
+          dir="auto"
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
             if ((e.metaKey || e.ctrlKey) && e.key === "Enter" && canSubmit) {

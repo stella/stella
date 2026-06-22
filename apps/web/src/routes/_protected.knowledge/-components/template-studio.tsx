@@ -3829,6 +3829,7 @@ const GuidanceNote = ({
       <Textarea
         aria-label={label}
         className="text-sm"
+        dir="auto"
         maxLength={GUIDANCE_MAX_LENGTH}
         onBlur={onBlur}
         onChange={(e) => onChange(e.target.value)}
@@ -4225,6 +4226,7 @@ const ConditionFieldEditor = ({
         <Input
           className="h-9 text-sm"
           defaultValue={field.label}
+          dir="auto"
           key={field.path}
           onBlur={(e) => {
             const next = e.currentTarget.value.trim();
@@ -4477,6 +4479,7 @@ const ConditionQuestionBuilder = ({
       </p>
       <Input
         className="h-9 text-sm"
+        dir="auto"
         onBlur={commit}
         onChange={(e) => setLabel(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -4681,6 +4684,7 @@ const ConditionExprEditor = ({
     <Input
       autoFocus
       className="h-8 font-mono text-xs"
+      dir="auto"
       onBlur={commit}
       onChange={(e) => setValue(e.currentTarget.value)}
       onKeyDown={(e) => {
@@ -5627,6 +5631,7 @@ const FieldFace = ({
             <>
               <Input
                 className="h-8 font-mono text-xs"
+                dir="auto"
                 onChange={(e) => onUpdate({ formula: e.target.value })}
                 placeholder={t("templates.fieldFormulaExpression")}
                 value={field.formula}
@@ -5811,6 +5816,7 @@ const SaveRecipeDialog = ({
             <Label htmlFor="recipe-name">{t("common.name")}</Label>
             <Input
               autoFocus
+              dir="auto"
               id="recipe-name"
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {
@@ -5889,6 +5895,7 @@ const FieldPathEditor = ({
     <Input
       autoFocus
       className="h-7 font-mono text-xs"
+      dir="auto"
       onBlur={commit}
       onChange={(e) => setValue(e.currentTarget.value)}
       onKeyDown={(e) => {

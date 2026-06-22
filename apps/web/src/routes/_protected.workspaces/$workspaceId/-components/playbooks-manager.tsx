@@ -466,6 +466,7 @@ const PlaybookEditor = ({
           {t("workspaces.playbooks.nameLabel")}
         </Label>
         <Input
+          dir="auto"
           id="playbook-name"
           onChange={(event) =>
             onChange({ ...draft, name: event.currentTarget.value })
@@ -523,6 +524,7 @@ const PlaybookEditor = ({
             >
               <div className="flex items-center gap-2">
                 <Input
+                  dir="auto"
                   onChange={(event) =>
                     updateColumn(column.sourceId, {
                       name: event.currentTarget.value,
@@ -578,6 +580,7 @@ const PlaybookEditor = ({
               </div>
               <Textarea
                 className="min-h-16"
+                dir="auto"
                 onChange={(event) =>
                   updateColumn(column.sourceId, {
                     prompt: event.currentTarget.value,

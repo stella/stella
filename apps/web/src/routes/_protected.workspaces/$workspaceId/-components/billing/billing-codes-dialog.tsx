@@ -304,6 +304,7 @@ const CreateCodeForm = ({
             {(field) => (
               <Input
                 autoFocus
+                dir="auto"
                 maxLength={20}
                 onChange={(e) => field.handleChange(e.currentTarget.value)}
                 placeholder={t("billing.codes.codePlaceholder")}
@@ -317,6 +318,7 @@ const CreateCodeForm = ({
           <form.Field name="label">
             {(field) => (
               <Input
+                dir="auto"
                 maxLength={256}
                 onChange={(e) => field.handleChange(e.currentTarget.value)}
                 placeholder={t("billing.codes.labelPlaceholder")}

@@ -1041,6 +1041,7 @@ const TemplateTagsDialogBody = ({
 
         <Input
           autoFocus
+          dir="auto"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -1158,6 +1159,7 @@ const TemplateGuidanceDialogBody = ({
           </label>
           <Textarea
             className="min-h-[60px]"
+            dir="auto"
             id="template-when-to-use"
             maxLength={10_000}
             onChange={(e) => setWhenToUse(e.target.value)}
@@ -1174,6 +1176,7 @@ const TemplateGuidanceDialogBody = ({
           </label>
           <Textarea
             className="min-h-[60px]"
+            dir="auto"
             id="template-when-not-to-use"
             maxLength={10_000}
             onChange={(e) => setWhenNotToUse(e.target.value)}

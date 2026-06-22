@@ -177,6 +177,7 @@ const ClauseFillItem = ({
                 <Textarea
                   autoFocus
                   className="min-h-16 text-sm"
+                  dir="auto"
                   onChange={(e) => setInstruction(e.target.value)}
                   placeholder={t("ai.refinePlaceholder")}
                   value={instruction}

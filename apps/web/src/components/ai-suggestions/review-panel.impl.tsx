@@ -745,6 +745,7 @@ const IdentityPopoverBody = ({
             <Input
               autoComplete="off"
               className="h-8 text-xs"
+              dir="auto"
               maxLength={120}
               onChange={(e) => setPreferredName(e.target.value)}
               placeholder={t("docxReview.wordNamePlaceholder")}
@@ -758,6 +759,7 @@ const IdentityPopoverBody = ({
             <Input
               autoComplete="off"
               className="h-8 text-xs uppercase"
+              dir="auto"
               maxLength={6}
               onChange={(e) => setWordEditShortcut(e.target.value)}
               placeholder={t("docxReview.wordShortcutPlaceholder")}

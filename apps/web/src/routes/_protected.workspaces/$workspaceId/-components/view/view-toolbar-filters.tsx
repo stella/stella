@@ -397,6 +397,7 @@ const ValueEditor = ({
     <Input
       autoFocus
       className="h-7! w-full text-xs"
+      dir="auto"
       onChange={(e) => emit(e.currentTarget.value)}
       placeholder={t("workspaces.properties.enterAValue")}
       size="sm"

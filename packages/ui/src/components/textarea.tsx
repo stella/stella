@@ -41,6 +41,7 @@ function Textarea({
                 "min-h-18.5 py-[calc(--spacing(2)-1px)] max-sm:min-h-21.5",
             )}
             data-slot="textarea"
+            dir="auto"
             {...mergeProps(defaultProps, props)}
           />
         )}

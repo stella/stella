@@ -178,6 +178,7 @@ export const WorkspaceBreadcrumb = ({
       return (
         <Input
           className={`${breadcrumbInputClassName} w-28 text-sm`}
+          dir="auto"
           onBlur={() => {
             void refRename.commit();
           }}
@@ -252,6 +253,7 @@ export const WorkspaceBreadcrumb = ({
                   </span>
                   <Input
                     className={`${matterNameInputClassName} w-fit`}
+                    dir="auto"
                     disabled={updateWorkspace.isPending}
                     onBlur={() => {
                       void nameRename.commit();
@@ -357,6 +359,7 @@ export const WorkspaceBreadcrumb = ({
           {colorPicker}
           <Input
             className={`${matterNameInputClassName} w-fit`}
+            dir="auto"
             disabled={updateWorkspace.isPending}
             onBlur={() => {
               void nameRename.commit();

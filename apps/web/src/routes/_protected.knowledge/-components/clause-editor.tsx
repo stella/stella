@@ -771,6 +771,7 @@ const AiEditBar = ({
         <Textarea
           autoFocus
           className="min-h-9 flex-1 resize-none text-sm"
+          dir="auto"
           disabled={generating}
           onChange={(e) => onInstructionChange(e.target.value)}
           onKeyDown={(e) => {

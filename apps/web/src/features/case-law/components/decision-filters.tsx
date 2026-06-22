@@ -78,6 +78,7 @@ export const DecisionFilters = ({
       <Input
         className="max-w-xs"
         defaultValue={filters.search ?? ""}
+        dir="auto"
         onChange={(e) => handleSearchChange(e.currentTarget.value)}
         placeholder={t("caseLaw.filters.searchPlaceholder")}
       />
@@ -103,6 +104,7 @@ export const DecisionFilters = ({
         <Input
           className="max-w-32"
           defaultValue={filters.country ?? ""}
+          dir="auto"
           onChange={(e) => handleCountryInputChange(e.currentTarget.value)}
           placeholder={t("common.country")}
         />
@@ -129,6 +131,7 @@ export const DecisionFilters = ({
         <Input
           className="max-w-48"
           defaultValue={filters.court ?? ""}
+          dir="auto"
           onChange={(e) => handleCourtInputChange(e.currentTarget.value)}
           placeholder={t("caseLaw.filters.court")}
         />

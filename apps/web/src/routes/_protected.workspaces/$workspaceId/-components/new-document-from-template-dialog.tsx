@@ -158,6 +158,7 @@ const TemplatePickList = ({
         <Input
           autoFocus
           className="ps-8"
+          dir="auto"
           onChange={(e) => setSearch(e.target.value)}
           placeholder={t("templates.searchTemplates")}
           type="search"

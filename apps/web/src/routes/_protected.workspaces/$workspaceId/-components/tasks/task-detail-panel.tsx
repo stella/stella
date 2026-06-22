@@ -294,6 +294,7 @@ export const TaskDetailPanel = ({
             <Input
               autoFocus
               className="text-base font-semibold"
+              dir="auto"
               onBlur={commitName}
               onChange={(e) => setEditNameValue(e.target.value)}
               onKeyDown={(e) => {

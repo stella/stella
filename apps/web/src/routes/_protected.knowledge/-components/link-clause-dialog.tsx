@@ -269,6 +269,7 @@ export const LinkClauseDialog = ({
               <Input
                 aria-label={t("clauses.searchClauses")}
                 className="ps-8"
+                dir="auto"
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("clauses.searchClauses")}
                 value={search}
@@ -423,6 +424,7 @@ export const LinkClauseDialog = ({
             {slotValue === SLOT_VALUE_CUSTOM && (
               <Input
                 aria-label={t("clauses.slotName")}
+                dir="auto"
                 onChange={(e) => setCustomSlotName(e.target.value)}
                 placeholder={t("clauses.slotNamePlaceholder")}
                 value={customSlotName}

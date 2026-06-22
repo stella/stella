@@ -345,6 +345,7 @@ const CreateRateTableForm = ({
             {(field) => (
               <Input
                 autoFocus
+                dir="auto"
                 onChange={(e) => field.handleChange(e.currentTarget.value)}
                 placeholder={t("billing.rates.tableNamePlaceholder")}
                 value={field.state.value}
@@ -357,6 +358,7 @@ const CreateRateTableForm = ({
           <form.Field name="currency">
             {(field) => (
               <Input
+                dir="auto"
                 maxLength={3}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())
@@ -743,6 +745,7 @@ const CreateRateEntryForm = ({
           <form.Field name="hourlyRate">
             {(field) => (
               <Input
+                dir="auto"
                 inputMode="decimal"
                 onChange={(e) => field.handleChange(e.currentTarget.value)}
                 placeholder="350.00"

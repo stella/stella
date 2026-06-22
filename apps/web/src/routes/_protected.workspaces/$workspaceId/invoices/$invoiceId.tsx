@@ -819,6 +819,7 @@ const EditInvoiceForm = ({
           <Field name={field.name}>
             <Label>{t("billing.invoices.invoiceNumber")}</Label>
             <Input
+              dir="auto"
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value)}
               value={field.state.value}
@@ -858,6 +859,7 @@ const EditInvoiceForm = ({
           <Field name={field.name}>
             <Label>{t("common.reference")}</Label>
             <Input
+              dir="auto"
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value)}
               value={field.state.value}
@@ -871,6 +873,7 @@ const EditInvoiceForm = ({
           <Field name={field.name}>
             <Label>{t("common.currency")}</Label>
             <Input
+              dir="auto"
               maxLength={3}
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
@@ -885,6 +888,7 @@ const EditInvoiceForm = ({
           <Field name={field.name}>
             <Label>{t("common.notes")}</Label>
             <Textarea
+              dir="auto"
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value)}
               rows={3}

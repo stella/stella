@@ -854,6 +854,7 @@ const CreateContactDialog = ({
                       <FieldLabel>{t("contacts.fields.firstName")}</FieldLabel>
                       <Input
                         autoFocus
+                        dir="auto"
                         onBlur={field.handleBlur}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -875,6 +876,7 @@ const CreateContactDialog = ({
                     <Field name={field.name}>
                       <FieldLabel>{t("contacts.fields.lastName")}</FieldLabel>
                       <Input
+                        dir="auto"
                         onBlur={field.handleBlur}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -902,6 +904,7 @@ const CreateContactDialog = ({
                       <FieldLabel>{t("common.organizationName")}</FieldLabel>
                       <Input
                         autoFocus
+                        dir="auto"
                         onBlur={field.handleBlur}
                         onChange={(e) => {
                           field.handleChange(e.target.value);
@@ -929,6 +932,7 @@ const CreateContactDialog = ({
                         <Field name={field.name}>
                           <div className="flex gap-2">
                             <Input
+                              dir="auto"
                               inputMode="numeric"
                               onBlur={field.handleBlur}
                               onChange={(e) => {
@@ -976,6 +980,7 @@ const CreateContactDialog = ({
                           {t("contacts.fields.registrationNumber")}
                         </FieldLabel>
                         <Input
+                          dir="auto"
                           onBlur={field.handleBlur}
                           onChange={(e) => field.handleChange(e.target.value)}
                           value={field.state.value}
@@ -993,6 +998,7 @@ const CreateContactDialog = ({
                 <Field name={field.name}>
                   <FieldLabel>{t("contacts.create.contactName")}</FieldLabel>
                   <Input
+                    dir="auto"
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                     value={field.state.value}

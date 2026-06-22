@@ -80,6 +80,7 @@ export const MatterTargetPicker = ({
           />
           <Input
             className="ps-8"
+            dir="auto"
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("inspector.matterPicker.searchPlaceholder")}
             type="search"

@@ -263,6 +263,7 @@ function ProfilePageBody() {
                 {t("settings.account.preferredNameDescription")}
               </p>
               <Input
+                dir="auto"
                 id="preferred-name-input"
                 maxLength={120}
                 placeholder={t("settings.account.preferredNamePlaceholder")}
@@ -278,6 +279,7 @@ function ProfilePageBody() {
                 {t("settings.account.wordEditShortcutDescription")}
               </p>
               <Input
+                dir="auto"
                 id="word-edit-shortcut-input"
                 maxLength={16}
                 placeholder={t("settings.account.wordEditShortcutPlaceholder")}

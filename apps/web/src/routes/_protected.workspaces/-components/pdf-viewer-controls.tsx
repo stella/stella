@@ -209,6 +209,7 @@ export const PdfViewerControls = ({
             <input
               aria-label={t("common.currentPage")}
               autoComplete="off"
+              dir="auto"
               className="me-1 w-14 rounded border px-1 text-end"
               inputMode="numeric"
               onBlur={() => {
