@@ -32,6 +32,7 @@ export const LIMITS = {
   entitySummariesPageSize: 200,
   viewsCount: 20,
   viewTemplatesPerUser: 50,
+  playbooksCount: 50,
   templatesCount: 50,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,

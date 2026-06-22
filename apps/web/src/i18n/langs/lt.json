@@ -2673,6 +2673,30 @@
       "zoomIn": "Priartinti",
       "zoomOut": "Nutolinti"
     },
+    "playbooks": {
+      "action": "Playbooks",
+      "addColumn": "Add column",
+      "applied": "Playbook applied",
+      "apply": "Apply",
+      "columnNamePlaceholder": "Column name",
+      "columnsLabel": "Columns",
+      "contentType": {
+        "date": "Date",
+        "int": "Number",
+        "text": "Text"
+      },
+      "create": "New playbook",
+      "description": "Bundle AI columns that fill only for a chosen document type.",
+      "duplicateColumn": "Column names must be unique.",
+      "empty": "No playbooks yet.",
+      "incomplete": "Add a name and at least one column.",
+      "nameLabel": "Name",
+      "namePlaceholder": "e.g. Lease review",
+      "promptPlaceholder": "What should this column extract?",
+      "summary": "{type} · {count, number} columns",
+      "title": "Playbooks",
+      "typeLabel": "Document type"
+    },
     "possibleDuplicates": "Galimi dublikatai",
     "properties": {
       "addCondition": "Add condition",

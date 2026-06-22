@@ -12,6 +12,8 @@ export type { Page } from "@/api/lib/pagination";
 export type PropertyTable = typeof properties.$inferSelect;
 export type PropertyContent = SchemaValidators.PropertyContent;
 export type PropertyContentType = SchemaValidators.PropertyContentType;
+export type PlaybookBundleColumn = SchemaValidators.PlaybookBundleColumn;
+export type PlaybookBundle = SchemaValidators.PlaybookBundle;
 
 export type FieldContent = SchemaValidators.FieldContent;
 

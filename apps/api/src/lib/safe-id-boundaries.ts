@@ -45,6 +45,10 @@ export const brandPersistedPropertyId = (
   propertyId: string,
 ): SafeId<"property"> => toSafeId<"property">(propertyId);
 
+export const brandPersistedPlaybookId = (
+  playbookId: string,
+): SafeId<"playbook"> => toSafeId<"playbook">(playbookId);
+
 export const brandPersistedUserFileId = (
   userFileId: string,
 ): SafeId<"userFile"> => toSafeId<"userFile">(userFileId);

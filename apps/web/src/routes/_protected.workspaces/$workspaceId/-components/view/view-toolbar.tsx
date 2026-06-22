@@ -51,6 +51,7 @@ import type {
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
+import { PlaybooksManager } from "@/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
@@ -222,6 +223,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           />
           <TableContentModeControl viewId={view.id} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
+          <PlaybooksManager workspaceId={workspaceId} />
           <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
         </>
       )}

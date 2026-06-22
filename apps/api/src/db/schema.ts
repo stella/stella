@@ -45,6 +45,7 @@ import type {
   ContactPhone,
   EntityKind,
   FieldContent,
+  PlaybookBundle,
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
@@ -738,6 +739,12 @@ export const properties = p.pgTable(
     tool: jsonb().$type<PropertyTool>().notNull(),
     system: p.boolean().notNull().default(false),
     kinds: p.varchar({ length: 64 }).array().$type<EntityKind>(),
+    // Correlates a property materialized by a playbook back to the bundle
+    // column (its `sourceId`) that produced it, so re-applying matches by
+    // identity rather than name: survives renames and never collides across
+    // playbooks or with manually-created columns. Null for any property not
+    // created by a playbook.
+    playbookSourceId: p.uuid("playbook_source_id"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
@@ -785,6 +792,44 @@ export const propertyDependencies = p.pgTable(
       })
       .onDelete("restrict"),
     p.index("property_dependencies_workspace_id_idx").on(table.workspaceId),
+    ...wsPolicies(),
+  ],
+);
+
+// -- Playbooks --
+
+/**
+ * A playbook binds a Document Type option value to a reusable bundle
+ * of AI columns. Applying it materializes each bundle column as a
+ * property gated by `typePropertyId eq typeValue`, so the columns
+ * auto-fill only for documents classified as that type.
+ */
+export const playbooks = p.pgTable(
+  "playbooks",
+  {
+    id: pUuid<"playbook">().primaryKey(),
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    name: p.varchar({ length: 256 }).notNull(),
+    typePropertyId: safeUuid<"property">("type_property_id").notNull(),
+    typeValue: p.varchar("type_value", { length: 1000 }).notNull(),
+    bundle: jsonb().$type<PlaybookBundle>().notNull(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("playbooks_workspace_id_idx").on(table.workspaceId),
+    p
+      .index("playbooks_workspace_created_idx")
+      .on(table.workspaceId, table.createdAt, table.id),
+    p
+      .foreignKey({
+        name: "playbooks_type_property_fk",
+        columns: [table.typePropertyId, table.workspaceId],
+        foreignColumns: [properties.id, properties.workspaceId],
+      })
+      .onDelete("cascade"),
     ...wsPolicies(),
   ],
 );
@@ -4281,6 +4326,7 @@ export const relations = defineRelations(
     infoSoudTrackedCases,
     properties,
     propertyDependencies,
+    playbooks,
     entities,
     taskAssignees,
     entityLinks,

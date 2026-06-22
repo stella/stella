@@ -41,6 +41,7 @@ export const AUDIT_RESOURCE_TYPE = {
   INVOICE: "invoice",
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",
   ORGANIZATION_SETTINGS: "organization_settings",
+  PLAYBOOK: "playbook",
   PROMPT_SHORTCUT: "prompt_shortcut",
   PROPERTY: "property",
   RATE_ENTRY: "rate_entry",
