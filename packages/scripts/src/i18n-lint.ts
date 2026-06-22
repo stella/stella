@@ -384,13 +384,29 @@ export const findDroppedExactSelectors = (
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
+// Arabic attaches proclitics to the front of a word — conjunctions (و/ف),
+// prepositions (ب/ك/ل/س), and the definite article ال — so a forbidden term
+// like قضية also surfaces as القضية / وقضية / بالقضية / للقضية. Allow an
+// optional proclitic cluster before the term for Arabic; the trailing word
+// boundary still guards against substrings, and other scripts are unaffected.
+const ARABIC_PROCLITIC_PREFIX = "[وفبكلس]*(?:ال)?";
+
 /** Whole-word, script-aware (Unicode) containment test. */
 const wordRegexCache = new Map<string, RegExp>();
-const containsWord = (haystack: string, needle: string): boolean => {
-  let regex = wordRegexCache.get(needle);
+const containsWord = (
+  haystack: string,
+  needle: string,
+  locale: string,
+): boolean => {
+  const cacheKey = `${locale}:${needle}`;
+  let regex = wordRegexCache.get(cacheKey);
   if (!regex) {
-    regex = new RegExp(`(?<!\\p{L})${escapeRegExp(needle)}(?!\\p{L})`, "iu");
-    wordRegexCache.set(needle, regex);
+    const prefix = locale === "ar" ? ARABIC_PROCLITIC_PREFIX : "";
+    regex = new RegExp(
+      `(?<!\\p{L})${prefix}${escapeRegExp(needle)}(?!\\p{L})`,
+      "iu",
+    );
+    wordRegexCache.set(cacheKey, regex);
   }
   return regex.test(haystack);
 };
@@ -434,12 +450,12 @@ export const findForbiddenTerms = (
     const forbidden = rule.byLocale[locale];
     if (
       !forbidden ||
-      !rule.triggers.some((trigger) => containsWord(source, trigger))
+      !rule.triggers.some((trigger) => containsWord(source, trigger, "en"))
     ) {
       continue;
     }
     for (const term of forbidden) {
-      if (containsWord(target, term)) {
+      if (containsWord(target, term, locale)) {
         hits.push(term);
       }
     }
