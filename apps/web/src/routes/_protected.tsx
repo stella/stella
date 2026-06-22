@@ -582,8 +582,10 @@ function WorkspaceInspectorSidePanel() {
     tabOriginWorkspaceId ?? routeWorkspaceId ?? fallbackTabWorkspaceId;
   const [width, setWidth] = useState(INSPECTOR_PANE_DEFAULT_WIDTH);
   const isDragging = useRef(false);
-  // Re-run the offset effect on language switch (the pane's docked edge flips).
-  const lang = useI18nStore((s) => s.lang);
+  // Re-run the offset effect once the new bundle applies: `loadedLang` (not
+  // `lang`) is what flips document.documentElement.dir, so depending on it
+  // reads the correct direction.
+  const loadedLang = useI18nStore((s) => s.loadedLang);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -636,7 +638,7 @@ function WorkspaceInspectorSidePanel() {
         "--folio-find-replace-right",
       );
     };
-  }, [widthPx, lang]);
+  }, [widthPx, loadedLang]);
 
   return (
     <div

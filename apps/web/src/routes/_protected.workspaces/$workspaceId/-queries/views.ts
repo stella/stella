@@ -8,14 +8,16 @@ import type { WorkspaceView } from "@/lib/types";
 
 export const viewsKeys = {
   // Default view names are localized server-side per Accept-Language, so the
-  // cache identity must include the UI language — otherwise switching language
-  // keeps serving the previously-localized names until an unrelated refetch.
-  // Read here rather than threaded through callers so the query and the
-  // mutations' cache ops (setQueryData/invalidate) stay on the same key.
+  // cache identity must include the locale — otherwise switching language keeps
+  // serving the previously-localized names until an unrelated refetch. Use
+  // `loadedLang` (not `lang`): the request's Accept-Language comes from
+  // getFormattingLocale(), which reads loadedLang, so the key must match the
+  // locale actually used for the response. Read here rather than threaded
+  // through callers so the query and the mutations' cache ops stay on one key.
   all: (workspaceId: string) => [
     "views",
     workspaceId,
-    useI18nStore.getState().lang,
+    useI18nStore.getState().loadedLang,
   ],
 };
 
