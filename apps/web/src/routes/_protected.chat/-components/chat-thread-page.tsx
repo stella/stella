@@ -453,7 +453,9 @@ export const ChatThreadPage = ({
           <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-5xl px-4 pb-4">
             <SuggestedFollowupChips
               isGenerating={isGenerating}
-              isEmpty={controller.isEmpty}
+              isEmpty={
+                controller.isEmpty && controller.attachments.length === 0
+              }
               lastMessageId={messages.at(-1)?.id ?? null}
               lastMessageRole={messages.at(-1)?.role ?? null}
               messageCount={messages.length}

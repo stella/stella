@@ -1228,29 +1228,37 @@ const FileChatOverlayInner = ({
           enabled={false}
           workspaceId={workspaceId ?? threadRef.threadId}
         />
-        <SuggestedFollowupChips
-          isGenerating={isGenerating}
-          isEmpty={editorController.isEmpty}
-          lastMessageId={messages.at(-1)?.id ?? null}
-          lastMessageRole={messages.at(-1)?.role ?? null}
-          messageCount={messages.length}
-          prompts={suggestedPrompts}
-          onSelect={(prompt) => {
-            // Mirror the PromptBar send guard: when an editable DOCX's edit
-            // snapshot isn't ready, block the chip send too so the model
-            // never sees a follow-up without current edit context.
-            if (!canSubmitWithCurrentDocxSnapshot()) {
-              return;
+        {/* Float the chips above the floating composer (matching the bar's
+            centered width) instead of leaving them in normal flow after the
+            full-height viewer; z below the thread panel so the panel wins. */}
+        <div className="absolute start-1/2 bottom-[88px] z-30 flex w-[min(560px,calc(100%-2rem))] -translate-x-1/2 px-1">
+          <SuggestedFollowupChips
+            isGenerating={isGenerating}
+            isEmpty={
+              editorController.isEmpty &&
+              editorController.attachments.length === 0
             }
-            editorController.setContent(prompt);
-            void editorController.submit(async (draft) => {
-              if (!(await ensureAIAvailable())) {
+            lastMessageId={messages.at(-1)?.id ?? null}
+            lastMessageRole={messages.at(-1)?.role ?? null}
+            messageCount={messages.length}
+            prompts={suggestedPrompts}
+            onSelect={(prompt) => {
+              // Mirror the PromptBar send guard: when an editable DOCX's edit
+              // snapshot isn't ready, block the chip send too so the model
+              // never sees a follow-up without current edit context.
+              if (!canSubmitWithCurrentDocxSnapshot()) {
                 return;
               }
-              await sendMessage({ text: draft.html });
-            });
-          }}
-        />
+              editorController.setContent(prompt);
+              void editorController.submit(async (draft) => {
+                if (!(await ensureAIAvailable())) {
+                  return;
+                }
+                await sendMessage({ text: draft.html });
+              });
+            }}
+          />
+        </div>
         <PromptBar
           attentionPulseSeq={attentionPulseSeq}
           canSubmitNow={canSubmitWithCurrentDocxSnapshot}

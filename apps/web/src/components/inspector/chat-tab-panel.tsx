@@ -400,7 +400,10 @@ export const ChatTabPanel = ({
           />
           <SuggestedFollowupChips
             isGenerating={isGenerating}
-            isEmpty={editorController.isEmpty}
+            isEmpty={
+              editorController.isEmpty &&
+              editorController.attachments.length === 0
+            }
             lastMessageId={messages.at(-1)?.id ?? null}
             lastMessageRole={messages.at(-1)?.role ?? null}
             messageCount={messages.length}
