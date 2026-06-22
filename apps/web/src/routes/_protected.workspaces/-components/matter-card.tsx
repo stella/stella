@@ -107,7 +107,10 @@ export const MatterCard = ({
           >
             {/* Line 1: name + reference */}
             <div className="flex items-center gap-2">
-              <h2 className="min-w-0 flex-1 truncate text-sm font-semibold">
+              <h2
+                className="min-w-0 flex-1 truncate text-sm font-semibold"
+                dir="auto"
+              >
                 {rename.status === "editing" ? (
                   <InlineEdit
                     onChange={rename.setDraft}

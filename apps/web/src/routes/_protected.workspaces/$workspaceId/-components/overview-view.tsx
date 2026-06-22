@@ -1259,7 +1259,9 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
           </span>
         </span>
         {icon}
-        <span className="truncate">{entity.name}</span>
+        <span className="truncate" dir="auto">
+          {entity.name}
+        </span>
       </span>
       {relTime && (
         <span

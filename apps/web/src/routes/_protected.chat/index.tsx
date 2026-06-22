@@ -43,6 +43,7 @@ import {
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -507,7 +508,11 @@ function ChatIndex() {
                     <LandingItemText
                       icon={<MessageSquareIcon className="size-4" />}
                       meta={`${chat.workspaceName} - ${formatRelativeTime(chat.updatedAt)}`}
-                      title={chat.title}
+                      title={
+                        isPlaceholderThreadTitle(chat.title)
+                          ? t("chat.newChat")
+                          : chat.title
+                      }
                     />
                   </Link>
                 ) : (
@@ -520,7 +525,11 @@ function ChatIndex() {
                     <LandingItemText
                       icon={<MessageSquareIcon className="size-4" />}
                       meta={formatRelativeTime(chat.updatedAt)}
-                      title={chat.title}
+                      title={
+                        isPlaceholderThreadTitle(chat.title)
+                          ? t("chat.newChat")
+                          : chat.title
+                      }
                     />
                   </Link>
                 ),
@@ -619,7 +628,10 @@ const LandingItemText = ({
       <LandingRowIcon tone={iconTone}>{icon}</LandingRowIcon>
     )}
     <span className="min-w-0 flex-1">
-      <span className="text-foreground block truncate text-sm font-medium">
+      <span
+        className="text-foreground block truncate text-sm font-medium"
+        dir="auto"
+      >
         {title}
       </span>
       {meta && (

@@ -61,6 +61,7 @@ import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-l
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
@@ -457,8 +458,13 @@ export const ChatTabPanel = ({
 };
 
 const useChatContextLabel = (tab: ChatTab, activeOrganizationId: string) => {
+  const t = useTranslations();
   const { data } = useQuery(workspacesNavigationOptions(activeOrganizationId));
-  const fallbackLabel = tab.label.trim().length > 0 ? tab.label : "chat";
+  const resolvedLabel = isPlaceholderThreadTitle(tab.label)
+    ? t("chat.newChat")
+    : tab.label;
+  const fallbackLabel =
+    resolvedLabel.trim().length > 0 ? resolvedLabel : "chat";
 
   if (tab.activeSkill) {
     return tab.activeSkill.skillName;
@@ -594,7 +600,9 @@ const ChatTabPanelChrome = ({
     <div className="bg-muted/40 relative flex min-w-0 flex-1 flex-col">
       <InspectorTabHeader
         actions={actions}
-        label={tab.label}
+        label={
+          isPlaceholderThreadTitle(tab.label) ? t("chat.newChat") : tab.label
+        }
         matter={
           <ChatMatterPicker
             matterIds={tab.contextMatterIds}

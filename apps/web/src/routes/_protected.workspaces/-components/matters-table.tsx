@@ -178,7 +178,9 @@ const NameCell = ({ workspace }: CellProps) => (
         backgroundColor: getMatterColor(workspace.id),
       }}
     />
-    <span className="truncate font-medium">{workspace.name}</span>
+    <span className="truncate font-medium" dir="auto">
+      {workspace.name}
+    </span>
   </div>
 );
 
