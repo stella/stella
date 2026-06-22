@@ -2060,7 +2060,7 @@
     "dateRenderPreview": "No documento: {value}",
     "deleteCategory": "Excluir categoria",
     "deleteFailed": "Falha ao excluir modelo",
-    "describeWhenToUse": "Descreva quando usar este modelo",
+    "describeWhenToUse": "Descreva quando usar isto",
     "directiveEach": "Repetição: {expression}",
     "directiveElse": "Senão",
     "directiveElseIf": "Senão se: {expression}",

@@ -869,7 +869,7 @@
     "alsoPartyIn": "Apparaît également comme partie dans {count, plural, one {# autre dossier} many {# autres dossiers} other {# autres dossiers}}",
     "attorneys": {
       "none": "Non attribué",
-      "originating": "Avocat apporteur",
+      "originating": "Contact principal",
       "responsible": "Avocat responsable",
       "title": "Avocats"
     },
@@ -953,7 +953,7 @@
       "firstName": "Prénom",
       "lastName": "Nom de famille",
       "middleName": "Deuxième prénom",
-      "originatingAttorney": "Avocat apporteur",
+      "originatingAttorney": "Contact principal",
       "paymentTermDays": "Délai de paiement (jours)",
       "prefix": "Préfixe",
       "registrationNumber": "Numéro d'enregistrement",
@@ -2060,7 +2060,7 @@
     "dateRenderPreview": "Dans le document : {value}",
     "deleteCategory": "Supprimer la catégorie",
     "deleteFailed": "Impossible de supprimer le modèle",
-    "describeWhenToUse": "Décrivez quand utiliser ce modèle",
+    "describeWhenToUse": "Décrivez quand l'utiliser",
     "directiveEach": "Boucle : {expression}",
     "directiveElse": "Sinon",
     "directiveElseIf": "Sinon si : {expression}",

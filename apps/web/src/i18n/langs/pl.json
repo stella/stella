@@ -301,15 +301,15 @@
     "firstPartyTooltip": "Stworzone przez zespół stella",
     "install": "Zainstaluj",
     "installFailed": "Instalacja nie powiodła się",
-    "installPack": "{count, plural, one {Zainstaluj # narzędzie} few {Zainstaluj # narzędzia} other {Zainstaluj # narzędzi}}",
+    "installPack": "{count, plural, one {Zainstaluj # narzędzie} few {Zainstaluj # narzędzia} many {Zainstaluj # narzędzi} other {Zainstaluj # narzędzi}}",
     "installed": "Zainstalowano: {name}",
     "installedShort": "Zainstalowano",
     "onboarding": {
       "packTitle": "Polecane dla Twojej jurysdykcji"
     },
     "openHomepage": "Otwórz stronę główną",
-    "packDescription": "{count, plural, one {# narzędzie} few {# narzędzia} other {# narzędzi}} wybranych dla Twojej praktyki. Zainstaluj jednym kliknięciem lub wybierz poniżej.",
-    "packInstalled": "{count, plural, one {Zainstalowano # narzędzie} few {Zainstalowano # narzędzia} other {Zainstalowano # narzędzi}}",
+    "packDescription": "{count, plural, one {# narzędzie} few {# narzędzia} many {# narzędzi} other {# narzędzi}} wybranych dla Twojej praktyki. Zainstaluj jednym kliknięciem lub wybierz poniżej.",
+    "packInstalled": "{count, plural, one {Zainstalowano # narzędzie} few {Zainstalowano # narzędzia} many {Zainstalowano # narzędzi} other {Zainstalowano # narzędzi}}",
     "packPartial": "Zainstalowano {installed}, {failed} nieudane",
     "recommended": "Polecane",
     "removed": "To narzędzie nie jest już dostępne.",
@@ -445,7 +445,7 @@
     "pastedChars": "Wklejono · {count} znaków",
     "pastedText": {
       "expand": "Pokaż pełny tekst",
-      "fromClipboard": "Wklejono {count, plural, one {# znak} few {# znaki} other {# znaków}}",
+      "fromClipboard": "Wklejono {count, plural, one {# znak} few {# znaki} many {# znaków} other {# znaków}}",
       "fromPromptFallback": "Umiejętność"
     },
     "placeholder": "Wpisz pytanie tutaj, / dla umiejętności, @ aby dodać kontekst",
@@ -713,7 +713,7 @@
     "decline": "Odrzuć",
     "delete": "Usuń",
     "deleteConfirmDescription": "Czy na pewno chcesz usunąć „{name}“? Tej operacji nie można cofnąć.",
-    "deletedCount": "{count, plural, one {# element usunięto} few {# elementy usunięto} other {# elementów usunięto}}",
+    "deletedCount": "{count, plural, one {# element usunięto} few {# elementy usunięto} many {# elementów usunięto} other {# elementów usunięto}}",
     "description": "Opis",
     "details": "Szczegóły",
     "documentation": "Dokumentacja",
@@ -866,10 +866,10 @@
     "title": "Autoryzacja dostępu"
   },
   "contacts": {
-    "alsoPartyIn": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} other {# innych sprawach}}",
+    "alsoPartyIn": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} many {# innych sprawach} other {# innych sprawach}}",
     "attorneys": {
       "none": "Nieprzypisany",
-      "originating": "Prawnik pozyskujący",
+      "originating": "Główny kontakt",
       "responsible": "Prawnik prowadzący",
       "title": "Prawnicy klienta"
     },
@@ -953,7 +953,7 @@
       "firstName": "Imię",
       "lastName": "Nazwisko",
       "middleName": "Drugie imię",
-      "originatingAttorney": "Prawnik pozyskujący",
+      "originatingAttorney": "Główny kontakt",
       "paymentTermDays": "Termin płatności (dni)",
       "prefix": "Prefiks",
       "registrationNumber": "Numer KRS",
@@ -2023,7 +2023,7 @@
     "checkTemplate": "Sprawdź szablon",
     "checkWarnings": "{count, plural, one {# ostrzeżenie} few {# ostrzeżenia} many {# ostrzeżeń} other {# ostrzeżeń}}",
     "conditionAddRule": "Dodaj regułę",
-    "conditionCount": "{count, plural, one {# warunek} few {# warunki} other {# warunków}}",
+    "conditionCount": "{count, plural, one {# warunek} few {# warunki} many {# warunków} other {# warunków}}",
     "conditionField": "Pole",
     "conditionMatch": "Dopasowanie",
     "conditionMatchAll": "Wszystkie",
@@ -2060,7 +2060,7 @@
     "dateRenderPreview": "W dokumencie: {value}",
     "deleteCategory": "Usuń kategorię",
     "deleteFailed": "Nie udało się usunąć szablonu",
-    "describeWhenToUse": "Opisz, kiedy używać tego szablonu",
+    "describeWhenToUse": "Opisz, kiedy tego używać",
     "directiveEach": "Pętla: {expression}",
     "directiveElse": "W przeciwnym razie",
     "directiveElseIf": "W przeciwnym razie, jeśli: {expression}",
@@ -2438,7 +2438,7 @@
       "maxEntitiesReached": "Osiągnięto maksymalną liczbę elementów",
       "rateLimited": "Ograniczenie szybkości; wznowienie za {seconds, number} s",
       "renamedToAvoidConflicts": "{count, plural, one {# plik został przemianowany, aby uniknąć konfliktów} few {# pliki zostały przemianowane, aby uniknąć konfliktów} many {# plików zostało przemianowanych, aby uniknąć konfliktów} other {# plików zostało przemianowanych, aby uniknąć konfliktów}}",
-      "retryFailed": "Ponów {count, plural, one {# plik} few {# pliki} other {# plików}}",
+      "retryFailed": "Ponów {count, plural, one {# plik} few {# pliki} many {# plików} other {# plików}}",
       "uploadedPartially": "{failed, plural, one {# plik nie został przesłany} few {# pliki nie zostały przesłane} many {# plików nie zostało przesłanych} other {# plików nie zostało przesłanych}} z {total, number}",
       "uploadedSuccessfully": "Pliki przesłane pomyślnie",
       "uploading": "Przesyłanie plików",
@@ -2846,7 +2846,7 @@
       "tightContent": "Kompaktowo",
       "wrapContent": "Zawijaj tekst"
     },
-    "tasksCount": "{count, plural, one {# pozycja agendy} few {# pozycje agendy} other {# pozycji agendy}}",
+    "tasksCount": "{count, plural, one {# pozycja agendy} few {# pozycje agendy} many {# pozycji agendy} other {# pozycji agendy}}",
     "team": "Zespół",
     "tools": {
       "aiModel": "Model AI",
