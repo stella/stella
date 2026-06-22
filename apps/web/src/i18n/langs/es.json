@@ -484,6 +484,7 @@
       "stale": "Obsoleto"
     },
     "suggestionStep": "{current} de {total}",
+    "tabToAsk": "→ para preguntar: \"{prompt}\"",
     "thinking": "Trabajando con contexto",
     "tool": {
       "apply-active-docx-edits": "Preparando cambios del documento",
@@ -1322,7 +1323,7 @@
     "hidePane": "Ocultar panel",
     "matterPicker": {
       "allMatters": "Todos los asuntos",
-      "description": "Elige los asuntos en los que puede basarse este chat. La IA ve el contenido de cada asunto que selecciones.",
+      "description": "Elige los asuntos en los que puede basarse este chat.",
       "empty": "No hay asuntos disponibles.",
       "noMatter": "Sin asunto",
       "noResults": "Ningún asunto coincide con «{query}».",

@@ -59,6 +59,7 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -66,9 +67,13 @@ import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
+import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { chatThreadOptions } from "@/routes/_protected.chat/-queries";
+import {
+  chatThreadOptions,
+  chatThreadSuggestedPromptsOptions,
+} from "@/routes/_protected.chat/-queries";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 
 type ChatTabPanelProps = {
@@ -228,8 +233,29 @@ export const ChatTabPanel = ({
   // attachments come from the same provider as the right-panel
   // chat. Thread ref is shared with `chatThreadOptions` above so
   // drafts persist across tab close/open.
+  const lastMessageId = messages.at(-1)?.id ?? null;
+  const lastMessageRole = messages.at(-1)?.role ?? null;
+  const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
+  // Fetch suggestions only when editor is empty, last message is from
+  // assistant, and no generation is in progress. Using draft state
+  // avoids triggering the query when user is actively typing.
+  const eligibleForSuggestions =
+    editorIsInitiallyEmpty &&
+    lastMessageId !== null &&
+    lastMessageRole === "assistant";
+  const { data: suggestedPromptsData } = useQuery(
+    chatThreadSuggestedPromptsOptions({
+      activeOrganizationId,
+      enabled: !isGenerating && eligibleForSuggestions,
+      lastMessageId: lastMessageId ?? "",
+      threadRef,
+    }),
+  );
+  const suggestedPrompts = suggestedPromptsData?.prompts ?? [];
+  const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
   const editorController = useChatEditor({
     placeholder: t("chat.contextPlaceholder", { context: chatContextLabel }),
+    suggestedFollowupPrompt,
     threadRef,
   });
   const focusComposer = editorController.focus;
@@ -371,6 +397,26 @@ export const ChatTabPanel = ({
             editor={editorController.editor}
             enabled={anonymized}
             workspaceId={tabWorkspaceId ?? threadRef.threadId}
+          />
+          <SuggestedFollowupChips
+            isGenerating={isGenerating}
+            isEmpty={
+              editorController.isEmpty &&
+              editorController.attachments.length === 0
+            }
+            lastMessageId={messages.at(-1)?.id ?? null}
+            lastMessageRole={messages.at(-1)?.role ?? null}
+            messageCount={messages.length}
+            prompts={suggestedPrompts}
+            onSelect={(prompt) => {
+              editorController.setContent(prompt);
+              void editorController.submit(async (draft) => {
+                if (!(await ensureAIAvailable())) {
+                  return;
+                }
+                await sendMessage({ text: draft.html });
+              });
+            }}
           />
           <PromptBar
             editorController={editorController}

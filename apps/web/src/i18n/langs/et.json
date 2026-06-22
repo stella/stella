@@ -484,6 +484,7 @@
       "stale": "Aegunud"
     },
     "suggestionStep": "{current} / {total}",
+    "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "thinking": "Töötan kontekstiga",
     "tool": {
       "apply-active-docx-edits": "Dokumendi muudatuste ettevalmistamine",
@@ -1322,7 +1323,7 @@
     "hidePane": "Peida paneel",
     "matterPicker": {
       "allMatters": "Kõik toimikud",
-      "description": "Vali toimikud, millele see vestlus tugineb. AI näeb sisu igast valitud toimikust.",
+      "description": "Vali toimikud, millele see vestlus tugineb.",
       "empty": "Ühtegi toimikut pole saadaval.",
       "noMatter": "Toimikut pole",
       "noResults": "Ükski toimik ei vasta päringule „{query}”.",

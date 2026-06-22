@@ -127,3 +127,33 @@ export const useChatDraftStore = create<ChatDraftStore>((set, get) => ({
 
 export const getChatDraft = (threadRef: ChatThreadRef): ChatDraftState | null =>
   useChatDraftStore.getState().getDraft(getChatThreadKey(threadRef));
+
+const isEmptyDoc = (draft: ChatDraftState): boolean => {
+  if (draft.doc.type !== "doc") {
+    return false;
+  }
+  const nodes = draft.doc.content;
+  if (!nodes || nodes.length !== 1) {
+    return false;
+  }
+  const [only] = nodes;
+  // A paragraph with children (text, mentions, pasted-text chips) is not empty.
+  return only?.type === "paragraph" && (only.content?.length ?? 0) === 0;
+};
+
+const isDraftEmpty = (draft: ChatDraftState | null): boolean => {
+  if (!draft) {
+    return true;
+  }
+  return draft.attachments.length === 0 && isEmptyDoc(draft);
+};
+
+export const isChatDraftEmpty = (threadRef: ChatThreadRef): boolean =>
+  isDraftEmpty(getChatDraft(threadRef));
+
+export const useIsChatDraftEmpty = (threadRef: ChatThreadRef): boolean => {
+  const threadKey = getChatThreadKey(threadRef);
+  return useChatDraftStore((state) =>
+    isDraftEmpty(state.draftsByThreadKey[threadKey] ?? null),
+  );
+};

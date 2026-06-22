@@ -484,6 +484,7 @@
       "stale": "Veraltet"
     },
     "suggestionStep": "{current} von {total}",
+    "tabToAsk": "→ zum Fragen: „{prompt}“",
     "thinking": "Arbeite mit Kontext",
     "tool": {
       "apply-active-docx-edits": "Dokumentänderungen vorbereiten",
@@ -1322,7 +1323,7 @@
     "hidePane": "Bereich ausblenden",
     "matterPicker": {
       "allMatters": "Alle Akten",
-      "description": "Wählen Sie die Akten aus, auf die dieser Chat zurückgreifen kann. Die KI sieht Inhalte aus jeder ausgewählten Akte.",
+      "description": "Wählen Sie die Akten aus, auf die dieser Chat zurückgreifen kann.",
       "empty": "Keine Akten verfügbar.",
       "noMatter": "Keine Akte",
       "noResults": "Keine Akte stimmt mit „{query}“ überein.",

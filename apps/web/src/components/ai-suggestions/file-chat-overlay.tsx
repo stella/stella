@@ -24,7 +24,7 @@ import {
 } from "react";
 import type { RefObject } from "react";
 
-import { useSuspenseQuery } from "@tanstack/react-query";
+import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { LoaderCircleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -57,8 +57,10 @@ import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useDevStore } from "@/lib/dev-store";
+import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import type {
@@ -67,6 +69,7 @@ import type {
 } from "@/routes/_protected.chat/-queries";
 import {
   chatThreadOptions,
+  chatThreadSuggestedPromptsOptions,
   fileChatThreadOptions,
 } from "@/routes/_protected.chat/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -1011,8 +1014,30 @@ const FileChatOverlayInner = ({
     );
   }
 
+  // Check eligibility for suggested prompts using draft state (avoids
+  // unnecessary API calls when user is typing).
+  const lastMessageId = messages.at(-1)?.id ?? null;
+  const lastMessageRole = messages.at(-1)?.role ?? null;
+  const editorIsInitiallyEmpty = useIsChatDraftEmpty(threadRef);
+  const eligibleForSuggestions =
+    editorIsInitiallyEmpty &&
+    !isGenerating &&
+    lastMessageId !== null &&
+    lastMessageRole === "assistant";
+  const { data: suggestedPromptsData } = useQuery(
+    chatThreadSuggestedPromptsOptions({
+      activeOrganizationId,
+      enabled: eligibleForSuggestions,
+      lastMessageId: lastMessageId ?? "",
+      threadRef,
+    }),
+  );
+  const suggestedPrompts = suggestedPromptsData?.prompts ?? [];
+  const suggestedFollowupPrompt = suggestedPrompts.at(0) ?? undefined;
+
   const editorController = useChatEditor({
     placeholder: filePlaceholder,
+    suggestedFollowupPrompt,
     threadRef,
   });
   // Focus the composer when the user explicitly starts a new thread,
@@ -1104,7 +1129,6 @@ const FileChatOverlayInner = ({
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
   const hasThreadContent = hasMessages || error !== undefined;
-  const lastMessageId = messages.at(-1)?.id ?? null;
   // Auto-open the thread panel as soon as the first message
   // lands so users see streaming without having to click the
   // chevron themselves.
@@ -1204,6 +1228,41 @@ const FileChatOverlayInner = ({
           enabled={false}
           workspaceId={workspaceId ?? threadRef.threadId}
         />
+        {/* Float the chips above the floating composer (matching the bar's
+            centered width) instead of leaving them in normal flow after the
+            full-height viewer; z below the thread panel so the panel wins. */}
+        <div className="absolute start-1/2 bottom-[88px] z-30 flex w-[min(560px,calc(100%-2rem))] -translate-x-1/2 px-1">
+          <SuggestedFollowupChips
+            isGenerating={isGenerating}
+            isEmpty={
+              editorController.isEmpty &&
+              editorController.attachments.length === 0
+            }
+            lastMessageId={messages.at(-1)?.id ?? null}
+            lastMessageRole={messages.at(-1)?.role ?? null}
+            messageCount={messages.length}
+            prompts={suggestedPrompts}
+            onSelect={(prompt) => {
+              // Mirror the PromptBar send guard: when an editable DOCX's edit
+              // snapshot isn't ready, block the chip send too so the model
+              // never sees a follow-up without current edit context.
+              if (!canSubmitWithCurrentDocxSnapshot()) {
+                return;
+              }
+              editorController.setContent(prompt);
+              void editorController.submit(async (draft) => {
+                if (!(await ensureAIAvailable())) {
+                  return;
+                }
+                // Pop the thread open on send (mirrors the PromptBar submit
+                // path) so a chip sent while the thread is collapsed still
+                // streams the reply into view.
+                setPanelOpen(true);
+                await sendMessage({ text: draft.html });
+              });
+            }}
+          />
+        </div>
         <PromptBar
           attentionPulseSeq={attentionPulseSeq}
           canSubmitNow={canSubmitWithCurrentDocxSnapshot}

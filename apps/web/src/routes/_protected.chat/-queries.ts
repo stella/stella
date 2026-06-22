@@ -267,6 +267,31 @@ export const chatKeys = {
           "recap",
           lastMessageId,
         ],
+  suggestedPrompts: (
+    activeOrganizationId: string,
+    threadRef: ChatThreadRef,
+    lastMessageId: string,
+  ) =>
+    threadRef.scope === "global"
+      ? [
+          ...chatKeys.all,
+          activeOrganizationId,
+          "thread",
+          threadRef.scope,
+          threadRef.threadId,
+          "suggestedPrompts",
+          lastMessageId,
+        ]
+      : [
+          ...chatKeys.all,
+          activeOrganizationId,
+          "thread",
+          threadRef.scope,
+          threadRef.workspaceId,
+          threadRef.threadId,
+          "suggestedPrompts",
+          lastMessageId,
+        ],
 };
 
 type ChatThreadOptionsInput = QueryOptionsInput<
@@ -1017,6 +1042,55 @@ export const chatThreadRecapOptions = ({
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.recap(activeOrganizationId, threadRef, lastMessageId),
     queryFn: async () => await fetchThreadRecap(threadRef),
+  });
+
+type ChatThreadSuggestedPromptsFetched = {
+  prompts: string[];
+};
+
+const fetchThreadSuggestedPrompts = async (
+  threadRef: ChatThreadRef,
+): Promise<ChatThreadSuggestedPromptsFetched> => {
+  const response = await api.chat
+    .threads({ threadId: toSafeId<"chatThread">(threadRef.threadId) })
+    ["suggested-prompts"].post(undefined, {
+      query:
+        threadRef.scope === "workspace"
+          ? { workspaceId: toSafeId<"workspace">(threadRef.workspaceId) }
+          : {},
+    });
+
+  if (response.error) {
+    getAnalytics().captureError(toAPIError(response.error));
+    return { prompts: [] };
+  }
+
+  return { prompts: response.data.prompts };
+};
+
+type ChatThreadSuggestedPromptsOptionsArgs = {
+  activeOrganizationId: string;
+  enabled: boolean;
+  lastMessageId: string;
+  threadRef: ChatThreadRef;
+};
+
+export const chatThreadSuggestedPromptsOptions = ({
+  activeOrganizationId,
+  enabled,
+  lastMessageId,
+  threadRef,
+}: ChatThreadSuggestedPromptsOptionsArgs) =>
+  queryOptions({
+    enabled,
+    staleTime: Number.POSITIVE_INFINITY,
+    gcTime: STALE_TIME.FIVETEEN.MINUTES,
+    queryKey: chatKeys.suggestedPrompts(
+      activeOrganizationId,
+      threadRef,
+      lastMessageId,
+    ),
+    queryFn: async () => await fetchThreadSuggestedPrompts(threadRef),
   });
 
 export const groupedChatThreadsOptions = (activeOrganizationId: string) =>

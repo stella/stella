@@ -484,6 +484,7 @@
       "stale": "Obsolète"
     },
     "suggestionStep": "{current} sur {total}",
+    "tabToAsk": "→ pour demander : « {prompt} »",
     "thinking": "Traitement du contexte",
     "tool": {
       "apply-active-docx-edits": "Préparation des modifications",
@@ -1322,7 +1323,7 @@
     "hidePane": "Masquer le volet",
     "matterPicker": {
       "allMatters": "Tous les dossiers",
-      "description": "Choisissez les dossiers sur lesquels cette conversation peut s'appuyer. L'IA voit le contenu de chaque dossier sélectionné.",
+      "description": "Choisissez les dossiers sur lesquels cette conversation peut s'appuyer.",
       "empty": "Aucun dossier disponible.",
       "noMatter": "Aucun dossier",
       "noResults": "Aucun dossier ne correspond à « {query} ».",

@@ -161,6 +161,14 @@ export type ChatEditorController = {
   handlePaste: (event: React.ClipboardEvent) => void;
   isEmpty: boolean;
   openFilePicker: () => void;
+  /**
+   * The placeholder string the surface should render. Resolves the
+   * suggested-followup "tab to ask" hint, an explicit override, and the
+   * default in that order. Surfaces render this themselves (see
+   * `ChatInputSurface`); TipTap's own placeholder is suppressed for the
+   * chat editor to avoid a double-rendered overlay.
+   */
+  placeholder: string;
   removeFile: (id: string) => void;
   setContent: (
     content: Parameters<Editor["commands"]["setContent"]>[0],
@@ -472,17 +480,24 @@ export const useChatEditor = ({
   placeholder,
   sentMessageHistoryHtml,
   threadRef,
+  suggestedFollowupPrompt,
 }: {
   onDraftStart?: (() => void) | undefined;
   placeholder?: string | undefined;
   sentMessageHistoryHtml?: readonly string[] | undefined;
   threadRef: ChatThreadRef;
+  suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
   const t = useTranslations();
   const defaultPlaceholder = t("chat.placeholder");
-  const resolvedPlaceholder = placeholder ?? defaultPlaceholder;
+  const tabToAskText = suggestedFollowupPrompt
+    ? t("chat.tabToAsk", { prompt: suggestedFollowupPrompt })
+    : undefined;
+  const resolvedPlaceholder = tabToAskText ?? placeholder ?? defaultPlaceholder;
   const placeholderRef = useRef(resolvedPlaceholder);
   placeholderRef.current = resolvedPlaceholder;
+  const suggestedFollowupPromptRef = useRef(suggestedFollowupPrompt);
+  suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -932,6 +947,29 @@ export const useChatEditor = ({
           return true;
         }
 
+        // ArrowRight or Tab + empty editor + suggested followup: accept the
+        // suggestion without auto-submitting (so the user can review and press
+        // Enter). Tab is intercepted only in this narrow state — a suggestion
+        // on offer and the input empty — so it still moves focus normally (for
+        // keyboard and screen-reader users) everywhere else, including the
+        // moment the suggestion is gone.
+        if (
+          (event.key === "ArrowRight" || event.key === "Tab") &&
+          !event.shiftKey &&
+          !event.altKey &&
+          !event.ctrlKey &&
+          !event.metaKey &&
+          !event.isComposing
+        ) {
+          const suggestion = suggestedFollowupPromptRef.current;
+          const targetEditor = editorRef.current;
+          if (suggestion && targetEditor && targetEditor.isEmpty) {
+            event.preventDefault();
+            targetEditor.commands.setContent(suggestion);
+            return true;
+          }
+        }
+
         // Submit on Enter or Cmd/Ctrl+Enter. Shift+Enter falls
         // through to the HardBreak extension (newline). The
         // mention-suggestion plugin owns Enter while its popup is
@@ -1266,6 +1304,7 @@ export const useChatEditor = ({
     handlePaste,
     isEmpty,
     openFilePicker,
+    placeholder: resolvedPlaceholder,
     removeFile,
     setContent,
     setEditable,

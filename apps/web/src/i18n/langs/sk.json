@@ -484,6 +484,7 @@
       "stale": "Zastarané"
     },
     "suggestionStep": "{current} z {total}",
+    "tabToAsk": "→ pre otázku: \"{prompt}\"",
     "thinking": "Pracujem s kontextom",
     "tool": {
       "apply-active-docx-edits": "Pripravujem úpravy dokumentu",
@@ -1322,7 +1323,7 @@
     "hidePane": "Skryť panel",
     "matterPicker": {
       "allMatters": "Všetky spisy",
-      "description": "Vyberte spisy, z ktorých môže tento chat čerpať. AI vidí obsah všetkých vybraných spisov.",
+      "description": "Vyberte spisy, z ktorých môže tento chat čerpať.",
       "empty": "Žiadne spisy nie sú dostupné.",
       "noMatter": "Žiadny spis",
       "noResults": "Žiadny spis sa nezhoduje s „{query}“.",

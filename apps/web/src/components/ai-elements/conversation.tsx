@@ -110,8 +110,14 @@ export const ConversationScrollButton = ({
     !isAtBottom && (
       <Button
         className={cn(
-          "bg-background hover:bg-muted shadow-sm",
-          "absolute bottom-4 left-1/2 -translate-x-1/2 rounded-full",
+          // The outline variant is translucent in dark mode (content shows
+          // through the button) and its `::before` highlight is a rounded
+          // rectangle whose corners poke past the circle as faint "ears".
+          // Pin an opaque surface in both themes and round `::before` to
+          // the circle; isolate/z-10 keep it above the scrolled content.
+          "bg-background dark:bg-background hover:bg-muted",
+          "isolate shadow-sm before:rounded-full",
+          "absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full",
           className,
         )}
         onClick={() => scrollToBottom()}

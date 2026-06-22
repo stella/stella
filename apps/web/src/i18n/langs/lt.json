@@ -484,6 +484,7 @@
       "stale": "Pasenusi"
     },
     "suggestionStep": "{current} iš {total}",
+    "tabToAsk": "→, kad paklaustumėte: „{prompt}“",
     "thinking": "Dirbama su kontekstu",
     "tool": {
       "apply-active-docx-edits": "Ruošiami dokumento pakeitimai",
@@ -1322,7 +1323,7 @@
     "hidePane": "Slėpti polangį",
     "matterPicker": {
       "allMatters": "Visos bylos",
-      "description": "Pasirinkite bylas, kuriomis šis pokalbis gali remtis. DI mato kiekvienos pasirinktos bylos turinį.",
+      "description": "Pasirinkite bylas, kuriomis šis pokalbis gali remtis.",
       "empty": "Bylų nėra.",
       "noMatter": "Be bylos",
       "noResults": "Pagal „{query}“ bylų nerasta.",

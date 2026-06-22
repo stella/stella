@@ -484,6 +484,7 @@
       "stale": "Novecojis"
     },
     "suggestionStep": "{current} no {total}",
+    "tabToAsk": "→, lai jautātu: “{prompt}”",
     "thinking": "Strādāju ar kontekstu",
     "tool": {
       "apply-active-docx-edits": "Dokumenta izmaiņu sagatavošana",
@@ -1322,7 +1323,7 @@
     "hidePane": "Slēpt paneli",
     "matterPicker": {
       "allMatters": "Visas lietas",
-      "description": "Izvēlieties lietas, uz kurām šī tērzēšana var balstīties. AI redz saturu no katras atlasītās lietas.",
+      "description": "Izvēlieties lietas, uz kurām šī tērzēšana var balstīties.",
       "empty": "Nav pieejamu lietu.",
       "noMatter": "Bez lietas",
       "noResults": "Neviena lieta neatbilst „{query}”.",

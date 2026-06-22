@@ -484,6 +484,7 @@
       "stale": "Nieaktualne"
     },
     "suggestionStep": "{current} z {total}",
+    "tabToAsk": "→, aby zapytać: „{prompt}”",
     "thinking": "Pracuję z kontekstem",
     "tool": {
       "apply-active-docx-edits": "Przygotowywanie zmian w dokumencie",
@@ -1322,7 +1323,7 @@
     "hidePane": "Ukryj panel",
     "matterPicker": {
       "allMatters": "Wszystkie sprawy",
-      "description": "Wybierz sprawy, na których czat może się opierać. AI widzi treść każdej wybranej sprawy.",
+      "description": "Wybierz sprawy, na których czat może się opierać.",
       "empty": "Brak dostępnych spraw.",
       "noMatter": "Brak sprawy",
       "noResults": "Brak spraw pasujących do „{query}”.",

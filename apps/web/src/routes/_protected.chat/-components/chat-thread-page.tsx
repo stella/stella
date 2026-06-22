@@ -38,6 +38,7 @@ import {
   useChatAnonymized,
   useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
+import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { useDevStore } from "@/lib/dev-store";
@@ -49,12 +50,14 @@ import { roleOptions } from "@/routes/-queries";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
 import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
+import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import {
   chatThreadOptions,
+  chatThreadSuggestedPromptsOptions,
   invalidateChatThreadAcrossScopes,
 } from "@/routes/_protected.chat/-queries";
 import { managementRoles } from "@/routes/_protected.organization/-consts";
@@ -202,6 +205,25 @@ export const ChatThreadPage = ({
 
   const sentMessageHistoryHtml = getUserMessageHtmlHistory(messages);
 
+  // Fetch suggested follow-up prompts for Tab-to-ask (editor) and chips display.
+  // Gated by draft store emptiness so the query does not fire when the
+  // user is already typing a custom follow-up.
+  const lastMessageId = messages.at(-1)?.id ?? null;
+  const lastMessageRole = messages.at(-1)?.role ?? null;
+  const editorIsEmpty = useIsChatDraftEmpty(threadRef);
+  const eligibleForSuggestions =
+    editorIsEmpty && lastMessageId !== null && lastMessageRole === "assistant";
+  const { data: suggestedPromptsData } = useQuery(
+    chatThreadSuggestedPromptsOptions({
+      activeOrganizationId,
+      enabled: !isGenerating && eligibleForSuggestions,
+      lastMessageId: lastMessageId ?? "",
+      threadRef,
+    }),
+  );
+  const suggestedFollowupPrompts = suggestedPromptsData?.prompts ?? [];
+  const suggestedFollowupPrompt = suggestedFollowupPrompts.at(0) ?? undefined;
+
   // Seed brand-new (empty) threads from the persisted web-search
   // preference so the user doesn't have to flip the toggle every time
   // they start a chat. We only fire on the first render where the
@@ -255,6 +277,7 @@ export const ChatThreadPage = ({
   ]);
   const controller = useChatEditor({
     sentMessageHistoryHtml,
+    suggestedFollowupPrompt,
     threadRef,
   });
 
@@ -320,8 +343,8 @@ export const ChatThreadPage = ({
           handleDeny,
         }}
       >
-        <div className="flex w-full flex-1 flex-col overflow-hidden">
-          <div className="mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
+        <div className="relative flex w-full flex-1 flex-col overflow-hidden">
+          <div className="bg-background absolute inset-x-0 top-0 z-10 mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
             <div className="flex min-w-0 items-center gap-2">
               <NewChatButton
                 hasMessages={messages.length > 0}
@@ -358,7 +381,7 @@ export const ChatThreadPage = ({
           </div>
 
           <Conversation>
-            <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4">
+            <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pt-14 pb-36">
               {messages.length === 0 && !isGenerating && !error ? (
                 <div className="m-auto w-full max-w-md px-4">
                   <PromptSuggestions
@@ -403,7 +426,7 @@ export const ChatThreadPage = ({
                 </>
               )}
             </ConversationContent>
-            <ConversationScrollButton />
+            <ConversationScrollButton className="bottom-28" />
           </Conversation>
 
           <ChatAnonymizationLayer
@@ -411,7 +434,42 @@ export const ChatThreadPage = ({
             enabled={anonymized}
             workspaceId={workspaceId ?? threadRef.threadId}
           />
-          <div className="mx-auto w-full max-w-5xl p-4">
+          {/* Soft fades so messages dissolve into the floating header and
+              composer instead of being clipped at a hard edge. Only when a
+              conversation exists — the centered empty-state suggestions
+              must stay crisp, not dimmed by the bottom fade. */}
+          {messages.length > 0 && (
+            <>
+              <div
+                aria-hidden="true"
+                className="from-background pointer-events-none absolute inset-x-0 top-12 mx-auto h-10 w-full max-w-5xl bg-linear-to-b to-transparent"
+              />
+              <div
+                aria-hidden="true"
+                className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
+              />
+            </>
+          )}
+          <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-5xl px-4 pb-4">
+            <SuggestedFollowupChips
+              isGenerating={isGenerating}
+              isEmpty={
+                controller.isEmpty && controller.attachments.length === 0
+              }
+              lastMessageId={messages.at(-1)?.id ?? null}
+              lastMessageRole={messages.at(-1)?.role ?? null}
+              messageCount={messages.length}
+              prompts={suggestedFollowupPrompts}
+              onSelect={(prompt) => {
+                controller.setContent(prompt);
+                void controller.submit(async (draft) => {
+                  if (!(await ensureAIAvailable())) {
+                    return;
+                  }
+                  await sendMessage(await buildChatRequestMessage(draft));
+                });
+              }}
+            />
             <ChatInputSurface
               anonymized={anonymized}
               autoFocus

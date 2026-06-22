@@ -484,6 +484,7 @@
       "stale": "Elavult"
     },
     "suggestionStep": "{current} / {total}",
+    "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "thinking": "Kontextussal dolgozom",
     "tool": {
       "apply-active-docx-edits": "Dokumentummódosítások előkészítése",
@@ -1322,7 +1323,7 @@
     "hidePane": "Panel elrejtése",
     "matterPicker": {
       "allMatters": "Összes ügy",
-      "description": "Válassza ki, mely ügyekre támaszkodhat ez a chat. Az AI minden kiválasztott ügy tartalmát látja.",
+      "description": "Válassza ki, mely ügyekre támaszkodhat ez a chat.",
       "empty": "Nincs elérhető ügy.",
       "noMatter": "Nincs ügy",
       "noResults": "Egyetlen ügy sem egyezik a következővel: „{query}”.",

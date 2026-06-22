@@ -150,6 +150,22 @@ const TEMPERATURE_PER_ROLE = {
 export const getTemperatureForRole = (role: ModelRole): number =>
   TEMPERATURE_PER_ROLE[role];
 
+// Reasoning effort requested per role, independent of provider. Each
+// provider's defaults builder translates this to its own knob (OpenRouter
+// `reasoning.effort`, Google `thinkingConfig`, ...). "off" asks the model
+// to skip thinking — used by the lightweight `fast` role (title, recap,
+// suggestions, autocomplete) so thinking tokens don't eat the small output
+// budget; reasoning models that refuse are downgraded to minimal by the
+// reasoning-fallback middleware. "default" leaves the model's own setting
+// untouched.
+type ReasoningEffortPolicy = "default" | "off" | "low" | "medium" | "high";
+const REASONING_EFFORT_PER_ROLE = {
+  fast: "off",
+  chat: "default",
+  reasoning: "high",
+  pdf: "default",
+} as const satisfies Record<ModelRole, ReasoningEffortPolicy>;
+
 // -- Prompt caching ---------------------------------------------
 
 /**
@@ -1307,6 +1323,86 @@ export const createServiceTierMiddleware = (
   },
 });
 
+// -- Reasoning fallback -----------------------------------------
+
+const REASONING_MANDATORY_PATTERN = /reasoning is mandatory/iu;
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+// True when the call asked OpenRouter to skip reasoning entirely.
+const requestsDisabledReasoning = (params: CallOptions): boolean => {
+  const reasoning = params.providerOptions?.["openrouter"]?.["reasoning"];
+  return isRecord(reasoning) && reasoning["effort"] === "none";
+};
+
+// A forced-reasoning retry spends tokens the caller sized for visible
+// output (they asked for none), so top maxOutputTokens up by a flat
+// reasoning allowance to keep the original output budget intact. Left
+// untouched when the caller set no cap (nothing to protect).
+const REASONING_FALLBACK_TOKEN_HEADROOM = 1024;
+
+const withMinimalReasoning = (params: CallOptions): CallOptions => ({
+  ...params,
+  ...(params.maxOutputTokens === undefined
+    ? {}
+    : {
+        maxOutputTokens:
+          params.maxOutputTokens + REASONING_FALLBACK_TOKEN_HEADROOM,
+      }),
+  providerOptions: {
+    ...params.providerOptions,
+    openrouter: {
+      ...params.providerOptions?.["openrouter"],
+      reasoning: { effort: "minimal" },
+    },
+  },
+});
+
+// OpenRouter rejects disabling reasoning on models that require it (e.g.
+// Gemini Flash) with a 400 ("Reasoning is mandatory for this endpoint").
+const isReasoningMandatoryError = (error: unknown): boolean => {
+  if (!APICallError.isInstance(error) || error.statusCode !== 400) {
+    return false;
+  }
+  const body = typeof error.responseBody === "string" ? error.responseBody : "";
+  return REASONING_MANDATORY_PATTERN.test(`${body} ${error.message}`);
+};
+
+// Lets any caller request `reasoning.effort: "none"` without knowing
+// whether the resolved model permits it: when the provider refuses to
+// disable reasoning, retry once at the lowest effort it accepts. Every
+// other error propagates unchanged. Mirrors the service-tier fallback.
+const reasoningFallbackMiddleware: SingleMiddleware = {
+  specificationVersion: "v3",
+  wrapGenerate: async ({ doGenerate, model, params }) => {
+    try {
+      return await doGenerate();
+    } catch (error) {
+      if (
+        !requestsDisabledReasoning(params) ||
+        !isReasoningMandatoryError(error)
+      ) {
+        throw error;
+      }
+      return await model.doGenerate(withMinimalReasoning(params));
+    }
+  },
+  wrapStream: async ({ doStream, model, params }) => {
+    try {
+      return await doStream();
+    } catch (error) {
+      if (
+        !requestsDisabledReasoning(params) ||
+        !isReasoningMandatoryError(error)
+      ) {
+        throw error;
+      }
+      return await model.doStream(withMinimalReasoning(params));
+    }
+  },
+};
+
 // -- Default settings -------------------------------------------
 
 /**
@@ -1441,6 +1537,22 @@ const bareTemperatureDefaults: DefaultsBuilder = ({ role }) => ({
   temperature: TEMPERATURE_PER_ROLE[role],
 });
 
+// Translate the central per-role reasoning policy to OpenRouter's
+// `reasoning.effort`. "off" maps to OpenRouter's "none" (Gemini Flash and
+// other reasoning models that refuse are downgraded to minimal — with a
+// budget top-up — by the reasoning-fallback middleware); "default" leaves
+// reasoning unset so the model's own behaviour applies.
+const openrouterDefaults: DefaultsBuilder = ({ role }) => {
+  const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
+  const effort = REASONING_EFFORT_PER_ROLE[role];
+  if (effort !== "default") {
+    settings.providerOptions = {
+      openrouter: { reasoning: { effort: effort === "off" ? "none" : effort } },
+    };
+  }
+  return settings;
+};
+
 // `satisfies Record<AIProvider, ...>` makes adding a new provider to
 // AI_PROVIDERS a compile error here, so no provider can silently
 // fall through to a generic default that ignores its own knobs.
@@ -1449,7 +1561,7 @@ const DEFAULTS_BUILDERS = {
   anthropic: anthropicDefaults,
   openai: openaiDefaults,
   azure_foundry: azureFoundryDefaults,
-  openrouter: bareTemperatureDefaults,
+  openrouter: openrouterDefaults,
   mistral: bareTemperatureDefaults,
   openai_compatible: bareTemperatureDefaults,
   huggingface: bareTemperatureDefaults,
@@ -1519,6 +1631,7 @@ const withInstrumentation = (
     createServiceTierMiddleware(ctx.serviceTierTarget, ctx.serviceTier, {
       allowFallbackToStandard: ctx.allowServiceTierFallback,
     }),
+    reasoningFallbackMiddleware,
   );
   if (isAIDevToolsEnabled()) {
     middlewares.push(devToolsMiddleware());

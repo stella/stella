@@ -8,7 +8,16 @@
 
 /* Placeholder is rendered as a React element in ChatInputSurface,
  * keyed off the stable isEmpty state rather than TipTap's own
- * is-editor-empty class (which can flicker during initialisation). */
+ * is-editor-empty class (which can flicker during initialisation).
+ * Suppress TipTap's `::before` placeholder here: a global
+ * `.tiptap p.is-editor-empty::before { content: attr(data-placeholder) }`
+ * rule (from the property-input editor) would otherwise paint the
+ * extension's placeholder on top of the React span. They diverge once
+ * the suggested-followup "tab to ask" hint changes the editor
+ * placeholder, producing overlapping, unreadable text. */
+.chat-editor .tiptap p.is-editor-empty:first-child::before {
+  content: "";
+}
 
 .folio-ai-bar-editor--custom-placeholder
   .tiptap
