@@ -286,6 +286,7 @@ export const AIConfigProvidersEditor = ({
                       })
                     }
                     placeholder={getEndpointPlaceholder(providerDraft.provider)}
+                    type="url"
                     value={providerDraft.endpoint}
                   />
                 )}
