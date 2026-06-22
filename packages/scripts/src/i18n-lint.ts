@@ -203,8 +203,10 @@ const pluralShowsCount = (
   let shows = false;
   const scan = (elements: MessageFormatElement[], direct: boolean): void => {
     for (const element of elements) {
-      // `#` belongs to the nearest enclosing plural, so it only proves the
-      // outer count is shown when found directly, not inside a nested plural.
+      // `#` binds to the nearest enclosing plural, so it only proves the outer
+      // count is shown when found directly. Resetting `direct` for a nested
+      // select too is safe: @formatjs parses `#` inside a select as a literal,
+      // never a pound, so it is not counted there regardless.
       if (direct && element.type === TYPE.pound) {
         shows = true;
       }
