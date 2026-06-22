@@ -150,6 +150,7 @@ const getSuggestedPrompts = createSafeRootHandler(
         const recentMessagesDesc = await tx.query.chatMessages.findMany({
           where: {
             threadId: { eq: threadId },
+            userId: { eq: user.id },
           },
           columns: {
             id: true,

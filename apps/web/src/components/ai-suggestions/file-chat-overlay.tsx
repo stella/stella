@@ -1236,6 +1236,12 @@ const FileChatOverlayInner = ({
           messageCount={messages.length}
           prompts={suggestedPrompts}
           onSelect={(prompt) => {
+            // Mirror the PromptBar send guard: when an editable DOCX's edit
+            // snapshot isn't ready, block the chip send too so the model
+            // never sees a follow-up without current edit context.
+            if (!canSubmitWithCurrentDocxSnapshot()) {
+              return;
+            }
             editorController.setContent(prompt);
             void editorController.submit(async (draft) => {
               if (!(await ensureAIAvailable())) {

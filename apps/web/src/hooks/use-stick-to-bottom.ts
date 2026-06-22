@@ -3,12 +3,10 @@ import type { RefCallback, RefObject } from "react";
 
 import { panic } from "better-result";
 
-// Show the scroll-to-bottom button once the user is clearly scrolled away.
-const NEAR_BOTTOM_THRESHOLD_PX = 50;
-// Only consider the view "pinned" (release the scroll lock, hide the button)
-// when essentially at the bottom. The gap between the two thresholds is a
-// hysteresis dead-band: a small scroll-up no longer releases the lock, so the
-// resize observer can't yank the view back and flicker the button.
+// The view is "pinned" (auto-scroll follows, button hidden) only when
+// essentially at the bottom. A scroll-up past this both releases the lock and
+// shows the button in lockstep — keeping that threshold small is what stops
+// the resize observer from yanking the view back and flickering the button.
 const PINNED_BOTTOM_THRESHOLD_PX = 8;
 
 type StickToBottomContext = {
@@ -131,13 +129,12 @@ export const useStickToBottom = () => {
       // Skip isAtBottom updates during programmatic smooth
       // scrolls to prevent the scroll button from flickering.
       if (!programmaticScroll.current) {
-        // Hysteresis: hide only when pinned, show only once clearly scrolled
-        // away, so the state can't oscillate in the dead-band near the edge.
-        setIsAtBottom((prev) =>
-          prev
-            ? distanceFromBottom <= NEAR_BOTTOM_THRESHOLD_PX
-            : distanceFromBottom <= PINNED_BOTTOM_THRESHOLD_PX,
-        );
+        // Button visibility tracks the escape state exactly, so the two can
+        // never disagree: hidden only while pinned/following, shown the
+        // moment the user has scrolled away (which also pauses auto-scroll).
+        // Releasing the lock only near the bottom (above) is what prevents
+        // the resize-observer yank-and-flicker, without a dead band.
+        setIsAtBottom(!userScrolledUp.current);
       }
     };
 
