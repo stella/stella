@@ -196,8 +196,19 @@ export const ChatMentionList = ({
         return true;
       }
 
-      // ArrowRight on a workspace item drills down
-      if (event.key === "ArrowRight" && !drillTarget) {
+      // The drill-down chevron mirrors under RTL (DirectionalIcon), so the
+      // horizontal arrows must follow visual direction: the key pointing
+      // "into" the group is ArrowRight under LTR and ArrowLeft under RTL.
+      // Read the rendered list's computed direction so this stays correct
+      // regardless of how the host app or an enclosing subtree sets `dir`.
+      const isRtl =
+        listRef.current !== null &&
+        getComputedStyle(listRef.current).direction === "rtl";
+      const drillInKey = isRtl ? "ArrowLeft" : "ArrowRight";
+      const drillOutKey = isRtl ? "ArrowRight" : "ArrowLeft";
+
+      // The inline-forward arrow on a workspace item drills down
+      if (event.key === drillInKey && !drillTarget) {
         const item = activeItems.at(safeIndex);
         if (item?.category === "workspace") {
           handleDrillDown(item);
@@ -205,8 +216,8 @@ export const ChatMentionList = ({
         }
       }
 
-      // ArrowLeft exits drill-down
-      if (event.key === "ArrowLeft" && drillTarget) {
+      // The inline-back arrow exits drill-down
+      if (event.key === drillOutKey && drillTarget) {
         handleBack();
         return true;
       }
