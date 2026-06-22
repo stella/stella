@@ -154,10 +154,14 @@
       "pt-BR"
     ],
     "templates.usedTimes": [
+      "cs",
+      "de",
       "es",
       "fr",
+      "hu",
       "lt",
-      "pt-BR"
+      "pt-BR",
+      "sk"
     ],
     "templates.validationMinItems": [
       "es",

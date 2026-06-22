@@ -192,6 +192,46 @@ export const findMissingPluralCategories = (
   return missing;
 };
 
+const collectPluralArgs = (
+  elements: MessageFormatElement[],
+  names: Set<string>,
+): void => {
+  for (const element of elements) {
+    if (element.type === TYPE.plural) {
+      names.add(element.value);
+    }
+    if (element.type === TYPE.plural || element.type === TYPE.select) {
+      for (const option of Object.values(element.options)) {
+        collectPluralArgs(option.value, names);
+      }
+    }
+    if (element.type === TYPE.tag) {
+      collectPluralArgs(element.children, names);
+    }
+  }
+};
+
+/**
+ * Arguments the source pluralizes but the target flattened to plain
+ * interpolation (e.g. en `{count, plural, …}` rendered as `{count}`), which
+ * placeholder parity and the target-only category check both miss.
+ */
+export const findDroppedPlurals = (
+  source: string,
+  target: string,
+): string[] => {
+  const sourceAst = safeParse(source);
+  const targetAst = safeParse(target);
+  if (!sourceAst || !targetAst) {
+    return [];
+  }
+  const sourceArgs = new Set<string>();
+  const targetArgs = new Set<string>();
+  collectPluralArgs(sourceAst, sourceArgs);
+  collectPluralArgs(targetAst, targetArgs);
+  return [...sourceArgs].filter((arg) => !targetArgs.has(arg));
+};
+
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
@@ -309,7 +349,10 @@ const findViolations = (
     if (findPlaceholderMismatch(sourceValue, targetValue)) {
       result.placeholder.push(key);
     }
-    if (findMissingPluralCategories(targetValue, locale).length > 0) {
+    if (
+      findMissingPluralCategories(targetValue, locale).length > 0 ||
+      findDroppedPlurals(sourceValue, targetValue).length > 0
+    ) {
       result.plural.push(key);
     }
     if (
@@ -397,6 +440,22 @@ if (import.meta.main) {
         console.log(`\n${path.resolve(langsDir, file)}:`);
         for (const line of reported.toSorted()) {
           console.log(line);
+        }
+      }
+    }
+
+    // The en source must be valid ICU: a malformed source throws at render for
+    // English users. This is a hard invariant, never grandfathered.
+    if (!writeBaseline) {
+      const sourceErrors = Object.entries(source)
+        .filter(([, value]) => findIcuError(value) !== null)
+        .map(([key]) => key)
+        .toSorted();
+      if (sourceErrors.length > 0) {
+        hasIssues = true;
+        console.log(`\n${path.resolve(langsDir, "en.json")}:`);
+        for (const key of sourceErrors) {
+          console.log(`  icu (source): ${key}`);
         }
       }
     }

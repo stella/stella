@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { LOCALES, parseGlossary } from "./glossary-gen";
 import {
   buildForbiddenRules,
+  findDroppedPlurals,
   findForbiddenTerms,
   findIcuError,
   findMissingPluralCategories,
@@ -77,6 +78,23 @@ describe("findMissingPluralCategories", () => {
       findMissingPluralCategories(
         "{n, plural, =0 {none} one {#} other {#}}",
         "en",
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("findDroppedPlurals", () => {
+  test("flags a source plural flattened to plain interpolation", () => {
+    expect(
+      findDroppedPlurals("{count, plural, one {#} other {#}}", "{count} items"),
+    ).toEqual(["count"]);
+  });
+
+  test("passes when the target keeps the plural", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {#} other {#}}",
+        "{count, plural, one {#} few {#} other {#}}",
       ),
     ).toEqual([]);
   });
