@@ -4,7 +4,6 @@ import type { ReactNode } from "react";
 import { useForm } from "@tanstack/react-form";
 import { useNavigate } from "@tanstack/react-router";
 import { useSelector } from "@tanstack/react-store";
-import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -124,32 +123,6 @@ export function SignInPanel({
           });
         }
         return;
-      }
-
-      if (import.meta.env.DEV) {
-        const probe = await Result.tryPromise(async () => {
-          const url = new URL("/dev-public/last-otp", env.VITE_API_URL);
-          url.searchParams.set("email", parsedValue.email);
-          const response = await fetch(url, {
-            credentials: "include",
-            signal: AbortSignal.timeout(10_000),
-          });
-          if (!response.ok) {
-            return null;
-          }
-          const parsed = v.safeParse(
-            v.object({ otp: v.string() }),
-            await response.json(),
-          );
-          return parsed.success ? parsed.output.otp : null;
-        });
-        if (Result.isOk(probe) && probe.value !== null) {
-          stellaToast.add({
-            title: `Dev OTP: ${probe.value}`,
-            type: "info",
-            timeout: 8000,
-          });
-        }
       }
 
       await handleOtpSent(parsedValue.email);

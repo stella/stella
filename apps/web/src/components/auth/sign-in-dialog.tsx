@@ -13,6 +13,7 @@ import {
 
 import { OTPPanel } from "@/components/auth/otp-panel";
 import { SignInPanel } from "@/components/auth/sign-in-panel";
+import { fetchDevOtp } from "@/lib/dev-otp";
 
 type SignInDialogProps = {
   onOpenChange: (open: boolean) => void;
@@ -22,7 +23,7 @@ type SignInDialogProps = {
 
 type SignInDialogStep =
   | { status: "sign-in" }
-  | { status: "otp"; email: string };
+  | { status: "otp"; email: string; devOtp: string | null };
 
 export function SignInDialog({
   onOpenChange,
@@ -40,6 +41,19 @@ export function SignInDialog({
     }
   };
 
+  const showOtpStep = async (email: string) => {
+    // Transition immediately; the dev OTP fills in once it arrives so a slow or
+    // unreachable dev API never blocks the OTP screen. The panel is keyed by the
+    // code, so it remounts and picks up the prefill when it lands.
+    setStep({ status: "otp", email, devOtp: null });
+    const devOtp = await fetchDevOtp(email);
+    setStep((prev) =>
+      prev.status === "otp" && prev.email === email
+        ? { status: "otp", email, devOtp }
+        : prev,
+    );
+  };
+
   return (
     <Dialog onOpenChange={handleOpenChange} open={open}>
       <DialogPopup className="max-w-md">
@@ -52,12 +66,14 @@ export function SignInDialog({
               redirectTo={redirectTo}
               showHeading={false}
               onOtpSent={({ email }) => {
-                setStep({ status: "otp", email });
+                void showOtpStep(email);
               }}
             />
           ) : (
             <OTPPanel
+              key={step.devOtp ?? "empty"}
               email={step.email}
+              initialOtp={step.devOtp ?? undefined}
               redirectTo={redirectTo}
               surface="bare"
               onUseDifferentEmail={() => {
