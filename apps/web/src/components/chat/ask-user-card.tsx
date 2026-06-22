@@ -12,6 +12,7 @@ import { Streamdown } from "streamdown";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
@@ -405,6 +406,7 @@ export const AskUserCard = ({
                 <div className="flex gap-1.5">
                   <input
                     className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
+                    dir={contentDir(answers[i] ?? "")}
                     onChange={(e) => setAnswer(i, e.target.value)}
                     placeholder={q.default ?? t("chat.askUser.placeholder")}
                     type="text"

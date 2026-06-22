@@ -49,6 +49,17 @@ const hasText = (value: FieldValue): boolean => {
   return Array.isArray(value) && value.length > 0;
 };
 
+/**
+ * Content-derived direction for a controlled field value: `"auto"` when there
+ * is content, `undefined` when empty (so the field inherits the ambient UI
+ * direction — caret on the RTL side under Arabic). Use this for a raw
+ * `<input>`/`<textarea>` whose value you already control; the shared
+ * `<Input>`/`<Textarea>` apply it for you via `useContentDir`, which also
+ * tracks the empty↔non-empty transition for uncontrolled fields.
+ */
+export const contentDir = (value: FieldValue): "auto" | undefined =>
+  hasText(value) ? "auto" : undefined;
+
 export const useContentDir = ({
   dir,
   value,

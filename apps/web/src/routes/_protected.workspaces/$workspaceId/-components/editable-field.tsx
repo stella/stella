@@ -17,6 +17,7 @@ import { useFormatter, useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { api } from "@/lib/api";
@@ -373,6 +374,7 @@ const InlineTextEditor = ({
     <textarea
       autoFocus
       className="border-input bg-background focus:ring-ring min-h-20 w-full min-w-0 resize-none rounded-md border px-2 py-1 text-sm outline-none focus:ring-1"
+      dir={contentDir(draft)}
       onBlur={() => {
         const trimmed = draft.trim();
         if (trimmed !== value) {

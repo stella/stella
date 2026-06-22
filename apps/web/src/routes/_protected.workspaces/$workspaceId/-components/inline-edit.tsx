@@ -1,6 +1,7 @@
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 type InlineEditProps = {
@@ -44,6 +45,7 @@ export const InlineEdit = ({
           "focus:border-ring focus:ring-ring/16 focus:ring-2 focus:ring-offset-0",
           inputClassName,
         )}
+        dir={contentDir(value)}
         onBlur={onCommit}
         onChange={(e) => onChange(e.target.value)}
         onClick={(e) => e.stopPropagation()}
