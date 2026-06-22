@@ -298,7 +298,9 @@ const LinkedClauseRow = ({
     <li className="flex flex-col px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{link.clause?.title}</p>
+          <p className="text-sm font-medium" dir="auto">
+            {link.clause?.title}
+          </p>
           <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
             {link.slotName && <SlotChip slotName={link.slotName} />}
             {link.clauseVariant && <span>{link.clauseVariant.label}</span>}

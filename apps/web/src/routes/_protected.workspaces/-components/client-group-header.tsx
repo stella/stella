@@ -48,6 +48,7 @@ export const ClientGroupHeader = ({
         ) : (
           <span
             className="hover:underline"
+            dir="auto"
             onClick={(e) => {
               e.stopPropagation();
               void navigate({
@@ -82,7 +83,7 @@ export const ClientGroupHeader = ({
       {group.type === "client" && group.responsibleAttorneyName && (
         <>
           <span className="text-foreground-subtle">·</span>
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground text-xs" dir="auto">
             {group.responsibleAttorneyName}
           </span>
         </>

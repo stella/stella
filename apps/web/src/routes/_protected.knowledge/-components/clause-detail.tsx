@@ -504,6 +504,7 @@ const ClauseHeader = ({
       ) : (
         <button
           className="flex-1 truncate text-start text-lg font-semibold disabled:cursor-default"
+          dir="auto"
           disabled={!canEdit}
           onClick={() => {
             setTitleDraft(detail.title);
@@ -529,7 +530,7 @@ const ClauseHeader = ({
           <SelectPopup>
             <SelectItem value="">{t("common.uncategorized")}</SelectItem>
             {categories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.id}>
+              <SelectItem dir="auto" key={cat.id} value={cat.id}>
                 {cat.name}
               </SelectItem>
             ))}

@@ -721,11 +721,14 @@ const TemplateRow = ({
                 onClick={onSelect}
                 type="button"
               >
-                <span className="truncate text-sm font-medium">
+                <span className="truncate text-sm font-medium" dir="auto">
                   {template.name}
                 </span>
                 {categoryName !== null && (
-                  <span className="text-muted-foreground shrink-0 truncate text-xs">
+                  <span
+                    className="text-muted-foreground shrink-0 truncate text-xs"
+                    dir="auto"
+                  >
                     {categoryName}
                   </span>
                 )}
@@ -740,7 +743,7 @@ const TemplateRow = ({
                   onClick={onSelect}
                   type="button"
                 >
-                  <span className="truncate text-sm font-medium">
+                  <span className="truncate text-sm font-medium" dir="auto">
                     {template.name}
                   </span>
                 </button>

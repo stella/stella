@@ -368,7 +368,9 @@ export const ChatMatterPicker = ({
                             color: swatch,
                           }}
                         />
-                        <span className="truncate text-xs">{m.name}</span>
+                        <span className="truncate text-xs" dir="auto">
+                          {m.name}
+                        </span>
                       </span>
                     </MenuCheckboxItem>
                   );

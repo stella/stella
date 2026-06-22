@@ -48,7 +48,9 @@ export const CellResult = ({
           strokeWidth={2.25}
         />
         {hasPreview ? (
-          <div className="line-clamp-2 min-w-0">{preview}</div>
+          <div className="line-clamp-2 min-w-0" dir="auto">
+            {preview}
+          </div>
         ) : (
           <PendingSkeleton contentType={property.content.type} />
         )}
@@ -130,7 +132,11 @@ export const CellResult = ({
     );
   }
 
-  return <div className="line-clamp-2">{field.content.value}</div>;
+  return (
+    <div className="line-clamp-2" dir="auto">
+      {field.content.value}
+    </div>
+  );
 };
 
 type PendingSkeletonProps = {
@@ -223,7 +229,9 @@ const FileCell = ({
           fileName={fileName}
           mimeType={mimeType}
         />
-        <span className="min-w-0 truncate text-start">{fileName}</span>
+        <span className="min-w-0 truncate text-start" dir="auto">
+          {fileName}
+        </span>
       </Tooltip>
     );
   }
@@ -289,7 +297,9 @@ const SelectResult = ({ value, property }: SelectResultProps) => {
       }}
     >
       {!value && <SquareMinusIcon className="size-4" />}
-      <span className="truncate">{value ?? t("common.empty")}</span>
+      <span className="truncate" dir="auto">
+        {value ?? t("common.empty")}
+      </span>
     </span>
   );
 };

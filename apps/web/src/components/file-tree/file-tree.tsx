@@ -211,7 +211,7 @@ export function FileTree({
                 {renderName ? (
                   renderName(node)
                 ) : (
-                  <span className="truncate" title={node.name}>
+                  <span className="truncate" dir="auto" title={node.name}>
                     {node.name}
                   </span>
                 )}

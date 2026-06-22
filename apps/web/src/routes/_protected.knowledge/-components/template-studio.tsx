@@ -3579,6 +3579,7 @@ const StudioInsertRow = () => {
             <MenuSubPopup>
               {linkedClauses.map((link) => (
                 <MenuItem
+                  dir="auto"
                   key={link.id}
                   onClick={() =>
                     actions.insertClauseSlot(
@@ -4746,7 +4747,7 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
             {t("clauses.noLinkedClauses")}
           </p>
         ) : (
-          <div className="rounded-md border p-2.5 text-sm">
+          <div className="rounded-md border p-2.5 text-sm" dir="auto">
             {link.clause === null ? (
               <span className="text-destructive">
                 {t("clauses.clauseDeleted")}
@@ -4993,7 +4994,9 @@ const OutlineRow = ({
           <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
             <TextQuoteIcon className="size-4" />
           </span>
-          <span className="truncate">{node.name}</span>
+          <span className="truncate" dir="auto">
+            {node.name}
+          </span>
         </button>
         <Button
           aria-label={t("templates.studio.insertAtCaret")}

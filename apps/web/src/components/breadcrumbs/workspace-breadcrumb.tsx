@@ -144,6 +144,7 @@ export const WorkspaceBreadcrumb = ({
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
           className="hover:text-foreground min-w-0 truncate transition-colors"
+          dir="auto"
           onClick={() => {
             updateMattersConfig({ clientFilter: client.id });
           }}
@@ -312,7 +313,9 @@ export const WorkspaceBreadcrumb = ({
                     }}
                   />
                 </span>
-                <span className="truncate">{displayName}</span>
+                <span className="truncate" dir="auto">
+                  {displayName}
+                </span>
                 {workspace.reference && !isEditingRef ? (
                   <span
                     className="text-foreground-muted shrink-0 text-sm"
@@ -395,6 +398,7 @@ export const WorkspaceBreadcrumb = ({
           activeOptions={{ exact: true, includeSearch: false }}
           activeProps={{ className: "text-foreground font-semibold" }}
           className="hover:text-foreground max-w-80 truncate font-semibold transition-colors"
+          dir="auto"
           onClick={() => {
             startEditingName();
           }}

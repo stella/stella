@@ -195,7 +195,7 @@ const ClientCell = ({ workspace }: CellProps) => {
     );
   }
   return (
-    <span className="text-muted-foreground block truncate">
+    <span className="text-muted-foreground block truncate" dir="auto">
       {workspace.client.displayName}
     </span>
   );

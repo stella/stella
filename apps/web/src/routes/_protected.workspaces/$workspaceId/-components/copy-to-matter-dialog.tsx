@@ -216,6 +216,7 @@ export const CopyToMatterDialog = ({
                         "hover:bg-accent w-full rounded px-2 py-1.5 text-start text-sm",
                         targetWorkspaceId === workspace.id && "bg-accent",
                       )}
+                      dir="auto"
                       key={workspace.id}
                       onClick={() => {
                         setTargetWorkspaceId(workspace.id);
@@ -366,7 +367,9 @@ const FolderPicker = ({
             type="button"
           >
             <FolderIcon className="size-4 shrink-0" />
-            <span className="truncate">{folder.name}</span>
+            <span className="truncate" dir="auto">
+              {folder.name}
+            </span>
           </button>
         </div>
         {hasChildren && isExpanded && (

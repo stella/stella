@@ -168,6 +168,7 @@ export const VersionRow = ({
         )}
         <span
           className="text-muted-foreground truncate text-xs"
+          dir="auto"
           title={author?.name}
         >
           {author ? firstName(author.name) : ""}

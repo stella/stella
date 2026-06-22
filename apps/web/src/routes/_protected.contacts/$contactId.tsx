@@ -169,7 +169,9 @@ function ContactDetailPage() {
           ) : (
             <BuildingIcon className="text-muted-foreground size-5" />
           )}
-          <h1 className="text-xl font-bold">{contact.displayName}</h1>
+          <h1 className="text-xl font-bold" dir="auto">
+            {contact.displayName}
+          </h1>
           <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">
             {t(`contacts.type.${contact.type}`)}
           </span>
@@ -429,7 +431,9 @@ function ContactDetailPage() {
                     workspaceId={matter.id}
                   >
                     <MatterIcon matter={matter} />
-                    <span className="font-medium">{matter.name}</span>
+                    <span className="font-medium" dir="auto">
+                      {matter.name}
+                    </span>
                     <span className="text-muted-foreground ms-auto text-xs">
                       {t("common.createdAt", {
                         date: new Date(matter.createdAt).toLocaleDateString(

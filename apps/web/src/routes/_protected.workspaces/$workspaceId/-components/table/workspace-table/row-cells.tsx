@@ -813,6 +813,7 @@ const FolderCell = ({
       ) : (
         <button
           className="truncate text-start text-sm"
+          dir="auto"
           onDoubleClick={(e) => {
             e.stopPropagation();
             setEditValue(name);

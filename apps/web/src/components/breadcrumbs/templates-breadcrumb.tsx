@@ -38,7 +38,10 @@ export const TemplatesBreadcrumb = () => {
         </button>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
-      <BreadcrumbItem className="text-foreground max-w-64 truncate font-semibold">
+      <BreadcrumbItem
+        className="text-foreground max-w-64 truncate font-semibold"
+        dir="auto"
+      >
         {open.name}
       </BreadcrumbItem>
     </>

@@ -257,6 +257,7 @@ const useContactColumns = () => {
           cell: ({ row, getValue }) => (
             <Link
               className="font-medium hover:underline"
+              dir="auto"
               onClick={(event) => event.stopPropagation()}
               params={{ contactId: row.original.id }}
               to="/contacts/$contactId"

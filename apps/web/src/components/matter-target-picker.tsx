@@ -128,11 +128,14 @@ export const MatterTargetPicker = ({
                       className="size-4 shrink-0"
                       style={{ color: swatch }}
                     />
-                    <span className="min-w-0 flex-1 truncate">
+                    <span className="min-w-0 flex-1 truncate" dir="auto">
                       {workspace.name}
                     </span>
                     {workspace.client?.displayName !== undefined && (
-                      <span className="text-muted-foreground max-w-32 shrink-0 truncate text-xs">
+                      <span
+                        className="text-muted-foreground max-w-32 shrink-0 truncate text-xs"
+                        dir="auto"
+                      >
                         {workspace.client.displayName}
                       </span>
                     )}
@@ -256,7 +259,9 @@ const FolderPicker = ({
             type="button"
           >
             <FolderIcon className="size-4 shrink-0" />
-            <span className="truncate">{folder.name}</span>
+            <span className="truncate" dir="auto">
+              {folder.name}
+            </span>
           </button>
         </div>
         {hasChildren && isExpanded && (
