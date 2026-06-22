@@ -3,11 +3,30 @@ import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import { templateFills } from "@/api/db/schema";
+import { clauseBodyToRichPatch } from "@/api/handlers/clauses/clause-to-patch";
+import { clauseBodySchema } from "@/api/handlers/clauses/shared-schemas";
+import type { ClauseBody } from "@/api/handlers/clauses/types";
+import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
+import {
+  buildAiConditionDecider,
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/handlers/docx/ai-field-generator";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
+import { documentTextForAiFields } from "@/api/handlers/docx/extract-text";
+import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
+import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import { resolveAiConditions } from "@/api/handlers/docx/resolve-ai-conditions";
+import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
+import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData } from "@/api/handlers/docx/types";
+import type { RichPatchValue } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
+import { recordTemplateUse } from "@/api/handlers/templates/record-use";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -19,12 +38,16 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { DOCX_EXT_RE } from "@/api/lib/sanitize-filename";
 import { isRecord } from "@/api/lib/type-guards";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
-import { containsNull } from "./fill";
+import { assertTemplateFillUsage, containsNull } from "./fill";
 
 const fillByIdBodySchema = t.Object({
   values: t.String(),
+  // Per-fill clause edits (e.g. an AI tweak made in the fill form), keyed by
+  // the slot patch key (`@clause:Name`). When present, the override body is
+  // inserted for that slot instead of the linked clause's resolved body.
+  clauseOverrides: t.Optional(t.Record(t.String(), clauseBodySchema)),
 });
 
 const fillByIdQuerySchema = t.Object({
@@ -35,17 +58,53 @@ const fillByIdParamsSchema = t.Object({
   templateId: tSafeId("template"),
 });
 
-const PDF_MIME_TYPE = "application/pdf";
-
 type FillByIdProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   templateId: SafeId<"template">;
-  body: { values: string };
+  body: { values: string; clauseOverrides?: Record<string, ClauseBody> };
   query: { format?: "docx" | "pdf" };
   recordAuditEvent: AuditRecorder;
+};
+
+type ResolveClausePatchesArgs = {
+  buffer: Buffer;
+  templateId: SafeId<"template">;
+  clauseOverrides: Record<string, ClauseBody> | undefined;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+};
+
+/** Resolve the template's clause slots to rich patches, with any per-fill
+ *  override taking precedence over the linked clause body. */
+const resolveClausePatches = async ({
+  buffer,
+  templateId,
+  clauseOverrides,
+  scopedDb,
+  organizationId,
+}: ResolveClausePatchesArgs): Promise<Record<string, RichPatchValue>> => {
+  const slots = await discoverClauseSlots(buffer);
+  if (slots.length === 0) {
+    return {};
+  }
+  const patches = await resolveClauseSlots(
+    templateId,
+    slots,
+    scopedDb,
+    organizationId,
+  );
+  if (clauseOverrides) {
+    const slotKeys = new Set(slots.map((slot) => slot.patchKey));
+    for (const [key, overrideBody] of Object.entries(clauseOverrides)) {
+      if (slotKeys.has(key)) {
+        patches[key] = clauseBodyToRichPatch(overrideBody);
+      }
+    }
+  }
+  return patches;
 };
 
 const fillByIdHandler = async function* ({
@@ -54,7 +113,7 @@ const fillByIdHandler = async function* ({
   organizationId,
   userId,
   templateId,
-  body: { values: valuesJson },
+  body: { values: valuesJson, clauseOverrides },
   query: { format = "docx" },
   recordAuditEvent,
 }: FillByIdProps) {
@@ -68,6 +127,7 @@ const fillByIdHandler = async function* ({
         columns: {
           s3Key: true,
           fileName: true,
+          languages: true,
         },
       }),
     ),
@@ -112,17 +172,123 @@ const fillByIdHandler = async function* ({
   const arrayBuf = await s3File.arrayBuffer();
   const buffer = Buffer.from(arrayBuf);
 
-  // Discover and resolve clause slots ({{@clause:...}})
-  const slots = await discoverClauseSlots(buffer);
-  if (slots.length > 0) {
-    const clausePatches = await resolveClauseSlots(
-      templateId,
-      slots,
-      scopedDb,
-      organizationId,
-    );
-    for (const [key, value] of Object.entries(clausePatches)) {
-      parsed[key] = value;
+  // Discover/resolve clause slots ({{@clause:...}}) and apply per-fill overrides.
+  const clausePatches = await resolveClausePatches({
+    buffer,
+    templateId,
+    clauseOverrides,
+    scopedDb,
+    organizationId,
+  });
+  for (const [key, value] of Object.entries(clausePatches)) {
+    parsed[key] = value;
+  }
+
+  // Draft AI-fillable fields so the downloaded document matches the preview
+  // (fill-preview resolves them too); without this an AI-drafted placeholder
+  // shown in the preview would download unresolved.
+  let fillBuffer: Buffer = buffer;
+  let adaptedPaths: readonly string[] = [];
+  const manifest = await readManifest(buffer);
+
+  const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
+  const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
+  // Loaded once for the AI draft/adapt steps below.
+  const orgAIConfig =
+    manifest && (hasAiDraftFields || hasAiAdaptFields)
+      ? await loadOrgAIConfig(organizationId)
+      : null;
+
+  const usageRejection = await assertTemplateFillUsage({
+    orgAIConfig,
+    hasAiFields: Boolean(hasAiDraftFields) || Boolean(hasAiAdaptFields),
+    organizationId,
+    userId,
+    safeDb,
+  });
+  if (usageRejection !== null) {
+    return Result.err(usageRejection);
+  }
+
+  // Resolve registry lookups, assemble composite (multipart) values,
+  // evaluate formula (derived) fields, and check dependent (optionsFrom)
+  // selects before any AI step or substitution sees them; a failing step
+  // rejects the request naming the field.
+  const stepError = await applyManifestFillSteps({
+    values: parsed,
+    manifest,
+    resolveLookup: createDispatchLookupResolver(),
+  });
+  if (stepError !== null) {
+    return Result.err(new HandlerError({ status: 400, message: stepError }));
+  }
+
+  if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId: null,
+      },
+      feature: "templates.fill",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
+    if (hasAiDraftFields) {
+      const documentText = await documentTextForAiFields(
+        new Uint8Array(buffer),
+        manifest.fields,
+      );
+      const aiResolved = await resolveAiFields({
+        values: parsed,
+        fields: manifest.fields,
+        documentText,
+        generate: buildAiFieldGenerator({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
+        }),
+      });
+      // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
+      // so the downloaded document matches the preview.
+      const aiDecided = await resolveAiConditions({
+        values: aiResolved,
+        fields: manifest.fields,
+        decide: buildAiConditionDecider({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
+        }),
+      });
+      for (const [key, value] of Object.entries(aiDecided)) {
+        parsed[key] = value;
+      }
+    }
+    if (hasAiAdaptFields) {
+      // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
+      // the stub stays in `parsed` so uncovered occurrences still get the
+      // plain global substitution below.
+      const adapted = await adaptAiFields({
+        buffer,
+        fields: manifest.fields,
+        values: parsed,
+        adapt: buildAiOccurrenceAdapter({
+          orgAIConfig,
+          organizationId,
+          documentLanguages: template.languages,
+          skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
+        }),
+      });
+      fillBuffer = adapted.buffer;
+      adaptedPaths = adapted.adaptedPaths;
     }
   }
 
@@ -137,7 +303,12 @@ const fillByIdHandler = async function* ({
     );
   }
 
-  const result = await fillTemplate(buffer, parsed);
+  const result = await fillTemplate(fillBuffer, parsed);
+  // Adapted stubs no longer match a marker (each occurrence was already
+  // substituted), so they are not "unused" in any user-meaningful sense.
+  const unusedValues = result.unusedValues.filter(
+    (name) => !adaptedPaths.includes(name),
+  );
 
   const fillStatus =
     result.unmatchedPlaceholders.length > 0 ? "partial" : "success";
@@ -146,6 +317,7 @@ const fillByIdHandler = async function* ({
     Result.tryPromise({
       try: async () =>
         await scopedDb(async (tx) => {
+          await recordTemplateUse({ tx, templateId });
           await tx.insert(templateFills).values({
             organizationId,
             templateId,
@@ -153,7 +325,7 @@ const fillByIdHandler = async function* ({
             format,
             status: fillStatus,
             unmatchedCount: result.unmatchedPlaceholders.length,
-            unusedCount: result.unusedValues.length,
+            unusedCount: unusedValues.length,
             structureErrors:
               result.structureErrors.length > 0 ? result.structureErrors : null,
           });
@@ -208,7 +380,8 @@ const fillByIdHandler = async function* ({
       new Response(new Uint8Array(pdfResult.value.buffer), {
         status: 200,
         headers: {
-          "Content-Type": PDF_MIME_TYPE,
+          // Octet-stream, not application/pdf: see OCTET_STREAM_MIME_TYPE.
+          "Content-Type": OCTET_STREAM_MIME_TYPE,
           "Content-Disposition": contentDisposition(pdfName),
         },
       }),
@@ -216,18 +389,24 @@ const fillByIdHandler = async function* ({
   }
 
   const headers = new Headers({
-    "Content-Type": DOCX_MIME_TYPE,
+    // Octet-stream, not the DOCX mime type: the Eden treaty client
+    // text-decodes unrecognized content types, which corrupts the ZIP
+    // container (Word then reports unreadable content). See
+    // OCTET_STREAM_MIME_TYPE in mime-types.ts.
+    "Content-Type": OCTET_STREAM_MIME_TYPE,
     "Content-Disposition": contentDisposition(baseName),
   });
 
   if (result.unmatchedPlaceholders.length > 0) {
     headers.set(
       "X-Unmatched-Placeholders",
-      result.unmatchedPlaceholders.join(","),
+      // Headers are ISO-8859-1; field paths carry diacritics (Polish/Czech),
+      // so the diagnostic lists travel URI-encoded.
+      encodeURIComponent(result.unmatchedPlaceholders.join(",")),
     );
   }
-  if (result.unusedValues.length > 0) {
-    headers.set("X-Unused-Values", result.unusedValues.join(","));
+  if (unusedValues.length > 0) {
+    headers.set("X-Unused-Values", encodeURIComponent(unusedValues.join(",")));
   }
   if (result.structureErrors.length > 0) {
     headers.set("X-Structure-Errors", JSON.stringify(result.structureErrors));

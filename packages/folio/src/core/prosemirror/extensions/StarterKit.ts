@@ -33,6 +33,7 @@ import { AllCapsExtension } from "./marks/AllCapsExtension";
 // Marks
 import { BoldExtension } from "./marks/BoldExtension";
 import { CharacterSpacingExtension } from "./marks/CharacterSpacingExtension";
+import { CharacterStyleExtension } from "./marks/CharacterStyleExtension";
 import { CommentExtension } from "./marks/CommentExtension";
 import { FontFamilyExtension } from "./marks/FontFamilyExtension";
 import { FontSizeExtension } from "./marks/FontSizeExtension";
@@ -44,7 +45,6 @@ import { ItalicExtension } from "./marks/ItalicExtension";
 import { RtlExtension } from "./marks/RtlExtension";
 import { RunFormattingOverrideExtension } from "./marks/RunFormattingOverrideExtension";
 import { RunShadingExtension } from "./marks/RunShadingExtension";
-import { RunStyleExtension } from "./marks/RunStyleExtension";
 import { SmallCapsExtension } from "./marks/SmallCapsExtension";
 import { StrikeExtension } from "./marks/StrikeExtension";
 import { SubscriptExtension } from "./marks/SubscriptExtension";
@@ -133,9 +133,6 @@ export function createStarterKit(
   // an explicit highlight (registered after) wins the background when a run has
   // both — matching the paged painter's `run.highlight ?? run.shading`. (#722)
   add("runShading", RunShadingExtension());
-  // Inert reference mark: carries a run's `w:rStyle` named style id through the
-  // round-trip; the style's formatting itself rides on direct marks. (#833)
-  add("runStyle", RunStyleExtension());
   add("highlight", HighlightExtension());
   add("fontSize", FontSizeExtension());
   add("fontFamily", FontFamilyExtension());
@@ -155,6 +152,7 @@ export function createStarterKit(
   add("rtl", RtlExtension());
   add("textEffect", TextEffectExtension());
   add("runFormattingOverride", RunFormattingOverrideExtension());
+  add("characterStyle", CharacterStyleExtension());
   add("comment", CommentExtension());
   add("insertion", InsertionExtension());
   add("deletion", DeletionExtension());

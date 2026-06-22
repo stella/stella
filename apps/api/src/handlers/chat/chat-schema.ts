@@ -13,6 +13,7 @@ import {
   validateStoredFileRefs,
 } from "@/api/handlers/chat/attachment-validation";
 import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type { ChatMention, ChatMessage } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -40,29 +41,42 @@ export const userContextSchema = t.Object({
   wordEditShortcut: t.Optional(t.String()),
 });
 
+const docxEditSnapshotSchema = t.Object({
+  canApplyEdits: t.Optional(t.Boolean()),
+  blocks: t.Array(
+    t.Object({
+      id: t.String(),
+      kind: t.Union([
+        t.Literal("heading"),
+        t.Literal("listItem"),
+        t.Literal("paragraph"),
+      ]),
+      text: t.String(),
+      displayLabel: t.Optional(t.String()),
+      styleId: t.Optional(t.String()),
+    }),
+  ),
+});
+
 export const activeFileSchema = t.Object({
   entityId: tSafeId("entity"),
   fileFieldId: t.Optional(tSafeId("field")),
   fileName: t.String(),
   supportsDocxEdits: t.Optional(t.Boolean()),
-  docxEditSnapshot: t.Optional(
-    t.Object({
-      canApplyEdits: t.Optional(t.Boolean()),
-      blocks: t.Array(
-        t.Object({
-          id: t.String(),
-          kind: t.Union([
-            t.Literal("heading"),
-            t.Literal("listItem"),
-            t.Literal("paragraph"),
-          ]),
-          text: t.String(),
-          displayLabel: t.Optional(t.String()),
-          styleId: t.Optional(t.String()),
-        }),
-      ),
-    }),
-  ),
+  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
+});
+
+/**
+ * Template Studio surface: the user is authoring a reusable DOCX
+ * template (org-scoped, not a workspace entity). The snapshot mirrors
+ * the active-file one so `apply-active-docx-edits` operations target
+ * the same block-id space; the Studio client converts queued
+ * operations into in-document suggestions.
+ */
+export const activeTemplateSchema = t.Object({
+  templateId: tSafeId("template"),
+  fileName: t.String(),
+  docxEditSnapshot: t.Optional(docxEditSnapshotSchema),
 });
 
 export const activeDecisionSchema = t.Object({
@@ -102,8 +116,16 @@ export const sendMessageBodySchema = t.Object({
   contextMatterIds: t.Optional(t.Array(tSafeId("workspace"))),
   message: rawMessageSchema,
   truncateAfterMessageId: t.Optional(tSafeId("chatMessage")),
+  /**
+   * Optional named tool scope for this turn. Only server-defined
+   * scope names validate; the server maps the name to a fixed tool
+   * allowlist (see `tools/tool-scope.ts`), so a client can narrow
+   * but never widen the turn's tool surface.
+   */
+  toolScope: t.Optional(t.Literal(CHAT_TOOL_SCOPE.suggestTemplateFields)),
   userContext: t.Optional(userContextSchema),
   activeFile: t.Optional(activeFileSchema),
+  activeTemplate: t.Optional(activeTemplateSchema),
   activeDecision: t.Optional(activeDecisionSchema),
   activeExternal: t.Optional(activeExternalSchema),
   activeSkill: t.Optional(activeSkillSchema),
@@ -119,6 +141,7 @@ export const sendMessageBodySchema = t.Object({
 type RawIncomingMessage = Static<typeof rawMessageSchema>;
 export type IncomingUserContext = Static<typeof userContextSchema>;
 export type IncomingActiveFile = Static<typeof activeFileSchema>;
+export type IncomingActiveTemplate = Static<typeof activeTemplateSchema>;
 export type IncomingActiveDecision = Static<typeof activeDecisionSchema>;
 export type IncomingActiveExternal = Static<typeof activeExternalSchema>;
 export type IncomingActiveSkill = Static<typeof activeSkillSchema>;

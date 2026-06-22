@@ -1,0 +1,6467 @@
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import type { ReactNode } from "react";
+
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
+import { panic } from "better-result";
+import {
+  TextQuoteIcon,
+  ArrowLeftIcon,
+  BookmarkIcon,
+  BookmarkPlusIcon,
+  BracesIcon,
+  CheckIcon,
+  ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
+  CircleHelpIcon,
+  CopyIcon,
+  HashIcon,
+  LandmarkIcon,
+  ListFilterIcon,
+  Loader2Icon,
+  MessageCircleQuestionIcon,
+  PencilIcon,
+  PlusIcon,
+  RepeatIcon,
+  SaveIcon,
+  SigmaIcon,
+  SplitIcon,
+  Trash2Icon,
+  UserIcon,
+  WandSparklesIcon,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
+import type { Node as PMNode, NodeType, ResolvedPos } from "prosemirror-model";
+import { TextSelection } from "prosemirror-state";
+import type { EditorState, Transaction } from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
+import { useDebouncedCallback } from "use-debounce";
+import { useTranslations } from "use-intl";
+
+import type { TemplateRecipeDefinition } from "@stll/api/types";
+import {
+  buildPositionalText,
+  getFolioSelectionViewportRect,
+  getTemplateDirectives,
+  setTemplatePreviewValues,
+} from "@stll/folio";
+import type {
+  DirectiveKind,
+  DirectiveRange,
+  DocxEditorRef,
+  TemplatePreviewSpan,
+  TemplatePreviewValue,
+} from "@stll/folio";
+import { displayLanguageName } from "@stll/locales";
+import {
+  isFieldPath,
+  renderDeterministicFieldValue,
+  serializeCondition,
+} from "@stll/template-conditions";
+import type {
+  DeterministicFieldConfig,
+  GroupNode,
+} from "@stll/template-conditions";
+import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
+import {
+  Dialog,
+  DialogClose,
+  DialogFooter,
+  DialogHeader,
+  DialogPanel,
+  DialogPopup,
+  DialogTitle,
+} from "@stll/ui/components/dialog";
+import { Input } from "@stll/ui/components/input";
+import { Label } from "@stll/ui/components/label";
+import {
+  Menu,
+  MenuItem,
+  MenuPopup,
+  MenuSeparator,
+  MenuSub,
+  MenuSubPopup,
+  MenuSubTrigger,
+  MenuTrigger,
+} from "@stll/ui/components/menu";
+import {
+  Popover,
+  PopoverPopup,
+  PopoverTrigger,
+} from "@stll/ui/components/popover";
+import {
+  MenuPreviewLayout,
+  PreviewPane,
+} from "@stll/ui/components/preview-pane";
+import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { Separator } from "@stll/ui/components/separator";
+import { Textarea } from "@stll/ui/components/textarea";
+import { stellaToast } from "@stll/ui/components/toast";
+import { cn } from "@stll/ui/lib/utils";
+import "@stll/folio/editor.css";
+
+import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
+import { FacetBar } from "@/components/inspector/inspector-facet-bar";
+import { useInspectorStore } from "@/components/inspector/inspector-store";
+import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
+import type {
+  InspectorRailIconProps,
+  InspectorViewRenderProps,
+} from "@/components/inspector/view-registry";
+import { registerInspectorView } from "@/components/inspector/view-registry";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
+import { useI18nStore } from "@/i18n/i18n-store";
+import type { TranslationKey } from "@/i18n/types";
+import { api } from "@/lib/api";
+import {
+  DOCX_MIME,
+  SIDE_RAIL_TAB_ICON_SIZE_PX,
+  TOOLBAR_ROW_HEIGHT,
+} from "@/lib/consts";
+import { toAPIError, userErrorMessage } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
+import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
+import {
+  ConditionGroupEditor,
+  emptyGroup,
+  toRuleFields,
+} from "@/routes/_protected.knowledge/-components/condition-builder";
+import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
+import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
+import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
+import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention";
+import {
+  ARRAY_INDEX_KEY_PREFIX,
+  parseArrayItemKey,
+  TemplateForm,
+  useFillToMatterSaveTarget,
+} from "@/routes/_protected.knowledge/-components/template-form";
+import { useTemplateNavStore } from "@/routes/_protected.knowledge/-components/template-nav-store";
+import { TemplateStudioChat } from "@/routes/_protected.knowledge/-components/template-studio-chat";
+import {
+  defaultStudioField,
+  type OutlineNode,
+  type StudioActions,
+  type StudioField,
+  useTemplateStudioStore,
+} from "@/routes/_protected.knowledge/-components/template-studio-store";
+import { filledByForFieldMeta } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
+import { TemplateVersionsTab } from "@/routes/_protected.knowledge/-components/template-versions-tab";
+import {
+  defaultCompositeFormat,
+  type EditableLookupFormat,
+  type EditablePart,
+  type EditableField,
+  type FieldValidation,
+  FieldConfigEditor,
+} from "@/routes/_protected.knowledge/-components/template-wizard";
+import {
+  knowledgeKeys,
+  templateClausesOptions,
+  templateClausePreviewOptions,
+  templateDetailOptions,
+  templateDocxBufferOptions,
+  templateRecipesOptions,
+} from "@/routes/_protected.knowledge/-queries";
+
+const DocxEditor = lazy(async () => {
+  const m = await import("@stll/folio");
+  return { default: m.DocxEditor };
+});
+
+const protectedRouteApi = getRouteApi("/_protected");
+
+const TEMPLATE_STUDIO_VIEW = "template-studio";
+const MAKE_FIELD_CONTEXT_ID = "make-field";
+const WRAP_IF_CONTEXT_ID = "wrap-if";
+const WRAP_EACH_CONTEXT_ID = "wrap-each";
+const TEMPLATES_ROUTE_ID = "/_protected/knowledge/templates";
+const templateStudioTabId = (templateId: string) =>
+  `template-studio:${templateId}`;
+
+type TemplateStudioPayload = { templateId: string };
+
+/** Replay Folio's outline-jump flash (`folio-outline-flash`) on the directive
+ *  covering `pos`: scan the painted runs (`span[data-pm-start..data-pm-end]`)
+ *  for the one spanning the position and re-trigger the animation. Runs after a
+ *  scroll, so it retries across frames until the paged editor mounts the page. */
+const flashDirectiveAt = (view: EditorView, pos: number) => {
+  const container = view.dom.closest("[data-folio-scroll]");
+  if (!container) {
+    return;
+  }
+  let attempts = 0;
+  const run = () => {
+    const spans = container.querySelectorAll<HTMLElement>(
+      "span[data-pm-start][data-pm-end]",
+    );
+    for (const span of spans) {
+      const start = Number(span.dataset["pmStart"]);
+      const end = Number(span.dataset["pmEnd"]);
+      if (
+        Number.isFinite(start) &&
+        Number.isFinite(end) &&
+        start <= pos &&
+        pos < end
+      ) {
+        delete span.dataset["folioOutlineFlash"];
+        void span.offsetWidth;
+        span.dataset["folioOutlineFlash"] = "";
+        return;
+      }
+    }
+    attempts += 1;
+    if (attempts < 30) {
+      requestAnimationFrame(run);
+    }
+  };
+  requestAnimationFrame(run);
+};
+
+// ── Selection gesture popover ────────────────────────────
+
+/** Selecting prose settles for this long before the popover shows; drag and
+ *  shift+arrow selections re-arm it instead of flashing mid-gesture. */
+const GESTURE_SHOW_DELAY_MS = 150;
+/** Pause on a stable selection before asking the model to enrich the
+ *  Make-field row. The instant buttons never wait for this. */
+const GESTURE_ENRICH_DELAY_MS = 500;
+const GESTURE_POPOVER_OFFSET_PX = 8;
+/** Half the popover's widest layout (menu column + preview pane ≈ 440px), for
+ *  clamping its centered position inside the host so it never spills out. */
+const GESTURE_POPOVER_HALF_WIDTH_PX = 220;
+/** Rough rendered height of the menu + preview, for the above/below flip. */
+const GESTURE_POPOVER_EST_HEIGHT_PX = 280;
+/** At most this many existing field paths ride along in the enrichment
+ *  instruction (the suggest endpoint bounds `instructions` at 2000 chars). */
+const GESTURE_ENRICH_MAX_PATHS = 30;
+/** Joined-paths character budget inside the enrichment instruction. */
+const GESTURE_ENRICH_PATHS_MAX_CHARS = 1000;
+/** Source-phrase cap for the bilingual-mirror instruction (the suggest
+ *  endpoint bounds `instructions` at 2000 chars). */
+const MIRROR_SOURCE_MAX_CHARS = 400;
+/** Mirror-offer toasts stay long enough to rename the placeholder first. */
+const MIRROR_OFFER_TOAST_MS = 10_000;
+/** Item key a field gets when it turns repeatable: `lawyer` re-paths to
+ *  `lawyer.value` under `{{#each lawyer}}` — the engine's object-item
+ *  convention (bare `{{lawyer}}` inside its own loop never substitutes). */
+const LOOP_ITEM_KEY = "value";
+
+/** The live text selection in the document, as reported by Folio. */
+type GestureSelection = { from: number; to: number; text: string };
+
+/** A settled selection the gesture popover is anchored to; `left`/`top` are
+ *  relative to the page's document wrapper (the popover's offset parent). */
+type SelectionGesture = GestureSelection & {
+  left: number;
+  top: number;
+  placement: "above" | "below";
+};
+
+/** Session-lived answers for the selection popover, keyed by exact selection
+ *  + surrounding context + the known-paths list; bounded FIFO so it cannot
+ *  grow unchecked. */
+const gestureEnrichmentCache = new Map<string, GestureEnrichment>();
+const GESTURE_ENRICHMENT_CACHE_MAX = 100;
+
+/** Progressive AI proposal for the popover's AI row. `fieldPath` carries the
+ *  model's claim that the selection is another occurrence of an existing
+ *  field; it is re-checked against the session's fields at render/accept
+ *  time. */
+type GestureEnrichment =
+  | { status: "idle" }
+  | { status: "loading" }
+  | {
+      status: "ready";
+      label: string | undefined;
+      inputType: EditableField["inputType"] | undefined;
+      aiPrompt: string | undefined;
+      fieldPath: string | undefined;
+    };
+
+/** Tiny stable digest (a polynomial rolling hash over the joined list) so
+ *  the enrichment cache key reflects the known-paths list without storing
+ *  it verbatim. */
+const HASH_MODULUS = 2 ** 48;
+const hashStrings = (values: readonly string[]): string => {
+  let hash = 5381;
+  for (const char of values.join("\u0000")) {
+    hash = (hash * 31 + (char.codePointAt(0) ?? 0)) % HASH_MODULUS;
+  }
+  return hash.toString(36);
+};
+
+/** The session's field paths as they ride along in the enrichment
+ *  instruction: capped in count and joined length. */
+const enrichmentKnownPaths = (fields: readonly StudioField[]): string[] => {
+  const paths: string[] = [];
+  let budget = GESTURE_ENRICH_PATHS_MAX_CHARS;
+  for (const field of fields.slice(0, GESTURE_ENRICH_MAX_PATHS)) {
+    budget -= field.path.length + 2;
+    if (budget < 0) {
+      break;
+    }
+    paths.push(field.path);
+  }
+  return paths;
+};
+
+/**
+ * Template Studio page: the document (Folio) fills the surface, with a slim
+ * action bar above it. The whole-template / per-field settings live in a single
+ * tab in the global right-side Inspector (registered below), so the document
+ * gets the full width. The page seeds a module-level session store the inspector
+ * tab reads from, and opens/closes that tab over its own lifetime. Field
+ * metadata lives in the manifest; on save the edited manifest is re-embedded
+ * (/document) and the bytes stored as a new version.
+ */
+export const TemplateStudioPage = ({
+  templateId,
+  presignedUrl,
+  fileName,
+  manifest,
+  name,
+  metaLabel,
+}: {
+  templateId: string;
+  presignedUrl: string;
+  fileName: string;
+  manifest: unknown;
+  /** Template name, used as the inspector tab label (rename lives there too). */
+  name: string;
+  /** Field-count + date summary line. */
+  metaLabel: string;
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const editorRef = useRef<DocxEditorRef>(null);
+  const editorViewRef = useRef<EditorView | null>(null);
+  const { containerRef, fitZoom } = useFitToWidth();
+
+  const init = useTemplateStudioStore((s) => s.init);
+  const reset = useTemplateStudioStore((s) => s.reset);
+  const setSelected = useTemplateStudioStore((s) => s.setSelected);
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const markDirty = useTemplateStudioStore((s) => s.markDirty);
+  const markSaved = useTemplateStudioStore((s) => s.markSaved);
+  const openView = useInspectorStore((s) => s.openView);
+  const closeTab = useInspectorStore((s) => s.closeTab);
+
+  const [hasSelection, setHasSelection] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [showDirectives, setShowDirectives] = useState(true);
+  // Latest fill-preview values; re-dispatched when the eye toggles modes
+  // (eye on = orange preview accents, eye off = plain final-looking text).
+  const fillPreviewRef = useRef<Record<string, TemplatePreviewValue> | null>(
+    null,
+  );
+  // Reactive twin of editorViewRef for children that re-render on view
+  // creation (the floating AI bar needs a live prop, not a ref).
+  const [liveEditorView, setLiveEditorView] = useState<EditorView | null>(null);
+  // Right-click on selected text offers the structural gestures directly:
+  // turn it into a {{field}}, or wrap it in a condition / loop block.
+  const makeFieldContextItems = useMemo(
+    () => [
+      {
+        id: MAKE_FIELD_CONTEXT_ID,
+        label: t("templates.studio.makeField"),
+        requiresSelection: true,
+        icon: <BracesIcon size={14} />,
+      },
+      {
+        id: WRAP_IF_CONTEXT_ID,
+        label: t("templates.studio.showOnlyIf"),
+        requiresSelection: true,
+        icon: <SplitIcon size={14} />,
+      },
+      {
+        id: WRAP_EACH_CONTEXT_ID,
+        label: t("templates.studio.repeatForEach"),
+        requiresSelection: true,
+        icon: <RepeatIcon size={14} />,
+      },
+    ],
+    [t],
+  );
+
+  const getEditorView = useCallback(() => editorViewRef.current, []);
+  // Folio creates the editing PM view lazily (on first interaction), so a
+  // freshly opened template has no view until something forces it. Resolve
+  // it asynchronously: ensure, then poll a few frames before giving up, so
+  // the chat apply path doesn't report "document not editable" on a doc the
+  // user never clicked into.
+  const awaitEditorView = useCallback(async (): Promise<EditorView | null> => {
+    if (editorViewRef.current) {
+      return editorViewRef.current;
+    }
+    editorRef.current?.ensureEditorView({ focus: false });
+    return await new Promise<EditorView | null>((resolve) => {
+      let frames = 0;
+      const poll = () => {
+        if (editorViewRef.current || frames >= 12) {
+          resolve(editorViewRef.current);
+          return;
+        }
+        frames += 1;
+        requestAnimationFrame(poll);
+      };
+      requestAnimationFrame(poll);
+    });
+  }, []);
+  const forceEditorView = useCallback(() => {
+    editorRef.current?.ensureEditorView({ focus: false });
+  }, []);
+
+  // The document actions render in the Studio's inspector tab (its top row),
+  // not in a page toolbar — register them + the UI state they reflect. The ref
+  // indirection keeps the registered closures stable while handlers re-create
+  // per render.
+  const actionsRef = useRef<StudioActions | null>(null);
+  const setActions = useTemplateStudioStore((s) => s.setActions);
+  const patchUi = useTemplateStudioStore((s) => s.patchUi);
+  useMountEffect(() => {
+    setActions({
+      toggleDirectives: () => actionsRef.current?.toggleDirectives(),
+      insertField: () => actionsRef.current?.insertField(),
+      insertCondition: () => actionsRef.current?.insertCondition(),
+      insertLoop: () => actionsRef.current?.insertLoop(),
+      insertClause: () => actionsRef.current?.insertClause(),
+      insertClauseSlot: (slotName) =>
+        actionsRef.current?.insertClauseSlot(slotName),
+      insertText: (text) => actionsRef.current?.insertText(text),
+      isCaretInLoop: () => actionsRef.current?.isCaretInLoop() ?? false,
+      makeField: () => actionsRef.current?.makeField(),
+      save: async () => (await actionsRef.current?.save()) ?? false,
+      renameFieldPath: (oldPath, newPath) =>
+        actionsRef.current?.renameFieldPath(oldPath, newPath) ?? false,
+      rewriteConditionExpr: (next) =>
+        actionsRef.current?.rewriteConditionExpr(next) ?? false,
+      wrapFieldInCondition: (path) =>
+        actionsRef.current?.wrapFieldInCondition(path) ?? false,
+      rewriteFieldConditionExpr: (path, next) =>
+        actionsRef.current?.rewriteFieldConditionExpr(path, next) ?? false,
+      unwrapFieldCondition: (path) =>
+        actionsRef.current?.unwrapFieldCondition(path) ?? false,
+      deselect: () => actionsRef.current?.deselect(),
+      focusAdjacentField: (direction) =>
+        actionsRef.current?.focusAdjacentField(direction),
+      focusField: (path) => actionsRef.current?.focusField(path),
+      focusPosition: (pos) => actionsRef.current?.focusPosition(pos),
+      setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
+      insertExistingField: (path, formatKey) =>
+        actionsRef.current?.insertExistingField(path, formatKey),
+      deleteField: (path) => actionsRef.current?.deleteField(path),
+      insertRecipe: (definition) =>
+        actionsRef.current?.insertRecipe(definition),
+      setFieldRepeatable: (path, repeatable) =>
+        actionsRef.current?.setFieldRepeatable(path, repeatable) ?? false,
+    });
+    return () => setActions(null);
+  });
+  useExternalSyncEffect(() => {
+    patchUi({ metaLabel });
+  }, [patchUi, metaLabel]);
+  useExternalSyncEffect(() => {
+    patchUi({ showDirectives });
+  }, [patchUi, showDirectives]);
+  useExternalSyncEffect(() => {
+    patchUi({ hasSelection });
+  }, [patchUi, hasSelection]);
+  useExternalSyncEffect(() => {
+    patchUi({ isSaving });
+  }, [patchUi, isSaving]);
+
+  const {
+    data: loadedBuffer,
+    isLoading,
+    isError,
+  } = useQuery(
+    templateDocxBufferOptions(activeOrganizationId, templateId, presignedUrl),
+  );
+  const [docBuffer, setDocBuffer] = useState<ArrayBuffer | null>(null);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- latches the docx buffer from the query once and freezes it so a later refetch can't re-initialize the editor mid-edit; driven by async query state, not a single setter call-site, so it cannot move into a handler
+  useEffect(() => {
+    if (loadedBuffer && docBuffer === null) {
+      setDocBuffer(loadedBuffer);
+    }
+  }, [loadedBuffer, docBuffer]);
+
+  // Seed the shared session from the manifest and open the Fields/Clauses/
+  // History tab in the global inspector; tear both down when the page unmounts
+  // (leaving the studio). Keyed on templateId so editing the manifest in the
+  // tab doesn't re-seed and discard in-progress edits.
+  useExternalSyncEffect(() => {
+    init({
+      templateId,
+      fields: parseFields(manifest),
+    });
+    openView({
+      type: TEMPLATE_STUDIO_VIEW,
+      id: templateStudioTabId(templateId),
+      label: name,
+      payload: { templateId },
+      ownerRouteId: TEMPLATES_ROUTE_ID,
+    });
+    return () => {
+      closeTab(templateStudioTabId(templateId));
+      reset(templateId);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- seed once per template; the manifest is the fixed source doc for this templateId and re-seeding would discard edits made in the inspector tab.
+  }, [templateId]);
+
+  // The eye toggles the preview between accented and plain rendering.
+  useExternalSyncEffect(() => {
+    const view = editorViewRef.current;
+    const values = fillPreviewRef.current;
+    if (!view || values === null) {
+      return;
+    }
+    setTemplatePreviewValues(view, {
+      values,
+      mode: showDirectives ? "highlighted" : "plain",
+    });
+  }, [showDirectives]);
+
+  // Warn before a tab close / hard navigation while there are unsaved edits.
+  useMountEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (useTemplateStudioStore.getState().isDirty) {
+        event.preventDefault();
+      }
+    };
+    window.addEventListener("beforeunload", onBeforeUnload);
+    return () => window.removeEventListener("beforeunload", onBeforeUnload);
+  });
+
+  // Folio defers creating the ProseMirror view until first interaction, so
+  // onEditorViewReady never fires and the selection->inspector binding can't
+  // read directives. Force the view once the document is loaded (the editor
+  // mounts lazily, so poll the ref until it's available).
+  useExternalSyncEffect(() => {
+    if (!docBuffer) {
+      return undefined;
+    }
+    let raf = 0;
+    const ensure = () => {
+      if (editorRef.current) {
+        editorRef.current.ensureEditorView({ focus: false });
+      } else {
+        raf = requestAnimationFrame(ensure);
+      }
+    };
+    ensure();
+    return () => cancelAnimationFrame(raf);
+  }, [docBuffer]);
+
+  const setOutline = useTemplateStudioStore((s) => s.setOutline);
+
+  // Map the editor's caret to the directive it sits in, so the inspector tab
+  // knows which face to show. Reads the live plugin state via the captured
+  // view; the outline rebuild rides along (same scan, fires on every edit).
+  const syncSelection = useCallback(() => {
+    const view = editorViewRef.current;
+    if (!view) {
+      setSelected(null);
+      return;
+    }
+    const directives = getTemplateDirectives(view.state);
+    const head = view.state.selection.from;
+    const covering = directives.find(
+      (range) => head >= range.from && head <= range.to,
+    );
+    // Clicking plain text keeps the current face open — mid-configuration
+    // clicks into the document (selecting text to copy into a field's
+    // settings) must not hide the work in progress. Only landing in another
+    // marker switches; the face's back chevron leaves deliberately.
+    if (covering !== undefined) {
+      setSelected(covering);
+    } else {
+      // Refresh a stale range for the still-shown directive (its position
+      // may have shifted with edits) without dropping the face.
+      const current = useTemplateStudioStore.getState().selected;
+      if (current !== null) {
+        const samePath = directives.find(
+          (range) => range.kind === current.kind && range.expr === current.expr,
+        );
+        setSelected(samePath ?? null);
+      }
+    }
+    setOutline(buildOutline(directives));
+  }, [setSelected, setOutline]);
+
+  // ── Bilingual mirroring ──────────────────────────────────
+  // A structural gesture inside a table cell with exactly one text-bearing
+  // sibling cell (two-column bilingual documents) offers repeating the
+  // gesture on the parallel cell. Never silent: a field mirror lands as an
+  // accept/reject in-document suggestion, a block mirror as a toast action.
+
+  /** Bilingual mirror for Make field: ask the model for the EXACT verbatim
+   *  substring of the parallel cell that corresponds to the source phrase,
+   *  then queue an accept/reject in-document suggestion replacing it with
+   *  the same `{{path}}` marker. No confident verbatim hit, no proposal. */
+  const proposeFieldMirror = async ({
+    path,
+    sourceText,
+    sibling,
+  }: {
+    path: string;
+    sourceText: string;
+    sibling: SiblingCell;
+  }) => {
+    const phrase = sourceText.slice(0, MIRROR_SOURCE_MAX_CHARS);
+    const response = await api.templates["suggest-fields"].post({
+      text: sibling.text,
+      instructions:
+        `This text is the parallel-language twin of a clause in which the ` +
+        `exact phrase "${phrase}" became the field {{${path}}}. Return ` +
+        `exactly ONE suggestion: fieldPath must be "${path}" and ` +
+        `literalText must be the EXACT verbatim substring of this text ` +
+        `that corresponds to that phrase. If there is no clear ` +
+        `correspondence, return no suggestions.`,
+    });
+    if (response.error) {
+      return;
+    }
+    const literal = response.data.suggestions.at(0)?.literalText ?? "";
+    // Anchor only on a verbatim hit inside the sibling cell that is not
+    // itself marker text; anything else means no confident match.
+    if (
+      literal === "" ||
+      literal.includes("{{") ||
+      literal.includes("}}") ||
+      !sibling.text.includes(literal)
+    ) {
+      return;
+    }
+    const { fields, enqueueMirrorRequests } = useTemplateStudioStore.getState();
+    const field =
+      fields.find((f) => f.path === path) ?? defaultStudioField(path);
+    enqueueMirrorRequests([
+      {
+        spec: {
+          id: `mirror-field-${path}`,
+          literalText: literal,
+          suggestedText: `{{${path}}}`,
+          topic: path,
+          rationale: t("templates.studio.mirrorFieldRationale"),
+          scopeText: sibling.text,
+          display: {
+            valueKind: inputTypeValueKind(field.inputType),
+            filledBy: filledByForFieldMeta({ path, aiPrompt: field.aiPrompt }),
+          },
+        },
+        onAccepted: () => {
+          // One field now fills two languages, so AI adapts the wording
+          // per occurrence — unless the value is structural (lookup /
+          // formula / composite) or not prose (no letters: IDs, amounts).
+          const current = useTemplateStudioStore
+            .getState()
+            .fields.find((f) => f.path === path);
+          if (current === undefined || current.aiAdapt) {
+            return;
+          }
+          const structural =
+            current.lookup !== undefined ||
+            current.formula !== undefined ||
+            current.parts !== undefined;
+          if (structural || !/\p{L}/u.test(sourceText)) {
+            return;
+          }
+          upsertField(path, { aiAdapt: true });
+        },
+      },
+    ]);
+  };
+
+  // The hero gesture: turn the current text selection into a `{{field}}`,
+  // deriving a unique field path from the selected text and registering it in
+  // the session (the dispatched selection change re-runs syncSelection).
+  // Returns the created path so callers can apply extra config on top.
+  const makeField = (range?: { from: number; to: number }): string | null => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return null;
+    }
+    const { from, to } = range ?? view.state.selection;
+    if (from === to) {
+      return null;
+    }
+    const text = view.state.doc.textBetween(from, to, " ");
+    // Detect the parallel cell before the marker insert shifts positions.
+    const sibling = findSiblingCell(view.state, from);
+    const base = slugify(text);
+    const existing = useTemplateStudioStore.getState().fields;
+    let path = base;
+    for (let n = 2; existing.some((f) => f.path === path); n++) {
+      path = `${base}_${n}`;
+    }
+    view.dispatch(
+      view.state.tr.insertText(`{{${path}}}`, from, to).scrollIntoView(),
+    );
+    view.focus();
+    upsertField(path, {});
+    if (sibling !== null) {
+      void proposeFieldMirror({ path, sourceText: text, sibling });
+    }
+    return path;
+  };
+
+  // Folio creates its editable PM view lazily (on first focus), so the captured
+  // ref can be null if the user opens the Insert menu without clicking into the
+  // document first. Ensure + focus the view, then run the insert (next frame if
+  // it had to be created).
+  const withEditorView = (perform: (view: EditorView) => void) => {
+    if (editorViewRef.current) {
+      perform(editorViewRef.current);
+      return;
+    }
+    editorRef.current?.ensureEditorView({ focus: true });
+    requestAnimationFrame(() => {
+      if (editorViewRef.current) {
+        perform(editorViewRef.current);
+      }
+    });
+  };
+
+  const insertInline = (text: string) =>
+    withEditorView((view) => {
+      const { from, to } = view.state.selection;
+      // Inserting inside an existing {{marker}} would nest markers and break
+      // the grammar. Strict interior overlap only: a caret parked at a
+      // marker's edge is a legitimate insertion point.
+      const intersects = getTemplateDirectives(view.state).some(
+        (range) => from < range.to && to > range.from,
+      );
+      if (intersects) {
+        stellaToast.add({
+          type: "error",
+          title: t("templates.studio.noNestedMarkers"),
+        });
+        return;
+      }
+      view.dispatch(view.state.tr.insertText(text, from, to).scrollIntoView());
+      view.focus();
+      markDirty();
+    });
+
+  // Replace the selection (or insert at the caret) with an existing field's
+  // marker; `range` pins a captured selection (the gesture popover's) so a
+  // click can never target a drifted live selection.
+  const insertExistingFieldAt = (
+    path: string,
+    options?: {
+      range?: { from: number; to: number } | undefined;
+      formatKey?: string | undefined;
+    },
+  ) =>
+    withEditorView((view) => {
+      const { from, to } = options?.range ?? view.state.selection;
+      // A lookup field's non-default output is addressed by `{{path.key}}`;
+      // the bare `{{path}}` renders the default (first) format.
+      const marker =
+        options?.formatKey === undefined
+          ? `{{${path}}}`
+          : `{{${path}.${options.formatKey}}}`;
+      view.dispatch(
+        view.state.tr.insertText(marker, from, to).scrollIntoView(),
+      );
+      view.focus();
+      markDirty();
+      if (from !== to) {
+        // Replacing concrete text with a reused field means this spot's
+        // wording may need to differ (declension); let AI fit it.
+        const field = useTemplateStudioStore
+          .getState()
+          .fields.find((f) => f.path === path);
+        if (field && field.aiPrompt === undefined && !field.aiAdapt) {
+          upsertField(path, { aiAdapt: true });
+        }
+      }
+    });
+
+  // Block directives must occupy their own paragraph (the fill engine anchors
+  // them line-by-line). With a selection, wrap the paragraphs it covers in
+  // opener/closer; with a caret, insert opener/body/closer after the current
+  // paragraph. Either way the placeholder name ends up selected, so typing
+  // renames it immediately.
+  const insertOrWrapBlock = (
+    open: string,
+    close: string,
+    placeholder: string,
+    range?: { from: number; to: number },
+    allowInline = false,
+  ) =>
+    withEditorView((view) => {
+      const { state } = view;
+      const paragraph = state.schema.nodes["paragraph"];
+      if (!paragraph) {
+        return;
+      }
+      const para = (text: string) => markerParagraph(state, paragraph, text);
+      const selectPlaceholder = (tr: Transaction, openStart: number) => {
+        const namePos = openStart + 1 + open.indexOf(placeholder);
+        return tr.setSelection(
+          TextSelection.create(tr.doc, namePos, namePos + placeholder.length),
+        );
+      };
+      const { from, to } = range ?? state.selection;
+      try {
+        // Inline condition: a partial selection inside one paragraph wraps the
+        // selected text in inline {{#if}}…{{/if}} markers (the fill engine
+        // resolves them mid-paragraph), instead of promoting whole paragraphs.
+        if (allowInline && from !== to) {
+          const $from = state.doc.resolve(from);
+          const $to = state.doc.resolve(to);
+          const wholeParagraph =
+            $from.parentOffset === 0 &&
+            $to.parentOffset === $to.parent.content.size;
+          if ($from.sameParent($to) && !wholeParagraph) {
+            const tr = state.tr.insertText(close, to).insertText(open, from);
+            const namePos = from + open.indexOf(placeholder);
+            view.dispatch(
+              tr
+                .setSelection(
+                  TextSelection.create(
+                    tr.doc,
+                    namePos,
+                    namePos + placeholder.length,
+                  ),
+                )
+                .scrollIntoView(),
+            );
+            view.focus();
+            markDirty();
+            return;
+          }
+        }
+        if (from === to) {
+          const $from = state.doc.resolve(from);
+          const pos =
+            $from.depth >= 1
+              ? $from.after(paragraphDepth($from, paragraph))
+              : state.doc.content.size;
+          view.dispatch(
+            selectPlaceholder(
+              state.tr.insert(pos, [para(open), para(""), para(close)]),
+              pos,
+            ).scrollIntoView(),
+          );
+        } else {
+          const $from = state.doc.resolve(from);
+          const $to = state.doc.resolve(to);
+          const start =
+            $from.depth >= 1
+              ? $from.before(paragraphDepth($from, paragraph))
+              : 0;
+          const end =
+            $to.depth >= 1
+              ? $to.after(paragraphDepth($to, paragraph))
+              : state.doc.content.size;
+          const tr = state.tr
+            .insert(end, para(close))
+            .insert(start, para(open));
+          view.dispatch(selectPlaceholder(tr, start).scrollIntoView());
+        }
+        view.focus();
+        markDirty();
+      } catch {
+        // Selection wasn't in an insertable block context; ignore.
+      }
+    });
+
+  // Insert a fresh, uniquely-named field at the cursor and register it so it
+  // shows in the Fields list right away (rename it there).
+  const insertField = () => {
+    const existing = useTemplateStudioStore.getState().fields;
+    let path = "field";
+    for (let n = 2; existing.some((f) => f.path === path); n++) {
+      path = `field_${n}`;
+    }
+    insertInline(`{{${path}}}`);
+    upsertField(path, {});
+  };
+
+  const insertCondition = (range?: { from: number; to: number }) =>
+    insertOrWrapBlock("{{#if condition}}", "{{/if}}", "condition", range, true);
+  const insertLoop = (range?: { from: number; to: number }) =>
+    insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range, true);
+  const insertClause = () => insertInline("{{@clause:Clause}}");
+
+  /** Explicit-click block mirror: wrap the parallel cell's paragraphs in
+   *  the same block. The opener's live expression is read at click time via
+   *  the synced selected directive (the user typically renames the
+   *  placeholder before clicking), so the mirror uses the final name. */
+  const applyBlockMirror = (kind: "if" | "each") => {
+    const view = editorViewRef.current;
+    const { selected } = useTemplateStudioStore.getState();
+    const expr = selected?.expr.trim() ?? "";
+    if (!view || !selected || selected.kind !== kind || expr === "") {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
+    }
+    const sibling = findSiblingCell(view.state, selected.from);
+    const range = sibling === null ? null : siblingWrapRange(sibling);
+    if (range === null) {
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      return;
+    }
+    if (kind === "if") {
+      insertOrWrapBlock(`{{#if ${expr}}}`, "{{/if}}", expr, range, true);
+    } else {
+      insertOrWrapBlock(`{{#each ${expr}}}`, "{{/each}}", expr, range, true);
+    }
+  };
+
+  const offerBlockMirror = (kind: "if" | "each") => {
+    stellaToast.add({
+      title: t("templates.studio.mirrorBlockOffer"),
+      type: "info",
+      timeout: MIRROR_OFFER_TOAST_MS,
+      action: {
+        label: t("templates.studio.mirrorBlockAction"),
+        onClick: () => applyBlockMirror(kind),
+      },
+    });
+  };
+
+  /** Wrap-in-condition/loop with the bilingual-mirror offer on top: detect
+   *  the parallel cell before the wrap shifts positions, then toast. */
+  const wrapBlockWithMirrorOffer = (
+    kind: "if" | "each",
+    range?: { from: number; to: number },
+  ) => {
+    const view = editorViewRef.current;
+    const anchor = range ?? view?.state.selection;
+    const sibling =
+      view && anchor !== undefined && anchor.from !== anchor.to
+        ? findSiblingCell(view.state, anchor.from)
+        : null;
+    if (kind === "if") {
+      insertCondition(range);
+    } else {
+      insertLoop(range);
+    }
+    if (sibling !== null) {
+      offerBlockMirror(kind);
+    }
+  };
+
+  // ── Selection → gesture popover ──────────────────────────
+  // Selecting plain prose floats the structural gestures next to the
+  // selection: Make field leads, wrap-in-condition / wrap-in-loop follow.
+  // After the selection has been stable for a moment, the model proposes a
+  // configuration for the would-be field and the Make-field row enriches;
+  // the buttons themselves never wait for it.
+  const overlayHostRef = useRef<HTMLDivElement | null>(null);
+  const [gesture, setGestureState] = useState<SelectionGesture | null>(null);
+  // Mirror for handlers that fire outside the render cycle (debounced
+  // callbacks, in-flight enrichment) and need the freshest value.
+  const gestureRef = useRef<SelectionGesture | null>(null);
+  const setGesture = (next: SelectionGesture | null) => {
+    gestureRef.current = next;
+    setGestureState(next);
+  };
+  const [enrichment, setEnrichment] = useState<GestureEnrichment>({
+    status: "idle",
+  });
+  // Bumped on every hide/new fetch so stale enrichment responses are dropped.
+  const enrichSeqRef = useRef(0);
+
+  // useCallback (not React Compiler memoization) because the dismiss-listener
+  // effect depends on it.
+  const hideGesture = useCallback(() => {
+    enrichSeqRef.current++;
+    gestureRef.current = null;
+    setGestureState(null);
+    setEnrichment({ status: "idle" });
+  }, []);
+
+  const showGesture = useDebouncedCallback((sel: GestureSelection) => {
+    const view = editorViewRef.current;
+    const host = overlayHostRef.current;
+    if (!view || !host) {
+      return;
+    }
+    const { from, to } = view.state.selection;
+    if (from === to || from !== sel.from || to !== sel.to) {
+      return;
+    }
+    // Only for selections made in the document itself: while the AI chat bar
+    // (or any surface outside the editor) holds focus, stay away.
+    const scrollContainer = view.dom.closest("[data-folio-scroll]");
+    if (!scrollContainer || !scrollContainer.contains(document.activeElement)) {
+      return;
+    }
+    // Existing {{markers}} have their own inspector faces; the gesture
+    // popover is only for plain prose.
+    const overlapsDirective = getTemplateDirectives(view.state).some(
+      (range) => range.from < to && range.to > from,
+    );
+    if (overlapsDirective) {
+      return;
+    }
+    // Folio paints the selection highlights asynchronously after the
+    // selection change; retry across a few frames until they exist.
+    let attempts = 0;
+    const read = () => {
+      const liveView = editorViewRef.current;
+      if (!liveView) {
+        return;
+      }
+      const live = liveView.state.selection;
+      if (live.from !== sel.from || live.to !== sel.to) {
+        return;
+      }
+      const rect = getFolioSelectionViewportRect(liveView);
+      if (!rect) {
+        attempts++;
+        if (attempts < 10) {
+          requestAnimationFrame(read);
+        }
+        return;
+      }
+      const hostRect = host.getBoundingClientRect();
+      const fitsBelow =
+        rect.bottom -
+          hostRect.top +
+          GESTURE_POPOVER_OFFSET_PX +
+          GESTURE_POPOVER_EST_HEIGHT_PX <
+        host.clientHeight;
+      const placement = fitsBelow ? "below" : "above";
+      const center = rect.left + rect.width / 2 - hostRect.left;
+      setGesture({
+        ...sel,
+        left: Math.min(
+          Math.max(center, GESTURE_POPOVER_HALF_WIDTH_PX),
+          Math.max(
+            GESTURE_POPOVER_HALF_WIDTH_PX,
+            host.clientWidth - GESTURE_POPOVER_HALF_WIDTH_PX,
+          ),
+        ),
+        top:
+          placement === "below"
+            ? rect.bottom - hostRect.top
+            : rect.top - hostRect.top,
+        placement,
+      });
+    };
+    requestAnimationFrame(read);
+  }, GESTURE_SHOW_DELAY_MS);
+
+  const fetchGestureSuggestion = async (sel: GestureSelection) => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return;
+    }
+    const seq = ++enrichSeqRef.current;
+    const contextText = paragraphsAroundSelection(view.state, sel.from);
+    const knownPaths = enrichmentKnownPaths(
+      useTemplateStudioStore.getState().fields,
+    );
+    // Re-selecting the same text in the same context is common (the popover
+    // dismisses on any click); serve the model's previous answer instead of
+    // paying for it again. The known-paths list changes rarely; its hash
+    // keys the existing-field part of the answer.
+    const cacheKey = `${sel.text}\u0000${contextText}\u0000${hashStrings(knownPaths)}`;
+    const cached = gestureEnrichmentCache.get(cacheKey);
+    if (cached !== undefined) {
+      setEnrichment(cached);
+      return;
+    }
+    setEnrichment({ status: "loading" });
+    const existingFieldsClause =
+      knownPaths.length === 0
+        ? ""
+        : ` The template already has these fields: ${knownPaths.join(", ")}.` +
+          ` If the selection is just another occurrence of one of them, set` +
+          ` fieldPath to that exact existing path instead of inventing a` +
+          ` new field.`;
+    const response = await api.templates["suggest-fields"].post({
+      text: contextText,
+      instructions:
+        `The user selected this exact text: "${sel.text}". Propose exactly ` +
+        `ONE field for that exact selection (literalText must equal it): ` +
+        `its label and input type, plus an aiPrompt only when the selection ` +
+        `is free-form prose that AI should draft at fill ` +
+        `time.${existingFieldsClause}`,
+    });
+    if (seq !== enrichSeqRef.current) {
+      return;
+    }
+    const match = response.error ? null : response.data.suggestions.at(0);
+    if (!match) {
+      setEnrichment({ status: "idle" });
+      return;
+    }
+    const ready: GestureEnrichment = {
+      status: "ready",
+      label: match.label,
+      inputType:
+        match.inputType !== undefined && isInputType(match.inputType)
+          ? match.inputType
+          : undefined,
+      aiPrompt: match.aiPrompt,
+      fieldPath: match.fieldPath,
+    };
+    if (gestureEnrichmentCache.size >= GESTURE_ENRICHMENT_CACHE_MAX) {
+      const oldest = gestureEnrichmentCache.keys().next().value;
+      if (oldest !== undefined) {
+        gestureEnrichmentCache.delete(oldest);
+      }
+    }
+    gestureEnrichmentCache.set(cacheKey, ready);
+    setEnrichment(ready);
+  };
+
+  const enrichGesture = useDebouncedCallback((sel: GestureSelection) => {
+    const shown = gestureRef.current;
+    if (shown === null || shown.from !== sel.from || shown.to !== sel.to) {
+      return;
+    }
+    void fetchGestureSuggestion(sel);
+  }, GESTURE_ENRICH_DELAY_MS);
+
+  const onGestureSelectionChange = (sel: GestureSelection) => {
+    if (sel.text.trim() === "") {
+      showGesture.cancel();
+      enrichGesture.cancel();
+      hideGesture();
+      return;
+    }
+    const shown = gestureRef.current;
+    if (shown !== null && (shown.from !== sel.from || shown.to !== sel.to)) {
+      hideGesture();
+    }
+    showGesture(sel);
+    enrichGesture(sel);
+  };
+
+  const dismissGesture = () => {
+    showGesture.cancel();
+    enrichGesture.cancel();
+    hideGesture();
+  };
+
+  /** The popover's "Existing field…" list: reuse a field over the captured
+   *  selection. */
+  const applyExistingFieldGesture = (path: string) => {
+    const shown = gestureRef.current;
+    if (shown === null) {
+      return;
+    }
+    insertExistingFieldAt(path, {
+      range: { from: shown.from, to: shown.to },
+    });
+    dismissGesture();
+  };
+
+  /** Wrap the captured selection in an existing condition (reuse), referencing
+   *  it by name so the gate shares the condition-field's single source. */
+  const applyExistingConditionGesture = (conditionName: string) => {
+    const shown = gestureRef.current;
+    if (shown === null) {
+      return;
+    }
+    insertOrWrapBlock(
+      `{{#if ${conditionName}}}`,
+      "{{/if}}",
+      conditionName,
+      { from: shown.from, to: shown.to },
+      true,
+    );
+    dismissGesture();
+  };
+
+  /** Accept the AI proposal row: when the model recognized the selection as
+   *  another occurrence of an existing field, reuse that field; otherwise
+   *  make a new field carrying the proposed configuration. */
+  const applyAiGesture = () => {
+    const shown = gestureRef.current;
+    if (shown === null || enrichment.status !== "ready") {
+      return;
+    }
+    const range = { from: shown.from, to: shown.to };
+    const existing =
+      enrichment.fieldPath === undefined
+        ? undefined
+        : useTemplateStudioStore
+            .getState()
+            .fields.find((f) => f.path === enrichment.fieldPath);
+    if (existing !== undefined) {
+      insertExistingFieldAt(existing.path, { range });
+    } else {
+      const path = makeField(range);
+      if (path !== null) {
+        upsertField(path, {
+          ...(enrichment.label !== undefined && enrichment.label !== ""
+            ? { label: enrichment.label }
+            : {}),
+          ...(enrichment.inputType !== undefined
+            ? { inputType: enrichment.inputType }
+            : {}),
+          ...(enrichment.aiPrompt !== undefined
+            ? { aiPrompt: enrichment.aiPrompt }
+            : {}),
+        });
+      }
+    }
+    dismissGesture();
+  };
+
+  // Each button acts on the selection captured when the popover anchored, so
+  // a click can never target a drifted live selection.
+  const applyGesture = (kind: "field" | "if" | "each" | "clause") => {
+    const shown = gestureRef.current;
+    if (shown === null) {
+      return;
+    }
+    const range = { from: shown.from, to: shown.to };
+    if (kind === "field") {
+      // The plain row is deliberately generic; the AI proposal accepts via
+      // its own row below the separator.
+      makeField(range);
+    } else if (kind === "clause") {
+      withEditorView((view) => {
+        const slotName = slugify(
+          view.state.doc.textBetween(range.from, range.to, " "),
+        );
+        view.dispatch(
+          view.state.tr
+            .insertText(`{{@clause:${slotName}}}`, range.from, range.to)
+            .scrollIntoView(),
+        );
+        view.focus();
+        markDirty();
+      });
+    } else if (kind === "if") {
+      wrapBlockWithMirrorOffer("if", range);
+    } else {
+      wrapBlockWithMirrorOffer("each", range);
+    }
+    dismissGesture();
+  };
+
+  // Escape, any scroll, and the (custom) context menu all dismiss the
+  // popover: the selection survives, only the floating affordance leaves.
+  const gestureShown = gesture !== null;
+  useExternalSyncEffect(() => {
+    if (!gestureShown) {
+      return undefined;
+    }
+    const host = overlayHostRef.current;
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        hideGesture();
+      }
+    };
+    const dismiss = () => hideGesture();
+    window.addEventListener("keydown", onKeyDown);
+    host?.addEventListener("scroll", dismiss, { capture: true });
+    host?.addEventListener("contextmenu", dismiss, { capture: true });
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      host?.removeEventListener("scroll", dismiss, { capture: true });
+      host?.removeEventListener("contextmenu", dismiss, { capture: true });
+    };
+  }, [gestureShown, hideGesture]);
+
+  useExternalSyncEffect(
+    () => () => {
+      showGesture.cancel();
+      enrichGesture.cancel();
+    },
+    [showGesture, enrichGesture],
+  );
+
+  // Loop recipes mirror insertOrWrapBlock's caret branch: the opener, one
+  // marker paragraph per field, and the closer land after the current
+  // paragraph (block directives must occupy their own paragraph).
+  const insertRecipeLoopBlock = (loopPath: string, fieldPaths: string[]) =>
+    withEditorView((view) => {
+      const { state } = view;
+      const paragraph = state.schema.nodes["paragraph"];
+      if (!paragraph) {
+        return;
+      }
+      const para = (text: string) => markerParagraph(state, paragraph, text);
+      const { from } = state.selection;
+      const $from = state.doc.resolve(from);
+      const pos =
+        $from.depth >= 1
+          ? $from.after(paragraphDepth($from, paragraph))
+          : state.doc.content.size;
+      try {
+        view.dispatch(
+          state.tr
+            .insert(pos, [
+              para(`{{#each ${loopPath}}}`),
+              ...fieldPaths.map((path) => para(`{{${path}}}`)),
+              para("{{/each}}"),
+            ])
+            .scrollIntoView(),
+        );
+        view.focus();
+        markDirty();
+      } catch {
+        // Selection wasn't in an insertable block context; ignore.
+      }
+    });
+
+  const insertRecipe = (definition: TemplateRecipeDefinition) => {
+    const existing = useTemplateStudioStore.getState().fields;
+    const prepared = prepareRecipeInsert(definition, existing);
+    if (prepared.loopPath !== null) {
+      insertRecipeLoopBlock(
+        prepared.loopPath,
+        prepared.fields.map((f) => f.path),
+      );
+    } else {
+      insertInline(prepared.fields.map((f) => `{{${f.path}}}`).join(" "));
+    }
+    for (const field of prepared.fields) {
+      upsertField(field.path, field.config);
+    }
+  };
+
+  const handleSave = async (): Promise<boolean> => {
+    const editor = editorRef.current;
+    if (!editor) {
+      return false;
+    }
+    setIsSaving(true);
+    try {
+      const bytes = await editor.save();
+      if (!bytes) {
+        stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+        return false;
+      }
+      const file = new File([bytes], fileName, { type: DOCX_MIME });
+
+      // Persist the edited manifest alongside the bytes in one call; the server
+      // re-embeds it (avoids a binary re-embed round-trip that Eden would parse
+      // as text and corrupt).
+      const { fields } = useTemplateStudioStore.getState();
+      const stored = await api
+        .templates({ templateId: toSafeId<"template">(templateId) })
+        .document.post({
+          file,
+          manifest: JSON.stringify(buildManifest(manifest, fields)),
+        });
+      if (stored.error) {
+        stellaToast.add({
+          title: t("templates.saveFailed"),
+          description: userErrorMessage(
+            stored.error,
+            t("common.unexpectedError"),
+          ),
+          type: "error",
+        });
+        return false;
+      }
+
+      markSaved();
+      stellaToast.add({ title: t("templates.templateSaved"), type: "success" });
+      void queryClient.invalidateQueries({
+        queryKey: knowledgeKeys.templates.all(activeOrganizationId),
+      });
+      return true;
+    } catch {
+      stellaToast.add({ title: t("templates.saveFailed"), type: "error" });
+      return false;
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  // Repeatable ON: rename the field to the loop-item convention
+  // (`lawyer` → `lawyer.value`, every marker rewritten), then wrap the first
+  // marker's containing paragraph in `{{#each lawyer}}` / `{{/each}}`. The
+  // wrap is paragraph-anchored like insertOrWrapBlock (works inside table
+  // cells) but keeps the caret in the marker so the field face stays open.
+  const makeFieldRepeatable = (path: string): boolean => {
+    const view = editorViewRef.current;
+    if (!view || path.includes(".")) {
+      return false;
+    }
+    const placed = getTemplateDirectives(view.state).some(
+      (d) => d.kind === "placeholder" && d.expr === path,
+    );
+    if (!placed) {
+      return false;
+    }
+    const fields = useTemplateStudioStore.getState().fields;
+    const itemPath = nextFreePath(`${path}.${LOOP_ITEM_KEY}`, (candidate) =>
+      fields.some((f) => f.path === candidate),
+    );
+    if (actionsRef.current?.renameFieldPath(path, itemPath) !== true) {
+      return false;
+    }
+    const { state } = view;
+    const paragraph = state.schema.nodes["paragraph"];
+    const marker = getTemplateDirectives(state)
+      .filter((d) => d.kind === "placeholder" && d.expr === itemPath)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (!paragraph || marker === undefined) {
+      return false;
+    }
+    // Inline-or-block wrap, matching conditions: an inline marker becomes an
+    // inline {{#each}} (the fill engine resolves these), a whole-paragraph
+    // marker promotes to its own opener/closer paragraphs.
+    insertOrWrapBlock(
+      `{{#each ${path}}}`,
+      "{{/each}}",
+      path,
+      { from: marker.from, to: marker.to },
+      true,
+    );
+    // The wrap moves the caret into the new opener's placeholder name; park it
+    // back inside the item marker so the field face stays open, exactly like
+    // wrapFieldInCondition does.
+    const reopened = getTemplateDirectives(view.state)
+      .filter((d) => d.kind === "placeholder" && d.expr === itemPath)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (reopened !== undefined) {
+      actionsRef.current.focusPosition(reopened.from);
+    }
+    return true;
+  };
+
+  // Repeatable OFF: delete the enclosing each's opener/closer paragraphs
+  // (only when the loop body holds nothing but this field's markers; the
+  // face disables the toggle otherwise) and re-path back to the loop's name.
+  const unmakeFieldRepeatable = (path: string): boolean => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return false;
+    }
+    // Read the loop name first and verify this field actually belongs to it;
+    // the shared remover otherwise mirrors unwrapFieldCondition's guard/delete.
+    const pair = enclosingDirectivePair(view.state, path, "each", "endeach");
+    if (pair === null) {
+      return false;
+    }
+    const loopPath = pair.opener.expr.trim();
+    if (!path.startsWith(`${loopPath}.`)) {
+      return false;
+    }
+    const result = removeEnclosingDirectiveParagraphs(path, "each", "endeach");
+    if (result === null) {
+      return false;
+    }
+    const fields = useTemplateStudioStore.getState().fields;
+    const flatPath = nextFreePath(loopPath, (candidate) =>
+      fields.some((f) => f.path === candidate),
+    );
+    return actionsRef.current?.renameFieldPath(path, flatPath) ?? false;
+  };
+
+  // Inline-wrap this field's own marker in `{{#if condition}}…{{/if}}`. The
+  // marker is text inside one paragraph, so insertCondition's inline branch
+  // wraps it in place; the field face stays open (the caret remains in the
+  // marker). The expression is set straight after via the shared condition
+  // builder, which targets the just-created enclosing block by field path.
+  const wrapFieldInCondition = (path: string): boolean => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return false;
+    }
+    const marker = getTemplateDirectives(view.state)
+      .filter((d) => d.kind === "placeholder" && d.expr === path)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (marker === undefined) {
+      return false;
+    }
+    insertCondition({ from: marker.from, to: marker.to });
+    // The wrap moves the caret into the new opener's placeholder name; park it
+    // back inside the field marker so the field face stays open. The opener
+    // adds `{{#if condition}}` (length below) before the marker's old start.
+    const reopened = getTemplateDirectives(view.state)
+      .filter((d) => d.kind === "placeholder" && d.expr === path)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (reopened !== undefined) {
+      actionsRef.current?.focusPosition(reopened.from);
+    }
+    return true;
+  };
+
+  // True when the caret sits inside an `{{#each}}…{{/each}}` body, paired by
+  // walking sorted directives with a stack. An `each` opener encloses the
+  // caret when `opener.to <= head` and its matching `endeach.from >= head`.
+  const caretInEachBlock = (state: EditorState): boolean => {
+    const head = state.selection.from;
+    const directives = getTemplateDirectives(state).toSorted(
+      (a, b) => a.from - b.from,
+    );
+    const stack: DirectiveRange[] = [];
+    for (const d of directives) {
+      if (d.kind === "each") {
+        stack.push(d);
+      } else if (d.kind === "endeach") {
+        const open = stack.pop();
+        if (open !== undefined && open.to <= head && d.from >= head) {
+          return true;
+        }
+      }
+    }
+    return false;
+  };
+
+  // The innermost opener/closer pair (e.g. `{{#if}}`/`{{/if}}` or
+  // `{{#each}}`/`{{/each}}`) that encloses this field's marker, paired by
+  // walking the sorted directives like buildOutline does. Returns null when the
+  // marker is not inside any matching block.
+  const enclosingDirectivePair = (
+    state: EditorState,
+    path: string,
+    openKind: DirectiveKind,
+    closeKind: DirectiveKind,
+  ): { opener: DirectiveRange; closer: DirectiveRange } | null => {
+    const directives = getTemplateDirectives(state).toSorted(
+      (a, b) => a.from - b.from,
+    );
+    const marker = directives.find(
+      (d) => d.kind === "placeholder" && d.expr === path,
+    );
+    if (marker === undefined) {
+      return null;
+    }
+    const stack: DirectiveRange[] = [];
+    for (const d of directives) {
+      if (d.kind === openKind) {
+        stack.push(d);
+      } else if (d.kind === closeKind) {
+        const open = stack.pop();
+        if (
+          open !== undefined &&
+          open.to <= marker.from &&
+          d.from >= marker.to
+        ) {
+          return { opener: open, closer: d };
+        }
+      }
+    }
+    return null;
+  };
+
+  // Delete the innermost opener/closer paragraphs enclosing this field's marker,
+  // shared by condition-unwrap and loop-unmake. Guarded: the block body must
+  // hold nothing but this field's markers. An inline wrap deletes just the
+  // marker text; a block wrap (its own paragraph) deletes the whole paragraph.
+  // Delete the closer first so the opener's positions stay valid. Returns the
+  // pair on success, or null on guard fail / no pair / dispatch throw.
+  const removeEnclosingDirectiveParagraphs = (
+    path: string,
+    openKind: DirectiveKind,
+    closeKind: DirectiveKind,
+  ): { opener: DirectiveRange; closer: DirectiveRange } | null => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return null;
+    }
+    const { state } = view;
+    const pair = enclosingDirectivePair(state, path, openKind, closeKind);
+    if (pair === null) {
+      return null;
+    }
+    const bodyOnlyHasThisField = getTemplateDirectives(state).every(
+      (d) =>
+        d.from < pair.opener.to ||
+        d.to > pair.closer.from ||
+        (d.kind === "placeholder" && d.expr === path),
+    );
+    if (!bodyOnlyHasThisField) {
+      return null;
+    }
+    const paragraph = state.schema.nodes["paragraph"];
+    const removalBounds = (d: DirectiveRange) => {
+      if (!d.block || !paragraph) {
+        return { from: d.from, to: d.to };
+      }
+      const $pos = state.doc.resolve(d.from);
+      if ($pos.depth < 1) {
+        return { from: d.from, to: d.to };
+      }
+      const depth = paragraphDepth($pos, paragraph);
+      return { from: $pos.before(depth), to: $pos.after(depth) };
+    };
+    const closerBounds = removalBounds(pair.closer);
+    const openerBounds = removalBounds(pair.opener);
+    try {
+      // Closer first so the opener's positions stay valid.
+      view.dispatch(
+        state.tr
+          .delete(closerBounds.from, closerBounds.to)
+          .delete(openerBounds.from, openerBounds.to),
+      );
+    } catch {
+      return null;
+    }
+    markDirty();
+    return pair;
+  };
+
+  // Rewrite the `{{#if …}}` opener of the block that encloses this field's
+  // marker (re-derived from the live document, so it works whether the block
+  // was just created by wrapFieldInCondition or already existed).
+  const rewriteFieldConditionExpr = (path: string, next: string): boolean => {
+    const view = editorViewRef.current;
+    const trimmed = next.trim();
+    if (!view || trimmed === "" || /[{}]/u.test(trimmed)) {
+      return false;
+    }
+    const pair = enclosingDirectivePair(view.state, path, "if", "endif");
+    if (pair === null) {
+      return false;
+    }
+    if (trimmed === pair.opener.expr.trim()) {
+      return true;
+    }
+    const tr = view.state.tr.insertText(
+      `{{#if ${trimmed}}}`,
+      pair.opener.from,
+      pair.opener.to,
+    );
+    // Keep the caret inside this field's marker so the field face stays open.
+    const marker = getTemplateDirectives(view.state)
+      .filter((d) => d.kind === "placeholder" && d.expr === path)
+      .toSorted((a, b) => a.from - b.from)
+      .at(0);
+    if (marker !== undefined) {
+      tr.setSelection(
+        TextSelection.near(
+          tr.doc.resolve(Math.min(marker.from + 2, tr.doc.content.size)),
+        ),
+      );
+    }
+    view.dispatch(tr);
+    markDirty();
+    return true;
+  };
+
+  // Remove the inline `{{#if …}}` / `{{/if}}` pair around this field's marker,
+  // keeping the field. Guarded: only when the block body holds nothing but
+  // this field's marker (the face disables Remove otherwise). Delete the
+  // closer first so the opener's positions stay valid.
+  const unwrapFieldCondition = (path: string): boolean => {
+    const result = removeEnclosingDirectiveParagraphs(path, "if", "endif");
+    if (result !== null) {
+      actionsRef.current?.focusField(path);
+    }
+    return result !== null;
+  };
+
+  actionsRef.current = {
+    toggleDirectives: () => setShowDirectives((v) => !v),
+    deleteField: (path) => {
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      const positional = buildPositionalText(view.state.doc);
+      const literal = `{{${path}}}`;
+      const ranges: { from: number; to: number }[] = [];
+      let idx = positional.text.indexOf(literal);
+      while (idx !== -1) {
+        ranges.push({
+          from: positional.pmPositionAt(idx),
+          to: positional.pmPositionAt(idx + literal.length - 1) + 1,
+        });
+        idx = positional.text.indexOf(literal, idx + literal.length);
+      }
+      if (ranges.length > 0) {
+        const tr = view.state.tr;
+        for (const range of ranges.toReversed()) {
+          tr.delete(range.from, range.to);
+        }
+        view.dispatch(tr);
+      }
+      useTemplateStudioStore.getState().removeField(path);
+      markDirty();
+      actionsRef.current?.deselect();
+    },
+    insertExistingField: (path, formatKey) =>
+      insertExistingFieldAt(path, { formatKey }),
+    setFieldRepeatable: (path, repeatable) =>
+      repeatable ? makeFieldRepeatable(path) : unmakeFieldRepeatable(path),
+    setFillPreview: (values) => {
+      fillPreviewRef.current = values;
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      setTemplatePreviewValues(
+        view,
+        values === null
+          ? null
+          : { values, mode: showDirectives ? "highlighted" : "plain" },
+      );
+    },
+    insertField,
+    insertCondition,
+    insertLoop,
+    insertClause,
+    insertRecipe,
+    insertClauseSlot: (slotName) => insertInline(`{{@clause:${slotName}}}`),
+    insertText: (text) => insertInline(text),
+    isCaretInLoop: () => {
+      const view = editorViewRef.current;
+      return view !== null && caretInEachBlock(view.state);
+    },
+    makeField: () => {
+      makeField();
+    },
+    save: async () => await handleSave(),
+    focusAdjacentField: (direction) => {
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      const placeholders = getTemplateDirectives(view.state)
+        .filter((d) => d.kind === "placeholder")
+        .toSorted((a, b) => a.from - b.from);
+      if (placeholders.length === 0) {
+        return;
+      }
+      // Step field-by-field, not occurrence-by-occurrence: collapse to each
+      // distinct path's FIRST occurrence (placeholders are sorted, so the first
+      // seen per path wins) and cycle through those.
+      const firstByPath = new Map<string, DirectiveRange>();
+      for (const d of placeholders) {
+        if (!firstByPath.has(d.expr)) {
+          firstByPath.set(d.expr, d);
+        }
+      }
+      const distinct = [...firstByPath.values()];
+      const head = view.state.selection.from;
+      const currentExpr = placeholders.find(
+        (d) => head >= d.from && head <= d.to,
+      )?.expr;
+      const currentIndex =
+        currentExpr === undefined
+          ? -1
+          : distinct.findIndex((d) => d.expr === currentExpr);
+      let nextIndex: number;
+      if (currentIndex === -1) {
+        nextIndex = direction > 0 ? 0 : distinct.length - 1;
+      } else {
+        nextIndex =
+          (currentIndex + direction + distinct.length) % distinct.length;
+      }
+      const target = distinct.at(nextIndex);
+      if (target) {
+        actionsRef.current?.focusPosition(target.from);
+      }
+    },
+    focusField: (path) => {
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      const target = getTemplateDirectives(view.state)
+        .filter((d) => d.kind === "placeholder" && d.expr === path)
+        .toSorted((a, b) => a.from - b.from)
+        .at(0);
+      if (target) {
+        actionsRef.current?.focusPosition(target.from);
+      }
+    },
+    focusPosition: (pos) => {
+      const view = editorViewRef.current;
+      if (!view) {
+        return;
+      }
+      const $pos = view.state.doc.resolve(
+        Math.min(pos + 2, view.state.doc.content.size),
+      );
+      view.dispatch(view.state.tr.setSelection(TextSelection.near($pos)));
+      view.focus();
+      editorRef.current?.getEditorRef()?.scrollToPosition(pos);
+      flashDirectiveAt(view, pos);
+    },
+    renameFieldPath: (oldPath, newPath) => {
+      const view = editorViewRef.current;
+      const trimmed = newPath.trim();
+      if (!view || trimmed === oldPath) {
+        return false;
+      }
+      const taken = useTemplateStudioStore
+        .getState()
+        .fields.some((f) => f.path === trimmed);
+      if (!isFieldPath(trimmed) || taken) {
+        return false;
+      }
+      // Rewrite the bare `{{oldPath}}` marker plus every keyed lookup marker
+      // `{{oldPath.<formatKey>}}` (a lookup field's non-default formats are
+      // addressed by `{{path.key}}`; the bare marker renders the default).
+      // Each rewrite carries the path replacement to apply at its range.
+      const renamed = useTemplateStudioStore
+        .getState()
+        .fields.find((f) => f.path === oldPath);
+      const literals: { literal: string; replacement: string }[] = [
+        { literal: `{{${oldPath}}}`, replacement: `{{${trimmed}}}` },
+        ...(renamed?.lookup?.formats ?? []).map((format) => ({
+          literal: `{{${oldPath}.${format.key}}}`,
+          replacement: `{{${trimmed}.${format.key}}}`,
+        })),
+      ];
+      // Last occurrence first so earlier positions stay valid while the
+      // transaction accumulates.
+      const positional = buildPositionalText(view.state.doc);
+      const ranges: { from: number; to: number; replacement: string }[] = [];
+      for (const { literal, replacement } of literals) {
+        let idx = positional.text.indexOf(literal);
+        while (idx !== -1) {
+          ranges.push({
+            from: positional.pmPositionAt(idx),
+            to: positional.pmPositionAt(idx + literal.length - 1) + 1,
+            replacement,
+          });
+          idx = positional.text.indexOf(literal, idx + literal.length);
+        }
+      }
+      ranges.sort((a, b) => a.from - b.from);
+      const first = ranges.at(0);
+      if (first !== undefined) {
+        const tr = view.state.tr;
+        for (const range of ranges.toReversed()) {
+          tr.insertText(range.replacement, range.from, range.to);
+        }
+        // Park the caret inside the first rewritten marker (its `from` is
+        // unaffected by the later-position edits above) so the selection
+        // sync re-derives the inspector face with the new path right away;
+        // without this the face keeps showing the stale path.
+        tr.setSelection(
+          TextSelection.near(
+            tr.doc.resolve(Math.min(first.from + 2, tr.doc.content.size)),
+          ),
+        ).scrollIntoView();
+        // No view.focus(): the dispatched selection refreshes the face, and
+        // keeping DOM focus in the inspector lets Tab continue through the
+        // field's form instead of jumping into the document.
+        view.dispatch(tr);
+      }
+      useTemplateStudioStore.getState().renameField(oldPath, trimmed);
+      markDirty();
+      return true;
+    },
+    rewriteConditionExpr: (next) => {
+      const view = editorViewRef.current;
+      const { selected } = useTemplateStudioStore.getState();
+      const trimmed = next.trim();
+      if (
+        !view ||
+        !selected ||
+        (selected.kind !== "if" && selected.kind !== "elseif") ||
+        trimmed === "" ||
+        /[{}]/u.test(trimmed)
+      ) {
+        return false;
+      }
+      if (trimmed === selected.expr) {
+        return true;
+      }
+      const token = selected.kind === "if" ? "#if" : "#elseif";
+      const tr = view.state.tr.insertText(
+        `{{${token} ${trimmed}}}`,
+        selected.from,
+        selected.to,
+      );
+      // Keep the caret inside the rewritten opener so the condition face
+      // stays open on the (re-scanned) directive.
+      tr.setSelection(
+        TextSelection.near(
+          tr.doc.resolve(Math.min(selected.from + 2, tr.doc.content.size)),
+        ),
+      );
+      view.dispatch(tr);
+      markDirty();
+      return true;
+    },
+    wrapFieldInCondition,
+    rewriteFieldConditionExpr,
+    unwrapFieldCondition,
+    deselect: () => {
+      const view = editorViewRef.current;
+      const { selected } = useTemplateStudioStore.getState();
+      if (view && selected) {
+        // A caret anywhere inside (or at the edge of) the marker would make
+        // syncSelection re-derive the same face; park it just past the range.
+        const pos = Math.min(selected.to + 1, view.state.doc.content.size);
+        view.dispatch(
+          view.state.tr.setSelection(
+            TextSelection.near(view.state.doc.resolve(pos), 1),
+          ),
+        );
+      }
+      setSelected(null);
+    },
+  };
+
+  if (isError) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">
+          {t("templates.previewFailed")}
+        </p>
+      </div>
+    );
+  }
+  if (isLoading || !docBuffer) {
+    return (
+      <div className="flex h-full items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex h-full min-h-0 flex-col">
+      {/* `relative` so the floating AI bar, stepper, and selection-gesture
+          popover anchor over the doc. */}
+      <div className="relative min-h-0 flex-1" ref={overlayHostRef}>
+        <div
+          className="h-full [scrollbar-gutter:stable] overflow-auto"
+          ref={containerRef}
+        >
+          <Suspense fallback={null}>
+            <DocxEditor
+              ref={editorRef}
+              autoOpenReviewSidebar={false}
+              className="h-full"
+              documentBuffer={docBuffer}
+              initialZoom={fitZoom}
+              loadingIndicator={null}
+              onChange={markDirty}
+              onEditorViewReady={(view) => {
+                // Folio re-reports null on some re-renders; keep the last live
+                // view so selection syncing doesn't lose its reference.
+                if (view) {
+                  editorViewRef.current = view;
+                  setLiveEditorView(view);
+                  setOutline(buildOutline(getTemplateDirectives(view.state)));
+                }
+              }}
+              onCustomContextAction={(id, range) => {
+                if (id === MAKE_FIELD_CONTEXT_ID) {
+                  makeField(range);
+                }
+                if (id === WRAP_IF_CONTEXT_ID) {
+                  wrapBlockWithMirrorOffer("if", range);
+                }
+                if (id === WRAP_EACH_CONTEXT_ID) {
+                  wrapBlockWithMirrorOffer("each", range);
+                }
+              }}
+              customContextMenuItems={makeFieldContextItems}
+              onSelectionChange={(state) => {
+                setHasSelection(state?.hasSelection ?? false);
+                syncSelection();
+              }}
+              onSelectionTextChange={onGestureSelectionChange}
+              showTemplateDirectives={showDirectives}
+            />
+          </Suspense>
+        </div>
+        {gesture !== null && (
+          <SelectionGesturePopover
+            enrichment={enrichment}
+            gesture={gesture}
+            onAcceptAi={applyAiGesture}
+            onInsertExisting={applyExistingFieldGesture}
+            onMakeClause={() => applyGesture("clause")}
+            onMakeField={() => applyGesture("field")}
+            onWrapEach={() => applyGesture("each")}
+            onWrapIf={() => applyGesture("if")}
+            onWrapIfExisting={applyExistingConditionGesture}
+          />
+        )}
+        <TemplateStudioChat
+          editorRef={editorRef}
+          editorView={liveEditorView}
+          awaitView={awaitEditorView}
+          ensureView={forceEditorView}
+          fileName={fileName}
+          getView={getEditorView}
+          templateId={templateId}
+        />
+      </div>
+    </div>
+  );
+};
+
+// ── Global inspector tab ─────────────────────────────────
+
+// The template settings live as a single tab in the app's right-side
+// inspector. The page (above) owns the document + actions and seeds the shared
+// session store this view reads from. `close-on-route-leave` is a backstop; the
+// page also closes the tab on unmount.
+/** The selection's containing paragraph plus one paragraph on each side —
+ *  enough context for the model to read how a new field is used, read from
+ *  the live doc because the field marker does not exist yet. */
+const paragraphsAroundSelection = (
+  state: EditorState,
+  from: number,
+): string => {
+  const $from = state.doc.resolve(from);
+  if ($from.depth === 0) {
+    return $from.parent.textContent.slice(0, 4000);
+  }
+  const container = $from.node($from.depth - 1);
+  const index = $from.index($from.depth - 1);
+  const texts: string[] = [];
+  for (const i of [index - 1, index, index + 1]) {
+    if (i < 0 || i >= container.childCount) {
+      continue;
+    }
+    const text = container.child(i).textContent;
+    if (text.trim() !== "") {
+      texts.push(text);
+    }
+  }
+  return texts.join("\n");
+};
+
+/** Popover buttons act on the captured selection; preventing mousedown keeps
+ *  focus (and the painted selection) in the editor while clicking. */
+const keepEditorFocus = (event: { preventDefault: () => void }) => {
+  event.preventDefault();
+};
+
+/** Floating gesture menu anchored under (or above) the painted selection.
+ *  Instant rows first (plain Make field, the existing-field list, the
+ *  structural wraps); the AI proposal lands as its own row below a
+ *  separator once the model answers. */
+const SelectionGesturePopover = ({
+  gesture,
+  enrichment,
+  onMakeField,
+  onInsertExisting,
+  onAcceptAi,
+  onWrapIf,
+  onWrapIfExisting,
+  onWrapEach,
+  onMakeClause,
+}: {
+  gesture: SelectionGesture;
+  enrichment: GestureEnrichment;
+  onMakeField: () => void;
+  onInsertExisting: (path: string) => void;
+  onAcceptAi: () => void;
+  onWrapIf: () => void;
+  onWrapIfExisting: (name: string) => void;
+  onWrapEach: () => void;
+  onMakeClause: () => void;
+}) => {
+  const t = useTranslations();
+  const fields = useTemplateStudioStore((s) => s.fields);
+  const [preview, setPreview] = useState<GestureInsertKind | null>(null);
+  return (
+    <div
+      aria-label={t("templates.studio.insert")}
+      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80vh)] max-w-[min(92vw,30rem)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      role="group"
+      style={{
+        left: gesture.left,
+        top: gesture.top,
+        transform:
+          gesture.placement === "above"
+            ? `translate(-50%, calc(-100% - ${GESTURE_POPOVER_OFFSET_PX}px))`
+            : `translate(-50%, ${GESTURE_POPOVER_OFFSET_PX}px)`,
+      }}
+    >
+      <MenuPreviewLayout
+        preview={
+          <PreviewPane>
+            {preview ? (
+              <GestureInsertPreview key={preview} kind={preview} />
+            ) : (
+              <div className="text-muted-foreground flex h-full items-center justify-center text-center text-xs text-balance">
+                {t("templates.studio.previewHint")}
+              </div>
+            )}
+          </PreviewPane>
+        }
+      >
+        <GestureSplitRow
+          existing={fields.map((field) => ({
+            key: field.path,
+            icon: VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon,
+            label: field.label === "" ? field.path : field.label,
+            sublabel: field.label === "" ? undefined : field.path,
+            onSelect: () => onInsertExisting(field.path),
+          }))}
+          icon={BracesIcon}
+          label={t("templates.studio.makeField")}
+          onDefault={onMakeField}
+          onHighlight={() => setPreview("field")}
+          reuseLabel={t("templates.studio.existingField")}
+        />
+        <GestureSplitRow
+          existing={reusableConditions(fields, (key) => t(key)).map(
+            (condition) => ({
+              key: condition.ref,
+              icon: SplitIcon,
+              label: condition.label,
+              onSelect: () => onWrapIfExisting(condition.ref),
+            }),
+          )}
+          icon={SplitIcon}
+          label={t("templates.studio.showOnlyIf")}
+          onDefault={onWrapIf}
+          onHighlight={() => setPreview("if")}
+          reuseLabel={t("templates.studio.existingCondition")}
+        />
+        <Button
+          className="justify-start gap-2 font-normal"
+          onClick={onWrapEach}
+          onFocus={() => setPreview("each")}
+          onMouseDown={keepEditorFocus}
+          onMouseEnter={() => setPreview("each")}
+          size="sm"
+          variant="ghost"
+        >
+          <RepeatIcon className="text-muted-foreground size-3.5 shrink-0" />
+          {t("templates.studio.repeatForEach")}
+        </Button>
+        <Button
+          className="justify-start gap-2 font-normal"
+          onClick={onMakeClause}
+          onFocus={() => setPreview("clause")}
+          onMouseDown={keepEditorFocus}
+          onMouseEnter={() => setPreview("clause")}
+          size="sm"
+          variant="ghost"
+        >
+          <TextQuoteIcon className="text-muted-foreground size-3.5 shrink-0" />
+          {t("templates.studio.scopeClause")}
+        </Button>
+        {enrichment.status !== "idle" && (
+          <>
+            <Separator className="my-1" />
+            <GestureAiRow
+              enrichment={enrichment}
+              fields={fields}
+              onAcceptAi={onAcceptAi}
+            />
+          </>
+        )}
+      </MenuPreviewLayout>
+    </div>
+  );
+};
+
+/** What each gesture-menu insert produces, shown in the preview pane while a
+ *  row is highlighted. Mock depictions of inserted document content, not
+ *  interface text; deliberately untranslated to keep them free of per-language
+ *  i18n debt. */
+type GestureInsertKind = "field" | "if" | "each" | "clause";
+
+// Mock document content, not interface text; deliberately untranslated (see
+// the preview-pane pattern) so the previews carry no per-language i18n debt.
+// The concept caption below each IS translated (templates.studio.concept*).
+const GESTURE_PREVIEW_SAMPLE = {
+  fieldBefore: "Due within ",
+  fieldMarker: "{{term}}",
+  fieldValue: "30",
+  fieldAfter: " days.",
+  ifMarker: "{{#if has_guarantor}}",
+  ifBody: "The Guarantor shall be jointly liable.",
+  eachMarker: "{{#each parties}}",
+  eachItem: "– {{name}}, {{role}}",
+  eachFilled: ["– Jane Roe, Buyer", "– John Doe, Seller"],
+  clauseMarker: "{{@clause:liability}}",
+  clauseText: "Neither party is liable for indirect or consequential loss.",
+} as const;
+
+const CONCEPT_KEY = {
+  field: "templates.studio.conceptField",
+  if: "templates.studio.conceptCondition",
+  each: "templates.studio.conceptLoop",
+  clause: "templates.studio.conceptClause",
+} as const satisfies Record<GestureInsertKind, TranslationKey>;
+
+/** One-shot reveal: fills in after a short beat and stays (no loop). */
+const useFillReveal = (): boolean => {
+  const [filled, setFilled] = useState(false);
+  useMountEffect(() => {
+    const id = setTimeout(() => setFilled(true), 600);
+    return () => clearTimeout(id);
+  });
+  return filled;
+};
+
+/** Cross-fades the whole template form into the whole filled result, stacked in
+ *  one grid cell sized to both — so the surrounding layout never reflows and a
+ *  shorter filled line just leaves harmless trailing space (no mid-text gap).
+ *  Opacity only (GPU-friendly); one-shot, settles on the filled layer. */
+const FillReveal = ({
+  on,
+  marker,
+  filled,
+  className,
+}: {
+  on: boolean;
+  marker: ReactNode;
+  filled: ReactNode;
+  className?: string;
+}) => (
+  <span className={cn("grid [&>*]:col-start-1 [&>*]:row-start-1", className)}>
+    <span
+      aria-hidden={on}
+      className="transition-opacity duration-500"
+      style={{ opacity: on ? 0 : 1 }}
+    >
+      {marker}
+    </span>
+    <span
+      aria-hidden={!on}
+      className="transition-opacity duration-500"
+      style={{ opacity: on ? 1 : 0 }}
+    >
+      {filled}
+    </span>
+  </span>
+);
+
+const GestureInsertPreview = ({ kind }: { kind: GestureInsertKind }) => {
+  const t = useTranslations();
+  const filled = useFillReveal();
+
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex flex-1 flex-col justify-center overflow-hidden text-sm leading-relaxed">
+        {kind === "field" && (
+          <FillReveal
+            className="whitespace-nowrap"
+            filled={
+              <span>
+                {GESTURE_PREVIEW_SAMPLE.fieldBefore}
+                <span className="text-foreground font-semibold">
+                  {GESTURE_PREVIEW_SAMPLE.fieldValue}
+                </span>
+                {GESTURE_PREVIEW_SAMPLE.fieldAfter}
+              </span>
+            }
+            marker={
+              <span>
+                {GESTURE_PREVIEW_SAMPLE.fieldBefore}
+                <code className="bg-primary/10 text-primary rounded px-1 py-0.5 text-xs">
+                  {GESTURE_PREVIEW_SAMPLE.fieldMarker}
+                </code>
+                {GESTURE_PREVIEW_SAMPLE.fieldAfter}
+              </span>
+            }
+            on={filled}
+          />
+        )}
+
+        {kind === "if" && (
+          <div className="border-foreground-disabled bg-accent/50 rounded-sm border-s-[3px] py-1.5 ps-3 pe-2">
+            <FillReveal
+              className="block"
+              filled={
+                <span className="text-success inline-flex items-center gap-1 text-xs">
+                  <CheckIcon className="size-3" />
+                </span>
+              }
+              marker={
+                <code className="text-muted-foreground block text-xs">
+                  {GESTURE_PREVIEW_SAMPLE.ifMarker}
+                </code>
+              }
+              on={filled}
+            />
+            <span className="mt-1 block">{GESTURE_PREVIEW_SAMPLE.ifBody}</span>
+          </div>
+        )}
+
+        {kind === "each" && (
+          <div className="border-success/40 bg-success/10 rounded-sm border-s-[3px] py-1.5 ps-3 pe-2">
+            <FillReveal
+              className="block"
+              filled={
+                <span className="block">
+                  {GESTURE_PREVIEW_SAMPLE.eachFilled.map((row) => (
+                    <span className="block" key={row}>
+                      {row}
+                    </span>
+                  ))}
+                </span>
+              }
+              marker={
+                <span className="block">
+                  <code className="text-muted-foreground text-xs">
+                    {GESTURE_PREVIEW_SAMPLE.eachMarker}
+                  </code>
+                  <span className="mt-1 block">
+                    {GESTURE_PREVIEW_SAMPLE.eachItem}
+                  </span>
+                </span>
+              }
+              on={filled}
+            />
+          </div>
+        )}
+
+        {kind === "clause" && (
+          <FillReveal
+            className="block"
+            filled={
+              <span className="block leading-relaxed">
+                {GESTURE_PREVIEW_SAMPLE.clauseText}
+              </span>
+            }
+            marker={
+              <span className="bg-card flex items-center gap-1.5 rounded-sm border border-dashed p-2">
+                <TextQuoteIcon className="text-muted-foreground size-3.5 shrink-0" />
+                <code className="text-muted-foreground text-xs">
+                  {GESTURE_PREVIEW_SAMPLE.clauseMarker}
+                </code>
+              </span>
+            }
+            on={filled}
+          />
+        )}
+      </div>
+      <p className="text-muted-foreground mt-1.5 shrink-0 text-[11px] leading-snug">
+        {t(CONCEPT_KEY[kind])}
+      </p>
+    </div>
+  );
+};
+
+/** One reusable item in a {@link GestureSplitRow}'s expand list. */
+type GestureExistingOption = {
+  key: string;
+  icon: LucideIcon;
+  label: string;
+  /** Secondary muted text (e.g. a field's path), shown right-aligned. */
+  sublabel?: string | undefined;
+  onSelect: () => void;
+};
+
+/** A gesture-menu row whose primary click creates something new (the sensible
+ *  default); a trailing chevron expands an inline list of existing items to
+ *  reuse instead, so reuse is exactly one extra click. Used for both fields
+ *  ("Make field" + existing fields) and conditions ("Show only if" + existing
+ *  conditions), keeping the two symmetric. */
+const GestureSplitRow = ({
+  icon: Icon,
+  label,
+  reuseLabel,
+  onDefault,
+  onHighlight,
+  existing,
+}: {
+  icon: LucideIcon;
+  label: string;
+  reuseLabel: string;
+  onDefault: () => void;
+  /** Drive the preview pane while the default (create-new) button is hovered
+   *  or focused. */
+  onHighlight: () => void;
+  existing: GestureExistingOption[];
+}) => {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <div className="flex items-center gap-0.5">
+        <Button
+          className="flex-1 justify-start gap-2 font-normal"
+          onClick={onDefault}
+          onFocus={onHighlight}
+          onMouseDown={keepEditorFocus}
+          onMouseEnter={onHighlight}
+          size="sm"
+          variant="ghost"
+        >
+          <Icon className="text-muted-foreground size-3.5 shrink-0" />
+          {label}
+        </Button>
+        {existing.length > 0 && (
+          <Button
+            aria-expanded={open}
+            aria-label={reuseLabel}
+            className="shrink-0"
+            onClick={() => setOpen((v) => !v)}
+            onMouseDown={keepEditorFocus}
+            size="icon-sm"
+            title={reuseLabel}
+            variant="ghost"
+          >
+            {open ? (
+              <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+            ) : (
+              <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+            )}
+          </Button>
+        )}
+      </div>
+      {open && (
+        <div className="flex max-h-44 flex-col overflow-y-auto">
+          {existing.map((option) => {
+            const OptionIcon = option.icon;
+            return (
+              <Button
+                className="justify-start gap-2 ps-7 font-normal"
+                key={option.key}
+                onClick={option.onSelect}
+                onMouseDown={keepEditorFocus}
+                size="sm"
+                title={option.sublabel ?? option.label}
+                variant="ghost"
+              >
+                <OptionIcon className="text-muted-foreground size-3.5 shrink-0" />
+                <span className="min-w-0 truncate">{option.label}</span>
+                {option.sublabel === undefined ? null : (
+                  <code className="text-muted-foreground ms-auto min-w-0 truncate text-[10px]">
+                    {option.sublabel}
+                  </code>
+                )}
+              </Button>
+            );
+          })}
+        </div>
+      )}
+    </>
+  );
+};
+
+/** The AI slot under the separator: a shimmer while the proposal is in
+ *  flight, then the proposal as a quietly accented row — proposed type icon
+ *  left, wand right. A proposal that points at an existing field reads as
+ *  "Use existing …" and reuses it instead of creating a duplicate. */
+const GestureAiRow = ({
+  enrichment,
+  fields,
+  onAcceptAi,
+}: {
+  enrichment: GestureEnrichment;
+  fields: StudioField[];
+  onAcceptAi: () => void;
+}) => {
+  const t = useTranslations();
+  if (enrichment.status !== "ready") {
+    return (
+      <div className="flex h-8 items-center px-2.5">
+        <span
+          aria-hidden="true"
+          className="bg-muted h-1.5 w-16 animate-pulse rounded-full"
+        />
+      </div>
+    );
+  }
+  const existing =
+    enrichment.fieldPath === undefined
+      ? undefined
+      : fields.find((f) => f.path === enrichment.fieldPath);
+  let label: string;
+  let TypeIcon: LucideIcon;
+  if (existing !== undefined) {
+    label = t("templates.studio.useExisting", {
+      name: existing.label === "" ? existing.path : existing.label,
+    });
+    TypeIcon = VALUE_TYPE_META[inputTypeValueKind(existing.inputType)].icon;
+  } else {
+    label =
+      enrichment.label !== undefined && enrichment.label !== ""
+        ? enrichment.label
+        : t("templates.studio.makeField");
+    TypeIcon =
+      VALUE_TYPE_META[inputTypeValueKind(enrichment.inputType ?? "text")].icon;
+  }
+  return (
+    <Button
+      className="bg-primary/5 text-primary hover:bg-primary/10 hover:text-primary justify-start gap-2 font-normal"
+      onClick={onAcceptAi}
+      onMouseDown={keepEditorFocus}
+      size="sm"
+      title={label}
+      variant="ghost"
+    >
+      <TypeIcon className="size-3.5 shrink-0" />
+      <span className="min-w-0 truncate">{label}</span>
+      <WandSparklesIcon className="ms-auto size-3.5 shrink-0" />
+    </Button>
+  );
+};
+
+/** A paragraph node carrying marker text ("" for the empty body line). */
+const markerParagraph = (
+  state: EditorState,
+  paragraph: NodeType,
+  text: string,
+) => paragraph.create(null, text.length > 0 ? state.schema.text(text) : null);
+
+/** Anchor at the nearest enclosing paragraph, not the top-level block:
+ *  inside a table, depth 1 is the whole table and wrapping there would
+ *  swallow it. The fill engine expands per paragraph wherever it lives
+ *  (including inside a cell), so the markers belong next to the lines. */
+const paragraphDepth = ($pos: ResolvedPos, paragraph: NodeType): number => {
+  for (let depth = $pos.depth; depth >= 1; depth--) {
+    if ($pos.node(depth).type === paragraph) {
+      return depth;
+    }
+  }
+  return 1;
+};
+
+// ── Bilingual mirroring: sibling-cell detection ──────────
+
+/** A text-bearing cell parallel to a gesture's cell — same table row,
+ *  and the only other cell in it with text (two-column bilingual docs).
+ *  `from`/`to` span the cell's content; `text` is built from the same
+ *  positional-text model the suggestion anchoring searches, so it can be
+ *  used as a scope/needle there verbatim. */
+type SiblingCell = { cell: PMNode; from: number; to: number; text: string };
+
+const isTableCellNodeName = (name: string) =>
+  name === "tableCell" || name === "tableHeader";
+
+const findSiblingCell = (
+  state: EditorState,
+  pos: number,
+): SiblingCell | null => {
+  const $pos = state.doc.resolve(pos);
+  let cellDepth = 0;
+  for (let depth = $pos.depth; depth >= 1; depth--) {
+    if (isTableCellNodeName($pos.node(depth).type.name)) {
+      cellDepth = depth;
+      break;
+    }
+  }
+  if (cellDepth < 2 || $pos.node(cellDepth - 1).type.name !== "tableRow") {
+    return null;
+  }
+  const row = $pos.node(cellDepth - 1);
+  const rowStart = $pos.start(cellDepth - 1);
+  const cellIndex = $pos.index(cellDepth - 1);
+  const siblings: SiblingCell[] = [];
+  let offset = 0;
+  for (let index = 0; index < row.childCount; index++) {
+    const cell = row.child(index);
+    if (index !== cellIndex && cell.textContent.trim() !== "") {
+      const from = rowStart + offset + 1;
+      const to = from + cell.content.size;
+      siblings.push({
+        cell,
+        from,
+        to,
+        text: buildPositionalText(state.doc, from, to).text,
+      });
+    }
+    offset += cell.nodeSize;
+  }
+  // Only an unambiguous twin qualifies: with several text-bearing siblings
+  // the parallel column can't be picked reliably.
+  if (siblings.length !== 1) {
+    return null;
+  }
+  return siblings.at(0) ?? null;
+};
+
+/** Positions inside the sibling cell's first and last paragraphs, so
+ *  `insertOrWrapBlock` expands the wrap to exactly the cell's paragraphs. */
+const siblingWrapRange = (
+  sibling: SiblingCell,
+): { from: number; to: number } | null => {
+  const { cell } = sibling;
+  if (
+    cell.firstChild?.type.name !== "paragraph" ||
+    cell.lastChild?.type.name !== "paragraph"
+  ) {
+    return null;
+  }
+  return { from: sibling.from + 1, to: sibling.to - 1 };
+};
+
+type OutlineRowItem = { node: OutlineNode; count: number };
+
+/** Collapse sibling field nodes sharing a path into one row (keeping the first,
+ *  earliest occurrence) with an occurrence count; non-field nodes pass through
+ *  with count 1. Order is preserved (callers pass doc-sorted sibling lists). */
+const dedupeOutlineFields = (nodes: OutlineNode[]): OutlineRowItem[] => {
+  const result: OutlineRowItem[] = [];
+  const indexByPath = new Map<string, number>();
+  for (const node of nodes) {
+    if (node.type === "field") {
+      const existing = indexByPath.get(node.path);
+      if (existing !== undefined) {
+        const item = result[existing];
+        if (item) {
+          item.count += 1;
+        }
+        continue;
+      }
+      indexByPath.set(node.path, result.length);
+    }
+    result.push({ node, count: 1 });
+  }
+  return result;
+};
+
+/** Folds the flat directive scan into the document's nesting: if/each
+ *  markers open groups that own everything up to their closer, so the
+ *  panel mirrors which fields only appear under a condition or repeat. */
+const buildOutline = (directives: readonly DirectiveRange[]): OutlineNode[] => {
+  const root: OutlineNode[] = [];
+  const stack: OutlineNode[][] = [root];
+  const top = () => stack.at(-1) ?? root;
+  for (const d of directives.toSorted((a, b) => a.from - b.from)) {
+    if (d.kind === "placeholder") {
+      top().push({ type: "field", path: d.expr, from: d.from });
+    } else if (d.kind === "clause") {
+      top().push({ type: "clause", name: d.expr, from: d.from });
+    } else if (d.kind === "if" || d.kind === "each") {
+      const group: OutlineNode = {
+        type: "group",
+        kind: d.kind,
+        expr: d.expr,
+        from: d.from,
+        children: [],
+      };
+      top().push(group);
+      stack.push(group.children);
+    } else if (d.kind === "elseif" || d.kind === "else") {
+      // A branch closes the previous branch and opens a sibling group.
+      if (stack.length > 1) {
+        stack.pop();
+      }
+      const group: OutlineNode = {
+        type: "group",
+        kind: d.kind,
+        expr: d.expr,
+        from: d.from,
+        children: [],
+      };
+      top().push(group);
+      stack.push(group.children);
+    } else if (
+      (d.kind === "endif" || d.kind === "endeach") &&
+      stack.length > 1
+    ) {
+      stack.pop();
+    }
+  }
+  return root;
+};
+
+/** The rule-builder's param-less operator word keys; narrowed from the broad
+ *  `TranslationKey` union so the row can call `t(key)` with a single argument
+ *  (interpolating keys need a values object). */
+type OperatorWordKey =
+  | "templates.conditionOpAtLeast"
+  | "templates.conditionOpAtMost"
+  | "templates.conditionOpIsNot"
+  | "templates.conditionOpIs"
+  | "templates.conditionOpGreaterThan"
+  | "templates.conditionOpLessThan"
+  | "templates.conditionOpContains";
+
+/** Canonical comparison operators (as `serializeCondition` emits them) mapped
+ *  to the rule-builder's word keys, longest first so `>=`/`<=`/`!=` win over
+ *  their single-character prefixes when scanning an expression. */
+const CONDITION_OPERATOR_WORDS: readonly {
+  operator: string;
+  labelKey: OperatorWordKey;
+}[] = [
+  { operator: ">=", labelKey: "templates.conditionOpAtLeast" },
+  { operator: "<=", labelKey: "templates.conditionOpAtMost" },
+  { operator: "!=", labelKey: "templates.conditionOpIsNot" },
+  { operator: "==", labelKey: "templates.conditionOpIs" },
+  { operator: ">", labelKey: "templates.conditionOpGreaterThan" },
+  { operator: "<", labelKey: "templates.conditionOpLessThan" },
+  { operator: "contains", labelKey: "templates.conditionOpContains" },
+];
+
+/** Strip matching surrounding quotes from a comparison's right-hand side so
+ *  `state == "draft"` reads as `is draft`, not `is "draft"`. */
+const unquote = (value: string): string => {
+  const trimmed = value.trim();
+  const first = trimmed.at(0);
+  if (
+    trimmed.length >= 2 &&
+    (first === '"' || first === "'") &&
+    trimmed.at(-1) === first
+  ) {
+    return trimmed.slice(1, -1);
+  }
+  return trimmed;
+};
+
+/** Friendly reading of a condition/loop opener for the outline row. Bare
+ *  boolean field paths read as the field's label; binary comparisons read as
+ *  `label operator-word value`; anything we can't prettify falls back to the
+ *  raw expression. The raw expression stays available as the row's `title`. */
+const humanizeConditionExpr = (
+  expr: string,
+  fields: readonly StudioField[],
+  operatorWord: (key: OperatorWordKey) => string,
+): string => {
+  const trimmed = expr.trim();
+  if (trimmed === "") {
+    return expr;
+  }
+  const labelFor = (path: string): string => {
+    const field = fields.find((f) => f.path === path);
+    return field !== undefined && field.label !== "" ? field.label : path;
+  };
+  // A bare field path with no operator is a yes/no question gating the block.
+  if (isFieldPath(trimmed)) {
+    return labelFor(trimmed);
+  }
+  for (const { operator, labelKey } of CONDITION_OPERATOR_WORDS) {
+    const index = trimmed.indexOf(operator);
+    if (index <= 0) {
+      continue;
+    }
+    const lhs = trimmed.slice(0, index).trim();
+    const rhs = trimmed.slice(index + operator.length).trim();
+    if (lhs === "" || rhs === "" || !isFieldPath(lhs)) {
+      continue;
+    }
+    return `${labelFor(lhs)} ${operatorWord(labelKey)} ${unquote(rhs)}`;
+  }
+  return trimmed;
+};
+
+const outlineFieldPaths = (nodes: OutlineNode[]): Set<string> => {
+  const paths = new Set<string>();
+  const walk = (list: OutlineNode[]) => {
+    for (const node of list) {
+      if (node.type === "field") {
+        paths.add(node.path);
+      }
+      if (node.type === "group") {
+        walk(node.children);
+      }
+    }
+  };
+  walk(nodes);
+  return paths;
+};
+
+type StudioFacet = "fields" | "guidance" | "clauses" | "history" | "fill";
+
+const STUDIO_FACETS: readonly StudioFacet[] = [
+  "fields",
+  "guidance",
+  "clauses",
+  "history",
+  "fill",
+];
+
+function TemplateStudioInspectorView({
+  tab,
+  onClose,
+}: InspectorViewRenderProps<TemplateStudioPayload>) {
+  const t = useTranslations();
+  const { templateId } = tab.payload;
+  const [facet, setFacet] = useState<StudioFacet>("fields");
+  const [editReturnFacet, setEditReturnFacet] = useState<StudioFacet | null>(
+    null,
+  );
+  const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
+  const fields = useTemplateStudioStore((s) => s.fields);
+  const outline = useTemplateStudioStore((s) => s.outline);
+  const selected = useTemplateStudioStore((s) => s.selected);
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+
+  const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const lang = useI18nStore((s) => s.lang);
+  // Languages sit in the tab header (next to the name) so the template's identity
+  // reads at a glance; useQuery (not suspense) keeps a cache miss from blocking
+  // the whole studio chrome.
+  const { data: detailData } = useQuery(
+    templateDetailOptions(activeOrganizationId, templateId),
+  );
+  const detail =
+    detailData && !(detailData instanceof Response) && "manifest" in detailData
+      ? detailData
+      : null;
+  const languages = detail?.languages ?? [];
+  const openView = useInspectorStore((s) => s.openView);
+  const setNavName = useTemplateNavStore((s) => s.setName);
+  const [rename, setRename] = useState<{ active: boolean; value: string }>({
+    active: false,
+    value: "",
+  });
+
+  const commitRename = async () => {
+    const next = rename.value.trim();
+    setRename({ active: false, value: "" });
+    if (!next || next === tab.label) {
+      return;
+    }
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .post({ name: next });
+    if (response.error) {
+      stellaToast.add({ type: "error", title: t("templates.renameFailed") });
+      return;
+    }
+    // Reflect the new name in the tab label, the breadcrumb, and the list.
+    openView({
+      type: TEMPLATE_STUDIO_VIEW,
+      id: templateStudioTabId(templateId),
+      label: next,
+      payload: { templateId },
+      ownerRouteId: TEMPLATES_ROUTE_ID,
+    });
+    setNavName(next);
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.templates.all(activeOrganizationId),
+    });
+    stellaToast.add({ type: "success", title: t("templates.templateRenamed") });
+  };
+
+  const facetLabels: Record<StudioFacet, string> = {
+    fields: t("templates.fields"),
+    guidance: t("templates.whenToUse"),
+    clauses: t("common.clauses"),
+    history: t("common.history"),
+    fill: t("templates.testFill"),
+  };
+
+  // Leaving the field-settings face returns to wherever the edit was launched
+  // from (the Fill-tab pencil records "fill"); otherwise it drops to the
+  // Fields overview.
+  const exitField = () => {
+    if (editReturnFacet !== null) {
+      setFacet(editReturnFacet);
+      setEditReturnFacet(null);
+    }
+    useTemplateStudioStore.getState().actions?.deselect();
+  };
+
+  // The page seeds the session on mount; until then (or after it unmounts and
+  // clears) the body has nothing to show — but keep the header + subtab row so
+  // the tab reads consistently with the rest of the inspector.
+  const ready = sessionTemplateId === templateId;
+
+  return (
+    <div className="bg-background flex h-full flex-1 flex-col overflow-hidden">
+      <InspectorTabHeader
+        actions={<StudioSaveAction />}
+        label={tab.label}
+        matter={
+          languages.length > 0 ? (
+            <span className="flex shrink-0 items-center gap-1">
+              {languages.map((tag) => (
+                <span
+                  className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium"
+                  key={tag}
+                  title={tag}
+                >
+                  {languageChipLabel(tag, lang)}
+                </span>
+              ))}
+            </span>
+          ) : undefined
+        }
+        onClose={onClose}
+        onStartRename={() => setRename({ active: true, value: tab.label })}
+        rename={{
+          active: rename.active,
+          value: rename.value,
+          onChange: (value) => setRename({ active: true, value }),
+          onCommit: () => void commitRename(),
+          onCancel: () => setRename({ active: false, value: "" }),
+        }}
+      />
+      <FacetBar
+        facet={facet}
+        facets={STUDIO_FACETS}
+        labels={facetLabels}
+        onChange={(next) => {
+          // Re-clicking Fields returns to the template overview.
+          if (next === facet && next === "fields") {
+            useTemplateStudioStore.getState().actions?.deselect();
+          }
+          setEditReturnFacet(null);
+          setFacet(next);
+        }}
+      />
+      {!ready && (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+        </div>
+      )}
+      {ready && facet === "fields" && (
+        <Inspector
+          fields={fields}
+          onFieldBack={exitField}
+          onFieldUpdate={upsertField}
+          outline={outline}
+          selected={selected}
+        />
+      )}
+      {ready && facet === "guidance" && (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <TemplateGuidanceFacet templateId={templateId} />
+        </div>
+      )}
+      {ready && facet === "clauses" && (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <TemplateClausesTab templateId={templateId} />
+        </div>
+      )}
+      {ready && facet === "history" && (
+        <div className="min-h-0 flex-1 overflow-auto">
+          <TemplateVersionsTab templateId={templateId} />
+        </div>
+      )}
+      {ready && facet === "fill" && (
+        <TemplateFillFacet
+          onEditField={(path) => {
+            setEditReturnFacet("fill");
+            setFacet("fields");
+            useTemplateStudioStore.getState().actions?.focusField(path);
+          }}
+          templateId={templateId}
+        />
+      )}
+      {ready && facet === "fields" && !selected && (
+        <StudioOverviewSummary fields={fields} templateId={templateId} />
+      )}
+      {ready && facet === "fields" && <StudioInsertRow />}
+    </div>
+  );
+}
+
+/** Save lives in the tab's title row; enabled only with unsaved edits. */
+const StudioSaveAction = () => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const ui = useTemplateStudioStore((s) => s.ui);
+  const isDirty = useTemplateStudioStore((s) => s.isDirty);
+  // Nothing to save → no button at all; a permanently greyed-out control just
+  // reads as broken. It reappears the moment an edit makes the tab dirty.
+  if (!actions || (!isDirty && !ui.isSaving)) {
+    return null;
+  }
+  return (
+    <Button
+      disabled={ui.isSaving}
+      onClick={() => {
+        void actions.save();
+      }}
+      size="xs"
+    >
+      <SaveIcon className="size-3.5" />
+      {t("common.save")}
+    </Button>
+  );
+};
+
+// Filling happens in-place as the "Fill" subtab. It targets the *saved*
+// template (the fill endpoint reads from S3). The persisted manifest carries no
+// field kind/itemFields, so re-discover the stored DOCX (the same merge the
+// fill endpoint uses) to get the real field shape — {{#each}} array fields
+// included — rather than reconstructing it from the flat manifest.
+const TemplateFillFacet = ({
+  templateId,
+  onEditField,
+}: {
+  templateId: string;
+  onEditField: (path: string) => void;
+}) => {
+  const fillSaveTarget = useFillToMatterSaveTarget();
+  const facetOrgId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: clausePreview } = useQuery({
+    ...templateClausePreviewOptions(facetOrgId, templateId),
+  });
+  // Leaving the facet clears the in-document preview (and drops any pending
+  // lookup-preview response so it cannot re-set a stale preview).
+  useMountEffect(() => () => {
+    cancelLookupPreviews();
+    useTemplateStudioStore.getState().actions?.setFillPreview(null);
+  });
+  const t = useTranslations();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const detailOptions = templateDetailOptions(activeOrganizationId, templateId);
+  const { data: detailData } = useQuery(detailOptions);
+  const fillIsDirty = useTemplateStudioStore((s) => s.isDirty);
+  const fillActions = useTemplateStudioStore((s) => s.actions);
+  const detail =
+    detailData && !(detailData instanceof Response) && "manifest" in detailData
+      ? detailData
+      : null;
+
+  const presignedUrl = detail?.presignedUrl;
+  const fileName = detail?.fileName;
+  const {
+    data: discovered,
+    isLoading: discovering,
+    isError,
+  } = useQuery({
+    queryKey: [
+      ...knowledgeKeys.templates.detail(activeOrganizationId, templateId),
+      "fill-discover",
+      presignedUrl,
+      fileName,
+    ],
+    queryFn: async () => {
+      if (presignedUrl === undefined || fileName === undefined) {
+        panic("fill tab: saved template document is unavailable");
+      }
+      const res = await fetch(presignedUrl, {
+        signal: AbortSignal.timeout(15_000),
+      });
+      const blob = await res.blob();
+      const file = new File([blob], fileName, { type: DOCX_MIME });
+      const response = await api.templates.discover.post({ file });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      if (response.data instanceof Response) {
+        panic("fill tab: discover returned a raw response");
+      }
+      return response.data;
+    },
+    enabled: presignedUrl !== undefined && fileName !== undefined,
+  });
+
+  if (!detail || discovering) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+      </div>
+    );
+  }
+
+  if (isError || !discovered) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">
+          {t("templates.loadFailed")}
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {fillIsDirty ? (
+        <div className="border-warning/30 bg-warning/10 mx-4 mt-3 flex items-center justify-between gap-2 rounded-lg border p-2.5">
+          <p className="text-warning-foreground text-xs">
+            {t("templates.studio.fillStale")}
+          </p>
+          <Button
+            onClick={() => void fillActions?.save()}
+            size="sm"
+            variant="outline"
+          >
+            {t("common.save")}
+          </Button>
+        </div>
+      ) : null}
+      <TemplateForm
+        conditions={discovered.conditions}
+        fields={discovered.fields}
+        fileName={detail.fileName}
+        onBack={() => undefined}
+        onDone={() => undefined}
+        onEditField={onEditField}
+        onValuesChange={(values) =>
+          pushFillPreview(values, discovered.fields, clausePreview?.slotTexts)
+        }
+        saveTarget={fillSaveTarget}
+        structureErrors={discovered.structureErrors}
+        templateId={templateId}
+      />
+    </>
+  );
+};
+
+/** Typed fill values become the live in-document preview, each field rendered
+ *  through the SAME deterministic dispatcher the API fill engine uses
+ *  (`renderDeterministicFieldValue`): composite joins via its `format`
+ *  template, a formula is computed, a date is rendered in its locale/style —
+ *  so the preview is byte-identical to the generated document. A lookup
+ *  field's value is resolved server-side, so it previews the raw registry
+ *  number until the debounced lookup-preview response lands (and on a miss the
+ *  raw number stays); that async overlay is the one exception to the shared
+ *  dispatcher.
+ *
+ *  Repeatable (array) fields preview with their FIRST item only: the form
+ *  names item inputs `path[i].sub` while the `{{#each}}` body's markers use
+ *  the bare item path (`path.sub`), so item 0's values map onto those paths
+ *  and the loop body previews with the first entry. Expanding the loop into
+ *  one preview per item is a known future item. */
+const pushFillPreview = (
+  values: Record<string, unknown>,
+  fields?: readonly LookupPreviewField[],
+  clauseTexts?: Record<string, string>,
+) => {
+  cancelLookupPreviews();
+  const preview: Record<string, TemplatePreviewValue> = {};
+  const fieldByPath = new Map<string, LookupPreviewField>(
+    (fields ?? []).map((field) => [field.path, field]),
+  );
+  // Linked clause slots preview their resolved text, keyed by slot name to
+  // match the folio plugin's clause-range key.
+  if (clauseTexts) {
+    Object.assign(preview, clauseTexts);
+  }
+  for (const [key, value] of Object.entries(values)) {
+    if (key.startsWith(ARRAY_INDEX_KEY_PREFIX)) {
+      continue;
+    }
+    const item = parseArrayItemKey(key);
+    if (item && item.index !== 0) {
+      continue;
+    }
+    const path = item ? `${item.path}.${item.sub}` : key;
+    const previewValue = renderPreviewFieldValue(
+      fieldByPath.get(path),
+      value,
+      values,
+    );
+    if (previewValue !== null) {
+      preview[path] = previewValue;
+    }
+  }
+  // Formula fields are derived (no form input), so they never appear in the
+  // submitted values; render them from the field list directly.
+  for (const field of fields ?? []) {
+    if (field.formula === undefined || preview[field.path] !== undefined) {
+      continue;
+    }
+    const computed = renderDeterministicFieldValue(field, values);
+    if (computed !== null) {
+      preview[field.path] = computed;
+    }
+  }
+  const pending = applyCachedLookupRenderings(preview, fields ?? []);
+  useTemplateStudioStore
+    .getState()
+    .actions?.setFillPreview(Object.keys(preview).length > 0 ? preview : null);
+  if (pending.length > 0) {
+    queueLookupPreviews(pending, () =>
+      pushFillPreview(values, fields, clauseTexts),
+    );
+  }
+};
+
+// ── Lookup live preview ──────────────────────────────────
+// A lookup field's live preview shows the deterministic looked-up rendering
+// (number → registry hit → the field's [token] format), not the raw number.
+// Plausible numbers debounce into POST /templates/lookup-preview; the
+// rendered text (with the format's **bold** / *italic* markers intact)
+// substitutes into the preview map when the response lands, parsed into
+// formatted preview spans so the document preview shows the formatting.
+
+/** Mirrors the KRS shape check in template-form.tsx (and `validateKrsNumber`
+ *  server-side): exactly 10 digits, whitespace-tolerant. */
+const LOOKUP_PREVIEW_NUMBER_RE = /^\d{10}$/u;
+
+const normalizeLookupNumber = (value: string): string =>
+  value.replaceAll(/\s/gu, "");
+
+/** Mirrors LOOKUP_MARKDOWN_RE in apps/api/src/handlers/docx/lookup-fields.ts
+ *  (the source of truth for the lookup format's inline markdown): `**bold**`
+ *  and `*italic*` spans, non-nesting, asterisk-free content, unmatched
+ *  asterisks stay literal. */
+const LOOKUP_PREVIEW_MARKDOWN_RE =
+  /\*\*(?<bold>[^*]+)\*\*|(?<!\*)\*(?<italic>[^*]+)\*(?!\*)/gu;
+
+/** A rendered lookup output as a folio preview value: formatted spans when
+ *  the format used `**bold**` / `*italic*`, otherwise the plain string. */
+const lookupPreviewValue = (rendered: string): TemplatePreviewValue => {
+  const spans: TemplatePreviewSpan[] = [];
+  let cursor = 0;
+  for (const match of rendered.matchAll(LOOKUP_PREVIEW_MARKDOWN_RE)) {
+    if (match.index > cursor) {
+      spans.push({ text: rendered.slice(cursor, match.index) });
+    }
+    const { bold, italic } = match.groups ?? {};
+    if (bold !== undefined) {
+      spans.push({ text: bold, bold: true });
+    } else if (italic !== undefined) {
+      spans.push({ text: italic, italic: true });
+    }
+    cursor = match.index + match[0].length;
+  }
+  if (spans.length === 0) {
+    return rendered;
+  }
+  if (cursor < rendered.length) {
+    spans.push({ text: rendered.slice(cursor) });
+  }
+  return { runs: spans };
+};
+
+type StudioLookup = NonNullable<StudioField["lookup"]>;
+
+/** A field as the live preview needs it: the deterministic-transform config
+ *  the shared dispatcher reads (composite/formula/date), plus the lookup
+ *  config the async overlay handles itself. */
+type LookupPreviewField = DeterministicFieldConfig & {
+  lookup?: StudioLookup | undefined;
+};
+
+/** A single field's live preview string. A deterministic field (composite /
+ *  formula / date) renders through the shared dispatcher, so it matches the
+ *  generated document exactly; everything else (a scalar, or a lookup field
+ *  whose value the async overlay later replaces) falls back to the raw
+ *  string/number/boolean. Returns null when there is nothing to preview. */
+const renderPreviewFieldValue = (
+  field: LookupPreviewField | undefined,
+  value: unknown,
+  values: Record<string, unknown>,
+): TemplatePreviewValue | null => {
+  if (field !== undefined) {
+    const deterministic = renderDeterministicFieldValue(field, values);
+    if (deterministic !== null) {
+      return deterministic;
+    }
+  }
+  if (typeof value === "string") {
+    return value === "" ? null : value;
+  }
+  if (typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  return null;
+};
+
+type LookupPreviewRequest = {
+  registry: StudioLookup["registry"];
+  number: string;
+  format: string | null;
+  /** Where the rendering lands in the preview map: the bare `field.path` for
+   *  the default (first) format, the keyed `${field.path}.${format.key}` for
+   *  every later one. Excluded from the cache key (renderings depend only on
+   *  registry+number+format), so identical formats across markers share a
+   *  cache slot. */
+  previewPath: string;
+};
+
+const lookupPreviewKey = (request: LookupPreviewRequest): string =>
+  `${request.registry} ${request.number} ${request.format ?? ""}`;
+
+/** Rendered previews (the endpoint's marked-up string, parsed at
+ *  substitution time) keyed registry+number+format so repeats are instant;
+ *  null marks a known miss (typo'd number, registry outage) that keeps the
+ *  raw number without refetch loops. Bounded: past the cap the oldest
+ *  insertion is evicted, so a long studio session cannot grow it without
+ *  limit. */
+const LOOKUP_PREVIEW_CACHE_MAX = 100;
+const lookupPreviewCache = new Map<string, string | null>();
+
+const rememberLookupRendering = (key: string, rendered: string | null) => {
+  if (lookupPreviewCache.size >= LOOKUP_PREVIEW_CACHE_MAX) {
+    const oldest = lookupPreviewCache.keys().next().value;
+    if (oldest !== undefined) {
+      lookupPreviewCache.delete(oldest);
+    }
+  }
+  lookupPreviewCache.set(key, rendered);
+};
+
+const LOOKUP_PREVIEW_DEBOUNCE_MS = 500;
+let lookupPreviewSeq = 0;
+let lookupPreviewTimer: ReturnType<typeof setTimeout> | undefined;
+
+/** Invalidate the debounce and any in-flight responses; every preview push
+ *  (and preview-surface unmount) starts here so only the latest push can
+ *  apply its renderings. */
+const cancelLookupPreviews = () => {
+  lookupPreviewSeq += 1;
+  clearTimeout(lookupPreviewTimer);
+};
+
+/** Substitute cached renderings into `preview` in place (parsed into
+ *  formatted spans where the format carries markup) and return the requests
+ *  that still need the endpoint. */
+const applyCachedLookupRenderings = (
+  preview: Record<string, TemplatePreviewValue>,
+  fields: readonly LookupPreviewField[],
+): LookupPreviewRequest[] => {
+  const pending: LookupPreviewRequest[] = [];
+  for (const field of fields) {
+    const lookup = field.lookup;
+    const raw = preview[field.path];
+    // The entered value is always a plain string (the registry number);
+    // anything else is a previous substitution and needs no lookup.
+    if (lookup === undefined || typeof raw !== "string") {
+      continue;
+    }
+    const number = normalizeLookupNumber(raw);
+    if (!LOOKUP_PREVIEW_NUMBER_RE.test(number)) {
+      continue;
+    }
+    // The fill pipeline writes the default (first) format under the bare
+    // `field.path` and every later format under the keyed
+    // `${field.path}.${format.key}`; the preview plugin matches markers by
+    // exact expression, so each configured format needs its own request and
+    // its own preview slot or keyed markers like `{{company.address}}` stay
+    // blank.
+    for (const [index, format] of lookup.formats.entries()) {
+      const request: LookupPreviewRequest = {
+        registry: lookup.registry,
+        number,
+        format: format.template,
+        previewPath: index === 0 ? field.path : `${field.path}.${format.key}`,
+      };
+      const cached = lookupPreviewCache.get(lookupPreviewKey(request));
+      if (cached === undefined) {
+        pending.push(request);
+      } else if (cached !== null) {
+        preview[request.previewPath] = lookupPreviewValue(cached);
+      }
+    }
+  }
+  return pending;
+};
+
+/** Debounced fetch of the pending renderings into the cache; `onResolved`
+ *  re-runs the push (which now substitutes synchronously) unless a newer
+ *  push superseded this one. */
+const queueLookupPreviews = (
+  requests: readonly LookupPreviewRequest[],
+  onResolved: () => void,
+) => {
+  const seq = lookupPreviewSeq;
+  clearTimeout(lookupPreviewTimer);
+  lookupPreviewTimer = setTimeout(() => {
+    void (async () => {
+      const resolved = await Promise.all(
+        requests.map(async (request) => {
+          const response = await api.templates["lookup-preview"].post({
+            registry: request.registry,
+            number: request.number,
+            format: request.format,
+          });
+          // A miss keeps the raw number in the preview (cached as null so
+          // it is not refetched); the fill submit reports the real error.
+          const rendered =
+            !response.error && !(response.data instanceof Response)
+              ? response.data.rendered
+              : null;
+          rememberLookupRendering(lookupPreviewKey(request), rendered);
+          return rendered !== null;
+        }),
+      );
+      if (seq === lookupPreviewSeq && resolved.some(Boolean)) {
+        onResolved();
+      }
+    })();
+  }, LOOKUP_PREVIEW_DEBOUNCE_MS);
+};
+
+/** One field entry in an "Existing field…" insert list. A lookup field with
+ *  more than one output format expands into a submenu so the author picks WHICH
+ *  rendering to insert: the first format as the default (`{{path}}`), each
+ *  later format keyed (`{{path.key}}`). Single-format lookups and non-lookup
+ *  fields insert with one click as `{{path}}`. */
+const InsertExistingFieldItem = ({
+  field,
+  onInsert,
+}: {
+  field: StudioField;
+  onInsert: (path: string, formatKey?: string) => void;
+}) => {
+  const t = useTranslations();
+  const label = field.label === "" ? field.path : field.label;
+  const formats = field.lookup?.formats ?? [];
+  if (formats.length <= 1) {
+    return (
+      <MenuItem onClick={() => onInsert(field.path)}>
+        <span className="min-w-0 truncate">{label}</span>
+        <code className="text-muted-foreground ms-auto ps-3 text-[10px]">
+          {field.path}
+        </code>
+      </MenuItem>
+    );
+  }
+  return (
+    <MenuSub>
+      <MenuSubTrigger>
+        <span className="min-w-0 truncate">{label}</span>
+        <code className="text-muted-foreground ms-auto ps-3 text-[10px]">
+          {field.path}
+        </code>
+      </MenuSubTrigger>
+      <MenuSubPopup>
+        {formats.map((format, index) => (
+          <MenuItem
+            key={`${format.key}-${String(index)}`}
+            onClick={() =>
+              onInsert(field.path, index === 0 ? undefined : format.key)
+            }
+          >
+            <span className="min-w-0 truncate">
+              {index === 0
+                ? t("templates.studio.insertFormatDefault")
+                : format.key}
+            </span>
+          </MenuItem>
+        ))}
+      </MenuSubPopup>
+    </MenuSub>
+  );
+};
+
+/** Document actions row — rendered in the inspector tab's top area; the page
+ *  registers the handlers + UI state in the session store. */
+const StudioInsertRow = () => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const fields = useTemplateStudioStore((s) => s.fields);
+  const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  // Linked clauses feed the Insert > Clause slot submenu so the user picks a
+  // real clause instead of typing a slot name into a bare {{@clause:...}}.
+  const { data: clausesData } = useQuery({
+    ...templateClausesOptions(activeOrganizationId, sessionTemplateId ?? ""),
+    enabled: sessionTemplateId !== null,
+  });
+  // Saved recipes (org-wide) feed the Insert > Recipes submenu.
+  const { data: recipesData } = useQuery(
+    templateRecipesOptions(activeOrganizationId),
+  );
+  // The loop-token submenu (`{{@index}}`/`{{@count}}`) only makes sense inside
+  // an `{{#each}}` body. `isCaretInLoop` reads the live caret imperatively, so
+  // recompute it each time the menu opens rather than reactively.
+  const [caretInLoop, setCaretInLoop] = useState(false);
+  const recipes =
+    recipesData && "recipes" in recipesData ? recipesData.recipes : [];
+  const linkedClauses =
+    clausesData && "links" in clausesData && Array.isArray(clausesData.links)
+      ? clausesData.links.flatMap(
+          (link: {
+            id: string;
+            slotName: string | null;
+            clause: { title: string } | null;
+          }) =>
+            link.clause
+              ? [
+                  {
+                    id: link.id,
+                    slotName: link.slotName,
+                    title: link.clause.title,
+                  },
+                ]
+              : [],
+        )
+      : [];
+  if (!actions) {
+    return null;
+  }
+  return (
+    <div
+      className={cn(
+        "flex shrink-0 items-center gap-1 border-t px-2",
+        TOOLBAR_ROW_HEIGHT,
+      )}
+    >
+      <Button
+        className="flex-1 justify-start"
+        onClick={actions.insertField}
+        size="sm"
+        variant="ghost"
+      >
+        <PlusIcon />
+        {t("templates.studio.newField")}
+      </Button>
+      <Menu
+        onOpenChange={(open) => {
+          if (open) {
+            setCaretInLoop(actions.isCaretInLoop());
+          }
+        }}
+      >
+        <MenuTrigger
+          aria-label={t("templates.studio.insert")}
+          render={<Button size="icon-sm" variant="ghost" />}
+        >
+          <ChevronDownIcon />
+        </MenuTrigger>
+        <MenuPopup align="end">
+          {fields.length > 0 && (
+            <MenuSub>
+              <MenuSubTrigger>
+                <BracesIcon />
+                {t("templates.fields")}
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                {fields.map((f) => (
+                  <InsertExistingFieldItem
+                    field={f}
+                    key={f.path}
+                    onInsert={actions.insertExistingField}
+                  />
+                ))}
+              </MenuSubPopup>
+            </MenuSub>
+          )}
+          <MenuItem onClick={actions.insertCondition}>
+            <SplitIcon />
+            {t("templates.studio.scopeCondition")}
+          </MenuItem>
+          <MenuItem onClick={actions.insertLoop}>
+            <RepeatIcon />
+            {t("templates.studio.loop")}
+          </MenuItem>
+          {caretInLoop && (
+            <MenuSub>
+              <MenuSubTrigger>
+                <RepeatIcon />
+                {t("templates.studio.loop")}
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                <MenuItem onClick={() => actions.insertText("{{@index}}")}>
+                  <HashIcon />
+                  {t("templates.studio.insertItemNumber")}
+                </MenuItem>
+                <MenuItem onClick={() => actions.insertText("{{@count}}")}>
+                  <SigmaIcon />
+                  {t("templates.studio.insertItemTotal")}
+                </MenuItem>
+              </MenuSubPopup>
+            </MenuSub>
+          )}
+          {recipes.length > 0 && (
+            <MenuSub>
+              <MenuSubTrigger>
+                <BookmarkIcon />
+                {t("templates.studio.recipes")}
+              </MenuSubTrigger>
+              <MenuSubPopup>
+                {recipes.map((recipe) => (
+                  <MenuItem
+                    key={recipe.id}
+                    onClick={() => actions.insertRecipe(recipe.definition)}
+                  >
+                    <span className="min-w-0 truncate">{recipe.name}</span>
+                  </MenuItem>
+                ))}
+              </MenuSubPopup>
+            </MenuSub>
+          )}
+          <MenuSub>
+            <MenuSubTrigger>
+              <TextQuoteIcon />
+              {t("templates.studio.scopeClause")}
+            </MenuSubTrigger>
+            <MenuSubPopup>
+              {linkedClauses.map((link) => (
+                <MenuItem
+                  key={link.id}
+                  onClick={() =>
+                    actions.insertClauseSlot(
+                      link.slotName ?? slugify(link.title),
+                    )
+                  }
+                >
+                  {link.title}
+                </MenuItem>
+              ))}
+              {linkedClauses.length > 0 && <MenuSeparator />}
+              <MenuItem onClick={actions.insertClause}>
+                {t("templates.studio.emptyClauseSlot")}
+              </MenuItem>
+            </MenuSubPopup>
+          </MenuSub>
+        </MenuPopup>
+      </Menu>
+    </div>
+  );
+};
+
+const TemplateStudioRailIcon = (
+  _props: InspectorRailIconProps<TemplateStudioPayload>,
+) => <BracesIcon size={SIDE_RAIL_TAB_ICON_SIZE_PX} />;
+
+registerInspectorView<TemplateStudioPayload>({
+  navigationPolicy: "close-on-route-leave",
+  railIcon: TemplateStudioRailIcon,
+  render: TemplateStudioInspectorView,
+  type: TEMPLATE_STUDIO_VIEW,
+});
+
+// ── Selection-scoped inspector ───────────────────────────
+
+type InspectorProps = {
+  selected: DirectiveRange | null;
+  fields: StudioField[];
+  outline: OutlineNode[];
+  onFieldUpdate: (path: string, patch: Partial<StudioField>) => void;
+  onFieldBack?: () => void;
+};
+
+const Inspector = ({
+  selected,
+  fields,
+  outline,
+  onFieldUpdate,
+  onFieldBack,
+}: InspectorProps) => {
+  if (selected && selected.kind === "placeholder") {
+    const field =
+      fields.find((f) => f.path === selected.expr) ??
+      defaultStudioField(selected.expr);
+    return (
+      <FieldFace
+        field={field}
+        key={field.path}
+        onBack={onFieldBack}
+        onUpdate={(patch) => onFieldUpdate(field.path, patch)}
+      />
+    );
+  }
+
+  if (selected && (selected.kind === "if" || selected.kind === "elseif")) {
+    return <ConditionFace fields={fields} selected={selected} />;
+  }
+
+  if (selected && selected.kind === "clause") {
+    return <ClauseFace selected={selected} />;
+  }
+
+  if (selected && selected.kind === "each") {
+    return <LoopFace key={selected.expr} selected={selected} />;
+  }
+
+  // Default: whole-template overview — the field/condition outline. Identity
+  // (language) now lives in the tab header, the when-to-use guidance in its own
+  // subtab, and the count summary in the footer above the insert row.
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <FieldNavigator fields={fields} outline={outline} />
+    </ScrollArea>
+  );
+};
+
+/** Subtle count strip pinned above the insert row on the template overview:
+ *  fields · conditions · clauses. Conditions ARE the template's boolean
+ *  fields, so they are derived rather than fetched. */
+const StudioOverviewSummary = ({
+  fields,
+  templateId,
+}: {
+  fields: StudioField[];
+  templateId: string;
+}) => {
+  const t = useTranslations();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: clausesData } = useQuery(
+    templateClausesOptions(activeOrganizationId, templateId),
+  );
+  const clauseCount =
+    clausesData && "links" in clausesData ? clausesData.links.length : 0;
+  const conditionCount = fields.filter((f) => f.inputType === "boolean").length;
+  const summary = [
+    t("templates.fieldCount", { count: fields.length }),
+    t("templates.conditionCount", { count: conditionCount }),
+    t("clauses.clauseCount", { count: clauseCount }),
+  ].join(" · ");
+  return (
+    <p className="text-muted-foreground shrink-0 px-4 py-2 text-xs tabular-nums">
+      {summary}
+    </p>
+  );
+};
+
+/** "When to use" subtab: free-text guidance that steers agents (and humans)
+ *  toward or away from this template. Its own tab because the guidance matters
+ *  to agents picking a template, not just to the author drafting one. */
+const TemplateGuidanceFacet = ({ templateId }: { templateId: string }) => {
+  const t = useTranslations();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data: detailData } = useQuery(
+    templateDetailOptions(activeOrganizationId, templateId),
+  );
+  const detail =
+    detailData && !(detailData instanceof Response) && "manifest" in detailData
+      ? detailData
+      : null;
+  if (detail === null) {
+    return (
+      <div className="flex flex-1 items-center justify-center p-8">
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
+      </div>
+    );
+  }
+  return (
+    <GuidanceFields
+      key={templateId}
+      languages={detail.languages}
+      organizationId={activeOrganizationId}
+      templateId={templateId}
+      whenNotToUse={detail.whenNotToUse ?? ""}
+      whenToUse={detail.whenToUse ?? ""}
+    />
+  );
+};
+
+/** Both guidance notes, committed on blur via the template update endpoint
+ *  (the same fields the list's guidance dialog writes). Keyed on templateId so
+ *  switching templates resets the local drafts. */
+const GuidanceFields = ({
+  organizationId,
+  templateId,
+  whenToUse,
+  whenNotToUse,
+  languages,
+}: {
+  organizationId: string;
+  templateId: string;
+  whenToUse: string;
+  whenNotToUse: string;
+  languages: string[];
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const [useText, setUseText] = useState(whenToUse);
+  const [notText, setNotText] = useState(whenNotToUse);
+
+  const commit = async () => {
+    const nextUse = useText.trim() || null;
+    const nextNot = notText.trim() || null;
+    if (
+      nextUse === (whenToUse.trim() || null) &&
+      nextNot === (whenNotToUse.trim() || null)
+    ) {
+      return;
+    }
+    // The update endpoint replaces guidance wholesale, so send every field
+    // explicitly — omitting languages would clear them.
+    const response = await api.templates({ templateId }).post({
+      whenToUse: nextUse,
+      whenNotToUse: nextNot,
+      languages,
+    });
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+    await queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.templates.detail(organizationId, templateId),
+    });
+  };
+
+  return (
+    <div className="flex flex-col gap-4 p-4">
+      <GuidanceNote
+        label={t("templates.whenToUse")}
+        onBlur={() => void commit()}
+        onChange={setUseText}
+        placeholder={t("templates.whenToUsePlaceholder")}
+        value={useText}
+      />
+      <GuidanceNote
+        label={t("templates.whenNotToUse")}
+        onBlur={() => void commit()}
+        onChange={setNotText}
+        placeholder={t("templates.whenNotToUsePlaceholder")}
+        value={notText}
+      />
+    </div>
+  );
+};
+
+// The hard cap (matching templates/update.ts) is a generous safety net, not a
+// content limit; the soft recommended length is what actually nudges — past it
+// the live counter turns amber so notes stay concise for the agents reading
+// them.
+const GUIDANCE_MAX_LENGTH = 10_000;
+const GUIDANCE_RECOMMENDED_LENGTH = 500;
+
+/** One guidance note: label, a height-capped textarea that scrolls internally
+ *  once it fills, and a live character count that warns past the soft limit. */
+const GuidanceNote = ({
+  label,
+  value,
+  onChange,
+  onBlur,
+  placeholder,
+}: {
+  label: string;
+  value: string;
+  onChange: (next: string) => void;
+  onBlur: () => void;
+  placeholder: string;
+}) => {
+  const overRecommended = value.length > GUIDANCE_RECOMMENDED_LENGTH;
+  return (
+    <div className="flex flex-col gap-1.5">
+      <Label className="text-sm">{label}</Label>
+      <Textarea
+        aria-label={label}
+        className="text-sm"
+        maxLength={GUIDANCE_MAX_LENGTH}
+        onBlur={onBlur}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        style={{ maxHeight: "12rem" }}
+        value={value}
+      />
+      <span
+        className={cn(
+          "self-end text-[11px] tabular-nums",
+          overRecommended ? "text-warning" : "text-muted-foreground",
+        )}
+      >
+        {value.length}
+      </span>
+    </div>
+  );
+};
+
+/** Language-chip text from the shared language list (endonym), with an
+ *  Intl fallback localized to the UI language for tags outside the list. */
+const languageChipLabel = (tag: string, uiLang: string): string =>
+  displayLanguageName(tag, { displayLocale: uiLang });
+
+/** A condition string that is exactly one field's bare name (the "is filled"
+ *  / yes-no truthy check) maps back to that field, so the question input can
+ *  prefill with its label for editing. */
+const booleanFieldForExpr = (
+  expr: string,
+  fields: readonly StudioField[],
+): StudioField | undefined => {
+  const trimmed = expr.trim();
+  if (trimmed === "" || !isFieldPath(trimmed)) {
+    return undefined;
+  }
+  const field = fields.find((f) => f.path === trimmed);
+  return field?.inputType === "boolean" ? field : undefined;
+};
+
+// ── Conditions = boolean fields ──────────────────────────
+
+/** How a boolean field's yes/no value arises. The three are mutually
+ *  exclusive (backend-validated):
+ *   - asked: a plain boolean, answered Yes/No in the fill form (a question).
+ *   - rule:  DERIVED from `condition` (a `@stll/template-conditions` rule).
+ *   - ai:    decided by the model from `aiPrompt`.
+ *  A boolean field is always a reusable condition; this discriminates only
+ *  *how* it resolves. */
+type ConditionSource =
+  | { kind: "asked" }
+  | { kind: "rule"; expr: string }
+  | { kind: "ai"; prompt: string };
+
+const conditionSourceOf = (field: StudioField): ConditionSource => {
+  if (field.condition !== undefined && field.condition.trim() !== "") {
+    return { kind: "rule", expr: field.condition };
+  }
+  if (field.aiPrompt !== undefined && field.aiPrompt.trim() !== "") {
+    return { kind: "ai", prompt: field.aiPrompt };
+  }
+  return { kind: "asked" };
+};
+
+const isBooleanField = (field: StudioField): boolean =>
+  field.inputType === "boolean";
+
+/** One reusable condition the picker can insert: every boolean field (its bare
+ *  path is the gate). Shown in plain language; inserting references it by path
+ *  so editing the source once updates every `{{#if}}` that points at it. */
+type ReusableCondition = {
+  /** The token a marker references: the field path. */
+  ref: string;
+  /** Plain-language reading for the list. */
+  label: string;
+  source: "asked" | "rule" | "ai";
+};
+
+/** Plain-language label for a condition-field: its own label, else the
+ *  humanized rule, else the field path. */
+const conditionFieldLabel = (
+  field: StudioField,
+  fields: readonly StudioField[],
+  operatorWord: (key: OperatorWordKey) => string,
+): string => {
+  if (field.label.trim() !== "") {
+    return field.label;
+  }
+  const source = conditionSourceOf(field);
+  if (source.kind === "rule") {
+    return humanizeConditionExpr(source.expr, fields, operatorWord);
+  }
+  return field.path;
+};
+
+/** Enumerate reusable conditions from the session: every boolean field is a
+ *  condition addressed by its own path. */
+const reusableConditions = (
+  fields: readonly StudioField[],
+  operatorWord: (key: OperatorWordKey) => string,
+): ReusableCondition[] => {
+  const out: ReusableCondition[] = [];
+  for (const field of fields) {
+    if (!isBooleanField(field)) {
+      continue;
+    }
+    const source = conditionSourceOf(field);
+    out.push({
+      ref: field.path,
+      label: conditionFieldLabel(field, fields, operatorWord),
+      source: source.kind,
+    });
+  }
+  return out;
+};
+
+/** Auto-derive a human label for a freshly built condition-field from its
+ *  expression ("Client type is company"), so the reuse picker reads in plain
+ *  language without the author naming it. */
+const labelForConditionExpr = (
+  expr: string,
+  fields: readonly StudioField[],
+  operatorWord: (key: OperatorWordKey) => string,
+): string => {
+  const friendly = humanizeConditionExpr(expr, fields, operatorWord);
+  return friendly.charAt(0).toUpperCase() + friendly.slice(1);
+};
+
+/** Freeze a stable, collision-safe slug `path` for a new condition-field from
+ *  its derived label (or expression). Mirrors the question path freezing. */
+const freezeConditionPath = (
+  seed: string,
+  fields: readonly StudioField[],
+): string => {
+  const base = sanitizeFieldPath(seed) || "condition";
+  return nextFreePath(base, (candidate) =>
+    fields.some((f) => f.path === candidate),
+  );
+};
+
+/**
+ * Settings face for a `{{#if}}` / `{{#elseif}}` opener. Teaches the two real
+ * ways a condition is expressed, cheapest first:
+ *   1. Ask a yes/no question — creates a boolean field and points the block at
+ *      its bare name, so the filler sees a Yes/No toggle (zero syntax).
+ *   2. Only when a field matches — a visual `field operator value` rule builder.
+ *   3. Advanced (collapsed) — the raw expression editor.
+ */
+const ConditionFace = ({
+  selected,
+  fields,
+}: {
+  selected: DirectiveRange;
+  fields: StudioField[];
+}) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const rewrite = (next: string) =>
+    actions?.rewriteConditionExpr(next) ?? false;
+  // A block that already references a boolean condition-field edits the FIELD's
+  // source (asked / rule / AI), so the single field is the source of truth and
+  // every `{{#if path}}` pointing at it follows. Otherwise (a raw expression)
+  // fall back to the builder, which also lets the author repoint the block at a
+  // reusable condition.
+  const conditionField = booleanFieldForExpr(selected.expr, fields);
+  const humanEcho = conditionField?.label;
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <ScopeHeader
+        action={
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  aria-label={t("templates.studio.conditionHelpTooltip")}
+                  size="icon-sm"
+                  variant="ghost"
+                >
+                  <CircleHelpIcon />
+                </Button>
+              }
+            />
+            <PopoverPopup className="max-w-xs p-3">
+              <p className="text-xs">
+                {t("templates.studio.conditionHelpTooltip")}
+              </p>
+            </PopoverPopup>
+          </Popover>
+        }
+        onBack={() => actions?.deselect()}
+        subtitle={
+          humanEcho !== undefined && humanEcho !== ""
+            ? humanEcho
+            : humanizeConditionExpr(selected.expr, fields, (key) => t(key))
+        }
+      />
+      <div className="flex flex-col gap-5 px-4 py-4">
+        {conditionField === undefined ? (
+          <ConditionBuilder
+            expr={selected.expr}
+            fields={fields}
+            fromKey={`${selected.from}:${selected.expr}`}
+            onRewrite={rewrite}
+          />
+        ) : (
+          <ConditionFieldEditor field={conditionField} fields={fields} />
+        )}
+      </div>
+    </ScrollArea>
+  );
+};
+
+/**
+ * Settings face for a `{{#each <path>}}` loop opener. Loops have no value of
+ * their own; the only thing to configure is how many times they may repeat.
+ * The bounds live on the loop-container FieldMeta whose path equals the array
+ * path (`selected.expr`), which {@link LoopBoundsInputs} upserts.
+ */
+const LoopFace = ({ selected }: { selected: DirectiveRange }) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const arrayPath = selected.expr.trim();
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <ScopeHeader
+        onBack={() => actions?.deselect()}
+        subtitle={<code className="text-xs">{arrayPath}</code>}
+        title={t("templates.studio.scopeLoop")}
+      />
+      <div className="flex flex-col gap-4 px-4 py-4">
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.loopBoundsHint")}
+        </p>
+        <LoopBoundsInputs containerPath={arrayPath} />
+      </div>
+    </ScrollArea>
+  );
+};
+
+/**
+ * The two repeat-bound inputs (minimum / maximum repeats) for an `{{#each}}`
+ * loop. Reads the bounds from the loop-container FieldMeta (path =
+ * {@link containerPath}) and writes them back via `upsertField`, creating the
+ * container record when absent. Shared by {@link LoopFace} and the
+ * repeatable-field section of {@link FieldFace} so a single-field loop's author
+ * sets bounds without hunting for the `{{#each}}` marker. An empty input unsets
+ * the bound; min is clamped to ≤ max (and max to ≥ min) so an impossible range
+ * cannot be saved.
+ */
+const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
+  const t = useTranslations();
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const validation = useTemplateStudioStore(
+    (s) => s.fields.find((f) => f.path === containerPath)?.validation,
+  );
+  const minItems = validation?.minItems;
+  const maxItems = validation?.maxItems;
+
+  const writeBounds = (next: FieldValidation) => {
+    const bounds: FieldValidation = {};
+    if (next.minItems !== undefined) {
+      bounds.minItems = next.minItems;
+    }
+    if (next.maxItems !== undefined) {
+      bounds.maxItems = next.maxItems;
+    }
+    upsertField(containerPath, {
+      validation: Object.keys(bounds).length > 0 ? bounds : undefined,
+    });
+  };
+
+  const onMin = (raw: string) => {
+    const value = parseBoundInput(raw);
+    if (value === undefined) {
+      writeBounds({ maxItems });
+      return;
+    }
+    const max = maxItems !== undefined && value > maxItems ? value : maxItems;
+    writeBounds({ minItems: value, maxItems: max });
+  };
+
+  const onMax = (raw: string) => {
+    const value = parseBoundInput(raw);
+    if (value === undefined) {
+      writeBounds({ minItems });
+      return;
+    }
+    const min = minItems !== undefined && value < minItems ? value : minItems;
+    writeBounds({ minItems: min, maxItems: value });
+  };
+
+  return (
+    <div className="flex items-end gap-3">
+      <div className="flex flex-1 flex-col gap-1.5">
+        <Label className="text-sm" htmlFor="loop-min-repeats">
+          {t("templates.studio.minRepeats")}
+        </Label>
+        <Input
+          className="h-8"
+          id="loop-min-repeats"
+          inputMode="numeric"
+          min={0}
+          onChange={(e) => onMin(e.target.value)}
+          type="number"
+          value={minItems === undefined ? "" : String(minItems)}
+        />
+      </div>
+      <div className="flex flex-1 flex-col gap-1.5">
+        <Label className="text-sm" htmlFor="loop-max-repeats">
+          {t("templates.studio.maxRepeats")}
+        </Label>
+        <Input
+          className="h-8"
+          id="loop-max-repeats"
+          inputMode="numeric"
+          min={0}
+          onChange={(e) => onMax(e.target.value)}
+          type="number"
+          value={maxItems === undefined ? "" : String(maxItems)}
+        />
+      </div>
+    </div>
+  );
+};
+
+/** Parse a repeat-bound input: a non-negative integer, or undefined when the
+ *  input is empty/invalid (which unsets the bound). */
+const parseBoundInput = (raw: string): number | undefined => {
+  const trimmed = raw.trim();
+  if (trimmed === "") {
+    return undefined;
+  }
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed) || parsed < 0) {
+    return undefined;
+  }
+  return parsed;
+};
+
+/** Edit a boolean condition-field's SOURCE — how its yes/no value arises —
+ *  writing back to the single field so every `{{#if path}}` that references it
+ *  updates at once. The three sources are mutually exclusive:
+ *   - asked: plain boolean, answered in the fill form (clears condition + AI).
+ *   - rule:  a `condition` expression, DERIVED at fill time.
+ *   - ai:    an `aiPrompt`, decided by the model.
+ *  The label is editable inline; the path is frozen at creation. */
+const ConditionFieldEditor = ({
+  field,
+  fields,
+}: {
+  field: StudioField;
+  fields: StudioField[];
+}) => {
+  const t = useTranslations();
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const derived = conditionSourceOf(field);
+  const [group, setGroup] = useState<GroupNode>(emptyGroup);
+  // Clicking "Rule" with no expression yet keeps the derived source at "asked"
+  // (no `condition` is written until Done), so track the picked tab locally to
+  // reveal the right editor immediately.
+  const [pick, setPick] = useState<ConditionSource["kind"] | null>(null);
+  const sourceKind = pick ?? derived.kind;
+  const ruleFields = toRuleFields(fields);
+
+  const fieldMention = createTemplateFieldMention(
+    fields
+      .filter((f) => f.path !== field.path)
+      .map((f) => ({ id: f.path, label: f.label || f.path })),
+  );
+
+  const setAsked = () => {
+    setPick("asked");
+    upsertField(field.path, { condition: undefined, aiPrompt: undefined });
+  };
+  const setAi = () => {
+    setPick("ai");
+    upsertField(field.path, {
+      condition: undefined,
+      aiPrompt: field.aiPrompt ?? "",
+    });
+  };
+  const applyRule = () => {
+    const expression = serializeCondition(group);
+    if (expression === "") {
+      return;
+    }
+    upsertField(field.path, { condition: expression, aiPrompt: undefined });
+    setGroup(emptyGroup());
+  };
+
+  return (
+    <div className="flex flex-col gap-4">
+      <div className="flex flex-col gap-1.5">
+        <Label className="text-sm">{t("common.name")}</Label>
+        <Input
+          className="h-9 text-sm"
+          defaultValue={field.label}
+          key={field.path}
+          onBlur={(e) => {
+            const next = e.currentTarget.value.trim();
+            if (next !== field.label) {
+              upsertField(field.path, { label: next });
+            }
+          }}
+          placeholder={t("templates.studio.conditionLabelPlaceholder")}
+        />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Label className="text-sm">
+          {t("templates.studio.conditionSource")}
+        </Label>
+        <div className="flex items-center gap-1">
+          <Button
+            className="flex-1"
+            onClick={setAsked}
+            size="sm"
+            variant={sourceKind === "asked" ? "secondary" : "ghost"}
+          >
+            <MessageCircleQuestionIcon className="size-3.5" />
+            {t("templates.studio.conditionSourceAsked")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={() => {
+              setPick("rule");
+              upsertField(field.path, { aiPrompt: undefined });
+            }}
+            size="sm"
+            variant={sourceKind === "rule" ? "secondary" : "ghost"}
+          >
+            <ListFilterIcon className="size-3.5" />
+            {t("templates.studio.conditionSourceRule")}
+          </Button>
+          <Button
+            className="flex-1"
+            onClick={setAi}
+            size="sm"
+            variant={sourceKind === "ai" ? "secondary" : "ghost"}
+          >
+            <WandSparklesIcon className="size-3.5" />
+            {t("templates.studio.conditionSourceAi")}
+          </Button>
+        </div>
+      </div>
+      {sourceKind === "asked" ? (
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.conditionAskQuestionHelp")}
+        </p>
+      ) : null}
+      {sourceKind === "rule" ? (
+        <div className="flex flex-col gap-2">
+          {derived.kind === "rule" && derived.expr.trim() !== "" ? (
+            <p className="text-foreground text-sm">
+              {humanizeConditionExpr(derived.expr, fields, (key) => t(key))}
+            </p>
+          ) : null}
+          <ConditionGroupEditor
+            fields={ruleFields}
+            group={group}
+            onChange={setGroup}
+          />
+          <Button className="self-start" onClick={applyRule} size="sm">
+            {t("common.done")}
+          </Button>
+        </div>
+      ) : null}
+      {sourceKind === "ai" ? (
+        <AIPromptInput
+          mentionExtension={fieldMention}
+          onChange={(value) =>
+            upsertField(field.path, { aiPrompt: value, condition: undefined })
+          }
+          placeholder={t("templates.studio.conditionAiPlaceholder")}
+          value={field.aiPrompt ?? ""}
+          valueFormat="text"
+          variant="minimal"
+        />
+      ) : null}
+    </div>
+  );
+};
+
+/** The three-tier condition-setting UI (ask-a-question, match-a-field rule,
+ *  advanced raw editor), shared by the ConditionFace (editing a selected
+ *  `{{#if}}` opener) and the FieldFace's "Show only if…" section (editing the
+ *  block that wraps the field's own marker). `onRewrite` is the only thing
+ *  that differs between callers: it points at whichever block this builder
+ *  targets. `fromKey` resets the question/advanced inputs when the target or
+ *  its expression changes. */
+const ConditionBuilder = ({
+  expr,
+  fields,
+  fromKey,
+  onRewrite,
+}: {
+  expr: string;
+  fields: StudioField[];
+  fromKey: string;
+  onRewrite: (next: string) => boolean;
+}) => (
+  <>
+    <ConditionReusePicker
+      currentRef={expr}
+      fields={fields}
+      onRewrite={onRewrite}
+    />
+    <ConditionQuestionBuilder
+      expr={expr}
+      fields={fields}
+      key={fromKey}
+      onRewrite={onRewrite}
+    />
+    <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />
+    <ConditionAdvanced expr={expr} fromKey={fromKey} onRewrite={onRewrite} />
+  </>
+);
+
+/** "Reuse a condition" affordance: every existing reusable condition (boolean
+ *  fields), in plain language. Picking one points this block at it by reference
+ *  (`{{#if <ref>}}`), so editing that condition's source once updates every
+ *  block that reuses it. Quiet by convention: a single collapsed row, and
+ *  nothing at all when there is nothing to reuse. */
+const ConditionReusePicker = ({
+  fields,
+  currentRef,
+  onRewrite,
+}: {
+  fields: StudioField[];
+  /** The block's current expression; the matching reusable entry is hidden so
+   *  the list only offers *other* conditions. */
+  currentRef: string;
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  const current = currentRef.trim();
+  const options = reusableConditions(fields, (key) => t(key)).filter(
+    (c) => c.ref !== current,
+  );
+
+  if (options.length === 0) {
+    return null;
+  }
+
+  if (!open) {
+    return (
+      <section className="flex flex-col gap-2">
+        <h4 className="flex items-center gap-1.5 text-sm font-medium">
+          <CopyIcon className="text-muted-foreground size-4 shrink-0" />
+          {t("templates.studio.conditionReuse")}
+        </h4>
+        <Button
+          className="self-start"
+          onClick={() => setOpen(true)}
+          size="sm"
+          variant="outline"
+        >
+          {t("templates.studio.conditionReusePick")}
+        </Button>
+      </section>
+    );
+  }
+  return (
+    <section className="flex flex-col gap-2">
+      <h4 className="flex items-center gap-1.5 text-sm font-medium">
+        <CopyIcon className="text-muted-foreground size-4 shrink-0" />
+        {t("templates.studio.conditionReuse")}
+      </h4>
+      <ul className="flex flex-col">
+        {options.map((option) => (
+          <li key={option.ref}>
+            <button
+              className="hover:bg-muted flex w-full items-center gap-2 rounded px-1.5 py-1.5 text-start text-sm"
+              onClick={() => {
+                if (!onRewrite(option.ref)) {
+                  stellaToast.add({
+                    type: "error",
+                    title: t("templates.studio.invalidExpression"),
+                  });
+                  return;
+                }
+                setOpen(false);
+              }}
+              title={option.ref}
+              type="button"
+            >
+              <span className="min-w-0 flex-1 truncate">{option.label}</span>
+              <code className="text-muted-foreground shrink-0 text-[10px]">
+                {option.ref}
+              </code>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+};
+
+/** Primary, no-syntax path: a question label becomes a boolean field whose
+ *  bare name is the block's condition. The filler answers Yes/No; the block
+ *  shows on Yes. Prefilled with the current boolean field's label when the
+ *  condition already points at one. */
+const ConditionQuestionBuilder = ({
+  expr,
+  fields,
+  onRewrite,
+}: {
+  expr: string;
+  fields: StudioField[];
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const existing = booleanFieldForExpr(expr, fields);
+  const [label, setLabel] = useState(existing?.label ?? "");
+
+  const commit = () => {
+    const trimmed = label.trim();
+    if (trimmed === "") {
+      return;
+    }
+    // Editing an existing question: keep its field/path, just relabel.
+    if (existing !== undefined) {
+      if (trimmed !== existing.label) {
+        upsertField(existing.path, { label: trimmed });
+      }
+      return;
+    }
+    const base = sanitizeFieldPath(trimmed) || "question";
+    const taken = (candidate: string) =>
+      useTemplateStudioStore
+        .getState()
+        .fields.some((f) => f.path === candidate);
+    const path = nextFreePath(base, taken);
+    upsertField(path, { inputType: "boolean", label: trimmed });
+    onRewrite(path);
+  };
+
+  return (
+    <section className="flex flex-col gap-2">
+      <h4 className="flex items-center gap-1.5 text-sm font-medium">
+        <MessageCircleQuestionIcon className="text-muted-foreground size-4 shrink-0" />
+        {t("templates.studio.conditionAskQuestion")}
+      </h4>
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        {t("templates.studio.conditionAskQuestionHelp")}
+      </p>
+      <Input
+        className="h-9 text-sm"
+        onBlur={commit}
+        onChange={(e) => setLabel(e.currentTarget.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.currentTarget.blur();
+            return;
+          }
+          if (e.key === "Escape") {
+            setLabel(existing?.label ?? "");
+            e.currentTarget.blur();
+          }
+        }}
+        placeholder={t("templates.studio.conditionAskQuestionPlaceholder")}
+        value={label}
+      />
+    </section>
+  );
+};
+
+/** Secondary path: a visual `field operator value` rule (All/Any of several),
+ *  populated from the template's non-boolean fields. Serialization is one-way
+ *  (building sets the raw expression); the builder does not parse an existing
+ *  expression back, so it always starts empty — the current expression still
+ *  shows in Advanced below. */
+const ConditionRuleBuilder = ({
+  fields,
+  onRewrite,
+}: {
+  fields: StudioField[];
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const upsertField = useTemplateStudioStore((s) => s.upsertField);
+  const [open, setOpen] = useState(false);
+  const [group, setGroup] = useState<GroupNode>(emptyGroup);
+  const ruleFields = toRuleFields(fields);
+
+  // Building a rule does not point the block at a raw expression; it creates a
+  // reusable boolean condition-field whose value is DERIVED by that rule, then
+  // points the block at the field's path. The field is then in the reuse
+  // picker and edit-once-propagates to every `{{#if path}}` referencing it.
+  const apply = () => {
+    const expression = serializeCondition(group);
+    if (expression === "") {
+      return;
+    }
+    const label = labelForConditionExpr(expression, fields, (key) => t(key));
+    const path = freezeConditionPath(label, fields);
+    upsertField(path, {
+      inputType: "boolean",
+      label,
+      condition: expression,
+    });
+    if (onRewrite(path)) {
+      setGroup(emptyGroup());
+      setOpen(false);
+      return;
+    }
+    stellaToast.add({
+      type: "error",
+      title: t("templates.studio.invalidExpression"),
+    });
+  };
+
+  if (!open) {
+    return (
+      <section className="flex flex-col gap-2">
+        <h4 className="flex items-center gap-1.5 text-sm font-medium">
+          <ListFilterIcon className="text-muted-foreground size-4 shrink-0" />
+          {t("templates.studio.conditionMatchField")}
+        </h4>
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.conditionMatchFieldHelp")}
+        </p>
+        <Button
+          className="self-start"
+          onClick={() => setOpen(true)}
+          size="sm"
+          variant="outline"
+        >
+          <PlusIcon />
+          {t("templates.studio.conditionBuildRule")}
+        </Button>
+      </section>
+    );
+  }
+  return (
+    <section className="flex flex-col gap-2">
+      <h4 className="flex items-center gap-1.5 text-sm font-medium">
+        <ListFilterIcon className="text-muted-foreground size-4 shrink-0" />
+        {t("templates.studio.conditionMatchField")}
+      </h4>
+      <ConditionGroupEditor
+        fields={ruleFields}
+        group={group}
+        onChange={setGroup}
+      />
+      <div className="flex items-center gap-2">
+        <Button onClick={apply} size="sm">
+          {t("common.done")}
+        </Button>
+        <Button
+          onClick={() => {
+            setGroup(emptyGroup());
+            setOpen(false);
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          {t("common.cancel")}
+        </Button>
+      </div>
+    </section>
+  );
+};
+
+/** Power-user / reference path, collapsed by default: the raw expression
+ *  editor for the block opener. */
+const ConditionAdvanced = ({
+  expr,
+  fromKey,
+  onRewrite,
+}: {
+  expr: string;
+  fromKey: string;
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  return (
+    <section className="border-t pt-3">
+      <button
+        aria-expanded={open}
+        className="hover:bg-muted flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-start text-xs"
+        onClick={() => setOpen((v) => !v)}
+        type="button"
+      >
+        {open ? (
+          <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
+        ) : (
+          <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+        )}
+        <span className="text-muted-foreground font-medium">
+          {t("templates.studio.conditionAdvanced")}
+        </span>
+      </button>
+      {open && (
+        <div className="mt-2 flex flex-col gap-3">
+          <ConditionExprEditor
+            expr={expr}
+            key={fromKey}
+            onRewrite={onRewrite}
+          />
+        </div>
+      )}
+    </section>
+  );
+};
+
+/** Click-to-edit condition expression: commits by rewriting the block
+ *  opener's `{{#if …}}` text in the document. */
+const ConditionExprEditor = ({
+  expr,
+  onRewrite,
+}: {
+  expr: string;
+  onRewrite: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(expr);
+
+  const commit = () => {
+    if (value.trim() === expr) {
+      setEditing(false);
+      return;
+    }
+    if (onRewrite(value)) {
+      setEditing(false);
+      return;
+    }
+    stellaToast.add({
+      type: "error",
+      title: t("templates.studio.invalidExpression"),
+    });
+  };
+
+  if (!editing) {
+    return (
+      <button
+        className="hover:bg-muted/60 group flex w-full items-center gap-1.5 rounded border px-3 py-2 text-start"
+        onClick={() => setEditing(true)}
+        title={t("common.edit")}
+        type="button"
+      >
+        <code className="min-w-0 flex-1 truncate text-xs">{expr || "—"}</code>
+        <PencilIcon className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  }
+  return (
+    <Input
+      autoFocus
+      className="h-8 font-mono text-xs"
+      onBlur={commit}
+      onChange={(e) => setValue(e.currentTarget.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          commit();
+        }
+        if (e.key === "Escape") {
+          setValue(expr);
+          setEditing(false);
+        }
+      }}
+      value={value}
+    />
+  );
+};
+
+const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const templateId = useTemplateStudioStore((s) => s.templateId);
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const queryClient = useQueryClient();
+  const [linkOpen, setLinkOpen] = useState(false);
+  const clausesOptions = templateClausesOptions(
+    activeOrganizationId,
+    templateId ?? "",
+  );
+  const { data: linksData } = useQuery({
+    ...clausesOptions,
+    enabled: templateId !== null,
+  });
+  const link =
+    linksData && "links" in linksData
+      ? linksData.links.find((l) => l.slotName === selected.expr)
+      : undefined;
+
+  return (
+    <ScrollArea className="min-h-0 flex-1">
+      <ScopeHeader
+        onBack={() => actions?.deselect()}
+        subtitle={selected.expr}
+        title={t("templates.studio.scopeClause")}
+      />
+      <div className="flex flex-col gap-3 px-4 py-4">
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.clauseSlotHelp")}
+        </p>
+        {link === undefined ? (
+          <p className="text-muted-foreground text-xs">
+            {t("clauses.noLinkedClauses")}
+          </p>
+        ) : (
+          <div className="rounded-md border p-2.5 text-sm">
+            {link.clause === null ? (
+              <span className="text-destructive">
+                {t("clauses.clauseDeleted")}
+              </span>
+            ) : (
+              link.clause.title
+            )}
+          </div>
+        )}
+        <Button onClick={() => setLinkOpen(true)} size="sm" variant="outline">
+          {t("clauses.linkClause")}
+        </Button>
+      </div>
+      {templateId === null ? null : (
+        <LinkClauseDialog
+          defaultSlotName={selected.expr}
+          onLinked={() => {
+            void queryClient.invalidateQueries({
+              queryKey: clausesOptions.queryKey,
+            });
+          }}
+          onOpenChange={setLinkOpen}
+          open={linkOpen}
+          templateId={templateId}
+        />
+      )}
+    </ScrollArea>
+  );
+};
+
+/** Document outline: fields where they sit, condition/loop blocks as
+ *  collapsible groups owning what's inside them, clause slots inline.
+ *  Every row jumps the document caret to its marker. Yes/no fields are not
+ *  listed here; they show under the Conditions disclosure as questions. */
+const FieldNavigator = ({
+  fields,
+  outline,
+}: {
+  fields: StudioField[];
+  outline: OutlineNode[];
+}) => {
+  const t = useTranslations();
+  const [showUnused, setShowUnused] = useState(false);
+  // Fields registered in the session but with no marker in the document:
+  // suggested but not placed. Tucked under a disclosure so the main list
+  // shows only what is actually in the document.
+  const placed = outlineFieldPaths(outline);
+  // A loop-container record (carries `{{#each}}` repeat bounds, no marker of
+  // its own) is loop config, not a fillable field, so it never shows in the
+  // unplaced list even though its bare path is not "placed".
+  const unplaced = fields.filter(
+    (f) =>
+      !placed.has(f.path) &&
+      f.inputType !== "boolean" &&
+      !fieldHasLoopBounds(f),
+  );
+  return (
+    <div className="px-4 py-3">
+      <ul className="flex flex-col">
+        {dedupeOutlineFields(outline).map((item, index) => (
+          <OutlineRow
+            count={item.count}
+            fields={fields}
+            key={index}
+            node={item.node}
+          />
+        ))}
+      </ul>
+      {unplaced.length > 0 && (
+        <div className="mt-1">
+          <button
+            aria-expanded={showUnused}
+            className="hover:bg-muted text-muted-foreground flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start text-xs font-medium"
+            onClick={() => setShowUnused((v) => !v)}
+            type="button"
+          >
+            {showUnused ? (
+              <ChevronDownIcon className="size-3.5" />
+            ) : (
+              <ChevronRightIcon className="size-3.5" />
+            )}
+            {t("templates.unusedFields", { count: unplaced.length })}
+          </button>
+          {showUnused && (
+            <ul className="flex flex-col">
+              {unplaced.map((f) => (
+                <OutlineRow
+                  fields={fields}
+                  key={`unplaced-${f.path}`}
+                  node={{ type: "field", path: f.path, from: -1 }}
+                />
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+/** The field row's hover "+" that inserts the field's marker at the document
+ *  caret. A lookup field with more than one output format opens a menu so the
+ *  author picks WHICH rendering (default `{{path}}` or keyed `{{path.key}}`);
+ *  otherwise a single click inserts `{{path}}`. */
+const InsertAtCaretButton = ({
+  field,
+  onInsert,
+}: {
+  field: StudioField;
+  onInsert: (formatKey?: string) => void;
+}) => {
+  const t = useTranslations();
+  const formats = field.lookup?.formats ?? [];
+  const className =
+    "absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100";
+  if (formats.length <= 1) {
+    return (
+      <Button
+        aria-label={t("templates.studio.insertAtCaret")}
+        className={className}
+        onClick={(e) => {
+          e.stopPropagation();
+          onInsert();
+        }}
+        size="icon-sm"
+        title={t("templates.studio.insertAtCaret")}
+        variant="outline"
+      >
+        <PlusIcon />
+      </Button>
+    );
+  }
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("templates.studio.insertAtCaret")}
+        render={
+          <Button
+            className={className}
+            onClick={(e) => e.stopPropagation()}
+            size="icon-sm"
+            title={t("templates.studio.insertAtCaret")}
+            variant="outline"
+          />
+        }
+      >
+        <PlusIcon />
+      </MenuTrigger>
+      <MenuPopup align="end">
+        {formats.map((format, index) => (
+          <MenuItem
+            key={`${format.key}-${String(index)}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onInsert(index === 0 ? undefined : format.key);
+            }}
+          >
+            {index === 0
+              ? t("templates.studio.insertFormatDefault")
+              : format.key}
+          </MenuItem>
+        ))}
+      </MenuPopup>
+    </Menu>
+  );
+};
+
+const OutlineRow = ({
+  node,
+  fields,
+  count = 1,
+}: {
+  node: OutlineNode;
+  fields: StudioField[];
+  count?: number;
+}) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+
+  const jump = () => {
+    if (node.from >= 0) {
+      actions?.focusPosition(node.from);
+    }
+  };
+
+  if (node.type === "field") {
+    const field = fields.find((f) => f.path === node.path);
+    // Yes/no fields live under the Conditions disclosure as questions.
+    if (field !== undefined && field.inputType === "boolean") {
+      return null;
+    }
+    const Icon =
+      field === undefined
+        ? VALUE_TYPE_META.text.icon
+        : VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon;
+    return (
+      <li className="group/row relative">
+        <button
+          className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
+          onClick={jump}
+          title={node.path}
+          type="button"
+        >
+          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+            <Icon className="size-4" />
+          </span>
+          <FieldRowLabel label={field?.label ?? ""} path={node.path} />
+          {field === undefined ? null : (
+            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
+              {count > 1 ? (
+                <span className="text-muted-foreground text-[10px] tabular-nums">
+                  {count}×
+                </span>
+              ) : null}
+              <FieldCapabilityIcons field={field} />
+              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+            </span>
+          )}
+        </button>
+        {field === undefined ? null : (
+          <InsertAtCaretButton
+            field={field}
+            onInsert={(formatKey) =>
+              actions?.insertExistingField(node.path, formatKey)
+            }
+          />
+        )}
+      </li>
+    );
+  }
+
+  if (node.type === "clause") {
+    return (
+      <li className="group/row relative">
+        <button
+          className="hover:bg-muted flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
+          onClick={jump}
+          title={t("templates.studio.scopeClause")}
+          type="button"
+        >
+          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+            <TextQuoteIcon className="size-4" />
+          </span>
+          <span className="truncate">{node.name}</span>
+        </button>
+        <Button
+          aria-label={t("templates.studio.insertAtCaret")}
+          className="absolute end-1.5 top-1/2 -translate-y-1/2 opacity-0 transition-opacity group-hover/row:opacity-100"
+          onClick={(e) => {
+            e.stopPropagation();
+            actions?.insertClauseSlot(node.name);
+          }}
+          size="icon-sm"
+          title={t("templates.studio.insertAtCaret")}
+          variant="outline"
+        >
+          <PlusIcon />
+        </Button>
+      </li>
+    );
+  }
+
+  // A loop wrapping exactly one field IS that field, made repeatable: render
+  // it as the field's row (opens the face) with a repeats badge, so the user
+  // doesn't have to drill into the group to reach the only field inside.
+  if (node.kind === "each") {
+    const onlyChild = node.children.length === 1 ? node.children[0] : undefined;
+    if (onlyChild !== undefined && onlyChild.type === "field") {
+      const loopField = fields.find((f) => f.path === onlyChild.path);
+      const LoopIcon =
+        loopField === undefined
+          ? VALUE_TYPE_META.text.icon
+          : VALUE_TYPE_META[inputTypeValueKind(loopField.inputType)].icon;
+      return (
+        <li className="group/row relative">
+          <button
+            className="hover:bg-muted group flex w-full items-center gap-2.5 rounded-md px-2 py-2 pe-10 text-start text-sm"
+            onClick={() => actions?.focusPosition(onlyChild.from)}
+            title={onlyChild.path}
+            type="button"
+          >
+            <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+              <LoopIcon className="size-4" />
+            </span>
+            <FieldRowLabel
+              label={loopField?.label ?? ""}
+              path={onlyChild.path}
+            />
+            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
+              <RepeatIcon className="size-3.5" />
+              {loopField === undefined ? null : (
+                <FieldCapabilityIcons field={loopField} />
+              )}
+              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+            </span>
+          </button>
+        </li>
+      );
+    }
+  }
+
+  return <OutlineGroupRow fields={fields} jump={jump} node={node} />;
+};
+
+/** A condition / loop block in the outline, rendered as a peer of field rows:
+ *  a boxed icon slot (Split for if/elseif/else, Repeat for each) and a human
+ *  reading of the opener as the label, with the raw expression kept in the
+ *  row's title. Collapsible when it owns children. */
+const OutlineGroupRow = ({
+  node,
+  fields,
+  jump,
+}: {
+  node: OutlineGroup;
+  fields: StudioField[];
+  jump: () => void;
+}) => {
+  const t = useTranslations();
+  const [open, setOpen] = useState(true);
+  const GroupIcon = node.kind === "each" ? RepeatIcon : SplitIcon;
+  const groupTitle =
+    node.kind === "each"
+      ? t("templates.studio.loop")
+      : t("templates.studio.scopeCondition");
+  const friendly = humanizeConditionExpr(node.expr, fields, (key) => t(key));
+  let groupLabel: string;
+  if (node.kind === "each") {
+    groupLabel = t("templates.studio.repeats", { item: friendly });
+  } else if (node.kind === "else") {
+    groupLabel = t("templates.studio.otherwise");
+  } else if (node.kind === "elseif") {
+    groupLabel = t("templates.studio.otherwiseIf", { condition: friendly });
+  } else {
+    groupLabel = friendly;
+  }
+  const hasChildren = node.children.length > 0;
+  // A condition that is a bare boolean field IS that field used as a gate, so
+  // it carries the same required/repeatable affordances a field row shows.
+  // Rule/AI conditions reference no single field, so they show no indicator.
+  const conditionField =
+    node.kind === "if" || node.kind === "elseif"
+      ? booleanFieldForExpr(node.expr, fields)
+      : undefined;
+  return (
+    <li className="group/row relative">
+      {/* Expand control sits on the RIGHT so the leading icon lines up with
+          field rows (which have no leading chevron). */}
+      <div className="flex items-center">
+        <button
+          className="hover:bg-muted group flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-2 py-2 text-start text-sm"
+          onClick={jump}
+          title={node.expr === "" ? groupTitle : node.expr}
+          type="button"
+        >
+          <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
+            <GroupIcon className="size-4" />
+          </span>
+          <span className="truncate">{groupLabel}</span>
+          {conditionField === undefined ? null : (
+            <span className="text-muted-foreground ms-auto flex shrink-0 items-center gap-1.5">
+              {fieldHasLoopBounds(conditionField) ? (
+                <RepeatIcon className="size-3.5" />
+              ) : null}
+              <FieldCapabilityIcons field={conditionField} />
+            </span>
+          )}
+        </button>
+        {hasChildren ? (
+          <button
+            aria-expanded={open}
+            aria-label={groupTitle}
+            className="hover:bg-muted text-muted-foreground me-1 shrink-0 rounded p-0.5"
+            onClick={() => setOpen((v) => !v)}
+            type="button"
+          >
+            {open ? (
+              <ChevronDownIcon className="size-3.5" />
+            ) : (
+              <ChevronRightIcon className="size-3.5" />
+            )}
+          </button>
+        ) : null}
+      </div>
+      {hasChildren && open ? (
+        <ul className="border-border ms-2 flex flex-col border-s ps-2">
+          {dedupeOutlineFields(node.children).map((item, index) => (
+            <OutlineRow
+              count={item.count}
+              fields={fields}
+              key={index}
+              node={item.node}
+            />
+          ))}
+        </ul>
+      ) : null}
+    </li>
+  );
+};
+
+/** Row text for an outline/question entry: the label leads; the mono path is
+ *  secondary (revealed on hover next to it). A field without a label shows
+ *  its path once instead, with a quiet pencil hinting that clicking through
+ *  leads to rename. */
+const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
+  if (label === "") {
+    return (
+      <>
+        <code className="truncate">{path}</code>
+        <PencilIcon className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
+      </>
+    );
+  }
+  return (
+    <>
+      <span className="truncate">{label}</span>
+      <code className="text-muted-foreground min-w-0 truncate text-[10px] opacity-0 transition-opacity group-hover:opacity-100">
+        {path}
+      </code>
+    </>
+  );
+};
+
+/** Mini-icons marking what a field can do: registry lookup, AI involvement,
+ *  formula derivation, and a quiet dot for required. */
+const FieldCapabilityIcons = ({ field }: { field: StudioField }) => (
+  <>
+    {field.lookup === undefined ? null : <LandmarkIcon className="size-3" />}
+    {field.aiAdapt ? (
+      <span className="flex items-center gap-0.5">
+        <UserIcon className="size-3" />
+        <WandSparklesIcon className="size-3" />
+      </span>
+    ) : null}
+    {!field.aiAdapt && field.aiPrompt !== undefined ? (
+      <WandSparklesIcon className="size-3" />
+    ) : null}
+    {field.formula === undefined ? null : <SigmaIcon className="size-3" />}
+    {field.required ? (
+      <span aria-hidden="true" className="size-1 rounded-full bg-current" />
+    ) : null}
+  </>
+);
+
+const ScopeHeader = ({
+  title,
+  subtitle,
+  action,
+  onBack,
+}: {
+  title?: string;
+  subtitle?: ReactNode;
+  /** Right-aligned control (e.g. the field face's suggest wand). */
+  action?: ReactNode;
+  /** Renders a leading back arrow returning to the template overview. */
+  onBack?: () => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <div className="flex min-h-12 items-center justify-between gap-2 border-b px-3 py-2">
+      {onBack === undefined ? null : (
+        <Button
+          aria-label={t("common.goBack")}
+          className="-ms-1.5 shrink-0 self-start"
+          onClick={onBack}
+          size="icon-sm"
+          variant="ghost"
+        >
+          <ArrowLeftIcon />
+        </Button>
+      )}
+      <div className="min-w-0 flex-1">
+        {title === undefined ? null : (
+          <p className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
+            {title}
+          </p>
+        )}
+        {subtitle === undefined ? null : (
+          <div className="min-w-0 overflow-hidden text-sm">{subtitle}</div>
+        )}
+      </div>
+      {action === undefined ? null : (
+        <div className="shrink-0 self-start">{action}</div>
+      )}
+    </div>
+  );
+};
+
+/** Why the Repeatable switch is locked; `TranslationKey` keeps the stored
+ *  keys honest against the message catalogue. */
+type RepeatDisabledKey = TranslationKey &
+  (
+    | "templates.studio.repeatableLoopHasOtherContent"
+    | "templates.studio.repeatableNested"
+  );
+
+/** What the Repeatable toggle can show for a field: hidden for object
+ *  subfields (e.g. `tenant.name`) and unplaced fields, otherwise on/off
+ *  with an optional reason the switch is locked. */
+type FieldRepeatState =
+  | { kind: "hidden" }
+  | { kind: "off" | "on"; disabledKey: RepeatDisabledKey | null };
+
+const fieldRepeatState = (
+  field: StudioField,
+  outline: OutlineNode[],
+): FieldRepeatState => {
+  const group = findEnclosingEachGroup(outline, field.path, null);
+  if (group !== null) {
+    const loopPath = group.expr.trim();
+    if (loopPath !== "" && field.path.startsWith(`${loopPath}.`)) {
+      // The loop's own item field: ON; unwrapping is only offered while the
+      // loop body holds nothing but this field's markers.
+      const exclusive = group.children.every(
+        (child) => child.type === "field" && child.path === field.path,
+      );
+      return {
+        kind: "on",
+        disabledKey: exclusive
+          ? null
+          : "templates.studio.repeatableLoopHasOtherContent",
+      };
+    }
+    // A constant field inside someone else's loop; wrapping again would
+    // nest loops the fill form cannot ask about.
+    return { kind: "off", disabledKey: "templates.studio.repeatableNested" };
+  }
+  if (field.path.includes(".") || !outlineFieldPaths(outline).has(field.path)) {
+    return { kind: "hidden" };
+  }
+  return { kind: "off", disabledKey: null };
+};
+
+/** Whether this field's marker is already wrapped in an `{{#if}}` block, and
+ *  the block's live expression. `canRemove` mirrors the Repeatable guard: the
+ *  un-wrap is only offered while the branch holds nothing but this field's
+ *  marker (otherwise removing the `if` would expose the block's other
+ *  content unconditionally). */
+type FieldConditionState =
+  | { kind: "none" }
+  | { kind: "conditional"; expr: string; canRemove: boolean };
+
+const fieldConditionState = (
+  field: StudioField,
+  outline: OutlineNode[],
+): FieldConditionState => {
+  const group = findEnclosingIfGroup(outline, field.path, null);
+  if (group === null) {
+    return { kind: "none" };
+  }
+  const canRemove = group.children.every(
+    (child) => child.type === "field" && child.path === field.path,
+  );
+  return { kind: "conditional", expr: group.expr, canRemove };
+};
+
+/** "Show only if…" section of the field face (secondary, below the value
+ *  controls): conditions the field's own marker without leaving the face.
+ *  Not conditional yet → a ghost affordance that inline-wraps the marker in
+ *  `{{#if condition}}…{{/if}}` and reveals the shared condition builder so the
+ *  author sets the expression at once. Already conditional → the current
+ *  reading plus the same builder to edit it, and a Remove action that unwraps
+ *  the block (disabled when the block holds more than this field). */
+const FieldConditionSection = ({
+  field,
+  fields,
+  condition,
+}: {
+  field: StudioField;
+  fields: StudioField[];
+  condition: FieldConditionState;
+}) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const rewrite = (next: string) =>
+    actions?.rewriteFieldConditionExpr(field.path, next) ?? false;
+
+  if (condition.kind === "none") {
+    return (
+      <div className="flex flex-col gap-1.5 border-t px-4 py-3">
+        <Button
+          className="self-start"
+          onClick={() => {
+            if (actions?.wrapFieldInCondition(field.path) !== true) {
+              stellaToast.add({
+                type: "error",
+                title: t("errors.actionFailed"),
+              });
+            }
+          }}
+          size="sm"
+          variant="ghost"
+        >
+          <SplitIcon className="size-3.5" />
+          {t("templates.studio.showOnlyIf")}
+        </Button>
+        <p className="text-muted-foreground text-xs leading-relaxed">
+          {t("templates.studio.showOnlyIfHelp")}
+        </p>
+      </div>
+    );
+  }
+
+  const friendly = humanizeConditionExpr(condition.expr, fields, (key) =>
+    t(key),
+  );
+  return (
+    <div className="flex flex-col gap-3 border-t px-4 py-4">
+      <div className="flex flex-col gap-1">
+        <Label className="text-sm">{t("templates.studio.showOnlyWhen")}</Label>
+        <p className="text-foreground text-sm">{friendly}</p>
+      </div>
+      <ConditionBuilder
+        expr={condition.expr}
+        fields={fields}
+        fromKey={`${field.path}:${condition.expr}`}
+        onRewrite={rewrite}
+      />
+      <Button
+        className="text-muted-foreground self-start"
+        disabled={!condition.canRemove}
+        onClick={() => {
+          if (actions?.unwrapFieldCondition(field.path) !== true) {
+            stellaToast.add({ type: "error", title: t("errors.actionFailed") });
+          }
+        }}
+        size="sm"
+        title={
+          condition.canRemove
+            ? undefined
+            : t("templates.studio.removeConditionBlocked")
+        }
+        variant="ghost"
+      >
+        <Trash2Icon className="size-3.5" />
+        {t("templates.studio.removeCondition")}
+      </Button>
+    </div>
+  );
+};
+
+/**
+ * Field settings face: leads with what the field IS (a blank in the fill
+ * form), lets the model propose a configuration, and previews the actual fill
+ * control so every setting shows its consequence.
+ */
+const FieldFace = ({
+  field,
+  onUpdate,
+  onBack,
+}: {
+  field: StudioField;
+  onUpdate: (patch: Partial<StudioField>) => void;
+  onBack?: (() => void) | undefined;
+}) => {
+  const t = useTranslations();
+  const actions = useTemplateStudioStore((s) => s.actions);
+  const fields = useTemplateStudioStore((s) => s.fields);
+  const fieldCount = fields.length;
+  const outline = useTemplateStudioStore((s) => s.outline);
+
+  // `@`-mention source for the AI-instruction inputs: every other field's
+  // path/label, so an author can reference a sibling field. The mention node
+  // serializes back to `{{path}}` in the stored `aiPrompt` string.
+  const fieldMention = useMemo(
+    () =>
+      createTemplateFieldMention(
+        fields
+          .filter((f) => f.path !== field.path)
+          .map((f) => ({ id: f.path, label: f.label || f.path })),
+      ),
+    [fields, field.path],
+  );
+  const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
+
+  // Clear the in-document preview when the face leaves or switches fields
+  // (cancelling any pending lookup preview so it cannot re-set it).
+  useExternalSyncEffect(
+    () => () => {
+      cancelLookupPreviews();
+      useTemplateStudioStore.getState().actions?.setFillPreview(null);
+    },
+    [field.path],
+  );
+
+  const repeat = fieldRepeatState(field, outline);
+  // The loop-container path that carries this loop's repeat bounds: the
+  // enclosing `{{#each <path>}}` group's array path (which equals `<base>` for
+  // a single-field repeatable, where the item field is `<base>.value`).
+  const enclosingEach = findEnclosingEachGroup(outline, field.path, null);
+  const loopContainerPath =
+    enclosingEach === null ? null : enclosingEach.expr.trim() || null;
+  const condition = fieldConditionState(field, outline);
+  const fieldIsPlaced = outlineFieldPaths(outline).has(field.path);
+  const toggleRepeatable = (next: boolean) => {
+    const applied = actions?.setFieldRepeatable(field.path, next) ?? false;
+    if (!applied) {
+      stellaToast.add({ type: "error", title: t("errors.actionFailed") });
+    }
+  };
+
+  // The four value sources are mutually exclusive (the manifest validator
+  // rejects combinations), so each picker button clears the other three.
+  let valueSource: ValueSource = "person";
+  if (field.formula !== undefined) {
+    valueSource = "formula";
+  } else if (field.aiAdapt) {
+    valueSource = "textAi";
+  } else if (field.aiPrompt !== undefined) {
+    valueSource = "ai";
+  }
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      <ScrollArea className="min-h-0 flex-1">
+        <ScopeHeader
+          action={
+            <div className="flex items-center gap-0.5">
+              <Button
+                aria-label={t("common.previous")}
+                disabled={fieldCount < 2}
+                onClick={() => actions?.focusAdjacentField(-1)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <ChevronLeftIcon />
+              </Button>
+              <Button
+                aria-label={t("common.next")}
+                disabled={fieldCount < 2}
+                onClick={() => actions?.focusAdjacentField(1)}
+                size="icon-sm"
+                variant="ghost"
+              >
+                <ChevronRightIcon />
+              </Button>
+              <Button
+                aria-label={t("common.delete")}
+                onClick={() => actions?.deleteField(field.path)}
+                size="icon-sm"
+                title={t("common.delete")}
+                variant="ghost"
+              >
+                <Trash2Icon className="text-muted-foreground" />
+              </Button>
+              <Button
+                aria-label={t("templates.studio.saveAsRecipe")}
+                onClick={() => setRecipeDialogOpen(true)}
+                size="icon-sm"
+                title={t("templates.studio.saveAsRecipe")}
+                variant="ghost"
+              >
+                <BookmarkPlusIcon />
+              </Button>
+            </div>
+          }
+          onBack={onBack ?? (() => actions?.deselect())}
+          subtitle={
+            <FieldPathEditor
+              key={field.path}
+              onRename={(next) => {
+                if (!actions) {
+                  return false;
+                }
+                const safe = sanitizeFieldPath(next);
+                const renamed = actions.renameFieldPath(field.path, safe);
+                // A human-looking name doubles as the label while none is
+                // set: typing "Name of lawyer" yields path name_of_lawyer
+                // and that label in one go.
+                if (renamed && field.label === "" && next.trim() !== safe) {
+                  onUpdate({ label: next.trim() });
+                }
+                return renamed;
+              }}
+              path={field.path}
+            />
+          }
+        />
+        <div className="flex flex-col gap-2 border-t px-4 py-4">
+          <Label className="text-sm">{t("templates.studio.whoFills")}</Label>
+          <div className="grid grid-cols-2 gap-1.5">
+            <Button
+              className="justify-start"
+              onClick={() =>
+                onUpdate({
+                  aiPrompt: undefined,
+                  aiAdapt: false,
+                  aiSeesDocument: false,
+                  formula: undefined,
+                })
+              }
+              size="sm"
+              variant={valueSource === "person" ? "default" : "outline"}
+            >
+              <UserIcon className="size-3.5" />
+              {t("templates.studio.filledByPerson")}
+            </Button>
+            <Button
+              className="justify-start"
+              onClick={() =>
+                onUpdate({
+                  aiAdapt: true,
+                  aiSeesDocument: false,
+                  formula: undefined,
+                })
+              }
+              size="sm"
+              variant={valueSource === "textAi" ? "default" : "outline"}
+            >
+              <WandSparklesIcon className="size-3.5" />
+              {t("templates.studio.textPlusAi")}
+            </Button>
+            <Button
+              className="justify-start"
+              onClick={() =>
+                onUpdate({
+                  aiPrompt: field.aiPrompt ?? "",
+                  aiAdapt: false,
+                  formula: undefined,
+                })
+              }
+              size="sm"
+              variant={valueSource === "ai" ? "default" : "outline"}
+            >
+              <WandSparklesIcon className="size-3.5" />
+              {t("templates.studio.draftedByAi")}
+            </Button>
+            <Button
+              className="justify-start"
+              onClick={() =>
+                onUpdate({
+                  formula: field.formula ?? "",
+                  aiPrompt: undefined,
+                  aiAdapt: false,
+                  aiSeesDocument: false,
+                  lookup: undefined,
+                })
+              }
+              size="sm"
+              variant={valueSource === "formula" ? "default" : "outline"}
+            >
+              <SigmaIcon className="size-3.5" />
+              {t("templates.studio.formula")}
+            </Button>
+          </div>
+          {valueSource === "textAi" ? (
+            <>
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t("templates.aiAdaptHint")}
+              </p>
+              <AIPromptInput
+                className="bg-muted/40 focus-within:ring-ring/40 rounded-md border px-2.5 py-2 focus-within:ring-1"
+                mentionExtension={fieldMention}
+                onChange={(value) => onUpdate({ aiPrompt: value || undefined })}
+                placeholder={t(
+                  "templates.studio.aiAdaptInstructionPlaceholder",
+                )}
+                value={field.aiPrompt ?? ""}
+                valueFormat="text"
+                variant="minimal"
+              />
+            </>
+          ) : null}
+          {valueSource === "ai" ? (
+            <>
+              <AIPromptInput
+                className="bg-muted/40 focus-within:ring-ring/40 rounded-md border px-2.5 py-2 focus-within:ring-1"
+                mentionExtension={fieldMention}
+                onChange={(value) => onUpdate({ aiPrompt: value })}
+                placeholder={t("templates.studio.aiPromptPlaceholder")}
+                value={field.aiPrompt ?? ""}
+                valueFormat="text"
+                variant="minimal"
+              />
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t("templates.studio.aiPromptContextHint")}
+              </p>
+              <label className="text-muted-foreground flex w-fit cursor-pointer items-center gap-1.5 text-xs">
+                <Checkbox
+                  checked={field.aiSeesDocument}
+                  onCheckedChange={(checked) =>
+                    onUpdate({ aiSeesDocument: checked })
+                  }
+                />
+                {t("templates.studio.aiSeesDocument")}
+              </label>
+            </>
+          ) : null}
+          {valueSource === "formula" ? (
+            <>
+              <Input
+                className="h-8 font-mono text-xs"
+                onChange={(e) => onUpdate({ formula: e.target.value })}
+                placeholder={t("templates.fieldFormulaExpression")}
+                value={field.formula}
+              />
+              <p className="text-muted-foreground text-xs leading-relaxed">
+                {t("templates.fieldFormulaExpressionHint")}
+              </p>
+            </>
+          ) : null}
+          {valueSource === "person" || valueSource === "textAi" ? (
+            <label className="text-muted-foreground flex w-fit cursor-pointer items-center gap-1.5 text-xs">
+              <Checkbox
+                checked={field.required}
+                onCheckedChange={(checked) => onUpdate({ required: checked })}
+              />
+              {t("common.required")}
+              <span aria-hidden className="text-destructive">
+                *
+              </span>
+            </label>
+          ) : null}
+        </div>
+        <FieldConfigEditor
+          embedded
+          field={field}
+          hideFormulaControl
+          hideHint={valueSource === "ai"}
+          hideRequired
+          onUpdate={onUpdate}
+        />
+        {field.lookup !== undefined && field.lookup.formats.length > 0 ? (
+          <div className="flex flex-col gap-1.5 border-t px-4 py-4">
+            <Label className="text-sm">
+              {t("templates.studio.insertOutput")}
+            </Label>
+            {field.lookup.formats.map((format, index) => (
+              <Button
+                className="justify-between gap-2"
+                key={format.key}
+                onClick={() =>
+                  actions?.insertExistingField(
+                    field.path,
+                    index === 0 ? undefined : format.key,
+                  )
+                }
+                size="sm"
+                variant="outline"
+              >
+                <span className="flex items-center gap-2">
+                  <PlusIcon className="size-3.5" />
+                  {index === 0
+                    ? t("templates.studio.insertFormatDefault")
+                    : format.key}
+                </span>
+                <code className="text-muted-foreground text-[10px]">
+                  {index === 0
+                    ? `{{${field.path}}}`
+                    : `{{${field.path}.${format.key}}}`}
+                </code>
+              </Button>
+            ))}
+          </div>
+        ) : null}
+        {repeat.kind === "hidden" || valueSource === "formula" ? null : (
+          <div className="flex flex-col gap-1.5 border-t px-4 py-3">
+            <Button
+              aria-pressed={repeat.kind === "on"}
+              className="self-start"
+              disabled={repeat.disabledKey !== null}
+              onClick={() => toggleRepeatable(repeat.kind !== "on")}
+              size="sm"
+              title={
+                repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
+              }
+              variant={repeat.kind === "on" ? "secondary" : "ghost"}
+            >
+              <RepeatIcon className="size-3.5" />
+              {t("templates.studio.repeatable")}
+            </Button>
+            <p className="text-muted-foreground text-xs leading-relaxed">
+              {t("templates.studio.repeatableHelp")}
+            </p>
+            {repeat.kind === "on" && loopContainerPath !== null && (
+              <LoopBoundsInputs containerPath={loopContainerPath} />
+            )}
+          </div>
+        )}
+        {fieldIsPlaced ? (
+          <FieldConditionSection
+            condition={condition}
+            field={field}
+            fields={fields}
+          />
+        ) : null}
+      </ScrollArea>
+      <SaveRecipeDialog
+        fieldPath={field.path}
+        onOpenChange={setRecipeDialogOpen}
+        open={recipeDialogOpen}
+      />
+    </div>
+  );
+};
+
+/** The four mutually exclusive ways a field's value is produced at fill time. */
+type ValueSource = "person" | "textAi" | "ai" | "formula";
+
+/**
+ * Save the field's configuration as an org-wide recipe, insertable into any
+ * template. When the field's marker sits inside a `{{#each}}` block, the
+ * whole block is the recipe: the loop path plus every field used inside it.
+ */
+const SaveRecipeDialog = ({
+  fieldPath,
+  open,
+  onOpenChange,
+}: {
+  fieldPath: string;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const outline = useTemplateStudioStore((s) => s.outline);
+  const fields = useTemplateStudioStore((s) => s.fields);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const definition = buildRecipeDefinition(fieldPath, outline, fields);
+
+  const save = async () => {
+    const trimmed = name.trim();
+    if (trimmed === "") {
+      return;
+    }
+    setSaving(true);
+    const response = await api["template-recipes"].put({
+      name: trimmed,
+      definition,
+    });
+    setSaving(false);
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.studio.recipeSaveFailed"),
+      });
+      return;
+    }
+    stellaToast.add({
+      type: "success",
+      title: t("templates.studio.recipeSaved"),
+    });
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.templateRecipes.all(activeOrganizationId),
+    });
+    setName("");
+    onOpenChange(false);
+  };
+
+  return (
+    <Dialog onOpenChange={onOpenChange} open={open}>
+      <DialogPopup className="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>{t("templates.studio.saveAsRecipe")}</DialogTitle>
+        </DialogHeader>
+        <DialogPanel className="flex flex-col gap-3">
+          <div className="text-muted-foreground flex items-center gap-2 text-xs">
+            {definition.loop === undefined ? null : (
+              <span className="flex items-center gap-1">
+                <RepeatIcon className="size-3.5 shrink-0" />
+                <code>{definition.loop.path}</code>
+              </span>
+            )}
+            <span>
+              {t("templates.fieldCount", { count: definition.fields.length })}
+            </span>
+          </div>
+          <div className="flex flex-col gap-1.5">
+            <Label htmlFor="recipe-name">{t("common.name")}</Label>
+            <Input
+              autoFocus
+              id="recipe-name"
+              onChange={(e) => setName(e.currentTarget.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  void save();
+                }
+              }}
+              value={name}
+            />
+          </div>
+        </DialogPanel>
+        <DialogFooter>
+          <DialogClose render={<Button variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            disabled={name.trim() === "" || saving}
+            onClick={() => void save()}
+          >
+            {saving ? (
+              <Loader2Icon className="animate-spin" />
+            ) : (
+              <BookmarkPlusIcon />
+            )}
+            {t("common.save")}
+          </Button>
+        </DialogFooter>
+      </DialogPopup>
+    </Dialog>
+  );
+};
+
+/** Click-to-edit field path: renames the {{markers}} in the document. */
+const FieldPathEditor = ({
+  path,
+  onRename,
+}: {
+  path: string;
+  onRename: (next: string) => boolean;
+}) => {
+  const t = useTranslations();
+  const [editing, setEditing] = useState(false);
+  const [value, setValue] = useState(path);
+
+  const commit = () => {
+    if (value.trim() === path) {
+      setEditing(false);
+      return;
+    }
+    if (onRename(value)) {
+      setEditing(false);
+      return;
+    }
+    stellaToast.add({
+      type: "error",
+      title: t("templates.studio.renameFieldInvalid"),
+    });
+  };
+
+  if (!editing) {
+    return (
+      <button
+        className="hover:bg-muted/60 group text-muted-foreground -ms-1 flex w-full min-w-0 items-center gap-1.5 rounded px-1 py-0.5"
+        onClick={() => setEditing(true)}
+        title={t("templates.studio.renameField")}
+        type="button"
+      >
+        <code className="truncate text-xs" title={path}>
+          {path}
+        </code>
+        <PencilIcon className="size-3 opacity-0 transition-opacity group-hover:opacity-100" />
+      </button>
+    );
+  }
+  return (
+    <Input
+      autoFocus
+      className="h-7 font-mono text-xs"
+      onBlur={commit}
+      onChange={(e) => setValue(e.currentTarget.value)}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          commit();
+        }
+        if (e.key === "Escape") {
+          setValue(path);
+          setEditing(false);
+        }
+      }}
+      value={value}
+    />
+  );
+};
+
+/** Live preview of the control this field becomes in the fill form. */
+// ── Fit-to-width ─────────────────────────────────────────
+
+// Letter width at 96 DPI (816px); a touch wider than A4 so either page size
+// fits without horizontal scroll. Sets only the initial zoom; the editor's own
+// zoom control (Ctrl/Cmd+scroll) takes over after.
+const DOCX_PAGE_WIDTH = 816;
+const FIT_PADDING = 16;
+const MIN_ZOOM = 0.25;
+const MAX_FIT_ZOOM = 1;
+
+const clampFitZoom = (zoom: number) =>
+  Math.max(MIN_ZOOM, Math.min(MAX_FIT_ZOOM, zoom));
+
+const useFitToWidth = () => {
+  const [fitZoom, setFitZoom] = useState(MAX_FIT_ZOOM);
+
+  const containerRef = useCallback((node: HTMLElement | null) => {
+    if (!node) {
+      return undefined;
+    }
+    const updateZoom = () => {
+      const { clientWidth } = node;
+      if (clientWidth <= 0) {
+        return;
+      }
+      const available = Math.max(1, clientWidth - FIT_PADDING * 2);
+      setFitZoom(
+        clampFitZoom(Math.round((available / DOCX_PAGE_WIDTH) * 100) / 100),
+      );
+    };
+    updateZoom();
+    const rafId = requestAnimationFrame(updateZoom);
+    const observer = new ResizeObserver(updateZoom);
+    observer.observe(node);
+    return () => {
+      cancelAnimationFrame(rafId);
+      observer.disconnect();
+    };
+  }, []);
+
+  return { containerRef, fitZoom };
+};
+
+// ── Manifest <-> state ───────────────────────────────────
+
+const INPUT_TYPE_VALUES = [
+  "text",
+  "textarea",
+  "number",
+  "boolean",
+  "date",
+  "select",
+] as const;
+
+const isInputType = (value: string): value is EditableField["inputType"] =>
+  INPUT_TYPE_VALUES.some((type) => type === value);
+
+const trimChar = (value: string, ch: string): string => {
+  let start = 0;
+  let end = value.length;
+  while (start < end && value[start] === ch) {
+    start++;
+  }
+  while (end > start && value[end - 1] === ch) {
+    end--;
+  }
+  return value.slice(start, end);
+};
+
+// Derive a field path from selected prose: "Jan Kowalski" -> "jan_kowalski".
+/** Lowercase + underscore a typed field name without word-count capping —
+ *  "Name of lawyer" becomes a valid path instead of a validation error. */
+const sanitizeFieldPath = (text: string): string => {
+  const collapsed = text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}.]+/gu, "_");
+  return trimChar(collapsed, "_").slice(0, 64);
+};
+
+const slugify = (text: string): string => {
+  const collapsed = text
+    .trim()
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "_");
+  // Long selections make unwieldy paths; the first few words identify the
+  // field just as well (the label carries the rest).
+  const slug = trimChar(collapsed, "_")
+    .split("_")
+    .slice(0, 4)
+    .join("_")
+    .slice(0, 40);
+  return slug.length > 0 ? slug : "field";
+};
+
+const isRecord = (v: unknown): v is Record<string, unknown> =>
+  typeof v === "object" && v !== null;
+
+/** Read a non-negative integer attribute, or undefined when absent/invalid. */
+const parseBound = (value: unknown): number | undefined => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) {
+    return undefined;
+  }
+  return Math.floor(value);
+};
+
+const fieldHasLoopBounds = (field: StudioField): boolean =>
+  field.validation?.minItems !== undefined ||
+  field.validation?.maxItems !== undefined;
+
+/** Parse the full persisted `validation` record verbatim so scalar rules the
+ *  Studio UI does not surface (required/minLength/maxLength/min/max/pattern,
+ *  authored via prepare/suggest/import) round-trip through a Studio save
+ *  instead of being dropped. Returns undefined when nothing is set. */
+const parseValidation = (raw: unknown): FieldValidation | undefined => {
+  if (!isRecord(raw)) {
+    return undefined;
+  }
+  const validation: FieldValidation = {};
+  if (typeof raw["required"] === "boolean") {
+    validation.required = raw["required"];
+  }
+  if (typeof raw["pattern"] === "string") {
+    validation.pattern = raw["pattern"];
+  }
+  const numericKeys = [
+    "minLength",
+    "maxLength",
+    "min",
+    "max",
+    "minItems",
+    "maxItems",
+  ] as const;
+  for (const key of numericKeys) {
+    const bound = parseBound(raw[key]);
+    if (bound !== undefined) {
+      validation[key] = bound;
+    }
+  }
+  return Object.keys(validation).length > 0 ? validation : undefined;
+};
+
+const parseFields = (manifest: unknown): StudioField[] => {
+  if (!isRecord(manifest) || !Array.isArray(manifest["fields"])) {
+    return [];
+  }
+  const fields: StudioField[] = manifest["fields"]
+    .filter(isRecord)
+    .map((raw) => {
+      const rawType = raw["inputType"];
+      const inputType =
+        typeof rawType === "string" && isInputType(rawType) ? rawType : "text";
+      const field: StudioField = {
+        path: typeof raw["path"] === "string" ? raw["path"] : "",
+        kind: typeof raw["kind"] === "string" ? raw["kind"] : "string",
+        label: typeof raw["label"] === "string" ? raw["label"] : "",
+        inputType,
+        required: raw["required"] === true,
+        options: Array.isArray(raw["options"])
+          ? raw["options"].filter((o): o is string => typeof o === "string")
+          : [],
+        aiPrompt:
+          typeof raw["aiPrompt"] === "string" ? raw["aiPrompt"] : undefined,
+        aiAdapt: raw["aiAdapt"] === true,
+        aiSeesDocument: raw["aiSeesDocument"] === true,
+      };
+      if (typeof raw["optionsFrom"] === "string") {
+        field.optionsFrom = raw["optionsFrom"];
+      }
+      if (isRecord(raw["lookup"]) && raw["lookup"]["registry"] === "krs") {
+        const formats = parseEditableLookupFormats(raw["lookup"]["formats"]);
+        if (formats.length > 0) {
+          field.lookup = { registry: "krs", formats };
+        }
+      }
+      if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {
+        field.parts = parseEditableParts(raw["parts"]);
+        field.format = raw["format"];
+      }
+      if (typeof raw["formula"] === "string") {
+        field.formula = raw["formula"];
+      }
+      // A boolean field's value rule: derived by this expression rather than
+      // asked. Only meaningful on boolean fields (a condition-field).
+      if (typeof raw["condition"] === "string" && inputType === "boolean") {
+        field.condition = raw["condition"];
+      }
+      if (typeof raw["hint"] === "string") {
+        field.hint = raw["hint"];
+      }
+      const rawDateFormat = raw["dateFormat"];
+      if (
+        isRecord(rawDateFormat) &&
+        typeof rawDateFormat["locale"] === "string"
+      ) {
+        const style = DATE_FORMAT_STYLES.find(
+          (s) => s === rawDateFormat["style"],
+        );
+        if (style !== undefined) {
+          field.dateFormat = { locale: rawDateFormat["locale"], style };
+        }
+      }
+      const validation = parseValidation(raw["validation"]);
+      if (validation !== undefined) {
+        field.validation = validation;
+      }
+      return field;
+    });
+
+  // Mirror the server merge: namespace parents (a path that is only a dotted
+  // prefix of others) are not fillable inputs. This keeps the display clean
+  // for templates saved before the server fix landed. A loop-container field
+  // (carries `validation.minItems`/`maxItems`) is exempt: it is the bounds
+  // record for an `{{#each <path>}}` and its only "child" is the loop body,
+  // so it must survive to round-trip the repeat bounds.
+  const paths = fields.map((f) => f.path);
+  return fields.filter(
+    (f) =>
+      fieldHasLoopBounds(f) ||
+      !paths.some((p) => p !== f.path && p.startsWith(`${f.path}.`)),
+  );
+};
+
+const parseEditableParts = (raw: unknown[]): EditablePart[] =>
+  raw.filter(isRecord).map((part) => ({
+    key: typeof part["key"] === "string" ? part["key"] : "",
+    label: typeof part["label"] === "string" ? part["label"] : undefined,
+    inputType: part["inputType"] === "select" ? "select" : "text",
+    options: Array.isArray(part["options"])
+      ? part["options"].filter((o): o is string => typeof o === "string")
+      : [],
+    pattern: typeof part["pattern"] === "string" ? part["pattern"] : undefined,
+  }));
+
+/** Parse the persisted lookup `formats` list (the sole carrier of renderings;
+ *  the first entry is the default). Rows missing a key or template are
+ *  dropped; an empty result drops the lookup entirely upstream. */
+const parseEditableLookupFormats = (raw: unknown): EditableLookupFormat[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const formats: EditableLookupFormat[] = [];
+  for (const entry of raw) {
+    if (
+      isRecord(entry) &&
+      typeof entry["key"] === "string" &&
+      typeof entry["template"] === "string"
+    ) {
+      formats.push({ key: entry["key"], template: entry["template"] });
+    }
+  }
+  return formats;
+};
+
+type ManifestField = {
+  path: string;
+  inputType: EditableField["inputType"];
+  label?: string;
+  required?: boolean;
+  options?: string[];
+  aiPrompt?: string;
+  aiAdapt?: boolean;
+  aiSeesDocument?: boolean;
+  parts?: EditablePart[];
+  format?: string;
+  optionsFrom?: string;
+  lookup?: EditableField["lookup"];
+  formula?: string;
+  condition?: string;
+  hint?: string;
+  dateFormat?: EditableField["dateFormat"];
+  validation?: FieldValidation;
+};
+
+/** One session field as it is persisted: only the settings that are
+ *  actually set, in the manifest's `FieldMeta` shape. Shared by the
+ *  template manifest build and recipe snapshots. */
+const studioFieldToManifestField = (f: StudioField): ManifestField => {
+  const field: ManifestField = { path: f.path, inputType: f.inputType };
+  if (f.label) {
+    field.label = f.label;
+  }
+  if (f.required) {
+    field.required = true;
+  }
+  if (f.options.length > 0) {
+    field.options = f.options;
+  }
+  if (f.hint !== undefined && f.hint.trim() !== "") {
+    field.hint = f.hint.trim();
+  }
+  if (f.dateFormat !== undefined && f.inputType === "date") {
+    field.dateFormat = f.dateFormat;
+  }
+  // Re-emit the full validation record verbatim before the value-source early
+  // returns: loop repeat bounds ride on the array-container FieldMeta (a
+  // bounds-only container record has no marker of its own), and scalar rules
+  // the Studio UI does not surface (required/minLength/maxLength/min/max/
+  // pattern, authored via prepare/suggest/import) must round-trip rather than
+  // be dropped on save.
+  if (f.validation !== undefined && Object.keys(f.validation).length > 0) {
+    field.validation = f.validation;
+  }
+  // A formula is one of the mutually exclusive value sources; the manifest
+  // validator rejects it next to aiPrompt/aiAdapt/lookup/parts, and a
+  // composite configuration takes precedence (mirrors the wizard's emit).
+  const formula = f.parts === undefined ? (f.formula?.trim() ?? "") : "";
+  if (formula !== "") {
+    field.formula = formula;
+    return field;
+  }
+  // A boolean condition-field DERIVED by rule: the `condition` expression is
+  // mutually exclusive with the other value sources (backend-validated).
+  const condition =
+    f.inputType === "boolean" ? (f.condition?.trim() ?? "") : "";
+  if (condition !== "") {
+    field.condition = condition;
+    return field;
+  }
+  if (f.aiPrompt) {
+    field.aiPrompt = f.aiPrompt;
+  }
+  if (f.aiAdapt) {
+    field.aiAdapt = true;
+  }
+  // Only an AI-drafted field (aiPrompt) reads the document; the flag is
+  // meaningless without one, so do not persist a stale opt-in.
+  if (f.aiSeesDocument && f.aiPrompt) {
+    field.aiSeesDocument = true;
+  }
+  if (f.optionsFrom !== undefined && f.inputType === "select") {
+    field.optionsFrom = f.optionsFrom;
+  }
+  if (f.lookup !== undefined) {
+    field.lookup = f.lookup;
+  }
+  if (f.parts !== undefined && f.parts.length > 0) {
+    // Mirror the wizard: an untyped format defaults to the part keys joined
+    // by spaces, so a composite configured in the face never silently saves
+    // as a plain field.
+    const format = f.format?.trim() || defaultCompositeFormat(f.parts);
+    if (format !== undefined && format !== "") {
+      field.parts = f.parts;
+      field.format = format;
+    }
+  }
+  return field;
+};
+
+const buildManifest = (original: unknown, fields: StudioField[]) => {
+  const version =
+    isRecord(original) && typeof original["version"] === "number"
+      ? original["version"]
+      : 1;
+  return {
+    version,
+    fields: fields.filter((f) => f.path).map(studioFieldToManifestField),
+  };
+};
+
+// ── Recipes (saved structural blocks) ────────────────────
+
+type RecipeField = TemplateRecipeDefinition["fields"][number];
+
+type OutlineGroup = Extract<OutlineNode, { type: "group" }>;
+
+/** Innermost `{{#each}}` group whose subtree contains the field's marker. */
+const findEnclosingEachGroup = (
+  nodes: OutlineNode[],
+  path: string,
+  enclosing: OutlineGroup | null,
+): OutlineGroup | null => {
+  for (const node of nodes) {
+    if (node.type === "field" && node.path === path && enclosing !== null) {
+      return enclosing;
+    }
+    if (node.type === "group") {
+      const next = node.kind === "each" ? node : enclosing;
+      const found = findEnclosingEachGroup(node.children, path, next);
+      if (found !== null) {
+        return found;
+      }
+    }
+  }
+  return null;
+};
+
+/** Innermost `if`/`elseif`/`else` group whose subtree contains the field's
+ *  marker. Mirrors findEnclosingEachGroup but for condition branches. */
+const findEnclosingIfGroup = (
+  nodes: OutlineNode[],
+  path: string,
+  enclosing: OutlineGroup | null,
+): OutlineGroup | null => {
+  for (const node of nodes) {
+    if (node.type === "field" && node.path === path && enclosing !== null) {
+      return enclosing;
+    }
+    if (node.type === "group") {
+      const branch =
+        node.kind === "if" || node.kind === "elseif" || node.kind === "else";
+      const next = branch ? node : enclosing;
+      const found = findEnclosingIfGroup(node.children, path, next);
+      if (found !== null) {
+        return found;
+      }
+    }
+  }
+  return null;
+};
+
+/** Snapshot a recipe from the live session: when the field's marker sits
+ *  inside a `{{#each}}` block, the recipe is the whole block (loop path +
+ *  every field used inside it); otherwise just this field's config. */
+const buildRecipeDefinition = (
+  fieldPath: string,
+  outline: OutlineNode[],
+  fields: StudioField[],
+): TemplateRecipeDefinition => {
+  const group = findEnclosingEachGroup(outline, fieldPath, null);
+  const loopPath =
+    group !== null && isFieldPath(group.expr) ? group.expr : null;
+  const paths =
+    group !== null && loopPath !== null
+      ? [...outlineFieldPaths(group.children)]
+      : [fieldPath];
+  const recipeFields = paths.map((path) => {
+    const field =
+      fields.find((f) => f.path === path) ?? defaultStudioField(path);
+    // The recipe schema is a strict FieldMeta subset without formula,
+    // validation, or condition; strip them so saving a recipe passes boundary
+    // validation (the snapshot keeps the field's label and type; the formula,
+    // condition rule, and loop repeat bounds stay template-local).
+    const {
+      formula: _formula,
+      validation: _validation,
+      condition: _condition,
+      ...recipeField
+    } = studioFieldToManifestField(field);
+    return recipeField;
+  });
+  if (loopPath === null) {
+    return { fields: recipeFields };
+  }
+  return { fields: recipeFields, loop: { path: loopPath } };
+};
+
+const nextFreePath = (
+  base: string,
+  isTaken: (candidate: string) => boolean,
+): string => {
+  let path = base;
+  for (let n = 2; isTaken(path); n++) {
+    path = `${base}_${n}`;
+  }
+  return path;
+};
+
+type PreparedRecipeField = { path: string; config: Partial<StudioField> };
+
+type PreparedRecipe = {
+  loopPath: string | null;
+  fields: PreparedRecipeField[];
+};
+
+/** Resolve the recipe's paths against the session so inserting never
+ *  clobbers existing fields: a conflicting loop renames its whole namespace
+ *  at once (`persons` -> `persons_2`, fields move with it), conflicting
+ *  plain fields get a `_2` suffix individually (like makeField). */
+const prepareRecipeInsert = (
+  definition: TemplateRecipeDefinition,
+  existing: StudioField[],
+): PreparedRecipe => {
+  const taken = new Set(existing.map((f) => f.path));
+
+  let loopPath: string | null = null;
+  let mapPath = (path: string): string => path;
+  if (definition.loop !== undefined) {
+    const base = definition.loop.path;
+    loopPath = nextFreePath(base, (candidate) =>
+      existing.some(
+        (f) => f.path === candidate || f.path.startsWith(`${candidate}.`),
+      ),
+    );
+    const renamed = loopPath;
+    mapPath = (path) => {
+      if (path === base) {
+        return renamed;
+      }
+      if (path.startsWith(`${base}.`)) {
+        return `${renamed}${path.slice(base.length)}`;
+      }
+      return path;
+    };
+  }
+
+  // Track each recipe field's original path -> final inserted path so
+  // reference metadata (e.g. `optionsFrom`) can be rewritten to point at the
+  // inserted source field instead of the original/now-renamed recipe path.
+  const renames = new Map<string, string>();
+  const prepared: { field: RecipeField; path: string }[] = [];
+  for (const field of definition.fields) {
+    const path = nextFreePath(mapPath(field.path), (candidate) =>
+      taken.has(candidate),
+    );
+    taken.add(path);
+    renames.set(field.path, path);
+    prepared.push({ field, path });
+  }
+  const remapReference = (reference: string): string =>
+    renames.get(reference) ?? mapPath(reference);
+  const fields: PreparedRecipeField[] = prepared.map(({ field, path }) => ({
+    path,
+    config: recipeFieldToStudioPatch(field, remapReference),
+  }));
+  return { loopPath, fields };
+};
+
+/** The saved recipe field config as an upsertField patch (path excluded:
+ *  the prepared, conflict-free path is passed separately). `remapReference`
+ *  rewrites field-path references (e.g. `optionsFrom`) through the same
+ *  loop/per-field renames applied to the inserted fields. */
+const recipeFieldToStudioPatch = (
+  field: RecipeField,
+  remapReference: (reference: string) => string,
+): Partial<StudioField> => {
+  const patch: Partial<StudioField> = {
+    label: field.label ?? "",
+    inputType: field.inputType ?? "text",
+    required: field.required === true,
+    options: field.options ?? [],
+    aiPrompt: field.aiPrompt,
+    aiAdapt: field.aiAdapt === true,
+    aiSeesDocument: field.aiSeesDocument === true,
+  };
+  if (field.hint !== undefined) {
+    patch.hint = field.hint;
+  }
+  if (field.dateFormat !== undefined) {
+    patch.dateFormat = field.dateFormat;
+  }
+  if (field.optionsFrom !== undefined) {
+    patch.optionsFrom = remapReference(field.optionsFrom);
+  }
+  if (field.lookup !== undefined) {
+    patch.lookup = field.lookup;
+  }
+  if (field.parts !== undefined && field.format !== undefined) {
+    patch.parts = field.parts.map((part) => ({
+      key: part.key,
+      label: part.label,
+      inputType: part.inputType,
+      options: part.options ?? [],
+      pattern: part.pattern,
+    }));
+    patch.format = field.format;
+  }
+  return patch;
+};

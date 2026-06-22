@@ -1,0 +1,240 @@
+import { create } from "zustand";
+
+import type { TemplateRecipeDefinition } from "@stll/api/types";
+import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio";
+
+import type { ReplacementSpec } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
+import type { EditableField } from "@/routes/_protected.knowledge/-components/template-wizard";
+
+// The Studio's editable manifest data + live document selection. Lives in a
+// module-level store (not the inspector tab payload, which must be
+// structured-cloneable) so the full-width Folio page and the Fields/Clauses/
+// History tab — rendered in the global inspector, a separate React tree — share
+// one source of truth. Only one template is authored at a time.
+
+export type StudioField = EditableField & {
+  aiPrompt: string | undefined;
+  /** Person fills a stub; AI rewords it per occurrence to fit the context. */
+  aiAdapt: boolean;
+  /** AI-only field opt-in: inject the document text into the generator
+   *  prompt so the draft can reference the surrounding contract. */
+  aiSeesDocument: boolean;
+};
+export const defaultStudioField = (path: string): StudioField => ({
+  path,
+  kind: "string",
+  label: "",
+  inputType: "text",
+  required: false,
+  options: [],
+  aiPrompt: undefined,
+  aiAdapt: false,
+  aiSeesDocument: false,
+});
+
+type TemplateStudioSession = {
+  templateId: string;
+  fields: StudioField[];
+};
+
+/** Document actions the page owns; the inspector tab renders the buttons. */
+export type StudioActions = {
+  toggleDirectives: () => void;
+  insertField: () => void;
+  insertCondition: () => void;
+  insertLoop: () => void;
+  insertClause: () => void;
+  /** Insert a `{{@clause:Name}}` slot bound to a linked clause's slot name. */
+  insertClauseSlot: (slotName: string) => void;
+  /** Insert a raw marker (e.g. `{{@index}}`) inline at the caret. */
+  insertText: (text: string) => void;
+  /** True when the document caret sits inside a `{{#each}}…{{/each}}` body,
+   *  so loop-only tokens (`{{@index}}`, `{{@count}}`) are meaningful there. */
+  isCaretInLoop: () => boolean;
+  makeField: () => void;
+  /** Persist the document + manifest. Resolves true only on a successful
+   *  save, so callers (e.g. "Save and leave") can await it before navigating
+   *  away and unmounting the page (which resets the shared store). */
+  save: () => Promise<boolean>;
+  /** Rewrite {{oldPath}} markers in the document and rename the field.
+   *  Returns false when the new path is invalid or already taken. */
+  renameFieldPath: (oldPath: string, newPath: string) => boolean;
+  /** Rewrite the selected `{{#if …}}` / `{{#elseif …}}` opener with a new
+   *  expression. Returns false when nothing suitable is selected or the
+   *  expression is invalid. */
+  rewriteConditionExpr: (next: string) => boolean;
+  /** Inline-wrap this field's own marker in `{{#if condition}}…{{/if}}` so the
+   *  field renders only when the condition holds. Returns false when the
+   *  field's marker could not be wrapped. */
+  wrapFieldInCondition: (path: string) => boolean;
+  /** Rewrite the `{{#if …}}` opener of the block that encloses this field's
+   *  marker. Returns false when no enclosing `if` block exists or the
+   *  expression is invalid. */
+  rewriteFieldConditionExpr: (path: string, next: string) => boolean;
+  /** Remove the `{{#if …}}` / `{{/if}}` pair around this field's marker (keep
+   *  the field). Returns false when the block holds more than this field's
+   *  marker or could not be rewritten. */
+  unwrapFieldCondition: (path: string) => boolean;
+  /** Return to the template overview: move the document caret just past the
+   *  selected marker (so selection sync doesn't immediately re-derive the
+   *  same face) and clear the selection. */
+  deselect: () => void;
+  /** Move the document caret to the next/previous field marker. */
+  focusAdjacentField: (direction: 1 | -1) => void;
+  /** Move the document caret into the first marker of the given field. */
+  focusField: (path: string) => void;
+  /** Move the document caret to an exact document position. */
+  focusPosition: (pos: number) => void;
+  /** Live fill preview in the document: path → value (plain text, or
+   *  formatted spans for lookup renderings), or null to clear. */
+  setFillPreview: (values: Record<string, TemplatePreviewValue> | null) => void;
+  /** Replace the selection (or insert at the caret) with an existing field's
+   *  marker; replacing text flips the field to AI-adapted wording. For a
+   *  multi-format lookup field, `formatKey` selects a non-default output
+   *  (`{{path.key}}`); omit it to insert the default (`{{path}}`). */
+  insertExistingField: (path: string, formatKey?: string) => void;
+  /** Remove every {{path}} marker from the document and drop the field. */
+  deleteField: (path: string) => void;
+  /** Insert a saved recipe at the caret: loop recipes add the `{{#each}}`
+   *  block with one marker paragraph per field, plain recipes add the
+   *  markers inline; the pre-configured fields register in the session
+   *  (existing paths are kept and the recipe's get a `_2` suffix). */
+  insertRecipe: (definition: TemplateRecipeDefinition) => void;
+  /** Make the field repeat per loop item (wrap its marker's containing
+   *  paragraph in `{{#each path}}` / `{{/each}}` and re-path the field to
+   *  the loop-item convention, `path` → `path.value`), or undo it (remove
+   *  the enclosing each markers and re-path back to the loop's name).
+   *  Returns false when the document could not be rewritten. */
+  setFieldRepeatable: (path: string, repeatable: boolean) => boolean;
+};
+
+/** A bilingual-mirror proposal the page queues for the chat surface — the
+ *  Studio's only AISuggestion decoration writer — to place in-document as
+ *  an accept/reject suggestion. */
+export type MirrorSuggestionRequest = {
+  spec: ReplacementSpec;
+  /** Runs once when the placed suggestion is accepted. */
+  onAccepted?: (() => void) | undefined;
+};
+
+/** Page-owned UI state the inspector's action row reflects. */
+export type StudioUiState = {
+  metaLabel: string;
+  showDirectives: boolean;
+  hasSelection: boolean;
+  isSaving: boolean;
+};
+
+const DEFAULT_UI: StudioUiState = {
+  metaLabel: "",
+  showDirectives: true,
+  hasSelection: false,
+  isSaving: false,
+};
+
+export type OutlineNode =
+  | { type: "field"; path: string; from: number }
+  | { type: "clause"; name: string; from: number }
+  | {
+      type: "group";
+      kind: "if" | "elseif" | "else" | "each";
+      expr: string;
+      from: number;
+      children: OutlineNode[];
+    };
+
+type TemplateStudioState = {
+  /** Null until a template page mounts and seeds the session. */
+  templateId: string | null;
+  fields: StudioField[];
+  /** The directive the document caret currently sits in, or null. */
+  selected: DirectiveRange | null;
+  /** Unsaved manifest or document edits since the last load/save. */
+  isDirty: boolean;
+  actions: StudioActions | null;
+  ui: StudioUiState;
+  setActions: (actions: StudioActions | null) => void;
+  patchUi: (patch: Partial<StudioUiState>) => void;
+  init: (session: TemplateStudioSession) => void;
+  /** Clear the session on page unmount, but only if it still owns it. */
+  reset: (templateId: string) => void;
+  upsertField: (path: string, patch: Partial<StudioField>) => void;
+  removeField: (path: string) => void;
+  renameField: (oldPath: string, newPath: string) => void;
+  /** Document structure tree, rebuilt by the editor on every scan. */
+  outline: OutlineNode[];
+  setOutline: (outline: OutlineNode[]) => void;
+  setSelected: (selected: DirectiveRange | null) => void;
+  markDirty: () => void;
+  markSaved: () => void;
+  /** Bilingual-mirror proposals waiting for the chat surface to place. */
+  pendingMirrorRequests: MirrorSuggestionRequest[];
+  enqueueMirrorRequests: (requests: MirrorSuggestionRequest[]) => void;
+  clearMirrorRequests: () => void;
+};
+
+export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
+  templateId: null,
+  fields: [],
+  outline: [],
+  setOutline: (outline) => set({ outline }),
+  selected: null,
+  isDirty: false,
+  actions: null,
+  ui: DEFAULT_UI,
+  setActions: (actions) => set({ actions }),
+  patchUi: (patch) => set((state) => ({ ui: { ...state.ui, ...patch } })),
+  init: (session) =>
+    set({
+      templateId: session.templateId,
+      fields: session.fields,
+      selected: null,
+      isDirty: false,
+      pendingMirrorRequests: [],
+    }),
+  reset: (templateId) =>
+    set((state) =>
+      // Skip the reset while a save is in flight: handleSave reads `fields`
+      // after the network round-trip, so clearing them here (e.g. on a
+      // "Save and leave" unmount) would persist an empty field list.
+      state.templateId === templateId && !state.ui.isSaving
+        ? {
+            templateId: null,
+            fields: [],
+            selected: null,
+            isDirty: false,
+            actions: null,
+            ui: DEFAULT_UI,
+            pendingMirrorRequests: [],
+          }
+        : state,
+    ),
+  pendingMirrorRequests: [],
+  enqueueMirrorRequests: (requests) =>
+    set((state) => ({
+      pendingMirrorRequests: [...state.pendingMirrorRequests, ...requests],
+    })),
+  clearMirrorRequests: () => set({ pendingMirrorRequests: [] }),
+  upsertField: (path, patch) =>
+    set((state) => {
+      const exists = state.fields.some((f) => f.path === path);
+      const fields = exists
+        ? state.fields.map((f) => (f.path === path ? { ...f, ...patch } : f))
+        : [...state.fields, { ...defaultStudioField(path), ...patch }];
+      return { fields, isDirty: true };
+    }),
+  removeField: (path) =>
+    set((state) => ({
+      fields: state.fields.filter((f) => f.path !== path),
+    })),
+  renameField: (oldPath, newPath) =>
+    set((state) => ({
+      fields: state.fields.map((f) =>
+        f.path === oldPath ? { ...f, path: newPath } : f,
+      ),
+      isDirty: true,
+    })),
+  setSelected: (selected) => set({ selected }),
+  markDirty: () => set({ isDirty: true }),
+  markSaved: () => set({ isDirty: false }),
+}));

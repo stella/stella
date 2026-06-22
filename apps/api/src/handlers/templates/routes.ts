@@ -4,30 +4,47 @@ import createTemplateCategory from "@/api/handlers/templates/categories-create";
 import deleteTemplateCategory from "@/api/handlers/templates/categories-delete";
 import listTemplateCategories from "@/api/handlers/templates/categories-list";
 import updateTemplateCategory from "@/api/handlers/templates/categories-update";
+import checkTemplate from "@/api/handlers/templates/check";
+import getTemplateClauseSlots from "@/api/handlers/templates/clause-slots";
 import linkTemplateClause from "@/api/handlers/templates/clauses-link";
 import listTemplateClauses from "@/api/handlers/templates/clauses-list";
 import syncTemplateClause from "@/api/handlers/templates/clauses-sync";
+import syncAllTemplateClauses from "@/api/handlers/templates/clauses-sync-all";
 import unlinkTemplateClause from "@/api/handlers/templates/clauses-unlink";
 import createTemplate from "@/api/handlers/templates/create";
+import createBlankTemplate from "@/api/handlers/templates/create-blank";
 import deleteTemplate from "@/api/handlers/templates/delete";
 import discoverTemplate from "@/api/handlers/templates/discover";
 import fillTemplate from "@/api/handlers/templates/fill";
 import fillTemplateById from "@/api/handlers/templates/fill-by-id";
 import fillTemplatePreview from "@/api/handlers/templates/fill-preview";
+import fillTemplateToWorkspace from "@/api/handlers/templates/fill-to-workspace";
 import getTemplate from "@/api/handlers/templates/get";
 import listTemplates from "@/api/handlers/templates/list";
+import lookupPreview from "@/api/handlers/templates/lookup-preview";
 import manifestTemplate from "@/api/handlers/templates/manifest";
+import prefillTemplate from "@/api/handlers/templates/prefill";
+import prepareTemplate from "@/api/handlers/templates/prepare";
 import previewTemplate from "@/api/handlers/templates/preview";
+import saveTemplateDocument from "@/api/handlers/templates/save-document";
+import suggestFields from "@/api/handlers/templates/suggest-fields";
 import updateTemplate from "@/api/handlers/templates/update";
+import templateVersionDiff from "@/api/handlers/templates/versions-diff";
 import getTemplateVersion from "@/api/handlers/templates/versions-get";
 import listTemplateVersions from "@/api/handlers/templates/versions-list";
-import { authMacro, permissionMacro } from "@/api/lib/auth";
+import templateVersionSummarize from "@/api/handlers/templates/versions-summarize";
+import {
+  authMacro,
+  permissionMacro,
+  workspaceAccessMacro,
+} from "@/api/lib/auth";
 
 export const templatesRoute = new Elysia({
   prefix: "/templates",
 })
   .use(authMacro)
   .use(permissionMacro)
+  .use(workspaceAccessMacro)
   .guard({
     validateAuth: true,
   })
@@ -41,9 +58,21 @@ export const templatesRoute = new Elysia({
     permissions: fillTemplate.config.permissions,
     query: fillTemplate.config.query,
   })
+  .post("/lookup-preview", lookupPreview.handler, {
+    body: lookupPreview.config.body,
+    permissions: lookupPreview.config.permissions,
+  })
   .post("/manifest", manifestTemplate.handler, {
     body: manifestTemplate.config.body,
     permissions: manifestTemplate.config.permissions,
+  })
+  .post("/prepare", prepareTemplate.handler, {
+    body: prepareTemplate.config.body,
+    permissions: prepareTemplate.config.permissions,
+  })
+  .post("/suggest-fields", suggestFields.handler, {
+    body: suggestFields.config.body,
+    permissions: suggestFields.config.permissions,
   })
   // ── CRUD endpoints ─────────────────────────────────
   .get("/", listTemplates.handler, {
@@ -54,9 +83,17 @@ export const templatesRoute = new Elysia({
     body: createTemplate.config.body,
     permissions: createTemplate.config.permissions,
   })
+  .put("/blank", createBlankTemplate.handler, {
+    body: createBlankTemplate.config.body,
+    permissions: createBlankTemplate.config.permissions,
+  })
   .get("/:templateId/preview", previewTemplate.handler, {
     params: previewTemplate.config.params,
     permissions: previewTemplate.config.permissions,
+  })
+  .get("/:templateId/check", checkTemplate.handler, {
+    params: checkTemplate.config.params,
+    permissions: checkTemplate.config.permissions,
   })
   .post("/:templateId/fill-preview", fillTemplatePreview.handler, {
     body: fillTemplatePreview.config.body,
@@ -69,14 +106,34 @@ export const templatesRoute = new Elysia({
     permissions: fillTemplateById.config.permissions,
     query: fillTemplateById.config.query,
   })
+  .post("/:templateId/fill-to/:workspaceId", fillTemplateToWorkspace.handler, {
+    body: fillTemplateToWorkspace.config.body,
+    params: fillTemplateToWorkspace.config.params,
+    permissions: fillTemplateToWorkspace.config.permissions,
+    validateWorkspaceAccess: true,
+  })
+  .post("/:templateId/prefill", prefillTemplate.handler, {
+    body: prefillTemplate.config.body,
+    params: prefillTemplate.config.params,
+    permissions: prefillTemplate.config.permissions,
+  })
   .get("/:templateId", getTemplate.handler, {
     params: getTemplate.config.params,
     permissions: getTemplate.config.permissions,
+  })
+  .get("/:templateId/clause-slots", getTemplateClauseSlots.handler, {
+    params: getTemplateClauseSlots.config.params,
+    permissions: getTemplateClauseSlots.config.permissions,
   })
   .post("/:templateId", updateTemplate.handler, {
     body: updateTemplate.config.body,
     params: updateTemplate.config.params,
     permissions: updateTemplate.config.permissions,
+  })
+  .post("/:templateId/document", saveTemplateDocument.handler, {
+    body: saveTemplateDocument.config.body,
+    params: saveTemplateDocument.config.params,
+    permissions: saveTemplateDocument.config.permissions,
   })
   .delete("/:templateId", deleteTemplate.handler, {
     params: deleteTemplate.config.params,
@@ -86,11 +143,24 @@ export const templatesRoute = new Elysia({
   .get("/:templateId/versions", listTemplateVersions.handler, {
     params: listTemplateVersions.config.params,
     permissions: listTemplateVersions.config.permissions,
+    query: listTemplateVersions.config.query,
   })
   .get("/:templateId/versions/:versionId", getTemplateVersion.handler, {
     params: getTemplateVersion.config.params,
     permissions: getTemplateVersion.config.permissions,
   })
+  .get("/:templateId/versions/:versionId/diff", templateVersionDiff.handler, {
+    params: templateVersionDiff.config.params,
+    permissions: templateVersionDiff.config.permissions,
+  })
+  .post(
+    "/:templateId/versions/:versionId/summarize",
+    templateVersionSummarize.handler,
+    {
+      params: templateVersionSummarize.config.params,
+      permissions: templateVersionSummarize.config.permissions,
+    },
+  )
   // ── Clause linking ──────────────────────────────────
   .get("/:templateId/clauses", listTemplateClauses.handler, {
     params: listTemplateClauses.config.params,
@@ -104,6 +174,10 @@ export const templatesRoute = new Elysia({
   .delete("/:templateId/clauses/:linkId", unlinkTemplateClause.handler, {
     params: unlinkTemplateClause.config.params,
     permissions: unlinkTemplateClause.config.permissions,
+  })
+  .post("/:templateId/clauses/sync", syncAllTemplateClauses.handler, {
+    params: syncAllTemplateClauses.config.params,
+    permissions: syncAllTemplateClauses.config.permissions,
   })
   .post("/:templateId/clauses/:linkId/sync", syncTemplateClause.handler, {
     params: syncTemplateClause.config.params,

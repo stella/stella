@@ -2,9 +2,11 @@
  * AI Suggestion Decorations Plugin
  *
  * Renders pending AI suggestions as non-mutating ProseMirror decorations
- * — subtle dotted underlines on the suggested ranges. The document
- * itself is never modified by the suggestion queue; decorations live
- * purely in the view layer.
+ * — subtle dotted underlines on the suggested ranges. The focused
+ * suggestion additionally previews its change in the text: the original
+ * range is struck through and the suggested text is injected after it
+ * as a widget. The document itself is never modified by the suggestion
+ * queue; decorations live purely in the view layer.
  *
  * The plugin keeps a `DecorationSet` derived from the suggestion list.
  * Updates are pushed via the `setAISuggestions` meta key, which the
@@ -32,11 +34,35 @@ type AISuggestionDecorationState = {
   decorationSet: DecorationSet;
 };
 
-const SEVERITY_CLASS: Record<AISuggestionSeverity, string> = {
+/**
+ * Severity → CSS modifier class. Shared with the paged editor's
+ * suggestion overlay so both renderers stay on the same class names.
+ */
+export const AI_SUGGESTION_SEVERITY_CLASS: Record<
+  AISuggestionSeverity,
+  string
+> = {
   typo: "folio-ai-suggestion--typo",
   style: "folio-ai-suggestion--style",
   substantive: "folio-ai-suggestion--substantive",
 };
+
+/**
+ * Lazy DOM factory for the focused suggestion's in-text replacement
+ * preview. Returned as a closure so the element is only created when
+ * the view draws the widget (keeps the build side-effect free for
+ * headless state updates).
+ */
+function buildReplacementWidget(suggestion: AISuggestion): () => HTMLElement {
+  return () => {
+    const span = document.createElement("span");
+    span.className = "folio-ai-suggestion--focused-replacement";
+    span.dataset["folioAiSuggestionId"] = suggestion.id;
+    span.contentEditable = "false";
+    span.textContent = suggestion.suggestedText;
+    return span;
+  };
+}
 
 function buildDecorationSet(
   doc: PMNode,
@@ -67,8 +93,9 @@ function buildDecorationSet(
         {
           class: [
             "folio-ai-suggestion",
-            SEVERITY_CLASS[suggestion.severity],
+            AI_SUGGESTION_SEVERITY_CLASS[suggestion.severity],
             isFocused ? "folio-ai-suggestion--focused" : "",
+            isFocused ? "folio-ai-suggestion--focused-original" : "",
           ]
             .filter(Boolean)
             .join(" "),
@@ -77,6 +104,22 @@ function buildDecorationSet(
         { inclusiveStart: false, inclusiveEnd: false },
       ),
     );
+    // The focused suggestion previews its change in the document
+    // itself: the original range reads as deleted (see the
+    // `--focused-original` class above) and the proposed text is
+    // injected right after it as a widget. A pure deletion (empty
+    // suggestedText) has nothing to inject — the strikethrough alone
+    // carries the preview.
+    if (isFocused && suggestion.suggestedText.length > 0) {
+      decorations.push(
+        Decoration.widget(to, buildReplacementWidget(suggestion), {
+          side: 1,
+          marks: [],
+          ignoreSelection: true,
+          key: `folio-ai-suggestion-replacement-${suggestion.id}`,
+        }),
+      );
+    }
   }
 
   return DecorationSet.create(doc, decorations);
@@ -131,10 +174,27 @@ export function createAISuggestionDecorationsPlugin(): Plugin<AISuggestionDecora
         }
 
         if (tr.docChanged) {
+          if (prev.suggestions.length === 0) {
+            return prev;
+          }
           // oxlint-disable-next-line unicorn/no-array-method-this-argument -- DecorationSet.map is not Array#map
           const mapped = prev.decorationSet.map(tr.mapping, tr.doc);
+          // Remap the suggestion ranges alongside the decoration set
+          // (same bias as the non-inclusive inline decorations) so
+          // consumers that project the ranges themselves — the paged
+          // editor's suggestion overlay — keep pointing at the moved
+          // text after edits.
+          const suggestions = prev.suggestions.map((suggestion) => ({
+            ...suggestion,
+            range: {
+              // oxlint-disable-next-line unicorn/no-array-method-this-argument -- Mapping#map is not Array#map
+              from: tr.mapping.map(suggestion.range.from, 1),
+              // oxlint-disable-next-line unicorn/no-array-method-this-argument -- Mapping#map is not Array#map
+              to: tr.mapping.map(suggestion.range.to, -1),
+            },
+          }));
           return {
-            suggestions: prev.suggestions,
+            suggestions,
             focusedId: prev.focusedId,
             decorationSet: mapped,
           };

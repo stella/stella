@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import type { ScopedDb } from "@/api/db";
+import type { SafeDb, ScopedDb } from "@/api/db";
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { extractText } from "@/api/handlers/docx/extract-text";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
@@ -117,6 +117,11 @@ const stubScopedDb = (async (fn: unknown) => {
   return;
 }) as unknown as ScopedDb;
 
+// SAFETY: test stub; these fill cases reject before reaching any AI generator
+// (non-DOCX file or empty values), so the safeDb is never invoked.
+// oxlint-disable-next-line typescript/no-unsafe-type-assertion
+const stubSafeDb = (async () => undefined) as unknown as SafeDb;
+
 const makeDocxFile = async (buf: Buffer) =>
   new File([new Uint8Array(buf)], "test.docx", { type: DOCX_MIME });
 
@@ -128,13 +133,6 @@ const sampleManifest: TemplateManifest = {
       label: "Client Name",
       inputType: "text",
       required: true,
-    },
-  ],
-  conditions: [
-    {
-      name: "hasGuarantor",
-      expression: "has_guarantor",
-      label: "Has Guarantor?",
     },
   ],
 };
@@ -182,14 +180,32 @@ describe("template discover", () => {
     expect(discovered.structureErrors).toEqual([]);
   });
 
-  test("returns conditions from manifest", async () => {
-    let buf = await makeEmptyDocx();
-    buf = await writeManifest(buf, sampleManifest);
+  test("discover synthesizes conditions from boolean condition-fields", async () => {
+    let buf = await makeDocx(WRAP(P("Client: {{clientName}}")));
+    buf = await writeManifest(buf, {
+      version: 1,
+      fields: [
+        { path: "clientName", label: "Client Name", inputType: "text" },
+        {
+          path: "hasGuarantor",
+          label: "Has Guarantor?",
+          inputType: "boolean",
+          condition: "has_guarantor",
+        },
+      ],
+    });
+    const file = await makeDocxFile(buf);
 
-    const manifest = await readManifest(buf);
-    expect(manifest).not.toBeNull();
-    expect(manifest?.conditions).toHaveLength(1);
-    expect(manifest?.conditions[0]?.name).toBe("hasGuarantor");
+    const result = await discoverHandler({
+      organizationId: fakeOrgId,
+      body: { file },
+    });
+    if (result instanceof Response) {
+      throw new TypeError("Expected discover data, got a Response");
+    }
+    expect(result.conditions).toHaveLength(1);
+    expect(result.conditions[0]?.name).toBe("hasGuarantor");
+    expect(result.conditions[0]?.expression).toBe("has_guarantor");
   });
 
   test("discovers placeholders in headers", async () => {
@@ -393,8 +409,6 @@ describe("template manifest", () => {
     expect(read?.fields).toHaveLength(1);
     expect(read?.fields[0]?.path).toBe("clientName");
     expect(read?.fields[0]?.label).toBe("Client Name");
-    expect(read?.conditions).toHaveLength(1);
-    expect(read?.conditions[0]?.name).toBe("hasGuarantor");
   });
 
   test("returns null for DOCX without manifest", async () => {
@@ -413,7 +427,6 @@ describe("template manifest", () => {
         manifest: JSON.stringify({
           version: 1,
           fields: [null, "bad"],
-          conditions: [],
         }),
       },
     });
@@ -425,28 +438,6 @@ describe("template manifest", () => {
     expect(body.error).toContain("'path'");
   });
 
-  test("rejects conditions with missing properties", async () => {
-    const buf = await makeEmptyDocx();
-    const file = await makeDocxFile(buf);
-    const result = await manifestHandler({
-      organizationId: fakeOrgId,
-      body: {
-        file,
-        manifest: JSON.stringify({
-          version: 1,
-          fields: [],
-          conditions: [{ name: "x" }],
-        }),
-      },
-    });
-
-    expect(result).toBeInstanceOf(Response);
-    const resp = result;
-    expect(resp.status).toBe(400);
-    const body = await readTestJson<{ error: string }>(resp);
-    expect(body.error).toContain("'expression'");
-  });
-
   test("overwrites existing stella manifest", async () => {
     const buf = await makeEmptyDocx();
     const first = await writeManifest(buf, sampleManifest);
@@ -454,14 +445,12 @@ describe("template manifest", () => {
     const updated: TemplateManifest = {
       version: 1,
       fields: [{ path: "newField", label: "New Field" }],
-      conditions: [],
     };
     const second = await writeManifest(first, updated);
     const read = await readManifest(second);
 
     expect(read?.fields).toHaveLength(1);
     expect(read?.fields[0]?.path).toBe("newField");
-    expect(read?.conditions).toHaveLength(0);
   });
 });
 
@@ -491,6 +480,7 @@ describe("handler MIME validation", () => {
 
   test("fill rejects non-DOCX file", async () => {
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -513,7 +503,6 @@ describe("handler MIME validation", () => {
         manifest: JSON.stringify({
           version: 1,
           fields: [],
-          conditions: [],
         }),
       },
     });
@@ -533,6 +522,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -551,6 +541,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -569,6 +560,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -587,6 +579,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -605,6 +598,7 @@ describe("fill handler validation", () => {
     const buf = await makeEmptyDocx();
     const file = await makeDocxFile(buf);
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -632,6 +626,7 @@ describe("fill handler diagnostic headers", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -652,6 +647,7 @@ describe("fill handler diagnostic headers", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -675,6 +671,7 @@ describe("fill handler diagnostic headers", () => {
     const file = await makeDocxFile(buf);
 
     const result = await fillHandler({
+      safeDb: stubSafeDb,
       scopedDb: stubScopedDb,
       organizationId: fakeOrgId,
       userId: fakeUserId,
@@ -691,6 +688,39 @@ describe("fill handler diagnostic headers", () => {
     expect(resp.headers.get("X-Unmatched-Placeholders")).toBeNull();
     expect(resp.headers.get("X-Unused-Values")).toBeNull();
     expect(resp.headers.get("X-Structure-Errors")).toBeNull();
+  });
+});
+
+// ── Handler: fill download stays binary-safe ─────────────
+
+describe("fill handler download response", () => {
+  test("serves the DOCX as application/octet-stream with intact ZIP bytes", async () => {
+    const xml = WRAP(P("Pełnomocnik: {{name}}"));
+    const buf = await makeDocx(xml);
+    const file = await makeDocxFile(buf);
+
+    const result = await fillHandler({
+      safeDb: stubSafeDb,
+      scopedDb: stubScopedDb,
+      organizationId: fakeOrgId,
+      userId: fakeUserId,
+      query: {},
+      body: { file, values: JSON.stringify({ name: "Maciej Kuropatwiński" }) },
+    });
+
+    expect(result).toBeInstanceOf(Response);
+    const resp = result;
+    expect(resp.status).toBe(200);
+    // The Eden treaty client maps only application/octet-stream to
+    // arrayBuffer() and text-decodes every other content type, which
+    // UTF-8-mangles the ZIP container (Word: "unreadable content").
+    expect(resp.headers.get("Content-Type")).toBe("application/octet-stream");
+    expect(resp.headers.get("Content-Disposition")).toContain("attachment");
+
+    const bytes = Buffer.from(await resp.arrayBuffer());
+    const zip = await JSZip.loadAsync(bytes);
+    const docXml = await zip.file("word/document.xml")?.async("string");
+    expect(docXml).toContain("Maciej Kuropatwiński");
   });
 });
 

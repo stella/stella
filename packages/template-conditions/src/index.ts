@@ -1,8 +1,26 @@
 /**
- * Shared condition evaluation for DOCX template
- * conditionals. Pure functions with no runtime dependencies;
- * usable on both backend (Bun) and frontend (browser).
+ * Shared condition evaluation + marker grammar for DOCX templates. Small,
+ * side-effect-free functions usable on both backend (Bun) and frontend
+ * (browser).
+ *
+ * Boolean conditions are evaluated through the canonical `@stll/conditions`
+ * AST and its single evaluator, so view filters, AI-extraction gating, and
+ * template `{{#if ...}}` conditionals share one set of operators and semantics
+ * and never drift apart. This module owns the template surface: the string
+ * parser (`./parse`), the named-condition resolver, and the no-code builder
+ * serializer (`./condition-builder`).
  */
+
+import {
+  evaluateCondition as evaluateConditionAst,
+  type ConditionValue,
+  type OperandResolver,
+} from "@stll/conditions";
+
+import { parseCondition } from "./parse.js";
+import { resolvePath } from "./path.js";
+
+export { resolvePath };
 
 // ── Types ─────────────────────────────────────────────────
 
@@ -19,455 +37,160 @@ export type NamedCondition = {
  */
 export const MAX_CONDITION_DEPTH = 50;
 
-// ── Path resolution ───────────────────────────────────────
-
-/** Narrow `unknown` to a string-keyed record. */
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null;
-
-/** Resolve a dotted path like `company.name` against data. */
-export const resolvePath = (
-  path: string,
-  data: Record<string, unknown>,
-): unknown => {
-  const parts = path.split(".");
-  let current: unknown = data;
-  for (const part of parts) {
-    if (!isRecord(current)) {
-      return undefined;
-    }
-    current = current[part];
-  }
-  return current;
-};
-
-// ── Tokenizer ─────────────────────────────────────────────
-
-type Token =
-  | { type: "value"; raw: string }
-  | { type: "op"; raw: string }
-  | { type: "not" }
-  | { type: "and" }
-  | { type: "or" }
-  | { type: "lparen" }
-  | { type: "rparen" }
-  | { type: "string"; raw: string };
-
-const TOKEN_RE =
-  /("(?:[^"\\]|\\.)*"|==|!=|>=|<=|>|<|!(?!=)|and\b|or\b|[()]|[\p{L}\p{N}_.]+)/gu;
-
-const STARTS_WITH_DIGIT_RE = /^\d/u;
-
-const tokenize = (expr: string): Token[] => {
-  const tokens: Token[] = [];
-  for (const m of expr.matchAll(TOKEN_RE)) {
-    const raw = m[1] ?? m[0];
-    if (raw === "and") {
-      tokens.push({ type: "and" });
-    } else if (raw === "or") {
-      tokens.push({ type: "or" });
-    } else if (raw === "!") {
-      tokens.push({ type: "not" });
-    } else if (
-      raw === "==" ||
-      raw === "!=" ||
-      raw === ">" ||
-      raw === "<" ||
-      raw === ">=" ||
-      raw === "<="
-    ) {
-      tokens.push({ type: "op", raw });
-    } else if (raw === "(") {
-      tokens.push({ type: "lparen" });
-    } else if (raw === ")") {
-      tokens.push({ type: "rparen" });
-    } else if (raw.startsWith('"')) {
-      tokens.push({
-        type: "string",
-        raw: raw.slice(1, -1).replace(/\\"/gu, '"'),
-      });
-    } else {
-      tokens.push({ type: "value", raw });
-    }
-  }
-  return tokens;
-};
-
-// ── Helpers ───────────────────────────────────────────────
-
-/** Parse a numeric literal, supporting `_` separators. */
-const parseNumeric = (raw: string): number | undefined => {
-  if (!STARTS_WITH_DIGIT_RE.test(raw)) {
-    return undefined;
-  }
-  const cleaned = raw.replace(/_/gu, "");
-  const n = Number(cleaned);
-  return Number.isFinite(n) ? n : undefined;
-};
+// ── Boolean condition evaluation ──────────────────────────
 
 /**
- * Resolve a token to a concrete value in the data context.
- * String literals return as strings; identifiers resolve via
- * dotted path; numeric-looking values parse as numbers.
+ * Normalize a fill-bag value into a `ConditionValue` the shared evaluator
+ * accepts: arrays become string arrays (multi-select fields hold their options
+ * as strings, so membership tests like `parties contains "guarantor"` work
+ * even when an element is numeric), primitives pass through, anything else is
+ * stringified.
  */
-const resolveToken = (
-  token: Token,
-  data: Record<string, unknown>,
-  namedConditions?: readonly NamedCondition[],
-  _resolved?: Set<string>,
-  _depth = 0,
-): unknown => {
-  if (token.type === "string") {
-    return token.raw;
+const toConditionValue = (raw: unknown): ConditionValue => {
+  if (raw === null || raw === undefined) {
+    return raw;
   }
-  if (token.type === "value") {
-    const num = parseNumeric(token.raw);
-    if (num !== undefined) {
-      return num;
-    }
-    if (token.raw === "true") {
-      return true;
-    }
-    if (token.raw === "false") {
-      return false;
-    }
-    if (namedConditions) {
-      const named = namedConditions.find((c) => c.name === token.raw);
-      if (named) {
-        if (_depth >= MAX_CONDITION_DEPTH) {
-          return false;
-        }
-        const resolved = new Set(_resolved);
-        if (resolved.has(token.raw)) {
-          return false;
-        }
-        resolved.add(token.raw);
-        return evaluateCondition(
-          named.expression,
-          data,
-          namedConditions,
-          resolved,
-          _depth + 1,
-        );
-      }
-    }
-    return resolvePath(token.raw, data);
+  if (Array.isArray(raw)) {
+    return raw.map(String);
   }
+  if (
+    typeof raw === "string" ||
+    typeof raw === "number" ||
+    typeof raw === "boolean"
+  ) {
+    return raw;
+  }
+  // A non-scalar (a nested fill object) is not a meaningful condition operand.
   return undefined;
 };
 
 /**
- * Convert a plain numeric string to a number, else undefined. Empty /
- * whitespace-only strings are not numbers (avoids `"" == 0` surprises).
+ * Build the operand resolver for one evaluation. Only `path` operands need
+ * resolving (the evaluator handles literals). A path is first matched against
+ * the named conditions: a hit evaluates that condition's expression — so
+ * `{{#if isCompany}}` and `{{#if isCompany and signed}}` both work — guarded
+ * against cycles (`resolved`) and runaway chains (`MAX_CONDITION_DEPTH`).
+ * Otherwise the path resolves against the fill data.
  */
-const numericString = (value: unknown): number | undefined => {
-  if (typeof value !== "string" || value.trim() === "") {
-    return undefined;
-  }
-  const n = Number(value);
-  return Number.isFinite(n) ? n : undefined;
-};
-
-/**
- * When one operand is a number and the other is a numeric-looking string,
- * compare them numerically. Form number inputs and JSON payloads serialize
- * numbers as strings, so `contractValue > 100000` must still hold when
- * `contractValue` arrives as `"150000"`. Non-numeric operands are left
- * untouched so `"abc" == 0` stays false.
- */
-const coerceNumericPair = (
-  left: unknown,
-  right: unknown,
-): [unknown, unknown] => {
-  if (typeof left === "number" && typeof right === "string") {
-    const r = numericString(right);
-    if (r !== undefined) {
-      return [left, r];
-    }
-  }
-  if (typeof right === "number" && typeof left === "string") {
-    const l = numericString(left);
-    if (l !== undefined) {
-      return [l, right];
-    }
-  }
-  return [left, right];
-};
-
-/** Evaluate a comparison between two resolved values. */
-const compare = (rawLeft: unknown, op: string, rawRight: unknown): boolean => {
-  const [left, right] = coerceNumericPair(rawLeft, rawRight);
-  switch (op) {
-    case "==":
-      return left === right;
-    case "!=":
-      return left !== right;
-    case ">":
-      return (
-        typeof left === "number" && typeof right === "number" && left > right
-      );
-    case "<":
-      return (
-        typeof left === "number" && typeof right === "number" && left < right
-      );
-    case ">=":
-      return (
-        typeof left === "number" && typeof right === "number" && left >= right
-      );
-    case "<=":
-      return (
-        typeof left === "number" && typeof right === "number" && left <= right
-      );
-    default:
-      return false;
-  }
-};
-
-/**
- * Test truthiness: non-empty string, non-zero, true,
- * non-empty array.
- */
-const isTruthy = (value: unknown): boolean => {
-  if (value === null || value === undefined) {
-    return false;
-  }
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (typeof value === "number") {
-    return value !== 0;
-  }
-  if (typeof value === "string") {
-    return value.length > 0;
-  }
-  if (Array.isArray(value)) {
-    return value.length > 0;
-  }
-  if (typeof value === "object") {
-    return true;
-  }
-  return false;
-};
-
-// ── Token-level evaluator (supports parentheses) ─────────
-
-type Atom = { negated: boolean; value: boolean };
-
-/**
- * Find the matching closing parenthesis for an opening
- * paren at `start`. Returns the index of the `)` token.
- */
-const findMatchingParen = (tokens: readonly Token[], start: number): number => {
-  let depth = 1;
-  for (let j = start + 1; j < tokens.length; j++) {
-    const tok = tokens[j];
-    if (!tok) {
-      break;
-    }
-    if (tok.type === "lparen") {
-      depth++;
-    } else if (tok.type === "rparen") {
-      depth--;
-      if (depth === 0) {
-        return j;
-      }
-    }
-  }
-  return tokens.length; // unmatched — treat as end
-};
-
-/**
- * Evaluate a token stream with full operator precedence:
- * `!` > comparisons > `and` > `or`. Supports `(...)` for
- * explicit grouping.
- */
-const evaluateTokens = (
-  tokens: readonly Token[],
+const makeResolver = (
   data: Record<string, unknown>,
-  namedConditions?: readonly NamedCondition[],
-  _resolved?: Set<string>,
-  _depth = 0,
-): boolean => {
-  const atoms: Atom[] = [];
-  const connectors: ("and" | "or")[] = [];
-
-  /** Get token at index; returns undefined past end. */
-  const at = (idx: number): Token | undefined => tokens[idx];
-
-  let i = 0;
-  while (i < tokens.length) {
-    const current = at(i);
-    if (!current) {
-      break;
+  namedConditions: readonly NamedCondition[] | undefined,
+  resolved: ReadonlySet<string>,
+  depth: number,
+): OperandResolver => {
+  const resolve: OperandResolver = (operand) => {
+    if (operand.type !== "path") {
+      return undefined;
     }
-
-    // Skip closing parens (handled by recursion)
-    if (current.type === "rparen") {
-      i++;
-      continue;
-    }
-
-    // Eat negation prefix
-    let negated = false;
-    while (at(i)?.type === "not") {
-      negated = !negated;
-      i++;
-    }
-
-    const tok = at(i);
-    if (!tok) {
-      atoms.push({ negated: false, value: false });
-      break;
-    }
-
-    // Parenthesized sub-expression
-    if (tok.type === "lparen") {
-      if (_depth >= MAX_CONDITION_DEPTH) {
-        atoms.push({ negated, value: false });
-        i = findMatchingParen(tokens, i) + 1;
-      } else {
-        const closeIdx = findMatchingParen(tokens, i);
-        const inner = tokens.slice(i + 1, closeIdx);
-        const value = evaluateTokens(
-          inner,
-          data,
-          namedConditions,
-          _resolved,
-          _depth + 1,
-        );
-        atoms.push({ negated, value });
-        i = closeIdx + 1;
+    const { path } = operand;
+    const named = namedConditions?.find((c) => c.name === path);
+    if (named) {
+      if (depth >= MAX_CONDITION_DEPTH || resolved.has(path)) {
+        return false;
       }
-    } else {
-      // Regular atom: value, possibly followed by comparison
-      const left = tok;
-      i++;
-
-      const maybeOp = at(i);
-      if (maybeOp?.type === "op") {
-        const op = maybeOp.raw;
-        i++;
-        const right = at(i);
-        if (right) {
-          i++;
-          const lv = resolveToken(
-            left,
-            data,
-            namedConditions,
-            _resolved,
-            _depth,
-          );
-          const rv = resolveToken(
-            right,
-            data,
-            namedConditions,
-            _resolved,
-            _depth,
-          );
-          atoms.push({
-            negated,
-            value: compare(lv, op, rv),
-          });
-        } else {
-          atoms.push({ negated, value: false });
-        }
-      } else {
-        const resolved = resolveToken(
-          left,
-          data,
-          namedConditions,
-          _resolved,
-          _depth,
-        );
-        atoms.push({
-          negated,
-          value: isTruthy(resolved),
-        });
-      }
+      const next = new Set(resolved);
+      next.add(path);
+      return evaluateCondition(
+        named.expression,
+        data,
+        namedConditions,
+        next,
+        depth + 1,
+      );
     }
-
-    // Check for and/or connector
-    const connector = at(i);
-    if (connector?.type === "and") {
-      connectors.push("and");
-      i++;
-    } else if (connector?.type === "or") {
-      connectors.push("or");
-      i++;
-    }
-  }
-
-  const booleans = atoms.map((a) => (a.negated ? !a.value : a.value));
-
-  // Apply `and` first (higher precedence), then `or`
-  const orGroups: boolean[][] = [[]];
-  let currentGroup = orGroups[0] ?? [];
-  for (let j = 0; j < booleans.length; j++) {
-    const bool = booleans[j];
-    if (bool === undefined) {
-      continue;
-    }
-    currentGroup.push(bool);
-    if (j < connectors.length && connectors[j] === "or") {
-      const next: boolean[] = [];
-      orGroups.push(next);
-      currentGroup = next;
-    }
-  }
-
-  return orGroups.some((group) => group.every(Boolean));
+    return toConditionValue(resolvePath(path, data));
+  };
+  return resolve;
 };
 
-// ── Main evaluator ────────────────────────────────────────
-
 /**
- * Evaluate a Liquid-style condition expression.
+ * Evaluate a template `{{#if ...}}` condition. The expression is parsed into
+ * the canonical `@stll/conditions` AST and evaluated by the shared evaluator.
  *
- * Supports truthiness, negation (`!`), comparisons
- * (`==`, `!=`, `>`, `<`, `>=`, `<=`), logical operators
- * (`and`, `or`), dotted paths, and numeric underscores.
+ * Supports comparisons (`==`, `!=`, `>`, `<`, `>=`, `<=`), `contains`,
+ * truthiness, negation (`!`), logical operators (`and`, `or`), parentheses,
+ * dotted paths, numeric underscores, and named-condition references.
  *
- * Operator precedence (highest to lowest):
- * 1. `!` (negation)
- * 2. Comparisons
- * 3. `and`
- * 4. `or`
- *
- * Supports `(...)` for explicit grouping. No arithmetic.
+ * An empty or unparseable expression is `false` ("no condition" never gates a
+ * branch true).
  */
 export const evaluateCondition = (
   expression: string,
   data: Record<string, unknown>,
   namedConditions?: readonly NamedCondition[],
-  _resolved?: Set<string>,
+  _resolved: ReadonlySet<string> = new Set(),
   _depth = 0,
 ): boolean => {
-  if (namedConditions) {
-    const trimmed = expression.trim();
-    const named = namedConditions.find((c) => c.name === trimmed);
-    if (named) {
-      if (_depth >= MAX_CONDITION_DEPTH) {
-        return false;
-      }
-      const resolved = new Set(_resolved);
-      if (resolved.has(trimmed)) {
-        return false;
-      }
-      resolved.add(trimmed);
-      return evaluateCondition(
-        named.expression,
-        data,
-        namedConditions,
-        resolved,
-        _depth + 1,
-      );
-    }
-  }
-
-  const tokens = tokenize(expression);
-  if (tokens.length === 0) {
+  const node = parseCondition(expression);
+  if (node === null) {
     return false;
   }
-
-  return evaluateTokens(tokens, data, namedConditions, _resolved, _depth);
+  return evaluateConditionAst(
+    node,
+    makeResolver(data, namedConditions, _resolved, _depth),
+  );
 };
+
+export { parseCondition } from "./parse.js";
+
+// Value-returning arithmetic evaluator for computed fields. Kept separate
+// from the boolean condition engine above; re-exported here as the package's
+// single entry point.
+export { evaluateNumericExpression } from "./compute.js";
+
+// Single source of truth for the deterministic field-value transforms
+// (composite, formula, date). Both the api fill engine and the web live
+// preview render through renderDeterministicFieldValue so they cannot drift.
+export {
+  formatDate,
+  renderComposite,
+  renderDeterministicFieldValue,
+} from "./field-values.js";
+export type {
+  DeterministicFieldConfig,
+  FieldDateFormat,
+  PartConfig,
+} from "./field-values.js";
+
+// The no-code condition builder edits the canonical `@stll/conditions` AST;
+// `serializeCondition` renders it to the `{{#if}}` expression `evaluateCondition`
+// parses. Re-export the AST surface so template consumers import from one place.
+export { serializeCondition } from "./condition-builder.js";
+export {
+  conditionNodeSchema,
+  conditionSchema,
+  emptyCondition,
+} from "@stll/conditions";
+export type {
+  CompareNode,
+  CompareOp,
+  Condition,
+  ConditionNode,
+  GroupNode,
+  Operand,
+  PredicateNode,
+  PredicateOp,
+} from "@stll/conditions";
+
+// Canonical `{{...}}` marker grammar — the single source of truth for every
+// directive recognizer (api fill pipeline, folio editor, web preview).
+export {
+  assertNever,
+  BLOCK_DIRECTIVE_KINDS,
+  blockDirectiveLinePattern,
+  classifyMarker,
+  clauseSlotPattern,
+  countPattern,
+  DIRECTIVE_KINDS,
+  hasBlockDirectivePattern,
+  hasNumberingPattern,
+  indexPattern,
+  isBlockDirectiveKind,
+  isFieldPath,
+  markerPattern,
+  numPattern,
+  placeholderPattern,
+  refPattern,
+  scanMarkers,
+} from "./markers.js";
+export type { DirectiveKind, MarkerMeta, ScannedMarker } from "./markers.js";

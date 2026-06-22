@@ -19,6 +19,7 @@ import {
 } from "@/api/mcp/gateway/list-tools";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { STELLA_TOOL_HANDLERS } from "@/api/mcp/stella-tools";
+import { TEMPLATE_TOOL_HANDLERS } from "@/api/mcp/template-tools";
 import type {
   McpToolDefinition,
   McpToolHandler,
@@ -42,6 +43,18 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   [
     "set_practice_jurisdictions",
     STELLA_TOOL_HANDLERS.set_practice_jurisdictions,
+  ],
+  ["list_templates", TEMPLATE_TOOL_HANDLERS.list_templates],
+  ["describe_template", TEMPLATE_TOOL_HANDLERS.describe_template],
+  ["fill_template", TEMPLATE_TOOL_HANDLERS.fill_template],
+  ["create_template", TEMPLATE_TOOL_HANDLERS.create_template],
+  [
+    "configure_template_fields",
+    TEMPLATE_TOOL_HANDLERS.configure_template_fields,
+  ],
+  [
+    "template_marker_reference",
+    TEMPLATE_TOOL_HANDLERS.template_marker_reference,
   ],
 ]);
 

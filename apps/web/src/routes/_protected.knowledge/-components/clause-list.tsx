@@ -1,54 +1,31 @@
 import { useState } from "react";
 
-import { useMutation } from "@tanstack/react-query";
 import {
   DownloadIcon,
-  MoreHorizontalIcon,
-  PencilIcon,
   PlusIcon,
   SearchIcon,
   TextQuoteIcon,
-  Trash2Icon,
   UploadIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
 
-import {
-  AlertDialog,
-  AlertDialogClose,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogPopup,
-  AlertDialogTitle,
-} from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
 import {
-  Dialog,
-  DialogClose,
-  DialogFooter,
-  DialogHeader,
-  DialogPanel,
-  DialogPopup,
-  DialogTitle,
-} from "@stll/ui/components/dialog";
-import { Input } from "@stll/ui/components/input";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@stll/ui/components/menu";
+  InputGroup,
+  InputGroupAddon,
+  InputGroupInput,
+} from "@stll/ui/components/input-group";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
-import {
-  toAPIError,
-  userErrorFromThrown,
-  userErrorMessage,
-} from "@/lib/errors";
+import { userErrorMessage } from "@/lib/errors";
+import { CategorySidebar } from "@/routes/_protected.knowledge/-components/category-sidebar";
+import type {
+  CategoryLabels,
+  CategoryOps,
+} from "@/routes/_protected.knowledge/-components/category-sidebar";
 import { ClauseImportDialog } from "@/routes/_protected.knowledge/-components/clause-import-dialog";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
@@ -149,7 +126,7 @@ export const ClauseList = ({
   return (
     <div className="flex min-h-0 flex-1">
       {/* Category sidebar */}
-      <CategorySidebar
+      <ClauseCategorySidebar
         categories={categories}
         onCategoriesChanged={onCategoriesChanged}
         onSelect={onCategorySelect}
@@ -159,15 +136,17 @@ export const ClauseList = ({
       {/* Clause list */}
       <div className="flex min-h-0 flex-1 flex-col border-s">
         <div className="flex items-center justify-between border-b px-4 py-2">
-          <div className="relative me-3 flex-1">
-            <SearchIcon className="text-muted-foreground absolute start-2.5 top-1/2 size-4 -translate-y-1/2" />
-            <Input
-              className="h-8 ps-8"
+          <InputGroup className="me-3 flex-1">
+            <InputGroupInput
               onChange={handleSearchChange}
               placeholder={t("clauses.searchPlaceholder")}
+              size="sm"
               value={searchInput}
             />
-          </div>
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+          </InputGroup>
           <div className="flex gap-1">
             {canCreateClause && (
               <Button
@@ -290,335 +269,110 @@ const ClauseRow = ({
   );
 };
 
-// ── Category Sidebar ─────────────────────────────────
+// ── Category sidebar (clause-flavoured) ──────────────
 
-const CategorySidebar = ({
-  categories,
-  selectedId,
-  onSelect,
-  onCategoriesChanged,
-}: {
+type ClauseCategorySidebarProps = {
   categories: CategoryItem[];
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onCategoriesChanged: () => void;
-}) => {
-  const t = useTranslations();
-  const canCreateClause = usePermissions({ clause: ["create"] });
-  const [createOpen, setCreateOpen] = useState(false);
-
-  return (
-    <div className="flex w-48 shrink-0 flex-col overflow-y-auto">
-      <nav className="flex-1 p-2">
-        <button
-          className={`w-full rounded-md px-3 py-1.5 text-start text-sm ${
-            selectedId === null ? "bg-muted font-medium" : "hover:bg-muted/50"
-          }`}
-          onClick={() => onSelect(null)}
-          type="button"
-        >
-          {t("clauses.allClauses")}
-        </button>
-        <button
-          className={`w-full rounded-md px-3 py-1.5 text-start text-sm ${
-            selectedId === "uncategorized"
-              ? "bg-muted font-medium"
-              : "hover:bg-muted/50"
-          }`}
-          onClick={() => onSelect("uncategorized")}
-          type="button"
-        >
-          {t("common.uncategorized")}
-        </button>
-
-        {categories.length > 0 && <div className="my-1 border-t" />}
-
-        {categories.map((cat) => (
-          <CategoryRow
-            category={cat}
-            isSelected={selectedId === cat.id}
-            key={cat.id}
-            onCategoriesChanged={onCategoriesChanged}
-            onSelect={() => onSelect(cat.id)}
-          />
-        ))}
-      </nav>
-
-      {canCreateClause && (
-        <div className="border-t p-2">
-          <Button
-            className="w-full justify-start"
-            onClick={() => setCreateOpen(true)}
-            size="sm"
-            variant="ghost"
-          >
-            <PlusIcon />
-            {t("clauses.createCategory")}
-          </Button>
-        </div>
-      )}
-
-      <CategoryFormDialog
-        onOpenChange={setCreateOpen}
-        onSaved={onCategoriesChanged}
-        open={createOpen}
-      />
-    </div>
-  );
 };
 
-// ── Category Row ─────────────────────────────────────
-
-const CategoryRow = ({
-  category,
-  isSelected,
+/** Thin wrapper over the shared `CategorySidebar`: resolves clause
+ *  permissions, wires the clause-categories api ops, and supplies the
+ *  clause-scoped labels. No drag-and-drop (clauses are not draggable). */
+const ClauseCategorySidebar = ({
+  categories,
+  selectedId,
   onSelect,
   onCategoriesChanged,
-}: {
-  category: CategoryItem;
-  isSelected: boolean;
-  onSelect: () => void;
-  onCategoriesChanged: () => void;
-}) => {
-  const t = useTranslations();
-  const canUpdateClause = usePermissions({ clause: ["update"] });
-  const canDeleteClause = usePermissions({ clause: ["delete"] });
-  const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
+}: ClauseCategorySidebarProps) => {
+  const canCreate = usePermissions({ clause: ["create"] });
+  const canUpdate = usePermissions({ clause: ["update"] });
+  const canDelete = usePermissions({ clause: ["delete"] });
+  const ops = useClauseCategoryOps();
+  const labels = useClauseCategoryLabels();
 
-  const deleteCategory = useMutation({
-    mutationFn: async () => {
+  return (
+    <CategorySidebar
+      categories={categories}
+      labels={labels}
+      onChanged={onCategoriesChanged}
+      onSelect={onSelect}
+      ops={ops}
+      permissions={{ canCreate, canUpdate, canDelete }}
+      selectedId={selectedId}
+    />
+  );
+};
+
+/** Clause-categories CRUD wired to the api treaty. Each op surfaces its own
+ *  error toast and resolves to the shared `CategoryOps` contract. */
+const useClauseCategoryOps = (): CategoryOps => {
+  const t = useTranslations();
+
+  return {
+    create: async (name) => {
+      const response = await api["clause-categories"].put({ name });
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return null;
+      }
+      return { id: response.data.id, name: response.data.name };
+    },
+    rename: async (id, name) => {
       const response = await api["clause-categories"]({
-        categoryId: category.id,
+        categoryId: id,
+      }).post({ name });
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return false;
+      }
+      return true;
+    },
+    remove: async (id) => {
+      const response = await api["clause-categories"]({
+        categoryId: id,
       }).delete();
       if (response.error) {
-        throw toAPIError(response.error);
-      }
-      return response.data;
-    },
-    onSuccess: () => {
-      setDeleteOpen(false);
-      onCategoriesChanged();
-    },
-    onError: (error) => {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.deleteFailed"),
-        description: userErrorFromThrown(error, t("common.unexpectedError")),
-      });
-    },
-  });
-
-  return (
-    <div className="group flex items-center">
-      <button
-        className={`min-w-0 flex-1 truncate rounded-md px-3 py-1.5 text-start text-sm ${
-          isSelected ? "bg-muted font-medium" : "hover:bg-muted/50"
-        }`}
-        onClick={onSelect}
-        type="button"
-      >
-        {category.name}
-      </button>
-
-      <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                className="invisible shrink-0 group-hover:visible"
-                size="icon-xs"
-                variant="ghost"
-              />
-            }
-          >
-            <MoreHorizontalIcon />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent>
-            {canUpdateClause && (
-              <DropdownMenuItem onClick={() => setEditOpen(true)}>
-                <PencilIcon />
-                {t("clauses.editCategory")}
-              </DropdownMenuItem>
-            )}
-            {canDeleteClause && (
-              <DropdownMenuItem
-                className="text-destructive-foreground"
-                onClick={() => setDeleteOpen(true)}
-              >
-                <Trash2Icon />
-                {t("clauses.deleteCategory")}
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
-
-        <AlertDialogPopup>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("clauses.deleteCategory")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("clauses.categoryDeleteConfirm")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogClose render={<Button variant="ghost" />}>
-              {t("common.cancel")}
-            </AlertDialogClose>
-            <Button
-              disabled={deleteCategory.isPending}
-              onClick={() => {
-                deleteCategory.mutate();
-              }}
-              variant="destructive"
-            >
-              {t("common.delete")}
-            </Button>
-          </AlertDialogFooter>
-        </AlertDialogPopup>
-      </AlertDialog>
-
-      <CategoryFormDialog
-        initial={{
-          id: category.id,
-          name: category.name,
-        }}
-        onOpenChange={setEditOpen}
-        onSaved={onCategoriesChanged}
-        open={editOpen}
-      />
-    </div>
-  );
-};
-
-// ── Category Form Dialog ─────────────────────────────
-
-type CategoryFormDialogProps = {
-  open: boolean;
-  onOpenChange: (open: boolean) => void;
-  onSaved: () => void;
-  initial?: { id: string; name: string };
-};
-
-const CategoryFormDialog = ({
-  open,
-  onOpenChange,
-  onSaved,
-  initial,
-}: CategoryFormDialogProps) => (
-  <Dialog onOpenChange={onOpenChange} open={open}>
-    {/* Mount only while open so each open instantiates a fresh
-        form: cancel-then-reopen discards unsaved edits (the
-        behaviour the removed `open`-driven reset effect provided),
-        and switching between create/edit-for-same-id re-seeds from
-        `initial` without an effect. */}
-    {open ? (
-      <CategoryFormDialogBody
-        initial={initial}
-        onOpenChange={onOpenChange}
-        onSaved={onSaved}
-      />
-    ) : null}
-  </Dialog>
-);
-
-type CategoryFormDialogBodyProps = {
-  onOpenChange: (open: boolean) => void;
-  onSaved: () => void;
-  initial: { id: string; name: string } | undefined;
-};
-
-const CategoryFormDialogBody = ({
-  onOpenChange,
-  onSaved,
-  initial,
-}: CategoryFormDialogBodyProps) => {
-  const t = useTranslations();
-  const isEdit = !!initial?.id;
-  const [name, setName] = useState(initial?.name ?? "");
-  const [saving, setSaving] = useState(false);
-
-  const handleSave = async () => {
-    if (!name.trim()) {
-      return;
-    }
-
-    setSaving(true);
-
-    if (isEdit && initial.id) {
-      const response = await api["clause-categories"]({
-        categoryId: initial.id,
-      }).post({ name: name.trim() });
-
-      setSaving(false);
-
-      if (response.error) {
         stellaToast.add({
           type: "error",
-          title: t("clauses.saveFailed"),
+          title: t("clauses.deleteFailed"),
           description: userErrorMessage(
             response.error,
             t("common.unexpectedError"),
           ),
         });
-        return;
+        return false;
       }
-    } else {
-      const response = await api["clause-categories"].put({
-        name: name.trim(),
-      });
-
-      setSaving(false);
-
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("clauses.saveFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-    }
-
-    onOpenChange(false);
-    onSaved();
+      return true;
+    },
   };
+};
 
-  return (
-    <DialogPopup className="sm:max-w-sm">
-      <DialogHeader>
-        <DialogTitle>
-          {isEdit ? t("clauses.editCategory") : t("clauses.createCategory")}
-        </DialogTitle>
-      </DialogHeader>
-      <DialogPanel className="grid gap-4">
-        <div className="grid gap-1.5">
-          <label className="text-sm font-medium" htmlFor="category-name">
-            {t("clauses.categoryName")}
-          </label>
-          <Input
-            id="category-name"
-            onChange={(e) => setName(e.target.value)}
-            placeholder={t("clauses.categoryNamePlaceholder")}
-            value={name}
-          />
-        </div>
-      </DialogPanel>
-      <DialogFooter>
-        <DialogClose render={<Button variant="ghost" />}>
-          {t("common.cancel")}
-        </DialogClose>
-        <Button
-          disabled={saving || !name.trim()}
-          onClick={() => {
-            void handleSave();
-          }}
-        >
-          {t("common.save")}
-        </Button>
-      </DialogFooter>
-    </DialogPopup>
-  );
+const useClauseCategoryLabels = (): CategoryLabels => {
+  const t = useTranslations();
+  return {
+    all: t("clauses.allClauses"),
+    createCategory: t("clauses.createCategory"),
+    editCategory: t("clauses.editCategory"),
+    deleteCategory: t("clauses.deleteCategory"),
+    deleteConfirm: t("clauses.categoryDeleteConfirm"),
+    nameLabel: t("clauses.categoryName"),
+    namePlaceholder: t("clauses.categoryNamePlaceholder"),
+  };
 };

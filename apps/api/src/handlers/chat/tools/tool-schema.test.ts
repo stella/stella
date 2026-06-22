@@ -113,6 +113,7 @@ describe("chat tool schemas", () => {
 
   test("chat tools expose readonly data through the stella API", () => {
     const tools = getChatTools({
+      memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
       safeDb: unusedSafeDb,
@@ -123,7 +124,7 @@ describe("chat tool schemas", () => {
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
       }),
-      hasActiveFileChat: false,
+      hasActiveDocxEditClient: false,
       webSearchEnabled: false,
     });
 
@@ -143,6 +144,7 @@ describe("chat tool schemas", () => {
 
   test("only exposes current skill edit tools for editable active skill chats", () => {
     const tools = getChatTools({
+      memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
       safeDb: unusedSafeDb,
@@ -153,7 +155,7 @@ describe("chat tool schemas", () => {
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
       }),
-      hasActiveFileChat: false,
+      hasActiveDocxEditClient: false,
       webSearchEnabled: false,
       activeSkillContext: editableActiveSkillContext,
       recordAuditEvent: noopAuditRecorder,
@@ -190,6 +192,7 @@ describe("chat tool schemas", () => {
 
   test("does not expose full body replacement for truncated active skill bodies", () => {
     const tools = getChatTools({
+      memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
       safeDb: unusedSafeDb,
@@ -200,7 +203,7 @@ describe("chat tool schemas", () => {
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
       }),
-      hasActiveFileChat: false,
+      hasActiveDocxEditClient: false,
       webSearchEnabled: false,
       activeSkillContext: {
         ...editableActiveSkillContext,
@@ -223,6 +226,7 @@ describe("chat tool schemas", () => {
 
   test("applies approval and anonymization policies by tool risk", () => {
     const tools = getChatTools({
+      memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
       safeDb: unusedSafeDb,
@@ -233,7 +237,7 @@ describe("chat tool schemas", () => {
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
       }),
-      hasActiveFileChat: false,
+      hasActiveDocxEditClient: false,
       webSearchEnabled: false,
     });
 

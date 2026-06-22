@@ -3,6 +3,7 @@
  * source of truth) and provides frontend-only helpers.
  */
 
+import type { ChatStatus } from "ai";
 import { panic } from "better-result";
 
 import type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
@@ -76,9 +77,13 @@ const CHAT_TOOL_TITLE_KEYS = {
   "create-document": "chat.tool.create-document",
   "create-current-skill-resource": "common.edit",
   "describe-stella-api": "chat.tool.describe-stella-api",
+  describe_template: "chat.tool.describe_template",
   "expand-chat-history": "chat.tool.expand-chat-history",
   fetch_url: "chat.tool.fetch_url",
+  fill_template: "chat.tool.fill_template",
   infosoud_lookup_case: "chat.tool.infosoud_lookup_case",
+  list_templates: "chat.tool.list_templates",
+  suggest_template_fields: "chat.tool.suggest_template_fields",
   "run-stella-query": "chat.tool.run-stella-query",
   "load-skill": "chat.tool.load-skill",
   "read-skill-resource": "chat.tool.read-skill-resource",
@@ -257,6 +262,59 @@ export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
   return "approval" in part;
 };
 
+type ApplyActiveDocxEditsToolInput =
+  ChatUITools["apply-active-docx-edits"]["input"];
+
+export const isApplyActiveDocxEditsInput = (
+  input: unknown,
+): input is ApplyActiveDocxEditsToolInput =>
+  typeof input === "object" &&
+  input !== null &&
+  "operations" in input &&
+  Array.isArray(input.operations);
+
+/**
+ * Latest apply-active-docx-edits part matching the given approval id
+ * (newest message first). Used by the surfaces that client-execute
+ * the tool (file overlay, Template Studio) to recover the operations
+ * the user just approved.
+ */
+export const getActiveDocxEditApprovalPart = (
+  messages: PersistedChatMessage[],
+  approvalId: string,
+):
+  | (ActiveDocxEditApprovalPart & { input: ApplyActiveDocxEditsToolInput })
+  | null => {
+  for (
+    let messageIndex = messages.length - 1;
+    messageIndex >= 0;
+    messageIndex -= 1
+  ) {
+    const message = messages.at(messageIndex);
+    if (!message || message.role !== "assistant") {
+      continue;
+    }
+
+    for (const part of message.parts) {
+      if (part.type !== "tool-apply-active-docx-edits") {
+        continue;
+      }
+
+      if (
+        (part.state === "approval-requested" ||
+          part.state === "approval-responded" ||
+          part.state === "output-denied") &&
+        part.approval.id === approvalId &&
+        isApplyActiveDocxEditsInput(part.input)
+      ) {
+        return part;
+      }
+    }
+  }
+
+  return null;
+};
+
 export const isApprovedActiveDocxEditPart = (
   part: ChatPart,
 ): part is ActiveDocxEditApprovalPart & {
@@ -342,6 +400,44 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
   }
 
   return message.parts.some(isRunningToolPart);
+};
+
+type ChatTurnInFlightOptions = {
+  status: ChatStatus;
+  messages: PersistedChatMessage[];
+  /**
+   * Set when the user explicitly stopped the turn. The AI SDK's
+   * `stop()` only aborts a live request; it never rewrites message
+   * parts, so a tool part caught mid-input stays in a running state
+   * and would otherwise keep the turn "in flight" forever.
+   */
+  turnAbandoned?: boolean;
+};
+
+/**
+ * Whether a chat turn is still in flight: an active request, or a
+ * tool call on the latest assistant message that is still collecting
+ * input or awaiting its output (the windows between response streams
+ * in multi-step tool turns).
+ *
+ * An errored turn is never in flight. When the stream dies mid tool
+ * call (network drop, server restart) the AI SDK flips its status to
+ * `"error"` but leaves the partial tool part in a running state; the
+ * SDK never auto-continues after an error, so treating that tail as
+ * in-flight would wedge the session as "generating" until reload.
+ */
+export const isChatTurnInFlight = ({
+  status,
+  messages,
+  turnAbandoned = false,
+}: ChatTurnInFlightOptions): boolean => {
+  if (status === "submitted" || status === "streaming") {
+    return true;
+  }
+  if (status === "error" || turnAbandoned) {
+    return false;
+  }
+  return hasRunningToolCallInLatestAssistantMessage({ messages });
 };
 
 export const getUserMessageHtmlHistory = (

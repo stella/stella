@@ -13,10 +13,7 @@
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
 import { numPrEqual } from "../../docx/numberingParser";
-import { visitDocxParagraphs } from "../../docx/paragraphTraversal";
 import { narrowEnum, ShapeOutlineStyleSchema } from "../../docx/parserEnums";
-import { createStyleEngine } from "../../style-engine";
-import type { StyleEngine } from "../../style-engine";
 import type {
   ImageWrap,
   ImagePosition,
@@ -60,7 +57,6 @@ import type {
   MathEquation,
   ColorValue,
   CellMargins,
-  StyleDefinitions,
 } from "../../types/document";
 import {
   OUTLINE_STYLE_CSS_ALIASES,
@@ -69,6 +65,7 @@ import {
 import { pixelsToEmu } from "../../utils/units";
 import {
   expectCharacterSpacingMarkAttrs,
+  expectCharacterStyleMarkAttrs,
   expectCommentMarkAttrs,
   expectEmphasisMarkAttrs,
   expectTextEffectMarkAttrs,
@@ -79,7 +76,6 @@ import {
   expectHardBreakAttrs,
   expectHighlightMarkAttrs,
   expectRunShadingMarkAttrs,
-  expectRunStyleMarkAttrs,
   expectHyperlinkMarkAttrs,
   expectImageAttrs,
   expectMathAttrs,
@@ -112,7 +108,6 @@ import type {
 } from "../schema/nodes";
 import { assertValidProseMirrorDocument } from "../validation";
 import { runShadingAttrsToShading } from "./runShadingMark";
-import { textFormattingToMarks } from "./toProseDoc";
 
 function normalizeShapeOutlineStyle(
   style: string | undefined,
@@ -247,18 +242,6 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
     documentBody.comments = baseDocument.package.document.comments;
   }
 
-  // Reconcile run character-style references (w:rStyle). The `runStyle` mark
-  // preserves the named link, but once a run has been edited away from its
-  // style the link would re-apply the style on save and silently revert the
-  // edit. Needs the original styles to resolve, so only runs when a base
-  // document is present (eigenpal/docx-editor#833).
-  if (baseDocument?.package.styles) {
-    reconcileRunStyleReferences(
-      { content: blocks },
-      createStyleEngine(baseDocument.package.styles),
-    );
-  }
-
   // If we have a base document, preserve its package structure
   if (baseDocument) {
     return {
@@ -276,155 +259,6 @@ export function fromProseDoc(pmDoc: PMNode, baseDocument?: Document): Document {
       document: documentBody,
     },
   };
-}
-
-function isSet(value: unknown): boolean {
-  return value !== null && value !== undefined;
-}
-
-const TEXT_COLOR_MARK_VALUE_KEYS = [
-  "rgb",
-  "themeColor",
-  "themeTint",
-  "themeShade",
-] as const;
-
-function hasTextColorMarkValue(mark: Mark): boolean {
-  return TEXT_COLOR_MARK_VALUE_KEYS.some((key) => isSet(mark.attrs[key]));
-}
-
-function runMarkDroppedStyleProperty(styleMark: Mark, runMark: Mark): boolean {
-  if (styleMark.type.name === "textColor") {
-    return !hasTextColorMarkValue(runMark);
-  }
-
-  return Object.entries(styleMark.attrs).some(
-    ([key, value]) => isSet(value) && !isSet(runMark.attrs[key]),
-  );
-}
-
-// A run still matches its character style as long as it carries a mark for
-// every property the style contributes. A property the user removed leaves no
-// mark of that type, so the inert `w:rStyle` link would wrongly re-apply it on
-// save; a property the user overrode keeps a mark of that type (with a value
-// the serializer re-emits, which wins over the style), so the link may stay.
-// Comparing the marks `toProseDoc` would emit keeps this in lockstep with every
-// property it round-trips — including values that emit no mark (an auto colour,
-// a baseline vertical alignment), which then correctly never count as removed.
-// Negative style properties (`runFormattingOverride`) are also safe to ignore:
-// retaining the style can only keep an inherited property off, and any direct
-// positive mark on the run wins over that style value in OOXML.
-function runDivergesFromStyle(
-  runFormatting: TextFormatting,
-  styleFormatting: TextFormatting,
-): boolean {
-  const runMarks = textFormattingToMarks(runFormatting);
-  return textFormattingToMarks(styleFormatting).some((styleMark) => {
-    if (
-      styleMark.type.name === "runStyle" ||
-      styleMark.type.name === "runFormattingOverride"
-    ) {
-      return false;
-    }
-    const runMark = runMarks.find((mark) => mark.type === styleMark.type);
-    if (!runMark) {
-      // The run dropped this mark type entirely.
-      return true;
-    }
-    // The run kept the mark type but still diverges if it dropped a property
-    // the style sets. Most compound marks have independent attr slots
-    // (`fontFamily.eastAsia` vs. `ascii`); textColor is different because
-    // `rgb` and `themeColor` are alternate representations of one property.
-    return runMarkDroppedStyleProperty(styleMark, runMark);
-  });
-}
-
-function reconcileRunStyleReference(run: Run, styleEngine: StyleEngine): void {
-  const styleId = run.formatting?.styleId;
-  if (!styleId || !run.formatting) {
-    return;
-  }
-  const styleFormatting = styleEngine.getRunStyleOwnProperties(styleId);
-  // Unknown style: keep the reference rather than guess at divergence.
-  if (
-    styleFormatting &&
-    runDivergesFromStyle(run.formatting, styleFormatting)
-  ) {
-    delete run.formatting.styleId;
-  }
-}
-
-function forEachRunInInline(
-  items: readonly (Run | Hyperlink)[],
-  fn: (run: Run) => void,
-): void {
-  for (const item of items) {
-    if (item.type === "run") {
-      fn(item);
-      continue;
-    }
-    for (const child of item.children) {
-      if (child.type === "run") {
-        fn(child);
-      }
-    }
-  }
-}
-
-// Visit every run reachable from a paragraph's inline content, including runs
-// nested in hyperlinks, fields, inline SDTs, and tracked-change containers — a
-// styled run can live in any of them and still needs reconciling.
-function forEachRunInParagraphContent(
-  content: ParagraphContent,
-  fn: (run: Run) => void,
-): void {
-  switch (content.type) {
-    case "run":
-      fn(content);
-      return;
-    case "hyperlink":
-      for (const child of content.children) {
-        if (child.type === "run") {
-          fn(child);
-        }
-      }
-      return;
-    case "simpleField":
-    case "insertion":
-    case "deletion":
-    case "moveFrom":
-    case "moveTo":
-      forEachRunInInline(content.content, fn);
-      return;
-    case "complexField":
-      for (const run of content.fieldCode) {
-        fn(run);
-      }
-      for (const run of content.fieldResult) {
-        fn(run);
-      }
-      return;
-    case "inlineSdt":
-      for (const child of content.content) {
-        forEachRunInParagraphContent(child, fn);
-      }
-      return;
-    default:
-      return;
-  }
-}
-
-function reconcileRunStyleReferences(
-  documentBody: DocumentBody,
-  styleEngine: StyleEngine,
-): void {
-  visitDocxParagraphs({ documentBody }, (paragraph) => {
-    for (const content of paragraph.content) {
-      forEachRunInParagraphContent(content, (run) => {
-        reconcileRunStyleReference(run, styleEngine);
-      });
-    }
-  });
 }
 
 /**
@@ -2096,8 +1930,9 @@ function createShapeRun(node: PMNode): Run {
 /**
  * Convert ProseMirror marks to TextFormatting
  */
-function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
+export function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
   const formatting: TextFormatting = {};
+  let characterStyleRPr: TextFormatting | undefined;
 
   for (const mark of marks) {
     switch (mark.type.name) {
@@ -2159,12 +1994,6 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         formatting.shading = runShadingAttrsToShading(
           expectRunShadingMarkAttrs(mark),
         );
-        break;
-
-      case "runStyle":
-        // Restore the run's character-style reference so `<w:rStyle>` is
-        // re-emitted on save (eigenpal/docx-editor#833).
-        formatting.styleId = expectRunStyleMarkAttrs(mark).styleId;
         break;
 
       case "fontSize": {
@@ -2284,13 +2113,107 @@ function marksToTextFormatting(marks: readonly Mark[]): TextFormatting {
         );
         break;
 
+      case "characterStyle": {
+        const attrs = expectCharacterStyleMarkAttrs(mark);
+        formatting.styleId = attrs.styleId;
+        characterStyleRPr = attrs._styleRPr;
+        break;
+      }
+
       // hyperlink is handled separately
       default:
         break;
     }
   }
 
+  if (characterStyleRPr) {
+    return subtractCharacterStyleFormatting(formatting, characterStyleRPr);
+  }
+
   return formatting;
+}
+
+/**
+ * Negatable boolean run-property keys whose serializer emits an explicit
+ * `w:val="0"` override when the value is `false` (see `serializeTextFormatting`
+ * in `runSerializer.ts`). Each entry pairs a base key with the complex-script
+ * mirror that `marksToTextFormatting` sets alongside it (the bold/italic marks
+ * set `*Cs` too), so a negative override disables both. Keys without a complex
+ * mirror use `null`.
+ */
+const NEGATABLE_STYLE_KEYS: readonly [
+  keyof TextFormatting,
+  keyof TextFormatting | null,
+][] = [
+  ["bold", "boldCs"],
+  ["italic", "italicCs"],
+  ["strike", null],
+  ["doubleStrike", null],
+  ["allCaps", null],
+  ["smallCaps", null],
+  ["hidden", null],
+  ["emboss", null],
+  ["imprint", null],
+  ["shadow", null],
+  ["outline", null],
+  ["rtl", null],
+];
+
+/**
+ * Drop run formatting values that the run's character style already provides
+ * (the `w:rStyle` reference re-imposes them on load), so a styled run
+ * serializes back to a style reference instead of baked direct formatting.
+ *
+ * `styleRPr` is the load-time snapshot from the characterStyle mark, captured
+ * in the same normal form this module produces from marks, so value equality
+ * is a faithful "came from the style and is unchanged" check. Values that
+ * differ (user edits, direct overrides from the source document) stay as
+ * direct formatting, which wins over the style per the OOXML cascade.
+ *
+ * When the user *removes* a boolean property the style supplied (e.g. toggling
+ * off bold on text whose `w:rStyle` is bold), that key is no longer present in
+ * `formatting`, so the subtraction loop above never sees it. Without a counter,
+ * the run keeps the style reference and Word re-applies the removed formatting
+ * on load. The second pass emits an explicit negative override (`false`) for
+ * each negatable boolean the style set to `true` but the run no longer carries.
+ */
+function subtractCharacterStyleFormatting(
+  formatting: TextFormatting,
+  styleRPr: TextFormatting,
+): TextFormatting {
+  const result: TextFormatting = {};
+
+  // SAFETY: Object.keys over a TextFormatting yields its own keys.
+  for (const key of Object.keys(formatting) as (keyof TextFormatting)[]) {
+    const value = formatting[key];
+    if (value === undefined) {
+      continue;
+    }
+    const styleValue = key === "styleId" ? undefined : styleRPr[key];
+    // Both values come out of marksToTextFormatting, so equal values have
+    // identical key insertion order and stringify identically.
+    if (
+      styleValue !== undefined &&
+      JSON.stringify(value) === JSON.stringify(styleValue)
+    ) {
+      continue;
+    }
+    // SAFETY: dynamic property copy between identical TextFormatting keys.
+    (result as Record<string, unknown>)[key] = value;
+  }
+
+  for (const [key, csKey] of NEGATABLE_STYLE_KEYS) {
+    if (styleRPr[key] !== true || formatting[key] !== undefined) {
+      continue;
+    }
+    // SAFETY: dynamic property copy between known boolean TextFormatting keys.
+    (result as Record<string, unknown>)[key] = false;
+    if (csKey !== null) {
+      (result as Record<string, unknown>)[csKey] = false;
+    }
+  }
+
+  return result;
 }
 
 function applyRunFormattingOverrideAttrs(
@@ -2505,6 +2428,15 @@ function tableAttrsToFormatting(
         delete result.look;
       }
     }
+    // Borders: toProseDoc seeds attrs.borders with the same reference as
+    // orig.borders, so a difference means a border command replaced them.
+    if (attrs.borders !== (orig.borders ?? undefined)) {
+      if (attrs.borders) {
+        result.borders = attrs.borders;
+      } else {
+        delete result.borders;
+      }
+    }
     // Width: check if changed
     const tableWidth = attrs.width;
     const tableWidthType = attrs.widthType;
@@ -2539,7 +2471,8 @@ function tableAttrsToFormatting(
     attrs.justification ||
     attrs.floating ||
     attrs.cellMargins ||
-    attrs.look;
+    attrs.look ||
+    attrs.borders;
 
   if (!hasFormatting) {
     return undefined;
@@ -2577,6 +2510,9 @@ function tableAttrsToFormatting(
   }
   if (attrs.look) {
     f.look = attrs.look;
+  }
+  if (attrs.borders) {
+    f.borders = attrs.borders;
   }
   return f;
 }
@@ -2978,17 +2914,6 @@ export function updateDocumentContent(
  * Used for converting edited header/footer PM content back to the document
  * model.
  */
-export function proseDocToBlocks(
-  pmDoc: PMNode,
-  styles?: StyleDefinitions,
-): BlockContent[] {
-  const blocks = extractBlocks(pmDoc);
-  // Header/footer save paths call this directly instead of `fromProseDoc`, so
-  // run the same w:rStyle reconciliation here when the document's styles are
-  // available — otherwise a character-style edit inside a header or footer is
-  // silently reverted on save (eigenpal/docx-editor#833).
-  if (styles) {
-    reconcileRunStyleReferences({ content: blocks }, createStyleEngine(styles));
-  }
-  return blocks;
+export function proseDocToBlocks(pmDoc: PMNode): BlockContent[] {
+  return extractBlocks(pmDoc);
 }

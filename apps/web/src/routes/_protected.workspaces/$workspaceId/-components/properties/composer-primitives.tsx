@@ -1,13 +1,8 @@
 import {
   AlertTriangleIcon,
-  AlignLeftIcon,
   AtSignIcon,
-  CalendarIcon,
-  CircleDotIcon,
   FileTextIcon,
-  HashIcon,
   PlusIcon,
-  TagsIcon,
   XIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -21,6 +16,8 @@ import {
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
+
+import { contentTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 export type CreatableContentType =
   | "text"
@@ -42,35 +39,22 @@ export type ChipDefinition = {
   label: string;
 };
 
+const CREATABLE_CONTENT_TYPES: readonly CreatableContentType[] = [
+  "text",
+  "int",
+  "date",
+  "single-select",
+  "multi-select",
+];
+
+// Icon + name come from the shared value-type registry so the property chips
+// and the template field types stay visually identical for overlapping kinds.
 export const useChipDefinitions = (): readonly ChipDefinition[] => {
   const t = useTranslations();
-  return [
-    {
-      type: "text",
-      icon: AlignLeftIcon,
-      label: t("workspaces.properties.chipText"),
-    },
-    {
-      type: "int",
-      icon: HashIcon,
-      label: t("workspaces.properties.chipNumber"),
-    },
-    {
-      type: "date",
-      icon: CalendarIcon,
-      label: t("common.date"),
-    },
-    {
-      type: "single-select",
-      icon: CircleDotIcon,
-      label: t("workspaces.properties.chipSingle"),
-    },
-    {
-      type: "multi-select",
-      icon: TagsIcon,
-      label: t("workspaces.properties.chipMulti"),
-    },
-  ];
+  return CREATABLE_CONTENT_TYPES.map((type) => {
+    const meta = VALUE_TYPE_META[contentTypeValueKind(type)];
+    return { type, icon: meta.icon, label: t(meta.labelKey) };
+  });
 };
 
 export const COMPOSER_CARD_CLASS =

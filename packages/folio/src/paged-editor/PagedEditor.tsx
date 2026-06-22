@@ -35,6 +35,7 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
+import type { AISuggestion } from "../core/ai-suggestions/types";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
 import { buildBookmarkText } from "../core/fields/bookmarkText";
@@ -51,7 +52,6 @@ import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
 import {
   findBodyEmptyRuns,
   findBodyPmAnchor,
-  findBodyPmAnchors,
   findBodyPmSpans,
 } from "../core/layout-bridge/findBodyPmSpans";
 import {
@@ -88,6 +88,10 @@ import type {
   CaretPosition,
 } from "../core/layout-bridge/selectionRects";
 import type * as SelectionGeometry from "../core/layout-bridge/selectionRects";
+import {
+  applyTemplatePreviewToBlocks,
+  templatePreviewDirtyRange,
+} from "../core/layout-bridge/templatePreviewFlow";
 // Layout bridge
 import { toFlowBlocks } from "../core/layout-bridge/toFlowBlocks";
 import type { ToFlowBlocksOptions } from "../core/layout-bridge/toFlowBlocks";
@@ -144,10 +148,18 @@ import {
   mergeTableRowAttrs,
 } from "../core/prosemirror/attrs";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
+import { aiSuggestionDecorationsKey } from "../core/prosemirror/plugins/aiSuggestionDecorations";
 import { anonymizationDecorationsKey } from "../core/prosemirror/plugins/anonymizationDecorations";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
 import { autocompleteSuggestionKey } from "../core/prosemirror/plugins/autocompleteSuggestion";
 import type { AutocompleteSuggestionState } from "../core/prosemirror/plugins/autocompleteSuggestion";
+import { templateDirectivesKey } from "../core/prosemirror/plugins/templateDirectives";
+import type { DirectiveRange } from "../core/prosemirror/plugins/templateDirectives";
+import { templatePreviewValuesKey } from "../core/prosemirror/plugins/templatePreviewValues";
+import type {
+  TemplatePreviewEntry,
+  TemplatePreviewValues,
+} from "../core/prosemirror/plugins/templatePreviewValues";
 import type { ImagePositionAttrs } from "../core/prosemirror/schema/nodes";
 import type { Footnote } from "../core/types/content";
 // Types
@@ -167,6 +179,8 @@ import {
 } from "../core/utils/domGuards";
 import { getDocumentWatermark } from "../core/watermark";
 // Internal components
+import { AISuggestionRectsOverlay } from "./AISuggestionRectsOverlay";
+import type { AISuggestionRectGroup } from "./AISuggestionRectsOverlay";
 import { AnonymizationRectsOverlay } from "./AnonymizationRectsOverlay";
 import type { AnonymizationRectGroup } from "./AnonymizationRectsOverlay";
 import { AutocompleteCaretOverlay } from "./AutocompleteCaretOverlay";
@@ -194,12 +208,17 @@ import {
 import type { DirtyRange } from "./incrementalMeasure";
 // Selection sync
 import { LayoutSelectionGate } from "./LayoutSelectionGate";
-import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 import {
-  getPageScrollTarget,
-  isValidPmScrollPosition,
-  prefersReducedMotionBehavior,
-} from "./scrollNavigation";
+  collectRunFontsAtPmPositions,
+  measureContentLeft,
+  projectRangesToRects,
+} from "./rangeProjection";
+import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
+import { getPageScrollTarget } from "./scrollNavigation";
+import {
+  PAGES_CONTAINER_CLASS,
+  scrollPagesToPmPosition,
+} from "./scrollToPmPosition";
 import { computePerBlockMeasureInputs } from "./sectionBlockWidths";
 import {
   DEFAULT_PAGE_HEIGHT_PX,
@@ -210,6 +229,8 @@ import {
 import { SelectionOverlay } from "./SelectionOverlay";
 import { resizeColumnPair } from "./tableColumnResize";
 import { tableInsertButtonOffset } from "./tableInsertButtonGeometry";
+import { TemplateDirectivesOverlay } from "./TemplateDirectivesOverlay";
+import type { DirectiveRectGroup } from "./TemplateDirectivesOverlay";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
 // Visual line navigation hook
@@ -276,6 +297,10 @@ export type PagedEditorProps = {
   onEditorViewReady?: (view: EditorView | null) => void;
   /** External ProseMirror plugins. */
   externalPlugins?: Plugin[];
+  /** Paint the template-directive overlay. Toggling this hides the chips even
+   *  while the directive plugin stays installed — the hidden view isn't
+   *  reconfigured on a same-document plugin change, so gate the overlay here. */
+  showTemplateDirectives?: boolean;
   /** Optional Yjs collaboration owner for the hidden ProseMirror state. */
   collaboration?: HiddenProseMirrorCollaboration | undefined;
   /** Extension manager for plugins/schema/commands (optional — falls back to default) */
@@ -440,6 +465,12 @@ const TRANSACTION_LAYOUT_MAX_DELAY_MS = 96;
 const SELECTION_REVEAL_AFTER_INPUT_DELAY = 120;
 // Stable empty array to avoid re-creating on each render
 const EMPTY_PLUGINS: Plugin[] = [];
+
+// Stable empty fallbacks for plugin-state reads, so transactions on
+// editors without the corresponding plugin don't churn the overlay refs
+// (a fresh `[]` per transaction would fail every identity comparison).
+const EMPTY_TEMPLATE_PREVIEW_ENTRIES: readonly TemplatePreviewEntry[] = [];
+const EMPTY_AI_SUGGESTIONS: readonly AISuggestion[] = [];
 
 const DEFERRED_KEYDOWN_REPLAY_KEYS = new Set([
   "ArrowDown",
@@ -1770,6 +1801,7 @@ export function PagedEditor(
     onSelectionTextChange,
     onEditorViewReady,
     externalPlugins = EMPTY_PLUGINS,
+    showTemplateDirectives = true,
     collaboration,
     extensionManager,
     onHeaderFooterDoubleClick,
@@ -1886,6 +1918,38 @@ export function PagedEditor(
   const [autocompleteText, setAutocompleteText] = useState<string>("");
   const [autocompleteIsStreaming, setAutocompleteIsStreaming] =
     useState<boolean>(false);
+  const [directiveRectGroups, setDirectiveRectGroups] = useState<
+    DirectiveRectGroup[]
+  >([]);
+  const [directiveContentLeft, setDirectiveContentLeft] = useState<
+    number | null
+  >(null);
+  const directivesRef = useRef<readonly DirectiveRange[]>([]);
+  const directivesOverlayRequestSeqRef = useRef(0);
+  // Template fill preview — the hidden editor's plugin keeps marker↔value
+  // entries in sync; the layout pipeline substitutes them into the flow
+  // blocks so the painted pages reflow as if the values were the text.
+  // `templatePreviewRef` mirrors the latest plugin state (change detection),
+  // `lastLaidOutTemplatePreviewRef` records what the last pipeline run
+  // actually substituted.
+  const templatePreviewRef = useRef<{
+    entries: readonly TemplatePreviewEntry[];
+    mode: TemplatePreviewValues["mode"];
+  }>({ entries: EMPTY_TEMPLATE_PREVIEW_ENTRIES, mode: "plain" });
+  const lastLaidOutTemplatePreviewRef = useRef<{
+    entries: readonly TemplatePreviewEntry[];
+    mode: TemplatePreviewValues["mode"];
+  }>({ entries: EMPTY_TEMPLATE_PREVIEW_ENTRIES, mode: "plain" });
+  // AI suggestion review — same pattern for the suggestion list and the
+  // focused suggestion's in-text diff preview.
+  const [aiSuggestionRectGroups, setAiSuggestionRectGroups] = useState<
+    AISuggestionRectGroup[]
+  >([]);
+  const aiSuggestionsRef = useRef<{
+    suggestions: readonly AISuggestion[];
+    focusedId: string | null;
+  }>({ suggestions: EMPTY_AI_SUGGESTIONS, focusedId: null });
+  const aiSuggestionsOverlayRequestSeqRef = useRef(0);
   const [remoteSelections, setRemoteSelections] = useState<
     HiddenProseMirrorRemoteSelection[]
   >([]);
@@ -2074,6 +2138,11 @@ export function PagedEditor(
   const cellDragAnchorPosRef = useRef<number | null>(null);
   const cellDragLastPmPosRef = useRef<number | null>(null);
   const cellDragOverflowXRef = useRef<number | null>(null);
+  // Last text position inside the cell the drag started in. Overflow→whole-cell
+  // escalation is only allowed once the drag actually reaches this position, so
+  // a tiny initial nudge (pmPos hasn't crossed a glyph yet) can't be mistaken
+  // for "dragged past the cell's text".
+  const cellDragContentEndRef = useRef<number | null>(null);
   const CELL_SELECT_OVERFLOW_PX = 5; // px of continued drag after text selection maxes out
 
   // Table quick action insert button state
@@ -2238,7 +2307,25 @@ export function PagedEditor(
         if (defaultTabStop !== undefined) {
           flowOpts.defaultTabStopTwips = defaultTabStop;
         }
-        const newBlocks = toFlowBlocks(state.doc, flowOpts);
+        let newBlocks = toFlowBlocks(state.doc, flowOpts);
+        // Template fill preview: substitute each matched {{marker}} range
+        // with its typed value at the flow-block level so the pages lay out
+        // (wrap, paginate) as if the value were the document text. View-only:
+        // the PM doc — and with it the save path — is never modified.
+        const previewState = templatePreviewValuesKey.getState(state);
+        const previewEntries =
+          previewState?.entries ?? EMPTY_TEMPLATE_PREVIEW_ENTRIES;
+        const previewMode = previewState?.preview?.mode ?? "plain";
+        if (previewEntries.length > 0) {
+          newBlocks = applyTemplatePreviewToBlocks(newBlocks, {
+            entries: previewEntries,
+            mode: previewMode,
+          });
+        }
+        lastLaidOutTemplatePreviewRef.current = {
+          entries: previewEntries,
+          mode: previewMode,
+        };
         setBlocks(newBlocks);
         recordPhaseDuration("flow-blocks", phaseStartedAt);
 
@@ -3757,6 +3844,96 @@ export function PagedEditor(
     );
   }, [layout, blocks, measures, zoom]);
 
+  // Project template-directive ranges (kept in sync by the
+  // templateDirectives plugin) onto container-space rects. Shares
+  // the projection pipeline with anonymization via
+  // `projectRangesToRects`.
+  const updateDirectivesOverlay = useCallback(() => {
+    const requestSeq = directivesOverlayRequestSeqRef.current + 1;
+    directivesOverlayRequestSeqRef.current = requestSeq;
+    // A marker with an active fill-preview value already reads as filled
+    // (orange substituted run); suppress its blue marker tint so filled and
+    // to-be-filled markers are visually disjoint.
+    const previewedStarts = new Set(
+      templatePreviewRef.current.entries.map((entry) => entry.from),
+    );
+    const ranges = directivesRef.current.filter(
+      (range) =>
+        !(range.kind === "placeholder" && previewedStarts.has(range.from)),
+    );
+    const pagesContainer = pagesContainerRef.current;
+    if (ranges.length === 0 || !pagesContainer) {
+      setDirectiveRectGroups([]);
+      setDirectiveContentLeft(null);
+      return;
+    }
+    setDirectiveContentLeft(measureContentLeft(pagesContainer, zoom));
+    void (async () => {
+      const projected = await projectRangesToRects(ranges, {
+        pagesContainer,
+        zoom,
+        layout,
+        blocks,
+        measures,
+      });
+      if (directivesOverlayRequestSeqRef.current === requestSeq) {
+        setDirectiveRectGroups(projected);
+      }
+    })();
+  }, [layout, blocks, measures, zoom]);
+
+  // Project pending AI suggestions (kept in sync by the
+  // aiSuggestionDecorations plugin) onto container-space rects: dotted
+  // severity underlines, plus the focused suggestion's in-text diff
+  // (struck-through original + adjacent replacement text).
+  const updateAISuggestionsOverlay = useCallback(() => {
+    const requestSeq = aiSuggestionsOverlayRequestSeqRef.current + 1;
+    aiSuggestionsOverlayRequestSeqRef.current = requestSeq;
+    const { suggestions, focusedId } = aiSuggestionsRef.current;
+    const pending = suggestions.filter(
+      (suggestion) =>
+        suggestion.status === "pending" &&
+        suggestion.range.from >= 0 &&
+        suggestion.range.to > suggestion.range.from,
+    );
+    const pagesContainer = pagesContainerRef.current;
+    if (pending.length === 0 || !pagesContainer) {
+      setAiSuggestionRectGroups((prev) => (prev.length === 0 ? prev : []));
+      return;
+    }
+    void (async () => {
+      const projected = await projectRangesToRects(
+        pending.map((suggestion) => ({
+          from: suggestion.range.from,
+          to: suggestion.range.to,
+          suggestion,
+        })),
+        { pagesContainer, zoom, layout, blocks, measures },
+      );
+      if (aiSuggestionsOverlayRequestSeqRef.current !== requestSeq) {
+        return;
+      }
+      const focused = projected.find(
+        ({ range }) => range.suggestion.id === focusedId,
+      );
+      const fonts = collectRunFontsAtPmPositions(
+        pagesContainer,
+        focused ? [focused.range.from] : [],
+      );
+      setAiSuggestionRectGroups(
+        projected.map(({ range, rects }) => ({
+          suggestion: range.suggestion,
+          rects,
+          focused: range.suggestion.id === focusedId,
+          font:
+            range.suggestion.id === focusedId
+              ? (fonts.get(range.from) ?? null)
+              : null,
+        })),
+      );
+    })();
+  }, [layout, blocks, measures, zoom]);
+
   const hideSelectionOverlayDuringInput = useCallback(
     (state: EditorState) => {
       selectionOverlayRequestSeqRef.current += 1;
@@ -3821,6 +3998,75 @@ export function PagedEditor(
         updateAutocompleteOverlay();
       }
 
+      const nextDirectives =
+        templateDirectivesKey.getState(newState)?.ranges ?? [];
+      if (nextDirectives !== directivesRef.current) {
+        directivesRef.current = nextDirectives;
+        // On a doc edit the layout is about to reflow; projecting now places
+        // the new ranges against the stale (pre-reflow) layout, so the marker
+        // highlights jitter sideways for a frame. Defer to the post-layout
+        // effect (keyed on `updateDirectivesOverlay`), which re-projects against
+        // the settled layout — the same deferral the selection overlay uses.
+        // Only project inline when ranges change without a doc change (no
+        // reflow pending, so the current layout is already correct).
+        if (!transaction.docChanged) {
+          updateDirectivesOverlay();
+        }
+      }
+
+      // Template fill preview: the substituted values are part of the flow
+      // blocks the painter lays out, so a preview change must re-run the
+      // layout pipeline (doc edits already do via scheduleLayout below).
+      // Value edits invalidate just the affected marker ranges so the
+      // incremental measure path can skip untouched blocks; a mode toggle
+      // restyles every substituted run, so it takes the full pass.
+      const nextPreviewState = templatePreviewValuesKey.getState(newState);
+      const nextPreviewEntries =
+        nextPreviewState?.entries ?? EMPTY_TEMPLATE_PREVIEW_ENTRIES;
+      const nextPreviewMode = nextPreviewState?.preview?.mode ?? "plain";
+      if (
+        nextPreviewEntries !== templatePreviewRef.current.entries ||
+        nextPreviewMode !== templatePreviewRef.current.mode
+      ) {
+        const previousPreview = templatePreviewRef.current;
+        templatePreviewRef.current = {
+          entries: nextPreviewEntries,
+          mode: nextPreviewMode,
+        };
+        if (!transaction.docChanged) {
+          if (nextPreviewMode !== previousPreview.mode) {
+            scheduleLayout(newState, null);
+          } else {
+            const previewDirty = templatePreviewDirtyRange(
+              previousPreview.entries,
+              nextPreviewEntries,
+            );
+            if (previewDirty) {
+              scheduleLayout(newState, previewDirty);
+            }
+          }
+        }
+      }
+
+      // AI suggestions: the plugin remaps its ranges through doc edits,
+      // so the ref always holds projectable positions.
+      const nextAiState = aiSuggestionDecorationsKey.getState(newState);
+      const nextAiSuggestions =
+        nextAiState?.suggestions ?? EMPTY_AI_SUGGESTIONS;
+      const nextAiFocusedId = nextAiState?.focusedId ?? null;
+      if (
+        nextAiSuggestions !== aiSuggestionsRef.current.suggestions ||
+        nextAiFocusedId !== aiSuggestionsRef.current.focusedId
+      ) {
+        aiSuggestionsRef.current = {
+          suggestions: nextAiSuggestions,
+          focusedId: nextAiFocusedId,
+        };
+        if (!transaction.docChanged) {
+          updateAISuggestionsOverlay();
+        }
+      }
+
       if (transaction.docChanged) {
         // Increment state sequence to signal document changed
         syncCoordinator.incrementStateSeq();
@@ -3852,6 +4098,8 @@ export function PagedEditor(
       updateSelectionOverlay,
       updateAnonymizationOverlay,
       updateAutocompleteOverlay,
+      updateDirectivesOverlay,
+      updateAISuggestionsOverlay,
       syncCoordinator,
     ],
     // NOTE: onDocumentChange removed from dependencies - accessed via ref to prevent infinite loops
@@ -4161,119 +4409,11 @@ export function PagedEditor(
 
   /** Scroll visible pages to a ProseMirror position. */
   const scrollToPositionImpl = useCallback((pmPos: number) => {
-    if (!isValidPmScrollPosition(pmPos)) {
-      return;
-    }
-
     const pageContainer = pagesContainerRef.current;
     if (!pageContainer) {
       return;
     }
-    // Phase 1: locate the target via per-run DOM if it's already
-    // rendered, otherwise via the page shell (always present
-    // under virtualization). The shell-based path was added to
-    // fix the "many clicks to arrive" bug — a per-run query on a
-    // virtualized doc only sees runs in the currently-rendered
-    // buffer, so each click stepped one buffer-width forward
-    // instead of jumping straight to the target.
-    const exact = findBodyPmAnchor(pageContainer, pmPos);
-    if (exact) {
-      exact.scrollIntoView({
-        behavior: prefersReducedMotionBehavior(),
-        block: "center",
-      });
-      return;
-    }
-
-    // Walk all currently-rendered runs to see if pmPos falls
-    // inside one of them (block-node positions never match
-    // exactly but usually live inside a known run).
-    let runMatch: HTMLElement | null = null;
-    for (const el of findBodyPmAnchors(pageContainer)) {
-      const start = Number(el.dataset["pmStart"]);
-      if (Number.isNaN(start)) {
-        continue;
-      }
-      const endAttr = el.dataset["pmEnd"];
-      const end = endAttr === undefined ? start : Number(endAttr);
-      if (start <= pmPos && pmPos <= end) {
-        runMatch = el;
-        break;
-      }
-    }
-    if (runMatch) {
-      runMatch.scrollIntoView({
-        behavior: prefersReducedMotionBehavior(),
-        block: "center",
-      });
-      return;
-    }
-
-    // Target lives outside the rendered buffer. Scroll to its
-    // page shell (which exists with correct dimensions even when
-    // empty), then refine to the exact run once the
-    // IntersectionObserver populates the page content.
-    //
-    // TODO: when the AI review session opens, pre-warm the page
-    // shells that contain pending suggestions (one-shot
-    // populate of ~30 pages instead of 200). Lets this scroll
-    // become single-phase again — no rAF refine — and makes
-    // navigation feel instant for long documents.
-    const shellHit = findPageShellForPmPos(pageContainer, pmPos);
-    if (!shellHit) {
-      return;
-    }
-    const { element: shell } = shellHit;
-    shell.scrollIntoView({
-      behavior: prefersReducedMotionBehavior(),
-      block: "center",
-    });
-
-    let attempts = 0;
-    const refine = () => {
-      attempts++;
-      const exactInShell = findBodyPmAnchor(shell, pmPos);
-      if (exactInShell) {
-        exactInShell.scrollIntoView({
-          behavior: prefersReducedMotionBehavior(),
-          block: "center",
-        });
-        return;
-      }
-      let bestEl: HTMLElement | null = null;
-      let bestStart = Number.NEGATIVE_INFINITY;
-      for (const el of findBodyPmAnchors(shell)) {
-        const start = Number(el.dataset["pmStart"]);
-        if (Number.isNaN(start)) {
-          continue;
-        }
-        const endAttr = el.dataset["pmEnd"];
-        const end = endAttr === undefined ? start : Number(endAttr);
-        if (start <= pmPos && pmPos <= end) {
-          bestEl = el;
-          break;
-        }
-        if (start <= pmPos && start > bestStart) {
-          bestStart = start;
-          bestEl = el;
-        }
-      }
-      if (bestEl) {
-        bestEl.scrollIntoView({
-          behavior: prefersReducedMotionBehavior(),
-          block: "center",
-        });
-        return;
-      }
-      // IntersectionObserver populates on the next tick; give it
-      // a few frames before giving up. ~20 frames covers slow
-      // initial paint on long pages without spinning indefinitely
-      // if the page genuinely has no run at this position.
-      if (attempts < 20) {
-        requestAnimationFrame(refine);
-      }
-    };
-    requestAnimationFrame(refine);
+    scrollPagesToPmPosition(pageContainer, pmPos);
   }, []);
 
   const scrollToPageImpl = useCallback(
@@ -4318,6 +4458,18 @@ export function PagedEditor(
       if (pmPos !== null) {
         const cellPos = findCellPosFromPmPos(pmPos);
         cellDragAnchorPosRef.current = cellPos;
+        cellDragContentEndRef.current = null;
+        if (cellPos !== null) {
+          const cellNode = hiddenPMRef.current
+            ?.getView()
+            ?.state.doc.nodeAt(cellPos);
+          if (cellNode) {
+            // `cellPos` is the cell's `before` position; the last cursor
+            // position inside it is `cellPos + nodeSize - 2` (just before the
+            // cell's closing token and its last child's closing token).
+            cellDragContentEndRef.current = cellPos + cellNode.nodeSize - 2;
+          }
+        }
         isCellDraggingRef.current = false;
         cellDragLastPmPosRef.current = null;
         cellDragOverflowXRef.current = null;
@@ -4331,6 +4483,7 @@ export function PagedEditor(
         }
       } else {
         cellDragAnchorPosRef.current = null;
+        cellDragContentEndRef.current = null;
         isCellDraggingRef.current = false;
         const view = hiddenPMRef.current?.getView();
         if (view) {
@@ -5007,9 +5160,16 @@ export function PagedEditor(
           return;
         }
 
-        // Detect when text selection has maxed out within the cell:
-        // If pmPos stops changing but mouse keeps moving, user has dragged past text content
+        // Escalate to a whole-cell selection only once the drag has reached the
+        // cell's last text position and the user keeps dragging past it. Gating
+        // on the content end is what separates "dragged past the text"
+        // (intended) from the sub-glyph stickiness at the very start of any drag
+        // (pmPos hasn't advanced to the next character yet) — without it, a <5px
+        // nudge inside a cell grabbed the entire cell.
+        const contentEnd = cellDragContentEndRef.current;
+        const atContentEnd = contentEnd !== null && pmPos >= contentEnd;
         if (
+          atContentEnd &&
           cellDragLastPmPosRef.current !== null &&
           pmPos === cellDragLastPmPosRef.current
         ) {
@@ -5029,7 +5189,7 @@ export function PagedEditor(
             return;
           }
         } else {
-          // Position is still advancing — reset overflow tracking
+          // Still selecting text within the cell — reset overflow tracking.
           cellDragOverflowXRef.current = null;
           cellDragLastPmPosRef.current = pmPos;
         }
@@ -5259,6 +5419,7 @@ export function PagedEditor(
     isCellDraggingRef.current = false;
     cellDragLastPmPosRef.current = null;
     cellDragOverflowXRef.current = null;
+    cellDragContentEndRef.current = null;
     activeHfDragSurfaceRef.current = null;
     stopDragAutoScroll();
     // Keep dragAnchorRef for potential shift-click extension
@@ -5274,6 +5435,45 @@ export function PagedEditor(
       window.removeEventListener("mouseup", handleMouseUp);
     };
   }, [handleMouseMove, handleMouseUp]);
+
+  // Mouse back/forward buttons (3 = back, 4 = forward) navigate browser history
+  // by default, which would yank the user out of the document mid-edit. While
+  // this editor is focused, repurpose them as undo / redo and suppress the
+  // navigation. preventDefault on mousedown drives the action; mouseup +
+  // auxclick also preventDefault since which event triggers the navigation
+  // varies across Chromium builds.
+  useEffect(() => {
+    if (readOnly) {
+      return;
+    }
+    const handleHistoryButton = (event: MouseEvent) => {
+      if (event.button !== 3 && event.button !== 4) {
+        return;
+      }
+      if (!hiddenPMRef.current?.isFocused()) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      if (event.type !== "mousedown") {
+        return;
+      }
+      if (event.button === 3) {
+        hiddenPMRef.current.undo();
+      } else {
+        hiddenPMRef.current.redo();
+      }
+    };
+    const options = { capture: true } as const;
+    window.addEventListener("mousedown", handleHistoryButton, options);
+    window.addEventListener("mouseup", handleHistoryButton, options);
+    window.addEventListener("auxclick", handleHistoryButton, options);
+    return () => {
+      window.removeEventListener("mousedown", handleHistoryButton, options);
+      window.removeEventListener("mouseup", handleHistoryButton, options);
+      window.removeEventListener("auxclick", handleHistoryButton, options);
+    };
+  }, [readOnly]);
 
   /**
    * Handle mousemove on pages to show table row/column insert buttons.
@@ -5669,19 +5869,12 @@ export function PagedEditor(
         }
       }
 
-      // Double-click: select entire cell (CellSelection) if in table, otherwise word selection
+      // Double-click: select the word under the cursor. Inside a table this
+      // still selects the word (matching Word / Google Docs), not the whole
+      // cell — cell selection is reachable by dragging across cells.
       if (e.detail === 2 && hiddenPMRef.current) {
         const pmPos = getPositionFromMouse(e.clientX, e.clientY);
         if (pmPos !== null) {
-          // If inside a table cell, select the entire cell
-          const cellPos = findCellPosFromPmPos(pmPos);
-          if (cellPos !== null) {
-            e.preventDefault();
-            e.stopPropagation();
-            hiddenPMRef.current.setCellSelection(cellPos, cellPos);
-            return;
-          }
-
           const view = hiddenPMRef.current.getView();
           if (view) {
             const { doc } = view.state;
@@ -5717,9 +5910,15 @@ export function PagedEditor(
               const pmAlignedText = pmAlignedParts.join("");
               const offset = $pos.parentOffset;
 
+              // A word character is any Unicode letter, number, combining mark
+              // (so decomposed accents stay attached) or underscore. Plain
+              // `\w` — even with the `u` flag — is ASCII-only, so it split
+              // "Gdańsk" at the "ń" and double-click selected just "Gda".
+              const wordChar = /[\p{L}\p{N}\p{M}_]/u;
+
               // Find word start (go back until whitespace/punctuation)
               let start = offset;
-              while (start > 0 && /\w/u.test(pmAlignedText[start - 1]!)) {
+              while (start > 0 && wordChar.test(pmAlignedText[start - 1]!)) {
                 // SAFETY: start > 0
                 start--;
               }
@@ -5728,7 +5927,7 @@ export function PagedEditor(
               let end = offset;
               while (
                 end < pmAlignedText.length &&
-                /\w/u.test(pmAlignedText[end]!)
+                wordChar.test(pmAlignedText[end]!)
               ) {
                 // SAFETY: end < pmAlignedText.length
                 end++;
@@ -6259,6 +6458,8 @@ export function PagedEditor(
     setPrecomputedInitialState(initialState);
     anonymizationMatchesRef.current =
       anonymizationDecorationsKey.getState(initialState)?.matches ?? [];
+    directivesRef.current =
+      templateDirectivesKey.getState(initialState)?.ranges ?? [];
 
     let cancelled = false;
     pendingInitialFontReadyLayoutRef.current = true;
@@ -6280,6 +6481,7 @@ export function PagedEditor(
       runLayoutPipeline(initialState, { reason: "initial" });
       updateSelectionOverlay(initialState);
       updateAnonymizationOverlay();
+      updateDirectivesOverlay();
       if (fontsLoaded) {
         lastLayoutUsedLoadedFontsRef.current = true;
         suppressFontReadyUntilRef.current =
@@ -6306,6 +6508,7 @@ export function PagedEditor(
     shouldCreateHiddenEditorView,
     styles,
     updateAnonymizationOverlay,
+    updateDirectivesOverlay,
     updateSelectionOverlay,
   ]);
 
@@ -6324,6 +6527,18 @@ export function PagedEditor(
         autocompleteSuggestionRef.current = initialSuggestion;
       }
       updateAutocompleteOverlay();
+      directivesRef.current =
+        templateDirectivesKey.getState(view.state)?.ranges ?? [];
+      const previewState = templatePreviewValuesKey.getState(view.state);
+      templatePreviewRef.current = {
+        entries: previewState?.entries ?? EMPTY_TEMPLATE_PREVIEW_ENTRIES,
+        mode: previewState?.preview?.mode ?? "plain",
+      };
+      const aiState = aiSuggestionDecorationsKey.getState(view.state);
+      aiSuggestionsRef.current = {
+        suggestions: aiState?.suggestions ?? EMPTY_AI_SUGGESTIONS,
+        focusedId: aiState?.focusedId ?? null,
+      };
 
       const focusReadyView = () => {
         if (readOnly || !shouldFocusHiddenEditorOnReadyRef.current) {
@@ -6342,8 +6557,24 @@ export function PagedEditor(
       };
 
       if (lastLaidOutPmDocRef.current?.eq(view.state.doc)) {
+        // The doc is already laid out, but the painted pages may carry a
+        // fill preview the fresh view's plugin no longer holds (or vice
+        // versa) — the substituted values live in the flow blocks, so a
+        // mismatch needs a pipeline re-run, not just overlay repaints.
+        const lastPreview = lastLaidOutTemplatePreviewRef.current;
+        if (
+          templatePreviewRef.current.mode !== lastPreview.mode ||
+          templatePreviewDirtyRange(
+            lastPreview.entries,
+            templatePreviewRef.current.entries,
+          ) !== null
+        ) {
+          runLayoutPipeline(view.state, { reason: "manual" });
+        }
         updateSelectionOverlay(view.state);
         updateAnonymizationOverlay();
+        updateDirectivesOverlay();
+        updateAISuggestionsOverlay();
         focusReadyView();
         return;
       }
@@ -6352,6 +6583,8 @@ export function PagedEditor(
         runLayoutPipeline(currentView.state, { reason: "initial" });
         updateSelectionOverlay(currentView.state);
         updateAnonymizationOverlay();
+        updateDirectivesOverlay();
+        updateAISuggestionsOverlay();
       };
 
       pendingInitialFontReadyLayoutRef.current = true;
@@ -6389,6 +6622,8 @@ export function PagedEditor(
       runLayoutPipeline,
       updateSelectionOverlay,
       updateAnonymizationOverlay,
+      updateDirectivesOverlay,
+      updateAISuggestionsOverlay,
       document,
       updateAutocompleteOverlay,
       readOnly,
@@ -6405,6 +6640,18 @@ export function PagedEditor(
   useEffect(() => {
     updateAnonymizationOverlay();
   }, [updateAnonymizationOverlay]);
+
+  // Re-paint the template-directive overlay on every fresh layout
+  // (initial paint, doc edit, zoom) so chips track the markers.
+  useEffect(() => {
+    updateDirectivesOverlay();
+  }, [updateDirectivesOverlay]);
+
+  // Re-paint the AI suggestion underlines + focused in-text diff on
+  // every fresh layout.
+  useEffect(() => {
+    updateAISuggestionsOverlay();
+  }, [updateAISuggestionsOverlay]);
 
   // Compute anchor Y positions for comments/revisions sidebar from the current
   // layout artifacts. Opening the sidebar or switching anchor modes does not
@@ -6823,7 +7070,7 @@ export function PagedEditor(
           {/* Pages container */}
           <div
             ref={pagesContainerRef}
-            className={`paged-editor__pages${readOnly ? " paged-editor--readonly" : ""}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ""}`}
+            className={`${PAGES_CONTAINER_CLASS}${readOnly ? " paged-editor--readonly" : ""}${hfEditMode ? ` paged-editor--hf-editing paged-editor--editing-${hfEditMode}` : ""}`}
             style={pagesContainerStyles}
             onMouseDown={containedHandler(
               pagesContainerRef,
@@ -6856,6 +7103,27 @@ export function PagedEditor(
             text={autocompleteText}
             isStreaming={autocompleteIsStreaming}
           />
+
+          {/* AI suggestion review — dotted severity underlines for
+              pending suggestions plus the focused suggestion's in-text
+              diff. Always mounted, renders nothing until the host
+              pushes a suggestion list into the hidden editor. */}
+          <AISuggestionRectsOverlay groups={aiSuggestionRectGroups} />
+
+          {/* Template-directive widgets — rich chips over {{...}}
+              markers in the template editor. Renders nothing when
+              the directives plugin isn't installed. */}
+          {showTemplateDirectives && (
+            <TemplateDirectivesOverlay
+              contentLeft={directiveContentLeft}
+              groups={directiveRectGroups}
+            />
+          )}
+
+          {/* Template fill preview needs no overlay: the layout pipeline
+              substitutes the typed values into the flow blocks, so the
+              painter lays out and paints them (with the accent chip in
+              highlighted mode) as part of the pages themselves. */}
 
           {/* Selection overlay */}
           <SelectionOverlay
@@ -6927,7 +7195,9 @@ export function PagedEditor(
                 alignItems: "center",
                 justifyContent: "center",
                 cursor: "pointer",
-                zIndex: 200,
+                // Keep this editor overlay below the app's popover/modal layer
+                // (z-50) so it can't bleed through an open popover over a table.
+                zIndex: 40,
                 padding: 0,
                 boxShadow: "none",
               }}

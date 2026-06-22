@@ -10,6 +10,7 @@ import type {
   BlockDirectiveKind,
   ExtractedDocument,
   ExtractedParagraph,
+  FieldMeta,
   ParagraphSource,
 } from "./types";
 
@@ -168,14 +169,12 @@ const extractParagraphsFromContainer = (
   let chars = 0;
   let index = startIndex;
 
-  for (const child of container.childNodes) {
-    if (!isElement(child)) {
-      continue;
-    }
-    if (child.localName !== "p" || child.namespaceURI !== W_NS) {
-      continue;
-    }
-
+  // Descendant paragraphs, not just direct children: document text
+  // commonly sits inside tables (w:tbl/w:tr/w:tc) or content controls
+  // (w:sdt), and discovery (`discover-template.ts`) already indexes
+  // paragraphs this way, so extraction must enumerate the same set or
+  // table content stays invisible to version diffs and AI context.
+  for (const child of container.getElementsByTagNameNS(W_NS, "p")) {
     const text = collectText(child);
     const { style, alignment } = readParagraphProps(child);
 
@@ -318,6 +317,29 @@ export const extractText = async (
   const charCount = headers.chars + bodyResult.chars + footers.chars;
 
   return { paragraphs, charCount, view: "accepted" };
+};
+
+/**
+ * Rendered document body for AI-draft fields that opted into seeing it
+ * ({@link FieldMeta.aiSeesDocument}). Returns `undefined` — and skips the
+ * extraction entirely — when no AI-draft field opted in, so the generator
+ * prompt and token cost stay unchanged for non-opted templates.
+ */
+export const documentTextForAiFields = async (
+  docxBytes: Uint8Array,
+  fields: readonly FieldMeta[],
+): Promise<string | undefined> => {
+  const wantsDocumentText = fields.some(
+    (field) =>
+      field.aiPrompt !== undefined &&
+      field.aiPrompt !== "" &&
+      field.aiSeesDocument === true,
+  );
+  if (!wantsDocumentText) {
+    return undefined;
+  }
+  const { paragraphs } = await extractText(docxBytes);
+  return paragraphs.map((paragraph) => paragraph.text).join("\n");
 };
 
 // ── Markdown extraction ─────────────────────────────────

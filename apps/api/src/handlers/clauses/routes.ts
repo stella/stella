@@ -11,11 +11,16 @@ import importClauses from "@/api/handlers/clauses/import";
 import getClause from "@/api/handlers/clauses/read-by-id";
 import listClauses from "@/api/handlers/clauses/read-list";
 import getClauseVersion from "@/api/handlers/clauses/read-version";
+import rewriteClause from "@/api/handlers/clauses/rewrite";
+import getTemplateClausePreview from "@/api/handlers/clauses/template-slot-preview";
 import updateClause from "@/api/handlers/clauses/update";
 import createVariant from "@/api/handlers/clauses/variants-create";
 import deleteVariant from "@/api/handlers/clauses/variants-delete";
 import listVariants from "@/api/handlers/clauses/variants-list";
 import updateVariant from "@/api/handlers/clauses/variants-update";
+import clauseVersionDiff from "@/api/handlers/clauses/versions-diff";
+import restoreClauseVersion from "@/api/handlers/clauses/versions-restore";
+import clauseVersionSummarize from "@/api/handlers/clauses/versions-summarize";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 // ── Categories ──────────────────────────────────────
@@ -67,6 +72,17 @@ export const clausesRoute = new Elysia({
     body: importClauses.config.body,
     permissions: importClauses.config.permissions,
   })
+  // AI assist: revise a clause body's prose in place (stateless; static path
+  // registered before /:clauseId so it isn't captured as an id).
+  .post("/ai-rewrite", rewriteClause.handler, {
+    body: rewriteClause.config.body,
+    permissions: rewriteClause.config.permissions,
+  })
+  // Live fill preview: resolve a template's linked clause slots to plain text.
+  .get("/template-slot-preview/:templateId", getTemplateClausePreview.handler, {
+    params: getTemplateClausePreview.config.params,
+    permissions: getTemplateClausePreview.config.permissions,
+  })
   .get("/:clauseId", getClause.handler, {
     params: getClause.config.params,
     permissions: getClause.config.permissions,
@@ -85,6 +101,26 @@ export const clausesRoute = new Elysia({
     params: getClauseVersion.config.params,
     permissions: getClauseVersion.config.permissions,
   })
+  .get("/:clauseId/versions/:versionId/diff", clauseVersionDiff.handler, {
+    params: clauseVersionDiff.config.params,
+    permissions: clauseVersionDiff.config.permissions,
+  })
+  .post(
+    "/:clauseId/versions/:versionId/summarize",
+    clauseVersionSummarize.handler,
+    {
+      params: clauseVersionSummarize.config.params,
+      permissions: clauseVersionSummarize.config.permissions,
+    },
+  )
+  .post(
+    "/:clauseId/versions/:versionId/restore",
+    restoreClauseVersion.handler,
+    {
+      params: restoreClauseVersion.config.params,
+      permissions: restoreClauseVersion.config.permissions,
+    },
+  )
   // ── Variants ────────────────────────────────────
   .get("/:clauseId/variants", listVariants.handler, {
     params: listVariants.config.params,

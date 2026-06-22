@@ -104,6 +104,7 @@ import {
   mergeCells as pmMergeCells,
   splitCell as pmSplitCell,
   setCellBorder,
+  setTableBorderPreset,
   setCellVerticalAlign,
   setCellMargins,
   setCellTextDirection,
@@ -160,6 +161,8 @@ import {
   createSuggestionModePlugin,
   setSuggestionMode,
 } from "../core/prosemirror/plugins/suggestionMode";
+import { createTemplateDirectivesPlugin } from "../core/prosemirror/plugins/templateDirectives";
+import { createTemplatePreviewValuesPlugin } from "../core/prosemirror/plugins/templatePreviewValues";
 import type { Comment } from "../core/types/content";
 import type {
   Document,
@@ -471,6 +474,9 @@ export function DocxEditor({
   onAnonymizationTermClick,
   selectedAnonymizationCanonical = null,
   anonymizationSelectionSeq,
+  showTemplateDirectives = false,
+  customContextMenuItems,
+  onCustomContextAction,
   collaboration,
   featureFlags,
   onSelectiveSaveTripwire,
@@ -676,6 +682,18 @@ export function DocxEditor({
     () => autocompleteSuggestionPlugin({ keymap: true }),
     [],
   );
+  // Template-directive widgets. Installed only for the template
+  // editor (`showTemplateDirectives`); scans the doc for {{...}}
+  // markers and exposes their ranges for the paged overlay.
+  const templateDirectivesPlugin = useMemo(
+    () => createTemplateDirectivesPlugin(),
+    [],
+  );
+  // Inert until a host pushes preview values (template fill preview).
+  const templatePreviewPlugin = useMemo(
+    () => createTemplatePreviewValuesPlugin(),
+    [],
+  );
   const editorPlugins = useMemo(
     () => [
       autocompletePlugin,
@@ -684,6 +702,8 @@ export function DocxEditor({
       aiSuggestionPlugin,
       aiCitationPlugin,
       anonymizationDecorationsPlugin,
+      ...(showTemplateDirectives ? [templateDirectivesPlugin] : []),
+      templatePreviewPlugin,
     ],
     [
       autocompletePlugin,
@@ -692,6 +712,9 @@ export function DocxEditor({
       aiSuggestionPlugin,
       aiCitationPlugin,
       anonymizationDecorationsPlugin,
+      showTemplateDirectives,
+      templateDirectivesPlugin,
+      templatePreviewPlugin,
     ],
   );
 
@@ -1225,7 +1248,7 @@ export function DocxEditor({
         for (const [rId, hf] of bag) {
           const view = editor.getHfView(rId);
           if (view) {
-            hf.content = proseDocToBlocks(view.state.doc, doc.package.styles);
+            hf.content = proseDocToBlocks(view.state.doc);
           }
         }
       };
@@ -2212,7 +2235,22 @@ export function DocxEditor({
         },
       ];
     }
-    const items: TextContextMenuItem[] = [
+    const items: TextContextMenuItem[] = [];
+    // Host-provided entries lead the menu — they're the surface-specific
+    // primary actions (e.g. the Template Studio's "Make field").
+    const custom = (customContextMenuItems ?? []).filter(
+      (item) => !item.requiresSelection || contextMenu.hasSelection,
+    );
+    for (const [index, item] of custom.entries()) {
+      items.push({
+        action: `custom:${item.id}`,
+        label: item.label,
+        emphasis: true,
+        ...(item.icon === undefined ? {} : { icon: item.icon }),
+        dividerAfter: index === custom.length - 1,
+      });
+    }
+    items.push(
       { action: "cut", label: t("cut"), shortcut: `${mod}+X` },
       { action: "copy", label: t("copy"), shortcut: `${mod}+C` },
       { action: "paste", label: t("paste"), shortcut: `${mod}+V` },
@@ -2228,7 +2266,7 @@ export function DocxEditor({
         shortcut: "Del",
         dividerAfter: !contextMenu.hasSelection && !contextMenu.cursorInTable,
       },
-    ];
+    );
     if (contextMenu.hasSelection) {
       items.push({
         action: "addComment",
@@ -2246,6 +2284,12 @@ export function DocxEditor({
         {
           action: "deleteColumn",
           label: t("deleteColumn"),
+          dividerAfter: true,
+        },
+        { action: "tableBordersAll", label: t("tableBordersAll") },
+        {
+          action: "tableBordersNone",
+          label: t("tableBordersNone"),
           dividerAfter: true,
         },
       );
@@ -2270,6 +2314,7 @@ export function DocxEditor({
     contextMenu.hasSelection,
     contextMenu.cursorInTable,
     contextMenu.cursorInTrackedChange,
+    customContextMenuItems,
     readOnly,
     t,
   ]);
@@ -2285,6 +2330,15 @@ export function DocxEditor({
       focusActiveEditor();
 
       if (readOnly && action !== "copy" && action !== "selectAll") {
+        return;
+      }
+
+      if (action.startsWith("custom:")) {
+        const { from, to } =
+          contextMenu.selectionRange.from !== contextMenu.selectionRange.to
+            ? contextMenu.selectionRange
+            : view.state.selection;
+        onCustomContextAction?.(action.slice("custom:".length), { from, to });
         return;
       }
 
@@ -2397,6 +2451,12 @@ export function DocxEditor({
         case "deleteColumn":
           pmDeleteColumn(view.state, view.dispatch);
           break;
+        case "tableBordersAll":
+          setTableBorderPreset("all")(view.state, view.dispatch);
+          break;
+        case "tableBordersNone":
+          setTableBorderPreset("none")(view.state, view.dispatch);
+          break;
         // Comment — same flow as floating comment button
         case "addComment": {
           // Use the stored selection range from when the context menu opened,
@@ -2457,6 +2517,7 @@ export function DocxEditor({
     [
       getActiveEditorView,
       focusActiveEditor,
+      onCustomContextAction,
       readOnly,
       contextMenu.selectionRange.from,
       contextMenu.selectionRange.to,
@@ -3383,6 +3444,7 @@ export function DocxEditor({
                         ? { onEditorViewReady: reportEditorViewReady }
                         : {})}
                       externalPlugins={editorPlugins}
+                      showTemplateDirectives={showTemplateDirectives}
                       {...(collaboration !== undefined
                         ? { collaboration }
                         : {})}

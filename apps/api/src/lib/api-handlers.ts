@@ -185,13 +185,27 @@ type SafeHandlerResult<TResult> =
   | TResult
   | SafeStatusResponse<HandlerErrorStatusCode>;
 
-type SafeHandlerFn<TContext, TResult extends SafeHandlerPayload> = (
-  ctx: TContext,
-) => AsyncGenerator<
+/**
+ * The async-generator a safe handler runs: it may `yield*` intermediate
+ * `Result.await(...)` failures (the `Err` yield) and finally returns a
+ * `Result<TResult, …>`.
+ *
+ * Annotate an *extracted* handler generator with this whenever its result must
+ * reach the client typed. TypeScript cannot infer an async generator's return
+ * type across `yield*` delegation, so a handler written as
+ * `createSafeRootHandler(cfg, (ctx) => yield* myHandler(ctx))` silently widens
+ * `TResult` (and the Eden response type) to `unknown` unless `myHandler` is
+ * declared `: SafeHandlerGenerator<MyResult>`.
+ */
+export type SafeHandlerGenerator<TResult> = AsyncGenerator<
   Err<never, SafeHandlerError>,
   Result<TResult, SafeHandlerError>,
   unknown
 >;
+
+type SafeHandlerFn<TContext, TResult extends SafeHandlerPayload> = (
+  ctx: TContext,
+) => SafeHandlerGenerator<TResult>;
 
 type SafeHandlerDefinition<
   TConfig extends InputSchema = InputSchema,
@@ -453,6 +467,84 @@ const runUsagePreflight = async ({
   });
 };
 
+type UsagePreflightInput = {
+  metering: UsageMeteringConfig;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  workspaceId: SafeId<"workspace"> | null;
+  userId: SafeId<"user">;
+  safeDb: SafeDb;
+};
+
+/**
+ * In-handler usage preflight for routes whose AI work is conditional
+ * on runtime input (e.g. a template fill that only calls a model when
+ * the manifest declares AI fields). The static `requiresUsage` config
+ * runs before the handler reads that input, so a deterministic fill
+ * would be rejected for AI quota it never spends. Such handlers omit
+ * `requiresUsage` and call this after detecting the AI-field signal,
+ * only when AI work will actually run.
+ *
+ * Returns a `HandlerError` carrying the same `402` usage detail
+ * (`reason`/`required`/`available`, surfaced by `safeErrorBody`) or a
+ * `500` the static path emits, so the caller returns it as `Result.err`
+ * and the client sees an unchanged response. `null` means proceed. No-op
+ * while `USAGE_ENFORCEMENT_ENABLED` is off, matching the static path.
+ */
+export const assertUsageAvailableForHandler = async ({
+  metering,
+  organizationId,
+  orgAIConfig,
+  workspaceId,
+  userId,
+  safeDb,
+}: UsagePreflightInput): Promise<HandlerError<402 | 500> | null> => {
+  if (!env.USAGE_ENFORCEMENT_ENABLED) {
+    return null;
+  }
+  const meteringContext = resolveMeteringContext({
+    metering,
+    organizationId,
+    orgAIConfig,
+    workspaceId,
+    userId,
+  });
+  if (meteringContext.cost <= 0) {
+    return null;
+  }
+  const checkResult = await safeDb(
+    async (tx) =>
+      await assertUsageAvailable({
+        tx,
+        organizationId: meteringContext.organizationId,
+        required: meteringContext.cost,
+      }),
+  );
+  if (Result.isError(checkResult)) {
+    // DB error during pre-flight — surface a generic 500 (the wrapper logs
+    // and captures it) so the user retries; we don't let an infrastructure
+    // failure look like an over-limit situation.
+    return new HandlerError({
+      status: 500,
+      message: "Internal server error",
+      cause: checkResult.error,
+    });
+  }
+  const check = checkResult.value;
+  if (check.ok) {
+    return null;
+  }
+  return new HandlerError({
+    status: 402,
+    message: check.error.message,
+    usage: {
+      reason: check.error.reason,
+      required: check.error.required,
+      available: check.error.available,
+    },
+  });
+};
+
 const createSafeDirectHandler = <
   TConfig extends InputSchema,
   TContext extends SafeHandlerLogContext,
@@ -469,6 +561,15 @@ const createSafeDirectHandler = <
 const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
+  // Usage-limit 402s carry structured fields so the frontend renders the
+  // "x of y units left" modal without parsing the message (see SafeErrorBody).
+  ...(error.usage
+    ? {
+        reason: error.usage.reason,
+        required: error.usage.required,
+        available: error.usage.available,
+      }
+    : {}),
 });
 
 export const createSafeRootHandler = <

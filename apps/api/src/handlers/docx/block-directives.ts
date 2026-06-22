@@ -8,11 +8,32 @@
  *
  * Templates without block directives skip all processing
  * (fast-path check via regex on raw XML).
+ *
+ * Word list numbering (`w:numPr`) survives loop expansion
+ * untouched: every cloned paragraph keeps its original
+ * `w:numId`, so Word numbers all iterations as one continuous
+ * sequence (counters live on the abstract definition, not the
+ * paragraph) — the legal-document expectation. Restarting per
+ * iteration would require cloning `w:num`/`w:abstractNum`
+ * entries and would still leak shared counters through
+ * `w:numStyleLink`, so it is deliberately not offered. The only
+ * numbering.xml knowledge needed here is reference validity:
+ * see {@link collectValidNumIds} / {@link pruneDanglingNumPr}.
  */
 
-import type * as slimdom from "slimdom";
+import * as slimdom from "slimdom";
 
-import { evaluateCondition, resolvePath } from "@stll/template-conditions";
+import {
+  blockDirectiveLinePattern,
+  countPattern,
+  evaluateCondition,
+  hasBlockDirectivePattern,
+  indexPattern,
+  numPattern,
+  refPattern,
+  resolvePath,
+} from "@stll/template-conditions";
+import type { NamedCondition } from "@stll/template-conditions";
 
 import { isElement, paragraphText, W_NS } from "./ooxml";
 import type {
@@ -22,7 +43,6 @@ import type {
   EachBlock,
   IfBlock,
   IfBranch,
-  NamedCondition,
   RichPatchValue,
   TemplateData,
   TemplateStructureError,
@@ -30,15 +50,76 @@ import type {
 
 export { evaluateCondition, resolvePath };
 
+/**
+ * Symbol key under which the fill pipeline stashes the *raw* (pre-format)
+ * values of fields that a later step rewrites to a display string, so that
+ * `{{#if}}` conditions evaluate against the original value. Today this carries
+ * date fields: a `date` input is submitted as an ISO `YYYY-MM-DD` string, then
+ * `applyDateFields` rewrites it in place to localized display text (e.g.
+ * "13. června 2028") for substitution. The condition engine's ordering
+ * comparisons (`>`, `<`, …) only work on the ISO shape, so a field that is both
+ * formatted *and* referenced by a condition must be compared raw. The overlay
+ * is keyed by field path and read by {@link processBlockDirectives} when
+ * building the condition-evaluation context.
+ *
+ * A Symbol key (not a string) is deliberate: the same shared values map is
+ * iterated as field paths everywhere else (substitution, `flattenTemplateData`,
+ * unmatched/unused diagnostics, `isTemplateData`), all of which use
+ * `Object.keys`/`values`/`entries` and so skip symbol keys. The overlay
+ * therefore travels on the map without ever colliding with a user field path or
+ * leaking into substitution. It survives object spread (`{ ...values }`), so it
+ * reaches `fillTemplate` across the boundaries that copy the map.
+ */
+export const CONDITION_RAW_VALUES = Symbol("condition-raw-values");
+
+/** Read the raw-value condition overlay stashed under {@link CONDITION_RAW_VALUES}. */
+export const readConditionRawValues = (
+  values: object,
+): Record<string, string> | undefined => {
+  const overlay: unknown = Reflect.get(values, CONDITION_RAW_VALUES);
+  return isStringRecord(overlay) ? overlay : undefined;
+};
+
+/** Narrow `unknown` to a `Record<string, string>` (the overlay shape). */
+const isStringRecord = (v: unknown): v is Record<string, string> =>
+  typeof v === "object" &&
+  v !== null &&
+  Object.values(v).every((entry) => typeof entry === "string");
+
+/**
+ * Overlay one loop row's raw (pre-format) values onto its iteration context, so
+ * an inner-loop `{{#if dob > "2028-01-01"}}` compares the original ISO date
+ * rather than the localized display text the date step wrote into the row for
+ * substitution. Raw values are stashed by field path under
+ * `<arrayPath>.<index>.<subPath>` (see {@link CONDITION_RAW_VALUES}); each match
+ * sets the bare item-relative sub-path, which the loop body's condition resolves
+ * the same way it resolves the row's other fields.
+ */
+const applyRowRawOverlay = (
+  itemContext: Record<string, unknown>,
+  rawValues: Record<string, string> | undefined,
+  arrayPath: string,
+  index: number,
+): void => {
+  if (!rawValues) {
+    return;
+  }
+  const prefix = `${arrayPath}.${index}.`;
+  for (const [key, raw] of Object.entries(rawValues)) {
+    if (key.startsWith(prefix)) {
+      itemContext[key.slice(prefix.length)] = raw;
+    }
+  }
+};
+
 // ── Regex patterns ───────────────────────────────────────
 
+// Canonical patterns from @stll/template-conditions (markers.ts).
 /** Matches a block directive as the sole paragraph content. */
-const DIRECTIVE_RE =
-  // oxlint-disable-next-line sonarjs/slow-regex -- directive matching runs on one OOXML paragraph at a time
-  /^\s*\{\{(?<tag>#if|#elseif|#else|#each|\/if|\/each)\s*(?<expr>.*?)\}\}\s*$/u;
+const DIRECTIVE_RE = blockDirectiveLinePattern();
 
 /** Fast-path: does the raw XML contain any block directives? */
-export const HAS_BLOCK_DIRECTIVES_RE = /\{\{[#/]/u;
+export const HAS_BLOCK_DIRECTIVES_RE = hasBlockDirectivePattern();
 
 // ── Type guards ─────────────────────────────────────────
 
@@ -400,12 +481,29 @@ export const processBlockDirectives = (
   body: slimdom.Element,
   data: TemplateData,
   namedConditions?: NamedCondition[],
+  conditionValues?: Record<string, string>,
 ): ProcessResult => {
   const patchValues: Record<string, RichPatchValue> = {};
   const allErrors: TemplateStructureError[] = [];
 
+  // Distinguishes sibling loops (possibly over the same array) so
+  // their iteration-scoped numbering keys can never collide.
+  let eachExpansionCount = 0;
+
   // Flatten top-level nested objects for value substitution.
   Object.assign(patchValues, flattenTemplateData(data));
+
+  // Context for condition/loop evaluation: `data` overlaid with the raw
+  // (pre-format) values of any field a fill step rewrote to a display string
+  // (today: date fields, see CONDITION_RAW_VALUES). Overlay keys are exact
+  // dotted field paths, which `resolvePath` prefers over the nested walk, so
+  // `{{#if signing_date > "2028-01-01"}}` compares the ISO value while
+  // substitution still uses the localized text in `data`/`patchValues`. Plain
+  // `data` when there is no overlay keeps the prior behavior untouched.
+  const conditionData: Record<string, unknown> =
+    conditionValues && Object.keys(conditionValues).length > 0
+      ? { ...data, ...conditionValues }
+      : data;
 
   const process = (
     bodyEl: slimdom.Element,
@@ -548,17 +646,44 @@ export const processBlockDirectives = (
     // directiveParagraphs always has opening + closing entries
     const closingIdx = block.directiveParagraphs.at(-1) ?? 0;
 
+    // {{@num:Key}} keys defined inside the loop body must number
+    // per expanded copy, not once for all iterations (a repeated
+    // key reuses its first number — see numbering.ts). Scope them
+    // with a per-expansion, per-iteration suffix. Keys defined
+    // outside the body are left alone so `@ref`s to shared
+    // clauses keep resolving from within the loop.
+    const localNumKeys = collectNumKeys(contentParagraphs);
+    const expansionId = eachExpansionCount;
+    eachExpansionCount += 1;
+
+    // `{{@index}}`/`{{@count}}` bind to the innermost loop, so resolve them
+    // only on paragraphs that belong directly to this loop's body — not those
+    // inside a nested `{{#each}}`, which will resolve when that loop expands.
+    const directlyInLoop = directEachBodyMask(contentParagraphs);
+
     // Create expanded paragraphs for each item
     const expandedGroups: slimdom.Element[][] = [];
     for (let itemIdx = 0; itemIdx < items.length; itemIdx++) {
       const item = items[itemIdx];
       const group: slimdom.Element[] = [];
 
-      for (const contentP of contentParagraphs) {
+      for (const [pIdx, contentP] of contentParagraphs.entries()) {
         const cloned = cloneParagraph(contentP, doc);
 
         // Rewrite {{arrayPath.field}} → {{__each_arrayPath_N_field}}
         rewriteEachPlaceholders(cloned, block.arrayPath, itemIdx);
+
+        if (directlyInLoop[pIdx]) {
+          rewriteIterationTokens(cloned, itemIdx, items.length);
+        }
+
+        if (localNumKeys.size > 0) {
+          scopeNumberingMarkers(cloned, {
+            localKeys: localNumKeys,
+            expansionId,
+            index: itemIdx,
+          });
+        }
 
         group.push(cloned);
       }
@@ -603,6 +728,15 @@ export const processBlockDirectives = (
         Object.assign(itemContext, item);
         // Also keep the array accessible by name
         itemContext[block.arrayPath] = item;
+        // Raw (pre-format) date values for this row, so a loop-body
+        // `{{#if dob > "..."}}` compares the ISO date, not the localized text
+        // the date step wrote into the row for substitution.
+        applyRowRawOverlay(
+          itemContext,
+          conditionValues,
+          block.arrayPath,
+          itemIdx,
+        );
       }
 
       // Check if any group paragraph has block directives
@@ -657,7 +791,7 @@ export const processBlockDirectives = (
     }
   };
 
-  process(body, data);
+  process(body, conditionData);
 
   return { patchValues, errors: allErrors };
 };
@@ -665,15 +799,18 @@ export const processBlockDirectives = (
 // ── Each-expansion helpers ───────────────────────────────
 
 /** Generate the synthetic patch key for an each-expanded field. */
-const eachKey = (arrayPath: string, index: number, field: string): string =>
-  `__each_${arrayPath}_${index}_${field}`;
+export const eachKey = (
+  arrayPath: string,
+  index: number,
+  field: string,
+): string => `__each_${arrayPath}_${index}_${field}`;
 
 /**
  * Recursively register patch values for an array item,
  * flattening nested objects into dot-joined keys so that
  * deep paths like `{{sellers.address.city}}` resolve.
  */
-const registerItemPatchValues = (
+export const registerItemPatchValues = (
   patchValues: Record<string, RichPatchValue>,
   item: Record<string, unknown>,
   arrayPath: string,
@@ -705,6 +842,50 @@ const registerItemPatchValues = (
   }
 };
 
+/** Apply `rewrite` to every `w:t` text node under `root`. */
+const rewriteTextNodes = (
+  root: slimdom.Element,
+  rewrite: (text: string) => string,
+): void => {
+  const walk = (node: slimdom.Node) => {
+    if (!isElement(node)) {
+      return;
+    }
+    if (node.localName === "t" && node.namespaceURI === W_NS) {
+      const text = node.textContent ?? "";
+      const rewritten = rewrite(text);
+      if (rewritten !== text) {
+        node.textContent = rewritten;
+      }
+      return;
+    }
+    for (const child of node.childNodes) {
+      walk(child);
+    }
+  };
+  walk(root);
+};
+
+/**
+ * Rewrite `{{arrayPath.field}}` → `{{__each_arrayPath_N_field}}`
+ * in a plain text string. Shared with the inline-each expander so
+ * both passes rewrite item field references identically.
+ */
+export const rewriteEachPlaceholdersInText = (
+  text: string,
+  arrayPath: string,
+  index: number,
+): string => {
+  const re = new RegExp(
+    `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_-]+)\\}\\}`,
+    "gu",
+  );
+  return text.replace(
+    re,
+    (_match, field: string) => `{{${eachKey(arrayPath, index, field)}}}`,
+  );
+};
+
 /**
  * Rewrite `{{arrayPath.field}}` → `{{__each_arrayPath_N_field}}`
  * in all `w:t` nodes of a paragraph.
@@ -714,27 +895,238 @@ const rewriteEachPlaceholders = (
   arrayPath: string,
   index: number,
 ): void => {
-  const walk = (node: slimdom.Node) => {
-    if (isElement(node)) {
-      if (node.localName === "t" && node.namespaceURI === W_NS) {
-        const text = node.textContent ?? "";
-        const re = new RegExp(
-          `\\{\\{${escapeRegExp(arrayPath)}\\.([.\\p{L}\\p{N}_]+)\\}\\}`,
-          "gu",
-        );
-        const rewritten = text.replace(
-          re,
-          (_match, field: string) => `{{${eachKey(arrayPath, index, field)}}}`,
-        );
-        if (rewritten !== text) {
-          node.textContent = rewritten;
-        }
-      } else {
-        for (const child of node.childNodes) {
-          walk(child);
-        }
-      }
+  rewriteTextNodes(paragraph, (text) =>
+    rewriteEachPlaceholdersInText(text, arrayPath, index),
+  );
+};
+
+/**
+ * Resolve `{{@index}}`/`{{@count}}` in all `w:t` nodes of a paragraph for the
+ * iteration at `index` of a loop with `count` items.
+ */
+const rewriteIterationTokens = (
+  paragraph: slimdom.Element,
+  index: number,
+  count: number,
+): void => {
+  rewriteTextNodes(paragraph, (text) =>
+    rewriteIterationTokensInText(text, index, count),
+  );
+};
+
+/**
+ * For each content paragraph of a loop, whether it belongs *directly* to that
+ * loop's body (each-nesting depth 0) rather than to a nested `{{#each}}`. A
+ * nested `{{#each}}` opener line and its inner paragraphs are depth > 0; the
+ * matching `{{/each}}` line closes back to the enclosing depth. Drives which
+ * paragraphs get their `{{@index}}`/`{{@count}}` tokens resolved by this loop.
+ */
+const directEachBodyMask = (
+  paragraphs: readonly slimdom.Element[],
+): boolean[] => {
+  const mask: boolean[] = [];
+  let depth = 0;
+  for (const p of paragraphs) {
+    const match = DIRECTIVE_RE.exec(paragraphText(p));
+    const tag = match?.[1];
+    if (tag === "/each") {
+      depth -= 1;
     }
-  };
-  walk(paragraph);
+    mask.push(depth === 0);
+    if (tag === "#each") {
+      depth += 1;
+    }
+  }
+  return mask;
+};
+
+/**
+ * Resolve the per-iteration tokens `{{@index}}` and `{{@count}}` in a plain
+ * text string: `{{@index}}` → the 1-based position (`index + 1`), `{{@count}}`
+ * → the loop's item count. Shared by the block and inline each expanders so
+ * both resolve iteration tokens identically.
+ *
+ * Composition: the caller applies this only to text that belongs to the
+ * *innermost* enclosing loop (the block expander skips paragraphs nested in an
+ * inner `{{#each}}`, the inline expander has no nested loops by grammar). An
+ * outer loop therefore leaves a nested loop's tokens untouched, and they are
+ * resolved when that inner loop expands — so `{{@index}}`/`{{@count}}` always
+ * bind to the closest loop. It also composes with field substitution: tokens
+ * and `{{path.field}}` placeholders are disjoint, so the order of the two
+ * rewrites does not matter.
+ */
+export const rewriteIterationTokensInText = (
+  text: string,
+  index: number,
+  count: number,
+): string =>
+  text
+    .replace(indexPattern(), String(index + 1))
+    .replace(countPattern(), String(count));
+
+// ── Loop-scoped clause numbering ─────────────────────────
+
+/** Collect `{{@num:Key}}` keys appearing in a plain text string. */
+export const collectNumKeysInText = (text: string): Set<string> => {
+  const keys = new Set<string>();
+  for (const match of text.matchAll(numPattern())) {
+    const key = match[1];
+    if (key !== undefined) {
+      keys.add(key);
+    }
+  }
+  return keys;
+};
+
+/** Collect `{{@num:Key}}` keys appearing in the given paragraphs. */
+const collectNumKeys = (
+  paragraphs: readonly slimdom.Element[],
+): Set<string> => {
+  const keys = new Set<string>();
+  for (const p of paragraphs) {
+    for (const key of collectNumKeysInText(paragraphText(p))) {
+      keys.add(key);
+    }
+  }
+  return keys;
+};
+
+/**
+ * Namespace for the synthetic per-iteration numbering key. Block and inline
+ * loops expand independently but share the document's numbering key space (the
+ * raw-XML `applyNumbering` pass runs once over both), so a distinct infix keeps
+ * an identical base `@num` key used in both a block and an inline loop from
+ * colliding on the same number.
+ */
+type NumberingScope = "each" | "ieach";
+
+/** Synthetic per-iteration key for a loop-local `@num`/`@ref`. */
+const iterationNumKey = (
+  key: string,
+  scope: NumberingScope,
+  expansionId: number,
+  index: number,
+): string => `${key}__${scope}${expansionId}_${index}`;
+
+type ScopeNumberingOptions = {
+  localKeys: ReadonlySet<string>;
+  expansionId: number;
+  index: number;
+  /** Defaults to the block-loop namespace. */
+  scope?: NumberingScope;
+};
+
+/**
+ * Rewrite loop-local `{{@num:Key}}` / `{{@ref:Key}}` markers in a plain text
+ * string to per-iteration keys so numbering.ts assigns each expanded copy its
+ * own number and intra-iteration refs follow it. Only keys present in
+ * `localKeys` (those *defined* by a `{{@num:Key}}` in the loop body) are
+ * scoped, so a `@ref` to a shared clause outside the loop still resolves.
+ * Shared by the block expander (per `w:t` node) and the inline expander (per
+ * rendered span).
+ */
+export const scopeIterationNumberingInText = (
+  text: string,
+  { localKeys, expansionId, index, scope = "each" }: ScopeNumberingOptions,
+): string => {
+  const rewriteSigil = (input: string, sigil: "num" | "ref", re: RegExp) =>
+    input.replace(re, (match, key: string) =>
+      localKeys.has(key)
+        ? `{{@${sigil}:${iterationNumKey(key, scope, expansionId, index)}}}`
+        : match,
+    );
+  return rewriteSigil(
+    rewriteSigil(text, "num", numPattern()),
+    "ref",
+    refPattern(),
+  );
+};
+
+/**
+ * DOM wrapper over {@link scopeIterationNumberingInText}: rewrite loop-local
+ * numbering markers in every `w:t` node of a paragraph. Markers split across
+ * runs are out of grammar, matching the raw-XML numbering pass.
+ */
+const scopeNumberingMarkers = (
+  paragraph: slimdom.Element,
+  options: ScopeNumberingOptions,
+): void => {
+  rewriteTextNodes(paragraph, (text) =>
+    scopeIterationNumberingInText(text, options),
+  );
+};
+
+// ── Word list-numbering integrity ────────────────────────
+
+/** slimdom can surface `w:` attributes either way; try both. */
+const readWAttr = (el: slimdom.Element, name: string): string | null =>
+  el.getAttributeNS(W_NS, name) ?? el.getAttribute(`w:${name}`);
+
+/** `w:numId="0"` is the explicit "no numbering" override — always valid. */
+const NUM_ID_NONE = "0";
+
+/**
+ * Collect `w:numId` values whose definition chain resolves
+ * (`w:num` → `w:abstractNum`). Loop expansion clones list
+ * paragraphs verbatim, so a numId left dangling in the template
+ * would be multiplied across iterations; callers prune those
+ * with {@link pruneDanglingNumPr} instead.
+ */
+export const collectValidNumIds = (
+  numberingXml: string | null,
+): ReadonlySet<string> => {
+  const valid = new Set<string>([NUM_ID_NONE]);
+  if (numberingXml === null) {
+    return valid;
+  }
+
+  const doc = slimdom.parseXmlDocument(numberingXml);
+  const abstractIds = new Set<string>();
+  for (const abstractNum of doc.getElementsByTagNameNS(W_NS, "abstractNum")) {
+    const id = readWAttr(abstractNum, "abstractNumId");
+    if (id !== null) {
+      abstractIds.add(id);
+    }
+  }
+
+  for (const num of doc.getElementsByTagNameNS(W_NS, "num")) {
+    const numId = readWAttr(num, "numId");
+    if (numId === null) {
+      continue;
+    }
+    const abstractRef = num.getElementsByTagNameNS(W_NS, "abstractNumId").at(0);
+    const abstractId = abstractRef ? readWAttr(abstractRef, "val") : null;
+    if (abstractId !== null && abstractIds.has(abstractId)) {
+      valid.add(numId);
+    }
+  }
+
+  return valid;
+};
+
+/**
+ * Remove `w:numPr` elements whose `w:numId` has no resolvable
+ * numbering definition. Word silently drops the numbering for
+ * such paragraphs while other consumers differ; removing the
+ * dangling reference makes the filled document render the same
+ * everywhere. Valid references are kept untouched so cloned
+ * iterations share the original numId (one continuous
+ * sequence — see the module doc).
+ */
+export const pruneDanglingNumPr = (
+  body: slimdom.Element,
+  validNumIds: ReadonlySet<string>,
+): void => {
+  for (const numPr of body.getElementsByTagNameNS(W_NS, "numPr")) {
+    const numIdEl = numPr.getElementsByTagNameNS(W_NS, "numId").at(0);
+    if (!numIdEl) {
+      // Style-inherited numbering; nothing to validate here.
+      continue;
+    }
+    const numId = readWAttr(numIdEl, "val");
+    if (numId === null || validNumIds.has(numId)) {
+      continue;
+    }
+    numPr.parentNode?.removeChild(numPr);
+  }
 };

@@ -9,10 +9,14 @@
 
 import * as slimdom from "slimdom";
 
+import { placeholderPattern } from "@stll/template-conditions";
+
 import { isElement, paragraphText, W_NS } from "./ooxml";
 import type { RichPatchValue } from "./types";
 
-export const PLACEHOLDER_RE = /\{\{(?<name>[\p{L}\p{N}_.@:-]+)\}\}/gu;
+// Canonical pattern from @stll/template-conditions (markers.ts) — the single
+// source of truth shared with discover-placeholders, folio, and the web preview.
+export const PLACEHOLDER_RE = placeholderPattern();
 
 const XML_NS = "http://www.w3.org/XML/1998/namespace";
 
@@ -198,6 +202,10 @@ const createInlineRuns = (
     return [createRun(doc, value, sourceRunProps)];
   }
 
+  // Single-paragraph values stay inline; multi-paragraph values are handled
+  // by the paragraph-splitting path (see splitParagraphForBlockValues) and
+  // never reach this function. If one does (defensive), join its text so the
+  // run-replacement path stays well-formed rather than dropping content.
   if (value.paragraphs.length <= 1) {
     return (value.paragraphs.at(0)?.runs ?? []).map((run) =>
       createRun(doc, run.text, sourceRunProps, run),
@@ -206,6 +214,9 @@ const createInlineRuns = (
 
   return [createRun(doc, valueText(value), sourceRunProps)];
 };
+
+const isMultiParagraphValue = (value: RichPatchValue): boolean =>
+  typeof value !== "string" && value.paragraphs.length > 1;
 
 const paragraphProps = (paragraph: slimdom.Element): slimdom.Element | null => {
   for (const child of paragraph.childNodes) {
@@ -474,6 +485,230 @@ const applyInlineMatch = (
   insertAfter(parent, startSpan.run, replacementRuns);
 };
 
+/**
+ * Text of one paragraph as the patcher's span walk sees it (every `w:t`
+ * inside a `w:r`, concatenated in document order). Offsets into this text
+ * are the coordinate space of {@link replaceParagraphTextRanges}; compute
+ * ranges from this, not from `paragraphText`, so they can never drift apart.
+ */
+export const paragraphSpanText = (paragraph: slimdom.Element): string =>
+  collectTextSpans(paragraph)
+    .map((span) => span.text)
+    .join("");
+
+/**
+ * Replace arbitrary non-overlapping, non-empty `[start, end)` ranges of a
+ * paragraph's span text (see {@link paragraphSpanText}) with plain-string
+ * values, reusing the same run-splitting machinery as placeholder patching:
+ * surrounding run formatting is preserved and ranges spanning split runs are
+ * handled. An empty value cuts the range. Ranges are applied descending by
+ * start so earlier offsets stay valid throughout.
+ */
+export const replaceParagraphTextRanges = (
+  paragraph: slimdom.Element,
+  ranges: readonly { start: number; end: number; value: string }[],
+): void => {
+  for (const range of [...ranges].toSorted((a, b) => b.start - a.start)) {
+    applyInlineMatch(paragraph, collectTextSpans(paragraph), range);
+  }
+};
+
+/**
+ * Deep-clone the run sequence covering `[contentStart, contentEnd)` of a
+ * paragraph's span text, trimming the boundary runs to the in-span slice while
+ * keeping every run's `rPr`. Returns the cloned `w:r` elements in document
+ * order; runs lying entirely inside the span are cloned whole, the first/last
+ * run is cloned with its text sliced to the part that falls inside the span.
+ * An empty span (no text spans intersect it) yields an empty array.
+ *
+ * The clones are detached (no parent); the caller owns insertion. Boundary
+ * `w:t` nodes keep `xml:space="preserve"` so leading/trailing whitespace inside
+ * the body (author separators) survives.
+ */
+const cloneRunSequence = (
+  spans: readonly TextSpan[],
+  contentStart: number,
+  contentEnd: number,
+): slimdom.Element[] => {
+  const clones: slimdom.Element[] = [];
+  for (const span of spans) {
+    const from = Math.max(span.start, contentStart);
+    const to = Math.min(span.end, contentEnd);
+    if (from >= to) {
+      continue;
+    }
+    const runClone = span.run.cloneNode(true);
+    if (!isElement(runClone)) {
+      continue;
+    }
+    const slice = span.text.slice(from - span.start, to - span.start);
+    // A run can hold several `w:t` (one span each). Index the span's `w:t`
+    // within its run, then rewrite the same position in the clone and clear the
+    // other `w:t`s so this clone carries exactly this span's in-span slice.
+    const tIndex = span.run
+      .getElementsByTagNameNS(W_NS, "t")
+      .indexOf(span.node);
+    const clonedTs = runClone.getElementsByTagNameNS(W_NS, "t");
+    for (const [i, t] of clonedTs.entries()) {
+      setText(t, i === tIndex ? slice : "");
+    }
+    clones.push(runClone);
+  }
+  return clones;
+};
+
+/**
+ * Render an inline `{{#each}}` span at the run level, preserving run formatting
+ * authored inside the body. For each item, the body run sequence
+ * (`[contentStart, contentEnd)` of the paragraph span text) is deep-cloned and
+ * each cloned run's text is rewritten by `rewriteItem(text, itemIndex)`; the
+ * concatenated per-item clones replace the whole marker span (`[start, end)`),
+ * so the opener/closer marker runs are removed. `itemCount === 0` removes the
+ * span entirely. Offsets index {@link paragraphSpanText}; this must run before
+ * the paragraph is otherwise mutated for the same span.
+ */
+export const expandInlineEachRuns = (
+  paragraph: slimdom.Element,
+  range: {
+    start: number;
+    end: number;
+    contentStart: number;
+    contentEnd: number;
+  },
+  itemCount: number,
+  rewriteItem: (text: string, itemIndex: number) => string,
+): void => {
+  const spans = collectTextSpans(paragraph);
+
+  const replacementRuns: slimdom.Element[] = [];
+  for (let itemIdx = 0; itemIdx < itemCount; itemIdx++) {
+    for (const runClone of cloneRunSequence(
+      spans,
+      range.contentStart,
+      range.contentEnd,
+    )) {
+      for (const t of runClone.getElementsByTagNameNS(W_NS, "t")) {
+        const text = t.textContent ?? "";
+        const rewritten = rewriteItem(text, itemIdx);
+        if (rewritten !== text) {
+          setText(t, rewritten);
+        }
+      }
+      replacementRuns.push(runClone);
+    }
+  }
+
+  // Cut the whole marker span (markers + body) out of the original runs, then
+  // splice the expanded copies in at the cut point. Reuse applyInlineMatch with
+  // an empty value: it preserves surrounding run formatting and leaves an
+  // anchor (the start span's run) we insert the clones after.
+  const anchor = spanForOffset(spans, range.start);
+  applyInlineMatch(paragraph, collectTextSpans(paragraph), {
+    start: range.start,
+    end: range.end,
+    value: "",
+  });
+  if (!anchor) {
+    return;
+  }
+  const parent = anchor.run.parentNode;
+  if (!parent) {
+    return;
+  }
+  insertAfter(parent, anchor.run, replacementRuns);
+};
+
+/**
+ * Inline injection of a multi-paragraph value (e.g. a multi-paragraph library
+ * clause filling a mid-paragraph `{{@clause:Name}}` slot). The host paragraph
+ * is split: text before the first multi-paragraph marker stays in a leading
+ * paragraph, each clause paragraph becomes its own `w:p`, and text after the
+ * marker trails into a final paragraph. Every produced paragraph clones the
+ * host `pPr` (style ref, numbering, alignment, spacing) and the host's first
+ * run `rPr`, so the injected block inherits the target paragraph's style.
+ *
+ * Single-paragraph and string matches in the same paragraph are still rendered
+ * inline (as runs) within whichever produced paragraph they fall into; only a
+ * multi-paragraph match introduces a paragraph break. Markers without a value
+ * stay as literal text.
+ */
+const splitParagraphForBlockValues = (
+  paragraph: slimdom.Element,
+  text: string,
+  matches: PlaceholderMatch[],
+): boolean => {
+  const doc = paragraph.ownerDocument;
+  const parent = paragraph.parentNode;
+  if (!doc || !parent) {
+    return false;
+  }
+
+  const pPr = paragraphProps(paragraph);
+  const sourceRunProps = firstRunProps(paragraph);
+
+  const newParagraph = (): slimdom.Element => {
+    const next = doc.createElementNS(W_NS, "w:p");
+    const props = cloneElement(pPr);
+    if (props) {
+      next.append(props);
+    }
+    return next;
+  };
+
+  const built: slimdom.Element[] = [];
+  // The paragraph being accumulated. Leading/trailing/inline text and
+  // single-paragraph values append runs here; a multi-paragraph value flushes
+  // it, emits the clause paragraphs, then opens a fresh accumulator.
+  let current = newParagraph();
+
+  const appendText = (chunk: string) => {
+    if (chunk.length === 0) {
+      return;
+    }
+    current.append(createRun(doc, chunk, sourceRunProps));
+  };
+
+  let cursor = 0;
+  for (const match of matches) {
+    appendText(text.slice(cursor, match.start));
+    cursor = match.end;
+
+    const { value } = match;
+    if (typeof value === "string" || value.paragraphs.length <= 1) {
+      for (const run of createInlineRuns(doc, value, sourceRunProps)) {
+        current.append(run);
+      }
+      continue;
+    }
+
+    built.push(current);
+    for (const clauseParagraph of value.paragraphs) {
+      const next = newParagraph();
+      for (const run of clauseParagraph.runs) {
+        next.append(createRun(doc, run.text, sourceRunProps, run));
+      }
+      built.push(next);
+    }
+    current = newParagraph();
+  }
+  appendText(text.slice(cursor));
+  built.push(current);
+
+  // Drop empty leading/trailing fragments (e.g. an empty clause value, or a
+  // marker that opened/closed the paragraph) but never collapse to nothing:
+  // an all-empty result still leaves one paragraph to preserve structure.
+  const nonEmpty = built.filter(
+    (candidate) => candidate.getElementsByTagNameNS(W_NS, "r").length > 0,
+  );
+  const emit = nonEmpty.length > 0 ? nonEmpty : built.slice(0, 1);
+
+  for (const produced of emit) {
+    parent.insertBefore(produced, paragraph);
+  }
+  parent.removeChild(paragraph);
+  return true;
+};
+
 const patchInlinePlaceholders = (
   paragraph: slimdom.Element,
   values: Record<string, RichPatchValue>,
@@ -483,6 +718,10 @@ const patchInlinePlaceholders = (
   const matches = findPlaceholderMatches(text, values);
   if (matches.length === 0) {
     return false;
+  }
+
+  if (matches.some((match) => isMultiParagraphValue(match.value))) {
+    return splitParagraphForBlockValues(paragraph, text, matches);
   }
 
   for (const match of matches.toReversed()) {
@@ -516,6 +755,78 @@ export const patchXmlPart = (
 
   for (const paragraph of paragraphs) {
     changed = patchParagraphPlaceholders(paragraph, values) || changed;
+  }
+
+  return {
+    xml: changed ? slimdom.serializeToWellFormedString(doc) : xml,
+    changed,
+  };
+};
+
+/**
+ * Text of every paragraph in an XML part, in document order, computed from
+ * the same text spans the patcher walks. Occurrence-indexed substitution
+ * (`patchXmlPartPerOccurrence`) counts marker occurrences against exactly
+ * this text, so context extraction and patching can never drift apart.
+ */
+export const partParagraphTexts = (xml: string): string[] => {
+  const doc = slimdom.parseXmlDocument(xml);
+  return [...doc.getElementsByTagNameNS(W_NS, "p")].map((paragraph) =>
+    collectTextSpans(paragraph)
+      .map((span) => span.text)
+      .join(""),
+  );
+};
+
+/**
+ * Replace placeholders occurrence-by-occurrence: the nth occurrence of
+ * `{{key}}` (in document order, counted across parts via the shared
+ * `counters` map) is replaced with `occurrenceValues.get(key)[n]`. Keys
+ * absent from the map and occurrences beyond the provided list are left
+ * untouched, so the regular global fill can still substitute them.
+ */
+export const patchXmlPartPerOccurrence = (
+  xml: string,
+  occurrenceValues: ReadonlyMap<string, readonly string[]>,
+  counters: Map<string, number>,
+): { xml: string; changed: boolean } => {
+  const doc = slimdom.parseXmlDocument(xml);
+  const paragraphs = [...doc.getElementsByTagNameNS(W_NS, "p")];
+  let changed = false;
+
+  for (const paragraph of paragraphs) {
+    const text = collectTextSpans(paragraph)
+      .map((span) => span.text)
+      .join("");
+    const matches: PlaceholderMatch[] = [];
+    for (const match of text.matchAll(placeholderPattern())) {
+      const key = match[1];
+      if (key === undefined) {
+        continue;
+      }
+      const renderings = occurrenceValues.get(key);
+      if (renderings === undefined) {
+        continue;
+      }
+      const index = counters.get(key) ?? 0;
+      counters.set(key, index + 1);
+      const value = renderings.at(index);
+      if (value === undefined) {
+        continue;
+      }
+      matches.push({
+        start: match.index,
+        end: match.index + match[0].length,
+        value,
+      });
+    }
+    if (matches.length === 0) {
+      continue;
+    }
+    for (const match of matches.toReversed()) {
+      applyInlineMatch(paragraph, collectTextSpans(paragraph), match);
+    }
+    changed = true;
   }
 
   return {

@@ -28,6 +28,7 @@ import {
   orgPolicies,
   promptShortcutPolicies,
   stella,
+  templateChatThreadPolicies,
   userPolicies,
   workspaceIdCheck,
   workspaceViewTemplatePolicies,
@@ -58,6 +59,7 @@ import type {
 import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
+import type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
 import type { CentsAmount } from "@/api/lib/money";
@@ -1607,6 +1609,14 @@ export const templates = p.pgTable(
     manifest: jsonb().$type<TemplateManifest>(),
     fieldCount: p.integer("field_count").notNull().default(0),
     currentVersion: p.integer("current_version").notNull().default(1),
+    tags: p.text().array(),
+    /** Ordered BCP-47 tags of the document text (bilingual templates list
+     *  every language, primary first). */
+    languages: p.text().array().notNull().default([]),
+    whenToUse: p.text("when_to_use"),
+    whenNotToUse: p.text("when_not_to_use"),
+    useCount: p.integer("use_count").notNull().default(0),
+    lastUsedAt: p.timestamp("last_used_at"),
     createdBy: p
       .text("created_by")
       .notNull()
@@ -2491,6 +2501,37 @@ export const templateCategories = p.pgTable(
   ],
 );
 
+/**
+ * Saved structural-block recipes: a named, org-wide snapshot of
+ * pre-configured template fields (optionally wrapped in a `{{#each}}`
+ * loop) that can be inserted into any template in one click.
+ */
+export const templateRecipes = p.pgTable(
+  "template_recipes",
+  {
+    id: pUuid<"templateRecipe">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: p.varchar({ length: 256 }).notNull(),
+    description: p.text(),
+    definition: jsonb().$type<TemplateRecipeDefinition>().notNull(),
+    createdBy: p
+      .text("created_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.index("template_recipes_organization_id_idx").on(table.organizationId),
+    p
+      .index("template_recipes_organization_id_name_idx")
+      .on(table.organizationId, table.name),
+    ...orgPolicies(),
+  ],
+);
+
 export const templateClauses = p.pgTable(
   "template_clauses",
   {
@@ -2506,6 +2547,10 @@ export const templateClauses = p.pgTable(
         onDelete: "set null",
       },
     ),
+    /** Label snapshot taken at link time. Survives variant deletion
+     *  (the FK nulls `clauseVariantId`) so dangling variant links can
+     *  be surfaced instead of silently falling back to the clause. */
+    clauseVariantLabel: p.varchar("clause_variant_label", { length: 256 }),
     clauseVersionId: safeUuid<"clauseVersion">("clause_version_id").references(
       () => clauseVersions.id,
       {
@@ -3332,6 +3377,51 @@ export const fileChatThreads = p.pgTable(
       })
       .onDelete("cascade"),
     ...fileChatThreadPolicies(),
+  ],
+);
+
+/**
+ * Per-user mapping of an org-scoped template to its latest chat
+ * thread, so reopening a template in the Template Studio resumes
+ * the conversation. "New chat" repoints `chatThreadId` at a fresh
+ * thread; older threads stay reachable from the chat history list.
+ */
+export const templateChatThreads = p.pgTable(
+  "template_chat_threads",
+  {
+    id: pUuid<"templateChatThread">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    templateId: safeUuid<"template">("template_id").notNull(),
+    chatThreadId: safeUuid<"chatThread">("chat_thread_id")
+      .notNull()
+      .references(() => chatThreads.id, { onDelete: "cascade" }),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  (table) => [
+    p
+      .uniqueIndex("template_chat_threads_scope_uidx")
+      .on(table.organizationId, table.userId, table.templateId),
+    p
+      .uniqueIndex("template_chat_threads_chat_thread_id_uidx")
+      .on(table.chatThreadId),
+    p
+      .foreignKey({
+        columns: [table.templateId, table.organizationId],
+        foreignColumns: [templates.id, templates.organizationId],
+      })
+      .onDelete("cascade"),
+    ...templateChatThreadPolicies(),
   ],
 );
 
@@ -4222,6 +4312,7 @@ export const relations = defineRelations(
     clauseVersions,
     templateCategories,
     templateClauses,
+    templateRecipes,
     templateFills,
     searchDocuments,
     extractedContent,
@@ -4241,6 +4332,7 @@ export const relations = defineRelations(
     chatThreadCompactions,
     chatThreadSearchDocuments,
     fileChatThreads,
+    templateChatThreads,
     mcpConnectors,
     mcpOAuthClients,
     mcpUserConnections,
@@ -4988,6 +5080,16 @@ export const relations = defineRelations(
       field: r.one.fields({
         from: r.fileChatThreads.fieldId,
         to: r.fields.id,
+      }),
+    },
+    templateChatThreads: {
+      thread: r.one.chatThreads({
+        from: r.templateChatThreads.chatThreadId,
+        to: r.chatThreads.id,
+      }),
+      template: r.one.templates({
+        from: r.templateChatThreads.templateId,
+        to: r.templates.id,
       }),
     },
     mcpConnectors: {

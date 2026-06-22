@@ -27,6 +27,7 @@ import type {
   IncomingActiveExternal,
   IncomingActiveFile,
   IncomingActiveSkill,
+  IncomingActiveTemplate,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
 import {
@@ -84,6 +85,7 @@ import {
   buildExternalMcpSystemHint,
   loadExternalMcpToolsForUser,
 } from "@/api/handlers/chat/tools/external-mcp-tools";
+import { restrictChatToolsToScope } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMessage,
   ChatMessageContent,
@@ -120,6 +122,28 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS = 120_000;
 
+/**
+ * Dev model overrides (`body.devModelId`) are local-only: reject them outside
+ * dev, otherwise validate the override against the org's provider config.
+ */
+const assertDevModelOverride = (
+  devModelId: string | undefined,
+  orgAIConfig: OrgAIConfig | null,
+): Result<void, HandlerError<400>> => {
+  if (!devModelId) {
+    return Result.ok(undefined);
+  }
+  if (!env.isDev) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Dev model overrides are only available locally.",
+      }),
+    );
+  }
+  return validateDevModelOverride(devModelId, orgAIConfig);
+};
+
 const config = {
   permissions: { chat: ["create"] },
   body: sendMessageBodySchema,
@@ -143,17 +167,7 @@ const sendMessage = createSafeRootHandler(
   }) {
     yield* requireAIAvailable(orgAIConfig);
 
-    if (body.devModelId && !env.isDev) {
-      return yield* Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Dev model overrides are only available locally.",
-        }),
-      );
-    }
-    if (body.devModelId) {
-      yield* validateDevModelOverride(body.devModelId, orgAIConfig);
-    }
+    yield* assertDevModelOverride(body.devModelId, orgAIConfig);
 
     const accessibleWorkspaceIds = activeWorkspaceIds;
     /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
@@ -239,6 +253,7 @@ const sendMessage = createSafeRootHandler(
     // explicit user or administrator opt-in.
     const validationTools = getChatTools({
       organizationId: session.activeOrganizationId,
+      memberRole: memberRole.role,
       refRegistry,
       safeDb,
       scopedDb,
@@ -250,7 +265,7 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: [],
         accessibleWorkspaceIds,
       }),
-      hasActiveFileChat: true,
+      hasActiveDocxEditClient: true,
       webSearchEnabled: validationThreadState.webSearchEnabled,
       externalTools: validationExternalMcpTools?.tools,
       disabledNativeToolSlugs,
@@ -470,6 +485,7 @@ const sendMessage = createSafeRootHandler(
       activeExternal: body.activeExternal,
       activeFile: body.activeFile,
       activeSkill: body.activeSkill,
+      activeTemplate: body.activeTemplate,
       contextMatterIds: effectiveContextMatterIds,
       memberRole,
       messageWindow: messagesForContextResult.value,
@@ -563,6 +579,8 @@ const sendMessage = createSafeRootHandler(
     // DOCX edit tool or the model can chase an impossible path.
     const chatTools = getChatTools({
       organizationId: session.activeOrganizationId,
+      memberRole: memberRole.role,
+      orgAIConfig,
       refRegistry,
       safeDb,
       scopedDb,
@@ -573,7 +591,9 @@ const sendMessage = createSafeRootHandler(
         pinnedIds: effectiveContextMatterIds,
         accessibleWorkspaceIds,
       }),
-      hasActiveFileChat: body.activeFile?.supportsDocxEdits === true,
+      hasActiveDocxEditClient:
+        body.activeFile?.supportsDocxEdits === true ||
+        body.activeTemplate !== undefined,
       webSearchEnabled: thread.data.webSearchEnabled,
       externalTools: externalMcpTools.tools,
       disabledNativeToolSlugs,
@@ -581,6 +601,14 @@ const sendMessage = createSafeRootHandler(
       activeSkillContext: chatContext.activeSkillContext,
       recordAuditEvent,
     });
+    // A named scope narrows the streaming turn to its server-defined
+    // allowlist (validation above stays broad so persisted tool parts
+    // keep validating). The scope name is schema-validated; unknown
+    // names never reach this point.
+    const streamingTools =
+      body.toolScope === undefined
+        ? chatTools
+        : restrictChatToolsToScope(chatTools, body.toolScope);
 
     const externalMcpSystemHint = buildExternalMcpSystemHint(
       externalMcpTools.connectors,
@@ -754,7 +782,7 @@ const sendMessage = createSafeRootHandler(
               safeDb,
               thirdPartyBoundary,
               threadId: body.threadId,
-              tools: chatTools,
+              tools: streamingTools,
               systemSafe,
               systemUntrusted,
               userId: user.id,
@@ -1485,6 +1513,7 @@ type PrepareChatContextProps = {
   activeExternal: IncomingActiveExternal | undefined;
   activeFile: IncomingActiveFile | undefined;
   activeSkill: IncomingActiveSkill | undefined;
+  activeTemplate: IncomingActiveTemplate | undefined;
   contextMatterIds: SafeId<"workspace">[];
   memberRole: { role: string };
   messageWindow: ChatMessage[];
@@ -1523,6 +1552,7 @@ const prepareChatContext = async ({
   activeExternal,
   activeFile,
   activeSkill,
+  activeTemplate,
   contextMatterIds,
   memberRole,
   messageWindow,
@@ -1551,6 +1581,7 @@ const prepareChatContext = async ({
         activeExternal,
         activeFile,
         activeSkill,
+        activeTemplate,
         contextMatterIds,
         memberRole,
         organizationId,

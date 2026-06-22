@@ -191,6 +191,30 @@ export type DocxEditorProps = {
   /** Monotonic counter from the bridge store; drives the re-scroll. */
   anonymizationSelectionSeq?: number | undefined;
   /**
+   * Render legal-template markers ({{field}}, {{@clause:..}},
+   * {{#if}}/{{#each}}) as rich widgets on the page instead of raw
+   * text. Off for ordinary documents; on for the template editor.
+   */
+  showTemplateDirectives?: boolean | undefined;
+  /**
+   * Host-provided text context-menu entries, appended after the built-ins.
+   * `requiresSelection` items only render when text is selected. Selecting one
+   * fires `onCustomContextAction` with the item id and the selection range
+   * captured when the menu opened (right-click can collapse the live PM
+   * selection, so the captured range is the reliable one).
+   */
+  customContextMenuItems?:
+    | readonly {
+        id: string;
+        label: string;
+        requiresSelection?: boolean;
+        icon?: ReactNode;
+      }[]
+    | undefined;
+  onCustomContextAction?:
+    | ((id: string, selectionRange: { from: number; to: number }) => void)
+    | undefined;
+  /**
    * Operational flags for save-path features. Selective save and its tripwire
    * mode are OFF by default; hosts opt in once their rollout pipeline is ready.
    */

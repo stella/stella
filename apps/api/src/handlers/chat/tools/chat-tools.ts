@@ -1,5 +1,6 @@
 import type { ToolSet } from "ai";
 
+import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
@@ -29,6 +30,7 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
+import { createTemplateTools } from "@/api/handlers/chat/tools/template-tools";
 import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
@@ -39,6 +41,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
+import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getDeployAvailableRegistryHandlers } from "@/api/lib/business-registries/dispatch";
@@ -72,6 +75,7 @@ type CurrentSkillEditToolName =
 type CurrentSkillEditTools = Partial<
   Record<CurrentSkillEditToolName, NonNullable<ToolSet[string]>>
 >;
+type TemplateTools = ReturnType<typeof createTemplateTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -84,7 +88,8 @@ type BuiltInChatTools = OrgTools &
   ActiveDocxEditTools &
   CreateDocumentTools &
   WebSearchTools &
-  ChatHistoryTools;
+  ChatHistoryTools &
+  TemplateTools;
 
 export type ChatTools = BuiltInChatTools;
 type BuiltInChatToolPolicyName =
@@ -95,6 +100,15 @@ type GetChatToolsProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  /**
+   * Caller's workspace member role. Gates role-restricted tools so a
+   * chat-capable role without the matching grant cannot reach them.
+   * Template tools require `template: ["create"]` (the same grant the
+   * REST fill route enforces), so a role with `template: []` (e.g.
+   * intern) sees no template tools.
+   */
+  memberRole: keyof typeof roles;
+  orgAIConfig?: OrgAIConfig | null;
   threadId: SafeId<"chatThread">;
   excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
   userId: SafeId<"user">;
@@ -107,11 +121,12 @@ type GetChatToolsProps = {
   /**
    * `true` when the request comes from a surface that has the
    * apply-active-docx-edits client executor mounted (the file
-   * overlay). Other surfaces (standalone chat, global chat) MUST
-   * NOT see this tool: the server has no `execute` for it, the
-   * client never calls `addToolOutput`, and the call would hang.
+   * overlay or the Template Studio). Other surfaces (standalone
+   * chat, global chat) MUST NOT see this tool: the server has no
+   * `execute` for it, the client never calls `addToolOutput`, and
+   * the call would hang.
    */
-  hasActiveFileChat: boolean;
+  hasActiveDocxEditClient: boolean;
   /**
    * Per-thread opt-in for the web_search + fetch_url tools. Combined
    * with FEATURE_WEB_SEARCH (deploy gate), the org's
@@ -154,6 +169,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   "create-document": CHAT_TOOL_POLICY_KIND.internal,
   "create-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "describe-stella-api": CHAT_TOOL_POLICY_KIND.internal,
+  describe_template: CHAT_TOOL_POLICY_KIND.internal,
   [EXPAND_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   // Per-thread `webSearchEnabled` already gates the tools; an
   // additional per-call approval would double-gate and block
@@ -161,11 +177,14 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   // official-registry lookups so the model executes immediately
   // once the toggle is on.
   [FETCH_URL_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  fill_template: CHAT_TOOL_POLICY_KIND.internal,
   infosoud_lookup_case: CHAT_TOOL_POLICY_KIND.publicOfficial,
+  list_templates: CHAT_TOOL_POLICY_KIND.internal,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
   "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
   [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
+  suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
   "update-current-skill-body": CHAT_TOOL_POLICY_KIND.mutation,
   "update-current-skill-resource": CHAT_TOOL_POLICY_KIND.mutation,
   "update-entity-fields": CHAT_TOOL_POLICY_KIND.mutation,
@@ -179,12 +198,14 @@ export const getChatTools = ({
   safeDb,
   scopedDb,
   organizationId,
+  memberRole,
+  orgAIConfig,
   threadId,
   excludedChatHistoryMessageIds,
   userId,
   toolWorkspaceIds,
   refRegistry,
-  hasActiveFileChat,
+  hasActiveDocxEditClient,
   webSearchEnabled,
   externalTools = {},
   disabledNativeToolSlugs,
@@ -236,7 +257,7 @@ export const getChatTools = ({
     webSearchEnabled && isWebSearchAvailable(disabledNativeToolSlugs)
       ? createWebSearchTools()
       : {};
-  const activeDocxEditTools = hasActiveFileChat
+  const activeDocxEditTools = hasActiveDocxEditClient
     ? createActiveDocxEditTools()
     : {};
   const historyTools = createChatHistoryTools({
@@ -258,6 +279,24 @@ export const getChatTools = ({
     scopedDb,
   });
 
+  // Template library tools: list, describe, and fill templates. Their
+  // execute fns rely on org RLS alone, so gate registration on the same
+  // `template: ["create"]` grant the REST fill route enforces; a
+  // chat-capable role without it (e.g. intern) sees no template tools.
+  const canUseTemplates = roles[memberRole].authorize({
+    template: ["create"],
+  }).success;
+  const templateTools = canUseTemplates
+    ? createTemplateTools({
+        scopedDb,
+        safeDb,
+        organizationId,
+        userId,
+        orgAIConfig,
+        recordAuditEvent,
+      })
+    : {};
+
   // create-document is client-executed (no server `execute`) — the
   // chat client picks the destination matter and posts the result
   // via the AI SDK's addToolOutput. It is always registered so the
@@ -274,6 +313,7 @@ export const getChatTools = ({
       ...boeTools,
       ...infosoudTools,
       ...workspaceTools,
+      ...templateTools,
       ...historyTools,
       ...createDocumentTools,
       ...activeDocxEditTools,

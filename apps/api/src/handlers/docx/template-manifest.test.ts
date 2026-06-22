@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { NamedCondition } from "@stll/template-conditions";
+
 import {
   MANIFEST_NS,
   mergeManifestWithDiscovery,
@@ -8,11 +10,7 @@ import {
   stripManifest,
   writeManifest,
 } from "./template-manifest";
-import type {
-  DiscoveredTemplate,
-  NamedCondition,
-  TemplateManifest,
-} from "./types";
+import type { DiscoveredTemplate, TemplateManifest } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -79,17 +77,6 @@ const sampleManifest: TemplateManifest = {
       },
     },
   ],
-  conditions: [
-    {
-      name: "HasNDA",
-      expression: 'contractType == "NDA"',
-      label: "NDA selected",
-    },
-    {
-      name: "IsLongTerm",
-      expression: "duration > 12",
-    },
-  ],
 };
 
 // ── readManifest ─────────────────────────────────────────
@@ -109,7 +96,6 @@ describe("readManifest", () => {
     expect(result).not.toBeNull();
     expect(result?.version).toBe(1);
     expect(result?.fields).toHaveLength(4);
-    expect(result?.conditions).toHaveLength(2);
   });
 
   test("parses field metadata correctly", async () => {
@@ -151,19 +137,107 @@ describe("readManifest", () => {
     });
   });
 
-  test("parses named conditions correctly", async () => {
+  test("round-trips a boolean condition-field's rule", async () => {
     const docx = await createMinimalDocx();
-    const withManifest = await writeManifest(docx, sampleManifest);
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "is_company",
+          inputType: "boolean",
+          condition: 'client_type == "company"',
+        },
+      ],
+    };
+    const withManifest = await writeManifest(docx, manifest);
     const result = await readManifest(withManifest);
 
-    const ndaCond = result?.conditions.find((c) => c.name === "HasNDA");
-    expect(ndaCond).toBeDefined();
-    expect(ndaCond?.expression).toBe('contractType == "NDA"');
-    expect(ndaCond?.label).toBe("NDA selected");
+    const field = result?.fields.find((f) => f.path === "is_company");
+    expect(field?.inputType).toBe("boolean");
+    expect(field?.condition).toBe('client_type == "company"');
+  });
 
-    const longTerm = result?.conditions.find((c) => c.name === "IsLongTerm");
-    expect(longTerm?.expression).toBe("duration > 12");
-    expect(longTerm?.label).toBeUndefined();
+  test("migrates a legacy <st:conditions> section into boolean condition-fields", async () => {
+    const { manifestNamedConditions } = await import("./manifest-conditions");
+
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>',
+    );
+    zip.file(
+      "customXml/item1.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<st:template xmlns:st="${MANIFEST_NS}" version="1">` +
+        "<st:fields>" +
+        '<st:field path="client_type" inputType="text"/>' +
+        "</st:fields>" +
+        "<st:conditions>" +
+        '<st:condition name="is_company"' +
+        ' expression="client_type == &quot;company&quot;" label="Is a company"/>' +
+        "</st:conditions>" +
+        "</st:template>",
+    );
+    const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+
+    const result = await readManifest(buf);
+    expect(result).not.toBeNull();
+
+    // The legacy condition becomes a synthetic boolean condition-field.
+    const migrated = result?.fields.find((f) => f.path === "is_company");
+    expect(migrated?.inputType).toBe("boolean");
+    expect(migrated?.condition).toBe('client_type == "company"');
+    expect(migrated?.label).toBe("Is a company");
+
+    // It surfaces as a named condition `{{#if is_company}}` resolves against.
+    expect(manifestNamedConditions(result!)).toContainEqual({
+      name: "is_company",
+      expression: 'client_type == "company"',
+      label: "Is a company",
+    });
+
+    // It re-persists on the next save (round-trips via buildFieldXml).
+    const docx = await createMinimalDocx();
+    const rewritten = await writeManifest(docx, result!);
+    const reread = await readManifest(rewritten);
+    const persisted = reread?.fields.find((f) => f.path === "is_company");
+    expect(persisted?.inputType).toBe("boolean");
+    expect(persisted?.condition).toBe('client_type == "company"');
+  });
+
+  test("a legacy condition never overrides an existing field with the same path", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>',
+    );
+    zip.file(
+      "customXml/item1.xml",
+      `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+        `<st:template xmlns:st="${MANIFEST_NS}" version="1">` +
+        "<st:fields>" +
+        '<st:field path="is_company" inputType="boolean"' +
+        ' condition="amount &gt; 1000"/>' +
+        "</st:fields>" +
+        "<st:conditions>" +
+        '<st:condition name="is_company" expression="stale_rule"/>' +
+        "</st:conditions>" +
+        "</st:template>",
+    );
+    const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+
+    const result = await readManifest(buf);
+    const matches = result?.fields.filter((f) => f.path === "is_company");
+    expect(matches).toHaveLength(1);
+    expect(matches?.at(0)?.condition).toBe("amount > 1000");
   });
 
   test("preserves empty-string labels", async () => {
@@ -171,13 +245,11 @@ describe("readManifest", () => {
     const manifest: TemplateManifest = {
       version: 1,
       fields: [{ path: "field", label: "" }],
-      conditions: [{ name: "cond", expression: "x", label: "" }],
     };
     const withManifest = await writeManifest(docx, manifest);
     const result = await readManifest(withManifest);
 
     expect(result?.fields[0]?.label).toBe("");
-    expect(result?.conditions[0]?.label).toBe("");
   });
 
   test("falls back to default version for non-numeric attribute", async () => {
@@ -213,7 +285,6 @@ describe("readManifest", () => {
           validation: { pattern: "" },
         },
       ],
-      conditions: [],
     };
     const withManifest = await writeManifest(docx, manifest);
     const result = await readManifest(withManifest);
@@ -319,7 +390,6 @@ describe("writeManifest", () => {
     const updatedManifest: TemplateManifest = {
       version: 1,
       fields: [{ path: "newField", label: "New Field" }],
-      conditions: [],
     };
     const v2 = await writeManifest(v1, updatedManifest);
 
@@ -342,14 +412,12 @@ describe("writeManifest", () => {
     const empty: TemplateManifest = {
       version: 1,
       fields: [],
-      conditions: [],
     };
     const withManifest = await writeManifest(docx, empty);
 
     const result = await readManifest(withManifest);
     expect(result).not.toBeNull();
     expect(result?.fields).toHaveLength(0);
-    expect(result?.conditions).toHaveLength(0);
   });
 
   test("escapes special XML characters", async () => {
@@ -362,7 +430,6 @@ describe("writeManifest", () => {
           label: 'Label with "quotes" & <brackets>',
         },
       ],
-      conditions: [],
     };
     const withManifest = await writeManifest(docx, manifest);
 
@@ -383,7 +450,6 @@ describe("writeManifest", () => {
           },
         },
       ],
-      conditions: [],
     };
     const withManifest = await writeManifest(docx, manifest);
 
@@ -520,7 +586,6 @@ describe("mergeManifestWithDiscovery", () => {
           inputType: "date",
         },
       ],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -547,7 +612,6 @@ describe("mergeManifestWithDiscovery", () => {
           inputType: "text",
         },
       ],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -556,6 +620,81 @@ describe("mergeManifestWithDiscovery", () => {
     expect(hidden).toBeDefined();
     expect(hidden?.label).toBe("Hidden");
     expect(hidden?.count).toBe(0);
+  });
+
+  test("threads formula through to resolved fields", () => {
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        { path: "rent", kind: "string", count: 1 },
+        { path: "rent_annual", kind: "string", count: 1 },
+      ],
+      structureErrors: [],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        { path: "rent_annual", formula: "rent * 12" },
+        { path: "manifest_only", formula: "rent * 24" },
+      ],
+    };
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+    const discoveredField = resolved.find((f) => f.path === "rent_annual");
+    const manifestOnly = resolved.find((f) => f.path === "manifest_only");
+    expect(discoveredField?.formula).toBe("rent * 12");
+    expect(manifestOnly?.formula).toBe("rent * 24");
+    expect(resolved.find((f) => f.path === "rent")?.formula).toBeUndefined();
+  });
+
+  test("drops namespace parents (a path that is only a prefix of others)", () => {
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        { path: "tenant", kind: "object", count: 0 },
+        { path: "tenant.name", kind: "string", count: 1 },
+        { path: "tenant.krs", kind: "string", count: 1 },
+        { path: "rent", kind: "string", count: 1 },
+      ],
+      structureErrors: [],
+    };
+    const resolved = mergeManifestWithDiscovery(null, discovery);
+    expect(resolved.map((f) => f.path).sort()).toEqual([
+      "rent",
+      "tenant.krs",
+      "tenant.name",
+    ]);
+  });
+
+  test("keeps a lookup field as a leaf despite dotted format markers under it", () => {
+    // {{company}} + {{company.full}} make discovery promote `company` to an
+    // object and register `company.full` as a string. The lookup field is a
+    // real leaf input, so it must survive the namespace-parent filter, and its
+    // declared format markers must be dropped (rendered outputs, not inputs).
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "full", template: "[company name], [seat]" }],
+          },
+        },
+      ],
+    };
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        { path: "company", kind: "object", count: 1 },
+        { path: "company.full", kind: "string", count: 1 },
+      ],
+      structureErrors: [],
+    };
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+    expect(resolved.map((f) => f.path)).toEqual(["company"]);
+    expect(resolved.at(0)?.lookup?.formats).toEqual([
+      { key: "full", template: "[company name], [seat]" },
+    ]);
   });
 
   test("preserves discovered fields without manifest entries", () => {
@@ -567,7 +706,6 @@ describe("mergeManifestWithDiscovery", () => {
           label: "Client Name",
         },
       ],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -609,11 +747,75 @@ describe("mergeManifestWithDiscovery", () => {
     expect(resolved[0]?.itemFields?.[0]?.path).toBe("name");
   });
 
+  test("dotted manifest entries enrich array item fields without shadowing the array root", () => {
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        {
+          path: "lawyers",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "name", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lawyers.name",
+          label: "Lawyer name",
+          inputType: "text",
+          required: true,
+        },
+      ],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+
+    // The array root must survive (a flat "lawyers.name" field would shadow
+    // it in the namespace-parent filter and break the array fill form).
+    expect(resolved).toHaveLength(1);
+    const lawyers = resolved.at(0);
+    expect(lawyers?.path).toBe("lawyers");
+    expect(lawyers?.kind).toBe("array");
+    const item = lawyers?.itemFields?.at(0);
+    expect(item?.path).toBe("name");
+    expect(item?.label).toBe("Lawyer name");
+    expect(item?.inputType).toBe("text");
+    expect(item?.required).toBe(true);
+  });
+
+  test("manifest entries under an array root never emit flat fields, even unplaced ones", () => {
+    const discovery: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        {
+          path: "lawyers",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "name", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [{ path: "lawyers.email", label: "Email", inputType: "text" }],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovery);
+
+    expect(resolved).toHaveLength(1);
+    expect(resolved.at(0)?.path).toBe("lawyers");
+    expect(resolved.at(0)?.kind).toBe("array");
+  });
+
   test("merge preserves empty-string label from manifest", () => {
     const manifest: TemplateManifest = {
       version: 1,
       fields: [{ path: "clientName", label: "" }],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -633,7 +835,6 @@ describe("mergeManifestWithDiscovery", () => {
           options: ["100", "200", "500"],
         },
       ],
-      conditions: [],
     };
 
     const resolved = mergeManifestWithDiscovery(manifest, baseDiscovery);
@@ -779,12 +980,510 @@ describe("round-trip", () => {
     const readBack = await readManifest(withManifest);
     expect(readBack?.version).toBe(1);
     expect(readBack?.fields).toHaveLength(4);
-    expect(readBack?.conditions).toHaveLength(2);
 
     // Strip
     const stripped = await stripManifest(withManifest);
     const afterStrip = await readManifest(stripped);
     expect(afterStrip).toBeNull();
+  });
+
+  test("composite parts + format round-trip", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lawyer",
+          label: "Lawyer",
+          parts: [
+            {
+              key: "position",
+              label: "Position",
+              inputType: "select",
+              options: ["rad. praw.", "adw."],
+            },
+            { key: "name", inputType: "text", pattern: "\\p{Lu}.+" },
+          ],
+          format: "{{position}} {{name}}",
+        },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+
+    const field = readBack?.fields.find((f) => f.path === "lawyer");
+    expect(field?.format).toBe("{{position}} {{name}}");
+    expect(field?.parts).toEqual([
+      {
+        key: "position",
+        label: "Position",
+        inputType: "select",
+        options: ["rad. praw.", "adw."],
+      },
+      { key: "name", inputType: "text", pattern: "\\p{Lu}.+" },
+    ]);
+  });
+
+  test("aiSeesDocument round-trips on an AI-drafted field", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        { path: "scope", aiPrompt: "Draft the scope", aiSeesDocument: true },
+        { path: "title", aiPrompt: "Draft the title", aiSeesDocument: false },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+
+    expect(
+      readBack?.fields.find((f) => f.path === "scope")?.aiSeesDocument,
+    ).toBe(true);
+    expect(
+      readBack?.fields.find((f) => f.path === "title")?.aiSeesDocument,
+    ).toBe(false);
+  });
+
+  test("optionsFrom round-trips; an invalid value is dropped on read", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lead_party",
+          inputType: "select",
+          options: ["Acme"],
+          optionsFrom: "parties.name",
+        },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.optionsFrom).toBe("parties.name");
+
+    // Hand-edited XML with a non-path value must not leak past the parser.
+    const tampered = await writeManifest(docx, {
+      ...manifest,
+      fields: [{ path: "lead_party", optionsFrom: "bad path!" }],
+    });
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(0)?.optionsFrom).toBeUndefined();
+  });
+
+  test("optionsFrom survives mergeManifestWithDiscovery", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        { path: "lead_party", inputType: "select", optionsFrom: "parties" },
+        { path: "manifest_only", optionsFrom: "parties" },
+      ],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "lead_party", count: 1 }],
+      fields: [{ path: "lead_party", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    const discoveredField = resolved.find((f) => f.path === "lead_party");
+    const manifestOnly = resolved.find((f) => f.path === "manifest_only");
+    expect(discoveredField?.optionsFrom).toBe("parties");
+    expect(manifestOnly?.optionsFrom).toBe("parties");
+  });
+
+  test("lookup round-trips; an unsupported registry is dropped on read", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "buyer_krs",
+          lookup: {
+            registry: "krs",
+            formats: [
+              {
+                key: "output_1",
+                template: "[name], with its seat in [seat], KRS [number]",
+              },
+            ],
+          },
+        },
+        {
+          path: "seller_krs",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "[name]" }],
+          },
+        },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.lookup).toEqual({
+      registry: "krs",
+      formats: [
+        {
+          key: "output_1",
+          template: "[name], with its seat in [seat], KRS [number]",
+        },
+      ],
+    });
+    expect(readBack?.fields.at(1)?.lookup).toEqual({
+      registry: "krs",
+      formats: [{ key: "output_1", template: "[name]" }],
+    });
+
+    // Hand-edited XML with a registry outside the supported set must not
+    // leak past the parser.
+    const zip = await JSZip.loadAsync(withManifest);
+    const itemEntry = zip.file("customXml/item1.xml");
+    const itemXml = await itemEntry?.async("string");
+    zip.file(
+      "customXml/item1.xml",
+      (itemXml ?? "").replaceAll('registry="krs"', 'registry="unknown"'),
+    );
+    const tampered = Buffer.from(
+      await zip.generateAsync({ type: "nodebuffer" }),
+    );
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(0)?.lookup).toBeUndefined();
+    expect(tamperedBack?.fields.at(1)?.lookup).toBeUndefined();
+  });
+
+  test("lookup named formats round-trip; an out-of-grammar key is dropped on read", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "company",
+          lookup: {
+            registry: "krs",
+            formats: [
+              { key: "output_1", template: "[company name]" },
+              { key: "full", template: "[company name], seat in [seat]" },
+              { key: "short", template: "**[company name]**" },
+            ],
+          },
+        },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.lookup).toEqual({
+      registry: "krs",
+      formats: [
+        { key: "output_1", template: "[company name]" },
+        { key: "full", template: "[company name], seat in [seat]" },
+        { key: "short", template: "**[company name]**" },
+      ],
+    });
+
+    // Hand-edited XML with a dotted key (illegal segment) must not leak past
+    // the parser; the surviving valid format still round-trips.
+    const zip = await JSZip.loadAsync(withManifest);
+    const itemEntry = zip.file("customXml/item1.xml");
+    const itemXml = await itemEntry?.async("string");
+    zip.file(
+      "customXml/item1.xml",
+      (itemXml ?? "").replaceAll('key="short"', 'key="bad.key"'),
+    );
+    const tampered = Buffer.from(
+      await zip.generateAsync({ type: "nodebuffer" }),
+    );
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(0)?.lookup?.formats).toEqual([
+      { key: "output_1", template: "[company name]" },
+      { key: "full", template: "[company name], seat in [seat]" },
+    ]);
+  });
+
+  test("formula round-trips; a hand-edited formula beside another value source is dropped", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "rent_indexed",
+          label: "Indexed rent",
+          formula: "min(rent * (1 + index / 100), rent * 1.05)",
+        },
+        {
+          path: "seller_krs",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "[name]" }],
+          },
+        },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.formula).toBe(
+      "min(rent * (1 + index / 100), rent * 1.05)",
+    );
+    expect(readBack?.fields.at(0)?.label).toBe("Indexed rent");
+    expect(readBack?.fields.at(1)?.formula).toBeUndefined();
+
+    // Hand-edited XML putting a formula on a lookup field (formula is
+    // mutually exclusive with the other value sources) must not leak past
+    // the parser.
+    const zip = await JSZip.loadAsync(withManifest);
+    const itemEntry = zip.file("customXml/item1.xml");
+    const itemXml = await itemEntry?.async("string");
+    zip.file(
+      "customXml/item1.xml",
+      (itemXml ?? "").replace(
+        'path="seller_krs"',
+        'path="seller_krs" formula="rent * 2"',
+      ),
+    );
+    const tampered = Buffer.from(
+      await zip.generateAsync({ type: "nodebuffer" }),
+    );
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(1)?.formula).toBeUndefined();
+    expect(tamperedBack?.fields.at(1)?.lookup).toEqual({
+      registry: "krs",
+      formats: [{ key: "output_1", template: "[name]" }],
+    });
+  });
+
+  test("dateFormat round-trips; a hand-edited implausible locale is dropped", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "signature_date",
+          inputType: "date",
+          dateFormat: { locale: "cs", style: "long" },
+        },
+        { path: "valid_until", inputType: "date" },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.dateFormat).toEqual({
+      locale: "cs",
+      style: "long",
+    });
+    expect(readBack?.fields.at(0)?.inputType).toBe("date");
+    expect(readBack?.fields.at(1)?.dateFormat).toBeUndefined();
+
+    // Hand-edited XML with a structurally invalid BCP-47 tag must not leak
+    // past the parser (Intl.DateTimeFormat would throw on it at fill time).
+    const zip = await JSZip.loadAsync(withManifest);
+    const itemEntry = zip.file("customXml/item1.xml");
+    const itemXml = await itemEntry?.async("string");
+    zip.file(
+      "customXml/item1.xml",
+      (itemXml ?? "").replace('locale="cs"', 'locale="not a locale"'),
+    );
+    const tampered = Buffer.from(
+      await zip.generateAsync({ type: "nodebuffer" }),
+    );
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(0)?.dateFormat).toBeUndefined();
+  });
+
+  test("hint round-trips and survives mergeManifestWithDiscovery", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "company.krs",
+          hint: 'KRS <number> from the "register"',
+        },
+        { path: "company.name" },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.hint).toBe(
+      'KRS <number> from the "register"',
+    );
+    expect(readBack?.fields.at(1)?.hint).toBeUndefined();
+
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "company.krs", count: 1 }],
+      fields: [{ path: "company.krs", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    expect(resolved.find((f) => f.path === "company.krs")?.hint).toBe(
+      'KRS <number> from the "register"',
+    );
+    expect(
+      resolved.find((f) => f.path === "company.name")?.hint,
+    ).toBeUndefined();
+  });
+
+  test("dateFormat survives mergeManifestWithDiscovery", () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "signature_date",
+          inputType: "date",
+          dateFormat: { locale: "cs", style: "long" },
+        },
+        {
+          path: "manifest_only",
+          inputType: "date",
+          dateFormat: { locale: "de", style: "medium" },
+        },
+      ],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "signature_date", count: 1 }],
+      fields: [{ path: "signature_date", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    const discoveredField = resolved.find((f) => f.path === "signature_date");
+    const manifestOnly = resolved.find((f) => f.path === "manifest_only");
+    expect(discoveredField?.dateFormat).toEqual({
+      locale: "cs",
+      style: "long",
+    });
+    expect(manifestOnly?.dateFormat).toEqual({ locale: "de", style: "medium" });
+  });
+
+  test("array-container validation (minItems/maxItems) reaches the resolved array field", () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lawyers",
+          label: "Lawyers",
+          validation: { minItems: 1, maxItems: 3 },
+        },
+      ],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        {
+          path: "lawyers",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "name", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+
+    const lawyers = resolved.find((f) => f.path === "lawyers");
+    expect(lawyers?.kind).toBe("array");
+    expect(lawyers?.label).toBe("Lawyers");
+    expect(lawyers?.validation).toEqual({ minItems: 1, maxItems: 3 });
+    // The array root must survive the namespace-parent filter.
+    expect(lawyers?.itemFields).toHaveLength(1);
+  });
+
+  test("array-container validation round-trips through write/read + merge", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [{ path: "lawyers", validation: { minItems: 2, maxItems: 5 } }],
+    };
+    const written = await writeManifest(await createMinimalDocx(), manifest);
+    const readBack = await readManifest(written);
+    expect(readBack?.fields.at(0)?.validation).toEqual({
+      minItems: 2,
+      maxItems: 5,
+    });
+
+    const discovered: DiscoveredTemplate = {
+      placeholders: [],
+      fields: [
+        {
+          path: "lawyers",
+          kind: "array",
+          count: 1,
+          itemFields: [{ path: "name", kind: "string", count: 1 }],
+        },
+      ],
+      structureErrors: [],
+    };
+    const resolved = mergeManifestWithDiscovery(readBack, discovered);
+    expect(resolved.find((f) => f.path === "lawyers")?.validation).toEqual({
+      minItems: 2,
+      maxItems: 5,
+    });
+  });
+
+  test("lookup survives mergeManifestWithDiscovery", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "buyer_krs",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "fmt" }],
+          },
+        },
+        {
+          path: "manifest_only",
+          lookup: {
+            registry: "krs",
+            formats: [{ key: "output_1", template: "[name]" }],
+          },
+        },
+      ],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "buyer_krs", count: 1 }],
+      fields: [{ path: "buyer_krs", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    const discoveredField = resolved.find((f) => f.path === "buyer_krs");
+    const manifestOnly = resolved.find((f) => f.path === "manifest_only");
+    expect(discoveredField?.lookup).toEqual({
+      registry: "krs",
+      formats: [{ key: "output_1", template: "fmt" }],
+    });
+    expect(manifestOnly?.lookup).toEqual({
+      registry: "krs",
+      formats: [{ key: "output_1", template: "[name]" }],
+    });
+  });
+
+  test("composite parts survive mergeManifestWithDiscovery", async () => {
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "lawyer",
+          parts: [{ key: "name", inputType: "text" }],
+          format: "{{name}}",
+        },
+      ],
+    };
+    const discovered: DiscoveredTemplate = {
+      placeholders: [{ name: "lawyer", count: 1 }],
+      fields: [{ path: "lawyer", kind: "string", count: 1 }],
+      structureErrors: [],
+    };
+
+    const resolved = mergeManifestWithDiscovery(manifest, discovered);
+    expect(resolved[0]?.parts).toEqual([{ key: "name", inputType: "text" }]);
+    expect(resolved[0]?.format).toBe("{{name}}");
   });
 
   test("write → strip → write creates fresh manifest", async () => {
@@ -795,7 +1494,6 @@ describe("round-trip", () => {
     const newManifest: TemplateManifest = {
       version: 1,
       fields: [{ path: "fresh" }],
-      conditions: [],
     };
     const v2 = await writeManifest(stripped, newManifest);
 

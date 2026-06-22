@@ -1,15 +1,22 @@
-import { useState } from "react";
+import { useCallback, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeftIcon,
+  ChevronDownIcon,
+  ChevronUpIcon,
   Loader2Icon,
   MoreHorizontalIcon,
+  PencilIcon,
   PlusIcon,
+  RotateCcwIcon,
+  StarIcon,
   Trash2Icon,
 } from "lucide-react";
+import { useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
   AlertDialog,
   AlertDialogClose,
@@ -20,6 +27,14 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/components/combobox";
 import {
   Dialog,
   DialogClose,
@@ -36,46 +51,41 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@stll/ui/components/menu";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import { Tabs, TabsList, TabsPanel, TabsTab } from "@stll/ui/components/tabs";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import {
   toAPIError,
   userErrorFromThrown,
   userErrorMessage,
 } from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-body";
 import { diffClauseBodies } from "@/routes/_protected.knowledge/-components/clause-diff";
 import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/clause-diff";
 import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
-import { ClauseFormDialog } from "@/routes/_protected.knowledge/-components/clause-form-dialog";
-import type { BlockDirectiveKind } from "@/routes/_protected.knowledge/-components/paragraph-rendering";
+import { ClauseEditor } from "@/routes/_protected.knowledge/-components/clause-editor";
+import type { ClauseParagraph } from "@/routes/_protected.knowledge/-components/clause-editor-types";
+import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
 import {
   clauseDetailOptions,
   knowledgeKeys,
 } from "@/routes/_protected.knowledge/-queries";
+import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 
 // ── Types ────────────────────────────────────────────
-
-type ClauseRun = {
-  text: string;
-  bold?: boolean;
-  italic?: boolean;
-};
-
-type ClauseParagraph = {
-  text: string;
-  style?: string;
-  level?: number;
-  runs?: ClauseRun[];
-  isDirective?: boolean;
-  directiveKind?: BlockDirectiveKind;
-  directiveExpression?: string;
-};
 
 /** Narrows JSONB `unknown` to ClauseParagraph[].
  *  Validates the first element only (sample check);
@@ -152,8 +162,6 @@ export const ClauseDetailView = ({
   const canEditClause = usePermissions({ clause: ["update"] });
   const canDeleteClause = usePermissions({ clause: ["delete"] });
   const detailQuery = useQuery(clauseDetailOptions(organizationId, clauseId));
-  const [editOpen, setEditOpen] = useState(false);
-  const [deleteOpen, setDeleteOpen] = useState(false);
 
   // SAFETY: bridges the Eden response and this local ClauseDetail; the
   // body element type resolves through a separate (web-local)
@@ -167,6 +175,280 @@ export const ClauseDetailView = ({
       queryKey: knowledgeKeys.clauses.detail(organizationId, clauseId),
     });
   };
+
+  return (
+    <div className="flex min-h-0 flex-1 flex-col">
+      {detailQuery.isPending && (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">
+            {t("clauses.loading")}
+          </p>
+        </div>
+      )}
+
+      {detailQuery.isError && (
+        <div className="flex flex-1 items-center justify-center p-8">
+          <p className="text-muted-foreground text-sm">
+            {t("clauses.loadFailed")}
+          </p>
+        </div>
+      )}
+
+      {detail && (
+        <DetailContent
+          canDelete={canDeleteClause}
+          canEdit={canEditClause}
+          categories={categories}
+          clauseId={clauseId}
+          detail={detail}
+          onBack={onBack}
+          onDeleted={onDeleted}
+          onRefresh={refreshDetail}
+        />
+      )}
+    </div>
+  );
+};
+
+// ── Detail Content ───────────────────────────────────
+
+const DetailContent = ({
+  detail,
+  clauseId,
+  categories,
+  canEdit,
+  canDelete,
+  onBack,
+  onDeleted,
+  onRefresh,
+}: {
+  detail: ClauseDetail;
+  clauseId: string;
+  categories: CategoryOption[];
+  canEdit: boolean;
+  canDelete: boolean;
+  onBack: () => void;
+  onDeleted: () => void;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  // Autosave persists the head working copy on every edit; a version snapshot
+  // is created only on explicit "Save as new version" / leave-with-changes.
+  // This tracks whether the head has un-versioned edits. A freshly loaded
+  // clause is clean.
+  const [dirtySinceVersion, setDirtySinceVersion] = useState(false);
+
+  return (
+    <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
+      <ClauseHeader
+        canDelete={canDelete}
+        canEdit={canEdit}
+        categories={categories}
+        clauseId={clauseId}
+        detail={detail}
+        dirtySinceVersion={dirtySinceVersion}
+        onBack={onBack}
+        onDeleted={onDeleted}
+        onRefresh={onRefresh}
+        onVersionSaved={() => setDirtySinceVersion(false)}
+      />
+
+      <p className="text-muted-foreground mt-2 text-sm">
+        {t("clauses.version", {
+          version: String(detail.currentVersion),
+        })}
+        {" \u00b7 "}
+        {format.dateTime(new Date(detail.createdAt), {
+          dateStyle: "medium",
+        })}
+      </p>
+
+      <div className="mt-3 grid gap-3">
+        <ClauseInlineTextField
+          canEdit={canEdit}
+          clauseId={clauseId}
+          field="description"
+          label={t("common.description")}
+          placeholder={t("clauses.descriptionPlaceholder")}
+          onRefresh={onRefresh}
+          value={detail.description}
+        />
+        <ClauseLanguageField
+          canEdit={canEdit}
+          clauseId={clauseId}
+          onRefresh={onRefresh}
+          value={detail.language}
+        />
+      </div>
+
+      <Tabs className="mt-6" defaultValue="body">
+        <TabsList variant="underline">
+          <TabsTab value="body">{t("clauses.body")}</TabsTab>
+          <TabsTab value="variants">{t("clauses.variants")}</TabsTab>
+          <TabsTab value="history">{t("common.history")}</TabsTab>
+        </TabsList>
+
+        <TabsPanel value="body">
+          <ClauseBodyEditor
+            canEdit={canEdit}
+            clauseId={clauseId}
+            detail={detail}
+            onBodyDirty={() => setDirtySinceVersion(true)}
+            onRefresh={onRefresh}
+          />
+          <ClauseUsageNotesField
+            canEdit={canEdit}
+            clauseId={clauseId}
+            onRefresh={onRefresh}
+            value={detail.usageNotes}
+          />
+        </TabsPanel>
+
+        <TabsPanel value="variants">
+          <VariantsTab
+            clauseId={clauseId}
+            onRefresh={onRefresh}
+            variants={detail.variants}
+          />
+        </TabsPanel>
+
+        <TabsPanel value="history">
+          <HistoryTab
+            clauseId={clauseId}
+            currentBody={detail.body}
+            onRefresh={onRefresh}
+            versions={detail.versions}
+          />
+        </TabsPanel>
+      </Tabs>
+    </div>
+  );
+};
+
+// \u2500\u2500 Header (back, inline title, category, delete) \u2500\u2500\u2500\u2500
+
+const ClauseHeader = ({
+  detail,
+  clauseId,
+  categories,
+  canEdit,
+  canDelete,
+  dirtySinceVersion,
+  onBack,
+  onDeleted,
+  onRefresh,
+  onVersionSaved,
+}: {
+  detail: ClauseDetail;
+  clauseId: string;
+  categories: CategoryOption[];
+  canEdit: boolean;
+  canDelete: boolean;
+  dirtySinceVersion: boolean;
+  onBack: () => void;
+  onDeleted: () => void;
+  onRefresh: () => void;
+  onVersionSaved: () => void;
+}) => {
+  const t = useTranslations();
+  const [editingTitle, setEditingTitle] = useState(false);
+  const [titleDraft, setTitleDraft] = useState(detail.title);
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [savingVersion, setSavingVersion] = useState(false);
+
+  // Snapshot the current head body as a new version. The head is already
+  // autosaved, so this only appends to history (no data is at risk).
+  const saveVersion = useCallback(async () => {
+    setSavingVersion(true);
+    const response = await api
+      .clauses({ clauseId })
+      .post({ body: detail.body, snapshotVersion: true });
+    setSavingVersion(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return false;
+    }
+
+    onVersionSaved();
+    onRefresh();
+    return true;
+  }, [clauseId, detail.body, t, onVersionSaved, onRefresh]);
+
+  const saveVersionAndLeave = useCallback(async () => {
+    const ok = await saveVersion();
+    if (ok) {
+      onBack();
+    }
+  }, [saveVersion, onBack]);
+
+  // Un-versioned head edits don't block leaving (they're already saved); we
+  // just offer to capture them as a version first.
+  const handleBack = useCallback(() => {
+    if (dirtySinceVersion) {
+      setConfirmLeave(true);
+      return;
+    }
+    onBack();
+  }, [dirtySinceVersion, onBack]);
+
+  const saveTitle = useCallback(async () => {
+    const trimmed = titleDraft.trim();
+    setEditingTitle(false);
+    if (trimmed === "" || trimmed === detail.title) {
+      setTitleDraft(detail.title);
+      return;
+    }
+
+    const response = await api.clauses({ clauseId }).post({ title: trimmed });
+
+    if (response.error) {
+      setTitleDraft(detail.title);
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    onRefresh();
+  }, [clauseId, detail.title, titleDraft, t, onRefresh]);
+
+  const saveCategory = useCallback(
+    async (value: string) => {
+      const response = await api.clauses({ clauseId }).post({
+        categoryId: value === "" ? null : toSafeId<"clauseCategory">(value),
+      });
+
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+
+      onRefresh();
+    },
+    [clauseId, t, onRefresh],
+  );
 
   const deleteClause = useMutation({
     mutationFn: async () => {
@@ -194,185 +476,494 @@ export const ClauseDetailView = ({
   });
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
-      <div className="flex items-center justify-between border-b px-4 py-2">
-        <Button onClick={onBack} size="sm" variant="ghost">
-          <ArrowLeftIcon />
-          {t("clauses.backToList")}
-        </Button>
+    <div className="flex items-center gap-2">
+      <Button
+        aria-label={t("common.back")}
+        onClick={handleBack}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <ArrowLeftIcon />
+      </Button>
 
-        {detail && (
-          <div className="flex gap-1">
-            {canEditClause && (
-              <Button
-                onClick={() => setEditOpen(true)}
-                size="sm"
-                variant="outline"
-              >
-                {t("common.edit")}
-              </Button>
-            )}
-            {canDeleteClause && (
-              <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
-                <Button
-                  onClick={() => setDeleteOpen(true)}
-                  size="sm"
-                  variant="ghost"
-                >
-                  <Trash2Icon className="size-4" />
-                </Button>
-                <AlertDialogPopup>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>
-                      {t("clauses.deleteClause")}
-                    </AlertDialogTitle>
-                    <AlertDialogDescription>
-                      {t("clauses.confirmDeleteClause")}
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogClose render={<Button variant="ghost" />}>
-                      {t("common.cancel")}
-                    </AlertDialogClose>
-                    <Button
-                      disabled={deleteClause.isPending}
-                      onClick={() => {
-                        deleteClause.mutate();
-                      }}
-                      variant="destructive"
-                    >
-                      {t("common.delete")}
-                    </Button>
-                  </AlertDialogFooter>
-                </AlertDialogPopup>
-              </AlertDialog>
-            )}
-          </div>
-        )}
-      </div>
-
-      {detailQuery.isPending && (
-        <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-muted-foreground text-sm">
-            {t("clauses.loading")}
-          </p>
-        </div>
-      )}
-
-      {detailQuery.isError && (
-        <div className="flex flex-1 items-center justify-center p-8">
-          <p className="text-muted-foreground text-sm">
-            {t("clauses.loadFailed")}
-          </p>
-        </div>
-      )}
-
-      {detail && (
-        <DetailContent
-          categories={categories}
-          clauseId={clauseId}
-          detail={detail}
-          onRefresh={refreshDetail}
-        />
-      )}
-
-      {detail && (
-        <ClauseFormDialog
-          categories={categories}
-          initial={{
-            ...detail,
-            bodyParagraphs: detail.body,
+      {editingTitle && canEdit ? (
+        <InlineEdit
+          className="flex-1"
+          inputClassName="flex-1 text-base"
+          onCancel={() => {
+            setTitleDraft(detail.title);
+            setEditingTitle(false);
           }}
-          onOpenChange={setEditOpen}
-          onSaved={refreshDetail}
-          open={editOpen}
+          onChange={setTitleDraft}
+          onCommit={() => {
+            void saveTitle();
+          }}
+          value={titleDraft}
         />
+      ) : (
+        <button
+          className="flex-1 truncate text-start text-lg font-semibold disabled:cursor-default"
+          disabled={!canEdit}
+          onClick={() => {
+            setTitleDraft(detail.title);
+            setEditingTitle(true);
+          }}
+          type="button"
+        >
+          {detail.title}
+        </button>
       )}
+
+      {canEdit && (
+        <Select
+          disabled={!canEdit}
+          onValueChange={(val) => {
+            void saveCategory(val ?? "");
+          }}
+          value={detail.categoryId ?? ""}
+        >
+          <SelectTrigger className="h-8 w-40 text-sm">
+            <SelectValue placeholder={t("common.uncategorized")} />
+          </SelectTrigger>
+          <SelectPopup>
+            <SelectItem value="">{t("common.uncategorized")}</SelectItem>
+            {categories.map((cat) => (
+              <SelectItem key={cat.id} value={cat.id}>
+                {cat.name}
+              </SelectItem>
+            ))}
+          </SelectPopup>
+        </Select>
+      )}
+
+      {canEdit && (
+        <Button
+          disabled={!dirtySinceVersion || savingVersion}
+          onClick={() => {
+            void saveVersion();
+          }}
+          size="sm"
+          variant="outline"
+        >
+          {t("clauses.saveAsVersion")}
+        </Button>
+      )}
+
+      {canDelete && (
+        <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+          <Button
+            aria-label={t("clauses.deleteClause")}
+            onClick={() => setDeleteOpen(true)}
+            size="icon-sm"
+            variant="ghost"
+          >
+            <Trash2Icon className="size-4" />
+          </Button>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>{t("clauses.deleteClause")}</AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("clauses.confirmDeleteClause")}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="ghost" />}>
+                {t("common.cancel")}
+              </AlertDialogClose>
+              <Button
+                disabled={deleteClause.isPending}
+                onClick={() => {
+                  deleteClause.mutate();
+                }}
+                variant="destructive"
+              >
+                {t("common.delete")}
+              </Button>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
+      )}
+
+      <LeaveConfirmDialog
+        cancelLabel={t("templates.goBackToEditing")}
+        description={t("clauses.unsavedVersionLeaveConfirm")}
+        onOpenChange={setConfirmLeave}
+        open={confirmLeave}
+        primary={{
+          label: t("clauses.saveVersionAndLeave"),
+          onClick: () => {
+            void saveVersionAndLeave();
+          },
+        }}
+        secondary={{
+          label: t("clauses.leaveWithoutVersion"),
+          variant: "ghost",
+          onClick: onBack,
+        }}
+      />
     </div>
   );
 };
 
-// ── Detail Content ───────────────────────────────────
+// \u2500\u2500 Inline editable body (WYSIWYG, autosave) \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
 
-const DetailContent = ({
+const ClauseBodyEditor = ({
   detail,
   clauseId,
-  categories,
+  canEdit,
   onRefresh,
+  onBodyDirty,
 }: {
   detail: ClauseDetail;
   clauseId: string;
-  categories: CategoryOption[];
+  canEdit: boolean;
+  onRefresh: () => void;
+  onBodyDirty: () => void;
+}) => {
+  const t = useTranslations();
+
+  const saveBody = useCallback(
+    async (body: ClauseParagraph[]) => {
+      // Head-only autosave: persists the working copy without snapshotting a
+      // version. The version snapshot happens on explicit save / leave.
+      const response = await api.clauses({ clauseId }).post({ body });
+
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+
+      onRefresh();
+    },
+    [clauseId, t, onRefresh],
+  );
+
+  const debouncedSave = useDebouncedCallback((body: ClauseParagraph[]) => {
+    void saveBody(body);
+  }, 1200);
+
+  if (!canEdit) {
+    return (
+      <div className="mt-4 rounded-lg border p-4">
+        <ClauseBody paragraphs={detail.body} />
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-4">
+      <ClauseEditor
+        content={detail.body}
+        onBlur={(body) => {
+          debouncedSave.cancel();
+          void saveBody(body);
+        }}
+        onChange={(body) => {
+          // Mark un-versioned the instant the body is edited (not when the
+          // debounced autosave resolves), so leaving right after a change still
+          // triggers the "save a version?" prompt.
+          onBodyDirty();
+          debouncedSave(body);
+        }}
+        title={detail.title}
+        usageNotes={detail.usageNotes ?? undefined}
+      />
+    </div>
+  );
+};
+
+// ── Inline metadata fields (autosave) ────────────────
+
+/** Short single-line metadata field (description).
+ *  Commits the trimmed value on blur, sending `null` when empty,
+ *  mirroring the modal's `field.trim() || null` shape. */
+const ClauseInlineTextField = ({
+  field,
+  value,
+  label,
+  placeholder,
+  clauseId,
+  canEdit,
+  onRefresh,
+}: {
+  field: "description";
+  value: string | null;
+  label: string;
+  placeholder: string;
+  clauseId: string;
+  canEdit: boolean;
   onRefresh: () => void;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
+  const [draft, setDraft] = useState(value ?? "");
 
-  const categoryName = detail.categoryId
-    ? categories.find((c) => c.id === detail.categoryId)?.name
-    : null;
+  const commit = useCallback(async () => {
+    const next = draft.trim() || null;
+    if (next === (value ?? null)) {
+      return;
+    }
+
+    const response = await api.clauses({ clauseId }).post({ [field]: next });
+
+    if (response.error) {
+      setDraft(value ?? "");
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    onRefresh();
+  }, [clauseId, draft, field, value, t, onRefresh]);
+
+  if (!canEdit) {
+    if (!value) {
+      return null;
+    }
+    return (
+      <div className="grid gap-1">
+        <span className="text-muted-foreground text-xs font-medium">
+          {label}
+        </span>
+        <p className="text-muted-foreground text-sm">{value}</p>
+      </div>
+    );
+  }
 
   return (
-    <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
-      <div className="mb-6">
-        <h2 className="text-lg font-semibold">{detail.title}</h2>
-        <p className="text-muted-foreground mt-1 text-sm">
-          {categoryName ?? t("common.uncategorized")}
-          {" \u00b7 "}
-          {t("clauses.version", {
-            version: String(detail.currentVersion),
-          })}
-          {" \u00b7 "}
-          {format.dateTime(new Date(detail.createdAt), {
-            dateStyle: "medium",
-          })}
-        </p>
-        {detail.description && (
-          <p className="text-muted-foreground mt-2 text-sm">
-            {detail.description}
-          </p>
-        )}
+    <div className="grid gap-1.5">
+      <label className="text-sm font-medium" htmlFor={`clause-${field}`}>
+        {label}
+      </label>
+      <Input
+        id={`clause-${field}`}
+        onBlur={() => {
+          void commit();
+        }}
+        onChange={(e) => setDraft(e.target.value)}
+        placeholder={placeholder}
+        value={draft}
+      />
+    </div>
+  );
+};
+
+// ── Language field (searchable single-select over ISO 639-1) ─
+
+type LanguagePick = {
+  code: string;
+  label: string;
+};
+
+/** Single nullable clause language, picked from the canonical
+ *  {@link LANGUAGES} list via a searchable combobox and autosaved as the
+ *  base ISO 639-1 code (region tags canonicalized through `toLanguageCode`).
+ *  Clearing the selection saves `null`. Legacy free-text values outside the
+ *  enum still render (via `displayLanguageName`) and stay selected until the
+ *  user re-picks. */
+const ClauseLanguageField = ({
+  value,
+  clauseId,
+  canEdit,
+  onRefresh,
+}: {
+  value: string | null;
+  clauseId: string;
+  canEdit: boolean;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations();
+  const lang = useI18nStore((s) => s.lang);
+
+  const options: LanguagePick[] = LANGUAGES.map((language) => ({
+    code: language.code,
+    label: displayLanguageName(language.code, { displayLocale: lang }),
+  })).sort((a, b) => a.label.localeCompare(b.label, lang));
+
+  // Keep a legacy/out-of-enum stored value selectable rather than dropping it.
+  const selected: LanguagePick | null =
+    value === null
+      ? null
+      : (options.find((option) => option.code === toLanguageCode(value)) ?? {
+          code: value,
+          label: displayLanguageName(value, { displayLocale: lang }),
+        });
+
+  const save = useCallback(
+    async (next: string | null) => {
+      const response = await api.clauses({ clauseId }).post({ language: next });
+
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+
+      onRefresh();
+    },
+    [clauseId, t, onRefresh],
+  );
+
+  const handleChange = (pick: LanguagePick | null) => {
+    const next = pick === null ? null : (toLanguageCode(pick.code) ?? null);
+    if (next === value) {
+      return;
+    }
+    void save(next);
+  };
+
+  if (!canEdit) {
+    if (selected === null) {
+      return null;
+    }
+    return (
+      <div className="grid gap-1">
+        <span className="text-muted-foreground text-xs font-medium">
+          {t("common.language")}
+        </span>
+        <p className="text-muted-foreground text-sm">{selected.label}</p>
       </div>
+    );
+  }
 
-      <Tabs defaultValue="body">
-        <TabsList variant="underline">
-          <TabsTab value="body">{t("clauses.body")}</TabsTab>
-          <TabsTab value="variants">{t("clauses.variants")}</TabsTab>
-          <TabsTab value="history">{t("common.history")}</TabsTab>
-        </TabsList>
+  return (
+    <div className="grid gap-1.5">
+      <label className="text-sm font-medium" htmlFor="clause-language">
+        {t("common.language")}
+      </label>
+      <Combobox<LanguagePick>
+        autoHighlight
+        isItemEqualToValue={(a, b) => a.code === b.code}
+        items={options}
+        itemToStringLabel={(item) => item.label}
+        onValueChange={handleChange}
+        value={selected}
+      >
+        <ComboboxInput
+          className="w-60"
+          id="clause-language"
+          placeholder={t("clauses.languagePlaceholder")}
+          showClear
+        />
+        <ComboboxPopup>
+          <ComboboxList>
+            {(item: LanguagePick) => (
+              <ComboboxItem key={item.code} value={item}>
+                {item.label}
+                <span className="text-muted-foreground ms-2 uppercase">
+                  {item.code}
+                </span>
+              </ComboboxItem>
+            )}
+          </ComboboxList>
+          <ComboboxEmpty>
+            {t("translate.dialog.noLanguagesFound")}
+          </ComboboxEmpty>
+        </ComboboxPopup>
+      </Combobox>
+    </div>
+  );
+};
 
-        <TabsPanel value="body">
-          <div className="mt-4 rounded-lg border p-4">
-            <ClauseBody paragraphs={detail.body} />
-          </div>
-          {detail.usageNotes && (
-            <div className="mt-3">
-              <p className="text-muted-foreground text-xs font-medium">
-                {t("clauses.usageNotes")}
-              </p>
-              <p className="text-muted-foreground mt-1 text-sm">
-                {detail.usageNotes}
-              </p>
-            </div>
-          )}
-        </TabsPanel>
+/** Multi-line usage notes field. Autosaves on a debounce while
+ *  typing and flushes on blur, matching the body editor's pattern. */
+const ClauseUsageNotesField = ({
+  value,
+  clauseId,
+  canEdit,
+  onRefresh,
+}: {
+  value: string | null;
+  clauseId: string;
+  canEdit: boolean;
+  onRefresh: () => void;
+}) => {
+  const t = useTranslations();
+  const [draft, setDraft] = useState(value ?? "");
 
-        <TabsPanel value="variants">
-          <VariantsTab
-            clauseId={clauseId}
-            onRefresh={onRefresh}
-            variants={detail.variants}
-          />
-        </TabsPanel>
+  const save = useCallback(
+    async (text: string) => {
+      const next = text.trim() || null;
+      if (next === (value ?? null)) {
+        return;
+      }
 
-        <TabsPanel value="history">
-          <HistoryTab
-            clauseId={clauseId}
-            currentBody={detail.body}
-            versions={detail.versions}
-          />
-        </TabsPanel>
-      </Tabs>
+      const response = await api
+        .clauses({ clauseId })
+        .post({ usageNotes: next });
+
+      if (response.error) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(
+            response.error,
+            t("common.unexpectedError"),
+          ),
+        });
+        return;
+      }
+
+      onRefresh();
+    },
+    [clauseId, value, t, onRefresh],
+  );
+
+  const debouncedSave = useDebouncedCallback((text: string) => {
+    void save(text);
+  }, 1200);
+
+  if (!canEdit) {
+    if (!value) {
+      return null;
+    }
+    return (
+      <div className="mt-3">
+        <p className="text-muted-foreground text-xs font-medium">
+          {t("clauses.usageNotes")}
+        </p>
+        <p className="text-muted-foreground mt-1 text-sm">{value}</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 grid gap-1.5">
+      <label className="text-sm font-medium" htmlFor="clause-usage-notes">
+        {t("clauses.usageNotes")}
+      </label>
+      <Textarea
+        className="min-h-[60px]"
+        id="clause-usage-notes"
+        onBlur={() => {
+          debouncedSave.cancel();
+          void save(draft);
+        }}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          debouncedSave(e.target.value);
+        }}
+        placeholder={t("clauses.usageNotesPlaceholder")}
+        value={draft}
+      />
     </div>
   );
 };
@@ -411,12 +1002,14 @@ const VariantsTab = ({
 
       {variants.length > 0 && (
         <ul className="divide-y rounded-lg border">
-          {variants.map((variant) => (
+          {variants.map((variant, index) => (
             <VariantRow
               clauseId={clauseId}
+              index={index}
               key={variant.id}
               onChanged={onRefresh}
               variant={variant}
+              variants={variants}
             />
           ))}
         </ul>
@@ -432,18 +1025,33 @@ const VariantsTab = ({
   );
 };
 
+/** Reverse of the create form's split: join paragraph text back into
+ *  the plain-text textarea representation. */
+const variantBodyToText = (body: unknown): string => {
+  const paragraphs = isClauseParagraphs(body) ? body : [];
+  return paragraphs.map((p) => p.text).join("\n");
+};
+
 const VariantRow = ({
   variant,
+  variants,
+  index,
   clauseId,
   onChanged,
 }: {
   variant: VariantItem;
+  variants: VariantItem[];
+  index: number;
   clauseId: string;
   onChanged: () => void;
 }) => {
   const t = useTranslations();
   const [deleteOpen, setDeleteOpen] = useState(false);
+  const [promoteOpen, setPromoteOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [promoting, setPromoting] = useState(false);
+  const [reordering, setReordering] = useState(false);
 
   const handleDelete = async () => {
     setDeleting(true);
@@ -474,13 +1082,112 @@ const VariantRow = ({
     onChanged();
   };
 
+  const handlePromote = useCallback(async () => {
+    const body = isClauseParagraphs(variant.body) ? variant.body : [];
+    if (body.length === 0) {
+      return;
+    }
+
+    setPromoting(true);
+    // Reuse the clause update endpoint with an explicit version snapshot:
+    // bumps currentVersion and writes a clauseVersions row, so the promotion
+    // stays auditable and revertable from history.
+    const response = await api
+      .clauses({ clauseId })
+      .post({ body, snapshotVersion: true });
+
+    setPromoting(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    stellaToast.add({
+      type: "success",
+      title: t("clauses.variantPromoted"),
+    });
+    setPromoteOpen(false);
+    onChanged();
+  }, [clauseId, variant.body, t, onChanged]);
+
+  const handleReorder = useCallback(
+    async (direction: "up" | "down") => {
+      const neighborIndex = direction === "up" ? index - 1 : index + 1;
+      const neighbor = variants.at(neighborIndex);
+      if (!neighbor) {
+        return;
+      }
+
+      setReordering(true);
+      // Swap sortOrder with the neighbor; the list query orders by
+      // sortOrder asc so the rows visually exchange places.
+      const [first, second] = await Promise.all([
+        api
+          .clauses({ clauseId })
+          .variants({ variantId: variant.id })
+          .post({ sortOrder: neighbor.sortOrder }),
+        api
+          .clauses({ clauseId })
+          .variants({ variantId: neighbor.id })
+          .post({ sortOrder: variant.sortOrder }),
+      ]);
+
+      setReordering(false);
+
+      const failure = first.error ?? second.error;
+      if (failure) {
+        stellaToast.add({
+          type: "error",
+          title: t("clauses.saveFailed"),
+          description: userErrorMessage(failure, t("common.unexpectedError")),
+        });
+        return;
+      }
+
+      onChanged();
+    },
+    [clauseId, index, variant.id, variant.sortOrder, variants, t, onChanged],
+  );
+
   const body = isClauseParagraphs(variant.body) ? variant.body : [];
+  const canMoveUp = index > 0;
+  const canMoveDown = index < variants.length - 1;
 
   return (
     <li className="px-4 py-3">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <span className="text-sm font-medium">{variant.label}</span>
-        <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+        <div className="flex items-center gap-1">
+          <Button
+            aria-label={t("common.moveUp")}
+            disabled={!canMoveUp || reordering}
+            onClick={() => {
+              void handleReorder("up");
+            }}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <ChevronUpIcon />
+          </Button>
+          <Button
+            aria-label={t("common.moveDown")}
+            disabled={!canMoveDown || reordering}
+            onClick={() => {
+              void handleReorder("down");
+            }}
+            size="icon-xs"
+            variant="ghost"
+          >
+            <ChevronDownIcon />
+          </Button>
           <DropdownMenu>
             <DropdownMenuTrigger
               render={<Button size="icon-xs" variant="ghost" />}
@@ -488,6 +1195,14 @@ const VariantRow = ({
               <MoreHorizontalIcon />
             </DropdownMenuTrigger>
             <DropdownMenuContent>
+              <DropdownMenuItem onClick={() => setEditOpen(true)}>
+                <PencilIcon />
+                {t("common.edit")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => setPromoteOpen(true)}>
+                <StarIcon />
+                {t("clauses.useAsMainBody")}
+              </DropdownMenuItem>
               <DropdownMenuItem
                 className="text-destructive-foreground"
                 onClick={() => setDeleteOpen(true)}
@@ -497,37 +1212,72 @@ const VariantRow = ({
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          <AlertDialogPopup>
-            <AlertDialogHeader>
-              <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
-              <AlertDialogDescription>
-                {t("common.deleteConfirmDescription", {
-                  name: variant.label,
-                })}
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogClose render={<Button variant="ghost" />}>
-                {t("common.cancel")}
-              </AlertDialogClose>
-              <Button
-                disabled={deleting}
-                onClick={() => {
-                  void handleDelete();
-                }}
-                variant="destructive"
-              >
-                {t("common.delete")}
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogPopup>
-        </AlertDialog>
+        </div>
       </div>
       {body.length > 0 && (
         <div className="bg-muted/30 mt-2 rounded border p-3">
           <ClauseBody paragraphs={body} />
         </div>
       )}
+
+      <AlertDialog onOpenChange={setDeleteOpen} open={deleteOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("common.delete")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("common.deleteConfirmDescription", {
+                name: variant.label,
+              })}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              disabled={deleting}
+              onClick={() => {
+                void handleDelete();
+              }}
+              variant="destructive"
+            >
+              {t("common.delete")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <AlertDialog onOpenChange={setPromoteOpen} open={promoteOpen}>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("clauses.useAsMainBody")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("clauses.confirmUseAsMainBody")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              disabled={promoting}
+              onClick={() => {
+                void handlePromote();
+              }}
+            >
+              {t("clauses.useAsMainBody")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+
+      <VariantFormDialog
+        clauseId={clauseId}
+        onOpenChange={setEditOpen}
+        onSaved={onChanged}
+        open={editOpen}
+        variant={variant}
+      />
     </li>
   );
 };
@@ -539,15 +1289,46 @@ const VariantFormDialog = ({
   open,
   onOpenChange,
   onSaved,
+  variant,
 }: {
   clauseId: string;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onSaved: () => void;
+  variant?: VariantItem;
+}) => (
+  <Dialog onOpenChange={onOpenChange} open={open}>
+    {/* Mount only while open so each open re-seeds from `variant`
+        (edit) or resets to blank (create) without an effect, matching
+        ClauseFormDialog. */}
+    {open ? (
+      <VariantFormDialogBody
+        clauseId={clauseId}
+        onOpenChange={onOpenChange}
+        onSaved={onSaved}
+        variant={variant}
+      />
+    ) : null}
+  </Dialog>
+);
+
+const VariantFormDialogBody = ({
+  clauseId,
+  onOpenChange,
+  onSaved,
+  variant,
+}: {
+  clauseId: string;
+  onOpenChange: (open: boolean) => void;
+  onSaved: () => void;
+  variant: VariantItem | undefined;
 }) => {
   const t = useTranslations();
-  const [label, setLabel] = useState("");
-  const [bodyText, setBodyText] = useState("");
+  const isEdit = !!variant;
+  const [label, setLabel] = useState(() => variant?.label ?? "");
+  const [bodyText, setBodyText] = useState(() =>
+    variant ? variantBodyToText(variant.body) : "",
+  );
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
@@ -558,10 +1339,15 @@ const VariantFormDialog = ({
     setSaving(true);
 
     const body = bodyText.split("\n").map((line) => ({ text: line }));
+    const payload = { label: label.trim(), body };
 
-    const response = await api
-      .clauses({ clauseId })
-      .variants.put({ label: label.trim(), body });
+    const response =
+      variant !== undefined
+        ? await api
+            .clauses({ clauseId })
+            .variants({ variantId: variant.id })
+            .post(payload)
+        : await api.clauses({ clauseId }).variants.put(payload);
 
     setSaving(false);
 
@@ -579,60 +1365,58 @@ const VariantFormDialog = ({
 
     stellaToast.add({
       type: "success",
-      title: t("clauses.variantCreated"),
+      title: isEdit ? t("clauses.variantUpdated") : t("clauses.variantCreated"),
     });
 
-    setLabel("");
-    setBodyText("");
     onOpenChange(false);
     onSaved();
   };
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
-      <DialogPopup className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>{t("clauses.addVariant")}</DialogTitle>
-        </DialogHeader>
-        <DialogPanel className="grid gap-4">
-          <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="variant-label">
-              {t("clauses.variantLabel")}
-            </label>
-            <Input
-              id="variant-label"
-              onChange={(e) => setLabel(e.target.value)}
-              placeholder={t("clauses.variantLabelPlaceholder")}
-              value={label}
-            />
-          </div>
-          <div className="grid gap-1.5">
-            <label className="text-sm font-medium" htmlFor="variant-body">
-              {t("clauses.body")}
-            </label>
-            <Textarea
-              className="min-h-[100px]"
-              id="variant-body"
-              onChange={(e) => setBodyText(e.target.value)}
-              value={bodyText}
-            />
-          </div>
-        </DialogPanel>
-        <DialogFooter>
-          <DialogClose render={<Button variant="ghost" />}>
-            {t("common.cancel")}
-          </DialogClose>
-          <Button
-            disabled={saving || !label.trim()}
-            onClick={() => {
-              void handleSave();
-            }}
-          >
-            {t("common.save")}
-          </Button>
-        </DialogFooter>
-      </DialogPopup>
-    </Dialog>
+    <DialogPopup className="sm:max-w-md">
+      <DialogHeader>
+        <DialogTitle>
+          {isEdit ? t("clauses.editVariant") : t("clauses.addVariant")}
+        </DialogTitle>
+      </DialogHeader>
+      <DialogPanel className="grid gap-4">
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium" htmlFor="variant-label">
+            {t("clauses.variantLabel")}
+          </label>
+          <Input
+            id="variant-label"
+            onChange={(e) => setLabel(e.target.value)}
+            placeholder={t("clauses.variantLabelPlaceholder")}
+            value={label}
+          />
+        </div>
+        <div className="grid gap-1.5">
+          <label className="text-sm font-medium" htmlFor="variant-body">
+            {t("clauses.body")}
+          </label>
+          <Textarea
+            className="min-h-[100px]"
+            id="variant-body"
+            onChange={(e) => setBodyText(e.target.value)}
+            value={bodyText}
+          />
+        </div>
+      </DialogPanel>
+      <DialogFooter>
+        <DialogClose render={<Button variant="ghost" />}>
+          {t("common.cancel")}
+        </DialogClose>
+        <Button
+          disabled={saving || !label.trim()}
+          onClick={() => {
+            void handleSave();
+          }}
+        >
+          {t("common.save")}
+        </Button>
+      </DialogFooter>
+    </DialogPopup>
   );
 };
 
@@ -642,13 +1426,14 @@ const HistoryTab = ({
   clauseId,
   currentBody,
   versions,
+  onRefresh,
 }: {
   clauseId: string;
   currentBody: ClauseParagraph[];
   versions: VersionItem[];
+  onRefresh: () => void;
 }) => {
   const t = useTranslations();
-  const format = useFormatter();
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [diffResult, setDiffResult] = useState<ParagraphDiff[] | null>(null);
   const [loading, setLoading] = useState(false);
@@ -711,32 +1496,16 @@ const HistoryTab = ({
       <div className="rounded-lg border">
         <ul className="divide-y">
           {versions.map((ver) => (
-            <li key={ver.id}>
-              <button
-                className={cn(
-                  "flex w-full items-center justify-between",
-                  "px-4 py-3 text-sm transition-colors",
-                  "hover:bg-muted/50",
-                  selectedId === ver.id && "bg-muted",
-                )}
-                onClick={() => {
-                  void handleVersionClick(ver.id);
-                }}
-                type="button"
-              >
-                <span className="font-medium">
-                  {t("clauses.version", {
-                    version: String(ver.version),
-                  })}
-                </span>
-                <span className="text-muted-foreground">
-                  {format.dateTime(new Date(ver.createdAt), {
-                    dateStyle: "medium",
-                    timeStyle: "short",
-                  })}
-                </span>
-              </button>
-            </li>
+            <VersionRow
+              clauseId={clauseId}
+              isSelected={selectedId === ver.id}
+              key={ver.id}
+              onRestored={onRefresh}
+              onToggleDiff={() => {
+                void handleVersionClick(ver.id);
+              }}
+              version={ver}
+            />
           ))}
         </ul>
       </div>
@@ -762,5 +1531,111 @@ const HistoryTab = ({
         </div>
       )}
     </div>
+  );
+};
+
+const VersionRow = ({
+  version,
+  clauseId,
+  isSelected,
+  onToggleDiff,
+  onRestored,
+}: {
+  version: VersionItem;
+  clauseId: string;
+  isSelected: boolean;
+  onToggleDiff: () => void;
+  onRestored: () => void;
+}) => {
+  const t = useTranslations();
+  const format = useFormatter();
+  const [restoreOpen, setRestoreOpen] = useState(false);
+  const [restoring, setRestoring] = useState(false);
+
+  const handleRestore = useCallback(async () => {
+    setRestoring(true);
+    const response = await api
+      .clauses({ clauseId })
+      .versions({ versionId: version.id })
+      .restore.post();
+
+    setRestoring(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.saveFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    stellaToast.add({
+      type: "success",
+      title: t("clauses.versionRestored"),
+    });
+    setRestoreOpen(false);
+    onRestored();
+  }, [clauseId, version.id, t, onRestored]);
+
+  return (
+    <li className="flex items-center gap-2 px-2">
+      <button
+        className={cn(
+          "flex flex-1 items-center justify-between",
+          "px-2 py-3 text-sm transition-colors",
+          "hover:bg-muted/50 rounded",
+          isSelected && "bg-muted",
+        )}
+        onClick={onToggleDiff}
+        type="button"
+      >
+        <span className="font-medium">
+          {t("clauses.version", {
+            version: String(version.version),
+          })}
+        </span>
+        <span className="text-muted-foreground">
+          {format.dateTime(new Date(version.createdAt), {
+            dateStyle: "medium",
+            timeStyle: "short",
+          })}
+        </span>
+      </button>
+      <AlertDialog onOpenChange={setRestoreOpen} open={restoreOpen}>
+        <Button
+          aria-label={t("clauses.restoreVersion")}
+          onClick={() => setRestoreOpen(true)}
+          size="icon-xs"
+          variant="ghost"
+        >
+          <RotateCcwIcon />
+        </Button>
+        <AlertDialogPopup>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{t("clauses.restoreVersion")}</AlertDialogTitle>
+            <AlertDialogDescription>
+              {t("clauses.confirmRestoreVersion")}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogClose render={<Button variant="ghost" />}>
+              {t("common.cancel")}
+            </AlertDialogClose>
+            <Button
+              disabled={restoring}
+              onClick={() => {
+                void handleRestore();
+              }}
+            >
+              {t("clauses.restoreVersion")}
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogPopup>
+      </AlertDialog>
+    </li>
   );
 };

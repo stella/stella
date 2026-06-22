@@ -8,37 +8,16 @@
  * (e.g. "cs,en-US;q=0.9,en;q=0.8").
  */
 
-const SUPPORTED_LANGS = [
-  "en",
-  "ar",
-  "cs",
-  "de",
-  "es",
-  "et",
-  "fr",
-  "hu",
-  "lt",
-  "lv",
-  "pl",
-  "pt-BR",
-  "sk",
-] as const;
+import { resolveUiLocale } from "@stll/locales";
+import type { UiLocale } from "@stll/locales";
 
-export type SupportedLang = (typeof SUPPORTED_LANGS)[number];
+export type SupportedLang = UiLocale;
 
-/** Match a single BCP-47 tag (sans quality weight) to a supported language. */
-const matchSupportedLang = (tag: string): SupportedLang | undefined => {
-  const exact = SUPPORTED_LANGS.find((l) => l === tag);
-  if (exact) {
-    return exact;
-  }
-  const prefix = tag.split("-").at(0);
-  const match = SUPPORTED_LANGS.find((l) => l === prefix);
-  if (match) {
-    return match;
-  }
-  return prefix === "pt" ? "pt-BR" : undefined;
-};
+/** Match a single BCP-47 tag (sans quality weight) to a supported language.
+ *  Delegates to the central `@stll/locales` resolver (exact tag, base-code
+ *  prefix, and the Portuguese `pt*` -> `pt-BR` special case). */
+const matchSupportedLang = (tag: string): SupportedLang | undefined =>
+  resolveUiLocale(tag) ?? undefined;
 
 const acceptLanguageTags = (header: string): string[] =>
   header

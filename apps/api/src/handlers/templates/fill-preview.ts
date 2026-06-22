@@ -2,11 +2,27 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
+import { adaptAiFields } from "@/api/handlers/docx/adapt-ai-fields";
+import {
+  buildAiConditionDecider,
+  buildAiFieldGenerator,
+  buildAiOccurrenceAdapter,
+} from "@/api/handlers/docx/ai-field-generator";
 import { discoverClauseSlots } from "@/api/handlers/docx/discover-clause-slots";
-import { extractText } from "@/api/handlers/docx/extract-text";
+import {
+  documentTextForAiFields,
+  extractText,
+} from "@/api/handlers/docx/extract-text";
+import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
+import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import { resolveAiConditions } from "@/api/handlers/docx/resolve-ai-conditions";
+import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
+import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData } from "@/api/handlers/docx/types";
+import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -15,7 +31,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";
 import { isRecord } from "@/api/lib/type-guards";
 
-import { containsNull } from "./fill";
+import { assertTemplateFillUsage, containsNull } from "./fill";
 
 const fillPreviewBodySchema = t.Object({
   values: t.String(),
@@ -29,6 +45,7 @@ type FillPreviewProps = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
   templateId: SafeId<"template">;
   body: { values: string };
 };
@@ -37,6 +54,7 @@ const fillPreviewHandler = async function* ({
   safeDb,
   scopedDb,
   organizationId,
+  userId,
   templateId,
   body: { values: valuesJson },
 }: FillPreviewProps) {
@@ -106,6 +124,111 @@ const fillPreviewHandler = async function* ({
     }
   }
 
+  // Draft AI-fillable fields so the preview reflects what download produces.
+  let fillBuffer: Buffer = buffer;
+  let adaptedPaths: readonly string[] = [];
+  const manifest = await readManifest(buffer);
+
+  const hasAiDraftFields = manifest?.fields.some((field) => field.aiPrompt);
+  const hasAiAdaptFields = manifest?.fields.some((field) => field.aiAdapt);
+  // Loaded once for the AI draft/adapt steps below.
+  const orgAIConfig =
+    manifest && (hasAiDraftFields || hasAiAdaptFields)
+      ? await loadOrgAIConfig(organizationId)
+      : null;
+
+  const usageRejection = await assertTemplateFillUsage({
+    orgAIConfig,
+    hasAiFields: Boolean(hasAiDraftFields) || Boolean(hasAiAdaptFields),
+    organizationId,
+    userId,
+    safeDb,
+  });
+  if (usageRejection !== null) {
+    return Result.err(usageRejection);
+  }
+
+  // Resolve registry lookups, assemble composite (multipart) values,
+  // evaluate formula (derived) fields, and check dependent (optionsFrom)
+  // selects before any AI step or substitution sees them; a failing step
+  // rejects the request naming the field.
+  const stepError = await applyManifestFillSteps({
+    values: record,
+    manifest,
+    resolveLookup: createDispatchLookupResolver(),
+  });
+  if (stepError !== null) {
+    return Result.err(new HandlerError({ status: 400, message: stepError }));
+  }
+
+  if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
+    const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId,
+        workspaceId: null,
+      },
+      feature: "templates.fill_preview",
+      modelRole: "fast",
+      orgAIConfig,
+      properties: { organization_id: organizationId },
+      traceId: Bun.randomUUIDv7(),
+    });
+    if (hasAiDraftFields) {
+      const documentText = await documentTextForAiFields(
+        new Uint8Array(buffer),
+        manifest.fields,
+      );
+      const aiResolved = await resolveAiFields({
+        values: record,
+        fields: manifest.fields,
+        documentText,
+        generate: buildAiFieldGenerator({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
+        }),
+      });
+      // Decide AI-decided boolean conditions (a boolean field with an aiPrompt)
+      // so the preview reflects which {{#if field_path}} blocks resolve.
+      const aiDecided = await resolveAiConditions({
+        values: aiResolved,
+        fields: manifest.fields,
+        decide: buildAiConditionDecider({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
+        }),
+      });
+      for (const [key, value] of Object.entries(aiDecided)) {
+        record[key] = value;
+      }
+    }
+    if (hasAiAdaptFields) {
+      // Rewrite each aiAdapt marker occurrence to fit its surrounding text;
+      // the stub stays in `record` so uncovered occurrences still get the
+      // plain global substitution below.
+      const adapted = await adaptAiFields({
+        buffer,
+        fields: manifest.fields,
+        values: record,
+        adapt: buildAiOccurrenceAdapter({
+          orgAIConfig,
+          organizationId,
+          skillContext: { organizationId, safeDb, userId },
+          aiAnalytics,
+        }),
+      });
+      fillBuffer = adapted.buffer;
+      adaptedPaths = adapted.adaptedPaths;
+    }
+  }
+
   if (!isTemplateData(record)) {
     return Result.err(
       new HandlerError({
@@ -117,7 +240,7 @@ const fillPreviewHandler = async function* ({
     );
   }
 
-  const result = await fillTemplate(buffer, record);
+  const result = await fillTemplate(fillBuffer, record);
 
   // Extract text from the filled document
   const { paragraphs, charCount } = await extractText(result.buffer);
@@ -126,7 +249,11 @@ const fillPreviewHandler = async function* ({
     paragraphs,
     charCount,
     unmatchedPlaceholders: result.unmatchedPlaceholders,
-    unusedValues: result.unusedValues,
+    // Adapted stubs no longer match a marker (each occurrence was already
+    // substituted), so they are not "unused" in any user-meaningful sense.
+    unusedValues: result.unusedValues.filter(
+      (name) => !adaptedPaths.includes(name),
+    ),
     structureErrors: result.structureErrors,
   });
 };
@@ -139,11 +266,12 @@ const config = {
 
 const fillTemplatePreview = createSafeRootHandler(
   config,
-  async function* ({ safeDb, scopedDb, session, params, body }) {
+  async function* ({ safeDb, scopedDb, session, user, params, body }) {
     return yield* fillPreviewHandler({
       safeDb,
       scopedDb,
       organizationId: session.activeOrganizationId,
+      userId: user.id,
       templateId: params.templateId,
       body,
     });

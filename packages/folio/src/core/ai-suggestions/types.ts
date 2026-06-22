@@ -33,6 +33,18 @@ export type AISuggestion = {
   /** 0..1 model confidence. Optional — not displayed prominently. */
   confidence?: number;
   status: AISuggestionStatus;
+  /**
+   * Optional display metadata the host may attach to describe the
+   * suggestion's payload with badges (e.g., a template-field proposal's
+   * value type and whether a person or AI fills it). Folio stays
+   * agnostic: `valueKind` is an opaque string the host resolves against
+   * its own registry; unknown values simply render no badge.
+   */
+  display?: {
+    valueKind?: string;
+    /** `personAi`: a person writes a stub and AI adapts it in place. */
+    filledBy?: "person" | "ai" | "personAi";
+  };
 };
 
 /**

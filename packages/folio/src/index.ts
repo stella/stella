@@ -13,6 +13,7 @@ export {
   createEmptyDocument,
   type CreateEmptyDocumentOptions,
 } from "./core/utils/createDocument";
+export { createDocx } from "./core/docx/rezip";
 export type { Document } from "./core/types/document";
 export type { DocxCompatibility } from "./core/docx/compatibility";
 export {
@@ -73,9 +74,15 @@ export {
   type ResolvedAnchor,
 } from "./core/ai-suggestions/conflict";
 export {
+  buildPositionalText,
+  type PositionalText,
+} from "./core/ai-suggestions/text-positions";
+export {
   setAISuggestionsMeta,
   setFocusedSuggestionMeta,
 } from "./core/prosemirror/plugins/aiSuggestionDecorations";
+export { scrollFolioPositionIntoView } from "./paged-editor/scrollToPmPosition";
+export { getFolioSelectionViewportRect } from "./paged-editor/selectionViewportRect";
 export {
   createAICitationDecorationsPlugin,
   setAICitationsMeta,
@@ -89,6 +96,18 @@ export {
   type AnonymizationMatch,
   type AnonymizationTerm,
 } from "./core/prosemirror/plugins/anonymizationDecorations";
+export {
+  getTemplateDirectives,
+  scanDirectives,
+  type DirectiveKind,
+  type DirectiveRange,
+} from "./core/prosemirror/plugins/templateDirectives";
+export {
+  setTemplatePreviewValues,
+  type TemplatePreviewSpan,
+  type TemplatePreviewValue,
+  type TemplatePreviewValues,
+} from "./core/prosemirror/plugins/templatePreviewValues";
 export {
   acceptAutocompleteSuggestion,
   acceptAutocompleteWord,

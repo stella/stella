@@ -1,15 +1,22 @@
 import { describe, expect, test } from "bun:test";
 import * as slimdom from "slimdom";
 
+import { numPattern, refPattern } from "@stll/template-conditions";
+
 import {
+  collectValidNumIds,
   evaluateCondition,
   flattenTemplateData,
   parseBlockTree,
   processBlockDirectives,
+  pruneDanglingNumPr,
+  readConditionRawValues,
   resolvePath,
   scanBlockDirectives,
 } from "./block-directives";
+import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { paragraphText, W_NS } from "./ooxml";
+import type { FieldMeta, TemplateData } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────
 
@@ -789,6 +796,92 @@ describe("processBlockDirectives — conditionals", () => {
   });
 });
 
+// ── DOM integration: raw-value condition overlay ─────────
+
+// A date field rendered to localized display text (e.g. "13. června 2028")
+// must still be compared as its raw ISO value by an ordering condition: the
+// condition engine only orders ISO `YYYY-MM-DD` strings, so without the overlay
+// `{{#if signing_date > "..."}}` would compare the display string and silently
+// evaluate false. The overlay is keyed by field path; substitution still uses
+// the formatted value in `data`.
+describe("processBlockDirectives — raw condition values overlay", () => {
+  const DATE_IF = WRAP(
+    [
+      P('{{#if signing_date > "2028-01-01"}}'),
+      P("After cutoff"),
+      P("{{#else}}"),
+      P("Before cutoff"),
+      P("{{/if}}"),
+    ].join(""),
+  );
+
+  test("ordering compares the raw ISO date, not the localized display text", () => {
+    const body = parseBody(DATE_IF);
+    processBlockDirectives(
+      body,
+      { signing_date: "13. června 2028" },
+      undefined,
+      { signing_date: "2028-06-13" },
+    );
+
+    expect(bodyTexts(body)).toEqual(["After cutoff"]);
+  });
+
+  test("a raw ISO that fails the comparison takes the else branch", () => {
+    const body = parseBody(DATE_IF);
+    processBlockDirectives(
+      body,
+      { signing_date: "13. června 2020" },
+      undefined,
+      { signing_date: "2020-06-13" },
+    );
+
+    expect(bodyTexts(body)).toEqual(["Before cutoff"]);
+  });
+
+  test("without the overlay the localized string fails to order (regression guard)", () => {
+    // Documents the bug the overlay fixes: the display text is not an ISO date,
+    // so the ordering comparison is false and the true branch is dropped.
+    const body = parseBody(DATE_IF);
+    processBlockDirectives(body, { signing_date: "13. června 2028" });
+
+    expect(bodyTexts(body)).toEqual(["Before cutoff"]);
+  });
+
+  // End-to-end through the real fill pipeline: applyManifestFillSteps formats
+  // the date in place AND stashes its raw ISO under CONDITION_RAW_VALUES; the
+  // stash is then read back and drives condition evaluation while substitution
+  // sees the formatted value.
+  test("applyManifestFillSteps formats the value yet stashes the raw ISO for conditions", async () => {
+    const dateField: FieldMeta = {
+      path: "signing_date",
+      inputType: "date",
+      dateFormat: { locale: "cs", style: "long" },
+    };
+    const values: TemplateData = { signing_date: "2028-06-13" };
+
+    const error = await applyManifestFillSteps({
+      values,
+      manifest: { fields: [dateField] },
+      resolveLookup: () => {
+        throw new Error("no lookup field in this manifest");
+      },
+    });
+
+    expect(error).toBeNull();
+    // Substitution value is the localized display text…
+    expect(values["signing_date"]).toBe("13. června 2028");
+    // …while the raw ISO travels on the map for condition evaluation.
+    const overlay = readConditionRawValues(values);
+    expect(overlay).toEqual({ signing_date: "2028-06-13" });
+
+    // The same overlay drives condition evaluation against the formatted map.
+    const body = parseBody(DATE_IF);
+    processBlockDirectives(body, values, undefined, overlay);
+    expect(bodyTexts(body)).toEqual(["After cutoff"]);
+  });
+});
+
 // ── DOM integration: loops ───────────────────────────────
 
 describe("processBlockDirectives — loops", () => {
@@ -816,6 +909,32 @@ describe("processBlockDirectives — loops", () => {
     // Patch values should have the indexed entries
     expect(patchValues["__each_sellers_0_name"]).toBe("Alice");
     expect(patchValues["__each_sellers_1_name"]).toBe("Bob");
+  });
+
+  test("inner-loop condition compares a row's raw date, not the localized text", () => {
+    const xml = WRAP(
+      [
+        P("{{#each people}}"),
+        P('{{#if dob > "2028-01-01"}}'),
+        P("After cutoff"),
+        P("{{/if}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    // `dob` in `data` is the localized text the date step wrote in for
+    // substitution; the raw ISO rides in the condition overlay under the
+    // index-qualified path. The loop body's condition must compare the raw ISO.
+    processBlockDirectives(
+      body,
+      { people: [{ dob: "13. června 2028" }, { dob: "1. ledna 2020" }] },
+      undefined,
+      { "people.0.dob": "2028-06-13", "people.1.dob": "2020-01-01" },
+    );
+
+    // Row 0 (2028-06-13 > 2028-01-01) keeps the line; row 1 (2020-01-01) drops
+    // it. Comparing the localized text instead would mis-order both.
+    expect(bodyTexts(body)).toEqual(["After cutoff"]);
   });
 
   test("each with zero items removes block", () => {
@@ -1013,5 +1132,222 @@ describe("processBlockDirectives — edge cases", () => {
 
     expect(errors.length).toBeGreaterThan(0);
     expect(errors[0]?.message).toContain("Unclosed");
+  });
+});
+
+// ── Loop-scoped clause numbering ─────────────────────────
+
+const numKeysOf = (text: string): string[] =>
+  [...text.matchAll(numPattern())].flatMap((m) => (m[1] ? [m[1]] : []));
+
+const refKeysOf = (text: string): string[] =>
+  [...text.matchAll(refPattern())].flatMap((m) => (m[1] ? [m[1]] : []));
+
+describe("processBlockDirectives — loop-scoped @num/@ref", () => {
+  test("each iteration gets a distinct @num key; intra-iteration @ref follows it", () => {
+    const xml = WRAP(
+      [
+        P("{{#each items}}"),
+        P("Clause {{@num:item}}. {{items.name}} (see {{@ref:item}})"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, {
+      items: [{ name: "A" }, { name: "B" }, { name: "C" }],
+    });
+
+    const texts = bodyTexts(body);
+    expect(texts).toHaveLength(3);
+
+    const numKeys = texts.flatMap(numKeysOf);
+    expect(numKeys).toHaveLength(3);
+    expect(new Set(numKeys).size).toBe(3);
+
+    // The rewritten ref in each paragraph targets that paragraph's num key
+    for (const text of texts) {
+      expect(refKeysOf(text)).toEqual(numKeysOf(text));
+    }
+  });
+
+  test("@ref to a key defined outside the loop body is left untouched", () => {
+    const xml = WRAP(
+      [
+        P("Clause {{@num:base}}. Base."),
+        P("{{#each items}}"),
+        P("Item {{@num:item}} under {{@ref:base}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, { items: [{ x: "1" }, { x: "2" }] });
+
+    const texts = bodyTexts(body);
+    // Both expanded paragraphs still reference the shared outer key
+    const refKeys = texts.flatMap(refKeysOf);
+    expect(refKeys).toEqual(["base", "base"]);
+    // While their own @num keys are iteration-scoped and distinct
+    const itemNumKeys = texts.flatMap(numKeysOf).filter((k) => k !== "base");
+    expect(itemNumKeys).toHaveLength(2);
+    expect(new Set(itemNumKeys).size).toBe(2);
+  });
+
+  test("sibling loops over the same array never share numbering keys", () => {
+    const xml = WRAP(
+      [
+        P("{{#each items}}"),
+        P("First {{@num:item}}"),
+        P("{{/each}}"),
+        P("{{#each items}}"),
+        P("Second {{@num:item}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, { items: [{ x: "1" }, { x: "2" }] });
+
+    const numKeys = bodyTexts(body).flatMap(numKeysOf);
+    expect(numKeys).toHaveLength(4);
+    expect(new Set(numKeys).size).toBe(4);
+  });
+
+  test("nested loops compose suffixes so every occurrence is unique", () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("{{#each subitems}}"),
+        P("Item {{@num:sub}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, {
+      groups: [{ subitems: ["a", "b"] }, { subitems: ["c"] }],
+    });
+
+    const numKeys = bodyTexts(body).flatMap(numKeysOf);
+    expect(numKeys).toHaveLength(3);
+    expect(new Set(numKeys).size).toBe(3);
+  });
+});
+
+// ── Word list-numbering integrity ────────────────────────
+
+/** Paragraph carrying a w:numPr (numId omitted = style-inherited). */
+const NP = (text: string, numId?: string) => {
+  const numIdXml = numId === undefined ? "" : `<w:numId w:val="${numId}"/>`;
+  return (
+    `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/>${numIdXml}</w:numPr></w:pPr>` +
+    `<w:r><w:t>${text}</w:t></w:r></w:p>`
+  );
+};
+
+const NUMBERING_XML =
+  `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>` +
+  `<w:numbering xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">` +
+  `<w:abstractNum w:abstractNumId="0"><w:lvl w:ilvl="0"><w:numFmt w:val="decimal"/></w:lvl></w:abstractNum>` +
+  `<w:num w:numId="1"><w:abstractNumId w:val="0"/></w:num>` +
+  `<w:num w:numId="2"><w:abstractNumId w:val="99"/></w:num>` +
+  `</w:numbering>`;
+
+describe("collectValidNumIds", () => {
+  test("resolves the num → abstractNum chain", () => {
+    const valid = collectValidNumIds(NUMBERING_XML);
+    expect(valid.has("1")).toBe(true);
+    // numId 2 points at a missing abstractNum — not resolvable
+    expect(valid.has("2")).toBe(false);
+    // numId 0 is the explicit "no numbering" override
+    expect(valid.has("0")).toBe(true);
+  });
+
+  test("without numbering.xml only the explicit zero override is valid", () => {
+    const valid = collectValidNumIds(null);
+    expect(valid.has("0")).toBe(true);
+    expect(valid.has("1")).toBe(false);
+  });
+});
+
+describe("pruneDanglingNumPr", () => {
+  const numPrCounts = (body: slimdom.Element): number[] =>
+    body
+      .getElementsByTagNameNS(W_NS, "p")
+      .map((p) => p.getElementsByTagNameNS(W_NS, "numPr").length);
+
+  test("drops unresolvable numPr, keeps valid / zero / style-inherited ones", () => {
+    const xml = WRAP(
+      [
+        NP("valid", "1"),
+        NP("dangling abstract", "2"),
+        NP("unknown num", "7"),
+        NP("explicit none", "0"),
+        NP("style inherited"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    pruneDanglingNumPr(body, collectValidNumIds(NUMBERING_XML));
+
+    expect(numPrCounts(body)).toEqual([1, 0, 0, 1, 1]);
+  });
+});
+
+// ── Iteration tokens: {{@index}} / {{@count}} ────────────
+
+describe("processBlockDirectives — iteration tokens", () => {
+  test("resolves {{@index}} (1-based) and {{@count}} per item", () => {
+    const xml = WRAP(
+      [P("{{#each rows}}"), P("{{@index}} of {{@count}}"), P("{{/each}}")].join(
+        "",
+      ),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, { rows: [{}, {}, {}] });
+    expect(bodyTexts(body)).toEqual(["1 of 3", "2 of 3", "3 of 3"]);
+  });
+
+  test("empty array removes the block (no tokens emitted)", () => {
+    const xml = WRAP(
+      [P("{{#each rows}}"), P("Item {{@index}}"), P("{{/each}}")].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, { rows: [] });
+    expect(bodyTexts(body)).toEqual([]);
+  });
+
+  test("{{@index}} composes with an item field placeholder", () => {
+    const xml = WRAP(
+      [P("{{#each p}}"), P("{{@index}}. {{p.name}}"), P("{{/each}}")].join(""),
+    );
+    const body = parseBody(xml);
+    const { patchValues } = processBlockDirectives(body, {
+      p: [{ name: "Alice" }, { name: "Bob" }],
+    });
+    // The token resolves immediately; the field becomes a synthetic each-key
+    // that value substitution fills later (see patch-template).
+    expect(bodyTexts(body)).toEqual([
+      "1. {{__each_p_0_name}}",
+      "2. {{__each_p_1_name}}",
+    ]);
+    expect(patchValues["__each_p_0_name"]).toBe("Alice");
+    expect(patchValues["__each_p_1_name"]).toBe("Bob");
+  });
+
+  test("nested loops: {{@index}}/{{@count}} bind to the innermost loop", () => {
+    const xml = WRAP(
+      [
+        P("{{#each groups}}"),
+        P("G{{@index}}/{{@count}}"),
+        P("{{#each groups.items}}"),
+        P("I{{@index}}/{{@count}}"),
+        P("{{/each}}"),
+        P("{{/each}}"),
+      ].join(""),
+    );
+    const body = parseBody(xml);
+    processBlockDirectives(body, {
+      groups: [{ items: [{}, {}] }, { items: [{}] }],
+    });
+    // Outer tokens count groups (2); inner tokens count each group's items.
+    expect(bodyTexts(body)).toEqual(["G1/2", "I1/2", "I2/2", "G2/2", "I1/1"]);
   });
 });

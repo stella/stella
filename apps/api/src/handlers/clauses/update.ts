@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -28,6 +28,10 @@ const updateClauseBodySchema = t.Object({
   categoryId: t.Optional(t.Nullable(tSafeId("clauseCategory"))),
   language: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
   body: t.Optional(clauseBodySchema),
+  // When true, also append a `clause_versions` snapshot + bump
+  // `currentVersion`. Autosave omits it (head-only working-copy save);
+  // an explicit "Save as new version" / leave-with-changes sends `true`.
+  snapshotVersion: t.Optional(t.Boolean()),
   description: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
   usageNotes: t.Optional(t.Nullable(t.String({ maxLength: 2000 }))),
   metadata: t.Optional(t.Nullable(t.Record(t.String(), t.Unknown()))),
@@ -38,6 +42,24 @@ const updateClauseParamsSchema = t.Object({
 });
 
 type UpdateClauseBody = Static<typeof updateClauseBodySchema>;
+
+/**
+ * Pure decision for whether an update should append a `clause_versions`
+ * snapshot. Autosave (`snapshotVersion` falsy) never snapshots; an explicit
+ * `snapshotVersion: true` snapshots unless the requested body is byte-identical
+ * to the latest stored snapshot (a no-op snapshot would just duplicate the last
+ * version). The head working-copy update is independent of this decision.
+ */
+export const planClauseVersionSnapshot = (args: {
+  snapshotVersion: boolean | undefined;
+  hasBody: boolean;
+  bodyEqualsLatestSnapshot: boolean;
+}): boolean => {
+  if (args.snapshotVersion !== true || !args.hasBody) {
+    return false;
+  }
+  return !args.bodyEqualsLatestSnapshot;
+};
 
 type UpdateClauseProps = {
   safeDb: SafeDb;
@@ -127,9 +149,43 @@ const updateClauseHandler = async function* ({
     updatedAt: new Date(),
   };
 
-  // If body changes, bump version and create snapshot
-  let newVersion: number | null = null;
-  if (body.body !== undefined) {
+  // Autosave (no `snapshotVersion`) always updates the head working copy but
+  // never appends to history. A version snapshot is written only on an explicit
+  // "Save as new version" / leave-with-changes request. The version itself is
+  // computed under a row lock in the write transaction below, not from this
+  // (unlocked) read.
+  //
+  // Dedupe: compare the incoming body against the LATEST stored snapshot, not
+  // against the head. The head moves on every autosave, so it is not a reliable
+  // proxy; the snapshot body is what history actually contains. If they match,
+  // an explicit snapshot would create a duplicate version, so skip it.
+  let bodyEqualsLatestSnapshot = false;
+  if (body.snapshotVersion === true && body.body !== undefined) {
+    const latestVersion = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.clauseVersions.findFirst({
+          where: {
+            clauseId: { eq: clauseId },
+            organizationId: { eq: organizationId },
+          },
+          orderBy: { version: "desc" },
+          columns: { body: true },
+        }),
+      ),
+    );
+
+    bodyEqualsLatestSnapshot =
+      latestVersion !== undefined &&
+      JSON.stringify(latestVersion.body) === JSON.stringify(body.body);
+  }
+
+  const shouldSnapshot = planClauseVersionSnapshot({
+    snapshotVersion: body.snapshotVersion,
+    hasBody: body.body !== undefined,
+    bodyEqualsLatestSnapshot,
+  });
+
+  if (shouldSnapshot) {
     const versionCount = yield* Result.await(
       safeDb((tx) =>
         tx.$count(clauseVersions, eq(clauseVersions.clauseId, clauseId)),
@@ -144,14 +200,64 @@ const updateClauseHandler = async function* ({
         }),
       );
     }
-
-    newVersion = existing.currentVersion + 1;
-    updates.body = body.body;
-    updates.currentVersion = newVersion;
   }
 
   const updated = yield* Result.await(
     safeDb(async (tx) => {
+      // The head working copy is always updated when a body is present
+      // (autosave). A version snapshot is computed under a row lock so
+      // concurrent snapshot requests serialize and can never compute the same
+      // next version → no duplicate clause_versions.
+      let newVersion: number | null = null;
+      if (body.body !== undefined) {
+        updates.body = body.body;
+      }
+      if (shouldSnapshot && body.body !== undefined) {
+        const [locked] = await tx
+          .select({ currentVersion: clauses.currentVersion })
+          .from(clauses)
+          .where(
+            and(
+              eq(clauses.id, clauseId),
+              eq(clauses.organizationId, organizationId),
+            ),
+          )
+          .for("update");
+        // Authoritative limit check under the row lock: concurrent snapshot
+        // requests serialize here, so the second one sees the first's
+        // committed insert and cannot push the clause over the cap. The
+        // pre-transaction check above is only a cheap early reject.
+        const lockedVersionCount = await tx.$count(
+          clauseVersions,
+          eq(clauseVersions.clauseId, clauseId),
+        );
+        if (lockedVersionCount >= LIMITS.clauseVersionsPerClause) {
+          return { ok: false as const, reason: "limit" as const };
+        }
+        // Authoritative dedupe under the same lock: re-read the latest snapshot
+        // body and compare it to the incoming body. Two concurrent snapshot
+        // requests with identical bodies both pass the pre-transaction dedupe
+        // (unlocked read), so without this the second would insert a duplicate
+        // version. When the bodies match, skip the snapshot entirely (leave
+        // newVersion null and do not bump currentVersion); the head body is
+        // still updated below.
+        const [latest] = await tx
+          .select({ body: clauseVersions.body })
+          .from(clauseVersions)
+          .where(eq(clauseVersions.clauseId, clauseId))
+          .orderBy(desc(clauseVersions.version))
+          .limit(1);
+        if (
+          latest &&
+          JSON.stringify(latest.body) === JSON.stringify(body.body)
+        ) {
+          newVersion = null;
+        } else {
+          newVersion = (locked?.currentVersion ?? existing.currentVersion) + 1;
+          updates.currentVersion = newVersion;
+        }
+      }
+
       const [row] = await tx
         .update(clauses)
         .set(updates)
@@ -197,9 +303,18 @@ const updateClauseHandler = async function* ({
         changes,
       });
 
-      return row;
+      return { ok: true as const, row };
     }),
   );
+
+  if (!updated.ok) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Version limit reached for this clause",
+      }),
+    );
+  }
 
   // Re-index search vector when searchable fields change
   const searchFieldsChanged =
@@ -223,11 +338,11 @@ const updateClauseHandler = async function* ({
     }
   }
 
-  if (!updated) {
+  if (!updated.row) {
     panic("Failed to update clause");
   }
 
-  return Result.ok(updated);
+  return Result.ok(updated.row);
 };
 
 const config = {

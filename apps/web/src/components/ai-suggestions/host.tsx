@@ -1,7 +1,7 @@
 /**
  * File-anchored AI chat host.
  *
- * Renders a glass prompt bar at the bottom of the file viewer plus,
+ * Renders a floating prompt bar at the bottom of the file viewer plus,
  * when expanded, a thread panel above it. The thread is the primary
  * UI — same interaction model as Stella's regular chat, but bound to
  * a single file in view. Each user prompt yields one assistant
@@ -15,15 +15,24 @@
 
 import "@/components/chat-editor.css";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentProps, ReactNode } from "react";
+import type {
+  ComponentProps,
+  KeyboardEvent as ReactKeyboardEvent,
+  ReactNode,
+} from "react";
 
 import {
   ArrowUpIcon,
   CheckIcon,
   ChevronDownIcon,
+  ChevronLeftIcon,
+  ChevronRightIcon,
   LoaderCircleIcon,
+  RotateCcwIcon,
   SquareIcon,
   SquarePenIcon,
+  UserIcon,
+  WandSparklesIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
@@ -31,6 +40,7 @@ import { useTranslations } from "use-intl";
 import {
   applySuggestions,
   resolveSuggestionAnchor,
+  scrollFolioPositionIntoView,
   setActiveCitationMeta,
   setAICitationsMeta,
   setAISuggestionsMeta,
@@ -43,6 +53,7 @@ import type {
   AIGenerateInput,
   AISuggestion,
   AISuggestionApplyMode,
+  AISuggestionPreset,
   AISuggestionSeverity,
 } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
@@ -65,6 +76,7 @@ import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
 import type { TranslationKey } from "@/i18n/types";
+import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
 import {
   anchorSuggestion,
@@ -132,6 +144,23 @@ function writeStoredApplyMode(mode: AISuggestionApplyMode): void {
     // best-effort; lack of persistence just means we'll re-ask next session
   }
 }
+
+/**
+ * Composer commands (plain text after `htmlToPromptText`) that reset
+ * the thread instead of generating a response.
+ */
+const NEW_THREAD_COMMANDS = new Set(["/new", "/clear"]);
+
+/**
+ * The raw input a generation was started with (composer HTML plus
+ * optional preset/paste payload). Kept verbatim so a stopped run can
+ * be retried with the exact same input.
+ */
+type GenerateBarInput = {
+  prompt: string;
+  presetId?: string;
+  pastedText?: string;
+};
 
 const SEVERITY_DOT_CLASS: Record<AISuggestionSeverity, string> = {
   substantive: "bg-destructive",
@@ -206,6 +235,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     layout = "floating",
     editorController,
   } = props;
+  const t = useTranslations();
   const author = config.applyAuthor ?? authorFallback;
 
   /**
@@ -262,10 +292,11 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
    * still need a value to fall back to in code paths that read it
    * (e.g., the auto-flush effect after unlock); use the host's
    * default. The user-facing "ask once" prompt only blocks the very
-   * first accept attempt.
+   * first accept attempt. A pinned config (promptForApplyMode: false)
+   * wins over the stored preference so the surface stays on its mode.
    */
   const applyMode: AISuggestionApplyMode = resolveApplyMode(
-    applyModeStored,
+    config.promptForApplyMode === false ? null : applyModeStored,
     config.defaultApplyMode,
   );
 
@@ -275,6 +306,20 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   }, []);
 
   const generationToken = useRef(0);
+
+  /**
+   * Input of the most recently started generation, kept so a
+   * user-initiated stop can offer Retry. Only `handleStop` promotes
+   * it into `retryInput`; normal completion never does.
+   */
+  const lastGenerateInput = useRef<GenerateBarInput | null>(null);
+  /**
+   * When non-null, the bar's action button shows Retry (re-sending
+   * this input) instead of the send arrow. Set on stop; cleared by
+   * typing a new draft, Escape, a new thread, or starting any
+   * generation.
+   */
+  const [retryInput, setRetryInput] = useState<GenerateBarInput | null>(null);
 
   // ---- derived state -------------------------------------------------------
 
@@ -346,14 +391,64 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
   }, [editorView, activeCitationId]);
 
+  // ---- stop / new thread ---------------------------------------------------
+
+  /**
+   * Cancels the in-flight generation. Bumping the run token makes the
+   * pending `onGenerate` promise resolve against a stale token (its
+   * result is dropped); flipping the loading assistant bubble to an
+   * error returns the derived bar status to idle.
+   */
+  const handleStop = useCallback(() => {
+    generationToken.current += 1;
+    setRetryInput(lastGenerateInput.current);
+    setMessages((prev) =>
+      prev.map<ThreadMessage>((m) =>
+        m.role === "assistant" && m.status === "loading"
+          ? {
+              id: m.id,
+              role: "assistant",
+              text: m.text,
+              suggestions: m.suggestions,
+              citations: m.citations,
+              mode: m.mode,
+              createdAt: m.createdAt,
+              status: "error",
+              error: t("chat.stopped"),
+            }
+          : m,
+      ),
+    );
+  }, [setMessages, t]);
+
+  /**
+   * Resets the thread: drops messages, queued accepts, focus, and the
+   * first-accept prompt, then clears this host's suggestion
+   * decorations from the editor. The decoration-push effect skips
+   * empty lists (to avoid racing the review-store writer), so the
+   * empty push has to happen explicitly here. The run-token bump
+   * keeps a generation started before the reset from landing into
+   * the fresh thread.
+   */
+  const handleNewThread = useCallback(() => {
+    generationToken.current += 1;
+    setRetryInput(null);
+    setMessages([]);
+    setPendingAccepts([]);
+    setPendingFirstAccept(null);
+    setFocusedId(null);
+    setActiveCitationId(null);
+    setPanelOpen(false);
+    if (editorView) {
+      const meta = setAISuggestionsMeta([]);
+      editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
+    }
+  }, [editorView, setMessages, setPendingAccepts]);
+
   // ---- generate ------------------------------------------------------------
 
   const handleGenerate = useCallback(
-    async (input: {
-      prompt: string;
-      presetId?: string;
-      pastedText?: string;
-    }) => {
+    async (input: GenerateBarInput) => {
       if (generating) {
         return;
       }
@@ -363,6 +458,14 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       // Flatten to plain text (with mentions inlined as `@Label`) so
       // pattern-matching generators don't have to parse HTML.
       const promptText = htmlToPromptText(input.prompt);
+
+      if (NEW_THREAD_COMMANDS.has(promptText)) {
+        handleNewThread();
+        return;
+      }
+
+      lastGenerateInput.current = input;
+      setRetryInput(null);
 
       const userMessage: UserThreadMessage = {
         id: `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
@@ -499,8 +602,32 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       updateAssistantMessage,
       setMessages,
       mode,
+      handleNewThread,
     ],
   );
+
+  // ---- retry after stop ------------------------------------------------------
+
+  /** Re-runs the prompt whose generation the user just stopped. */
+  const handleRetry = useCallback(() => {
+    const input = retryInput;
+    if (input === null) {
+      return;
+    }
+    setRetryInput(null);
+    void handleGenerate(input);
+  }, [retryInput, handleGenerate]);
+
+  // A non-empty draft means the user has moved on to a new prompt;
+  // drop the retry offer so the action button reverts to send (and
+  // stays send even if they delete the draft again).
+  const composerIsEmpty = editorController.isEmpty;
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (composer becomes non-empty → drop the retry offer); setRetryInput is shared with handleRetry/handleGenerate, so move into the composer-edit handler
+  useEffect(() => {
+    if (!composerIsEmpty && retryInput !== null) {
+      setRetryInput(null);
+    }
+  }, [composerIsEmpty, retryInput]);
 
   // ---- accept / reject -----------------------------------------------------
 
@@ -523,6 +650,24 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       return null;
     },
     [messages],
+  );
+
+  // Report each successfully applied suggestion to the mounting surface
+  // (config.onSuggestionApplied), from whichever path applied it.
+  const notifyApplied = useCallback(
+    (candidates: AISuggestion[], appliedIds: readonly string[]) => {
+      const onApplied = config.onSuggestionApplied;
+      if (!onApplied) {
+        return;
+      }
+      const applied = new Set(appliedIds);
+      for (const suggestion of candidates) {
+        if (applied.has(suggestion.id)) {
+          onApplied(suggestion);
+        }
+      }
+    },
+    [config.onSuggestionApplied],
   );
 
   // Apply a single suggestion at the given mode. Split out from
@@ -556,6 +701,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
         author,
       });
       applyResultToMessages(result);
+      notifyApplied([target], result.applied);
     },
     [
       findSuggestion,
@@ -564,6 +710,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       editorView,
       author,
       applyResultToMessages,
+      notifyApplied,
       setPendingAccepts,
     ],
   );
@@ -572,22 +719,31 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     (suggestionId: string) => {
       // First-time accept: ask whether to apply with tracked changes,
       // remember the answer, and defer this accept until they pick.
-      const target = findSuggestion(suggestionId);
-      const gate = resolveAcceptOneGate(
-        applyModeStored,
-        suggestionId,
-        target?.status === "pending",
-      );
-      if (gate.type === "noop") {
-        return;
-      }
-      if (gate.type === "defer") {
-        setPendingFirstAccept(gate.pending);
-        return;
+      // Surfaces with a pinned mode (promptForApplyMode: false) skip the gate.
+      if (config.promptForApplyMode !== false) {
+        const target = findSuggestion(suggestionId);
+        const gate = resolveAcceptOneGate(
+          applyModeStored,
+          suggestionId,
+          target?.status === "pending",
+        );
+        if (gate.type === "noop") {
+          return;
+        }
+        if (gate.type === "defer") {
+          setPendingFirstAccept(gate.pending);
+          return;
+        }
       }
       acceptOneAtMode(suggestionId, applyMode);
     },
-    [applyModeStored, findSuggestion, acceptOneAtMode, applyMode],
+    [
+      applyModeStored,
+      config.promptForApplyMode,
+      findSuggestion,
+      acceptOneAtMode,
+      applyMode,
+    ],
   );
 
   const handleRejectOne = useCallback(
@@ -644,6 +800,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
         author,
       });
       applyResultToMessages(result);
+      notifyApplied(targets, result.applied);
     },
     [
       messages,
@@ -652,33 +809,43 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       editorView,
       author,
       applyResultToMessages,
+      notifyApplied,
       setPendingAccepts,
     ],
   );
 
   const handleAcceptGroup = useCallback(
     (messageId: string) => {
-      const message = messages.find(
-        (m): m is AssistantThreadMessage =>
-          m.role === "assistant" && m.id === messageId,
-      );
-      const hasPending =
-        message?.suggestions.some((s) => s.status === "pending") ?? false;
-      const gate = resolveAcceptGroupGate(
-        applyModeStored,
-        messageId,
-        hasPending,
-      );
-      if (gate.type === "noop") {
-        return;
-      }
-      if (gate.type === "defer") {
-        setPendingFirstAccept(gate.pending);
-        return;
+      // Surfaces with a pinned mode (promptForApplyMode: false) skip the gate.
+      if (config.promptForApplyMode !== false) {
+        const message = messages.find(
+          (m): m is AssistantThreadMessage =>
+            m.role === "assistant" && m.id === messageId,
+        );
+        const hasPending =
+          message?.suggestions.some((s) => s.status === "pending") ?? false;
+        const gate = resolveAcceptGroupGate(
+          applyModeStored,
+          messageId,
+          hasPending,
+        );
+        if (gate.type === "noop") {
+          return;
+        }
+        if (gate.type === "defer") {
+          setPendingFirstAccept(gate.pending);
+          return;
+        }
       }
       acceptGroupAtMode(messageId, applyMode);
     },
-    [applyModeStored, messages, acceptGroupAtMode, applyMode],
+    [
+      applyModeStored,
+      config.promptForApplyMode,
+      messages,
+      acceptGroupAtMode,
+      applyMode,
+    ],
   );
 
   const handleRejectGroup = useCallback(
@@ -739,6 +906,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       author,
     });
     applyResultToMessages(result);
+    notifyApplied(targets, result.applied);
   }, [
     readOnly,
     editorView,
@@ -747,6 +915,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     applyMode,
     author,
     applyResultToMessages,
+    notifyApplied,
     setPendingAccepts,
   ]);
 
@@ -763,20 +932,88 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       if (!anchor) {
         return;
       }
-      const scrollContainer = editorView.dom.closest("[data-folio-scroll]");
-      if (scrollContainer === null) {
-        return;
-      }
-      const coords = editorView.coordsAtPos(anchor.from);
-      const rect = scrollContainer.getBoundingClientRect();
-      const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
-      scrollContainer.scrollTo({
-        top: targetTop - rect.height / 3,
-        behavior: "smooth",
-      });
+      scrollEditorToPos(editorView, anchor.from);
     },
     [editorView, findSuggestion],
   );
+
+  // ---- suggestion stepper --------------------------------------------------
+
+  // Pending suggestions in document order — the go-over-the-doc review walks
+  // them top to bottom.
+  const orderedPending = useMemo(
+    () =>
+      allSuggestions
+        .filter((s) => s.status === "pending")
+        .toSorted((a, b) => a.range.from - b.range.from),
+    [allSuggestions],
+  );
+
+  const focusedPendingIndex = focusedId
+    ? orderedPending.findIndex((s) => s.id === focusedId)
+    : -1;
+  const stepperIndex = focusedPendingIndex === -1 ? 0 : focusedPendingIndex;
+
+  const stepBy = useCallback(
+    (delta: number) => {
+      if (orderedPending.length === 0) {
+        return;
+      }
+      const target = orderedPending.at(
+        (stepperIndex + delta + orderedPending.length) % orderedPending.length,
+      );
+      if (target) {
+        handleFocusSuggestion(target.id);
+      }
+    },
+    [orderedPending, stepperIndex, handleFocusSuggestion],
+  );
+
+  // Accept/dismiss the focused suggestion and advance to the next pending one
+  // (the one after it in document order, else the previous).
+  const resolveCurrent = useCallback(
+    (action: "accept" | "dismiss") => {
+      const current = orderedPending.at(stepperIndex);
+      if (!current) {
+        return;
+      }
+      const next =
+        orderedPending.at(stepperIndex + 1) ??
+        (stepperIndex > 0 ? orderedPending.at(stepperIndex - 1) : undefined);
+      if (action === "accept") {
+        handleAcceptOne(current.id);
+      } else {
+        handleRejectOne(current.id);
+      }
+      if (next) {
+        handleFocusSuggestion(next.id);
+      } else {
+        setFocusedId(null);
+      }
+    },
+    [
+      orderedPending,
+      stepperIndex,
+      handleAcceptOne,
+      handleRejectOne,
+      handleFocusSuggestion,
+    ],
+  );
+
+  // When a generation lands new suggestions, jump to the first one so the
+  // review starts immediately.
+  const seenSuggestionIdsRef = useRef<Set<string>>(new Set());
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (generation lands fresh suggestions → focus the first one); the trigger is async suggestion data, not a single setter call-site, so move into the generation-complete flow
+  useEffect(() => {
+    const seen = seenSuggestionIdsRef.current;
+    const fresh = orderedPending.find((s) => !seen.has(s.id));
+    for (const s of orderedPending) {
+      seen.add(s.id);
+    }
+    if (fresh) {
+      handleFocusSuggestion(fresh.id);
+    }
+  }, [orderedPending, handleFocusSuggestion]);
 
   // ---- citation activate ---------------------------------------------------
 
@@ -787,17 +1024,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       onCitationActivate?.(citation);
       // Folio: scroll the editor to the cited range.
       if (citation.source.kind === "folio-range" && editorView) {
-        const scrollContainer = editorView.dom.closest("[data-folio-scroll]");
-        if (scrollContainer === null) {
-          return;
-        }
-        const coords = editorView.coordsAtPos(citation.source.from);
-        const rect = scrollContainer.getBoundingClientRect();
-        const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
-        scrollContainer.scrollTo({
-          top: targetTop - rect.height / 3,
-          behavior: "smooth",
-        });
+        scrollEditorToPos(editorView, citation.source.from);
       }
     },
     [editorView, onCitationActivate],
@@ -805,16 +1032,22 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 
   // ---- keybindings ---------------------------------------------------------
 
-  // Escape closes the floating thread panel. In standalone there's
-  // no panel to close (the thread is always visible alongside the
-  // bar), so the binding is skipped — no need to install a global
-  // keydown listener that would always be a no-op.
+  // Escape closes the floating thread panel and dismisses a pending
+  // retry offer. The listener is only installed while it has work to
+  // do: in standalone there's no panel to close (the thread is always
+  // visible alongside the bar), so only an active retry offer keeps
+  // the binding alive there.
+  const panelClosableByEscape = layout === "floating" && panelOpen;
   useExternalSyncEffect(() => {
-    if (layout !== "floating") {
+    if (!panelClosableByEscape && retryInput === null) {
       return undefined;
     }
     const handler = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && panelOpen) {
+      if (e.key !== "Escape") {
+        return;
+      }
+      setRetryInput(null);
+      if (panelClosableByEscape) {
         setPanelOpen(false);
       }
     };
@@ -822,7 +1055,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
     return () => {
       window.removeEventListener("keydown", handler);
     };
-  }, [layout, panelOpen]);
+  }, [panelClosableByEscape, retryInput]);
 
   // (Mode is derived from canEdit + readOnly — no auto-sync needed.)
 
@@ -863,13 +1096,36 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
       pendingCount={pendingCount}
       panelOpen={panelOpen}
       showThreadToggle={layout === "floating" && hasMessages}
+      presets={config.presets}
+      threadHasMessages={hasMessages}
       onSubmit={(input) => {
         void handleGenerate(input);
       }}
+      onStop={handleStop}
+      onRetry={retryInput !== null ? handleRetry : undefined}
+      onNewThread={hasMessages ? handleNewThread : undefined}
+      newThreadLabel={t("chat.newChat")}
       onTogglePanel={() => setPanelOpen((v) => !v)}
       editorController={editorController}
     />
   );
+
+  // The go-over-the-doc review bar: floats above the prompt bar while there
+  // are pending suggestions, stepping through them in document order.
+  const stepperBar =
+    layout === "floating" &&
+    !threadVisible &&
+    mode === "edit" &&
+    showAcceptUI &&
+    orderedPending.length > 0 ? (
+      <SuggestionStepper
+        index={stepperIndex}
+        total={orderedPending.length}
+        onStep={stepBy}
+        onAccept={() => resolveCurrent("accept")}
+        onDismiss={() => resolveCurrent("dismiss")}
+      />
+    ) : null;
 
   if (layout === "standalone") {
     return (
@@ -885,6 +1141,7 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
   return (
     <TooltipProvider delay={300}>
       {threadPanel}
+      {stepperBar}
       {promptBar}
     </TooltipProvider>
   );
@@ -893,6 +1150,34 @@ export function FileAIChatHost(props: FileAIChatHostProps) {
 // ===========================================================================
 // View helpers
 // ===========================================================================
+
+/**
+ * Scroll the document so the given PM position is centered in view.
+ *
+ * Folio's paged editor keeps its editing PM view hidden off-screen;
+ * `coordsAtPos` on that view yields coordinates of the hidden mirror,
+ * not the visible pages — scrolling by them moves a near-constant step
+ * per call instead of jumping to the target. Prefer the paged-layout
+ * scroll (anchors on the painted pages, page shells under
+ * virtualization); fall back to coordinate math only when no paged
+ * layout is mounted around the view.
+ */
+export function scrollEditorToPos(view: EditorView, pos: number): void {
+  if (scrollFolioPositionIntoView(view, pos)) {
+    return;
+  }
+  const scrollContainer = view.dom.closest("[data-folio-scroll]");
+  if (scrollContainer === null) {
+    return;
+  }
+  const coords = view.coordsAtPos(pos);
+  const rect = scrollContainer.getBoundingClientRect();
+  const targetTop = coords.top - rect.top + scrollContainer.scrollTop;
+  scrollContainer.scrollTo({
+    top: targetTop - rect.height / 3,
+    behavior: "smooth",
+  });
+}
 
 /**
  * Best-effort PM range of what the user is currently looking at,
@@ -937,11 +1222,41 @@ function computeVisibleRange(
 // Prompt bar
 // ===========================================================================
 
+/** Document scope a preset send applies to. */
+export type PromptBarPresetScope = "selection" | "document";
+
+/**
+ * Opt-in scope step for selected presets. When `appliesTo` matches a
+ * clicked chip, the preset bypasses the plain `onSubmit` path and
+ * goes through `onSubmit` here with an explicit scope: if
+ * `shouldAskForScope()` is true (the editor has a live selection)
+ * the chip row swaps to a tiny inline two-option chooser first;
+ * otherwise the preset submits with the whole-document scope
+ * immediately.
+ */
+type PromptBarPresetScopeChooser = {
+  appliesTo: (preset: AISuggestionPreset) => boolean;
+  shouldAskForScope: () => boolean;
+  question: string;
+  selectionLabel: string;
+  documentLabel: string;
+  onSubmit: (preset: AISuggestionPreset, scope: PromptBarPresetScope) => void;
+};
+
 type PromptBarProps = {
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
   canSubmitNow?: (() => boolean) | undefined;
-  onSubmit: (input: { prompt: string }) => void;
+  onSubmit: (input: { prompt: string; presetId?: string }) => void;
+  presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
+  /**
+   * Pre-saved prompts surfaced as chips above the empty bar. Clicking a
+   * chip — or pressing Tab while the input is empty (first preset) —
+   * accepts and sends it in one step. Hidden once the thread has any
+   * message; starting a new thread brings them back.
+   */
+  presets?: AISuggestionPreset[] | undefined;
+  threadHasMessages?: boolean | undefined;
   onNewThread?: (() => void) | undefined;
   newThreadLabel?: string | undefined;
   /**
@@ -952,6 +1267,14 @@ type PromptBarProps = {
    * floating control on top of the bar.
    */
   onStop?: () => void;
+  /**
+   * Offered after a user-initiated stop: while provided AND the
+   * composer is empty, the send arrow becomes a retry button that
+   * re-runs the stopped prompt. The owner clears it (prop becomes
+   * undefined) once the user types a new draft, presses Escape, or
+   * starts a new thread.
+   */
+  onRetry?: (() => void) | undefined;
 
   // ---- floating-only -----------------------------------------------------
   // These three props drive UI that only exists in floating mode
@@ -1023,9 +1346,30 @@ type PromptBarShellProps = {
 } & Omit<ComponentProps<"div">, "children">;
 
 /**
- * Shared outer shell for the glass prompt bar. Both the live
+ * Background for chrome floating over the document page (prompt bar,
+ * suggestion stepper, preset chips). In light mode the rendered page
+ * reads as white paper in every accent palette, while `--popover`
+ * follows the palette (Flexoki `#fffcf0`, Nord `#eceff4`) — solid but
+ * visibly hue-tinted against the document. Anchor these surfaces to
+ * the document instead: white in light; in dark the page follows the
+ * theme, so the popover token stays correct. (`--doc-canvas` itself
+ * is scoped to `.folio-root` and does not reach these elements.)
+ */
+const DOC_FLOAT_SURFACE_CLASS =
+  "[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)";
+
+/**
+ * Shared outer shell for the floating prompt bar. Both the live
  * `PromptBar` and the loading `PromptBarPlaceholder` (in the
  * inspector) render through this so they can never drift apart.
+ *
+ * The surface is solid on purpose: a translucent background lets
+ * document text bleed through, and backdrop-blur cannot compensate
+ * for children of this shell — the shell's own backdrop-filter makes
+ * it the backdrop root for its descendants (the preset chips), whose
+ * blur then samples nothing. In floating mode the solid color is the
+ * document anchor (see `DOC_FLOAT_SURFACE_CLASS`); in standalone the
+ * bar sits on app chrome, so it keeps the theme popover surface.
  */
 export function PromptBarShell({
   layout,
@@ -1037,17 +1381,82 @@ export function PromptBarShell({
     <div
       {...rest}
       className={cn(
-        "group/bar bg-background/75 border-foreground/15 relative flex items-end gap-1 rounded-2xl border backdrop-blur-xl backdrop-saturate-150 transition-[box-shadow,border-color]",
+        "group/bar border-foreground/15 relative flex items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
-        "after:pointer-events-none after:absolute after:-inset-6 after:-z-10 after:rounded-3xl after:bg-[radial-gradient(ellipse_at_center,var(--background)_0%,transparent_75%)] after:opacity-90",
+        "after:pointer-events-none after:absolute after:-inset-6 after:-z-10 after:rounded-3xl after:bg-[radial-gradient(ellipse_at_center,var(--doc-float-halo)_0%,transparent_75%)] after:opacity-90",
         "w-[min(560px,calc(100%-2rem))] py-1 ps-1.5 pe-1",
         layout === "floating"
-          ? "absolute start-1/2 bottom-8 z-50 -translate-x-1/2"
-          : "relative mb-8 shrink-0 self-center",
+          ? cn(
+              "absolute start-1/2 bottom-8 z-50 -translate-x-1/2",
+              DOC_FLOAT_SURFACE_CLASS,
+              // The halo fades document text around the bar, so it
+              // blends toward the page: white in light, the theme
+              // background (the folio canvas) in dark.
+              "[--doc-float-halo:var(--color-white)] dark:[--doc-float-halo:var(--background)]",
+            )
+          : "bg-popover relative mb-8 shrink-0 self-center [--doc-float-halo:var(--background)]",
         className,
       )}
     >
       {children}
+    </div>
+  );
+}
+
+type SuggestionStepperProps = {
+  index: number;
+  total: number;
+  onStep: (delta: number) => void;
+  onAccept: () => void;
+  onDismiss: () => void;
+};
+
+/** Compact floating review bar: step through the pending suggestions in
+ *  document order and accept/dismiss each in place. Shared with the
+ *  Template Studio chat, which feeds it tool-call suggestions. */
+export function SuggestionStepper({
+  index,
+  total,
+  onStep,
+  onAccept,
+  onDismiss,
+}: SuggestionStepperProps) {
+  const t = useTranslations();
+  return (
+    <div
+      className={cn(
+        DOC_FLOAT_SURFACE_CLASS,
+        "border-foreground/15 absolute start-1/2 bottom-26 z-50 flex -translate-x-1/2 items-center gap-1 rounded-full border px-1.5 py-1 shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+      )}
+    >
+      <Button
+        aria-label={t("common.previous")}
+        onClick={() => onStep(-1)}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <ChevronLeftIcon />
+      </Button>
+      <span className="text-muted-foreground min-w-12 text-center text-xs tabular-nums">
+        {t("chat.suggestionStep", {
+          current: String(index + 1),
+          total: String(total),
+        })}
+      </span>
+      <Button
+        aria-label={t("common.next")}
+        onClick={() => onStep(1)}
+        size="icon-sm"
+        variant="ghost"
+      >
+        <ChevronRightIcon />
+      </Button>
+      <Button className="ms-1" onClick={onDismiss} size="sm" variant="ghost">
+        {t("folio.dismiss")}
+      </Button>
+      <Button onClick={onAccept} size="sm">
+        {t("common.accept")}
+      </Button>
     </div>
   );
 }
@@ -1061,7 +1470,11 @@ export function PromptBar(props: PromptBarProps) {
     showThreadToggle,
     canSubmitNow,
     onSubmit,
+    presetScopeChooser,
+    presets,
+    threadHasMessages = false,
     onStop,
+    onRetry,
     onNewThread,
     newThreadLabel,
     onTogglePanel,
@@ -1093,6 +1506,15 @@ export function PromptBar(props: PromptBarProps) {
     : submitDisabled;
   const morphSendToStop = showStop && !queueWhileGenerating;
   const showQueueStopButton = showStop && queueWhileGenerating;
+  // After a stop the send arrow becomes Retry until the user starts
+  // a new draft (the owner also clears `onRetry` then; the `isEmpty`
+  // gate just avoids a one-render flash before that state lands).
+  const morphSendToRetry =
+    !morphSendToStop &&
+    onRetry !== undefined &&
+    isEmpty &&
+    !busy &&
+    !isSendBlocked;
 
   // Glow on attention pulse — kicked from the inspector when the
   // user clicks the AI-suggestions chip so they see the bar light
@@ -1130,10 +1552,90 @@ export function PromptBar(props: PromptBarProps) {
     submitDisabled: composerSubmitDisabled,
   });
 
+  // Preset chips: visible over the empty idle bar; click — or Tab with an
+  // empty input — accepts and sends the preset in one step.
+  const presetChipsVisible =
+    layout === "floating" &&
+    !panelOpen &&
+    !threadHasMessages &&
+    presets !== undefined &&
+    presets.length > 0 &&
+    isEmpty &&
+    !busy &&
+    !isSendBlocked;
+  /**
+   * Scoped preset awaiting the inline "Selected part / Entire
+   * document" choice. While set, the chip row renders the two-option
+   * chooser instead of the chips; Escape or losing chip visibility
+   * cancels back to the chips.
+   */
+  const [scopePromptPreset, setScopePromptPreset] =
+    useState<AISuggestionPreset | null>(null);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (preset chips lose visibility → cancel the scope chooser); setScopePromptPreset is shared with submitPreset, so move into the visibility-change source
+  useEffect(() => {
+    if (!presetChipsVisible && scopePromptPreset !== null) {
+      setScopePromptPreset(null);
+    }
+  }, [presetChipsVisible, scopePromptPreset]);
+  const submitPreset = useCallback(
+    (preset: AISuggestionPreset) => {
+      if (canSubmitNow !== undefined && !canSubmitNow()) {
+        return;
+      }
+      if (
+        presetScopeChooser !== undefined &&
+        presetScopeChooser.appliesTo(preset)
+      ) {
+        if (presetScopeChooser.shouldAskForScope()) {
+          setScopePromptPreset(preset);
+          return;
+        }
+        presetScopeChooser.onSubmit(preset, "document");
+        return;
+      }
+      onSubmit({ prompt: preset.prompt, presetId: preset.id });
+    },
+    [canSubmitNow, onSubmit, presetScopeChooser],
+  );
+  const resolvePresetScope = useCallback(
+    (scope: PromptBarPresetScope) => {
+      const preset = scopePromptPreset;
+      setScopePromptPreset(null);
+      if (preset === null || presetScopeChooser === undefined) {
+        return;
+      }
+      presetScopeChooser.onSubmit(preset, scope);
+    },
+    [scopePromptPreset, presetScopeChooser],
+  );
+  // Tab with an empty input writes the first preset INTO the composer (the
+  // user can edit before sending); clicking a chip accepts and sends as-is.
+  // Escape backs out of the inline preset-scope chooser.
+  const handleShellKeyDown = useCallback(
+    (event: ReactKeyboardEvent) => {
+      if (event.key === "Escape" && scopePromptPreset !== null) {
+        event.preventDefault();
+        setScopePromptPreset(null);
+        return;
+      }
+      if (event.key !== "Tab" || event.shiftKey || !presetChipsVisible) {
+        return;
+      }
+      const first = presets.at(0);
+      if (!first || !editor) {
+        return;
+      }
+      event.preventDefault();
+      editor.chain().focus().insertContent(first.prompt).run();
+    },
+    [presetChipsVisible, presets, editor, scopePromptPreset],
+  );
+
   return (
     <PromptBarShell
       aria-busy={busy}
       aria-label={t("chat.aiPrompt")}
+      onKeyDownCapture={handleShellKeyDown}
       className={cn(
         !inputDisabled && "focus-within:border-foreground/30",
         // Attention pulse — kicked by the inspector chip click to
@@ -1144,7 +1646,80 @@ export function PromptBar(props: PromptBarProps) {
       )}
       layout={layout}
       role="toolbar"
+      tabIndex={-1}
     >
+      {presetChipsVisible &&
+        scopePromptPreset !== null &&
+        presetScopeChooser !== undefined && (
+          <div className="absolute start-1 bottom-full mb-3 flex items-start">
+            <span
+              className={cn(
+                DOC_FLOAT_SURFACE_CLASS,
+                "border-foreground/15 inline-flex items-center gap-1.5 rounded-full border py-1 ps-3 pe-1 shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+              )}
+            >
+              <span className="text-muted-foreground text-[12px] font-medium">
+                {presetScopeChooser.question}
+              </span>
+              <Button
+                className="h-7 rounded-full px-2.5 text-[12.5px]"
+                onClick={() => resolvePresetScope("selection")}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {presetScopeChooser.selectionLabel}
+              </Button>
+              <Button
+                className="h-7 rounded-full px-2.5 text-[12.5px]"
+                onClick={() => resolvePresetScope("document")}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {presetScopeChooser.documentLabel}
+              </Button>
+            </span>
+          </div>
+        )}
+      {presetChipsVisible && scopePromptPreset === null && (
+        <div className="absolute start-1 bottom-full mb-3 flex flex-col items-start gap-1.5">
+          {presets.map((preset) => (
+            // The opaque surface lives on a wrapper, not the Button:
+            // the ghost variant swaps `background-color` to the
+            // translucent `--accent` on hover, which over the bare
+            // document would make the chip see-through under the
+            // cursor. Over the wrapper's solid surface the same swap
+            // is the standard menu-item tint.
+            <span
+              className={cn(
+                DOC_FLOAT_SURFACE_CLASS,
+                "border-foreground/15 inline-flex rounded-full border shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+              )}
+              key={preset.id}
+            >
+              <Button
+                aria-keyshortcuts="Tab"
+                className="text-foreground h-9 gap-2.5 rounded-full px-3 text-[13px] font-medium transition-[background-color] duration-150"
+                onClick={() => submitPreset(preset)}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                <WandSparklesIcon aria-hidden="true" className="size-4" />
+                {preset.label}
+              </Button>
+            </span>
+          ))}
+        </div>
+      )}
+      {layout === "floating" && pendingCount > 0 && (
+        <span className="flex h-8 shrink-0 items-center ps-0.5">
+          <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
+            {pendingCount}
+          </span>
+        </span>
+      )}
       <div className="relative flex min-h-8 min-w-0 flex-1 items-center gap-1.5 px-1.5">
         {isEmpty && busy && (
           <div className="text-muted-foreground pointer-events-none absolute inset-x-1.5 top-1/2 z-10 flex min-w-0 -translate-y-1/2 items-center gap-2 text-[13px]">
@@ -1182,8 +1757,12 @@ export function PromptBar(props: PromptBarProps) {
           // back as the user deletes content.
           className={cn(
             "folio-ai-bar-editor text-foreground min-w-0 flex-1 [&_.ProseMirror]:field-sizing-fixed [&_.ProseMirror]:max-h-32 [&_.ProseMirror]:min-h-0 [&_.ProseMirror]:overflow-y-auto [&_.ProseMirror]:py-1.5 [&_.ProseMirror]:text-[13px] [&_.ProseMirror]:leading-5 [&_.ProseMirror]:select-text [&_.ProseMirror]:focus-visible:outline-none [&_.ProseMirror_p]:my-0",
+            // Suppress the composer's own placeholder whenever the host
+            // renders an overlay in the same cell (custom placeholder, the
+            // busy "working" label, or the editor-loading label) — otherwise
+            // the two texts paint on top of each other.
             isEmpty &&
-              emptyPlaceholder !== undefined &&
+              (emptyPlaceholder !== undefined || busy || isSendBlocked) &&
               "folio-ai-bar-editor--custom-placeholder",
             inputDisabled && "pointer-events-none",
           )}
@@ -1195,10 +1774,13 @@ export function PromptBar(props: PromptBarProps) {
         <Tooltip>
           <TooltipTrigger
             render={
+              // Stays enabled while a response streams: starting a
+              // fresh thread is the escape hatch when a turn hangs
+              // or errors, so owners abort any live stream in their
+              // `onNewThread` and rotate regardless of bar state.
               <Button
                 aria-label={newThreadLabel}
                 className="rounded-full"
-                disabled={busy}
                 onClick={onNewThread}
                 size="icon-sm"
                 type="button"
@@ -1236,16 +1818,28 @@ export function PromptBar(props: PromptBarProps) {
         <TooltipTrigger
           render={
             <Button
-              aria-label={
-                morphSendToStop ? t("chat.stopResponse") : t("chat.sendPrompt")
-              }
+              aria-label={(() => {
+                if (morphSendToStop) {
+                  return t("chat.stopResponse");
+                }
+                if (morphSendToRetry) {
+                  return t("common.retry");
+                }
+                return t("chat.sendPrompt");
+              })()}
               className="rounded-full"
               disabled={
-                morphSendToStop ? false : composerSubmitDisabled || !canSubmit
+                morphSendToStop || morphSendToRetry
+                  ? false
+                  : composerSubmitDisabled || !canSubmit
               }
               onClick={() => {
                 if (morphSendToStop) {
                   onStop();
+                  return;
+                }
+                if (morphSendToRetry) {
+                  onRetry();
                   return;
                 }
                 void submitDraft();
@@ -1253,11 +1847,15 @@ export function PromptBar(props: PromptBarProps) {
               size="icon"
               type="button"
             >
-              {morphSendToStop ? (
-                <SquareIcon aria-hidden="true" />
-              ) : (
-                <ArrowUpIcon aria-hidden="true" />
-              )}
+              {(() => {
+                if (morphSendToStop) {
+                  return <SquareIcon aria-hidden="true" />;
+                }
+                if (morphSendToRetry) {
+                  return <RotateCcwIcon aria-hidden="true" />;
+                }
+                return <ArrowUpIcon aria-hidden="true" />;
+              })()}
             </Button>
           }
         />
@@ -1265,6 +1863,9 @@ export function PromptBar(props: PromptBarProps) {
           {(() => {
             if (morphSendToStop) {
               return t("chat.stopResponse");
+            }
+            if (morphSendToRetry) {
+              return t("common.retry");
             }
             if (canSubmit) {
               return t("chat.sendPrompt");
@@ -1289,19 +1890,13 @@ export function PromptBar(props: PromptBarProps) {
                 type="button"
                 variant="ghost"
               >
-                {pendingCount > 0 ? (
-                  <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
-                    {pendingCount}
-                  </span>
-                ) : (
-                  <ChevronDownIcon
-                    aria-hidden="true"
-                    className={cn(
-                      "size-3.5 transition-transform duration-150",
-                      panelOpen && "rotate-180",
-                    )}
-                  />
-                )}
+                <ChevronDownIcon
+                  aria-hidden="true"
+                  className={cn(
+                    "size-3.5 transition-transform duration-150",
+                    panelOpen && "rotate-180",
+                  )}
+                />
               </Button>
             }
           />
@@ -1359,7 +1954,17 @@ function ThreadPanel(props: ThreadPanelProps) {
   } = props;
 
   const panelRef = useRef<HTMLDivElement>(null);
+  const transcriptRef = useRef<HTMLDivElement>(null);
   const isFloating = layout === "floating";
+
+  // Keep the newest message in view: jump to the bottom whenever the thread
+  // grows (a sent prompt appends the user bubble + assistant placeholder).
+  useExternalSyncEffect(() => {
+    const el = transcriptRef.current;
+    if (el) {
+      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    }
+  }, [messages.length]);
 
   const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
     e.preventDefault();
@@ -1497,6 +2102,7 @@ function ThreadPanel(props: ThreadPanelProps) {
           // when there's no confirm banner above the messages.
           isFloating && !pendingFirstAccept && "pt-3.5",
         )}
+        ref={transcriptRef}
         style={{ scrollbarGutter: "stable" }}
       >
         {messages.length === 0 && !isFloating ? (
@@ -1721,19 +2327,38 @@ type SuggestionCardProps = {
   onFocus: (id: string) => void;
 };
 
-function SuggestionCard(props: SuggestionCardProps) {
+export function SuggestionCard(props: SuggestionCardProps) {
   const t = useTranslations();
   const { suggestion, focused, showAcceptUI, onAccept, onReject, onFocus } =
     props;
+  const { display } = suggestion;
   const isResolvable =
     suggestion.status === "pending" || suggestion.status === "stale";
-  const severityLabel = t(SEVERITY_LABEL_KEYS[suggestion.severity]);
+  // For display-carrying (field) suggestions the rationale is often just
+  // the field path again — the header and replacement row already show it.
+  const showRationale =
+    suggestion.rationale.length > 0 &&
+    (!display || suggestion.rationale !== suggestion.topic);
 
   return (
+    // The whole card is a click target for focus-and-jump (the header
+    // button stays the keyboard/AT path); clicks owned by interior
+    // buttons (header, accept, reject) are skipped so they don't
+    // double-fire.
+    // oxlint-disable-next-line jsx_a11y/no-static-element-interactions, jsx_a11y/click-events-have-key-events
     <div
       data-status={suggestion.status}
+      onClick={(event) => {
+        if (
+          event.target instanceof Element &&
+          event.target.closest("button") !== null
+        ) {
+          return;
+        }
+        onFocus(suggestion.id);
+      }}
       className={cn(
-        "border-border/60 bg-background/60 rounded-lg border px-3 py-2 transition-colors",
+        "border-border/60 bg-background/60 cursor-pointer rounded-lg border px-3 py-2 transition-colors",
         focused && "border-foreground-disabled bg-muted/40",
       )}
     >
@@ -1743,16 +2368,24 @@ function SuggestionCard(props: SuggestionCardProps) {
         onClick={() => onFocus(suggestion.id)}
         aria-label={t("chat.focusSuggestion", { topic: suggestion.topic })}
       >
-        <span
-          className={cn(
-            "size-1.5 shrink-0 rounded-full",
-            SEVERITY_DOT_CLASS[suggestion.severity],
-          )}
-          aria-hidden="true"
-        />
-        <span className="text-foreground font-medium">{suggestion.topic}</span>
-        <span aria-hidden="true">·</span>
-        <span>{severityLabel}</span>
+        {display ? (
+          <SuggestionDisplayBadges display={display} />
+        ) : (
+          <>
+            <span
+              className={cn(
+                "size-1.5 shrink-0 rounded-full",
+                SEVERITY_DOT_CLASS[suggestion.severity],
+              )}
+              aria-hidden="true"
+            />
+            <span className="text-foreground font-medium">
+              {suggestion.topic}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span>{t(SEVERITY_LABEL_KEYS[suggestion.severity])}</span>
+          </>
+        )}
         {suggestion.status === "stale" && (
           <span className="bg-destructive/12 text-destructive ms-1 inline-flex items-center gap-0.5 rounded-full px-1.5 py-0.5 text-[10px] font-medium tracking-wider uppercase">
             {t("chat.suggestionStatus.stale")}
@@ -1770,36 +2403,51 @@ function SuggestionCard(props: SuggestionCardProps) {
         )}
       </button>
 
-      <div className="bg-muted text-muted-foreground mt-2 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
-        <div className="flex gap-1.5">
-          <span
-            className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"
-            aria-hidden="true"
-          >
-            −
-          </span>
-          <span className="decoration-foreground-ghost line-through">
-            {suggestion.originalText}
-          </span>
-        </div>
-      </div>
-      <div className="bg-muted text-foreground mt-1 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
-        <div className="flex gap-1.5">
-          <span
-            className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"
-            aria-hidden="true"
-          >
-            +
-          </span>
-          <span>
-            {suggestion.suggestedText.length === 0
-              ? t("chat.removeSuggestion")
-              : suggestion.suggestedText}
-          </span>
-        </div>
-      </div>
+      {display ? (
+        <>
+          <div className="bg-muted text-foreground mt-2 rounded-md px-2.5 py-1.5 text-[13px] leading-snug text-pretty break-words">
+            <span className="decoration-foreground-ghost line-through">
+              {suggestion.originalText}
+            </span>
+          </div>
+          <div className="text-muted-foreground mt-1 px-2.5 font-mono text-[11px] leading-snug break-all">
+            {suggestion.suggestedText}
+          </div>
+        </>
+      ) : (
+        <>
+          <div className="bg-muted text-muted-foreground mt-2 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
+            <div className="flex gap-1.5">
+              <span
+                className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"
+                aria-hidden="true"
+              >
+                −
+              </span>
+              <span className="decoration-foreground-ghost line-through">
+                {suggestion.originalText}
+              </span>
+            </div>
+          </div>
+          <div className="bg-muted text-foreground mt-1 flex flex-col gap-0.5 rounded-md px-2.5 py-1.5 text-[12.5px] leading-snug text-pretty break-words">
+            <div className="flex gap-1.5">
+              <span
+                className="text-muted-foreground w-3 shrink-0 text-center tabular-nums"
+                aria-hidden="true"
+              >
+                +
+              </span>
+              <span>
+                {suggestion.suggestedText.length === 0
+                  ? t("chat.removeSuggestion")
+                  : suggestion.suggestedText}
+              </span>
+            </div>
+          </div>
+        </>
+      )}
 
-      {suggestion.rationale && (
+      {showRationale && (
         <p className="text-muted-foreground mt-1.5 text-xs leading-snug text-pretty">
           {suggestion.rationale}
         </p>
@@ -1829,5 +2477,72 @@ function SuggestionCard(props: SuggestionCardProps) {
         </div>
       )}
     </div>
+  );
+}
+
+type SuggestionDisplayBadgesProps = {
+  display: NonNullable<AISuggestion["display"]>;
+};
+
+/** Header badges for display-carrying suggestions: the payload's value
+ *  type plus who fills it (replaces the severity dot + label). */
+function SuggestionDisplayBadges({ display }: SuggestionDisplayBadgesProps) {
+  return (
+    <>
+      {display.valueKind !== undefined && (
+        <ValueKindChip valueKind={display.valueKind} />
+      )}
+      {display.filledBy !== undefined && (
+        <FilledByBadge filledBy={display.filledBy} />
+      )}
+    </>
+  );
+}
+
+type FilledByBadgeProps = {
+  filledBy: NonNullable<NonNullable<AISuggestion["display"]>["filledBy"]>;
+};
+
+/** Who fills the proposed field: a person, AI, or a person whose stub
+ *  AI adapts in place (`personAi`). */
+function FilledByBadge({ filledBy }: FilledByBadgeProps) {
+  const t = useTranslations();
+  if (filledBy === "ai") {
+    return (
+      <span className="bg-info/10 text-info inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        {t("templates.studio.draftedByAi")}
+      </span>
+    );
+  }
+  if (filledBy === "personAi") {
+    return (
+      <span className="bg-info/10 text-info inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+        <UserIcon aria-hidden="true" className="size-3 shrink-0" />
+        <WandSparklesIcon aria-hidden="true" className="size-3 shrink-0" />
+        {t("templates.studio.textPlusAi")}
+      </span>
+    );
+  }
+  return (
+    <span className="bg-muted text-muted-foreground inline-flex items-center gap-1 rounded-full px-1.5 py-0.5 text-[10px] font-medium">
+      <UserIcon aria-hidden="true" className="size-3 shrink-0" />
+      {t("templates.studio.filledByPerson")}
+    </span>
+  );
+}
+
+function ValueKindChip({ valueKind }: { valueKind: string }) {
+  const t = useTranslations();
+  if (!isValueTypeKind(valueKind)) {
+    return null;
+  }
+  const meta = VALUE_TYPE_META[valueKind];
+  const Icon = meta.icon;
+  return (
+    <span className="text-foreground inline-flex min-w-0 items-center gap-1 font-medium">
+      <Icon aria-hidden="true" className="size-3.5 shrink-0 opacity-70" />
+      <span className="truncate">{t(meta.labelKey)}</span>
+    </span>
   );
 }

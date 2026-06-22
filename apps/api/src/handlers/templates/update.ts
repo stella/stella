@@ -8,6 +8,10 @@ import { templates, templateVersions } from "@/api/db/schema";
 import { writeManifest } from "@/api/handlers/docx/template-manifest";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
 import { isTemplateManifest } from "@/api/handlers/docx/types";
+import {
+  MAX_TEMPLATE_LANGUAGES,
+  normalizeTemplateLanguages,
+} from "@/api/handlers/templates/template-languages";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -30,6 +34,20 @@ const updateTemplateBodySchema = t.Object({
   name: t.Optional(tDefaultVarchar),
   categoryId: t.Optional(t.Nullable(tSafeId("templateCategory"))),
   manifest: t.Optional(t.String()),
+  tags: t.Optional(
+    t.Array(t.String({ minLength: 1, maxLength: 64 }), {
+      maxItems: 32,
+    }),
+  ),
+  whenToUse: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+  whenNotToUse: t.Optional(t.Nullable(t.String({ maxLength: 10_000 }))),
+  // Accepts language tags (canonicalized to ISO 639-1 base codes server-side
+  // by `normalizeTemplateLanguages`). Tags cap at 35 chars (RFC 5646 buffer).
+  languages: t.Optional(
+    t.Array(t.String({ maxLength: 35 }), {
+      maxItems: MAX_TEMPLATE_LANGUAGES,
+    }),
+  ),
 });
 
 const updateTemplateParamsSchema = t.Object({
@@ -115,11 +133,36 @@ const updateTemplateHandler = async function* ({
     sizeBytes: number;
     s3Key: string;
     currentVersion: number;
+    tags: string[];
+    whenToUse: string | null;
+    whenNotToUse: string | null;
+    languages: string[];
     updatedAt: Date;
   }> = {
     ...pickDefined(body, ["name", "categoryId"]),
     updatedAt: new Date(),
   };
+
+  if (body.tags !== undefined) {
+    updates.tags = [
+      ...new Set(body.tags.map((tag) => tag.trim()).filter(Boolean)),
+    ];
+  }
+  if (body.whenToUse !== undefined) {
+    updates.whenToUse = body.whenToUse?.trim() || null;
+  }
+  if (body.whenNotToUse !== undefined) {
+    updates.whenNotToUse = body.whenNotToUse?.trim() || null;
+  }
+  if (body.languages !== undefined) {
+    const normalized = normalizeTemplateLanguages(body.languages);
+    if (!normalized.ok) {
+      return Result.err(
+        new HandlerError({ status: 400, message: normalized.message }),
+      );
+    }
+    updates.languages = normalized.languages;
+  }
 
   if (body.manifest !== undefined) {
     const manifest = parseManifest(body.manifest);

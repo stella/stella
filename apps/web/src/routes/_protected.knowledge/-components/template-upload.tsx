@@ -1,7 +1,7 @@
 import { useRef, useState } from "react";
 
 import { useMutation } from "@tanstack/react-query";
-import { UploadIcon } from "lucide-react";
+import { SparklesIcon, UploadIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -19,12 +19,17 @@ type DiscoverData = Exclude<
 >;
 
 type TemplateUploadProps = {
+  onCreateBlank: () => void;
   onDiscovered: (file: File, schema: DiscoverData) => void;
 };
 
-export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
+export const TemplateUpload = ({
+  onCreateBlank,
+  onDiscovered,
+}: TemplateUploadProps) => {
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement>(null);
+  const prepareInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
 
   const discoverMutation = useMutation({
@@ -50,7 +55,46 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
       });
     },
   });
-  const loading = discoverMutation.isPending;
+  // "Prepare with AI": the model marks up a finished document into a template,
+  // then we discover the result so it flows into the same configure step,
+  // pre-filled with the suggested fields (types + AI prompts ride in the
+  // embedded manifest and are preserved on create).
+  const prepareMutation = useMutation({
+    mutationFn: async (file: File) => {
+      const response = await api.templates.prepare.post({ file });
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+      // /prepare returns the marked-up docx as base64 JSON (binary responses
+      // get corrupted by Eden); decode it back to bytes, then discover.
+      const bytes = Uint8Array.from(
+        atob(response.data.docxBase64),
+        (ch) => ch.codePointAt(0) ?? 0,
+      );
+      const prepared = new File([bytes], file.name, { type: DOCX_MIME });
+      const discovered = await api.templates.discover.post({ file: prepared });
+      if (discovered.error) {
+        throw toAPIError(discovered.error);
+      }
+      const { data } = discovered;
+      if (data instanceof Response) {
+        throw new TypeError("Unexpected response shape");
+      }
+      return { file: prepared, data };
+    },
+    onSuccess: ({ file, data }) => {
+      onDiscovered(file, data);
+    },
+    onError: (error) => {
+      stellaToast.add({
+        type: "error",
+        title: t("templates.discoveryFailed"),
+        description: userErrorFromThrown(error, t("common.unexpectedError")),
+      });
+    },
+  });
+
+  const loading = discoverMutation.isPending || prepareMutation.isPending;
 
   const mutateDiscover = discoverMutation.mutate;
   const discover = (file: File) => {
@@ -70,6 +114,22 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
       discover(file);
     }
     // Reset so the same file can be re-selected
+    e.target.value = "";
+  };
+
+  const mutatePrepare = prepareMutation.mutate;
+  const handlePrepareFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.item(0);
+    if (file) {
+      if (file.type !== DOCX_MIME) {
+        stellaToast.add({
+          type: "error",
+          title: t("templates.invalidFileType"),
+        });
+      } else {
+        mutatePrepare(file);
+      }
+    }
     e.target.value = "";
   };
 
@@ -105,7 +165,7 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
         onDrop={handleDrop}
       >
         <div className="bg-muted flex size-12 items-center justify-center rounded-lg">
-          <UploadIcon className="text-muted-foreground size-6" />
+          <SparklesIcon className="text-muted-foreground size-6" />
         </div>
 
         <div className="text-center">
@@ -117,10 +177,48 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
           </p>
         </div>
 
-        <div className="flex flex-col items-center gap-2">
-          <Button disabled={loading} onClick={() => inputRef.current?.click()}>
-            {loading ? t("templates.discovering") : t("templates.browseFiles")}
+        {/* Primary: author the template directly in the Studio. */}
+        <div className="flex w-full flex-col items-center gap-2">
+          <Button className="w-full" disabled={loading} onClick={onCreateBlank}>
+            {t("templates.createInStudio")}
           </Button>
+          <p className="text-muted-foreground text-center text-xs">
+            {t("templates.createInStudioHint")}
+          </p>
+        </div>
+
+        {/* Secondary: import an existing document (upload or AI markup). */}
+        <div className="flex w-full items-center gap-2">
+          <span className="bg-border h-px flex-1" />
+          <span className="text-muted-foreground text-xs">
+            {t("templates.orImportFromDocument")}
+          </span>
+          <span className="bg-border h-px flex-1" />
+        </div>
+
+        <div className="flex flex-col items-center gap-2">
+          <div className="flex items-center gap-2">
+            <Button
+              disabled={loading}
+              onClick={() => inputRef.current?.click()}
+              size="sm"
+              variant="outline"
+            >
+              <UploadIcon />
+              {loading
+                ? t("templates.discovering")
+                : t("templates.browseFiles")}
+            </Button>
+            <Button
+              disabled={loading}
+              onClick={() => prepareInputRef.current?.click()}
+              size="sm"
+              variant="outline"
+            >
+              <WandSparklesIcon />
+              {t("templates.studio.prepareWithAi")}
+            </Button>
+          </div>
           <p className="text-muted-foreground text-xs">
             {t("templates.dragAndDrop")}
           </p>
@@ -131,6 +229,13 @@ export const TemplateUpload = ({ onDiscovered }: TemplateUploadProps) => {
           className="hidden"
           onChange={handleFileChange}
           ref={inputRef}
+          type="file"
+        />
+        <input
+          accept=".docx"
+          className="hidden"
+          onChange={handlePrepareFileChange}
+          ref={prepareInputRef}
           type="file"
         />
       </div>

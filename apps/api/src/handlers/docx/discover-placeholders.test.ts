@@ -40,6 +40,19 @@ describe("discoverPlaceholders", () => {
     expect(result).toEqual([{ name: "name", count: 1 }]);
   });
 
+  test("tolerates whitespace inside the braces", async () => {
+    const xml = WRAP(
+      "<w:p><w:r><w:t>Hello {{ name }}, owed {{  amount  }}.</w:t></w:r></w:p>",
+    );
+    const result = await discoverPlaceholders(await makeDocx(xml));
+
+    // Names are captured clean (no padding), sorted alphabetically.
+    expect(result).toEqual([
+      { name: "amount", count: 1 },
+      { name: "name", count: 1 },
+    ]);
+  });
+
   test("finds placeholders split across runs", async () => {
     const xml = WRAP(
       `<w:p>

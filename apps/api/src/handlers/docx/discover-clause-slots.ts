@@ -10,6 +10,8 @@
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { clauseSlotPattern } from "@stll/template-conditions";
+
 import { HEADER_FOOTER_RE, paragraphText, W_NS } from "./ooxml";
 
 // ── Types ────────────────────────────────────────────
@@ -24,8 +26,10 @@ export type ClauseSlot = {
 
 // ── Regex ────────────────────────────────────────────
 
-const CLAUSE_SLOT_RE =
-  /\{\{@clause:(?<name>[^:}]+)(?::(?<modifier>[^}]+))?\}\}/gu;
+// Canonical pattern from @stll/template-conditions (markers.ts). The name and
+// modifier captures exclude whitespace so the rebuilt patch key matches what
+// rich-patch's PLACEHOLDER_RE captures during replacement (they must agree).
+const CLAUSE_SLOT_RE = clauseSlotPattern();
 
 // ── Scanning ─────────────────────────────────────────
 
