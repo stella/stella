@@ -563,7 +563,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                               <>
                                 {task.assignedTo ? " · " : ""}
                                 {new Date(task.dueDate).toLocaleDateString(
-                                  lang,
+                                  getFormattingLocale(),
                                   {
                                     month: "short",
                                     day: "numeric",

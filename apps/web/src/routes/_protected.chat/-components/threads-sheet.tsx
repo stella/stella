@@ -27,6 +27,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
@@ -335,7 +336,9 @@ const ThreadGroup = ({
                 {thread.title}
               </span>
               <span className="text-muted-foreground text-xs">
-                {new Date(thread.createdAt).toLocaleDateString()}
+                {new Date(thread.createdAt).toLocaleDateString(
+                  getFormattingLocale(),
+                )}
               </span>
             </Link>
             <DeleteThreadButton

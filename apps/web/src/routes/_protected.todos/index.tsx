@@ -27,6 +27,7 @@ import {
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { pageTitle } from "@/lib/page-title";
@@ -317,7 +318,7 @@ const TaskRow = ({ task }: { task: ValidTask }) => {
           )}
         >
           <CalendarIcon className="size-3" />
-          {new Date(task.dueDate).toLocaleDateString(undefined, {
+          {new Date(task.dueDate).toLocaleDateString(getFormattingLocale(), {
             month: "short",
             day: "numeric",
             timeZone: "UTC",

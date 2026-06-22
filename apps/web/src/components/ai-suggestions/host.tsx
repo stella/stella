@@ -75,6 +75,7 @@ import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
@@ -2158,7 +2159,9 @@ function UserBubble({ message }: { message: UserThreadMessage }) {
         {message.pastedText && (
           <span className="text-info bg-info/10 inline-flex w-fit items-center gap-0.5 rounded px-1.5 text-[10.5px] font-medium tabular-nums">
             {t("chat.pastedChars", {
-              count: message.pastedText.length.toLocaleString(),
+              count: message.pastedText.length.toLocaleString(
+                getFormattingLocale(),
+              ),
             })}
           </span>
         )}

@@ -16,6 +16,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
 import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-components/contact-custom-fields-editor";
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
@@ -430,7 +431,9 @@ function ContactDetailPage() {
                     <span className="font-medium">{matter.name}</span>
                     <span className="text-muted-foreground ms-auto text-xs">
                       {t("common.createdAt", {
-                        date: new Date(matter.createdAt).toLocaleDateString(),
+                        date: new Date(matter.createdAt).toLocaleDateString(
+                          getFormattingLocale(),
+                        ),
                       })}
                     </span>
                   </MatterRefLink>

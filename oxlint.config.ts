@@ -297,6 +297,7 @@ export default defineConfig({
     "eslint-plugin-sonarjs",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
+    "./.oxlint-plugins/no-raw-locale-format.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -557,6 +558,19 @@ export default defineConfig({
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
+      },
+    },
+    {
+      // Locale-aware number/date formatting. Folio is excluded: its
+      // document surface stays LTR-based and formats with its own
+      // resolved locales rather than the UI numbering preference.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-locale-format.fixture.ts",
+      ],
+      rules: {
+        "no-raw-locale-format/no-raw-locale-format": "error",
       },
     },
     {

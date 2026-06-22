@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { getDocumentAstMetadata } from "@stll/legal-ast/document-ast";
 import { Button } from "@stll/ui/components/button";
 
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { sanitizeHref } from "@/lib/sanitize-href";
 
@@ -79,7 +80,11 @@ const MetadataField = ({
   }
 
   const display =
-    value instanceof Date ? value.toLocaleDateString() : <bdi>{value}</bdi>;
+    value instanceof Date ? (
+      value.toLocaleDateString(getFormattingLocale())
+    ) : (
+      <bdi>{value}</bdi>
+    );
 
   return (
     <div>
