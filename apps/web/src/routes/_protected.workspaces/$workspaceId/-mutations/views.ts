@@ -71,7 +71,10 @@ type UpdateViewVars = {
 export const useUpdateView = (workspaceId: string) => {
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const queryKey = viewsKeys.all(workspaceId);
+  // Optimistic reads/writes target the concrete locale-specific entry; the
+  // final invalidation targets the locale-independent prefix so every cached
+  // locale variant refetches.
+  const localizedKey = viewsKeys.localized(workspaceId);
 
   return useMutation({
     mutationFn: async ({ viewId, ...body }: UpdateViewVars) => {
@@ -85,11 +88,12 @@ export const useUpdateView = (workspaceId: string) => {
       return response.data;
     },
     onMutate: async ({ viewId, ...body }) => {
-      await queryClient.cancelQueries({ queryKey });
-      const previousViews = queryClient.getQueryData<WorkspaceView[]>(queryKey);
+      await queryClient.cancelQueries({ queryKey: localizedKey });
+      const previousViews =
+        queryClient.getQueryData<WorkspaceView[]>(localizedKey);
 
       queryClient.setQueryData<WorkspaceView[]>(
-        queryKey,
+        localizedKey,
         (current): WorkspaceView[] | undefined => {
           if (!current) {
             return current;
@@ -110,12 +114,14 @@ export const useUpdateView = (workspaceId: string) => {
     },
     onError: (error, _variables, context) => {
       if (context?.previousViews) {
-        queryClient.setQueryData(queryKey, context.previousViews);
+        queryClient.setQueryData(localizedKey, context.previousViews);
       }
       analytics.captureError(error);
     },
     onSettled: async () => {
-      await queryClient.invalidateQueries({ queryKey });
+      await queryClient.invalidateQueries({
+        queryKey: viewsKeys.all(workspaceId),
+      });
     },
   });
 };
