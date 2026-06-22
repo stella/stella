@@ -82,6 +82,14 @@ describe("findMissingPluralCategories", () => {
     ).toEqual([]);
   });
 
+  test("does not require the dormant es/fr/pt-BR `many` (exact millions)", () => {
+    for (const locale of ["es", "fr", "pt-BR"]) {
+      expect(
+        findMissingPluralCategories("{n, plural, one {#} other {#}}", locale),
+      ).toEqual([]);
+    }
+  });
+
   test("does not count exact selectors like =0 toward CLDR categories", () => {
     expect(
       findMissingPluralCategories(
@@ -243,6 +251,18 @@ describe("terminology", () => {
     expect(
       findForbiddenTerms("Open this matter", "Sachenrecht gilt", "de", rules),
     ).toEqual([]);
+  });
+
+  test("detects the concept when the source uses the plural trigger", () => {
+    // "matters" (plural) still triggers the "Matter" concept.
+    expect(
+      findForbiddenTerms(
+        "Manage your matters",
+        "Diese Sache öffnen",
+        "de",
+        rules,
+      ),
+    ).toEqual(["Sache"]);
   });
 
   test("matches an Arabic forbidden term carrying proclitics (ال/و prefixes)", () => {

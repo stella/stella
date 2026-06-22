@@ -869,7 +869,7 @@
     "alsoPartyIn": "También aparece como parte en {count, plural, one {# asunto más} other {# asuntos más}}",
     "attorneys": {
       "none": "No asignado",
-      "originating": "Abogado originador",
+      "originating": "Contacto principal",
       "responsible": "Abogado responsable",
       "title": "Abogados"
     },
@@ -953,7 +953,7 @@
       "firstName": "Nombre",
       "lastName": "Apellido",
       "middleName": "Segundo nombre",
-      "originatingAttorney": "Abogado originador",
+      "originatingAttorney": "Contacto principal",
       "paymentTermDays": "Plazo de pago (días)",
       "prefix": "Prefijo",
       "registrationNumber": "Número de registro",
@@ -2060,7 +2060,7 @@
     "dateRenderPreview": "En el documento: {value}",
     "deleteCategory": "Eliminar categoría",
     "deleteFailed": "No se pudo eliminar la plantilla",
-    "describeWhenToUse": "Describe cuándo usar esta plantilla",
+    "describeWhenToUse": "Describe cuándo usar esto",
     "directiveEach": "Bucle: {expression}",
     "directiveElse": "Si no",
     "directiveElseIf": "Si no, si: {expression}",

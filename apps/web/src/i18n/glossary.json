@@ -266,11 +266,31 @@
       "en": "Matter",
       "note": "Load-bearing term (the client-engagement workspace); must not drift into synonyms. The internal `workspace` alias means the same thing where user-facing (createNewWorkspace = \"Create new matter\"); render it with the Matter term, not a literal \"workspace\" translation. ar uses ملف (file/dossier); avoid قضية (lawsuit) and مسألة (abstract legal question).",
       "forbidden": {
-        "ar": ["قضية", "مسألة"],
+        "ar": ["قضية", "قضايا", "مسألة", "مسائل"],
         "cs": ["pracovní prostor"],
-        "sk": ["Vec"],
-        "de": ["Sache", "Mandat"],
-        "et": ["asi", "kohtuasi", "tööruum"],
+        "sk": ["Vec", "veci", "vecou", "vecí", "veciam", "vecami", "veciach"],
+        "de": [
+          "Sache",
+          "Sachen",
+          "Mandat",
+          "Mandate",
+          "Mandaten",
+          "Mandats",
+          "Mandatsdaten",
+          "Mandatsanbahner"
+        ],
+        "et": [
+          "asi",
+          "asja",
+          "asjad",
+          "asju",
+          "asjas",
+          "asjast",
+          "asjale",
+          "kohtuasi",
+          "kohtuasja",
+          "tööruum"
+        ],
         "fr": ["espace de travail"]
       },
       "translations": {
@@ -375,7 +395,7 @@
       "note": "sk prefers \"Vzor\" (native legal-document register) over \"Šablóna\". ar قالب for a template; reserve نموذج for fillable forms/specimens.",
       "forbidden": {
         "ar": ["نموذج"],
-        "sk": ["Šablóna"]
+        "sk": ["Šablóna", "šablónu", "šablóny", "šablón", "šablóne", "šablónou"]
       },
       "translations": {
         "ar": "قالب",
