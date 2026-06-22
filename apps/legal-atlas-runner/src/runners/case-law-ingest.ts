@@ -370,6 +370,7 @@ type CycleOutcome = "completed" | "failed" | "timeout";
 type CycleResult = {
   outcome: CycleOutcome;
   inserted: number;
+  pagesProcessed: number;
 };
 
 /**
@@ -475,7 +476,11 @@ const runOneCycle = async (
     logError(`[${adapterKey}] Failed: ${errorMessage}`);
   }
 
-  return { outcome, inserted: result?.inserted ?? 0 };
+  return {
+    outcome,
+    inserted: result?.inserted ?? 0,
+    pagesProcessed: result?.pagesProcessed ?? 0,
+  };
 };
 
 /**
@@ -489,6 +494,13 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
   let backoffFailures = 0;
   /** Consecutive completed cycles with zero inserts; drives idle backoff. */
   let idleCycles = 0;
+  /**
+   * Consecutive timeout cycles that completed zero pages: the adapter cannot
+   * finish even one page within its budget. Tracked separately because a
+   * "timeout" (unlike "failed") resets the failure counter, so a full stall
+   * would otherwise never reach the sustained-failure alert.
+   */
+  let stalledCycles = 0;
 
   while (true) {
     try {
@@ -505,7 +517,13 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       } finally {
         cycleSemaphore.release();
       }
-      const { outcome, inserted } = cycle;
+      const { outcome, inserted, pagesProcessed } = cycle;
+
+      // A timeout that completed no pages means the adapter is stuck (cannot
+      // finish even one page), not merely slow. Anything else — a completed
+      // cycle, or a timeout that did advance pages — clears the stall streak.
+      stalledCycles =
+        outcome === "timeout" && pagesProcessed === 0 ? stalledCycles + 1 : 0;
 
       if (outcome === "failed") {
         consecutiveFailures++;
@@ -533,6 +551,9 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         }
       }
     } catch (error) {
+      // A thrown cycle is already counted as a failure below; it is not a
+      // page-completion stall, so clear that streak.
+      stalledCycles = 0;
       consecutiveFailures++;
       backoffFailures++;
       const msg = error instanceof Error ? error.message : String(error);
@@ -543,14 +564,22 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
     }
 
-    if (consecutiveFailures >= SUSTAINED_FAILURE_THRESHOLD) {
+    // Alert on either a run of hard failures or a run of zero-page timeouts:
+    // both mean the source has made no forward progress for many cycles, but
+    // only the failure path used to reach the sustained-failure metric.
+    if (
+      consecutiveFailures >= SUSTAINED_FAILURE_THRESHOLD ||
+      stalledCycles >= SUSTAINED_FAILURE_THRESHOLD
+    ) {
       logger.error("case_law.ingestion.sustained_failure", {
         adapterKey,
         consecutiveFailures,
+        stalledCycles,
       });
-      // Reset alert counter to avoid flooding; backoffFailures
+      // Reset alert counters to avoid flooding; backoffFailures
       // stays high so the delay doesn't collapse.
       consecutiveFailures = 0;
+      stalledCycles = 0;
     }
 
     writeHeartbeat();
