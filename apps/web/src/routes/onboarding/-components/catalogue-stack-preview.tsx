@@ -174,7 +174,7 @@ const Row = ({
         slug={entry.slug}
       />
       <div className="flex min-w-0 flex-1 flex-col">
-        <span className="text-foreground truncate text-sm">
+        <span className="text-foreground truncate text-sm" dir="auto">
           {entry.displayName}
         </span>
         {entry.jurisdictions.length > 0 && (

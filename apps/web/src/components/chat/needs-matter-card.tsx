@@ -346,6 +346,7 @@ const MatterPickerSection = ({
                           "shrink-0 text-[10px]",
                           isSelected ? "opacity-80" : "text-muted-foreground",
                         )}
+                        dir="auto"
                       >
                         {m.client.displayName}
                       </span>
@@ -389,7 +390,7 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
     <>
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-xs font-semibold">
+        <span className="truncate text-xs font-semibold" dir="auto">
           {output.fileName}
         </span>
         {canOpen && (

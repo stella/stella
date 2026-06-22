@@ -1275,7 +1275,10 @@ const SearchRecents = ({
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{file.title}</span>
-                  <span className="text-muted-foreground block truncate text-xs">
+                  <span
+                    className="text-muted-foreground block truncate text-xs"
+                    dir="auto"
+                  >
                     {file.workspaceName}
                   </span>
                 </span>

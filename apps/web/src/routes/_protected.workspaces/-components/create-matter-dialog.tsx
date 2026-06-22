@@ -64,7 +64,9 @@ const SelectedClient = ({ client }: { client: MatterDraftClient }) => (
     ) : (
       <BuildingIcon className="text-muted-foreground size-4" />
     )}
-    <span className="truncate text-sm font-medium">{client.displayName}</span>
+    <span className="truncate text-sm font-medium" dir="auto">
+      {client.displayName}
+    </span>
   </div>
 );
 

@@ -80,7 +80,9 @@ export const AICellSourceCard = ({
                 kind="document"
                 mimeType={primaryFile.mimeType}
               />
-              <span className="truncate">{primaryFile.fileName}</span>
+              <span className="truncate" dir="auto">
+                {primaryFile.fileName}
+              </span>
               {sourceFiles.length > 1 && (
                 <span className="text-muted-foreground shrink-0">
                   +{sourceFiles.length - 1}

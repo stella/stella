@@ -1064,6 +1064,18 @@
     line-height: 1.6;
   }
 
+  /* Truncated cells almost always hold a single data value (a name, file,
+   * client, title). A Latin value in the RTL UI has its neutral trailing
+   * characters (".", "/", "()") reordered by the bidi algorithm — e.g.
+   * "Tatra Motor a.s." renders as ".Tatra Motor a.s". `unicode-bidi:
+   * plaintext` resolves each such element's base direction from its own
+   * content (the CSS form of dir="auto") so the value keeps its order.
+   * Scoped to `.truncate` (single-value displays) to avoid touching
+   * mixed-direction running text, which should use <bdi> instead. */
+  html[dir="rtl"] :where(.truncate) {
+    unicode-bidi: plaintext;
+  }
+
   /* The skeleton shimmer sweeps a fixed physical direction; mirror it
    * under RTL so the highlight travels with the reading direction. */
   html[dir="rtl"] [data-slot="skeleton"] {

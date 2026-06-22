@@ -145,7 +145,7 @@ export const ContactPicker = ({
                 ) : (
                   <BuildingIcon className="text-muted-foreground size-3.5" />
                 )}
-                <span>{contact.displayName}</span>
+                <span dir="auto">{contact.displayName}</span>
               </div>
             </ComboboxItem>
           ))}

@@ -460,6 +460,7 @@ const MattersTableGroup = ({
             ) : (
               <Link
                 className="hover:underline"
+                dir="auto"
                 onClick={(e) => e.stopPropagation()}
                 params={{ contactId: group.clientId }}
                 to="/contacts/$contactId"

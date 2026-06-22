@@ -63,7 +63,10 @@ export const CatalogueDetailPreview = ({
             slug={entry.slug}
           />
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <h2 className="text-foreground truncate text-base leading-tight font-semibold">
+            <h2
+              className="text-foreground truncate text-base leading-tight font-semibold"
+              dir="auto"
+            >
               {entry.displayName}
             </h2>
             <p className="text-muted-foreground text-xs tracking-wider uppercase">

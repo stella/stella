@@ -78,7 +78,9 @@ export const ClientFilterPopover = ({
                 onClick={() => toggle(c.id)}
                 type="button"
               >
-                <span className="truncate">{c.displayName}</span>
+                <span className="truncate" dir="auto">
+                  {c.displayName}
+                </span>
                 {active && (
                   <CheckIcon className="text-primary size-3.5 shrink-0" />
                 )}

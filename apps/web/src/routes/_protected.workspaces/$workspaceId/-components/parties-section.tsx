@@ -175,6 +175,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           )}
           <Link
             className="min-w-0 truncate text-sm font-medium hover:underline"
+            dir="auto"
             params={{ contactId: client.id }}
             to="/contacts/$contactId"
           >
@@ -377,7 +378,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
             </span>
             {selectedContact ? (
               <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                <span>{selectedContact.displayName}</span>
+                <span dir="auto">{selectedContact.displayName}</span>
                 <Button
                   className="ms-auto"
                   onClick={() => setSelectedContact(null)}
@@ -510,6 +511,7 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       )}
       <Link
         className="text-sm font-medium hover:underline"
+        dir="auto"
         params={{ contactId: contact.id }}
         to="/contacts/$contactId"
       >
@@ -659,7 +661,7 @@ const AddPartyDialog = ({
             </span>
             {selectedContact ? (
               <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                <span>{selectedContact.displayName}</span>
+                <span dir="auto">{selectedContact.displayName}</span>
                 <Button
                   className="ms-auto"
                   onClick={() => setSelectedContact(null)}

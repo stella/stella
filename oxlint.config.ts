@@ -299,6 +299,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
     "./.oxlint-plugins/require-dir-on-free-text-input.ts",
+    "./.oxlint-plugins/require-dir-on-rendered-name.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -584,6 +585,18 @@ export default defineConfig({
       rules: {
         "require-dir-on-free-text-input/require-dir-on-free-text-input":
           "error",
+      },
+    },
+    {
+      // Bidirectional: rendering a user-provided name needs `dir` so it
+      // isn't reordered under RTL.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/require-dir-on-rendered-name.fixture.tsx",
+      ],
+      rules: {
+        "require-dir-on-rendered-name/require-dir-on-rendered-name": "error",
       },
     },
     {

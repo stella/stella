@@ -146,6 +146,7 @@ export const MatterCard = ({
               (workspace.client ? (
                 <Link
                   className="text-muted-foreground hover:text-foreground relative z-10 -mt-1 truncate text-xs hover:underline"
+                  dir="auto"
                   onClick={(e) => e.stopPropagation()}
                   params={{ contactId: workspace.client.id }}
                   to="/contacts/$contactId"
