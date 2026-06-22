@@ -39,13 +39,14 @@ type UseContentDirResult = {
 };
 
 const hasText = (value: FieldValue): boolean => {
-  if (Array.isArray(value)) {
-    return value.some((entry) => entry.length > 0);
+  if (typeof value === "string") {
+    return value.length > 0;
   }
   if (typeof value === "number") {
     return true;
   }
-  return typeof value === "string" && value.length > 0;
+  // A multi-value field (readonly string[]) counts as content when non-empty.
+  return Array.isArray(value) && value.length > 0;
 };
 
 export const useContentDir = ({
