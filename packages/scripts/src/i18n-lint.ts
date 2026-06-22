@@ -47,12 +47,28 @@ const flatten = (
   return out;
 };
 
-const safeParse = (value: string): MessageFormatElement[] | null => {
-  try {
-    return parse(value);
-  } catch {
-    return null;
+// Parsing ICU is the hot path (each en source is checked against every locale,
+// and each value against several checks), so memoize: every unique string is
+// parsed at most once. A parse failure is cached as the Error it threw.
+const parseCache = new Map<string, MessageFormatElement[] | Error>();
+const cachedParse = (value: string): MessageFormatElement[] | Error => {
+  const cached = parseCache.get(value);
+  if (cached !== undefined) {
+    return cached;
   }
+  let result: MessageFormatElement[] | Error;
+  try {
+    result = parse(value);
+  } catch (error) {
+    result = error instanceof Error ? error : new Error(String(error));
+  }
+  parseCache.set(value, result);
+  return result;
+};
+
+const safeParse = (value: string): MessageFormatElement[] | null => {
+  const result = cachedParse(value);
+  return Array.isArray(result) ? result : null;
 };
 
 const collectArgNames = (
@@ -114,12 +130,8 @@ export const findPlaceholderMismatch = (
 
 /** ICU parse error message, or null when the value is valid ICU MessageFormat. */
 export const findIcuError = (value: string): string | null => {
-  try {
-    parse(value);
-    return null;
-  } catch (error) {
-    return error instanceof Error ? error.message : String(error);
-  }
+  const result = cachedParse(value);
+  return result instanceof Error ? result.message : null;
 };
 
 /**
@@ -136,14 +148,18 @@ export const findMissingPluralCategories = (
     return [];
   }
 
+  const cardinal = new Intl.PluralRules(locale, {
+    type: "cardinal",
+  }).resolvedOptions().pluralCategories;
+  const ordinal = new Intl.PluralRules(locale, {
+    type: "ordinal",
+  }).resolvedOptions().pluralCategories;
+
   const missing: string[] = [];
   const walk = (elements: MessageFormatElement[]): void => {
     for (const element of elements) {
       if (element.type === TYPE.plural) {
-        const type = element.pluralType === "ordinal" ? "ordinal" : "cardinal";
-        const required = new Intl.PluralRules(locale, {
-          type,
-        }).resolvedOptions().pluralCategories;
+        const required = element.pluralType === "ordinal" ? ordinal : cardinal;
         const present = new Set(
           Object.keys(element.options).filter((key) => !key.startsWith("=")),
         );
@@ -171,10 +187,15 @@ const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 /** Whole-word, script-aware (Unicode) containment test. */
-const containsWord = (haystack: string, needle: string): boolean =>
-  new RegExp(`(?<!\\p{L})${escapeRegExp(needle)}(?!\\p{L})`, "iu").test(
-    haystack,
-  );
+const wordRegexCache = new Map<string, RegExp>();
+const containsWord = (haystack: string, needle: string): boolean => {
+  let regex = wordRegexCache.get(needle);
+  if (!regex) {
+    regex = new RegExp(`(?<!\\p{L})${escapeRegExp(needle)}(?!\\p{L})`, "iu");
+    wordRegexCache.set(needle, regex);
+  }
+  return regex.test(haystack);
+};
 
 export type ForbiddenRule = {
   concept: string;
