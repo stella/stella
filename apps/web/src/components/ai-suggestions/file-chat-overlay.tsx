@@ -1254,6 +1254,10 @@ const FileChatOverlayInner = ({
                 if (!(await ensureAIAvailable())) {
                   return;
                 }
+                // Pop the thread open on send (mirrors the PromptBar submit
+                // path) so a chip sent while the thread is collapsed still
+                // streams the reply into view.
+                setPanelOpen(true);
                 await sendMessage({ text: draft.html });
               });
             }}
