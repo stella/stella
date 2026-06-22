@@ -29,6 +29,7 @@ import {
   MenuSeparator,
 } from "@stll/ui/components/menu";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { useContentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 import { VersionList, VersionRow } from "@/components/versions/version-list";
@@ -676,14 +677,7 @@ function VersionItem({
                 setContextAnchor(null);
               }}
             >
-              <input
-                autoComplete="off"
-                className="border-input bg-background placeholder:text-muted-foreground focus:ring-ring w-full rounded-md border px-2 py-1 text-xs outline-none focus:ring-1"
-                dir="auto"
-                maxLength={128}
-                name="customLabel"
-                placeholder={t("fileDetail.label")}
-              />
+              <VersionLabelInput placeholder={t("fileDetail.label")} />
             </form>
           </div>
 
@@ -762,3 +756,25 @@ function VersionItem({
 }
 
 const DEFAULT_LABEL_COLOR = "bg-foreground-disabled";
+
+// Uncontrolled custom-label field (the form action reads it via FormData). It
+// is free text in any language, so resolve direction from the typed content
+// (empty inherits the UI direction; first character sets LTR vs RTL).
+const VersionLabelInput = ({ placeholder }: { placeholder: string }) => {
+  const labelDir = useContentDir({
+    dir: undefined,
+    value: undefined,
+    defaultValue: undefined,
+  });
+  return (
+    <input
+      autoComplete="off"
+      className="border-input bg-background placeholder:text-muted-foreground focus:ring-ring w-full rounded-md border px-2 py-1 text-xs outline-none focus:ring-1"
+      dir={labelDir.dir}
+      maxLength={128}
+      name="customLabel"
+      onChange={(event) => labelDir.trackValue(event.currentTarget.value)}
+      placeholder={placeholder}
+    />
+  );
+};

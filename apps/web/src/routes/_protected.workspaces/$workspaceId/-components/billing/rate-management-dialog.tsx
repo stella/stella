@@ -346,7 +346,6 @@ const CreateRateTableForm = ({
             {(field) => (
               <Input
                 autoFocus
-                dir="auto"
                 onChange={(e) => field.handleChange(e.currentTarget.value)}
                 placeholder={t("billing.rates.tableNamePlaceholder")}
                 value={field.state.value}

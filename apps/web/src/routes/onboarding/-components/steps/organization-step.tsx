@@ -88,7 +88,6 @@ export const OrganizationStep = ({
                   "transition-shadow",
                   isInputPulsing && "ring-primary ring-2",
                 )}
-                dir="auto"
                 maxLength={50}
                 onBlur={field.handleBlur}
                 onChange={(e) => {

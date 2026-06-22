@@ -4,6 +4,10 @@ import type * as React from "react";
 
 import { Input as InputPrimitive } from "@base-ui/react/input";
 
+import {
+  isStructuredInputType,
+  useContentDir,
+} from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 type InputProps = Omit<
@@ -21,8 +25,23 @@ function Input({
   size = "default",
   unstyled = false,
   nativeInput = false,
+  dir,
+  onChange,
   ...props
 }: InputProps) {
+  const contentDir = useContentDir({
+    // Structured/neutral-value types (token, URL, number, date…) stay LTR
+    // unless the caller forces a direction; only free-text resolves by content.
+    dir: dir ?? (isStructuredInputType(props.type) ? "ltr" : undefined),
+    value: props.value,
+    defaultValue: props.defaultValue,
+  });
+  // Typed as the Base UI handler so the merged handler stays assignable to
+  // both the native <input> (via React's handler bivariance) and InputPrimitive.
+  const handleChange: NonNullable<InputProps["onChange"]> = (event) => {
+    contentDir.trackValue(event.currentTarget.value);
+    onChange?.(event);
+  };
   const inputClassName = cn(
     "placeholder:text-foreground-placeholder h-8.5 w-full min-w-0 rounded-[inherit] px-[calc(--spacing(3)-1px)] leading-8.5 outline-none [transition:background-color_5000000s_ease-in-out_0s] sm:h-7.5 sm:leading-7.5",
     size === "sm" &&
@@ -50,9 +69,10 @@ function Input({
         <input
           className={inputClassName}
           data-slot="input"
-          dir="auto"
           size={typeof size === "number" ? size : undefined}
           {...props}
+          dir={contentDir.dir}
+          onChange={handleChange}
         />
       ) : (
         <InputPrimitive
@@ -60,6 +80,8 @@ function Input({
           data-slot="input"
           size={typeof size === "number" ? size : undefined}
           {...props}
+          dir={contentDir.dir}
+          onChange={handleChange}
         />
       )}
     </span>

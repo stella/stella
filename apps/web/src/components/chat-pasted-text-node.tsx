@@ -17,6 +17,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 import type {
@@ -162,7 +163,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
             <textarea
               aria-label={t("common.edit")}
               className="bg-muted/40 focus-visible:ring-ring max-h-60 min-h-32 resize-none overflow-auto rounded-md border p-2 font-mono text-[11px] whitespace-pre-wrap focus-visible:ring-2 focus-visible:outline-none"
-              dir="auto"
+              dir={contentDir(draftText)}
               onBlur={commitDraft}
               onChange={(event) => {
                 setDraftText(event.target.value);

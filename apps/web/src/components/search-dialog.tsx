@@ -39,6 +39,7 @@ import {
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { getChatHitRoute } from "@/components/search-dialog.logic";
@@ -796,7 +797,7 @@ export const SearchDialog = ({
             <CommandInput
               autoFocus
               className="text-sm"
-              dir="auto"
+              dir={contentDir(query)}
               onKeyDownCapture={handleCommandInputKeyDownCapture}
               placeholder={t("search.placeholder")}
             />
@@ -1575,7 +1576,6 @@ const SearchableFacetGroup = ({
       <p className="text-muted-foreground mb-2 text-xs font-medium">{title}</p>
       <Input
         className="mb-1.5 h-7 px-2 text-xs"
-        dir="auto"
         onChange={(e) => {
           const value = e.target.value;
           setSearch(value);

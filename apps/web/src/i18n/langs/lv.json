@@ -323,6 +323,11 @@
       "apiKey": "API atslēga",
       "none": "Nav jāiestata"
     },
+    "toolNames": {
+      "anonymize": "Anonimizēt",
+      "createDocx": "Izveidot DOCX",
+      "webSearch": "Tīmekļa meklēšana"
+    },
     "unavailable": "Vēl nav pieejams"
   },
   "chat": {

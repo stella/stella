@@ -95,6 +95,17 @@ export const CHAT_FILE_INPUT_ACCEPT =
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
 
+// Wrap an interpolated value in Unicode directional isolates (FSI…PDI) so an
+// embedded run keeps its own direction inside a translated string of the
+// opposite direction — e.g. a Latin suggestion inside the Arabic "tab to ask"
+// placeholder, whose trailing "?" would otherwise reorder to the wrong side.
+// The plain-string equivalent of wrapping in <bdi>.
+// U+2068 FIRST STRONG ISOLATE, U+2069 POP DIRECTIONAL ISOLATE.
+const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
+const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
+const isolateBidi = (value: string): string =>
+  `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
+
 type EntityMentionPage = {
   entities: WorkspaceEntity[];
 };
@@ -499,7 +510,7 @@ export const useChatEditor = ({
   const t = useTranslations();
   const defaultPlaceholder = t("chat.placeholder");
   const tabToAskText = suggestedFollowupPrompt
-    ? t("chat.tabToAsk", { prompt: suggestedFollowupPrompt })
+    ? t("chat.tabToAsk", { prompt: isolateBidi(suggestedFollowupPrompt) })
     : undefined;
   const resolvedPlaceholder = tabToAskText ?? placeholder ?? defaultPlaceholder;
   const placeholderRef = useRef(resolvedPlaceholder);
@@ -905,7 +916,7 @@ export const useChatEditor = ({
       handleEditorUpdate(nextEditor);
     },
     editorProps: {
-      attributes: {
+      attributes: (state) => ({
         // A contenteditable div has no implicit ARIA role, so without
         // these the composer is invisible to assistive tech (and to
         // role-based queries); the visible placeholder span is
@@ -913,11 +924,14 @@ export const useChatEditor = ({
         role: "textbox",
         "aria-multiline": "true",
         "aria-label": resolvedPlaceholder,
-        // Align mixed Arabic + Latin input by its first strong character.
-        dir: "auto",
+        // While empty, inherit the ambient UI direction so the caret sits on
+        // the RTL side; once there is content, switch to first-strong-character
+        // detection to align mixed Arabic + Latin input. A static `dir="auto"`
+        // would fall back to LTR on the empty doc and strand the caret left.
+        ...(state.doc.textContent.length > 0 ? { dir: "auto" } : {}),
         class:
           "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
-      },
+      }),
       handlePaste: (_view, event) => {
         // ProseMirror processes paste before any React `onPaste`
         // handler, so the chip-on-large-paste logic has to live

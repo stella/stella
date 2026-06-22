@@ -7,6 +7,7 @@ import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { SearchIcon } from "lucide-react";
 
 import { DialogPopup } from "@stll/ui/components/dialog";
+import { useContentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 type CommandProps<ItemValue> = Omit<
@@ -65,8 +66,24 @@ function CommandInput({
   className,
   size = "lg",
   wrapperClassName,
+  dir,
+  onChange,
   ...props
 }: CommandInputProps) {
+  // Base UI's Autocomplete owns the value at the root, so onChange only fires
+  // for native typing — a programmatic value (e.g. a recent search) would not
+  // update it. A controlled consumer can therefore pass an explicit
+  // `dir={contentDir(value)}` which wins; otherwise fall back to tracking the
+  // typed text here.
+  const tracked = useContentDir({
+    dir: undefined,
+    value: undefined,
+    defaultValue: undefined,
+  });
+  const handleChange: NonNullable<CommandInputProps["onChange"]> = (event) => {
+    tracked.trackValue(event.currentTarget.value);
+    onChange?.(event);
+  };
   return (
     <div
       className={cn("flex min-w-0 flex-1 items-center gap-3", wrapperClassName)}
@@ -84,6 +101,8 @@ function CommandInput({
         data-slot="command-input"
         size={typeof size === "number" ? size : undefined}
         {...props}
+        dir={dir ?? tracked.dir}
+        onChange={handleChange}
       />
     </div>
   );

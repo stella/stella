@@ -11,6 +11,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import type { WorkspacePropertyOption } from "@/lib/types";
 import { SelectFallback } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/select-fallback";
@@ -102,7 +103,7 @@ export const InlineOptionEditor = ({
         </Button>
         <input
           className="placeholder:text-foreground-placeholder flex-1 bg-transparent text-sm focus-visible:outline-none"
-          dir="auto"
+          dir={contentDir(draft)}
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -185,7 +186,7 @@ const OptionRow = ({
       </Popover>
       <input
         className="flex-1 bg-transparent text-sm focus-visible:outline-none"
-        dir="auto"
+        dir={contentDir(draft)}
         onBlur={() => onRename(draft.trim())}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {

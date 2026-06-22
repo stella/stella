@@ -2,6 +2,7 @@ import { useTranslations } from "use-intl";
 
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { StellaWordmark } from "@/components/stella-wordmark";
 import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
 
@@ -161,6 +162,7 @@ const Row = ({
 }) => {
   const t = useTranslations();
   const delay = Math.min(index, STAGGER_CAP) * STAGGER_MS;
+  const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
 
   const content = (
     <>
@@ -175,7 +177,7 @@ const Row = ({
       />
       <div className="flex min-w-0 flex-1 flex-col">
         <span className="text-foreground truncate text-sm" dir="auto">
-          {entry.displayName}
+          {labelKey ? t(labelKey) : entry.displayName}
         </span>
         {entry.jurisdictions.length > 0 && (
           <span className="text-muted-foreground text-[10px]">

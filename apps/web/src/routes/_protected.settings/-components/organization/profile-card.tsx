@@ -94,7 +94,6 @@ export const OrganizationProfileCard = () => {
                 <Field name={field.name}>
                   <FieldLabel>{t("common.organizationName")}</FieldLabel>
                   <Input
-                    dir="auto"
                     onBlur={field.handleBlur}
                     onChange={(e) => field.handleChange(e.target.value)}
                     placeholder={t("auth.organizationNamePlaceholder")}

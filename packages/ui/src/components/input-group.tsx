@@ -95,11 +95,11 @@ function InputGroupText({ className, ...props }: React.ComponentProps<"span">) {
 }
 
 function InputGroupInput({ className, ...props }: InputProps) {
-  return <Input className={className} unstyled dir="auto" {...props} />;
+  return <Input className={className} unstyled {...props} />;
 }
 
 function InputGroupTextarea({ className, ...props }: TextareaProps) {
-  return <Textarea className={className} unstyled dir="auto" {...props} />;
+  return <Textarea className={className} unstyled {...props} />;
 }
 
 export {

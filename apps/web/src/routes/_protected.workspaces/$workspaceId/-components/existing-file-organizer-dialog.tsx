@@ -787,7 +787,6 @@ const UserInstructionsSection = ({
         <div className="border-t p-2">
           <Textarea
             className="min-h-16"
-            dir="auto"
             disabled={disabled}
             maxLength={USER_INSTRUCTIONS_MAX}
             onChange={(event) => onChange(event.currentTarget.value)}
@@ -1254,7 +1253,6 @@ const InlineNameInput = ({
   return (
     <Input
       className="hover:border-input/40 focus-within:bg-background focus-within:border-input border-transparent bg-transparent shadow-none"
-      dir="auto"
       disabled={disabled}
       onBlur={() => {
         if (draft !== value) {

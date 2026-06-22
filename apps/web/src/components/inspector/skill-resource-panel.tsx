@@ -304,7 +304,6 @@ const SkillResourceBody = ({
         <Textarea
           aria-label={editLabel}
           className="min-h-full flex-1 font-mono text-xs"
-          dir="auto"
           onChange={(event) => onDraftChange(event.currentTarget.value)}
           value={draft}
         />

@@ -326,6 +326,11 @@ type Messages = {
       "apiKey": "API key";
       "none": "No setup";
     };
+    "toolNames": {
+      "anonymize": "Anonymise";
+      "createDocx": "Create DOCX";
+      "webSearch": "Web Search";
+    };
     "unavailable": "Not available yet";
   };
   "chat": {

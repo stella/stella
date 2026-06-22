@@ -24,6 +24,7 @@ import {
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -560,7 +561,6 @@ export const ConfigureStep = ({
             <FieldControl
               render={
                 <Input
-                  dir="auto"
                   onChange={(e) => setName(e.target.value)}
                   placeholder={t("templates.templateNamePlaceholder")}
                   value={name}
@@ -697,7 +697,7 @@ const OptionsTagInput = ({
       ))}
       <input
         className="placeholder:text-muted-foreground min-w-24 flex-1 bg-transparent px-1 outline-none"
-        dir="auto"
+        dir={contentDir(draft)}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={
@@ -775,7 +775,6 @@ const CompositePartsEditor = ({
               <Input
                 aria-label={t("templates.fieldPartKeyPlaceholder")}
                 className="flex-1"
-                dir="auto"
                 onChange={(e) =>
                   updatePart(index, {
                     key: e.target.value.replace(PART_KEY_DISALLOWED_RE, ""),
@@ -845,7 +844,6 @@ const CompositePartsEditor = ({
         <FieldControl
           render={
             <Input
-              dir="auto"
               onChange={(e) => onUpdate({ format: e.target.value })}
               placeholder={formatPlaceholder}
               ref={formatInputRef}
@@ -904,7 +902,6 @@ const OptionsFromFieldControl = ({
         <FieldControl
           render={
             <Input
-              dir="auto"
               onChange={(e) => {
                 const next = e.target.value.replace(PART_KEY_DISALLOWED_RE, "");
                 onUpdate({ optionsFrom: next === "" ? undefined : next });
@@ -1207,7 +1204,6 @@ const LookupFormatRow = ({
         <Input
           aria-label={t("templates.fieldLookupFormatKey")}
           className="flex-1"
-          dir="auto"
           onChange={(e) =>
             onChange({
               key: e.target.value.replace(LOOKUP_FORMAT_KEY_DISALLOWED_RE, ""),
@@ -1232,7 +1228,6 @@ const LookupFormatRow = ({
         render={
           <Textarea
             aria-label={t("templates.fieldLookupFormatTemplate")}
-            dir="auto"
             maxLength={LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH}
             onChange={(e) => onChange({ template: e.target.value })}
             placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
@@ -1495,7 +1490,6 @@ export const FieldConfigEditor = ({
         <FieldControl
           render={
             <Input
-              dir="auto"
               onChange={(e) => onUpdate({ label: e.target.value })}
               placeholder={t("templates.fieldLabelPlaceholder")}
               value={field.label}
@@ -1510,7 +1504,6 @@ export const FieldConfigEditor = ({
           <FieldControl
             render={
               <Input
-                dir="auto"
                 maxLength={HINT_MAX_LENGTH}
                 onChange={(e) => onUpdate({ hint: e.target.value })}
                 value={field.hint ?? ""}

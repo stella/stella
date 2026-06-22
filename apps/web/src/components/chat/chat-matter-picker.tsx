@@ -11,6 +11,7 @@ import {
   MenuPopup,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -274,7 +275,7 @@ export const ChatMatterPicker = ({
             />
             <input
               className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-xs outline-none"
-              dir="auto"
+              dir={contentDir(search)}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
                 // base-ui's Menu listens for keystrokes (typeahead

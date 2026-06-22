@@ -323,6 +323,11 @@
       "apiKey": "مفتاح API",
       "none": "بدون إعداد"
     },
+    "toolNames": {
+      "anonymize": "إخفاء الهوية",
+      "createDocx": "إنشاء DOCX",
+      "webSearch": "بحث الويب"
+    },
     "unavailable": "غير متاح بعد"
   },
   "chat": {

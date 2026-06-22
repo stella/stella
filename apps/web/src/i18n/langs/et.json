@@ -323,6 +323,11 @@
       "apiKey": "API võti",
       "none": "Seadistus puudub"
     },
+    "toolNames": {
+      "anonymize": "Anonüümimine",
+      "createDocx": "Loo DOCX",
+      "webSearch": "Veebiotsing"
+    },
     "unavailable": "Veel pole saadaval"
   },
   "chat": {

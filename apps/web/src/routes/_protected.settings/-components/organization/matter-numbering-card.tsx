@@ -164,7 +164,6 @@ const MatterNumberingCardBody = ({
           {isCustom && (
             <Field>
               <Input
-                dir="auto"
                 onChange={(e) => setPattern(e.target.value)}
                 placeholder="{YYYY}/{SEQ}"
                 value={pattern}

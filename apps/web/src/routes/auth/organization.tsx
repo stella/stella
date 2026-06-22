@@ -360,7 +360,6 @@ const CreateOrganizationForm = ({
                 <FieldLabel>{t("common.organizationName")}</FieldLabel>
                 <Input
                   autoFocus
-                  dir="auto"
                   onBlur={field.handleBlur}
                   onChange={(event) => {
                     const value = event.target.value;

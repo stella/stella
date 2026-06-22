@@ -390,7 +390,6 @@ const LeafValueEditor = ({
   return (
     <Input
       className="h-7! w-32 text-xs"
-      dir="auto"
       onChange={(e) => emit(e.currentTarget.value)}
       placeholder={t("workspaces.properties.enterAValue")}
       size="sm"

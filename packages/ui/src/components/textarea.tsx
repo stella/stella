@@ -5,6 +5,7 @@ import type * as React from "react";
 import { Field as FieldPrimitive } from "@base-ui/react/field";
 import { mergeProps } from "@base-ui/react/merge-props";
 
+import { useContentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 type TextareaProps = React.ComponentProps<"textarea"> & {
@@ -16,8 +17,19 @@ function Textarea({
   className,
   size = "default",
   unstyled = false,
+  dir,
+  onChange,
   ...props
 }: TextareaProps) {
+  const contentDir = useContentDir({
+    dir,
+    value: props.value,
+    defaultValue: props.defaultValue,
+  });
+  const handleChange: NonNullable<TextareaProps["onChange"]> = (event) => {
+    contentDir.trackValue(event.currentTarget.value);
+    onChange?.(event);
+  };
   return (
     <span
       className={
@@ -41,8 +53,8 @@ function Textarea({
                 "min-h-18.5 py-[calc(--spacing(2)-1px)] max-sm:min-h-21.5",
             )}
             data-slot="textarea"
-            dir="auto"
-            {...mergeProps(defaultProps, props)}
+            {...mergeProps(defaultProps, props, { onChange: handleChange })}
+            dir={contentDir.dir}
           />
         )}
       />

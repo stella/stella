@@ -327,7 +327,6 @@ const MattersToolbarSkeleton = () => {
     >
       <Input
         className="w-64 max-w-[40%]"
-        dir="auto"
         disabled
         placeholder={t("common.search")}
         size="sm"

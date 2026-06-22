@@ -34,6 +34,7 @@ import {
   CatalogueRow,
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import type { ContextMenuAction } from "@/components/context-menu";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
@@ -43,6 +44,7 @@ import {
 
 const toRowDisplay = (entry: LoadedCatalogueEntry): CatalogueRowDisplay => ({
   slug: entry.slug,
+  kind: entry.kind,
   displayName: entry.displayName,
   description: entry.description,
   author: entry.author,
@@ -131,12 +133,19 @@ export const CatalogueStep = ({
   const recommendedSet = recommendedSlugsForJurisdictions(practiceCountryCodes);
   const selectedSet = new Set(selectedSlugs);
 
+  const localizedName = (entry: LoadedCatalogueEntry) => {
+    const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
+    return key ? t(key) : entry.displayName;
+  };
+
   const recommendedEntries = selectableEntries
     .filter(
       (entry) =>
         recommendedSet.has(entry.slug) && !pinnedSlugSet.has(entry.slug),
     )
-    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+    .sort((left, right) =>
+      localizedName(left).localeCompare(localizedName(right)),
+    );
 
   const otherEntries = selectableEntries.filter(
     (entry) =>
@@ -161,6 +170,7 @@ export const CatalogueStep = ({
     }
     return (
       entry.displayName.toLowerCase().includes(normalised) ||
+      localizedName(entry).toLowerCase().includes(normalised) ||
       entry.description.toLowerCase().includes(normalised) ||
       entry.tags.some((tag) => tag.toLowerCase().includes(normalised))
     );
@@ -172,7 +182,9 @@ export const CatalogueStep = ({
   // "Vybrat vše doporučené" bulk-adds the ones in `recommendedSet`.
   const filteredEntries = [...recommendedEntries, ...otherEntries]
     .filter(matchesSearch)
-    .sort((left, right) => left.displayName.localeCompare(right.displayName));
+    .sort((left, right) =>
+      localizedName(left).localeCompare(localizedName(right)),
+    );
 
   const allJurisdictionCodes = (() => {
     const set = new Set<string>();

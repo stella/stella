@@ -1042,6 +1042,13 @@
   }
   html {
     @apply antialiased;
+    /* Paint native UI (scrollbars, form controls, spellcheck) in the active
+     * palette. Without this the browser renders default scrollbars light even
+     * in dark mode, so they read as bright strips against the dark surface. */
+    color-scheme: light;
+  }
+  html.dark {
+    color-scheme: dark;
   }
   body {
     @apply bg-background text-foreground text-pretty;

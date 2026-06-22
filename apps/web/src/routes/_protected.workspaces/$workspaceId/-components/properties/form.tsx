@@ -1,6 +1,7 @@
 import type { ComponentProps } from "react";
 
 import { Field, FieldError } from "@stll/ui/components/field";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 type PropertyFormFieldProps = ComponentProps<typeof Field>;
@@ -35,7 +36,7 @@ export const PropertyTextInput = ({
       autoComplete="off"
       className="group-data-invalid:border-destructive/36 placeholder:text-foreground-placeholder w-full rounded-md px-1.5 py-1 text-sm font-semibold group-data-invalid:border focus-visible:outline-none"
       data-1p-ignore
-      dir="auto"
+      dir={contentDir(field.state.value)}
       onBlur={field.handleBlur}
       onChange={(e) => field.handleChange(e.target.value)}
       placeholder={placeholder}

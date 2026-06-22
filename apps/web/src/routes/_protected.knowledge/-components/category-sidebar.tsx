@@ -528,7 +528,6 @@ const CategoryFormDialogBody = ({
             {labels.nameLabel}
           </label>
           <Input
-            dir="auto"
             id="category-name"
             onChange={(e) => setName(e.target.value)}
             placeholder={labels.namePlaceholder}

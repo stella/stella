@@ -263,7 +263,6 @@ function ProfilePageBody() {
                 {t("settings.account.preferredNameDescription")}
               </p>
               <Input
-                dir="auto"
                 id="preferred-name-input"
                 maxLength={120}
                 placeholder={t("settings.account.preferredNamePlaceholder")}

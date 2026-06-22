@@ -19,6 +19,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import Tooltip from "@/components/tooltip";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { sanitizeHref } from "@/lib/sanitize-href";
@@ -59,6 +60,7 @@ export const CatalogueDetailPanel = ({
       (entry.kind === "mcp" && entry.installedConnectorSlug !== null) ||
       (entry.kind === "skill" && entry.installedSkillId !== null));
   const homepageUrl = sanitizeHref(entry.homepage ?? entry.authorUrl);
+  const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">
@@ -72,7 +74,7 @@ export const CatalogueDetailPanel = ({
           className="text-foreground min-w-0 truncate text-sm font-semibold"
           dir="auto"
         >
-          {entry.displayName}
+          {labelKey ? t(labelKey) : entry.displayName}
         </h2>
         {homepageUrl && (
           <a

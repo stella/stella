@@ -14,6 +14,7 @@ import { useTranslations } from "use-intl";
 import type { LoadedCatalogueEntry } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
 
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
 
@@ -41,6 +42,7 @@ export const CatalogueDetailPreview = ({
 }: CatalogueDetailPreviewProps) => {
   const t = useTranslations();
   const isFirstParty = entry.author === "stella";
+  const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
 
   return (
     <div className="flex h-full max-h-full w-full items-stretch justify-center overflow-hidden">
@@ -67,7 +69,7 @@ export const CatalogueDetailPreview = ({
               className="text-foreground truncate text-base leading-tight font-semibold"
               dir="auto"
             >
-              {entry.displayName}
+              {labelKey ? t(labelKey) : entry.displayName}
             </h2>
             <p className="text-muted-foreground text-xs tracking-wider uppercase">
               {t(`catalogue.filter.${kindToFilter(entry.kind)}`)}

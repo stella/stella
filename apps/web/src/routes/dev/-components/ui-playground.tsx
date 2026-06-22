@@ -458,7 +458,7 @@ export function UiPlayground() {
                         </PopoverDescription>
                         <Separator />
                         <Label>Owner</Label>
-                        <Input defaultValue="M. Novak" dir="auto" />
+                        <Input defaultValue="M. Novak" />
                         <Button size="sm">Apply</Button>
                       </div>
                     </PopoverPopup>
@@ -482,7 +482,7 @@ export function UiPlayground() {
                 >
                   <Field>
                     <FieldLabel>Matter name</FieldLabel>
-                    <Input defaultValue="Supply agreement review" dir="auto" />
+                    <Input defaultValue="Supply agreement review" />
                     <FieldDescription>
                       Visible labels and helper text stay close to the control.
                     </FieldDescription>
@@ -490,20 +490,13 @@ export function UiPlayground() {
 
                   <Field>
                     <FieldLabel>Reference</FieldLabel>
-                    <Input
-                      aria-invalid
-                      defaultValue="12345678901234567890"
-                      dir="auto"
-                    />
+                    <Input aria-invalid defaultValue="12345678901234567890" />
                     <FieldError match>Reference is too long.</FieldError>
                   </Field>
 
                   <Field>
                     <FieldLabel>Notes</FieldLabel>
-                    <Textarea
-                      defaultValue="Counterparty requested a narrow confidentiality carve-out."
-                      dir="auto"
-                    />
+                    <Textarea defaultValue="Counterparty requested a narrow confidentiality carve-out." />
                   </Field>
 
                   <InputGroup>
@@ -677,10 +670,7 @@ export function UiPlayground() {
                         </Field>
                         <Field>
                           <FieldLabel>Message</FieldLabel>
-                          <Textarea
-                            defaultValue="Please review the latest draft."
-                            dir="auto"
-                          />
+                          <Textarea defaultValue="Please review the latest draft." />
                         </Field>
                       </DialogPanel>
                       <DialogFooter>

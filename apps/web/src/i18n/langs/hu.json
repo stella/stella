@@ -323,6 +323,11 @@
       "apiKey": "API-kulcs",
       "none": "Nincs beállítás"
     },
+    "toolNames": {
+      "anonymize": "Anonimizálás",
+      "createDocx": "DOCX létrehozása",
+      "webSearch": "Webes keresés"
+    },
     "unavailable": "Még nem elérhető"
   },
   "chat": {

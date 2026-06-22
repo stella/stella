@@ -446,7 +446,6 @@ const RuleValueInput = ({
     <Input
       aria-label={t("templates.conditionValue")}
       className="w-28"
-      dir="auto"
       onChange={(e) => onChange(e.target.value)}
       placeholder={t("templates.conditionValue")}
       value={stringValue}

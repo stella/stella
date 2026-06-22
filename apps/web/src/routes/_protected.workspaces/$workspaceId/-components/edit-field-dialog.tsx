@@ -318,7 +318,6 @@ export const EditFieldDialog = ({
                             {t("workspaces.fields.currencyLabel")}
                           </FieldLabel>
                           <Input
-                            dir="auto"
                             maxLength={3}
                             onBlur={field.handleBlur}
                             onChange={(e) =>
@@ -379,7 +378,6 @@ const TextFormField = ({ field }: TextFormFieldProps) => {
     <Field name={field.name}>
       <FieldLabel>{t("workspaces.fields.fieldValueLabel")}</FieldLabel>
       <Input
-        dir="auto"
         onBlur={field.handleBlur}
         onChange={(e) => field.handleChange(e.target.value)}
         placeholder={t("workspaces.fields.fieldValuePlaceholder")}

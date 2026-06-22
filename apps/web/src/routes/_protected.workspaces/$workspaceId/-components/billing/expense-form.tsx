@@ -217,7 +217,6 @@ export const ExpenseForm = ({
         <form.Field name="description">
           {(field) => (
             <Textarea
-              dir="auto"
               onChange={(e) => field.handleChange(e.currentTarget.value)}
               placeholder={t("billing.expenses.descriptionPlaceholder")}
               rows={3}

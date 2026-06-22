@@ -74,7 +74,6 @@ export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
     <Textarea
       aria-label={t("common.notes")}
       className="min-h-28"
-      dir="auto"
       disabled={updateContact.isPending}
       onBlur={handleSave}
       onChange={(event) => setDraft(event.currentTarget.value)}

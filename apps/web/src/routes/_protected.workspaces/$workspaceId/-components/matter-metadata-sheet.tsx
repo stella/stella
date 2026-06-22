@@ -275,7 +275,6 @@ export const MatterMetadataPanel = ({
           </span>
           <Input
             className="rounded-md shadow-none"
-            dir="auto"
             disabled={updateWorkspace.isPending}
             onBlur={handleSaveName}
             onChange={(e) => {
@@ -309,7 +308,6 @@ export const MatterMetadataPanel = ({
           <div className="flex min-w-0 items-center gap-2">
             <Input
               className="w-36 shrink-0 rounded-md shadow-none"
-              dir="auto"
               onBlur={handleSaveReference}
               onChange={(e) => {
                 setReferenceDirty(true);

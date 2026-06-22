@@ -43,6 +43,7 @@ import {
   CatalogueRow,
   type CatalogueRowDisplay,
 } from "@/components/catalogue/catalogue-row";
+import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import type { ContextMenuAction } from "@/components/context-menu";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
@@ -96,6 +97,7 @@ type CatalogueBrowserProps = {
 
 const toRowDisplay = (entry: CatalogueEntry): CatalogueRowDisplay => ({
   slug: entry.slug,
+  kind: entry.kind,
   displayName: entry.displayName,
   description: entry.description,
   author: entry.author,
@@ -195,6 +197,10 @@ export const CatalogueBrowser = ({
 
   const filtered = (() => {
     const normalised = query.trim().toLowerCase();
+    const localizedName = (entry: CatalogueEntry) => {
+      const key = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
+      return key ? t(key) : entry.displayName;
+    };
     const subset = entries.filter((entry) => {
       if (filter !== "all" && entry.kind !== filter) {
         return false;
@@ -211,6 +217,7 @@ export const CatalogueBrowser = ({
       }
       return (
         entry.displayName.toLowerCase().includes(normalised) ||
+        localizedName(entry).toLowerCase().includes(normalised) ||
         entry.description.toLowerCase().includes(normalised) ||
         entry.tags.some((tag) => tag.toLowerCase().includes(normalised))
       );
@@ -219,7 +226,7 @@ export const CatalogueBrowser = ({
       if (left.isRecommendedForOrg !== right.isRecommendedForOrg) {
         return left.isRecommendedForOrg ? -1 : 1;
       }
-      return left.displayName.localeCompare(right.displayName);
+      return localizedName(left).localeCompare(localizedName(right));
     });
   })();
 

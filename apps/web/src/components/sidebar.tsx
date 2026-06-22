@@ -330,7 +330,6 @@ function SidebarInput({
       className={cn("bg-background h-8 w-full shadow-none", className)}
       data-sidebar="input"
       data-slot="sidebar-input"
-      dir="auto"
       {...props}
     />
   );
