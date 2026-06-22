@@ -42,7 +42,16 @@ export function SignInDialog({
   };
 
   const showOtpStep = async (email: string) => {
-    setStep({ status: "otp", email, devOtp: await fetchDevOtp(email) });
+    // Transition immediately; the dev OTP fills in once it arrives so a slow or
+    // unreachable dev API never blocks the OTP screen. The panel is keyed by the
+    // code, so it remounts and picks up the prefill when it lands.
+    setStep({ status: "otp", email, devOtp: null });
+    const devOtp = await fetchDevOtp(email);
+    setStep((prev) =>
+      prev.status === "otp" && prev.email === email
+        ? { status: "otp", email, devOtp }
+        : prev,
+    );
   };
 
   return (
@@ -62,6 +71,7 @@ export function SignInDialog({
             />
           ) : (
             <OTPPanel
+              key={step.devOtp ?? "empty"}
               email={step.email}
               initialOtp={step.devOtp ?? undefined}
               redirectTo={redirectTo}

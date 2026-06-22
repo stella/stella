@@ -21,7 +21,7 @@ export const fetchDevOtp = async (email: string): Promise<string | null> => {
     url.searchParams.set("email", email);
     const response = await fetch(url, {
       credentials: "include",
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(3000),
     });
     if (!response.ok) {
       return null;
