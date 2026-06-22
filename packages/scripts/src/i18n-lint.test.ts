@@ -245,6 +245,18 @@ describe("terminology", () => {
     ).toEqual([]);
   });
 
+  test("detects the concept when the source uses the plural trigger", () => {
+    // "matters" (plural) still triggers the "Matter" concept.
+    expect(
+      findForbiddenTerms(
+        "Manage your matters",
+        "Diese Sache öffnen",
+        "de",
+        rules,
+      ),
+    ).toEqual(["Sache"]);
+  });
+
   test("matches an Arabic forbidden term carrying proclitics (ال/و prefixes)", () => {
     const arRules = buildForbiddenRules(
       parseGlossary(

@@ -402,8 +402,13 @@ const containsWord = (
   let regex = wordRegexCache.get(cacheKey);
   if (!regex) {
     const prefix = locale === "ar" ? ARABIC_PROCLITIC_PREFIX : "";
+    // English source triggers also match their regular plural ("matter" →
+    // "matters"), so a string about the concept is detected either way. Only the
+    // source side is English; target forbidden terms stay exact-word (their own
+    // inflected forms are listed explicitly in the glossary).
+    const suffix = locale === "en" ? "(?:e?s)?" : "";
     regex = new RegExp(
-      `(?<!\\p{L})${prefix}${escapeRegExp(needle)}(?!\\p{L})`,
+      `(?<!\\p{L})${prefix}${escapeRegExp(needle)}${suffix}(?!\\p{L})`,
       "iu",
     );
     wordRegexCache.set(cacheKey, regex);
