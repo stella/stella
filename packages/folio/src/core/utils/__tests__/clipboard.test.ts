@@ -4,6 +4,7 @@ import type { Run } from "../../types/document";
 import {
   cleanWordHtml,
   getClipboardImageFiles,
+  htmlToRuns,
   runsToClipboardContent,
 } from "../clipboard";
 
@@ -35,6 +36,94 @@ const withDomParserStub = (run: () => void): void => {
       Reflect.deleteProperty(globalThis, "DOMParser");
     }
   }
+};
+
+type FakeDomNode = FakeTextNode | FakeElementNode;
+
+class FakeTextNode {
+  readonly childNodes: FakeDomNode[] = [];
+  nextSibling: FakeDomNode | null = null;
+  readonly nodeType = 3;
+  readonly textContent: string;
+
+  constructor(textContent: string) {
+    this.textContent = textContent;
+  }
+}
+
+class FakeElementNode {
+  readonly childNodes: FakeDomNode[];
+  nextSibling: FakeDomNode | null = null;
+  readonly nodeType = 1;
+  readonly style = {
+    backgroundColor: "",
+    color: "",
+    fontFamily: "",
+    fontSize: "",
+    fontStyle: "",
+    fontWeight: "",
+    textDecoration: "",
+  };
+  readonly tagName: string;
+
+  constructor(tagName: string, childNodes: FakeDomNode[] = []) {
+    this.tagName = tagName;
+    this.childNodes = childNodes;
+
+    for (let index = 0; index < childNodes.length; index++) {
+      childNodes[index]!.nextSibling = childNodes.at(index + 1) ?? null;
+    }
+  }
+
+  getAttribute(): string | null {
+    return null;
+  }
+}
+
+const withDomTree = (body: FakeElementNode, run: () => void): void => {
+  const originalNode = globalThis.Node;
+  const originalElement = globalThis.HTMLElement;
+  const originalParser = globalThis.DOMParser;
+
+  Object.defineProperty(globalThis, "Node", {
+    configurable: true,
+    value: { TEXT_NODE: 3 },
+  });
+  Object.defineProperty(globalThis, "HTMLElement", {
+    configurable: true,
+    value: FakeElementNode,
+  });
+  Object.defineProperty(globalThis, "DOMParser", {
+    configurable: true,
+    value: class {
+      parseFromString() {
+        return { body };
+      }
+    },
+  });
+
+  try {
+    run();
+  } finally {
+    restoreGlobal("Node", originalNode);
+    restoreGlobal("HTMLElement", originalElement);
+    restoreGlobal("DOMParser", originalParser);
+  }
+};
+
+const restoreGlobal = <K extends "DOMParser" | "HTMLElement" | "Node">(
+  key: K,
+  value: (typeof globalThis)[K] | undefined,
+): void => {
+  if (value) {
+    Object.defineProperty(globalThis, key, {
+      configurable: true,
+      value,
+    });
+    return;
+  }
+
+  Reflect.deleteProperty(globalThis, key);
 };
 
 describe("getClipboardImageFiles", () => {
@@ -170,6 +259,32 @@ describe("runsToClipboardContent", () => {
     expect(html).not.toContain(scriptScheme);
     expect(html).not.toContain("color: #000000;background");
     expect(html).not.toContain("background-color:");
+  });
+});
+
+describe("htmlToRuns", () => {
+  test("preserves visible text inside pasted form controls", () => {
+    const body = new FakeElementNode("body", [
+      new FakeElementNode("p", [new FakeTextNode("Before")]),
+      new FakeElementNode("form", [
+        new FakeElementNode("textarea", [new FakeTextNode("Field value")]),
+      ]),
+      new FakeElementNode("p", [new FakeTextNode("After")]),
+    ]);
+
+    withDomTree(body, () => {
+      const runs = htmlToRuns(
+        "<p>Before</p><form><textarea>Field value</textarea></form><p>After</p>",
+        "",
+      );
+      const text = runs
+        .map((run) => run.content.map((part) => part.text).join(""))
+        .join("");
+
+      expect(text).toContain("Before");
+      expect(text).toContain("Field value");
+      expect(text).toContain("After");
+    });
   });
 });
 

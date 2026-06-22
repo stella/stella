@@ -75,8 +75,6 @@ const SKIPPED_CLIPBOARD_ELEMENTS = new Set([
   "iframe",
   "object",
   "embed",
-  "form",
-  "textarea",
   "svg",
   "math",
 ]);
