@@ -2,394 +2,394 @@
   "placeholder": {},
   "icu": {},
   "plural": {
-    "billing.invoices.totalEntries": [
-      "es",
-      "fr"
-    ],
-    "billing.rates.rateCount": [
-      "es",
-      "fr"
-    ],
-    "billing.selectedCount": [
-      "es",
-      "fr"
-    ],
-    "catalogue.installPack": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR"
-    ],
-    "catalogue.packDescription": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR"
-    ],
-    "catalogue.packInstalled": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR"
-    ],
-    "chat.pastedText.fromClipboard": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR"
-    ],
-    "clauses.clauseCount": [
-      "es"
-    ],
-    "clauses.importResult": [
-      "es",
-      "fr"
-    ],
-    "clauses.importSuccess": [
-      "es",
-      "fr"
-    ],
-    "clauses.syncedAllResult": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pt-BR"
-    ],
-    "clauses.versionCount": [
-      "es"
-    ],
-    "common.deletedCount": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pl"
-    ],
-    "contacts.alsoPartyIn": [
-      "es",
-      "lt",
-      "pl"
-    ],
-    "fileDetail.changesDetected": [
-      "es",
-      "fr",
-      "hu",
-      "lt",
-      "lv"
-    ],
-    "knowledge.agentSkills.resources": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pt-BR"
-    ],
-    "onboarding.catalogueContinueWithCount": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pt-BR"
-    ],
-    "onboarding.cataloguePreviewCount": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pt-BR"
-    ],
-    "search.resultCount": [
-      "es",
-      "fr"
-    ],
-    "settings.organization.usageSeats": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pt-BR"
-    ],
-    "templates.checkErrors": [
-      "es"
-    ],
-    "templates.checkWarnings": [
-      "es"
-    ],
-    "templates.conditionCount": [
-      "es",
-      "lt",
-      "pl",
-      "pt-BR"
-    ],
-    "templates.emptyFieldsWarning": [
-      "es",
-      "fr",
-      "pt-BR"
-    ],
-    "templates.fieldCount": [
-      "es"
-    ],
-    "templates.prefillApplied": [
-      "es"
-    ],
-    "templates.registryFilled": [
-      "es"
-    ],
-    "templates.structureWarnings": [
-      "es"
-    ],
-    "templates.unusedFields": [
-      "es",
-      "fr",
-      "hu",
-      "pt-BR"
-    ],
-    "templates.usedTimes": [
-      "cs",
-      "de",
-      "es",
-      "fr",
-      "hu",
-      "lt",
-      "pt-BR",
-      "sk"
-    ],
-    "templates.validationMinItems": [
-      "es",
-      "fr",
-      "lt",
-      "pt-BR"
-    ],
-    "workspaces.copyToMatter.descriptionCount": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pt-BR"
-    ],
-    "workspaces.deleteItems": [
-      "es",
-      "fr",
-      "lt",
-      "lv"
-    ],
-    "workspaces.deleteItemsDescription": [
-      "es",
-      "fr",
-      "lt",
-      "lv"
-    ],
-    "workspaces.deleteSelectedRowsDescription": [
-      "es"
-    ],
-    "workspaces.documentsCount": [
-      "es"
-    ],
-    "workspaces.entitiesCount": [
-      "es",
-      "fr"
-    ],
-    "workspaces.files.renamedToAvoidConflicts": [
-      "es"
-    ],
-    "workspaces.files.retryFailed": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pl"
-    ],
-    "workspaces.files.uploadedPartially": [
-      "es",
-      "fr"
-    ],
-    "workspaces.importOrganizer.description": [
-      "es",
-      "fr",
-      "lt"
-    ],
-    "workspaces.importOrganizer.emptyFoldersToDelete": [
-      "es",
-      "fr",
-      "lt"
-    ],
-    "workspaces.infosoud.eventCount": [
-      "es",
-      "fr",
-      "lt",
-      "lv"
-    ],
-    "workspaces.infosoud.importAgendaResult": [
-      "es",
-      "fr",
-      "lt",
-      "lv"
-    ],
-    "workspaces.mattersCount": [
-      "es",
-      "fr"
-    ],
-    "workspaces.overview.membersCount": [
-      "es",
-      "fr",
-      "lt",
-      "lv"
-    ],
-    "workspaces.tasksCount": [
-      "es",
-      "fr",
-      "lt",
-      "lv",
-      "pl"
-    ],
-    "workspaces.views.fieldsSelected": [
-      "es"
-    ]
+    "billing.invoices.totalEntries": {
+      "es": "{count, plural, one {# registro} other {# registros}}",
+      "fr": "{count, plural, one {# entrée} other {# entrées}}"
+    },
+    "billing.rates.rateCount": {
+      "es": "{count, plural, one {# tarifa} other {# tarifas}}",
+      "fr": "{count, plural, one {# tarif} other {# tarifs}}"
+    },
+    "billing.selectedCount": {
+      "es": "{count, plural, one {# seleccionado} other {# seleccionados}}",
+      "fr": "{count, plural, one {# élément sélectionné} other {# éléments sélectionnés}}"
+    },
+    "catalogue.installPack": {
+      "es": "{count, plural, one {Instalar # herramienta} other {Instalar # herramientas}}",
+      "fr": "{count, plural, one {Installer # outil} other {Installer # outils}}",
+      "lt": "{count, plural, one {Įdiegti # įrankį} few {Įdiegti # įrankius} other {Įdiegti # įrankių}}",
+      "lv": "{count, plural, one {Instalēt # rīku} other {Instalēt # rīkus}}",
+      "pl": "{count, plural, one {Zainstaluj # narzędzie} few {Zainstaluj # narzędzia} other {Zainstaluj # narzędzi}}",
+      "pt-BR": "{count, plural, one {Instalar # ferramenta} other {Instalar # ferramentas}}"
+    },
+    "catalogue.packDescription": {
+      "es": "{count, plural, one {# herramienta} other {# herramientas}} seleccionadas para su práctica. Instale con un clic o elija individualmente abajo.",
+      "fr": "{count, plural, one {# outil} other {# outils}} sélectionnés pour votre pratique. Installation en un clic ou choix individuel ci-dessous.",
+      "lt": "{count, plural, one {# įrankis} few {# įrankiai} other {# įrankių}} parinkta jūsų praktikai. Įdiekite vienu paspaudimu arba pasirinkite žemiau.",
+      "lv": "{count, plural, one {# rīks} other {# rīki}} jūsu praksei. Instalējiet ar vienu klikšķi vai izvēlieties zemāk individuāli.",
+      "pl": "{count, plural, one {# narzędzie} few {# narzędzia} other {# narzędzi}} wybranych dla Twojej praktyki. Zainstaluj jednym kliknięciem lub wybierz poniżej.",
+      "pt-BR": "{count, plural, one {# ferramenta} other {# ferramentas}} selecionadas para sua prática. Instale com um clique ou escolha individualmente abaixo."
+    },
+    "catalogue.packInstalled": {
+      "es": "{count, plural, one {# herramienta instalada} other {# herramientas instaladas}}",
+      "fr": "{count, plural, one {# outil installé} other {# outils installés}}",
+      "lt": "{count, plural, one {Įdiegta # įrankis} few {Įdiegti # įrankiai} other {Įdiegta # įrankių}}",
+      "lv": "{count, plural, one {# rīks instalēts} other {# rīki instalēti}}",
+      "pl": "{count, plural, one {Zainstalowano # narzędzie} few {Zainstalowano # narzędzia} other {Zainstalowano # narzędzi}}",
+      "pt-BR": "{count, plural, one {# ferramenta instalada} other {# ferramentas instaladas}}"
+    },
+    "chat.pastedText.fromClipboard": {
+      "es": "Pegado: {count, plural, one {# carácter} other {# caracteres}}",
+      "fr": "Collé : {count, plural, one {# caractère} other {# caractères}}",
+      "lt": "Įklijuota {count, plural, one {# simbolis} few {# simboliai} other {# simbolių}}",
+      "lv": "Ielīmēti {count, plural, one {# rakstzīme} other {# rakstzīmes}}",
+      "pl": "Wklejono {count, plural, one {# znak} few {# znaki} other {# znaków}}",
+      "pt-BR": "{count, plural, one {# caractere colado} other {# caracteres colados}}"
+    },
+    "clauses.clauseCount": {
+      "es": "{count, plural, one {# cláusula} other {# cláusulas}}"
+    },
+    "clauses.importResult": {
+      "es": "{created, plural, one {# creada} other {# creadas}}, {skipped, plural, one {# omitida} other {# omitidas}}",
+      "fr": "{created, plural, one {# créée} other {# créées}}, {skipped, plural, one {# ignorée} other {# ignorées}}"
+    },
+    "clauses.importSuccess": {
+      "es": "{count, plural, one {# cláusula importada} other {# cláusulas importadas}}",
+      "fr": "{count, plural, one {# clause importée} other {# clauses importées}}"
+    },
+    "clauses.syncedAllResult": {
+      "es": "{count, plural, =0 {Ya está todo actualizado} one {# cláusula sincronizada} other {# cláusulas sincronizadas}}",
+      "fr": "{count, plural, =0 {Tout est déjà à jour} one {# clause synchronisée} other {# clauses synchronisées}}",
+      "lt": "{count, plural, =0 {Viskas jau atnaujinta} one {Sinchronizuota # sąlyga} few {Sinchronizuotos # sąlygos} other {Sinchronizuota # sąlygų}}",
+      "lv": "{count, plural, =0 {Viss jau ir aktuāls} one {Sinhronizēta # klauzula} other {Sinhronizētas # klauzulas}}",
+      "pt-BR": "{count, plural, =0 {Tudo já está atualizado} one {# cláusula sincronizada} other {# cláusulas sincronizadas}}"
+    },
+    "clauses.versionCount": {
+      "es": "{count, plural, one {# versión} other {# versiones}}"
+    },
+    "common.deletedCount": {
+      "es": "{count, plural, one {# elemento eliminado} other {# elementos eliminados}}",
+      "fr": "{count, plural, one {# élément supprimé} other {# éléments supprimés}}",
+      "lt": "{count, plural, one {# elementas ištrintas} few {# elementai ištrinti} other {# elementų ištrinta}}",
+      "lv": "{count, plural, one {# vienums dzēsts} other {# vienumi dzēsti}}",
+      "pl": "{count, plural, one {# element usunięto} few {# elementy usunięto} other {# elementów usunięto}}"
+    },
+    "contacts.alsoPartyIn": {
+      "es": "También aparece como parte en {count, plural, one {# asunto más} other {# asuntos más}}",
+      "lt": "Taip pat dalyvauja kaip šalis {count, plural, one {# kitoje byloje} few {# kitose bylose} other {# kitų bylų}}",
+      "pl": "Występuje również jako strona w {count, plural, one {# innej sprawie} few {# innych sprawach} other {# innych sprawach}}"
+    },
+    "fileDetail.changesDetected": {
+      "es": "{count, plural, one {# cambio} other {# cambios}}",
+      "fr": "{count, plural, one {# modification} other {# modifications}}",
+      "hu": "{count, plural, other {# módosítás}}",
+      "lt": "{count, plural, one {# pakeitimas} few {# pakeitimai} other {# pakeitimų}}",
+      "lv": "{count, plural, one {# izmaiņa} other {# izmaiņas}}"
+    },
+    "knowledge.agentSkills.resources": {
+      "es": "{count, plural, one {# recurso} other {# recursos}}",
+      "fr": "{count, plural, one {# ressource} other {# ressources}}",
+      "lt": "{count, plural, one {# išteklius} few {# ištekliai} other {# išteklių}}",
+      "lv": "{count, plural, one {# resurss} other {# resursi}}",
+      "pt-BR": "{count, plural, one {# recurso} other {# recursos}}"
+    },
+    "onboarding.catalogueContinueWithCount": {
+      "es": "{count, plural, one {Continuar con # herramienta} other {Continuar con # herramientas}}",
+      "fr": "{count, plural, one {Continuer avec # outil} other {Continuer avec # outils}}",
+      "lt": "{count, plural, one {Tęsti su # įrankiu} few {Tęsti su # įrankiais} other {Tęsti su # įrankių}}",
+      "lv": "{count, plural, one {Turpināt ar # rīku} other {Turpināt ar # rīkiem}}",
+      "pt-BR": "{count, plural, one {Continuar com # ferramenta} other {Continuar com # ferramentas}}"
+    },
+    "onboarding.cataloguePreviewCount": {
+      "es": "{count, plural, =0 {Sin capacidades} one {# capacidad} other {# capacidades}}",
+      "fr": "{count, plural, =0 {Aucune capacité} one {# capacité} other {# capacités}}",
+      "lt": "{count, plural, =0 {Nėra galimybių} one {# galimybė} few {# galimybės} other {# galimybių}}",
+      "lv": "{count, plural, =0 {Nav iespēju} one {# iespēja} other {# iespējas}}",
+      "pt-BR": "{count, plural, =0 {Nenhum recurso} one {# recurso} other {# recursos}}"
+    },
+    "search.resultCount": {
+      "es": "{count, plural, one {# resultado} other {# resultados}}",
+      "fr": "{count, plural, one {# résultat} other {# résultats}}"
+    },
+    "settings.organization.usageSeats": {
+      "es": "{count, plural, one {# puesto} other {# puestos}}",
+      "fr": "{count, plural, one {# siège} other {# sièges}}",
+      "lt": "{count, plural, one {# vieta} few {# vietos} other {# vietų}}",
+      "lv": "{count, plural, one {# vieta} other {# vietas}}",
+      "pt-BR": "{count, plural, one {# assento} other {# assentos}}"
+    },
+    "templates.checkErrors": {
+      "es": "{count, plural, one {# error} other {# errores}}"
+    },
+    "templates.checkWarnings": {
+      "es": "{count, plural, one {# advertencia} other {# advertencias}}"
+    },
+    "templates.conditionCount": {
+      "es": "{count, plural, one {# condición} other {# condiciones}}",
+      "lt": "{count, plural, one {# sąlyga} few {# sąlygos} other {# sąlygų}}",
+      "pl": "{count, plural, one {# warunek} few {# warunki} other {# warunków}}",
+      "pt-BR": "{count, plural, one {# condição} other {# condições}}"
+    },
+    "templates.emptyFieldsWarning": {
+      "es": "{count, plural, one {# campo sigue vacío} other {# campos siguen vacíos}}: {names}",
+      "fr": "{count, plural, one {# champ est encore vide} other {# champs sont encore vides}} : {names}",
+      "pt-BR": "{count, plural, one {# campo ainda está vazio} other {# campos ainda estão vazios}}: {names}"
+    },
+    "templates.fieldCount": {
+      "es": "{count, plural, one {# campo} other {# campos}}"
+    },
+    "templates.prefillApplied": {
+      "es": "{count, plural, one {# campo prerrellenado} other {# campos prerrellenados}}"
+    },
+    "templates.registryFilled": {
+      "es": "{count, plural, one {# campo rellenado} other {# campos rellenados}} desde el registro"
+    },
+    "templates.structureWarnings": {
+      "es": "{count, plural, one {# advertencia de estructura} other {# advertencias de estructura}}"
+    },
+    "templates.unusedFields": {
+      "es": "{count, plural, one {# campo sin usar} other {# campos sin usar}}",
+      "fr": "{count, plural, one {# champ inutilisé} other {# champs inutilisés}}",
+      "hu": "{count, plural, other {# nem használt mező}}",
+      "pt-BR": "{count, plural, one {# campo não usado} other {# campos não usados}}"
+    },
+    "templates.usedTimes": {
+      "cs": "Použito {count}×",
+      "de": "{count}-mal verwendet",
+      "es": "Usado {count, plural, one {# vez} other {# veces}}",
+      "fr": "Utilisé {count, plural, one {# fois} other {# fois}}",
+      "hu": "{count} alkalommal használva",
+      "lt": "{count, plural, one {Naudotas # kartą} few {Naudotas # kartus} other {Naudota # kartų}}",
+      "pt-BR": "Usado {count, plural, one {# vez} other {# vezes}}",
+      "sk": "Použité {count}×"
+    },
+    "templates.validationMinItems": {
+      "es": "Añade al menos {min, plural, one {# elemento} other {# elementos}}",
+      "fr": "Ajoutez au moins {min, plural, one {# élément} other {# éléments}}",
+      "lt": "Pridėkite bent {min, plural, one {# elementą} few {# elementus} other {# elementų}}",
+      "pt-BR": "Adicione pelo menos {min, plural, one {# item} other {# itens}}"
+    },
+    "workspaces.copyToMatter.descriptionCount": {
+      "es": "Copiar o mover {count, plural, one {# elemento} other {# elementos}} a otro asunto",
+      "fr": "Copier ou déplacer {count, plural, one {# élément} other {# éléments}} vers un autre dossier",
+      "lt": "Kopijuoti arba perkelti {count, plural, one {# elementą} few {# elementus} other {# elementų}} į kitą bylą",
+      "lv": "Kopēt vai pārvietot {count, plural, one {# vienību} other {# vienības}} uz citu lietu",
+      "pt-BR": "Copiar ou mover {count, plural, one {# item} other {# itens}} para outro caso"
+    },
+    "workspaces.deleteItems": {
+      "es": "Eliminar {count, plural, one {# elemento} other {# elementos}}",
+      "fr": "Supprimer {count, plural, one {# élément} other {# éléments}}",
+      "lt": "Ištrinti {count, plural, one {# elementą} few {# elementus} other {# elementų}}",
+      "lv": "Dzēst {count, plural, one {# vienību} other {# vienības}}"
+    },
+    "workspaces.deleteItemsDescription": {
+      "es": "¿Está seguro de que desea eliminar {count, plural, one {# elemento} other {# elementos}}? Esta acción no se puede deshacer.",
+      "fr": "Êtes-vous sûr de vouloir supprimer {count, plural, one {# élément} other {# éléments}} ? Cette action est irréversible.",
+      "lt": "Ar tikrai norite ištrinti {count, plural, one {# elementą} few {# elementus} other {# elementų}}? Šio veiksmo negalima atšaukti.",
+      "lv": "Vai tiešām vēlaties dzēst {count, plural, one {# vienību} other {# vienības}}? Šo darbību nevar atsaukt."
+    },
+    "workspaces.deleteSelectedRowsDescription": {
+      "es": "{count, plural, one {¿Está seguro de que desea eliminar # fila seleccionada? Esta acción no se puede deshacer.} other {¿Está seguro de que desea eliminar # filas seleccionadas? Esta acción no se puede deshacer.}}"
+    },
+    "workspaces.documentsCount": {
+      "es": "{count, plural, one {# documento} other {# documentos}}"
+    },
+    "workspaces.entitiesCount": {
+      "es": "{count, plural, one {# elemento} other {# elementos}}",
+      "fr": "{count, plural, one {# élément} other {# éléments}}"
+    },
+    "workspaces.files.renamedToAvoidConflicts": {
+      "es": "{count, plural, one {# archivo renombrado para evitar conflictos} other {# archivos renombrados para evitar conflictos}}"
+    },
+    "workspaces.files.retryFailed": {
+      "es": "Reintentar {count, plural, one {# archivo} other {# archivos}}",
+      "fr": "Réessayer {count, plural, one {# fichier} other {# fichiers}}",
+      "lt": "Kartoti {count, plural, one {# failą} few {# failus} other {# failų}}",
+      "lv": "Mēģināt vēlreiz {count, plural, one {# failu} other {# failus}}",
+      "pl": "Ponów {count, plural, one {# plik} few {# pliki} other {# plików}}"
+    },
+    "workspaces.files.uploadedPartially": {
+      "es": "{failed, plural, one {# archivo falló} other {# archivos fallaron}} de {total, number}",
+      "fr": "{failed, plural, one {# fichier échoué} other {# fichiers échoués}} sur {total, number}"
+    },
+    "workspaces.importOrganizer.description": {
+      "es": "{count, plural, =0 {No hay archivos para organizar} one {Movimientos y renombrados sugeridos para # archivo} other {Movimientos y renombrados sugeridos para # archivos}}",
+      "fr": "{count, plural, =0 {Aucun fichier à organiser} one {Déplacements et renommages suggérés pour # fichier} other {Déplacements et renommages suggérés pour # fichiers}}",
+      "lt": "{count, plural, =0 {Nėra failų tvarkyti} one {Siūlomi perkėlimai ir pervadinimai # failui} few {Siūlomi perkėlimai ir pervadinimai # failams} other {Siūlomi perkėlimai ir pervadinimai # failų}}"
+    },
+    "workspaces.importOrganizer.emptyFoldersToDelete": {
+      "es": "{count, plural, one {# carpeta vacía para eliminar} other {# carpetas vacías para eliminar}}",
+      "fr": "{count, plural, one {# dossier vide à supprimer} other {# dossiers vides à supprimer}}",
+      "lt": "{count, plural, one {# tuščias aplankas pašalinimui} few {# tušti aplankai pašalinimui} other {# tuščių aplankų pašalinimui}}"
+    },
+    "workspaces.infosoud.eventCount": {
+      "es": "{count, plural, one {# evento} other {# eventos}}",
+      "fr": "{count, plural, one {# événement} other {# événements}}",
+      "lt": "{count, plural, one {# įvykis} few {# įvykiai} other {# įvykių}}",
+      "lv": "{count, plural, one {# notikums} other {# notikumi}}"
+    },
+    "workspaces.infosoud.importAgendaResult": {
+      "es": "{count, plural, one {# elemento guardado en Agenda} other {# elementos guardados en Agenda}}",
+      "fr": "{count, plural, one {# élément enregistré dans Agenda} other {# éléments enregistrés dans Agenda}}",
+      "lt": "{count, plural, one {# elementas išsaugotas Agendoje} other {# elementų išsaugota Agendoje}}",
+      "lv": "{count, plural, one {# vienums saglabāts Agendā} other {# vienumi saglabāti Agendā}}"
+    },
+    "workspaces.mattersCount": {
+      "es": "{count, plural, one {# asunto} other {# asuntos}}",
+      "fr": "{count, plural, one {# dossier} other {# dossiers}}"
+    },
+    "workspaces.overview.membersCount": {
+      "es": "{count, plural, one {# miembro} other {# miembros}}",
+      "fr": "{count, plural, one {# membre} other {# membres}}",
+      "lt": "{count, plural, one {# narys} other {# narių}}",
+      "lv": "{count, plural, one {# dalībnieks} other {# dalībnieki}}"
+    },
+    "workspaces.tasksCount": {
+      "es": "{count, plural, one {# elemento de agenda} other {# elementos de agenda}}",
+      "fr": "{count, plural, one {# élément d'agenda} other {# éléments d'agenda}}",
+      "lt": "{count, plural, one {# agendos elementas} few {# agendos elementai} other {# agendos elementų}}",
+      "lv": "{count, plural, one {# agendas vienums} other {# agendas vienumi}}",
+      "pl": "{count, plural, one {# pozycja agendy} few {# pozycje agendy} other {# pozycji agendy}}"
+    },
+    "workspaces.views.fieldsSelected": {
+      "es": "{count, plural, one {# seleccionado} other {# seleccionados}}"
+    }
   },
   "terminology": {
-    "billing.matterRequired": [
-      "ar"
-    ],
-    "billing.selectMatter": [
-      "ar"
-    ],
-    "billing.selectMatterToStart": [
-      "ar",
-      "et"
-    ],
-    "chat.createDocument.pickMatterPrompt": [
-      "ar"
-    ],
-    "chat.emptyThreadDescription": [
-      "de",
-      "sk"
-    ],
-    "chat.greetingSubtitle": [
-      "de"
-    ],
-    "clauses.clauseDeletedHint": [
-      "sk"
-    ],
-    "common.matter": [
-      "ar"
-    ],
-    "contacts.alsoPartyIn": [
-      "ar"
-    ],
-    "contacts.noMattersAsClient": [
-      "ar"
-    ],
-    "inspector.matterPicker.description": [
-      "ar"
-    ],
-    "inspector.matterPicker.noMatter": [
-      "ar"
-    ],
-    "inspector.matterPicker.noResults": [
-      "ar"
-    ],
-    "navigation.newMatter": [
-      "ar"
-    ],
-    "search.kinds.matter": [
-      "ar",
-      "et",
-      "sk"
-    ],
-    "templates.checkNoIssues": [
-      "sk"
-    ],
-    "templates.confirmDelete": [
-      "sk"
-    ],
-    "templates.fieldLookupFormatTemplate": [
-      "sk"
-    ],
-    "templates.moveToMatter": [
-      "ar"
-    ],
-    "templates.newTemplate": [
-      "sk"
-    ],
-    "templates.studio.scopeTemplate": [
-      "sk"
-    ],
-    "templates.templateDeleted": [
-      "sk"
-    ],
-    "templates.templateRenamed": [
-      "sk"
-    ],
-    "templates.templateSaved": [
-      "sk"
-    ],
-    "templates.untitledTemplate": [
-      "sk"
-    ],
-    "templates.useTemplateHint": [
-      "ar"
-    ],
-    "templates.whenToUsePlaceholder": [
-      "sk"
-    ],
-    "workspaces.copyToMatter.description": [
-      "ar"
-    ],
-    "workspaces.copyToMatter.descriptionCount": [
-      "ar"
-    ],
-    "workspaces.copyToMatter.menuItem": [
-      "ar"
-    ],
-    "workspaces.copyToMatter.title": [
-      "ar"
-    ],
-    "workspaces.createNewWorkspace": [
-      "ar"
-    ],
-    "workspaces.emptyMatters.description": [
-      "ar",
-      "et"
-    ],
-    "workspaces.emptyMatters.title": [
-      "ar",
-      "et"
-    ],
-    "workspaces.importOrganizer.instructionsHelp": [
-      "ar"
-    ],
-    "workspaces.mattersCount": [
-      "ar",
-      "et"
-    ],
-    "workspaces.newMatter": [
-      "ar",
-      "et"
-    ],
-    "workspaces.noMatters": [
-      "ar",
-      "et"
-    ],
-    "workspaces.properties.scopeMatter": [
-      "et"
-    ],
-    "workspaces.properties.scopeMatterDescription": [
-      "et"
-    ],
-    "workspaces.views.templates.created": [
-      "sk"
-    ],
-    "workspaces.views.templates.deleted": [
-      "sk"
-    ]
+    "billing.matterRequired": {
+      "ar": "يرجى اختيار قضية"
+    },
+    "billing.selectMatter": {
+      "ar": "اختر قضية..."
+    },
+    "billing.selectMatterToStart": {
+      "ar": "اختر قضية لبدء توقيت الوقت",
+      "et": "Ajastuse alustamiseks valige asi"
+    },
+    "chat.createDocument.pickMatterPrompt": {
+      "ar": "اختر قضية لحفظ هذا المستند فيها."
+    },
+    "chat.emptyThreadDescription": {
+      "de": "Fragen Sie zu dieser Sache, entwerfen Sie Text oder bitten Sie um eine kurze Recherche.",
+      "sk": "Opýtajte sa na túto vec, pripravte text alebo požiadajte o krátku rešeršnú poznámku."
+    },
+    "chat.greetingSubtitle": {
+      "de": "Beginnen Sie mit einer Sache, einem Dokument oder einer einfachen Frage."
+    },
+    "clauses.clauseDeletedHint": {
+      "sk": "Toto prepojenie už nič nevypĺňa; odpojte ho, aby šablóna ostala prehľadná."
+    },
+    "common.matter": {
+      "ar": "قضية"
+    },
+    "contacts.alsoPartyIn": {
+      "ar": "يظهر أيضاً كطرف في {count, plural, zero {# قضية أخرى} one {قضية أخرى واحدة} two {قضيتين أخريين} few {# قضايا أخرى} many {# قضية أخرى} other {# قضية أخرى}}"
+    },
+    "contacts.noMattersAsClient": {
+      "ar": "جهة الاتصال هذه ليست عميلاً في أي قضية."
+    },
+    "inspector.matterPicker.description": {
+      "ar": "اختر القضايا التي يمكن لهذه المحادثة الاستناد إليها. يرى الذكاء الاصطناعي المحتوى من كل قضية تختارها."
+    },
+    "inspector.matterPicker.noMatter": {
+      "ar": "بلا قضية"
+    },
+    "inspector.matterPicker.noResults": {
+      "ar": "لا توجد قضية تطابق «{query}»."
+    },
+    "navigation.newMatter": {
+      "ar": "قضية جديدة"
+    },
+    "search.kinds.matter": {
+      "ar": "قضية",
+      "et": "Asi",
+      "sk": "Vec"
+    },
+    "templates.checkNoIssues": {
+      "sk": "Nenašli sa žiadne problémy. Šablóna je pripravená na použitie."
+    },
+    "templates.confirmDelete": {
+      "sk": "Šablóna bude trvalo vymazaná."
+    },
+    "templates.fieldLookupFormatTemplate": {
+      "sk": "Šablóna formátu"
+    },
+    "templates.moveToMatter": {
+      "ar": "النقل إلى قضية"
+    },
+    "templates.newTemplate": {
+      "sk": "Nová šablóna"
+    },
+    "templates.studio.scopeTemplate": {
+      "sk": "Šablóna"
+    },
+    "templates.templateDeleted": {
+      "sk": "Šablóna vymazaná"
+    },
+    "templates.templateRenamed": {
+      "sk": "Šablóna premenovaná"
+    },
+    "templates.templateSaved": {
+      "sk": "Šablóna uložená"
+    },
+    "templates.untitledTemplate": {
+      "sk": "Šablóna bez názvu"
+    },
+    "templates.useTemplateHint": {
+      "ar": "عبّئ الحقول، ثم نزّل المستند أو احفظه في قضية."
+    },
+    "templates.whenToUsePlaceholder": {
+      "sk": "Kedy sa má táto šablóna použiť? (pomáha AI s výberom šablóny)"
+    },
+    "workspaces.copyToMatter.description": {
+      "ar": "نسخ «{name}» أو نقله إلى قضية أخرى"
+    },
+    "workspaces.copyToMatter.descriptionCount": {
+      "ar": "نسخ {count, plural, zero {لا عناصر} one {عنصر واحد} two {عنصرين} few {# عناصر} many {# عنصرًا} other {# عنصر}} أو نقلها إلى قضية أخرى"
+    },
+    "workspaces.copyToMatter.menuItem": {
+      "ar": "نسخ/نقل إلى قضية"
+    },
+    "workspaces.copyToMatter.title": {
+      "ar": "نسخ إلى قضية"
+    },
+    "workspaces.createNewWorkspace": {
+      "ar": "إنشاء قضية جديدة"
+    },
+    "workspaces.emptyMatters.description": {
+      "ar": "أنشئ قضية لتنظيم المستندات وجهات الاتصال والمهام ونشاط الفريق في مكان واحد.",
+      "et": "Looge asi, et korraldada dokumendid, kontaktid, ülesanded ja tiimi tegevus ühes kohas."
+    },
+    "workspaces.emptyMatters.title": {
+      "ar": "أنشئ أول قضية لك",
+      "et": "Looge esimene asi"
+    },
+    "workspaces.importOrganizer.instructionsHelp": {
+      "ar": "تُحفظ لكل قضية على حدة. تُستخدم بالإضافة إلى موجّه النظام."
+    },
+    "workspaces.mattersCount": {
+      "ar": "{count, plural, zero {لا قضايا} one {قضية واحدة} two {قضيتان} few {# قضايا} many {# قضية} other {# قضية}}",
+      "et": "{count, plural, one {# asi} other {# asja}}"
+    },
+    "workspaces.newMatter": {
+      "ar": "قضية جديدة",
+      "et": "Uus asi"
+    },
+    "workspaces.noMatters": {
+      "ar": "لا توجد قضايا بعد. أنشئ أول قضية لك للبدء.",
+      "et": "Asju pole veel. Alustamiseks looge oma esimene asi."
+    },
+    "workspaces.properties.scopeMatter": {
+      "et": "Kogu asi"
+    },
+    "workspaces.properties.scopeMatterDescription": {
+      "et": "Kasutage kõiki failiveerge ja käivitage asi."
+    },
+    "workspaces.views.templates.created": {
+      "sk": "Šablóna uložená"
+    },
+    "workspaces.views.templates.deleted": {
+      "sk": "Šablóna vymazaná"
+    }
   }
 }

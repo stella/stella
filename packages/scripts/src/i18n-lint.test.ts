@@ -8,7 +8,9 @@ import {
   findIcuError,
   findMissingPluralCategories,
   findPlaceholderMismatch,
+  isSuppressed,
 } from "./i18n-lint";
+import type { LintBaseline } from "./i18n-lint";
 
 describe("findPlaceholderMismatch", () => {
   test("returns null when the variable sets match (order is irrelevant)", () => {
@@ -29,6 +31,12 @@ describe("findPlaceholderMismatch", () => {
       missing: ["a"],
       extra: ["b"],
     });
+  });
+
+  test("tracks rich-text tag names (t.rich), not just their children", () => {
+    expect(
+      findPlaceholderMismatch("<terms>Terms</terms>", "<link>Podmínky</link>"),
+    ).toEqual({ missing: ["<terms>"], extra: ["<link>"] });
   });
 
   test("counts the plural argument, not the # placeholder", () => {
@@ -97,6 +105,27 @@ describe("findDroppedPlurals", () => {
         "{count, plural, one {#} few {#} other {#}}",
       ),
     ).toEqual([]);
+  });
+});
+
+describe("isSuppressed", () => {
+  const baseline: LintBaseline = {
+    placeholder: { "a.b": { cs: "grandfathered value" } },
+    icu: {},
+    plural: {},
+    terminology: {},
+  };
+
+  test("suppresses only when the offending value is unchanged", () => {
+    expect(
+      isSuppressed(baseline, "placeholder", "a.b", "cs", "grandfathered value"),
+    ).toBe(true);
+  });
+
+  test("re-checks once the grandfathered string is edited", () => {
+    expect(
+      isSuppressed(baseline, "placeholder", "a.b", "cs", "edited value"),
+    ).toBe(false);
   });
 });
 

@@ -91,6 +91,9 @@ const collectArgNames = (
         }
         break;
       case TYPE.tag:
+        // Rich-text tags (t.rich) are placeholders too: a dropped or renamed
+        // tag breaks rendering, so track the tag name, not just its children.
+        names.add(`<${element.value}>`);
         collectArgNames(element.children, names);
         break;
       default:
@@ -300,9 +303,15 @@ export const findForbiddenTerms = (
 
 // --- baseline ---
 
-type LintCategory = "placeholder" | "icu" | "plural" | "terminology";
+export type LintCategory = "placeholder" | "icu" | "plural" | "terminology";
 
-type LintBaseline = Record<LintCategory, Record<string, string[]>>;
+// Per category: key -> locale -> the offending target value. Tying the
+// grandfather to the exact value means editing a debt string re-checks it, so
+// further regressions on already-grandfathered debt are not silently allowed.
+export type LintBaseline = Record<
+  LintCategory,
+  Record<string, Record<string, string>>
+>;
 
 const CATEGORIES: LintCategory[] = [
   "placeholder",
@@ -365,12 +374,14 @@ const findViolations = (
   return result;
 };
 
-const isBaselined = (
+/** A violation is suppressed only if the baselined offending value still matches. */
+export const isSuppressed = (
   baseline: LintBaseline,
   category: LintCategory,
   key: string,
   locale: string,
-): boolean => baseline[category][key]?.includes(locale) ?? false;
+  value: string,
+): boolean => baseline[category][key]?.[locale] === value;
 
 // --- CLI ---
 
@@ -427,9 +438,10 @@ if (import.meta.main) {
       const reported: string[] = [];
       for (const category of CATEGORIES) {
         for (const key of violations[category]) {
+          const value = target[key] ?? "";
           if (writeBaseline) {
-            (next[category][key] ??= []).push(locale);
-          } else if (!isBaselined(baseline, category, key, locale)) {
+            (next[category][key] ??= {})[locale] = value;
+          } else if (!isSuppressed(baseline, category, key, locale, value)) {
             reported.push(`  ${category}: ${key}`);
           }
         }
@@ -461,11 +473,20 @@ if (import.meta.main) {
     }
 
     if (writeBaseline) {
-      const sortRecord = (record: Record<string, string[]>) =>
+      const sortRecord = (
+        record: Record<string, Record<string, string>>,
+      ): Record<string, Record<string, string>> =>
         Object.fromEntries(
           Object.entries(record)
-            .map(([key, locales]) => [key, locales.toSorted()] as const)
-            .toSorted(([a], [b]) => a.localeCompare(b)),
+            .toSorted(([a], [b]) => a.localeCompare(b))
+            .map(([key, byLocale]) => [
+              key,
+              Object.fromEntries(
+                Object.entries(byLocale).toSorted(([a], [b]) =>
+                  a.localeCompare(b),
+                ),
+              ),
+            ]),
         );
       const serialized: LintBaseline = {
         placeholder: sortRecord(next.placeholder),
@@ -476,7 +497,11 @@ if (import.meta.main) {
       await Bun.write(baselinePath, `${JSON.stringify(serialized, null, 2)}\n`);
       const count = CATEGORIES.reduce(
         (sum, category) =>
-          sum + Object.values(next[category]).reduce((n, l) => n + l.length, 0),
+          sum +
+          Object.values(next[category]).reduce(
+            (n, byLocale) => n + Object.keys(byLocale).length,
+            0,
+          ),
         0,
       );
       console.log(
