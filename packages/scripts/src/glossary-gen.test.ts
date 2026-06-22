@@ -94,6 +94,25 @@ describe("parseGlossary", () => {
     ).toThrow(/missing translation for/u);
   });
 
+  test("rejects a non-object forbidden block", () => {
+    expect(() =>
+      parseGlossary(
+        JSON.stringify({
+          verbs: [
+            {
+              id: "save",
+              en: "Save",
+              forbidden: ["x"],
+              translations: fill("S"),
+            },
+          ],
+          legalConcepts: [],
+          ptBR: [],
+        }),
+      ),
+    ).toThrow(/must be an object keyed by locale/u);
+  });
+
   test("rejects an unknown locale", () => {
     expect(() =>
       parseGlossary(

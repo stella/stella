@@ -122,6 +122,11 @@ const parseTerm = (value: unknown, where: string): Term => {
     term.note = note;
   }
   const rawForbidden = value["forbidden"];
+  if (rawForbidden !== undefined && !isRecord(rawForbidden)) {
+    return panic(
+      `${where} (${id}): \`forbidden\` must be an object keyed by locale`,
+    );
+  }
   if (isRecord(rawForbidden)) {
     const forbidden: Record<string, string[]> = {};
     for (const [locale, words] of Object.entries(rawForbidden)) {
