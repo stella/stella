@@ -792,12 +792,6 @@
         "target": "جهة الاتصال هذه ليست عميلاً في أي قضية."
       }
     },
-    "inspector.matterPicker.description": {
-      "ar": {
-        "source": "Pick the matters this chat can draw on. The AI sees content from every matter you select.",
-        "target": "اختر القضايا التي يمكن لهذه المحادثة الاستناد إليها. يرى الذكاء الاصطناعي المحتوى من كل قضية تختارها."
-      }
-    },
     "inspector.matterPicker.noMatter": {
       "ar": {
         "source": "No matter",

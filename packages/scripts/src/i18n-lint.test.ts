@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { LOCALES, parseGlossary } from "./glossary-gen";
 import {
   buildForbiddenRules,
+  findDroppedExactSelectors,
   findDroppedPlurals,
   findForbiddenTerms,
   findIcuError,
@@ -132,6 +133,26 @@ describe("findDroppedPlurals", () => {
         "{count, plural, one {{n, plural, other {#}}} other {{n, plural, other {#}}}}",
       ),
     ).toEqual(["count"]);
+  });
+});
+
+describe("findDroppedExactSelectors", () => {
+  test("flags a dropped source exact selector (=0 zero-state)", () => {
+    expect(
+      findDroppedExactSelectors(
+        "{count, plural, =0 {No results} one {# result} other {# results}}",
+        "{count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      ),
+    ).toEqual(["count=0"]);
+  });
+
+  test("passes when the target keeps the source's exact selectors", () => {
+    expect(
+      findDroppedExactSelectors(
+        "{count, plural, =0 {No results} other {# results}}",
+        "{count, plural, =0 {Žádné} other {# výsledků}}",
+      ),
+    ).toEqual([]);
   });
 });
 

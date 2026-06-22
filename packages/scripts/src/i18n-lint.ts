@@ -285,6 +285,66 @@ export const findDroppedPlurals = (
   return dropped;
 };
 
+/** Exact plural selectors (`=0`, `=1`, …) per plural argument. */
+const collectExactSelectors = (
+  elements: MessageFormatElement[],
+  byArg: Map<string, Set<string>>,
+): void => {
+  for (const element of elements) {
+    if (element.type === TYPE.plural) {
+      const exact = Object.keys(element.options).filter((key) =>
+        key.startsWith("="),
+      );
+      if (exact.length > 0) {
+        const set = byArg.get(element.value) ?? new Set<string>();
+        for (const selector of exact) {
+          set.add(selector);
+        }
+        byArg.set(element.value, set);
+      }
+    }
+    if (element.type === TYPE.plural || element.type === TYPE.select) {
+      for (const option of Object.values(element.options)) {
+        collectExactSelectors(option.value, byArg);
+      }
+    }
+    if (element.type === TYPE.tag) {
+      collectExactSelectors(element.children, byArg);
+    }
+  }
+};
+
+/**
+ * Exact plural selectors the source defines but the target dropped, reported as
+ * `arg=N`. The CLDR-category check ignores exact selectors, so a translation
+ * that removes the source's `=0` zero-state branch otherwise passes while count
+ * 0 falls through to the generic plural category and renders the wrong copy.
+ */
+export const findDroppedExactSelectors = (
+  source: string,
+  target: string,
+): string[] => {
+  const sourceAst = safeParse(source);
+  const targetAst = safeParse(target);
+  if (!sourceAst || !targetAst) {
+    return [];
+  }
+  const sourceExact = new Map<string, Set<string>>();
+  const targetExact = new Map<string, Set<string>>();
+  collectExactSelectors(sourceAst, sourceExact);
+  collectExactSelectors(targetAst, targetExact);
+  const dropped: string[] = [];
+  for (const [arg, selectors] of sourceExact) {
+    const present = targetExact.get(arg) ?? new Set<string>();
+    for (const selector of selectors) {
+      if (!present.has(selector)) {
+        dropped.push(`${arg}${selector}`);
+      }
+    }
+  }
+  return dropped;
+};
+
 const escapeRegExp = (value: string): string =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
@@ -413,7 +473,8 @@ const findViolations = (
     }
     if (
       findMissingPluralCategories(targetValue, locale).length > 0 ||
-      findDroppedPlurals(sourceValue, targetValue).length > 0
+      findDroppedPlurals(sourceValue, targetValue).length > 0 ||
+      findDroppedExactSelectors(sourceValue, targetValue).length > 0
     ) {
       result.plural.push(key);
     }
