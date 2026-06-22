@@ -35,11 +35,11 @@ const config = {
 
 type SuggestedPromptsResult = { prompts: string[] };
 
-// Budget for the visible output only: up to 3 short lines, well under 100
-// tokens. The call requests reasoning off; if the model forces reasoning
-// anyway, the reasoning-fallback middleware tops this cap up by a flat
-// allowance so thinking tokens don't eat into the lines. Re-capped at 3 in
-// `cleanSuggestionsText` regardless.
+// Budget for the visible output only: a few short lines, well under 100
+// tokens. The fast role requests reasoning off (see the OpenRouter role
+// defaults); if a model forces reasoning anyway, the reasoning-fallback
+// middleware tops this cap up by a flat allowance so thinking tokens don't
+// eat into the lines. Re-capped at MAX_SUGGESTIONS in `cleanSuggestionsText`.
 const SUGGESTIONS_MAX_OUTPUT_TOKENS = 256;
 
 const SUGGEST_CLEANUP_STEPS = [
@@ -205,10 +205,6 @@ const getSuggestedPrompts = createSafeRootHandler(
           serviceTier: "standard",
         }),
         prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
-        // Listing follow-ups needs no deep thinking, so ask for reasoning
-        // off; the reasoning-fallback middleware downgrades to minimal on
-        // models that mandate reasoning. Keys for other providers are ignored.
-        providerOptions: { openrouter: { reasoning: { effort: "none" } } },
         system: SUGGESTIONS_SYSTEM_PROMPT,
         temperature: 0.3,
         ...aiAnalytics.stepCallbacks,

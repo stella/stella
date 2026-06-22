@@ -150,6 +150,22 @@ const TEMPERATURE_PER_ROLE = {
 export const getTemperatureForRole = (role: ModelRole): number =>
   TEMPERATURE_PER_ROLE[role];
 
+// Reasoning effort requested per role, independent of provider. Each
+// provider's defaults builder translates this to its own knob (OpenRouter
+// `reasoning.effort`, Google `thinkingConfig`, ...). "off" asks the model
+// to skip thinking — used by the lightweight `fast` role (title, recap,
+// suggestions, autocomplete) so thinking tokens don't eat the small output
+// budget; reasoning models that refuse are downgraded to minimal by the
+// reasoning-fallback middleware. "default" leaves the model's own setting
+// untouched.
+type ReasoningEffortPolicy = "default" | "off" | "low" | "medium" | "high";
+const REASONING_EFFORT_PER_ROLE = {
+  fast: "off",
+  chat: "default",
+  reasoning: "high",
+  pdf: "default",
+} as const satisfies Record<ModelRole, ReasoningEffortPolicy>;
+
 // -- Prompt caching ---------------------------------------------
 
 /**
@@ -1521,6 +1537,22 @@ const bareTemperatureDefaults: DefaultsBuilder = ({ role }) => ({
   temperature: TEMPERATURE_PER_ROLE[role],
 });
 
+// Translate the central per-role reasoning policy to OpenRouter's
+// `reasoning.effort`. "off" maps to OpenRouter's "none" (Gemini Flash and
+// other reasoning models that refuse are downgraded to minimal — with a
+// budget top-up — by the reasoning-fallback middleware); "default" leaves
+// reasoning unset so the model's own behaviour applies.
+const openrouterDefaults: DefaultsBuilder = ({ role }) => {
+  const settings: Settings = { temperature: TEMPERATURE_PER_ROLE[role] };
+  const effort = REASONING_EFFORT_PER_ROLE[role];
+  if (effort !== "default") {
+    settings.providerOptions = {
+      openrouter: { reasoning: { effort: effort === "off" ? "none" : effort } },
+    };
+  }
+  return settings;
+};
+
 // `satisfies Record<AIProvider, ...>` makes adding a new provider to
 // AI_PROVIDERS a compile error here, so no provider can silently
 // fall through to a generic default that ignores its own knobs.
@@ -1529,7 +1561,7 @@ const DEFAULTS_BUILDERS = {
   anthropic: anthropicDefaults,
   openai: openaiDefaults,
   azure_foundry: azureFoundryDefaults,
-  openrouter: bareTemperatureDefaults,
+  openrouter: openrouterDefaults,
   mistral: bareTemperatureDefaults,
   openai_compatible: bareTemperatureDefaults,
   huggingface: bareTemperatureDefaults,
