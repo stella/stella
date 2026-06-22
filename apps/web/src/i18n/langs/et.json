@@ -211,7 +211,7 @@
     "running": "Käib",
     "selectAll": "Vali kõik",
     "selectMatter": "Valige toimik...",
-    "selectMatterToStart": "Ajastuse alustamiseks valige asi",
+    "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
     "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
     "split": {
       "addSplit": "Lisa jagamine",
@@ -394,7 +394,7 @@
     "editableFilePlaceholder": "Vestle või muuda: {fileName}",
     "editableFilePlaceholderAction": "Vestle või muuda",
     "editorLoading": "Redaktori laadimine…",
-    "emptyThreadDescription": "Küsi selle asja kohta, koosta tekst või palu lühikest uurimismärkust.",
+    "emptyThreadDescription": "Küsi selle toimiku kohta, koosta tekst või palu lühikest uurimismärkust.",
     "emptyThreadTitle": "Alusta vestlust",
     "externalSourcePlaceholder": "Vestle teemal {title}",
     "externalSourcePlaceholderAction": "Vestle teemal",
@@ -405,15 +405,15 @@
     "focusSuggestion": "Fookusta soovitus: {topic}",
     "folioCitationFallback": "lk {n}",
     "greeting": "Millega soovite tegeleda?",
-    "greetingSubtitle": "Alustage asjast, dokumendist või lihtsast küsimusest.",
+    "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
     "inDocument": "Dokumendis",
     "landing": {
-      "lastAccessedMatters": "Viimati avatud asjad",
-      "noMatters": "Asju veel pole",
+      "lastAccessedMatters": "Viimati avatud toimikud",
+      "noMatters": "Toimikuid veel pole",
       "noPrompts": "Oskusi veel pole",
       "noRecentChats": "Hiljutisi vestlusi pole",
-      "pinnedMatters": "Kinnitatud asjad",
+      "pinnedMatters": "Kinnitatud toimikud",
       "prompts": "Oskused",
       "recentChats": "Hiljutised vestlused"
     },
@@ -424,7 +424,7 @@
     "mention": {
       "category": {
         "contacts": "Kontaktid",
-        "entities": "Selles asjas",
+        "entities": "Selles toimikus",
         "templates": "Mallid"
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
@@ -782,7 +782,7 @@
     "loading": "Laadimine",
     "logTime": "Salvesta aeg",
     "matter": "Toimik",
-    "matters": "Asjad",
+    "matters": "Toimikud",
     "metadata": "Metaandmed",
     "moveDown": "Liiguta alla",
     "moveUp": "Liiguta üles",
@@ -924,7 +924,7 @@
       "valuePlaceholder": "Väärtus"
     },
     "deleteContact": "Kustuta klient",
-    "deleteContactBlockedByMatters": "See kontakt on endiselt asjades kliendiks määratud. Määrake need asjad ümber või kustutage need enne kontakti kustutamist.",
+    "deleteContactBlockedByMatters": "See kontakt on endiselt toimikutes kliendiks määratud. Määrake need toimikud ümber või kustutage need enne kontakti kustutamist.",
     "deleteContactConfirmDescription": "Kas olete kindel, et soovite selle kontakti kustutada? Seda toimingut ei saa tagasi võtta.",
     "editContact": "Muuda klienti",
     "emailTypes": {
@@ -1812,7 +1812,7 @@
       "document": "Dokument",
       "folder": "Kaust",
       "link": "Link",
-      "matter": "Asi",
+      "matter": "Toimik",
       "message": "Sõnum",
       "task": "Ülesanne"
     },
@@ -2360,7 +2360,7 @@
     },
     "create": {
       "ownerTypeToggle": "Toimiku tüüp",
-      "personalDescription": "Isiklikud asjad on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."
+      "personalDescription": "Isiklikud toimikud on privaatsed ega vaja klienti. Saate need hiljem edutada, et meeskonnaga jagada."
     },
     "createNewWorkspace": "Loo uus toimik",
     "defaultName": "Pealkirjata",
@@ -2382,14 +2382,14 @@
     "duplicateWithContent": "Dubleeri koos sisuga",
     "duplicatingWorkspace": "Toimiku dubleerimine",
     "emptyDocuments": {
-      "description": "Laadige dokumendid üles, et võimaldada tabelite eraldamist, dokumentide korrastamist, brauseris redigeerimist ja otsingut selles asjas.",
+      "description": "Laadige dokumendid üles, et võimaldada tabelite eraldamist, dokumentide korrastamist, brauseris redigeerimist ja otsingut selles toimikus.",
       "title": "Laadige üles esimesed dokumendid",
-      "videoLabel": "Asja dokumentide ülevaade"
+      "videoLabel": "Toimiku dokumentide ülevaade"
     },
     "emptyMatters": {
-      "description": "Looge asi, et korraldada dokumendid, kontaktid, ülesanded ja tiimi tegevus ühes kohas.",
-      "title": "Looge esimene asi",
-      "videoLabel": "Asja seadistamise ülevaade"
+      "description": "Looge toimik, et korraldada dokumendid, kontaktid, ülesanded ja tiimi tegevus ühes kohas.",
+      "title": "Looge esimene toimik",
+      "videoLabel": "Toimiku seadistamise ülevaade"
     },
     "entitiesCount": "{count, plural, one {# element} other {# elementi}}",
     "exportToCsv": "Ekspordi CSV-sse",
@@ -2588,7 +2588,7 @@
     },
     "lockMatter": "Lukusta",
     "matterInfo": "Toimiku andmed",
-    "mattersCount": "{count, plural, one {# asi} other {# asja}}",
+    "mattersCount": "{count, plural, one {# toimik} other {# toimikut}}",
     "members": {
       "addMember": "Lisa liige",
       "addMemberDescription": "Lisa organisatsiooni liige sellesse toimikusse",
@@ -2601,12 +2601,12 @@
     },
     "newDocument": "Uus dokument",
     "newFolder": "Uus kaust",
-    "newMatter": "Uus asi",
+    "newMatter": "Uus toimik",
     "noDocuments": "Dokumente pole veel",
     "noFieldsToView": "Sellel kirjel pole välju, mida kuvada",
     "noGrouping": "Ära rühmita",
     "noItems": "Elemente pole veel",
-    "noMatters": "Asju pole veel. Alustamiseks looge oma esimene asi.",
+    "noMatters": "Toimikuid pole veel. Alustamiseks looge oma esimene toimik.",
     "operators": {
       "containsEvery": "Sisaldab kõiki",
       "equals": "Võrdub"
@@ -2615,7 +2615,7 @@
       "atAGlance": "Ülevaade",
       "edited": "muutis",
       "getStarted": "Alustage dokumentide üleslaadimisega või looge oma esimene kaust.",
-      "matterDetails": "Asja detailid",
+      "matterDetails": "Toimiku detailid",
       "membersCount": "{count, plural, one {# liige} other {# liiget}}",
       "nextDeadline": "Järgmine tähtaeg",
       "openTasks": "Avatud agenda",
@@ -2650,7 +2650,7 @@
         "third_party": "Kolmas isik",
         "witness": "Tunnistaja"
       },
-      "personalDescription": "Isiklikud asjad on ainult teile nähtavad. Edutage kliendile, et meeskonnaga jagada.",
+      "personalDescription": "Isiklikud toimikud on ainult teile nähtavad. Edutage kliendile, et meeskonnaga jagada.",
       "personalLabel": "Isiklik",
       "promoteCta": "Eduta kliendile",
       "promoteDescription": "Lisage klient, et seda toimikut meeskonnaga jagada. See on ühesuunaline — edutatud toimikuid ei saa tagasi isiklikuks muuta.",
@@ -2794,8 +2794,8 @@
       "scopeFile": "Praegune fail",
       "scopeFileDescription": "Kasutage välja {property} ja käivitage see fail nüüd.",
       "scopeFileUnavailable": "Selles vaates pole failiallikat saadaval.",
-      "scopeMatter": "Kogu asi",
-      "scopeMatterDescription": "Kasutage kõiki failiveerge ja käivitage asi.",
+      "scopeMatter": "Kogu toimik",
+      "scopeMatterDescription": "Kasutage kõiki failiveerge ja käivitage toimik.",
       "searchOrAddOptions": "Otsi või lisa valikuid",
       "selectColor": "Valige värv",
       "selectField": "Select field",
