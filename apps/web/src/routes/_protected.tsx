@@ -50,6 +50,7 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import {
@@ -581,6 +582,8 @@ function WorkspaceInspectorSidePanel() {
     tabOriginWorkspaceId ?? routeWorkspaceId ?? fallbackTabWorkspaceId;
   const [width, setWidth] = useState(INSPECTOR_PANE_DEFAULT_WIDTH);
   const isDragging = useRef(false);
+  // Re-run the offset effect on language switch (the pane's docked edge flips).
+  const lang = useI18nStore((s) => s.lang);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -615,13 +618,16 @@ function WorkspaceInspectorSidePanel() {
   const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
 
   useExternalSyncEffect(() => {
+    // The toast offset is consumed via a logical `end-` utility, so the same
+    // value reserves the correct edge in both directions.
     document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
-    // Keep Folio's find/replace dialog out from under the right inspector
-    // pane. Folio reads --folio-find-replace-right on the overlay so the
-    // dialog lands over the document, not behind the sidebar.
+    // Folio reads --folio-find-replace-right as a PHYSICAL right offset to keep
+    // its dialog off the inspector. The pane docks on the right only in LTR; in
+    // RTL it docks left (end-0), so the right edge is clear — reserve nothing.
+    const isRtl = document.documentElement.dir === "rtl";
     document.documentElement.style.setProperty(
       "--folio-find-replace-right",
-      widthPx,
+      isRtl ? "0px" : widthPx,
     );
 
     return () => {
@@ -630,7 +636,7 @@ function WorkspaceInspectorSidePanel() {
         "--folio-find-replace-right",
       );
     };
-  }, [widthPx]);
+  }, [widthPx, lang]);
 
   return (
     <div
