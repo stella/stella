@@ -469,6 +469,11 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
+    env:
+      # Authenticated Docker Hub pulls (when these secrets are set) avoid the
+      # anonymous per-IP pull-rate limit that intermittently fails the docker
+      # stack bring-up on shared GitHub runners.
+      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
 
     steps:
       - name: Checkout
@@ -523,6 +528,16 @@ jobs:
           cd ../web
           mv .env.example .env
 
+      - name: Log in to Docker Hub
+        # Skipped automatically until DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repo
+        # secrets exist; authenticated pulls raise the rate limit well above the
+        # shared-runner anonymous cap that flakes the gotenberg image pull.
+        if: steps.changed.outputs.run == 'true' && env.DOCKERHUB_USERNAME != ''
+        uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
       - name: Start docker stack
         if: steps.changed.outputs.run == 'true'
         # `--wait` only on long-running services; `minio-setup` is a one-shot
@@ -540,7 +555,7 @@ jobs:
             fi
             echo "::warning::docker stack start failed (attempt ${attempt}/3); tearing down and retrying"
             docker compose --profile dev down --volumes --remove-orphans || true
-            sleep 10
+            sleep "$((attempt * 20))"
           done
           echo "::error::docker stack failed to start after 3 attempts"
           exit 1
