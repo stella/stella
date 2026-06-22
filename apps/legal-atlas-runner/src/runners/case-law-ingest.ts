@@ -502,18 +502,17 @@ const runOneCycle = async (
  */
 // eslint-disable-next-line sonarjs/cognitive-complexity -- preserves the daemon's existing retry, alert, and idle-backoff state machine.
 const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
-  let consecutiveFailures = 0;
-  /** Separate counter for backoff; not reset by alert threshold. */
+  /**
+   * Consecutive cycles with no forward progress — a hard failure OR a timeout
+   * that completed zero pages. A single streak so an adapter that alternates
+   * between the two (each of which would otherwise reset the other's counter)
+   * still reaches the sustained-failure alert.
+   */
+  let noProgressStreak = 0;
+  /** Separate counter for backoff; not reset by the alert threshold. */
   let backoffFailures = 0;
   /** Consecutive completed cycles with zero inserts; drives idle backoff. */
   let idleCycles = 0;
-  /**
-   * Consecutive timeout cycles that completed zero pages: the adapter cannot
-   * finish even one page within its budget. Tracked separately because a
-   * "timeout" (unlike "failed") resets the failure counter, so a full stall
-   * would otherwise never reach the sustained-failure alert.
-   */
-  let stalledCycles = 0;
 
   while (true) {
     try {
@@ -547,17 +546,18 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
       const { outcome, inserted, pagesProcessed } = cycle;
 
-      // A timeout that completed no pages means the adapter is stuck (cannot
-      // finish even one page), not merely slow. Anything else — a completed
-      // cycle, or a timeout that did advance pages — clears the stall streak.
-      stalledCycles =
-        outcome === "timeout" && pagesProcessed === 0 ? stalledCycles + 1 : 0;
+      // Forward progress = a clean cycle, or a timeout that still advanced at
+      // least one page. A "failed" or a zero-page "timeout" is a stall; both
+      // grow the one streak, so an adapter alternating between them still
+      // reaches the alert.
+      const madeProgress =
+        outcome === "completed" ||
+        (outcome === "timeout" && pagesProcessed > 0);
+      noProgressStreak = madeProgress ? 0 : noProgressStreak + 1;
 
       if (outcome === "failed") {
-        consecutiveFailures++;
         backoffFailures++;
       } else {
-        consecutiveFailures = 0;
         backoffFailures = 0;
         // Only "completed" outcomes count toward idle. A "timeout"
         // means the cycle hit MAX_CYCLE_MS mid-work; the adapter is
@@ -579,10 +579,8 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         }
       }
     } catch (error) {
-      // A thrown cycle is already counted as a failure below; it is not a
-      // page-completion stall, so clear that streak.
-      stalledCycles = 0;
-      consecutiveFailures++;
+      // A thrown cycle made no forward progress either.
+      noProgressStreak++;
       backoffFailures++;
       const msg = error instanceof Error ? error.message : String(error);
       if (isTransientConnectionError(msg)) {
@@ -592,26 +590,19 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
     }
 
-    // Alert on either a run of hard failures or a run of zero-page timeouts:
-    // both mean the source has made no forward progress for many cycles, but
-    // only the failure path used to reach the sustained-failure metric.
-    if (
-      consecutiveFailures >= SUSTAINED_FAILURE_THRESHOLD ||
-      stalledCycles >= SUSTAINED_FAILURE_THRESHOLD
-    ) {
+    // A run of no-progress cycles (failures and/or zero-page timeouts) means
+    // the source is stalled; surface it on the sustained-failure metric.
+    if (noProgressStreak >= SUSTAINED_FAILURE_THRESHOLD) {
       logger.error("case_law.ingestion.sustained_failure", {
         adapterKey,
-        consecutiveFailures,
-        stalledCycles,
+        noProgressStreak,
       });
-      // Reset alert counters to avoid flooding; backoffFailures stays high so
-      // the delay doesn't collapse. Both are read again at the top of the next
-      // iteration (`consecutiveFailures++` / `stalledCycles + 1`); the rule's
-      // forward-only liveness can't see the loop back-edge.
+      // Reset to avoid flooding; backoffFailures stays high so the delay
+      // doesn't collapse. The value is read again at the top of the next
+      // iteration (`noProgressStreak + 1`); the rule's forward-only liveness
+      // can't see the loop back-edge.
       // oxlint-disable-next-line no-useless-assignment -- reset read on next loop iteration
-      consecutiveFailures = 0;
-      // oxlint-disable-next-line no-useless-assignment -- reset read on next loop iteration
-      stalledCycles = 0;
+      noProgressStreak = 0;
     }
 
     writeHeartbeat();
