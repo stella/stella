@@ -130,11 +130,19 @@ const parseTerm = (value: unknown, where: string): Term => {
           `${where} (${id}): unknown locale "${locale}" in \`forbidden\``,
         );
       }
-      if (Array.isArray(words)) {
-        forbidden[locale] = words.filter(
-          (word): word is string => typeof word === "string",
+      if (!Array.isArray(words)) {
+        return panic(
+          `${where} (${id}): \`forbidden.${locale}\` must be an array of strings`,
         );
       }
+      for (const word of words) {
+        if (typeof word !== "string") {
+          return panic(
+            `${where} (${id}): \`forbidden.${locale}\` must contain only strings`,
+          );
+        }
+      }
+      forbidden[locale] = words;
     }
     term.forbidden = forbidden;
   }

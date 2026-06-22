@@ -108,6 +108,25 @@ describe("parseGlossary", () => {
     ).toThrow(/unknown locale "xx"/u);
   });
 
+  test("rejects a non-array forbidden list", () => {
+    expect(() =>
+      parseGlossary(
+        JSON.stringify({
+          verbs: [
+            {
+              id: "save",
+              en: "Save",
+              forbidden: { fr: "Tribunal" },
+              translations: fill("S"),
+            },
+          ],
+          legalConcepts: [],
+          ptBR: [],
+        }),
+      ),
+    ).toThrow(/must be an array of strings/u);
+  });
+
   test("rejects an unknown locale in forbidden", () => {
     expect(() =>
       parseGlossary(
