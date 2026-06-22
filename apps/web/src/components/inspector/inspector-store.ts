@@ -1368,7 +1368,6 @@ export const useInspectorStore = create<State & Actions>()(
         }
       }),
 
-
     openView: ({ type, id, label, payload, ownerRouteId }) =>
       set((state) => {
         const existing = state.tabs.find((t) => t.id === id);

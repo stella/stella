@@ -429,13 +429,13 @@
       },
       "loadError": "Nie udało się załadować elementów"
     },
-    "moveToMain": "Przenieś do widoku głównego",
-    "moveToSide": "Przenieś do panelu bocznego",
     "modelSelector": {
       "defaultLabel": "Domyślny (rola czatu)",
       "description": "Wybierz model AI używany dla aktywnej sesji czatu.",
       "title": "Wybierz model czatu"
     },
+    "moveToMain": "Przenieś do widoku głównego",
+    "moveToSide": "Przenieś do panelu bocznego",
     "newChat": "Nowy czat",
     "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",

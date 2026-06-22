@@ -7,6 +7,7 @@ import type { SuggestionOptions, SuggestionProps } from "@tiptap/suggestion";
 import { insertPastedTextChip } from "@/components/chat-pasted-text-extension";
 import { PromptSlashList } from "@/components/chat/prompt-slash-list";
 import type { ChatPrompt, PromptScope } from "@/lib/prompts/types";
+import type { ReservedChatCommand } from "@/lib/reserved-chat-commands";
 
 export type SlashSkillScope = PromptScope | "built-in";
 
@@ -19,17 +20,10 @@ export type SlashSkill = {
   scope: SlashSkillScope;
 };
 
-export type SlashCommand = {
-  id: string;
-  name: string;
-  command: string;
-  description: string;
-};
-
 export type SlashItem =
   | { kind: "prompt"; prompt: ChatPrompt }
   | { kind: "skill"; skill: SlashSkill }
-  | { kind: "command"; command: SlashCommand };
+  | { kind: "command"; command: ReservedChatCommand };
 
 const insertSlashItem = (
   editor: Editor,
@@ -37,12 +31,15 @@ const insertSlashItem = (
   item: SlashItem,
 ) => {
   if (item.kind === "command") {
-    editor
-      .chain()
-      .focus()
-      .deleteRange(range)
-      .insertContent(item.command.command + " ")
-      .run();
+    insertPastedTextChip(
+      editor,
+      {
+        label: item.command.name,
+        source: "command",
+        text: item.command.command,
+      },
+      { replaceRange: range },
+    );
     return;
   }
 
@@ -123,12 +120,8 @@ const filterItems = (items: SlashItem[], query: string): SlashItem[] => {
   }
   return items.filter((item) => {
     if (item.kind === "command") {
-      const { name, command, description } = item.command;
-      return (
-        matchesQuery(name, trimmed) ||
-        matchesQuery(command, trimmed) ||
-        matchesQuery(description, trimmed)
-      );
+      const { name, command } = item.command;
+      return matchesQuery(name, trimmed) || matchesQuery(command, trimmed);
     }
     if (item.kind === "prompt") {
       const { name, command, body } = item.prompt;

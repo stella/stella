@@ -47,11 +47,12 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
+import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
-import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { formatRelativeTime } from "@/lib/relative-time";
+import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
@@ -83,11 +84,15 @@ function ChatIndex() {
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
   const threadIdRef = useRef(createChatThreadId());
+  // `/new` rotates the ref above; bump a render so `threadRef` (and the
+  // composer bound to it via `useChatEditor`) rebind to the fresh id instead
+  // of staying on the abandoned draft.
+  const [, rotateDraftThread] = useState(0);
   const threadRef: ChatThreadRef = {
     scope: "global",
     threadId: threadIdRef.current,
   };
-  const controller = useChatEditor({ threadRef });
+  const controller = useChatEditor({ reservedCommands: true, threadRef });
   const prompts = useSavedPrompts();
   const pinnedOrder = usePinnedStore((s) => s.pinnedOrder);
   const canCreateMatter = usePermissions({ workspace: ["create"] });
@@ -357,13 +362,14 @@ function ChatIndex() {
               autoFocus
               controller={controller}
               onSubmit={async (draft) => {
-                const text = draft.html.replace(/<[^>]+>/g, "").trim();
-                if (text === "/new") {
+                const reservedCommand = matchReservedChatCommand(draft.html);
+                if (reservedCommand?.id === "new") {
                   controller.setContent("");
                   threadIdRef.current = createChatThreadId();
+                  rotateDraftThread((value) => value + 1);
                   return;
                 }
-                if (text === "/model") {
+                if (reservedCommand?.id === "model") {
                   controller.setContent("");
                   useModelSelectorStore.getState().open();
                   return;

@@ -429,13 +429,13 @@
       },
       "loadError": "Error al cargar entidades"
     },
-    "moveToMain": "Mover a la vista principal",
-    "moveToSide": "Mover al panel lateral",
     "modelSelector": {
       "defaultLabel": "Predeterminado (rol de chat)",
       "description": "Elija el modelo de IA utilizado para la sesión de chat activa.",
       "title": "Seleccionar modelo de chat"
     },
+    "moveToMain": "Mover a la vista principal",
+    "moveToSide": "Mover al panel lateral",
     "newChat": "Nueva conversación",
     "noPromptPresetOnly": "Sin mensaje, solo preajuste",
     "noThreads": "Aún no hay conversaciones",

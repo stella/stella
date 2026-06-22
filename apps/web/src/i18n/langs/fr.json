@@ -429,13 +429,13 @@
       },
       "loadError": "Échec du chargement des entités"
     },
-    "moveToMain": "Déplacer vers la vue principale",
-    "moveToSide": "Déplacer vers le panneau latéral",
     "modelSelector": {
       "defaultLabel": "Par défaut (rôle de chat)",
       "description": "Choisissez le modèle d'IA utilisé pour la session de chat active.",
       "title": "Sélectionner le modèle de chat"
     },
+    "moveToMain": "Déplacer vers la vue principale",
+    "moveToSide": "Déplacer vers le panneau latéral",
     "newChat": "Nouvelle conversation",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",

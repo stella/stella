@@ -429,13 +429,13 @@
       },
       "loadError": "Neizdevās ielādēt entītijas"
     },
-    "moveToMain": "Pārvietot uz galveno skatu",
-    "moveToSide": "Pārvietot uz sānu paneli",
     "modelSelector": {
       "defaultLabel": "Noklusējuma (tērzēšanas loma)",
       "description": "Izvēlieties AI modeli, kas tiks izmantots aktīvajai tērzēšanas sesijai.",
       "title": "Atlasīt tērzēšanas modeli"
     },
+    "moveToMain": "Pārvietot uz galveno skatu",
+    "moveToSide": "Pārvietot uz sānu paneli",
     "newChat": "Jauna saruna",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",

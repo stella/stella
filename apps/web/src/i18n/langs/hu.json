@@ -429,13 +429,13 @@
       },
       "loadError": "Az entitások betöltése sikertelen"
     },
-    "moveToMain": "Áthelyezés a fő nézetbe",
-    "moveToSide": "Áthelyezés az oldalsó panelbe",
     "modelSelector": {
       "defaultLabel": "Alapértelmezett (csevegési szerepkör)",
       "description": "Válassza ki az aktív csevegési munkamenethez használt AI-modellt.",
       "title": "Csevegési modell kiválasztása"
     },
+    "moveToMain": "Áthelyezés a fő nézetbe",
+    "moveToSide": "Áthelyezés az oldalsó panelbe",
     "newChat": "Új csevegés",
     "noPromptPresetOnly": "Nincs üzenet, csak előbeállítás",
     "noThreads": "Még nincsenek beszélgetések",

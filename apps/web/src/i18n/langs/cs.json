@@ -429,13 +429,13 @@
       },
       "loadError": "Nepodařilo se načíst entity"
     },
-    "moveToMain": "Přesunout do hlavního zobrazení",
-    "moveToSide": "Přesunout do bočního panelu",
     "modelSelector": {
       "defaultLabel": "Výchozí (role chatu)",
       "description": "Vyberte model AI používaný pro aktivní relaci chatu.",
       "title": "Vybrat model chatu"
     },
+    "moveToMain": "Přesunout do hlavního zobrazení",
+    "moveToSide": "Přesunout do bočního panelu",
     "newChat": "Nový chat",
     "noPromptPresetOnly": "Bez zprávy, pouze předvolba",
     "noThreads": "Zatím žádné konverzace",

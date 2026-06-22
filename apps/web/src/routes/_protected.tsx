@@ -35,6 +35,7 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { AppBreadcrumbs } from "@/components/breadcrumbs/app-breadcrumbs";
 import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatMentionProviders } from "@/components/chat-mention-providers";
+import { ModelSelectorDialog } from "@/components/chat/model-selector-dialog";
 import {
   initializeInspectorTabBroadcast,
   useInspectorStore,
@@ -42,7 +43,6 @@ import {
 import type { InspectorTab } from "@/components/inspector/inspector-store";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
-import { ModelSelectorDialog } from "@/components/chat/model-selector-dialog";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
 import {
   SidebarInset,

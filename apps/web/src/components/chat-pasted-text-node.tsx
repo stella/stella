@@ -4,6 +4,7 @@ import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
 import {
   ClipboardPasteIcon,
+  CommandIcon,
   SparklesIcon,
   WandSparklesIcon,
   XIcon,
@@ -25,12 +26,23 @@ import type {
 
 const CHIP_MAX_LABEL_WIDTH_CLASS = "max-w-48";
 
+// Shared chip shell so the interactive paste/prompt/skill trigger and the
+// static command chip stay visually identical.
+const CHIP_BASE_CLASS = cn(
+  "inline-flex max-w-full items-center gap-1 align-middle",
+  "bg-muted/60 rounded-md border px-1.5 py-0.5",
+  "text-foreground text-xs font-medium",
+);
+
 const pickChipIcon = (source: PastedTextSource) => {
   if (source === "skill") {
     return WandSparklesIcon;
   }
   if (source === "prompt") {
     return SparklesIcon;
+  }
+  if (source === "command") {
+    return CommandIcon;
   }
   return ClipboardPasteIcon;
 };
@@ -39,6 +51,7 @@ const PASTED_TEXT_SOURCE_VALUES: ReadonlySet<string> = new Set([
   "paste",
   "prompt",
   "skill",
+  "command",
 ]);
 
 const isPastedTextSource = (value: unknown): value is PastedTextSource =>
@@ -92,15 +105,33 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
 
   const Icon = pickChipIcon(attrs.source);
 
+  // Reserved slash commands (`/new`, `/model`) are action triggers, not
+  // editable content, so they render as a static chip without the expand/edit
+  // popover the other sources use.
+  if (attrs.source === "command") {
+    return (
+      <NodeViewWrapper className="inline" data-source="command">
+        <span
+          className={cn(CHIP_BASE_CLASS, "select-none")}
+          contentEditable={false}
+        >
+          <Icon className="text-muted-foreground size-3 shrink-0" />
+          <span className={cn("truncate", CHIP_MAX_LABEL_WIDTH_CLASS)}>
+            {chipLabel}
+          </span>
+        </span>
+      </NodeViewWrapper>
+    );
+  }
+
   return (
     <NodeViewWrapper className="inline" data-source={attrs.source}>
       <Popover>
         <PopoverTrigger
           aria-label={t("chat.pastedText.expand")}
           className={cn(
-            "inline-flex max-w-full items-center gap-1 align-middle",
-            "bg-muted/60 hover:bg-muted rounded-md border px-1.5 py-0.5",
-            "text-foreground text-xs font-medium",
+            CHIP_BASE_CLASS,
+            "hover:bg-muted",
             "focus-visible:ring-ring transition-colors focus-visible:ring-2 focus-visible:outline-none",
             "cursor-pointer select-none",
           )}

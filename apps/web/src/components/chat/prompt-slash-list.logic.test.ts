@@ -78,8 +78,11 @@ const skillItem = ({ id, name, scope }: SkillItemInput): SlashItem => ({
 });
 
 const getItemId = (item: SlashItem): string => {
-  if (item.kind === "prompt") return item.prompt.id;
-  if (item.kind === "skill") return item.skill.id;
+  if (item.kind === "prompt") {
+    return item.prompt.id;
+  }
+  if (item.kind === "skill") {
+    return item.skill.id;
+  }
   return item.command.id;
 };
-
