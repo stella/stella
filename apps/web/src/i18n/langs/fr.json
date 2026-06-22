@@ -1858,6 +1858,10 @@
       "deleteAccountConfirmDescription": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est définitive et irréversible.",
       "deleteAccountOtpDescription": "Nous avons envoyé un code de vérification à 6 chiffres à votre adresse e-mail. Saisissez-le ci-dessous pour confirmer la suppression.",
       "deleteAccountSuccess": "Votre compte a été supprimé avec succès.",
+      "deleteAccountTaskReassignNone": "Aucun autre membre dans cet espace de travail",
+      "deleteAccountTaskReassignPlaceholder": "Sélectionner un membre...",
+      "deleteAccountTasksDescription": "Des tâches en attente vous sont attribuées. Réassignez-les à d'autres membres de l'espace de travail pour assurer la continuité.",
+      "deleteAccountTasksTitle": "Réassigner les tâches en attente",
       "deleteAccountWarning": "Une fois votre compte supprimé, il n'y a pas de retour en arrière possible. Tous les membres de l'organisation, identifiants d'authentification et sessions actives seront définitivement supprimés.",
       "deleteAccountWarningExplanation": "Nous enverrons un code de vérification à votre adresse e-mail pour confirmer cette demande. Si vous êtes le seul propriétaire d'une organisation, vous devez d'abord transférer la propriété ou supprimer l'organisation.",
       "desktop": "Bureau",
@@ -1882,11 +1886,7 @@
       "wordEditIdentitySaved": "Identité d’édition Word mise à jour",
       "wordEditShortcut": "Initiales d’édition Word",
       "wordEditShortcutDescription": "Tag court pour vos initiales sur les modifications Word.",
-      "wordEditShortcutPlaceholder": "p. ex. JK",
-      "deleteAccountTasksTitle": "Réassigner les tâches en attente",
-      "deleteAccountTasksDescription": "Des tâches en attente vous sont attribuées. Réassignez-les à d'autres membres de l'espace de travail pour assurer la continuité.",
-      "deleteAccountTaskReassignPlaceholder": "Sélectionner un membre...",
-      "deleteAccountTaskReassignNone": "Aucun autre membre dans cet espace de travail"
+      "wordEditShortcutPlaceholder": "p. ex. JK"
     },
     "organization": {
       "activeMembers": "Membres actifs",

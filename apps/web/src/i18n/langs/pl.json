@@ -1858,6 +1858,10 @@
       "deleteAccountConfirmDescription": "Czy na pewno chcesz usunąć swoje konto? Ta operacja jest trwała i nie można jej cofnąć.",
       "deleteAccountOtpDescription": "Wysłaliśmy 6-cyfrowy kod weryfikacyjny na Twój adres e-mail. Wprowadź go poniżej, aby potwierdzić usunięcie.",
       "deleteAccountSuccess": "Twoje konto zostało pomyślnie usunięte.",
+      "deleteAccountTaskReassignNone": "Brak innych członków w tym obszarze roboczym",
+      "deleteAccountTaskReassignPlaceholder": "Wybierz członka...",
+      "deleteAccountTasksDescription": "Masz przypisane oczekujące zadania. Przypisz je ponownie innym członkom obszaru roboczego, aby zapewnić ciągłość.",
+      "deleteAccountTasksTitle": "Ponownie przypisz oczekujące zadania",
       "deleteAccountWarning": "Po usunięciu konta nie ma już powrotu. Wszystkie członkostwa w organizacjach, dane uwierzytelniające i aktywne sesje zostaną trwale usunięte.",
       "deleteAccountWarningExplanation": "Wyślemy kod weryfikacyjny na Twój adres e-mail, aby potwierdzić to żądanie. Jeśli jesteś jedynym właścicielem jakiejkolwiek organizacji, musisz najpierw przenieść własność lub usunąć organizację.",
       "desktop": "Aplikacja na komputer",
@@ -1882,11 +1886,7 @@
       "wordEditIdentitySaved": "Zaktualizowano tożsamość do edycji w programie Word",
       "wordEditShortcut": "Skrót do edycji w programie Word",
       "wordEditShortcutDescription": "Krótki znacznik z Twoimi inicjałami przy edycji w programie Word.",
-      "wordEditShortcutPlaceholder": "np. JK",
-      "deleteAccountTasksTitle": "Ponownie przypisz oczekujące zadania",
-      "deleteAccountTasksDescription": "Masz przypisane oczekujące zadania. Przypisz je ponownie innym członkom obszaru roboczego, aby zapewnić ciągłość.",
-      "deleteAccountTaskReassignPlaceholder": "Wybierz członka...",
-      "deleteAccountTaskReassignNone": "Brak innych członków w tym obszarze roboczym"
+      "wordEditShortcutPlaceholder": "np. JK"
     },
     "organization": {
       "activeMembers": "Aktywni członkowie",

@@ -62,15 +62,17 @@ const deleteAccountSendOtp = createSafeSessionHandler(
     });
 
     if (env.isDev) {
-      // eslint-disable-next-line no-console
+      // eslint-disable-next-line no-console -- Local dev fallback prints OTPs when SMTP is unavailable.
       console.log(
         `\n\x1b[33m[DEV] OTP for ${emailStr}: ${otp} (type: delete-account)\x1b[0m\n`,
       );
       if (emailResult.isErr()) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[DEV] Failed to send email via SMTP: ${(emailResult.error as Error).message}`,
-        );
+        const message =
+          emailResult.error instanceof Error
+            ? emailResult.error.message
+            : String(emailResult.error);
+        // eslint-disable-next-line no-console -- Local dev fallback should expose SMTP delivery failures.
+        console.warn(`[DEV] Failed to send email via SMTP: ${message}`);
       }
     } else if (emailResult.isErr()) {
       return Result.err(

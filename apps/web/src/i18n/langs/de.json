@@ -1858,6 +1858,10 @@
       "deleteAccountConfirmDescription": "Sind Sie sicher, dass Sie Ihr Konto löschen möchten? Diese Aktion ist dauerhaft und kann nicht rückgängig gemacht werden.",
       "deleteAccountOtpDescription": "Wir haben einen 6-stelligen Bestätigungscode an Ihre E-Mail-Adresse gesendet. Geben Sie ihn unten ein, um die Löschung zu bestätigen.",
       "deleteAccountSuccess": "Ihr Konto wurde erfolgreich gelöscht.",
+      "deleteAccountTaskReassignNone": "Keine anderen Mitglieder in diesem Arbeitsbereich",
+      "deleteAccountTaskReassignPlaceholder": "Mitglied auswählen...",
+      "deleteAccountTasksDescription": "Ihnen sind ausstehende Aufgaben zugewiesen. Weisen Sie diese anderen Mitgliedern des Arbeitsbereichs zu, um die Kontinuität zu gewährleisten.",
+      "deleteAccountTasksTitle": "Ausstehende Aufgaben neu zuweisen",
       "deleteAccountWarning": "Sobald Sie Ihr Konto löschen, gibt es kein Zurück mehr. Alle Organisationsmitgliedschaften, Anmeldedaten und aktiven Sitzungen werden dauerhaft entfernt.",
       "deleteAccountWarningExplanation": "Wir senden einen Bestätigungscode an Ihre E-Mail-Adresse, um diese Anfrage zu bestätigen. Wenn Sie der einzige Eigentümer einer Organisation sind, müssen Sie zuerst die Eigentümerschaft übertragen oder die Organisation löschen.",
       "desktop": "Desktop",
@@ -1882,11 +1886,7 @@
       "wordEditIdentitySaved": "Word-Bearbeitungsidentität aktualisiert",
       "wordEditShortcut": "Word-Bearbeitungskürzel",
       "wordEditShortcutDescription": "Kurzes Kürzel für Ihre Initialen bei Word-Bearbeitungen.",
-      "wordEditShortcutPlaceholder": "z. B. JK",
-      "deleteAccountTasksTitle": "Ausstehende Aufgaben neu zuweisen",
-      "deleteAccountTasksDescription": "Ihnen sind ausstehende Aufgaben zugewiesen. Weisen Sie diese anderen Mitgliedern des Arbeitsbereichs zu, um die Kontinuität zu gewährleisten.",
-      "deleteAccountTaskReassignPlaceholder": "Mitglied auswählen...",
-      "deleteAccountTaskReassignNone": "Keine anderen Mitglieder in diesem Arbeitsbereich"
+      "wordEditShortcutPlaceholder": "z. B. JK"
     },
     "organization": {
       "activeMembers": "Aktive Mitglieder",

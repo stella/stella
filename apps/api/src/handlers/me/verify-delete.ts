@@ -49,7 +49,9 @@ const deleteAccountVerify = createSafeSessionHandler(
     }
 
     // 3. Verify and delete the user
-    yield* Result.await(verifyAndDeleteUser(currentUserId, emailStr, code, reassignments));
+    yield* Result.await(
+      verifyAndDeleteUser(currentUserId, emailStr, code, reassignments),
+    );
 
     return Result.ok({ success: true });
   },

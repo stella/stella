@@ -1861,6 +1861,10 @@ type Messages = {
       "deleteAccountConfirmDescription": "Are you sure you want to delete your account? This action is permanent and cannot be undone.";
       "deleteAccountOtpDescription": "We sent a 6-digit verification code to your email. Enter it below to confirm deletion.";
       "deleteAccountSuccess": "Your account has been successfully deleted.";
+      "deleteAccountTaskReassignNone": "No other members in this workspace";
+      "deleteAccountTaskReassignPlaceholder": "Select a member...";
+      "deleteAccountTasksDescription": "You have pending tasks assigned to you. Reassign them to other workspace members to ensure continuity.";
+      "deleteAccountTasksTitle": "Reassign pending tasks";
       "deleteAccountWarning": "Once you delete your account, there is no going back. All organization memberships, auth credentials, and active sessions will be permanently removed.";
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. If you are the sole owner of any organization, you must transfer ownership or delete the organization first.";
       "desktop": "Desktop";
@@ -1886,10 +1890,6 @@ type Messages = {
       "wordEditShortcut": "Word edit shortcut";
       "wordEditShortcutDescription": "Short tag for your initials on Word edits.";
       "wordEditShortcutPlaceholder": "e.g. JK";
-      "deleteAccountTasksTitle": "Reassign pending tasks";
-      "deleteAccountTasksDescription": "You have pending tasks assigned to you. Reassign them to other workspace members to ensure continuity.";
-      "deleteAccountTaskReassignPlaceholder": "Select a member...";
-      "deleteAccountTaskReassignNone": "No other members in this workspace";
     };
     "organization": {
       "activeMembers": "Active members";

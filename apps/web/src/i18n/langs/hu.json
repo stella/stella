@@ -1858,6 +1858,10 @@
       "deleteAccountConfirmDescription": "Biztosan törölni szeretné a fiókját? Ez a művelet végleges és nem vonható vissza.",
       "deleteAccountOtpDescription": "Küldtünk egy 6 jegyű ellenőrző kódot az e-mail címére. A törlés megerősítéséhez adja meg alább.",
       "deleteAccountSuccess": "Fiókja sikeresen törölve lett.",
+      "deleteAccountTaskReassignNone": "Nincs más tag ezen a munkaterületen",
+      "deleteAccountTaskReassignPlaceholder": "Tag kiválasztása...",
+      "deleteAccountTasksDescription": "Függőben lévő feladatok vannak hozzárendelve Önhöz. A folytonosság biztosítása érdekében ossza ki azokat a munkaterület más tagjainak.",
+      "deleteAccountTasksTitle": "Függőben lévő feladatok újbóli kiosztása",
       "deleteAccountWarning": "A fiók törlése után nincs visszaút. Minden szervezeti tagság, hitelesítési adat és aktív munkamenet véglegesen törlődik.",
       "deleteAccountWarningExplanation": "A kérés megerősítéséhez ellenőrző kódot küldünk az e-mail címére. Ha Ön egy szervezet egyedüli tulajdonosa, először át kell ruháznia a tulajdonjogot, vagy törölnie kell a szervezetet.",
       "desktop": "Asztali alkalmazás",
@@ -1882,11 +1886,7 @@
       "wordEditIdentitySaved": "Word-szerkesztési azonosító frissítve",
       "wordEditShortcut": "Word-szerkesztési rövidítés",
       "wordEditShortcutDescription": "Rövid jelölés a Word-szerkesztéseknél megjelenő monogramjához.",
-      "wordEditShortcutPlaceholder": "pl. KJ",
-      "deleteAccountTasksTitle": "Függőben lévő feladatok újbóli kiosztása",
-      "deleteAccountTasksDescription": "Függőben lévő feladatok vannak hozzárendelve Önhöz. A folytonosság biztosítása érdekében ossza ki azokat a munkaterület más tagjainak.",
-      "deleteAccountTaskReassignPlaceholder": "Tag kiválasztása...",
-      "deleteAccountTaskReassignNone": "Nincs más tag ezen a munkaterületen"
+      "wordEditShortcutPlaceholder": "pl. KJ"
     },
     "organization": {
       "activeMembers": "Aktív tagok",

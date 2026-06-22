@@ -1858,6 +1858,10 @@
       "deleteAccountConfirmDescription": "Naozaj chcete vymazať svoj účet? Táto akcia je trvalá a nedá sa vrátiť späť.",
       "deleteAccountOtpDescription": "Na váš e-mail sme odoslali 6-miestny overovací kód. Pre potvrdenie vymazania ho zadajte nižšie.",
       "deleteAccountSuccess": "Váš účet bol úspešne vymazaný.",
+      "deleteAccountTaskReassignNone": "Žiadni iní členovia v tomto pracovnom priestore",
+      "deleteAccountTaskReassignPlaceholder": "Vybrať člena...",
+      "deleteAccountTasksDescription": "Máte priradené čakajúce úlohy. Znovu ich priraďte ostatným členom pracovného priestoru, aby ste zaistili kontinuitu.",
+      "deleteAccountTasksTitle": "Znovu priradiť čakajúce úlohy",
       "deleteAccountWarning": "Akonáhle účet vymažete, niet cesty späť. Všetky členstvá v organizáciách, prihlasovacie údaje a aktívne relácie budú natrvalo odstránené.",
       "deleteAccountWarningExplanation": "Na vašu e-mailovú adresu pošleme overovací kód na potvrdenie tejto požiadavky. Ak ste jediným vlastníkom akejkoľvek organizácie, musíte najprv previesť vlastníctvo alebo organizáciu vymazať.",
       "desktop": "Aplikácia pre počítač",
@@ -1882,11 +1886,7 @@
       "wordEditIdentitySaved": "Identita pre úpravy vo Worde aktualizovaná",
       "wordEditShortcut": "Skratka pre úpravy vo Worde",
       "wordEditShortcutDescription": "Krátka značka pre vaše iniciály pri úpravách vo Worde.",
-      "wordEditShortcutPlaceholder": "napr. JK",
-      "deleteAccountTasksTitle": "Znovu priradiť čakajúce úlohy",
-      "deleteAccountTasksDescription": "Máte priradené čakajúce úlohy. Znovu ich priraďte ostatným členom pracovného priestoru, aby ste zaistili kontinuitu.",
-      "deleteAccountTaskReassignPlaceholder": "Vybrať člena...",
-      "deleteAccountTaskReassignNone": "Žiadni iní členovia v tomto pracovnom priestore"
+      "wordEditShortcutPlaceholder": "napr. JK"
     },
     "organization": {
       "activeMembers": "Aktívni členovia",

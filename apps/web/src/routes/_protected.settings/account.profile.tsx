@@ -166,11 +166,14 @@ function ProfilePageBody() {
   );
 
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
-  const [otpSent, setOtpSent] = useState(false);
   const [otpCode, setOtpCode] = useState("");
   const [otpError, setOtpError] = useState<string | null>(null);
-  const [step, setStep] = useState<"loading" | "tasks" | "confirm" | "otp">("loading");
-  const [reassignments, setReassignments] = useState<Record<string, string>>({});
+  const [step, setStep] = useState<"loading" | "tasks" | "confirm" | "otp">(
+    "loading",
+  );
+  const [reassignments, setReassignments] = useState<Record<string, string>>(
+    {},
+  );
 
   const { data: pendingTasksData } = useQuery({
     queryKey: ["me", "delete", "pending-tasks"],
@@ -178,11 +181,6 @@ function ProfilePageBody() {
       const res = await api.me.delete["pending-tasks"].get();
       if (res.error) {
         throw toAPIError(res.error);
-      }
-      if (res.data && res.data.tasks.length > 0) {
-        setStep("tasks");
-      } else {
-        setStep("confirm");
       }
       return res.data;
     },
@@ -200,7 +198,6 @@ function ProfilePageBody() {
     },
     onSuccess: () => {
       setStep("otp");
-      setOtpSent(true);
       stellaToast.add({
         title: t("settings.account.otpSentSuccess"),
         type: "success",
@@ -292,6 +289,24 @@ function ProfilePageBody() {
       });
     },
   });
+
+  const pendingTasks = pendingTasksData?.tasks ?? [];
+  const pendingMembers = pendingTasksData?.members ?? [];
+  let dialogStep = step;
+  if (step === "loading" && pendingTasksData) {
+    dialogStep = pendingTasks.length > 0 ? "tasks" : "confirm";
+  }
+  const dialogTitle =
+    dialogStep === "tasks"
+      ? t("settings.account.deleteAccountTasksTitle")
+      : t("settings.account.deleteAccount");
+  let dialogDescription = t("settings.account.deleteAccountConfirmDescription");
+  if (dialogStep === "otp") {
+    dialogDescription = t("settings.account.deleteAccountOtpDescription");
+  }
+  if (dialogStep === "tasks") {
+    dialogDescription = "";
+  }
 
   return (
     <>
@@ -419,7 +434,6 @@ function ProfilePageBody() {
         onOpenChange={(open) => {
           if (!open) {
             setIsDeleteDialogOpen(false);
-            setOtpSent(false);
             setOtpCode("");
             setOtpError(null);
             setReassignments({});
@@ -429,18 +443,8 @@ function ProfilePageBody() {
       >
         <DialogPopup>
           <DialogHeader>
-            <DialogTitle>
-              {step === "tasks"
-                ? t("settings.account.deleteAccountTasksTitle")
-                : t("settings.account.deleteAccount")}
-            </DialogTitle>
-            <DialogDescription>
-              {step === "otp"
-                ? t("settings.account.deleteAccountOtpDescription")
-                : step === "tasks"
-                  ? ""
-                  : t("settings.account.deleteAccountConfirmDescription")}
-            </DialogDescription>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            <DialogDescription>{dialogDescription}</DialogDescription>
           </DialogHeader>
           <DialogPanel>
             <div className="flex flex-col gap-4 py-2">
@@ -449,34 +453,35 @@ function ProfilePageBody() {
                   {otpError}
                 </div>
               )}
-              {step === "loading" && (
+              {dialogStep === "loading" && (
                 <div className="flex justify-center py-4">
-                  <span className="animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent" />
+                  <span className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
                 </div>
               )}
-              {step === "tasks" && (
+              {dialogStep === "tasks" && (
                 <div className="flex flex-col gap-4">
                   <p className="text-muted-foreground text-sm">
                     {t("settings.account.deleteAccountTasksDescription")}
                   </p>
-                  <div className="flex flex-col gap-3 max-h-[280px] overflow-y-auto pr-1">
-                    {pendingTasksData?.tasks.map((task) => {
-                      const candidates =
-                        pendingTasksData?.members.filter(
-                          (m) => m.workspaceId === task.workspaceId,
-                        ) ?? [];
+                  <div className="flex max-h-[280px] flex-col gap-3 overflow-y-auto pe-1">
+                    {pendingTasks.map((task) => {
+                      const candidates = pendingMembers.filter(
+                        (m) => m.workspaceId === task.workspaceId,
+                      );
                       return (
                         <div
                           key={task.assigneeId}
-                          className="flex flex-col gap-1 border-border rounded-lg border p-3 bg-muted/20"
+                          className="border-border bg-muted/20 flex flex-col gap-1 rounded-lg border p-3"
                         >
-                          <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>{task.workspaceName}</span>
-                            <span className="font-mono bg-muted px-1.5 py-0.5 rounded capitalize text-[10px]">
+                          <div className="text-muted-foreground flex justify-between text-xs">
+                            <span dir="auto">{task.workspaceName}</span>
+                            <span className="bg-muted rounded px-1.5 py-0.5 font-mono text-[10px] capitalize">
                               {task.role}
                             </span>
                           </div>
-                          <span className="text-sm font-medium">{task.taskName}</span>
+                          <span className="text-sm font-medium">
+                            {task.taskName}
+                          </span>
                           <div className="mt-2">
                             {candidates.length > 0 ? (
                               <Select
@@ -507,8 +512,10 @@ function ProfilePageBody() {
                                 </SelectPopup>
                               </Select>
                             ) : (
-                              <p className="text-xs text-muted-foreground italic">
-                                {t("settings.account.deleteAccountTaskReassignNone")}
+                              <p className="text-muted-foreground text-xs italic">
+                                {t(
+                                  "settings.account.deleteAccountTaskReassignNone",
+                                )}
                               </p>
                             )}
                           </div>
@@ -518,24 +525,27 @@ function ProfilePageBody() {
                   </div>
                 </div>
               )}
-              {step === "confirm" && (
+              {dialogStep === "confirm" && (
                 <p className="text-muted-foreground text-sm">
                   {t("settings.account.deleteAccountWarningExplanation")}
                 </p>
               )}
-              {step === "otp" && (
+              {dialogStep === "otp" && (
                 <div className="flex flex-col gap-2">
                   <Label htmlFor="otp-input">
                     {t("settings.account.enterOtp")}
                   </Label>
                   <Input
+                    dir="ltr"
                     id="otp-input"
                     placeholder="123456"
                     maxLength={6}
                     inputMode="numeric"
                     pattern="[0-9]*"
                     value={otpCode}
-                    onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ""))}
+                    onChange={(e) =>
+                      setOtpCode(e.target.value.replace(/\D/gu, ""))
+                    }
                     className="max-w-[200px] text-center text-lg tracking-widest"
                   />
                 </div>
@@ -547,7 +557,6 @@ function ProfilePageBody() {
               variant="ghost"
               onClick={() => {
                 setIsDeleteDialogOpen(false);
-                setOtpSent(false);
                 setOtpCode("");
                 setOtpError(null);
                 setReassignments({});
@@ -559,7 +568,7 @@ function ProfilePageBody() {
             >
               {t("common.cancel")}
             </Button>
-            {step === "otp" ? (
+            {dialogStep === "otp" ? (
               <Button
                 variant="destructive"
                 onClick={() =>
@@ -584,7 +593,7 @@ function ProfilePageBody() {
               <Button
                 variant="destructive"
                 onClick={() => sendOtpMutation.mutate()}
-                disabled={sendOtpMutation.isPending || step === "loading"}
+                disabled={sendOtpMutation.isPending || dialogStep === "loading"}
                 loading={sendOtpMutation.isPending}
               >
                 {t("settings.account.sendOtpCode")}

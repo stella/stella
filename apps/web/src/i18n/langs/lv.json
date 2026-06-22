@@ -1858,6 +1858,10 @@
       "deleteAccountConfirmDescription": "Vai tiešām vēlaties dzēst savu kontu? Šī darbība ir neatgriezeniska.",
       "deleteAccountOtpDescription": "Mēs nosūtījām 6 ciparu apstiprinājuma kodu uz jūsu e-pastu. Ievadiet to zemāk, lai apstiprinātu dzēšanu.",
       "deleteAccountSuccess": "Jūsu konts ir veiksmīgi dzēsts.",
+      "deleteAccountTaskReassignNone": "Šajā darba vietā nav citu dalībnieku",
+      "deleteAccountTaskReassignPlaceholder": "Izvēlēties dalībnieku...",
+      "deleteAccountTasksDescription": "Jums ir piešķirti nepabeigti uzdevumi. Pārdaliet tos citiem darba vietas dalībniekiem, lai nodrošinātu nepārtrauktību.",
+      "deleteAccountTasksTitle": "Pārdalīt nepabeigtos uzdevumus",
       "deleteAccountWarning": "Tiklīdz dzēsīsiet savu kontu, atpakaļceļa vairs nebūs. Visas dalības organizācijās, autentifikācijas dati un aktīvās sesijas tiks neatgriezeniski noņemtas.",
       "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājumu kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Ja esat vienīgais kādas organizācijas īpašnieks, vispirms ir jānodod īpašumtiesības vai jādzēš organizācija.",
       "desktop": "Datorlietotne",
@@ -1882,11 +1886,7 @@
       "wordEditIdentitySaved": "Word rediģēšanas identitāte atjaunināta",
       "wordEditShortcut": "Word rediģēšanas saīsne",
       "wordEditShortcutDescription": "Īss apzīmējums jūsu iniciāļiem Word rediģējumos.",
-      "wordEditShortcutPlaceholder": "piem., JK",
-      "deleteAccountTasksTitle": "Pārdalīt nepabeigtos uzdevumus",
-      "deleteAccountTasksDescription": "Jums ir piešķirti nepabeigti uzdevumi. Pārdaliet tos citiem darba vietas dalībniekiem, lai nodrošinātu nepārtrauktību.",
-      "deleteAccountTaskReassignPlaceholder": "Izvēlēties dalībnieku...",
-      "deleteAccountTaskReassignNone": "Šajā darba vietā nav citu dalībnieku"
+      "wordEditShortcutPlaceholder": "piem., JK"
     },
     "organization": {
       "activeMembers": "Aktīvie dalībnieki",

@@ -1,7 +1,19 @@
 import { Result } from "better-result";
 import { and, eq, inArray, ne } from "drizzle-orm";
 
-import { account, invitation, member, oauthAccessToken, oauthClient, oauthConsent, oauthRefreshToken, organization, session, user, verification } from "@/api/db/auth-schema";
+import {
+  account,
+  invitation,
+  member,
+  oauthAccessToken,
+  oauthClient,
+  oauthConsent,
+  oauthRefreshToken,
+  organization,
+  session,
+  user,
+  verification,
+} from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import {
   agentSkills,
@@ -22,10 +34,12 @@ import {
   workspaceViewTemplates,
   workspaces,
 } from "@/api/db/schema";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  brandPersistedEntityId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 
 /**
  * Fetches the user email by ID.
@@ -76,22 +90,31 @@ export const checkUserOrganizationOwnership = async (
         .innerJoin(organization, eq(organization.id, member.organizationId))
         .where(and(eq(member.userId, currentUserId), eq(member.role, "owner")));
 
-      for (const org of ownedOrgs) {
-        const otherOwners = await rootDb
-          .select({ id: member.id })
-          .from(member)
-          .where(
-            and(
-              eq(member.organizationId, org.orgId),
-              eq(member.role, "owner"),
-              ne(member.userId, currentUserId),
-            ),
-          )
-          .limit(1);
+      const ownedOrgIds = ownedOrgs.map((org) => org.orgId);
+      if (ownedOrgIds.length === 0) {
+        return { isSoleOwner: false };
+      }
 
-        if (otherOwners.length === 0) {
-          return { isSoleOwner: true, orgName: org.orgName };
-        }
+      const orgIdsWithOtherOwners = new Set(
+        (
+          await rootDb
+            .select({ orgId: member.organizationId })
+            .from(member)
+            .where(
+              and(
+                inArray(member.organizationId, ownedOrgIds),
+                eq(member.role, "owner"),
+                ne(member.userId, currentUserId),
+              ),
+            )
+        ).map((row) => row.orgId),
+      );
+
+      const soleOwnedOrg = ownedOrgs.find(
+        (org) => !orgIdsWithOtherOwners.has(org.orgId),
+      );
+      if (soleOwnedOrg) {
+        return { isSoleOwner: true, orgName: soleOwnedOrg.orgName };
       }
 
       return { isSoleOwner: false };
@@ -145,27 +168,29 @@ export const createDeleteAccountOtp = async (
       }),
   });
 
-export interface PendingTask {
+export type PendingTask = {
   assigneeId: string;
   entityId: string;
   role: "assignee" | "reviewer";
   taskName: string;
   workspaceId: string;
   workspaceName: string;
-}
+};
 
-export interface WorkspaceMemberInfo {
+export type WorkspaceMemberInfo = {
   workspaceId: string;
   userId: string;
   userName: string;
-}
+};
 
 /**
  * Fetches all pending tasks assigned to the user along with other workspace members for reassignment.
  */
 export const getPendingTasksAndMembers = async (
   currentUserId: string,
-): Promise<Result<{ tasks: PendingTask[]; members: WorkspaceMemberInfo[] }, HandlerError>> =>
+): Promise<
+  Result<{ tasks: PendingTask[]; members: WorkspaceMemberInfo[] }, HandlerError>
+> =>
   await Result.tryPromise({
     try: async () => {
       const userAssignments = await rootDb
@@ -189,7 +214,9 @@ export const getPendingTasksAndMembers = async (
         )
         .where(eq(taskAssignees.userId, currentUserId));
 
-      const workspaceIds = [...new Set(userAssignments.map((a) => a.workspaceId))];
+      const workspaceIds = [
+        ...new Set(userAssignments.map((a) => a.workspaceId)),
+      ];
 
       const otherMembers =
         workspaceIds.length > 0
@@ -221,7 +248,6 @@ export const getPendingTasksAndMembers = async (
         cause: err,
       }),
   });
-
 
 /**
  * Verifies the OTP and deletes the user from the database.
@@ -287,29 +313,38 @@ export const verifyAndDeleteUser = async (
           .select({ orgId: member.organizationId, orgName: organization.name })
           .from(member)
           .innerJoin(organization, eq(organization.id, member.organizationId))
-          .where(and(eq(member.userId, currentUserId), eq(member.role, "owner")))
+          .where(
+            and(eq(member.userId, currentUserId), eq(member.role, "owner")),
+          )
           .for("update");
 
-        for (const org of ownedOrgs) {
-          const otherOwners = await tx
-            .select({ id: member.id })
-            .from(member)
-            .where(
-              and(
-                eq(member.organizationId, org.orgId),
-                eq(member.role, "owner"),
-                ne(member.userId, currentUserId),
-              ),
-            )
-            .limit(1)
-            .for("update");
+        const ownedOrgIds = ownedOrgs.map((org) => org.orgId);
+        const orgIdsWithOtherOwners = new Set(
+          ownedOrgIds.length > 0
+            ? (
+                await tx
+                  .select({ orgId: member.organizationId })
+                  .from(member)
+                  .where(
+                    and(
+                      inArray(member.organizationId, ownedOrgIds),
+                      eq(member.role, "owner"),
+                      ne(member.userId, currentUserId),
+                    ),
+                  )
+                  .for("update")
+              ).map((row) => row.orgId)
+            : [],
+        );
 
-          if (otherOwners.length === 0) {
-            throw new HandlerError({
-              status: 400,
-              message: `Cannot delete account because you are the sole owner of organization "${org.orgName}". Please transfer ownership or delete the organization first.`,
-            });
-          }
+        const soleOwnedOrg = ownedOrgs.find(
+          (org) => !orgIdsWithOtherOwners.has(org.orgId),
+        );
+        if (soleOwnedOrg) {
+          throw new HandlerError({
+            status: 400,
+            message: `Cannot delete account because you are the sole owner of organization "${soleOwnedOrg.orgName}". Please transfer ownership or delete the organization first.`,
+          });
         }
 
         // audit: skip — ephemeral verification code deletion
@@ -326,24 +361,38 @@ export const verifyAndDeleteUser = async (
 
         // 1. Auth credentials, sessions, and invitations (auth-schema tables)
         await tx.delete(account).where(eq(account.userId, currentUserId));
-        // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
+        // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth session artifacts.
         await tx.delete(session).where(eq(session.userId, currentUserId));
         await tx.delete(member).where(eq(member.userId, currentUserId));
         // Delete invitations sent by the user, and also invitations sent to the user's email
-        await tx.delete(invitation).where(eq(invitation.inviterId, currentUserId));
+        await tx
+          .delete(invitation)
+          .where(eq(invitation.inviterId, currentUserId));
         await tx.delete(invitation).where(eq(invitation.email, email));
 
         // 2. OAuth / Better-Auth token tables (auth-schema)
-        // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
-        await tx.delete(oauthAccessToken).where(eq(oauthAccessToken.userId, currentUserId));
-        // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete
-        await tx.delete(oauthRefreshToken).where(eq(oauthRefreshToken.userId, currentUserId));
-        await tx.delete(oauthConsent).where(eq(oauthConsent.userId, currentUserId));
-        await tx.delete(oauthClient).where(eq(oauthClient.userId, currentUserId));
+        // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth OAuth access tokens.
+        await tx
+          .delete(oauthAccessToken)
+          .where(eq(oauthAccessToken.userId, currentUserId));
+        // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth OAuth refresh tokens.
+        await tx
+          .delete(oauthRefreshToken)
+          .where(eq(oauthRefreshToken.userId, currentUserId));
+        await tx
+          .delete(oauthConsent)
+          .where(eq(oauthConsent.userId, currentUserId));
+        await tx
+          .delete(oauthClient)
+          .where(eq(oauthClient.userId, currentUserId));
 
         // 3. MCP credentials and in-flight OAuth state (schema.ts, cascade on user.id)
-        await tx.delete(mcpUserConnections).where(eq(mcpUserConnections.userId, currentUserId));
-        await tx.delete(mcpOAuthState).where(eq(mcpOAuthState.userId, currentUserId));
+        await tx
+          .delete(mcpUserConnections)
+          .where(eq(mcpUserConnections.userId, currentUserId));
+        await tx
+          .delete(mcpOAuthState)
+          .where(eq(mcpOAuthState.userId, currentUserId));
 
         // 4. Workspace memberships — clear lead role then delete member rows
         await tx
@@ -355,88 +404,133 @@ export const verifyAndDeleteUser = async (
           .where(eq(workspaceMembers.userId, currentUserId));
 
         // 5. Task assignee records (reassign where requested, otherwise cascade)
-        if (reassignments && reassignments.length > 0) {
-          for (const item of reassignments) {
-            // SAFETY: item.entityId is validated as a valid UUID string at the API boundary
-            const entityId = item.entityId as SafeId<"entity">;
+        const reassignmentItems = (reassignments ?? []).map((item) => ({
+          entityId: brandPersistedEntityId(item.entityId),
+          reassignedUserId: item.reassignedUserId,
+        }));
 
-            const assignment = await tx
-              .select({
-                workspaceId: taskAssignees.workspaceId,
-              })
-              .from(taskAssignees)
+        if (reassignmentItems.length > 0) {
+          const reassignmentEntityIds = reassignmentItems.map(
+            (item) => item.entityId,
+          );
+          const reassignmentUserIds = reassignmentItems.map(
+            (item) => item.reassignedUserId,
+          );
+          const targetByEntityId = new Map(
+            reassignmentItems.map((item) => [
+              item.entityId,
+              item.reassignedUserId,
+            ]),
+          );
+
+          const assignments = await tx
+            .select({
+              entityId: taskAssignees.entityId,
+              workspaceId: taskAssignees.workspaceId,
+            })
+            .from(taskAssignees)
+            .where(
+              and(
+                inArray(taskAssignees.entityId, reassignmentEntityIds),
+                eq(taskAssignees.userId, currentUserId),
+              ),
+            );
+
+          const workspaceIds = assignments.map(
+            (assignment) => assignment.workspaceId,
+          );
+          const validMembershipKeys = new Set(
+            workspaceIds.length > 0
+              ? (
+                  await tx
+                    .select({
+                      userId: workspaceMembers.userId,
+                      workspaceId: workspaceMembers.workspaceId,
+                    })
+                    .from(workspaceMembers)
+                    .where(
+                      and(
+                        inArray(workspaceMembers.workspaceId, workspaceIds),
+                        inArray(workspaceMembers.userId, reassignmentUserIds),
+                      ),
+                    )
+                ).map((row) => `${row.workspaceId}:${row.userId}`)
+              : [],
+          );
+          const existingReassignmentKeys = new Set(
+            (
+              await tx
+                .select({
+                  entityId: taskAssignees.entityId,
+                  userId: taskAssignees.userId,
+                })
+                .from(taskAssignees)
+                .where(
+                  and(
+                    inArray(taskAssignees.entityId, reassignmentEntityIds),
+                    inArray(taskAssignees.userId, reassignmentUserIds),
+                  ),
+                )
+            ).map((row) => `${row.entityId}:${row.userId}`),
+          );
+
+          type ReassignmentUpdate = {
+            entityId: (typeof reassignmentItems)[number]["entityId"];
+            reassignedUserId: string;
+          };
+
+          const updates: ReassignmentUpdate[] = [];
+          const deletes: ReassignmentUpdate["entityId"][] = [];
+          for (const assignment of assignments) {
+            const reassignedUserId = targetByEntityId.get(assignment.entityId);
+            if (!reassignedUserId) {
+              continue;
+            }
+
+            const membershipKey = `${assignment.workspaceId}:${reassignedUserId}`;
+            const assignmentKey = `${assignment.entityId}:${reassignedUserId}`;
+            if (
+              !validMembershipKeys.has(membershipKey) ||
+              existingReassignmentKeys.has(assignmentKey)
+            ) {
+              deletes.push(assignment.entityId);
+              continue;
+            }
+
+            updates.push({
+              entityId: assignment.entityId,
+              reassignedUserId,
+            });
+          }
+
+          if (deletes.length > 0) {
+            await tx
+              .delete(taskAssignees)
               .where(
                 and(
-                  eq(taskAssignees.entityId, entityId),
+                  inArray(taskAssignees.entityId, deletes),
                   eq(taskAssignees.userId, currentUserId),
                 ),
-              )
-              .limit(1)
-              .then((rows) => rows[0]);
+              );
+          }
 
-            if (!assignment) {
-              continue;
-            }
-
-            const isMember = await tx
-              .select({ id: workspaceMembers.id })
-              .from(workspaceMembers)
-              .where(
-                and(
-                  eq(workspaceMembers.workspaceId, assignment.workspaceId),
-                  eq(workspaceMembers.userId, item.reassignedUserId),
-                ),
-              )
-              .limit(1)
-              .then((rows) => rows[0]);
-
-            if (!isMember) {
-              await tx
-                .delete(taskAssignees)
-                .where(
-                  and(
-                    eq(taskAssignees.entityId, entityId),
-                    eq(taskAssignees.userId, currentUserId),
-                  ),
-                );
-              continue;
-            }
-
-            const existing = await tx
-              .select({ id: taskAssignees.id })
-              .from(taskAssignees)
-              .where(
-                and(
-                  eq(taskAssignees.entityId, entityId),
-                  eq(taskAssignees.userId, item.reassignedUserId),
-                ),
-              )
-              .limit(1)
-              .then((rows) => rows[0]);
-
-            if (existing) {
-              await tx
-                .delete(taskAssignees)
-                .where(
-                  and(
-                    eq(taskAssignees.entityId, entityId),
-                    eq(taskAssignees.userId, currentUserId),
-                  ),
-                );
-            } else {
-              await tx
+          await Promise.all(
+            updates.map((item) =>
+              tx
                 .update(taskAssignees)
                 .set({ userId: item.reassignedUserId })
                 .where(
                   and(
-                    eq(taskAssignees.entityId, entityId),
+                    eq(taskAssignees.entityId, item.entityId),
                     eq(taskAssignees.userId, currentUserId),
                   ),
-                );
-            }
-          }
+                ),
+            ),
+          );
         }
-        await tx.delete(taskAssignees).where(eq(taskAssignees.userId, currentUserId));
+        await tx
+          .delete(taskAssignees)
+          .where(eq(taskAssignees.userId, currentUserId));
 
         // 6. Desktop edit sessions and handoffs (cascade on createdBy → user.id)
         await tx
@@ -452,7 +546,9 @@ export const verifyAndDeleteUser = async (
           .where(eq(folioCollabSessions.createdBy, currentUserId));
 
         // 8. Pending (in-flight) S3 uploads
-        await tx.delete(pendingUploads).where(eq(pendingUploads.userId, currentUserId));
+        await tx
+          .delete(pendingUploads)
+          .where(eq(pendingUploads.userId, currentUserId));
 
         // 9. Personal user files (private S3 uploads) — must delete userFiles before chatThreads
         // because userFiles.threadId has onDelete: "restrict" reference to chatThreads.id
@@ -491,18 +587,28 @@ export const verifyAndDeleteUser = async (
         await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
 
         // 10. AI chat threads — messages and fileChatThreads cascade on thread deletion
-        await tx.delete(fileChatThreads).where(eq(fileChatThreads.userId, currentUserId));
-        await tx.delete(chatThreads).where(eq(chatThreads.userId, currentUserId));
+        await tx
+          .delete(fileChatThreads)
+          .where(eq(fileChatThreads.userId, currentUserId));
+        await tx
+          .delete(chatThreads)
+          .where(eq(chatThreads.userId, currentUserId));
 
         // 11. Personal workspace view templates, prompt shortcuts, agent skills
         await tx
           .delete(workspaceViewTemplates)
           .where(eq(workspaceViewTemplates.userId, currentUserId));
-        await tx.delete(promptShortcuts).where(eq(promptShortcuts.userId, currentUserId));
-        await tx.delete(agentSkills).where(eq(agentSkills.userId, currentUserId));
+        await tx
+          .delete(promptShortcuts)
+          .where(eq(promptShortcuts.userId, currentUserId));
+        await tx
+          .delete(agentSkills)
+          .where(eq(agentSkills.userId, currentUserId));
 
         // 12. Personal billing rates
-        await tx.delete(rateEntries).where(eq(rateEntries.userId, currentUserId));
+        await tx
+          .delete(rateEntries)
+          .where(eq(rateEntries.userId, currentUserId));
 
         // 3. Clear personal data in the user table and release the original email address
         await tx

@@ -1858,6 +1858,10 @@
       "deleteAccountConfirmDescription": "Ar tikrai norite ištrinti savo paskyrą? Šis veiksmas yra negrįžtamas.",
       "deleteAccountOtpDescription": "Išsiuntėme 6 skaitmenų patvirtinimo kodą į jūsų el. paštą. Įveskite jį žemiau, kad patvirtintumėte ištrynimą.",
       "deleteAccountSuccess": "Jūsų paskyra sėkmingai ištrinta.",
+      "deleteAccountTaskReassignNone": "Šioje darbo srityje nėra kitų narių",
+      "deleteAccountTaskReassignPlaceholder": "Pasirinkite narį...",
+      "deleteAccountTasksDescription": "Jums priskirtos laukiančios užduotys. Perleiskite jas kitiems darbo srities nariams, kad užtikrintumėte veiklos tęstenumą.",
+      "deleteAccountTasksTitle": "Perleisti laukiančias užduotis",
       "deleteAccountWarning": "Ištrynus paskyrą, kelio atgal nėra. Visos narystės organizacijose, autentifikavimo duomenys ir aktyvios sesijos bus visam laikui pašalintos.",
       "deleteAccountWarningExplanation": "Atsiųsime patvirtinimo kodą į jūsų el. pašto adresą, kad patvirtintume šią užklausą. Jei esate vienintelis kurios nors organizacijos savininkas, pirmiausia turite perleisti nuosavybės teisę arba ištrinti organizaciją.",
       "desktop": "Darbalaukis",
@@ -1882,11 +1886,7 @@
       "wordEditIdentitySaved": "Word redagavimo tapatybė atnaujinta",
       "wordEditShortcut": "Word redagavimo žyma",
       "wordEditShortcutDescription": "Trumpa jūsų inicialų žyma Word pakeitimuose.",
-      "wordEditShortcutPlaceholder": "pvz., JK",
-      "deleteAccountTasksTitle": "Perleisti laukiančias užduotis",
-      "deleteAccountTasksDescription": "Jums priskirtos laukiančios užduotys. Perleiskite jas kitiems darbo srities nariams, kad užtikrintumėte veiklos tęstenumą.",
-      "deleteAccountTaskReassignPlaceholder": "Pasirinkite narį...",
-      "deleteAccountTaskReassignNone": "Šioje darbo srityje nėra kitų narių"
+      "wordEditShortcutPlaceholder": "pvz., JK"
     },
     "organization": {
       "activeMembers": "Aktyvūs nariai",

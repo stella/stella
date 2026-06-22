@@ -1858,6 +1858,10 @@
       "deleteAccountConfirmDescription": "Opravdu chcete smazat svůj účet? Tato akce je trvalá a nelze ji vrátit zpět.",
       "deleteAccountOtpDescription": "Na váš e-mail jsme odeslali 6místný ověřovací kód. Pro potvrzení smazání jej zadejte níže.",
       "deleteAccountSuccess": "Váš účet byl úspěšně smazán.",
+      "deleteAccountTaskReassignNone": "Žádní další členové v tomto pracovním prostoru",
+      "deleteAccountTaskReassignPlaceholder": "Vybrat člena...",
+      "deleteAccountTasksDescription": "Máte přiřazené nevyřízené úkoly. Znovu je přiřaďte ostatním členům pracovního prostoru, abyste zajistili kontinuitu.",
+      "deleteAccountTasksTitle": "Znovu přiřadit nevyřízené úkoly",
       "deleteAccountWarning": "Jakmile účet smažete, není cesty zpět. Všechna členství v organizacích, přihlašovací údaje a aktivní relace budou trvale odstraněny.",
       "deleteAccountWarningExplanation": "Na vaši e-mailovou adresu zašleme ověřovací kód pro potvrzení tohoto požadavku. Pokud jste jediným vlastníkem jakékoli organizace, musíte nejprve převést vlastnictví nebo organizaci smazat.",
       "desktop": "Aplikace pro počítač",
@@ -1882,11 +1886,7 @@
       "wordEditIdentitySaved": "Identita pro úpravy ve Wordu aktualizována",
       "wordEditShortcut": "Zkratka pro úpravy ve Wordu",
       "wordEditShortcutDescription": "Krátká značka pro vaše iniciály u úprav ve Wordu.",
-      "wordEditShortcutPlaceholder": "např. JK",
-      "deleteAccountTasksTitle": "Znovu přiřadit nevyřízené úkoly",
-      "deleteAccountTasksDescription": "Máte přiřazené nevyřízené úkoly. Znovu je přiřaďte ostatním členům pracovního prostoru, abyste zajistili kontinuitu.",
-      "deleteAccountTaskReassignPlaceholder": "Vybrat člena...",
-      "deleteAccountTaskReassignNone": "Žádní další členové v tomto pracovním prostoru"
+      "wordEditShortcutPlaceholder": "např. JK"
     },
     "organization": {
       "activeMembers": "Aktivní členové",

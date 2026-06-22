@@ -1858,6 +1858,10 @@
       "deleteAccountConfirmDescription": "¿Está seguro de que desea eliminar su cuenta? Esta acción es permanente y no se puede deshacer.",
       "deleteAccountOtpDescription": "Hemos enviado un código de verificación de 6 dígitos a su correo electrónico. Ingréselo a continuación para confirmar la eliminación.",
       "deleteAccountSuccess": "Su cuenta ha sido eliminada con éxito.",
+      "deleteAccountTaskReassignNone": "No hay otros miembros en este espacio de trabajo",
+      "deleteAccountTaskReassignPlaceholder": "Seleccionar un miembro...",
+      "deleteAccountTasksDescription": "Tiene tareas pendientes asignadas. Reasígnalas a otros miembros del espacio de trabajo para garantizar la continuidad.",
+      "deleteAccountTasksTitle": "Reasignar tareas pendientes",
       "deleteAccountWarning": "Una vez que elimine su cuenta, no hay marcha atrás. Todos los miembros de la organización, credenciales de autenticación y sesiones activas se eliminarán de forma permanente.",
       "deleteAccountWarningExplanation": "Enviaremos un código de verificación a su dirección de correo electrónico para confirmar esta solicitud. Si es el único propietario de alguna organización, primero debe transferir la propiedad o eliminar la organización.",
       "desktop": "Escritorio",
@@ -1882,11 +1886,7 @@
       "wordEditIdentitySaved": "Identidad de edición en Word actualizada",
       "wordEditShortcut": "Abreviatura de edición en Word",
       "wordEditShortcutDescription": "Etiqueta corta con tus iniciales en las ediciones de Word.",
-      "wordEditShortcutPlaceholder": "p. ej. JK",
-      "deleteAccountTasksTitle": "Reasignar tareas pendientes",
-      "deleteAccountTasksDescription": "Tiene tareas pendientes asignadas. Reasígnalas a otros miembros del espacio de trabajo para garantizar la continuidad.",
-      "deleteAccountTaskReassignPlaceholder": "Seleccionar un miembro...",
-      "deleteAccountTaskReassignNone": "No hay otros miembros en este espacio de trabajo"
+      "wordEditShortcutPlaceholder": "p. ej. JK"
     },
     "organization": {
       "activeMembers": "Miembros activos",
