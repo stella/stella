@@ -124,25 +124,49 @@ describe("findDroppedPlurals", () => {
       ),
     ).toEqual([]);
   });
+
+  test("does not count a nested plural's # as the outer count", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {# file} other {# files}}",
+        "{count, plural, one {{n, plural, other {#}}} other {{n, plural, other {#}}}}",
+      ),
+    ).toEqual(["count"]);
+  });
 });
 
 describe("isSuppressed", () => {
   const baseline: LintBaseline = {
-    placeholder: { "a.b": { cs: "grandfathered value" } },
+    placeholder: { "a.b": { cs: { source: "Open {x}", target: "Otevřít" } } },
     icu: {},
     plural: {},
     terminology: {},
   };
 
-  test("suppresses only when the offending value is unchanged", () => {
+  test("suppresses only when both source and target are unchanged", () => {
     expect(
-      isSuppressed(baseline, "placeholder", "a.b", "cs", "grandfathered value"),
+      isSuppressed(baseline, "placeholder", "a.b", "cs", {
+        source: "Open {x}",
+        target: "Otevřít",
+      }),
     ).toBe(true);
   });
 
-  test("re-checks once the grandfathered string is edited", () => {
+  test("re-checks when the translation is edited", () => {
     expect(
-      isSuppressed(baseline, "placeholder", "a.b", "cs", "edited value"),
+      isSuppressed(baseline, "placeholder", "a.b", "cs", {
+        source: "Open {x}",
+        target: "Edited",
+      }),
+    ).toBe(false);
+  });
+
+  test("re-checks when the en source changes under a stale translation", () => {
+    expect(
+      isSuppressed(baseline, "placeholder", "a.b", "cs", {
+        source: "Open {x} and {y}",
+        target: "Otevřít",
+      }),
     ).toBe(false);
   });
 });

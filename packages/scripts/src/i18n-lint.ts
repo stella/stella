@@ -201,9 +201,11 @@ const pluralShowsCount = (
   argName: string,
 ): boolean => {
   let shows = false;
-  const scan = (elements: MessageFormatElement[]): void => {
+  const scan = (elements: MessageFormatElement[], direct: boolean): void => {
     for (const element of elements) {
-      if (element.type === TYPE.pound) {
+      // `#` belongs to the nearest enclosing plural, so it only proves the
+      // outer count is shown when found directly, not inside a nested plural.
+      if (direct && element.type === TYPE.pound) {
         shows = true;
       }
       if (element.type === TYPE.argument && element.value === argName) {
@@ -211,16 +213,16 @@ const pluralShowsCount = (
       }
       if (element.type === TYPE.plural || element.type === TYPE.select) {
         for (const option of Object.values(element.options)) {
-          scan(option.value);
+          scan(option.value, false);
         }
       }
       if (element.type === TYPE.tag) {
-        scan(element.children);
+        scan(element.children, direct);
       }
     }
   };
   for (const option of Object.values(options)) {
-    scan(option.value);
+    scan(option.value, true);
   }
   return shows;
 };
@@ -351,12 +353,15 @@ export const findForbiddenTerms = (
 
 export type LintCategory = "placeholder" | "icu" | "plural" | "terminology";
 
-// Per category: key -> locale -> the offending target value. Tying the
-// grandfather to the exact value means editing a debt string re-checks it, so
-// further regressions on already-grandfathered debt are not silently allowed.
+export type BaselineEntry = { source: string; target: string };
+
+// Per category: key -> locale -> the offending (source, target) pair. Tying the
+// grandfather to both values means editing either the en source or the
+// translation re-checks the string, so further same-category regressions on
+// already-grandfathered debt are not silently allowed.
 export type LintBaseline = Record<
   LintCategory,
-  Record<string, Record<string, string>>
+  Record<string, Record<string, BaselineEntry>>
 >;
 
 const CATEGORIES: LintCategory[] = [
@@ -420,14 +425,20 @@ const findViolations = (
   return result;
 };
 
-/** A violation is suppressed only if the baselined offending value still matches. */
+/** A violation is suppressed only if the baselined (source, target) still matches. */
 export const isSuppressed = (
   baseline: LintBaseline,
   category: LintCategory,
   key: string,
   locale: string,
-  value: string,
-): boolean => baseline[category][key]?.[locale] === value;
+  entry: BaselineEntry,
+): boolean => {
+  const stored = baseline[category][key]?.[locale];
+  if (stored === undefined) {
+    return false;
+  }
+  return stored.source === entry.source && stored.target === entry.target;
+};
 
 // --- CLI ---
 
@@ -484,10 +495,13 @@ if (import.meta.main) {
       const reported: string[] = [];
       for (const category of CATEGORIES) {
         for (const key of violations[category]) {
-          const value = target[key] ?? "";
+          const entry = {
+            source: source[key] ?? "",
+            target: target[key] ?? "",
+          };
           if (writeBaseline) {
-            (next[category][key] ??= {})[locale] = value;
-          } else if (!isSuppressed(baseline, category, key, locale, value)) {
+            (next[category][key] ??= {})[locale] = entry;
+          } else if (!isSuppressed(baseline, category, key, locale, entry)) {
             reported.push(`  ${category}: ${key}`);
           }
         }
@@ -520,8 +534,8 @@ if (import.meta.main) {
 
     if (writeBaseline) {
       const sortRecord = (
-        record: Record<string, Record<string, string>>,
-      ): Record<string, Record<string, string>> =>
+        record: Record<string, Record<string, BaselineEntry>>,
+      ): Record<string, Record<string, BaselineEntry>> =>
         Object.fromEntries(
           Object.entries(record)
             .toSorted(([a], [b]) => a.localeCompare(b))
