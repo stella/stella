@@ -184,3 +184,60 @@ export const getDefaultViews = (
     position: tmpl.position,
   }));
 };
+
+// A default view's layout type → its VIEW_NAMES key.
+const LAYOUT_TYPE_TO_NAME_KEY: Partial<
+  Record<ViewLayoutType, keyof typeof VIEW_NAMES.en>
+> = {
+  overview: "overview",
+  table: "table",
+  filesystem: "files",
+  kanban: "todos",
+};
+
+// Every localized default name per key, so an un-renamed default view can be
+// recognized regardless of the language it was seeded in.
+const DEFAULT_NAME_SETS: Record<
+  keyof typeof VIEW_NAMES.en,
+  ReadonlySet<string>
+> = (() => {
+  const sets = {
+    overview: new Set<string>(),
+    table: new Set<string>(),
+    files: new Set<string>(),
+    todos: new Set<string>(),
+  };
+  for (const names of Object.values(VIEW_NAMES)) {
+    sets.overview.add(names.overview);
+    sets.table.add(names.table);
+    sets.files.add(names.files);
+    sets.todos.add(names.todos);
+  }
+  return sets;
+})();
+
+/**
+ * Re-localize an auto-created default view's name to `lang`.
+ *
+ * Default view names are persisted in the creator's language at seed time
+ * (see `getDefaultViews`), so an Arabic user opening a matter created by a
+ * Czech colleague would otherwise see "Přehled" instead of "نظرة عامة". On
+ * read we detect an un-renamed default — its stored name still matches a
+ * seeded name for its layout type, in any language — and return the current
+ * language's name. User-renamed views fall through unchanged.
+ */
+export const localizeDefaultViewName = ({
+  lang,
+  layoutType,
+  name,
+}: {
+  lang: SupportedLang;
+  layoutType: ViewLayoutType;
+  name: string;
+}): string => {
+  const nameKey = LAYOUT_TYPE_TO_NAME_KEY[layoutType];
+  if (nameKey === undefined || !DEFAULT_NAME_SETS[nameKey].has(name)) {
+    return name;
+  }
+  return VIEW_NAMES[lang][nameKey];
+};
