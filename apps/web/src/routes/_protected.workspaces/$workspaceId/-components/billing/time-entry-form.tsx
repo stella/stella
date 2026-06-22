@@ -219,7 +219,7 @@ export const TimeEntryForm = ({
               {(field) => (
                 <Input
                   className="w-20"
-                  dir="auto"
+                  dir="ltr"
                   maxLength={3}
                   onChange={(e) =>
                     field.handleChange(e.currentTarget.value.toUpperCase())

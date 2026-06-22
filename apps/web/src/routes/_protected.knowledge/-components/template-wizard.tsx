@@ -1409,7 +1409,7 @@ const FormulaConfigControl = ({
             render={
               <Input
                 className="font-mono"
-                dir="auto"
+                dir="ltr"
                 onChange={(e) => onUpdate({ formula: e.target.value })}
                 value={field.formula}
               />

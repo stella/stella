@@ -726,7 +726,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                     "rounded-s-none",
                     commandError && "border-destructive",
                   )}
-                  dir="auto"
+                  dir="ltr"
                   id="edit-skill-command"
                   onBlur={commitCommand}
                   onChange={(event) => setCommand(event.target.value)}

@@ -673,7 +673,7 @@ export function UiPlayground() {
                       <DialogPanel className="space-y-4">
                         <Field>
                           <FieldLabel>Email</FieldLabel>
-                          <Input defaultValue="anna@example.com" dir="auto" />
+                          <Input defaultValue="anna@example.com" dir="ltr" />
                         </Field>
                         <Field>
                           <FieldLabel>Message</FieldLabel>

@@ -211,7 +211,7 @@ export const AddMcpServerSheet = ({
               <Input
                 autoComplete="url"
                 autoFocus
-                dir="auto"
+                dir="ltr"
                 id="mcp-url"
                 inputMode="url"
                 onChange={(event) =>

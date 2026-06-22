@@ -200,7 +200,7 @@ export const ExpenseForm = ({
           <form.Field name="currency">
             {(field) => (
               <Input
-                dir="auto"
+                dir="ltr"
                 maxLength={3}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())

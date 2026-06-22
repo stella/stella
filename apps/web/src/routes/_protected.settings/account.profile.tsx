@@ -279,7 +279,7 @@ function ProfilePageBody() {
                 {t("settings.account.wordEditShortcutDescription")}
               </p>
               <Input
-                dir="auto"
+                dir="ltr"
                 id="word-edit-shortcut-input"
                 maxLength={16}
                 placeholder={t("settings.account.wordEditShortcutPlaceholder")}

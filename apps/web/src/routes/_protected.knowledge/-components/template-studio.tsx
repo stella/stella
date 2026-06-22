@@ -4693,7 +4693,7 @@ const ConditionExprEditor = ({
     <Input
       autoFocus
       className="h-8 font-mono text-xs"
-      dir="auto"
+      dir="ltr"
       onBlur={commit}
       onChange={(e) => setValue(e.currentTarget.value)}
       onKeyDown={(e) => {
@@ -5648,7 +5648,7 @@ const FieldFace = ({
             <>
               <Input
                 className="h-8 font-mono text-xs"
-                dir="auto"
+                dir="ltr"
                 onChange={(e) => onUpdate({ formula: e.target.value })}
                 placeholder={t("templates.fieldFormulaExpression")}
                 value={field.formula}

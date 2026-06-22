@@ -874,7 +874,7 @@ const EditInvoiceForm = ({
           <Field name={field.name}>
             <Label>{t("common.currency")}</Label>
             <Input
-              dir="auto"
+              dir="ltr"
               maxLength={3}
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
