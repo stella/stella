@@ -75,8 +75,24 @@ export default {
         },
       },
       create(context) {
-        const literalValue = (attr) =>
-          attr?.value?.type === "Literal" ? attr.value.value : undefined;
+        // Resolve a string/boolean literal whether written as a bare attribute
+        // (dir="auto") or wrapped in an expression container (dir={"auto"}), so
+        // the latter cannot bypass the rule.
+        const literalValue = (attr) => {
+          if (!attr?.value) {
+            return undefined;
+          }
+          if (attr.value.type === "Literal") {
+            return attr.value.value;
+          }
+          if (
+            attr.value.type === "JSXExpressionContainer" &&
+            attr.value.expression?.type === "Literal"
+          ) {
+            return attr.value.expression.value;
+          }
+          return undefined;
+        };
         return {
           JSXOpeningElement(node) {
             if (
