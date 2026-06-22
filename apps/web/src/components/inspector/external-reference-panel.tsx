@@ -877,7 +877,6 @@ export const ExternalReferencePanel = ({
               <Input
                 aria-label={t("folio.findReplace.findText")}
                 className="h-7 flex-1 rounded-md"
-                dir="auto"
                 nativeInput
                 onChange={(event) => {
                   setFindQuery(event.currentTarget.value);

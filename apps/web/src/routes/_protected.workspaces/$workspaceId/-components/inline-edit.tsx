@@ -44,7 +44,6 @@ export const InlineEdit = ({
           "focus:border-ring focus:ring-ring/16 focus:ring-2 focus:ring-offset-0",
           inputClassName,
         )}
-        dir="auto"
         onBlur={onCommit}
         onChange={(e) => onChange(e.target.value)}
         onClick={(e) => e.stopPropagation()}

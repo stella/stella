@@ -323,6 +323,11 @@
       "apiKey": "API raktas",
       "none": "Nereikia nustatyti"
     },
+    "toolNames": {
+      "anonymize": "Anonimizuoti",
+      "createDocx": "Sukurti DOCX",
+      "webSearch": "Žiniatinklio paieška"
+    },
     "unavailable": "Dar neprieinama"
   },
   "chat": {

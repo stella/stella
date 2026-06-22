@@ -74,7 +74,6 @@ export const MattersToolbar = ({
     >
       <Input
         className="w-64 max-w-[40%]"
-        dir="auto"
         onChange={(e) => onSearchChange(e.currentTarget.value)}
         placeholder={t("common.search")}
         ref={searchRef}

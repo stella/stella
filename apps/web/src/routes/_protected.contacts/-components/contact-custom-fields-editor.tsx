@@ -124,7 +124,6 @@ export const ContactCustomFieldsEditor = ({
           className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]"
         >
           <Input
-            dir="auto"
             disabled={isPending}
             maxLength={128}
             onChange={(event) => setLabelDraft(event.currentTarget.value)}
@@ -132,7 +131,6 @@ export const ContactCustomFieldsEditor = ({
             value={labelDraft}
           />
           <Input
-            dir="auto"
             disabled={isPending}
             maxLength={2000}
             onChange={(event) => setValueDraft(event.currentTarget.value)}
@@ -220,7 +218,6 @@ const CustomFieldRow = ({
     <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_minmax(0,2fr)_auto]">
       <Input
         aria-label={t("contacts.customFields.label")}
-        dir="auto"
         disabled={disabled}
         maxLength={128}
         onBlur={() => {
@@ -231,7 +228,6 @@ const CustomFieldRow = ({
       />
       <Input
         aria-label={t("contacts.customFields.value")}
-        dir="auto"
         disabled={disabled}
         maxLength={2000}
         onBlur={() => {

@@ -298,7 +298,7 @@ export default defineConfig({
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
     "./.oxlint-plugins/no-raw-locale-format.ts",
-    "./.oxlint-plugins/require-dir-on-free-text-input.ts",
+    "./.oxlint-plugins/no-input-dir-auto.ts",
     "./.oxlint-plugins/require-dir-on-rendered-name.ts",
     "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
@@ -577,15 +577,16 @@ export default defineConfig({
       },
     },
     {
-      // Bidirectional: free-text inputs need an explicit `dir` (auto).
+      // Bidirectional: the shared <Input>/<Textarea> own field direction, so a
+      // literal dir="auto" is forbidden (it strands the caret left when empty);
+      // numeric inputs must be explicitly dir="ltr".
       files: [
         "apps/web/src/**/*.tsx",
         "packages/ui/src/**/*.tsx",
-        ".oxlint-plugins/__fixtures__/require-dir-on-free-text-input.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/no-input-dir-auto.fixture.tsx",
       ],
       rules: {
-        "require-dir-on-free-text-input/require-dir-on-free-text-input":
-          "error",
+        "no-input-dir-auto/no-input-dir-auto": "error",
       },
     },
     {

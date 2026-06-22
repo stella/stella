@@ -204,7 +204,6 @@ export const InviteStep = ({
 
         <Input
           autoFocus
-          dir="auto"
           onChange={(e) => {
             setInput(e.target.value);
             if (error) {

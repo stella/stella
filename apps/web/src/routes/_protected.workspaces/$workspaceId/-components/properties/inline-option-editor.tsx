@@ -102,7 +102,6 @@ export const InlineOptionEditor = ({
         </Button>
         <input
           className="placeholder:text-foreground-placeholder flex-1 bg-transparent text-sm focus-visible:outline-none"
-          dir="auto"
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -185,7 +184,6 @@ const OptionRow = ({
       </Popover>
       <input
         className="flex-1 bg-transparent text-sm focus-visible:outline-none"
-        dir="auto"
         onBlur={() => onRename(draft.trim())}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={(e) => {

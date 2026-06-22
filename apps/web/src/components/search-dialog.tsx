@@ -1575,7 +1575,6 @@ const SearchableFacetGroup = ({
       <p className="text-muted-foreground mb-2 text-xs font-medium">{title}</p>
       <Input
         className="mb-1.5 h-7 px-2 text-xs"
-        dir="auto"
         onChange={(e) => {
           const value = e.target.value;
           setSearch(value);

@@ -55,7 +55,6 @@ export const ClientFilterPopover = ({
   return (
     <div className="flex w-64 flex-col gap-1">
       <Input
-        dir="auto"
         onChange={(e) => setSearch(e.target.value)}
         placeholder={t("workspaces.filters.searchClients")}
         size="sm"

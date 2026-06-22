@@ -323,6 +323,11 @@
       "apiKey": "Clave de API",
       "none": "Sin configuración"
     },
+    "toolNames": {
+      "anonymize": "Anonimizar",
+      "createDocx": "Crear DOCX",
+      "webSearch": "Búsqueda web"
+    },
     "unavailable": "Aún no disponible"
   },
   "chat": {

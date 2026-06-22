@@ -679,7 +679,6 @@ function VersionItem({
               <input
                 autoComplete="off"
                 className="border-input bg-background placeholder:text-muted-foreground focus:ring-ring w-full rounded-md border px-2 py-1 text-xs outline-none focus:ring-1"
-                dir="auto"
                 maxLength={128}
                 name="customLabel"
                 placeholder={t("fileDetail.label")}

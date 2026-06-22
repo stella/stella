@@ -243,7 +243,6 @@ export const TimeEntryForm = ({
         <form.Field name="narrative">
           {(field) => (
             <Textarea
-              dir="auto"
               onChange={(e) => field.handleChange(e.currentTarget.value)}
               placeholder={t("billing.narrativePlaceholder")}
               rows={3}
@@ -258,7 +257,6 @@ export const TimeEntryForm = ({
         <form.Field name="invoiceNarrative">
           {(field) => (
             <Textarea
-              dir="auto"
               onChange={(e) => field.handleChange(e.currentTarget.value)}
               placeholder={t("billing.invoiceNarrativePlaceholder")}
               rows={2}

@@ -373,7 +373,6 @@ const InlineTextEditor = ({
     <textarea
       autoFocus
       className="border-input bg-background focus:ring-ring min-h-20 w-full min-w-0 resize-none rounded-md border px-2 py-1 text-sm outline-none focus:ring-1"
-      dir="auto"
       onBlur={() => {
         const trimmed = draft.trim();
         if (trimmed !== value) {

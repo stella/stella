@@ -323,6 +323,11 @@
       "apiKey": "API klíč",
       "none": "Bez nastavení"
     },
+    "toolNames": {
+      "anonymize": "Anonymizovat",
+      "createDocx": "Vytvořit DOCX",
+      "webSearch": "Webové vyhledávání"
+    },
     "unavailable": "Zatím nedostupné"
   },
   "chat": {

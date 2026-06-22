@@ -398,7 +398,6 @@ export const AnonymizationDenyListCard = () => {
           >
             <Input
               autoComplete="off"
-              dir="auto"
               disabled={updateMutation.isPending}
               onChange={(event) => setPendingCanonical(event.target.value)}
               placeholder={t(

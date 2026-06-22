@@ -905,7 +905,7 @@ export const useChatEditor = ({
       handleEditorUpdate(nextEditor);
     },
     editorProps: {
-      attributes: {
+      attributes: (state) => ({
         // A contenteditable div has no implicit ARIA role, so without
         // these the composer is invisible to assistive tech (and to
         // role-based queries); the visible placeholder span is
@@ -913,11 +913,14 @@ export const useChatEditor = ({
         role: "textbox",
         "aria-multiline": "true",
         "aria-label": resolvedPlaceholder,
-        // Align mixed Arabic + Latin input by its first strong character.
-        dir: "auto",
+        // While empty, inherit the ambient UI direction so the caret sits on
+        // the RTL side; once there is content, switch to first-strong-character
+        // detection to align mixed Arabic + Latin input. A static `dir="auto"`
+        // would fall back to LTR on the empty doc and strand the caret left.
+        ...(state.doc.textContent.length > 0 ? { dir: "auto" } : {}),
         class:
           "field-sizing-content max-h-48 min-h-10 overflow-y-auto text-sm focus-visible:outline-none",
-      },
+      }),
       handlePaste: (_view, event) => {
         // ProseMirror processes paste before any React `onPaste`
         // handler, so the chip-on-large-paste logic has to live

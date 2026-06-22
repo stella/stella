@@ -281,7 +281,6 @@ const MatterPickerSection = ({
           />
           <input
             className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-xs outline-none"
-            dir="auto"
             disabled={isSubmitting}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("inspector.matterPicker.searchPlaceholder")}

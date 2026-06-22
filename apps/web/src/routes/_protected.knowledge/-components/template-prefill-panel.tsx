@@ -211,7 +211,6 @@ export const TemplatePrefillPanel = ({
           {pasteOpen ? (
             <Textarea
               className="min-h-24"
-              dir="auto"
               onChange={(e) => setPastedText(e.target.value)}
               placeholder={t("templates.prefillPasteTextPlaceholder")}
               value={pastedText}

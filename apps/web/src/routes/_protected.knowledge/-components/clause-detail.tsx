@@ -750,7 +750,6 @@ const ClauseInlineTextField = ({
         {label}
       </label>
       <Input
-        dir="auto"
         id={`clause-${field}`}
         onBlur={() => {
           void commit();
@@ -955,7 +954,6 @@ const ClauseUsageNotesField = ({
       </label>
       <Textarea
         className="min-h-[60px]"
-        dir="auto"
         id="clause-usage-notes"
         onBlur={() => {
           debouncedSave.cancel();
@@ -1390,7 +1388,6 @@ const VariantFormDialogBody = ({
             {t("clauses.variantLabel")}
           </label>
           <Input
-            dir="auto"
             id="variant-label"
             onChange={(e) => setLabel(e.target.value)}
             placeholder={t("clauses.variantLabelPlaceholder")}
@@ -1403,7 +1400,6 @@ const VariantFormDialogBody = ({
           </label>
           <Textarea
             className="min-h-[100px]"
-            dir="auto"
             id="variant-body"
             onChange={(e) => setBodyText(e.target.value)}
             value={bodyText}
