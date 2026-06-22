@@ -32,6 +32,7 @@ import {
   PopoverTrigger,
 } from "@stll/ui/components/popover";
 import { stellaToast } from "@stll/ui/components/toast";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 import { FileDropZone } from "@/components/file-drop-zone";
@@ -642,6 +643,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             <input
               aria-label={tSkills("formName")}
               className="text-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 w-full max-w-3xl rounded-md bg-transparent px-1.5 py-0.5 text-lg font-semibold outline-none focus-visible:ring-2"
+              dir={contentDir(name)}
               onBlur={commitName}
               onChange={(event) => setName(event.target.value)}
               placeholder={tSkills("formName")}
@@ -650,6 +652,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             <textarea
               aria-label={tSkills("formDescription")}
               className="text-muted-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 field-sizing-content w-full max-w-3xl resize-none rounded-md bg-transparent px-1.5 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-2"
+              dir={contentDir(description)}
               onBlur={commitDescription}
               onChange={(event) => setDescription(event.target.value)}
               placeholder={tSkills("formDescription")}

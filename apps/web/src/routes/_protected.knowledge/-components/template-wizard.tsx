@@ -24,6 +24,7 @@ import {
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
+import { contentDir } from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 import Tooltip from "@/components/tooltip";
@@ -696,6 +697,7 @@ const OptionsTagInput = ({
       ))}
       <input
         className="placeholder:text-muted-foreground min-w-24 flex-1 bg-transparent px-1 outline-none"
+        dir={contentDir(draft)}
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={
