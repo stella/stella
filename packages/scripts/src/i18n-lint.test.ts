@@ -63,6 +63,15 @@ describe("findMissingPluralCategories", () => {
     ).toEqual([]);
   });
 
+  test("does not require cs/sk fractional-only `many` for integer UI counts", () => {
+    expect(
+      findMissingPluralCategories(
+        "{n, plural, one {#} few {#} other {#}}",
+        "cs",
+      ),
+    ).toEqual([]);
+  });
+
   test("does not count exact selectors like =0 toward CLDR categories", () => {
     expect(
       findMissingPluralCategories(

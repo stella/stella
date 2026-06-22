@@ -3,98 +3,61 @@
   "icu": {},
   "plural": {
     "billing.invoices.totalEntries": [
-      "cs",
       "es",
-      "fr",
-      "sk"
+      "fr"
     ],
     "billing.rates.rateCount": [
-      "cs",
       "es",
-      "fr",
-      "sk"
+      "fr"
     ],
     "billing.selectedCount": [
-      "cs",
       "es",
-      "fr",
-      "sk"
+      "fr"
     ],
     "catalogue.installPack": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
       "pl",
-      "pt-BR",
-      "sk"
+      "pt-BR"
     ],
     "catalogue.packDescription": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
       "pl",
-      "pt-BR",
-      "sk"
+      "pt-BR"
     ],
     "catalogue.packInstalled": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
       "pl",
-      "pt-BR",
-      "sk"
+      "pt-BR"
     ],
     "chat.pastedText.fromClipboard": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
       "pl",
-      "pt-BR",
-      "sk"
-    ],
-    "chat.queuedAttachmentCount": [
-      "cs",
-      "sk"
-    ],
-    "chat.tool.docxEditMore": [
-      "cs",
-      "sk"
-    ],
-    "chat.tool.docxEditSummary": [
-      "cs",
-      "sk"
-    ],
-    "chat.toolCall.characterCount": [
-      "cs",
-      "sk"
+      "pt-BR"
     ],
     "clauses.clauseCount": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "clauses.importResult": [
-      "cs",
       "es",
-      "fr",
-      "sk"
+      "fr"
     ],
     "clauses.importSuccess": [
-      "cs",
       "es",
-      "fr",
-      "sk"
+      "fr"
     ],
     "clauses.syncedAllResult": [
-      "cs",
       "es",
       "fr",
       "lt",
@@ -102,37 +65,28 @@
       "pt-BR"
     ],
     "clauses.versionCount": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "common.deletedCount": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
-      "pl",
-      "sk"
+      "pl"
     ],
     "contacts.alsoPartyIn": [
-      "cs",
       "es",
       "lt",
-      "pl",
-      "sk"
+      "pl"
     ],
     "fileDetail.changesDetected": [
-      "cs",
       "es",
       "fr",
       "hu",
       "lt",
-      "lv",
-      "sk"
+      "lv"
     ],
     "knowledge.agentSkills.resources": [
-      "cs",
       "es",
       "fr",
       "lt",
@@ -140,98 +94,64 @@
       "pt-BR"
     ],
     "onboarding.catalogueContinueWithCount": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
-      "pt-BR",
-      "sk"
+      "pt-BR"
     ],
     "onboarding.cataloguePreviewCount": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
-      "pt-BR",
-      "sk"
-    ],
-    "onboarding.someInvitesFailed": [
-      "cs",
-      "sk"
+      "pt-BR"
     ],
     "search.resultCount": [
-      "cs",
       "es",
-      "fr",
-      "sk"
+      "fr"
     ],
     "settings.organization.usageSeats": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
-      "pt-BR",
-      "sk"
-    ],
-    "settings.organization.usageUnitCount": [
-      "cs",
-      "sk"
+      "pt-BR"
     ],
     "templates.checkErrors": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "templates.checkWarnings": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "templates.conditionCount": [
-      "cs",
       "es",
       "lt",
       "pl",
-      "pt-BR",
-      "sk"
+      "pt-BR"
     ],
     "templates.emptyFieldsWarning": [
-      "cs",
       "es",
       "fr",
-      "pt-BR",
-      "sk"
+      "pt-BR"
     ],
     "templates.fieldCount": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "templates.prefillApplied": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "templates.registryFilled": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "templates.structureWarnings": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "templates.unusedFields": [
-      "cs",
       "es",
       "fr",
       "hu",
-      "pt-BR",
-      "sk"
+      "pt-BR"
     ],
     "templates.usedTimes": [
       "es",
@@ -246,137 +166,89 @@
       "pt-BR"
     ],
     "workspaces.copyToMatter.descriptionCount": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
-      "pt-BR",
-      "sk"
+      "pt-BR"
     ],
     "workspaces.deleteItems": [
-      "cs",
       "es",
       "fr",
       "lt",
-      "lv",
-      "sk"
+      "lv"
     ],
     "workspaces.deleteItemsDescription": [
-      "cs",
       "es",
       "fr",
       "lt",
-      "lv",
-      "sk"
+      "lv"
     ],
     "workspaces.deleteSelectedRowsDescription": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "workspaces.documentsCount": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "workspaces.entitiesCount": [
-      "cs",
       "es",
-      "fr",
-      "sk"
+      "fr"
     ],
     "workspaces.files.renamedToAvoidConflicts": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ],
     "workspaces.files.retryFailed": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
-      "pl",
-      "sk"
+      "pl"
     ],
     "workspaces.files.uploadedPartially": [
-      "cs",
       "es",
-      "fr",
-      "sk"
-    ],
-    "workspaces.filters.chips.client": [
-      "cs",
-      "sk"
-    ],
-    "workspaces.filters.chips.team": [
-      "cs",
-      "sk"
+      "fr"
     ],
     "workspaces.importOrganizer.description": [
-      "cs",
       "es",
       "fr",
-      "lt",
-      "sk"
+      "lt"
     ],
     "workspaces.importOrganizer.emptyFoldersToDelete": [
-      "cs",
       "es",
       "fr",
-      "lt",
-      "sk"
+      "lt"
     ],
     "workspaces.infosoud.eventCount": [
-      "cs",
       "es",
       "fr",
       "lt",
-      "lv",
-      "sk"
+      "lv"
     ],
     "workspaces.infosoud.importAgendaResult": [
-      "cs",
       "es",
       "fr",
       "lt",
-      "lv",
-      "sk"
+      "lv"
     ],
     "workspaces.mattersCount": [
-      "cs",
       "es",
-      "fr",
-      "sk"
+      "fr"
     ],
     "workspaces.overview.membersCount": [
-      "cs",
       "es",
       "fr",
       "lt",
-      "lv",
-      "sk"
-    ],
-    "workspaces.properties.bulk.createdMany": [
-      "sk"
-    ],
-    "workspaces.properties.bulk.createMany": [
-      "sk"
+      "lv"
     ],
     "workspaces.tasksCount": [
-      "cs",
       "es",
       "fr",
       "lt",
       "lv",
-      "pl",
-      "sk"
+      "pl"
     ],
     "workspaces.views.fieldsSelected": [
-      "cs",
-      "es",
-      "sk"
+      "es"
     ]
   },
   "terminology": {

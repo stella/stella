@@ -134,10 +134,18 @@ export const findIcuError = (value: string): string | null => {
   return result instanceof Error ? result.message : null;
 };
 
+// CLDR lists `many` for Czech/Slovak cardinals, but it only applies to
+// fractional counts (e.g. 1.5); integer UI counts use one/few/other, and
+// TERMINOLOGY.md tells translators to omit it. Don't require it here.
+const OMITTED_CARDINAL_PLURALS: Record<string, Set<string>> = {
+  cs: new Set(["many"]),
+  sk: new Set(["many"]),
+};
+
 /**
  * Plural categories the target locale requires (per CLDR) but the value omits,
- * reported as `arg#category`. Exact selectors (`=0`, `=1`) do not count toward
- * the CLDR categories.
+ * reported as `arg#category`. Exact selectors (`=0`, `=1`) do not count, and
+ * locale-specific fractional-only categories (cs/sk `many`) are not required.
  */
 export const findMissingPluralCategories = (
   value: string,
@@ -148,9 +156,10 @@ export const findMissingPluralCategories = (
     return [];
   }
 
-  const cardinal = new Intl.PluralRules(locale, {
-    type: "cardinal",
-  }).resolvedOptions().pluralCategories;
+  const omitted = OMITTED_CARDINAL_PLURALS[locale];
+  const cardinal = new Intl.PluralRules(locale, { type: "cardinal" })
+    .resolvedOptions()
+    .pluralCategories.filter((category) => !omitted?.has(category));
   const ordinal = new Intl.PluralRules(locale, {
     type: "ordinal",
   }).resolvedOptions().pluralCategories;
