@@ -50,6 +50,7 @@ import {
   useSidebar,
 } from "@/components/sidebar";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { AuthenticatedUserProvider } from "@/lib/authenticated-user-context";
 import {
@@ -581,6 +582,10 @@ function WorkspaceInspectorSidePanel() {
     tabOriginWorkspaceId ?? routeWorkspaceId ?? fallbackTabWorkspaceId;
   const [width, setWidth] = useState(INSPECTOR_PANE_DEFAULT_WIDTH);
   const isDragging = useRef(false);
+  // Re-run the offset effect once the new bundle applies: `loadedLang` (not
+  // `lang`) is what flips document.documentElement.dir, so depending on it
+  // reads the correct direction.
+  const loadedLang = useI18nStore((s) => s.loadedLang);
 
   const handlePointerDown = (e: React.PointerEvent) => {
     e.preventDefault();
@@ -592,7 +597,12 @@ function WorkspaceInspectorSidePanel() {
     if (!isDragging.current) {
       return;
     }
-    const newWidth = window.innerWidth - e.clientX;
+    // The pane docks to the inline-end edge: that's the right in LTR
+    // (width = distance from the right) and the left in RTL (width =
+    // distance from the left). Without the RTL branch the delta is
+    // inverted and the drag oscillates.
+    const isRtl = document.documentElement.dir === "rtl";
+    const newWidth = isRtl ? e.clientX : window.innerWidth - e.clientX;
     setWidth(
       Math.min(
         INSPECTOR_PANE_MAX_WIDTH,
@@ -610,22 +620,43 @@ function WorkspaceInspectorSidePanel() {
   const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
 
   useExternalSyncEffect(() => {
+    // The toast offset is consumed via a logical `end-` utility, so the same
+    // value reserves the correct edge in both directions.
     document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
-    // Keep Folio's find/replace dialog out from under the right inspector
-    // pane. Folio reads --folio-find-replace-right on the overlay so the
-    // dialog lands over the document, not behind the sidebar.
+    // Folio's find/replace overlay is `justify-end`, so it packs against the
+    // inline-end edge: the right in LTR, the LEFT under RTL. The inspector
+    // docks to that same edge, so reserve the offset on whichever physical
+    // side both occupy and clear the other. In LTR reserve the right (left
+    // keeps its default); in RTL the pane docks left (end-0), so reserve the
+    // left and clear the right. The overlay reads --folio-find-replace-left in
+    // its width calc too, so setting it also keeps the dialog from overflowing
+    // the inspector.
+    const isRtl = document.documentElement.dir === "rtl";
     document.documentElement.style.setProperty(
       "--folio-find-replace-right",
-      widthPx,
+      isRtl ? "0px" : widthPx,
     );
+    if (isRtl) {
+      document.documentElement.style.setProperty(
+        "--folio-find-replace-left",
+        widthPx,
+      );
+    } else {
+      document.documentElement.style.removeProperty(
+        "--folio-find-replace-left",
+      );
+    }
 
     return () => {
       document.documentElement.style.removeProperty(TOAST_RIGHT_OFFSET_VAR);
       document.documentElement.style.removeProperty(
         "--folio-find-replace-right",
       );
+      document.documentElement.style.removeProperty(
+        "--folio-find-replace-left",
+      );
     };
-  }, [widthPx]);
+  }, [widthPx, loadedLang]);
 
   return (
     <div
@@ -635,12 +666,12 @@ function WorkspaceInspectorSidePanel() {
     >
       <div className="bg-sidebar relative" style={{ width: widthPx }} />
       <div
-        className="fixed inset-y-0 right-0 z-10 hidden h-svh md:flex"
+        className="fixed inset-y-0 end-0 z-10 hidden h-svh md:flex"
         style={{ width: widthPx }}
       >
         {showPaneContent && (
           <div
-            className="hover:bg-border active:bg-border absolute inset-y-0 -left-px z-20 flex w-1 cursor-col-resize items-center justify-center border-l"
+            className="hover:bg-border active:bg-border absolute inset-y-0 -start-px z-20 flex w-1 cursor-col-resize items-center justify-center border-s"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}

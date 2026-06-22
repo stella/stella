@@ -13,6 +13,7 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -141,7 +142,10 @@ export const TemplatePrefillPanel = ({
         {expanded ? (
           <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
         ) : (
-          <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
+          <DirectionalIcon
+            className="text-muted-foreground size-4 shrink-0"
+            icon={ChevronRightIcon}
+          />
         )}
         <WandSparklesIcon className="text-muted-foreground size-4 shrink-0" />
         <span className="text-sm font-medium">
@@ -207,6 +211,7 @@ export const TemplatePrefillPanel = ({
           {pasteOpen ? (
             <Textarea
               className="min-h-24"
+              dir="auto"
               onChange={(e) => setPastedText(e.target.value)}
               placeholder={t("templates.prefillPasteTextPlaceholder")}
               value={pastedText}

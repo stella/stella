@@ -33,6 +33,7 @@ import {
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Field, FieldError } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
@@ -44,6 +45,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { usePermissions } from "@/hooks/use-permissions";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -81,7 +83,7 @@ function InvoiceDetailPage() {
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <Link params={{ workspaceId }} to="/workspaces/$workspaceId/invoices">
           <Button size="icon" variant="ghost">
-            <ArrowLeftIcon className="size-4" />
+            <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
           </Button>
         </Link>
         <h1 className="text-sm font-medium">
@@ -358,7 +360,9 @@ const InvoiceDetail = ({
         {invoice.paidAt && (
           <InfoCell
             label={t("billing.invoices.paidAt")}
-            value={new Date(invoice.paidAt).toLocaleDateString()}
+            value={new Date(invoice.paidAt).toLocaleDateString(
+              getFormattingLocale(),
+            )}
           />
         )}
       </div>
@@ -816,6 +820,7 @@ const EditInvoiceForm = ({
           <Field name={field.name}>
             <Label>{t("billing.invoices.invoiceNumber")}</Label>
             <Input
+              dir="auto"
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value)}
               value={field.state.value}
@@ -855,6 +860,7 @@ const EditInvoiceForm = ({
           <Field name={field.name}>
             <Label>{t("common.reference")}</Label>
             <Input
+              dir="auto"
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value)}
               value={field.state.value}
@@ -868,6 +874,7 @@ const EditInvoiceForm = ({
           <Field name={field.name}>
             <Label>{t("common.currency")}</Label>
             <Input
+              dir="ltr"
               maxLength={3}
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value.toUpperCase())}
@@ -882,6 +889,7 @@ const EditInvoiceForm = ({
           <Field name={field.name}>
             <Label>{t("common.notes")}</Label>
             <Textarea
+              dir="auto"
               onBlur={field.handleBlur}
               onChange={(e) => field.handleChange(e.target.value)}
               rows={3}

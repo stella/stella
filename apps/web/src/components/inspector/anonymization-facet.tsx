@@ -25,7 +25,7 @@ import {
   RotateCcw,
   Trash2,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -196,6 +196,7 @@ export const AnonymizationFacet = ({
   onOpenFullView,
 }: AnonymizationFacetProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const analytics = useAnalytics();
   const formatLabel = (label: string): string =>
     isLabelTranslationKey(label) ? t(LABEL_TRANSLATION_KEYS[label]) : label;
@@ -653,6 +654,7 @@ export const AnonymizationFacet = ({
       >
         <Input
           autoComplete="off"
+          dir="auto"
           disabled={createMutation.isPending}
           onChange={(event) => setPendingValue(event.target.value)}
           placeholder={t("inspector.anonymization.addPlaceholder")}
@@ -791,7 +793,7 @@ export const AnonymizationFacet = ({
                       { count: String(hitCount) },
                     )}
                   >
-                    {hitCount}
+                    {format.number(hitCount)}
                   </span>
                 )}
                 <Button
@@ -844,7 +846,7 @@ export const AnonymizationFacet = ({
                     </span>
                   </span>
                   <span className="bg-muted text-muted-foreground rounded-full px-2 py-0.5 text-xs tabular-nums">
-                    {activeCount}
+                    {format.number(activeCount)}
                   </span>
                 </button>
                 {isOpen && (
@@ -881,7 +883,7 @@ export const AnonymizationFacet = ({
                                 { count: String(row.count) },
                               )}
                             >
-                              {row.count}
+                              {format.number(row.count)}
                             </span>
                           )}
                           {row.isExcluded ? (

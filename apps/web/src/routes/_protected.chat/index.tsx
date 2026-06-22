@@ -33,7 +33,6 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -44,6 +43,7 @@ import {
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { toAPIError } from "@/lib/errors";
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -76,7 +76,6 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 function ChatIndex() {
   const t = useTranslations();
-  const lang = useI18nStore((s) => s.lang);
   const { ensureAIAvailable } = useAIKeyGate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -435,7 +434,7 @@ function ChatIndex() {
                           />
                         }
                         iconTone="matter"
-                        meta={formatRelativeTime(matter.lastActivityAt, lang)}
+                        meta={formatRelativeTime(matter.lastActivityAt)}
                         title={matter.name}
                       />
                     </Link>
@@ -508,8 +507,12 @@ function ChatIndex() {
                   >
                     <LandingItemText
                       icon={<MessageSquareIcon className="size-4" />}
-                      meta={`${chat.workspaceName} - ${formatRelativeTime(chat.updatedAt, lang)}`}
-                      title={chat.title}
+                      meta={`${chat.workspaceName} - ${formatRelativeTime(chat.updatedAt)}`}
+                      title={
+                        isPlaceholderThreadTitle(chat.title)
+                          ? t("chat.newChat")
+                          : chat.title
+                      }
                     />
                   </Link>
                 ) : (
@@ -521,8 +524,12 @@ function ChatIndex() {
                   >
                     <LandingItemText
                       icon={<MessageSquareIcon className="size-4" />}
-                      meta={formatRelativeTime(chat.updatedAt, lang)}
-                      title={chat.title}
+                      meta={formatRelativeTime(chat.updatedAt)}
+                      title={
+                        isPlaceholderThreadTitle(chat.title)
+                          ? t("chat.newChat")
+                          : chat.title
+                      }
                     />
                   </Link>
                 ),
@@ -621,7 +628,10 @@ const LandingItemText = ({
       <LandingRowIcon tone={iconTone}>{icon}</LandingRowIcon>
     )}
     <span className="min-w-0 flex-1">
-      <span className="text-foreground block truncate text-sm font-medium">
+      <span
+        className="text-foreground block truncate text-sm font-medium"
+        dir="auto"
+      >
         {title}
       </span>
       {meta && (

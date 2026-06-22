@@ -347,6 +347,7 @@ const CategoryRow = ({
           "min-w-0 flex-1 truncate px-3 py-1.5 text-start text-sm",
           isSelected && "font-medium",
         )}
+        dir="auto"
         onClick={onSelect}
         type="button"
       >
@@ -527,6 +528,7 @@ const CategoryFormDialogBody = ({
             {labels.nameLabel}
           </label>
           <Input
+            dir="auto"
             id="category-name"
             onChange={(e) => setName(e.target.value)}
             placeholder={labels.namePlaceholder}

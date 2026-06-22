@@ -1,3 +1,5 @@
+import { getFormattingLocale } from "@/i18n/i18n-store";
+
 const MINUTE = 60;
 const HOUR = 3600;
 const DAY = 86_400;
@@ -10,10 +12,7 @@ const YEAR = 31_536_000;
  * `Intl.RelativeTimeFormat`. Returns short forms like
  * "2h ago", "yesterday", "3d ago".
  */
-export const formatRelativeTime = (
-  date: Date | string,
-  locale: string,
-): string => {
+export const formatRelativeTime = (date: Date | string): string => {
   const now = Date.now();
   const then =
     typeof date === "string" ? new Date(date).getTime() : date.getTime();
@@ -23,7 +22,7 @@ export const formatRelativeTime = (
   const diff = Math.round((then - now) / 1000);
   const absDiff = Math.abs(diff);
 
-  const rtf = new Intl.RelativeTimeFormat(locale, {
+  const rtf = new Intl.RelativeTimeFormat(getFormattingLocale(), {
     numeric: "auto",
     style: "narrow",
   });
@@ -50,16 +49,13 @@ export const formatRelativeTime = (
   return rtf.format(Math.trunc(diff / YEAR), "year");
 };
 
-export const formatFullTimestamp = (
-  date: Date | string,
-  locale: string,
-): string => {
+export const formatFullTimestamp = (date: Date | string): string => {
   const resolvedDate = typeof date === "string" ? new Date(date) : date;
   if (Number.isNaN(resolvedDate.getTime())) {
     return "";
   }
 
-  return resolvedDate.toLocaleString(locale, {
+  return resolvedDate.toLocaleString(getFormattingLocale(), {
     dateStyle: "full",
     timeStyle: "medium",
   });

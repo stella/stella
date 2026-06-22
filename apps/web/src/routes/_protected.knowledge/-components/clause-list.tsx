@@ -250,7 +250,9 @@ const ClauseRow = ({
           <TextQuoteIcon className="text-muted-foreground size-4" />
         </div>
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{clause.title}</p>
+          <p className="truncate text-sm font-medium" dir="auto">
+            {clause.title}
+          </p>
           <p className="text-muted-foreground text-xs">
             {categoryName ?? t("common.uncategorized")}
             {" \u00b7 "}

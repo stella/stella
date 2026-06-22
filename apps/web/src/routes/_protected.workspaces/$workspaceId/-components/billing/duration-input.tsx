@@ -120,9 +120,12 @@ export const DurationInput = ({
 
   return (
     <div className={cn("relative", className)}>
+      {/* Structured numeric time (e.g. 0:30) has no strong directional
+          character, so dir="auto" would inherit RTL; keep it LTR. */}
       <Input
         autoFocus={autoFocus}
         className="tabular-nums"
+        dir="ltr"
         onBlur={handleBlur}
         onChange={(e) => setDisplayValue(e.currentTarget.value)}
         onFocus={handleFocus}

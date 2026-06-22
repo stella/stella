@@ -68,7 +68,10 @@ export const CatalogueDetailPanel = ({
           TOOLBAR_ROW_HEIGHT,
         )}
       >
-        <h2 className="text-foreground min-w-0 truncate text-sm font-semibold">
+        <h2
+          className="text-foreground min-w-0 truncate text-sm font-semibold"
+          dir="auto"
+        >
           {entry.displayName}
         </h2>
         {homepageUrl && (

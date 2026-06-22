@@ -13,6 +13,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useReviewStore } from "@/components/ai-suggestions/review-store";
@@ -475,7 +476,10 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
             {oldVal && (
               <>
                 <SelectBadge property={property} value={oldVal} />
-                <ArrowRightIcon className="text-muted-foreground size-3 shrink-0" />
+                <DirectionalIcon
+                  className="text-muted-foreground size-3 shrink-0"
+                  icon={ArrowRightIcon}
+                />
               </>
             )}
             <SelectBadge property={property} value={displayNew} />

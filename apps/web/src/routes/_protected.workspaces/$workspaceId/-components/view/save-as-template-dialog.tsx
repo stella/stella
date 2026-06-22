@@ -96,6 +96,7 @@ export const SaveAsTemplateDialog = ({
               </FieldLabel>
               <Input
                 autoFocus
+                dir="auto"
                 onChange={(e) => setName(e.target.value)}
                 placeholder={t("workspaces.views.templates.namePlaceholder")}
                 value={name}

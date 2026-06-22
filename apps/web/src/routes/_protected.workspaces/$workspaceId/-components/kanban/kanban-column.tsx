@@ -22,7 +22,7 @@ import {
   SquareCheckIcon,
   Trash2Icon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import type { OptionColor } from "@stll/api/types";
 import {
@@ -124,6 +124,7 @@ export const KanbanColumn = ({
   taskOnly,
 }: KanbanColumnProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const columnRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const dragHandleRef = useRef<HTMLDivElement>(null);
@@ -387,7 +388,7 @@ export const KanbanColumn = ({
               {title}
             </button>
             <span className="text-muted-foreground text-xs">
-              {entities.length}
+              {format.number(entities.length)}
             </span>
           </span>
         )}

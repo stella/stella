@@ -146,7 +146,9 @@ const ClauseFillItem = ({
     <li className="rounded-md border p-3">
       <div className="flex items-start justify-between gap-2">
         <div className="flex min-w-0 items-center gap-2">
-          <span className="truncate text-sm font-medium">{slot.name}</span>
+          <span className="truncate text-sm font-medium" dir="auto">
+            {slot.name}
+          </span>
           {edited && (
             <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px] font-medium">
               {t("common.edited")}
@@ -177,6 +179,7 @@ const ClauseFillItem = ({
                 <Textarea
                   autoFocus
                   className="min-h-16 text-sm"
+                  dir="auto"
                   onChange={(e) => setInstruction(e.target.value)}
                   placeholder={t("ai.refinePlaceholder")}
                   value={instruction}

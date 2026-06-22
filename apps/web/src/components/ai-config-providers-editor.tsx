@@ -278,6 +278,7 @@ export const AIConfigProvidersEditor = ({
                   <Input
                     aria-label={t("aiConfig.endpoint")}
                     className="col-span-2 min-w-0 sm:col-span-2 sm:col-start-2"
+                    dir="auto"
                     disabled={disabled}
                     onChange={(event) =>
                       updateProvider(index, {

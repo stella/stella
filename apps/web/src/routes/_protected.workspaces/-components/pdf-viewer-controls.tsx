@@ -10,7 +10,7 @@ import {
   DownloadIcon,
   PrinterIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
@@ -54,6 +54,7 @@ export const PdfViewerControls = ({
   extraControls,
 }: PdfViewerControlsProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const analytics = useAnalytics();
   const { data: fileMetadata } = useQuery({
     ...fileMetadataOptions({ workspaceId, fieldId }),
@@ -209,6 +210,7 @@ export const PdfViewerControls = ({
             <input
               aria-label={t("common.currentPage")}
               autoComplete="off"
+              dir="ltr"
               className="me-1 w-14 rounded border px-1 text-end"
               inputMode="numeric"
               onBlur={() => {
@@ -237,7 +239,7 @@ export const PdfViewerControls = ({
               value={pageInputValue}
             />
             <span>/</span>
-            <span>{totalPages}</span>
+            <span>{format.number(totalPages)}</span>
           </div>
         </>
       )}

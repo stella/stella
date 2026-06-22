@@ -44,6 +44,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import {
   DropdownMenu,
@@ -483,7 +484,7 @@ const ClauseHeader = ({
         size="icon-sm"
         variant="ghost"
       >
-        <ArrowLeftIcon />
+        <DirectionalIcon icon={ArrowLeftIcon} />
       </Button>
 
       {editingTitle && canEdit ? (
@@ -503,6 +504,7 @@ const ClauseHeader = ({
       ) : (
         <button
           className="flex-1 truncate text-start text-lg font-semibold disabled:cursor-default"
+          dir="auto"
           disabled={!canEdit}
           onClick={() => {
             setTitleDraft(detail.title);
@@ -528,7 +530,7 @@ const ClauseHeader = ({
           <SelectPopup>
             <SelectItem value="">{t("common.uncategorized")}</SelectItem>
             {categories.map((cat) => (
-              <SelectItem key={cat.id} value={cat.id}>
+              <SelectItem dir="auto" key={cat.id} value={cat.id}>
                 {cat.name}
               </SelectItem>
             ))}
@@ -748,6 +750,7 @@ const ClauseInlineTextField = ({
         {label}
       </label>
       <Input
+        dir="auto"
         id={`clause-${field}`}
         onBlur={() => {
           void commit();
@@ -952,6 +955,7 @@ const ClauseUsageNotesField = ({
       </label>
       <Textarea
         className="min-h-[60px]"
+        dir="auto"
         id="clause-usage-notes"
         onBlur={() => {
           debouncedSave.cancel();
@@ -980,13 +984,14 @@ const VariantsTab = ({
   onRefresh: () => void;
 }) => {
   const t = useTranslations();
+  const format = useFormatter();
   const [addOpen, setAddOpen] = useState(false);
 
   return (
     <div className="mt-4">
       <div className="mb-3 flex items-center justify-between">
         <span className="text-muted-foreground text-sm">
-          {String(variants.length)}
+          {format.number(variants.length)}
         </span>
         <Button onClick={() => setAddOpen(true)} size="sm" variant="outline">
           <PlusIcon />
@@ -1385,6 +1390,7 @@ const VariantFormDialogBody = ({
             {t("clauses.variantLabel")}
           </label>
           <Input
+            dir="auto"
             id="variant-label"
             onChange={(e) => setLabel(e.target.value)}
             placeholder={t("clauses.variantLabelPlaceholder")}
@@ -1397,6 +1403,7 @@ const VariantFormDialogBody = ({
           </label>
           <Textarea
             className="min-h-[100px]"
+            dir="auto"
             id="variant-body"
             onChange={(e) => setBodyText(e.target.value)}
             value={bodyText}

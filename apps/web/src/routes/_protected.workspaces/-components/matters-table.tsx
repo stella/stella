@@ -1,8 +1,9 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Frame } from "@stll/ui/components/frame";
 import {
   SortableHead,
@@ -15,7 +16,7 @@ import {
 } from "@stll/ui/components/table";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useI18nStore } from "@/i18n/i18n-store";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
@@ -178,7 +179,9 @@ const NameCell = ({ workspace }: CellProps) => (
         backgroundColor: getMatterColor(workspace.id),
       }}
     />
-    <span className="truncate font-medium">{workspace.name}</span>
+    <span className="truncate font-medium" dir="auto">
+      {workspace.name}
+    </span>
   </div>
 );
 
@@ -192,7 +195,7 @@ const ClientCell = ({ workspace }: CellProps) => {
     );
   }
   return (
-    <span className="text-muted-foreground block truncate">
+    <span className="text-muted-foreground block truncate" dir="auto">
       {workspace.client.displayName}
     </span>
   );
@@ -204,26 +207,29 @@ const ReferenceCell = ({ workspace }: CellProps) => (
   </span>
 );
 
-const EntityCountCell = ({ workspace }: CellProps) => (
-  <span className="text-muted-foreground tabular-nums">
-    {workspace.entityCount}
-  </span>
-);
-
-const LastActivityCell = ({ workspace }: CellProps) => {
-  const lang = useI18nStore((s) => s.lang);
+const EntityCountCell = ({ workspace }: CellProps) => {
+  const format = useFormatter();
   return (
-    <span
-      className="text-muted-foreground"
-      title={new Date(workspace.lastActivityAt).toLocaleString(lang, {
-        dateStyle: "full",
-        timeStyle: "medium",
-      })}
-    >
-      {formatRelativeTime(workspace.lastActivityAt, lang)}
+    <span className="text-muted-foreground tabular-nums">
+      {format.number(workspace.entityCount)}
     </span>
   );
 };
+
+const LastActivityCell = ({ workspace }: CellProps) => (
+  <span
+    className="text-muted-foreground"
+    title={new Date(workspace.lastActivityAt).toLocaleString(
+      getFormattingLocale(),
+      {
+        dateStyle: "full",
+        timeStyle: "medium",
+      },
+    )}
+  >
+    {formatRelativeTime(workspace.lastActivityAt)}
+  </span>
+);
 
 /** Format a Date as `YYYY-MM-DD` in local time (locale-neutral, ISO-style). */
 const toLocalISODate = (date: Date): string => {
@@ -242,12 +248,11 @@ const TeamCell = ({ workspace }: CellProps) => (
 );
 
 const CreatedAtCell = ({ workspace }: CellProps) => {
-  const lang = useI18nStore((s) => s.lang);
   const date = new Date(workspace.createdAt);
   return (
     <span
       className="text-muted-foreground tabular-nums"
-      title={date.toLocaleString(lang, {
+      title={date.toLocaleString(getFormattingLocale(), {
         dateStyle: "full",
         timeStyle: "medium",
       })}
@@ -414,6 +419,7 @@ const MattersTableGroup = ({
   onToggle,
 }: MattersTableGroupProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const firstWs = group.workspaces.at(0);
 
   if (!firstWs) {
@@ -433,11 +439,13 @@ const MattersTableGroup = ({
           colSpan={columns.length}
         >
           <div className="flex items-center gap-2">
-            <ChevronRightIcon
+            <DirectionalIcon
               className={cn(
                 "text-muted-foreground size-3.5 shrink-0 transition-transform",
                 !collapsed && "rotate-90",
               )}
+              flip={collapsed}
+              icon={ChevronRightIcon}
             />
             {group.type === "client" && (
               <span
@@ -456,6 +464,7 @@ const MattersTableGroup = ({
             ) : (
               <Link
                 className="hover:underline"
+                dir="auto"
                 onClick={(e) => e.stopPropagation()}
                 params={{ contactId: group.clientId }}
                 to="/contacts/$contactId"
@@ -469,7 +478,7 @@ const MattersTableGroup = ({
                 "text-muted-foreground text-[0.625rem] tabular-nums",
               )}
             >
-              {group.workspaces.length}
+              {format.number(group.workspaces.length)}
             </span>
             {group.type === "client" && group.responsibleAttorneyName && (
               <span className="text-muted-foreground ms-auto truncate text-xs font-normal">

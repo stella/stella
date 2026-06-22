@@ -521,6 +521,7 @@ const DraftCard = ({
           autoComplete="off"
           autoFocus
           className="text-foreground placeholder:text-foreground-placeholder w-full px-0 text-[15px] font-semibold tracking-tight"
+          dir="auto"
           onChange={(e) => onChange({ name: e.target.value })}
           placeholder={t("workspaces.properties.newColumnName")}
           unstyled

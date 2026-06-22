@@ -27,9 +27,11 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { toAPIError } from "@/lib/errors";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
@@ -271,6 +273,8 @@ const ThreadGroup = ({
   scope,
   threads,
 }: ThreadGroupProps) => {
+  const t = useTranslations();
+
   if (threads.length === 0) {
     if (!emptyLabel) {
       return null;
@@ -332,10 +336,14 @@ const ThreadGroup = ({
                   })}
             >
               <span className="truncate text-sm font-medium">
-                {thread.title}
+                {isPlaceholderThreadTitle(thread.title)
+                  ? t("chat.newChat")
+                  : thread.title}
               </span>
               <span className="text-muted-foreground text-xs">
-                {new Date(thread.createdAt).toLocaleDateString()}
+                {new Date(thread.createdAt).toLocaleDateString(
+                  getFormattingLocale(),
+                )}
               </span>
             </Link>
             <DeleteThreadButton

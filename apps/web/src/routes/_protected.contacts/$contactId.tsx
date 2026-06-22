@@ -11,11 +11,13 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { usePermissions } from "@/hooks/use-permissions";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { ContactCommunicationEditor } from "@/routes/_protected.contacts/-components/contact-communication-editor";
 import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-components/contact-custom-fields-editor";
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
@@ -159,7 +161,7 @@ function ContactDetailPage() {
           size="icon-xs"
           variant="ghost"
         >
-          <ArrowLeftIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
         </Button>
         <div className="flex items-center gap-2">
           {contact.type === "person" ? (
@@ -167,7 +169,9 @@ function ContactDetailPage() {
           ) : (
             <BuildingIcon className="text-muted-foreground size-5" />
           )}
-          <h1 className="text-xl font-bold">{contact.displayName}</h1>
+          <h1 className="text-xl font-bold" dir="auto">
+            {contact.displayName}
+          </h1>
           <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">
             {t(`contacts.type.${contact.type}`)}
           </span>
@@ -427,10 +431,14 @@ function ContactDetailPage() {
                     workspaceId={matter.id}
                   >
                     <MatterIcon matter={matter} />
-                    <span className="font-medium">{matter.name}</span>
+                    <span className="font-medium" dir="auto">
+                      {matter.name}
+                    </span>
                     <span className="text-muted-foreground ms-auto text-xs">
                       {t("common.createdAt", {
-                        date: new Date(matter.createdAt).toLocaleDateString(),
+                        date: new Date(matter.createdAt).toLocaleDateString(
+                          getFormattingLocale(),
+                        ),
                       })}
                     </span>
                   </MatterRefLink>

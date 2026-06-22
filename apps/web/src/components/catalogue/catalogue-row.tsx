@@ -88,7 +88,9 @@ export const CatalogueRow = ({
         />
         <div className="flex min-w-0 flex-1 flex-col gap-1.5">
           <div className="flex min-h-7 items-center gap-2 sm:min-h-6">
-            <span className="text-sm font-medium">{display.displayName}</span>
+            <span className="text-sm font-medium" dir="auto">
+              {display.displayName}
+            </span>
             {isFirstParty && <FirstPartyMark />}
             <div className="ms-auto flex items-center gap-2">{actions}</div>
           </div>

@@ -55,6 +55,7 @@ export const ClientFilterPopover = ({
   return (
     <div className="flex w-64 flex-col gap-1">
       <Input
+        dir="auto"
         onChange={(e) => setSearch(e.target.value)}
         placeholder={t("workspaces.filters.searchClients")}
         size="sm"
@@ -77,7 +78,9 @@ export const ClientFilterPopover = ({
                 onClick={() => toggle(c.id)}
                 type="button"
               >
-                <span className="truncate">{c.displayName}</span>
+                <span className="truncate" dir="auto">
+                  {c.displayName}
+                </span>
                 {active && (
                   <CheckIcon className="text-primary size-3.5 shrink-0" />
                 )}

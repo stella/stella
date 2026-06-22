@@ -17,7 +17,7 @@ import {
   WandSparklesIcon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { displayLanguageName, LANGUAGES, toLanguageCode } from "@stll/locales";
 import {
@@ -137,6 +137,7 @@ export const TemplateList = ({
   onDeleted,
 }: TemplateListProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const canCreateTemplate = usePermissions({ template: ["create"] });
   const assignCategory = useAssignTemplateCategory();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -294,7 +295,7 @@ export const TemplateList = ({
               {t("knowledge.sections.templates.title")}
             </h2>
             <span className="text-muted-foreground text-sm tabular-nums">
-              {visibleTemplates.length}
+              {format.number(visibleTemplates.length)}
             </span>
             {tagFilter && (
               <span className="bg-muted text-foreground flex items-center gap-1 rounded-full py-0.5 ps-2 pe-1 text-xs font-medium">
@@ -721,11 +722,14 @@ const TemplateRow = ({
                 onClick={onSelect}
                 type="button"
               >
-                <span className="truncate text-sm font-medium">
+                <span className="truncate text-sm font-medium" dir="auto">
                   {template.name}
                 </span>
                 {categoryName !== null && (
-                  <span className="text-muted-foreground shrink-0 truncate text-xs">
+                  <span
+                    className="text-muted-foreground shrink-0 truncate text-xs"
+                    dir="auto"
+                  >
                     {categoryName}
                   </span>
                 )}
@@ -740,7 +744,7 @@ const TemplateRow = ({
                   onClick={onSelect}
                   type="button"
                 >
-                  <span className="truncate text-sm font-medium">
+                  <span className="truncate text-sm font-medium" dir="auto">
                     {template.name}
                   </span>
                 </button>
@@ -838,13 +842,13 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
   if (template.lastUsedAt) {
     segments.push(
       t("templates.lastUsedAgo", {
-        time: formatRelativeTime(template.lastUsedAt, lang),
+        time: formatRelativeTime(template.lastUsedAt),
       }),
     );
   }
   segments.push(
     t("templates.updatedAgo", {
-      time: formatRelativeTime(template.updatedAt, lang),
+      time: formatRelativeTime(template.updatedAt),
     }),
   );
 
@@ -1041,6 +1045,7 @@ const TemplateTagsDialogBody = ({
 
         <Input
           autoFocus
+          dir="auto"
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === "Enter") {
@@ -1158,6 +1163,7 @@ const TemplateGuidanceDialogBody = ({
           </label>
           <Textarea
             className="min-h-[60px]"
+            dir="auto"
             id="template-when-to-use"
             maxLength={10_000}
             onChange={(e) => setWhenToUse(e.target.value)}
@@ -1174,6 +1180,7 @@ const TemplateGuidanceDialogBody = ({
           </label>
           <Textarea
             className="min-h-[60px]"
+            dir="auto"
             id="template-when-not-to-use"
             maxLength={10_000}
             onChange={(e) => setWhenNotToUse(e.target.value)}

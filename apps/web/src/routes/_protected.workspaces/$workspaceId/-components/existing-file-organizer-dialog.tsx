@@ -16,7 +16,7 @@ import {
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -29,6 +29,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { Textarea } from "@stll/ui/components/textarea";
@@ -702,17 +703,20 @@ type SummaryStatProps = {
   tone: "primary" | "muted";
 };
 
-const SummaryStat = ({ count, label, tone }: SummaryStatProps) => (
-  <span
-    className={cn(
-      "flex items-center gap-1.5",
-      tone === "muted" && "text-muted-foreground",
-    )}
-  >
-    <span className="font-medium tabular-nums">{count}</span>
-    <span className="text-muted-foreground">{label}</span>
-  </span>
-);
+const SummaryStat = ({ count, label, tone }: SummaryStatProps) => {
+  const format = useFormatter();
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-1.5",
+        tone === "muted" && "text-muted-foreground",
+      )}
+    >
+      <span className="font-medium tabular-nums">{format.number(count)}</span>
+      <span className="text-muted-foreground">{label}</span>
+    </span>
+  );
+};
 
 type UserInstructionsSectionProps = {
   disabled: boolean;
@@ -752,7 +756,10 @@ const UserInstructionsSection = ({
           {expanded ? (
             <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
           ) : (
-            <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+            <DirectionalIcon
+              className="text-muted-foreground size-3.5 shrink-0"
+              icon={ChevronRightIcon}
+            />
           )}
           <span className="shrink-0 font-medium">
             {t("workspaces.importOrganizer.instructionsTitle")}
@@ -780,6 +787,7 @@ const UserInstructionsSection = ({
         <div className="border-t p-2">
           <Textarea
             className="min-h-16"
+            dir="auto"
             disabled={disabled}
             maxLength={USER_INSTRUCTIONS_MAX}
             onChange={(event) => onChange(event.currentTarget.value)}
@@ -1081,7 +1089,7 @@ const OrganizerFolderNode = ({
           {isExpanded ? (
             <ChevronDownIcon className="size-3.5" />
           ) : (
-            <ChevronRightIcon className="size-3.5" />
+            <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
           )}
         </button>
         <div
@@ -1246,6 +1254,7 @@ const InlineNameInput = ({
   return (
     <Input
       className="hover:border-input/40 focus-within:bg-background focus-within:border-input border-transparent bg-transparent shadow-none"
+      dir="auto"
       disabled={disabled}
       onBlur={() => {
         if (draft !== value) {
@@ -1295,7 +1304,10 @@ const DeleteFoldersSection = ({
         {expanded ? (
           <ChevronDownIcon className="text-muted-foreground size-3.5" />
         ) : (
-          <ChevronRightIcon className="text-muted-foreground size-3.5" />
+          <DirectionalIcon
+            className="text-muted-foreground size-3.5"
+            icon={ChevronRightIcon}
+          />
         )}
         <Trash2Icon className="text-muted-foreground size-4" />
         <span className="font-medium">

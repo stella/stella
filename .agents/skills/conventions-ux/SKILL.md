@@ -166,6 +166,47 @@ Small, almost invisible touches. Linear is a good reference.
   target (WCAG 2.5.8). If the visible element is smaller, extend
   the hit area with a pseudo-element or padding.
 
+## Right-to-Left (RTL) & Bidirectional
+
+Stella ships an Arabic (RTL) UI; every surface must mirror correctly
+and stay locale-aware. Test new UI in `ar` (not just `en`) before
+shipping — flipping `documentElement.dir` is not enough on its own.
+
+- **Logical properties only.** Use `ps-/pe-`, `ms-/me-`, `start-/end-`,
+  `border-s/-e`, `text-start/-end` — never physical `pl-/pr-`, `ml-/mr-`,
+  `left-/right-`, `text-left/right`, `border-l/-r`, `rounded-l/-r`.
+  Physical directional classes do not flip under `dir="rtl"`. Enforced by
+  the `no-physical-properties` oxlint rule.
+- **Mirror direction, not identity.** Render directional glyphs (chevrons,
+  arrows, back/forward, next/prev, breadcrumb separators, pagination, drawer
+  toggles) through `<DirectionalIcon icon={...} />` (`@stll/ui`), which
+  centralizes the `rtl:-scale-x-100` mirror. Do NOT mirror brand marks/logos,
+  the media play triangle, checkmarks, or anything whose meaning is
+  orientation-free. For disclosure chevrons that `rotate-90` on expand, pass
+  `flip={!isExpanded}` so the mirror applies only while collapsed — an
+  always-on mirror composes with the rotation and points the expanded state
+  the wrong way.
+- **Format through the central locale.** Route all numbers, dates, and
+  relative times through `useFormatter()`/`getFormatter()` (or pass
+  `getFormattingLocale()`); never a bare `Intl.*` / `.toLocale*String()`
+  with the base `lang` or no locale — that drops the user's numbering-system
+  preference (e.g. Eastern Arabic-Indic digits). Enforced by the
+  `no-raw-locale-format` oxlint rule.
+- **Isolate embedded Latin & numerals.** Wrap Latin runs inside RTL text
+  (case numbers, ECLI, citations, file names, emails) in `<bdi>` so bidi
+  reordering doesn't scramble neighbouring punctuation. Use `dir="auto"` on
+  free-text user inputs; keep `tel`/`email`/`url` and code fields LTR.
+- **Panels mirror as a unit.** A panel on the inline-end in LTR (right)
+  docks to the inline-start in RTL (left); its internal rail + content keep
+  their relative order automatically via flex + logical props — never pin
+  with physical `right-0`/`left-0`.
+- **Document surfaces stay LTR-based.** The editor/document canvas (folio)
+  keeps an LTR base direction even under an RTL UI; only the app chrome
+  mirrors. Brand wordmark/logo is never mirrored or transliterated.
+- **No untranslated LTR islands.** Don't leave English strings (suggested
+  prompts, labels, empty-state copy) inside an otherwise-Arabic surface;
+  route them through i18n. A Latin island reads as "unfinished," not "global."
+
 ## Anti-Patterns
 
 Explicit list of patterns that AI agents tend to generate and

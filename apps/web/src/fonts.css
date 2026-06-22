@@ -45,3 +45,16 @@
     U+0100-02AF, U+0304, U+0308, U+0329, U+1E00-1E9F, U+1EF2-1EFF, U+2020,
     U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
 }
+
+/* Noto Sans Arabic — https://github.com/notofonts/arabic */
+/* License: SIL Open Font License 1.1 (see public/fonts/OFL-NotoSansArabic.txt) */
+/* Arabic-only unicode-range: DM Sans keeps Latin, this serves Arabic glyphs. */
+@font-face {
+  font-family: "Noto Sans Arabic";
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+  src: url("/fonts/noto-sans-arabic-arabic-wght-normal.woff2") format("woff2");
+  unicode-range:
+    U+0600-06FF, U+0750-077F, U+0870-089F, U+08A0-08FF, U+FB50-FDFF, U+FE70-FEFF;
+}

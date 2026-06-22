@@ -4,7 +4,7 @@ import { useShallow } from "zustand/shallow";
 
 import { cn } from "@stll/ui/lib/utils";
 
-import { useI18nStore } from "@/i18n/i18n-store";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { parseLocalISODateMs } from "@/routes/_protected.workspaces/-filters/filter-pipeline";
 import type { Workspace } from "@/routes/_protected.workspaces/-types";
 import { useConfigStore } from "@/stores/config-store";
@@ -15,7 +15,6 @@ type ActiveFilterChipsProps = {
 
 export const ActiveFilterChips = ({ workspaces }: ActiveFilterChipsProps) => {
   const t = useTranslations();
-  const lang = useI18nStore((s) => s.lang);
   const { filters, clearFilter, clearAll } = useConfigStore(
     useShallow((s) => ({
       filters: s.matters.filters,
@@ -57,10 +56,14 @@ export const ActiveFilterChips = ({ workspaces }: ActiveFilterChipsProps) => {
       return t("workspaces.filters.date.thisMonth");
     }
     const fromLabel = filter.from
-      ? new Date(parseLocalISODateMs(filter.from)).toLocaleDateString(lang)
+      ? new Date(parseLocalISODateMs(filter.from)).toLocaleDateString(
+          getFormattingLocale(),
+        )
       : null;
     const toLabel = filter.to
-      ? new Date(parseLocalISODateMs(filter.to)).toLocaleDateString(lang)
+      ? new Date(parseLocalISODateMs(filter.to)).toLocaleDateString(
+          getFormattingLocale(),
+        )
       : null;
     if (fromLabel && toLabel) {
       return t("workspaces.filters.date.customRange", {

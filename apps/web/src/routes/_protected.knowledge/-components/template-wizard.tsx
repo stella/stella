@@ -12,6 +12,7 @@ import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
 import {
@@ -526,7 +527,7 @@ export const ConfigureStep = ({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-2">
         <Button onClick={onBack} size="sm" variant="ghost">
-          <ArrowLeftIcon />
+          <DirectionalIcon icon={ArrowLeftIcon} />
           {t("templates.backToList")}
         </Button>
       </div>
@@ -559,6 +560,7 @@ export const ConfigureStep = ({
             <FieldControl
               render={
                 <Input
+                  dir="auto"
                   onChange={(e) => setName(e.target.value)}
                   placeholder={t("templates.templateNamePlaceholder")}
                   value={name}
@@ -590,7 +592,10 @@ export const ConfigureStep = ({
                       {isExpanded ? (
                         <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
                       ) : (
-                        <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
+                        <DirectionalIcon
+                          className="text-muted-foreground size-4 shrink-0"
+                          icon={ChevronRightIcon}
+                        />
                       )}
                       <span className="min-w-0 flex-1 font-medium">
                         {field.label || field.path}
@@ -692,6 +697,7 @@ const OptionsTagInput = ({
       ))}
       <input
         className="placeholder:text-muted-foreground min-w-24 flex-1 bg-transparent px-1 outline-none"
+        dir="auto"
         onChange={(e) => setDraft(e.target.value)}
         onKeyDown={handleKeyDown}
         placeholder={
@@ -769,6 +775,7 @@ const CompositePartsEditor = ({
               <Input
                 aria-label={t("templates.fieldPartKeyPlaceholder")}
                 className="flex-1"
+                dir="auto"
                 onChange={(e) =>
                   updatePart(index, {
                     key: e.target.value.replace(PART_KEY_DISALLOWED_RE, ""),
@@ -838,6 +845,7 @@ const CompositePartsEditor = ({
         <FieldControl
           render={
             <Input
+              dir="auto"
               onChange={(e) => onUpdate({ format: e.target.value })}
               placeholder={formatPlaceholder}
               ref={formatInputRef}
@@ -896,6 +904,7 @@ const OptionsFromFieldControl = ({
         <FieldControl
           render={
             <Input
+              dir="auto"
               onChange={(e) => {
                 const next = e.target.value.replace(PART_KEY_DISALLOWED_RE, "");
                 onUpdate({ optionsFrom: next === "" ? undefined : next });
@@ -1198,6 +1207,7 @@ const LookupFormatRow = ({
         <Input
           aria-label={t("templates.fieldLookupFormatKey")}
           className="flex-1"
+          dir="auto"
           onChange={(e) =>
             onChange({
               key: e.target.value.replace(LOOKUP_FORMAT_KEY_DISALLOWED_RE, ""),
@@ -1222,6 +1232,7 @@ const LookupFormatRow = ({
         render={
           <Textarea
             aria-label={t("templates.fieldLookupFormatTemplate")}
+            dir="auto"
             maxLength={LOOKUP_FORMAT_TEMPLATE_MAX_LENGTH}
             onChange={(e) => onChange({ template: e.target.value })}
             placeholder={t("templates.fieldLookupAiFormatPlaceholder")}
@@ -1398,6 +1409,7 @@ const FormulaConfigControl = ({
             render={
               <Input
                 className="font-mono"
+                dir="ltr"
                 onChange={(e) => onUpdate({ formula: e.target.value })}
                 value={field.formula}
               />
@@ -1483,6 +1495,7 @@ export const FieldConfigEditor = ({
         <FieldControl
           render={
             <Input
+              dir="auto"
               onChange={(e) => onUpdate({ label: e.target.value })}
               placeholder={t("templates.fieldLabelPlaceholder")}
               value={field.label}
@@ -1497,6 +1510,7 @@ export const FieldConfigEditor = ({
           <FieldControl
             render={
               <Input
+                dir="auto"
                 maxLength={HINT_MAX_LENGTH}
                 onChange={(e) => onUpdate({ hint: e.target.value })}
                 value={field.hint ?? ""}

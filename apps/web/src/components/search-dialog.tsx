@@ -796,6 +796,7 @@ export const SearchDialog = ({
             <CommandInput
               autoFocus
               className="text-sm"
+              dir="auto"
               onKeyDownCapture={handleCommandInputKeyDownCapture}
               placeholder={t("search.placeholder")}
             />
@@ -1274,7 +1275,10 @@ const SearchRecents = ({
                 )}
                 <span className="min-w-0 flex-1">
                   <span className="block truncate">{file.title}</span>
-                  <span className="text-muted-foreground block truncate text-xs">
+                  <span
+                    className="text-muted-foreground block truncate text-xs"
+                    dir="auto"
+                  >
                     {file.workspaceName}
                   </span>
                 </span>
@@ -1455,27 +1459,30 @@ const FacetBucketList = ({
   buckets,
   selected,
   onChange,
-}: FacetBucketListProps) => (
-  <div className="space-y-0.5">
-    {buckets.map((bucket) => (
-      <Button
-        className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
-        key={bucket.value}
-        onClick={() => onChange(bucket.value)}
-        size="sm"
-        variant="ghost"
-      >
-        <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
-        <span className="flex-1 truncate text-start">
-          {bucket.label ?? bucket.value}
-        </span>
-        <span className="text-muted-foreground tabular-nums">
-          {bucket.count}
-        </span>
-      </Button>
-    ))}
-  </div>
-);
+}: FacetBucketListProps) => {
+  const format = useFormatter();
+  return (
+    <div className="space-y-0.5">
+      {buckets.map((bucket) => (
+        <Button
+          className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+          key={bucket.value}
+          onClick={() => onChange(bucket.value)}
+          size="sm"
+          variant="ghost"
+        >
+          <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
+          <span className="flex-1 truncate text-start">
+            {bucket.label ?? bucket.value}
+          </span>
+          <span className="text-muted-foreground tabular-nums">
+            {format.number(bucket.count)}
+          </span>
+        </Button>
+      ))}
+    </div>
+  );
+};
 
 const FACET_SEARCH_DEBOUNCE_MS = 250;
 const FACET_SEARCH_LIMIT = 20;
@@ -1568,6 +1575,7 @@ const SearchableFacetGroup = ({
       <p className="text-muted-foreground mb-2 text-xs font-medium">{title}</p>
       <Input
         className="mb-1.5 h-7 px-2 text-xs"
+        dir="auto"
         onChange={(e) => {
           const value = e.target.value;
           setSearch(value);

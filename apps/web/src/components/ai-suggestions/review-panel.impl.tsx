@@ -16,13 +16,14 @@ import {
   LoaderCircleIcon,
   XIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { diffWordSegments } from "@stll/folio";
 import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio";
 import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import {
   Popover,
@@ -137,6 +138,7 @@ export const ReviewPanelImpl = ({
   embedded = false,
 }: ReviewPanelProps) => {
   const t = useTranslations();
+  const format = useFormatter();
   const severityLabels = useSeverityLabels();
 
   // The selector must return a stable reference for the same
@@ -593,7 +595,7 @@ export const ReviewPanelImpl = ({
                 />
                 <span>{group.label}</span>
                 <span className="text-foreground-ghost tabular-nums">
-                  {group.items.length}
+                  {format.number(group.items.length)}
                 </span>
                 <span
                   aria-hidden="true"
@@ -745,6 +747,7 @@ const IdentityPopoverBody = ({
             <Input
               autoComplete="off"
               className="h-8 text-xs"
+              dir="auto"
               maxLength={120}
               onChange={(e) => setPreferredName(e.target.value)}
               placeholder={t("docxReview.wordNamePlaceholder")}
@@ -758,6 +761,7 @@ const IdentityPopoverBody = ({
             <Input
               autoComplete="off"
               className="h-8 text-xs uppercase"
+              dir="ltr"
               maxLength={6}
               onChange={(e) => setWordEditShortcut(e.target.value)}
               placeholder={t("docxReview.wordShortcutPlaceholder")}
@@ -935,9 +939,9 @@ const RedlinePreview = ({
     "bg-destructive/10 text-destructive line-through decoration-destructive/70 px-1 py-0.5 rounded-sm";
 
   const arrow = (
-    <ArrowRightIcon
-      aria-hidden="true"
+    <DirectionalIcon
       className="text-foreground-ghost mx-1 inline size-3.5 align-middle"
+      icon={ArrowRightIcon}
     />
   );
 

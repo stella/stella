@@ -297,6 +297,10 @@ export default defineConfig({
     "eslint-plugin-sonarjs",
     "@stll/oxlint-config/no-raw-colors",
     "./.oxlint-plugins/no-raw-date-input.ts",
+    "./.oxlint-plugins/no-raw-locale-format.ts",
+    "./.oxlint-plugins/require-dir-on-free-text-input.ts",
+    "./.oxlint-plugins/require-dir-on-rendered-name.ts",
+    "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -557,6 +561,54 @@ export default defineConfig({
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
+      },
+    },
+    {
+      // Locale-aware number/date formatting. Folio is excluded: its
+      // document surface stays LTR-based and formats with its own
+      // resolved locales rather than the UI numbering preference.
+      files: [
+        "apps/web/src/**/*.{ts,tsx}",
+        "packages/ui/src/**/*.{ts,tsx}",
+        ".oxlint-plugins/__fixtures__/no-raw-locale-format.fixture.ts",
+      ],
+      rules: {
+        "no-raw-locale-format/no-raw-locale-format": "error",
+      },
+    },
+    {
+      // Bidirectional: free-text inputs need an explicit `dir` (auto).
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/require-dir-on-free-text-input.fixture.tsx",
+      ],
+      rules: {
+        "require-dir-on-free-text-input/require-dir-on-free-text-input":
+          "error",
+      },
+    },
+    {
+      // Bidirectional: rendering a user-provided name needs `dir` so it
+      // isn't reordered under RTL.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/require-dir-on-rendered-name.fixture.tsx",
+      ],
+      rules: {
+        "require-dir-on-rendered-name/require-dir-on-rendered-name": "error",
+      },
+    },
+    {
+      // Numbers must go through the locale formatter so digits localize.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-unformatted-number.fixture.tsx",
+      ],
+      rules: {
+        "no-unformatted-number/no-unformatted-number": "error",
       },
     },
     {
@@ -919,7 +971,6 @@ export default defineConfig({
         "apps/web/src/**/conversation.tsx",
         "packages/ui/src/**/toast.tsx",
         "packages/ui/src/**/tabs.tsx",
-        "apps/web/src/**/_protected.tsx",
         "apps/web/src/**/kanban-column.tsx",
         "apps/web/src/**/workspace-table.tsx",
         "apps/web/src/**/workspace-table/**/*.tsx",

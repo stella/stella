@@ -171,6 +171,7 @@ export const ExpenseForm = ({
           <form.Field name="amount">
             {(field) => (
               <Input
+                dir="ltr"
                 inputMode="decimal"
                 onBlur={() => {
                   const cents = Math.round(
@@ -199,6 +200,7 @@ export const ExpenseForm = ({
           <form.Field name="currency">
             {(field) => (
               <Input
+                dir="ltr"
                 maxLength={3}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())
@@ -215,6 +217,7 @@ export const ExpenseForm = ({
         <form.Field name="description">
           {(field) => (
             <Textarea
+              dir="auto"
               onChange={(e) => field.handleChange(e.currentTarget.value)}
               placeholder={t("billing.expenses.descriptionPlaceholder")}
               rows={3}

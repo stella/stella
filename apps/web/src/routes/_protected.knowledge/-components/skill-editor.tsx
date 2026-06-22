@@ -642,6 +642,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             <input
               aria-label={tSkills("formName")}
               className="text-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 w-full max-w-3xl rounded-md bg-transparent px-1.5 py-0.5 text-lg font-semibold outline-none focus-visible:ring-2"
+              dir="auto"
               onBlur={commitName}
               onChange={(event) => setName(event.target.value)}
               placeholder={tSkills("formName")}
@@ -650,6 +651,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
             <textarea
               aria-label={tSkills("formDescription")}
               className="text-muted-foreground placeholder:text-foreground-placeholder focus-visible:ring-ring/30 -ms-1.5 field-sizing-content w-full max-w-3xl resize-none rounded-md bg-transparent px-1.5 py-0.5 text-sm leading-relaxed outline-none focus-visible:ring-2"
+              dir="auto"
               onBlur={commitDescription}
               onChange={(event) => setDescription(event.target.value)}
               placeholder={tSkills("formDescription")}
@@ -724,6 +726,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                     "rounded-s-none",
                     commandError && "border-destructive",
                   )}
+                  dir="ltr"
                   id="edit-skill-command"
                   onBlur={commitCommand}
                   onChange={(event) => setCommand(event.target.value)}
@@ -998,6 +1001,7 @@ function SkillFileTree({
             <Input
               autoFocus
               className="h-7 flex-1 text-sm"
+              dir="auto"
               onBlur={onCancelFolderRename}
               onChange={(event) => setRenameValue(event.target.value)}
               onClick={(event) => event.stopPropagation()}
@@ -1026,6 +1030,7 @@ function SkillFileTree({
             <Input
               autoFocus
               className="h-7 flex-1 text-sm"
+              dir="auto"
               onBlur={onCancelRename}
               onChange={(event) => setRenameValue(event.target.value)}
               onClick={(event) => event.stopPropagation()}
@@ -1154,6 +1159,7 @@ function FolderCreateActions({
           <div className="flex flex-col gap-2">
             <Input
               autoFocus
+              dir="auto"
               onChange={(event) => setFilename(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {
@@ -1342,6 +1348,7 @@ function RootAddMenu({
           <div className="flex flex-col gap-2">
             <Input
               autoFocus
+              dir="auto"
               onChange={(event) => setPath(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key === "Enter") {

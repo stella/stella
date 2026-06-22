@@ -6,7 +6,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { Button } from "@stll/ui/components/button";
@@ -312,6 +312,7 @@ function BrowseGroup({
   createSearch: (value: string) => CaseLawIndexSearch;
   title: string;
 }) {
+  const format = useFormatter();
   if (buckets.length === 0) {
     return null;
   }
@@ -330,7 +331,7 @@ function BrowseGroup({
               {bucket.value}
             </Link>
             <span className="text-muted-foreground shrink-0 text-xs">
-              {bucket.count}
+              {format.number(bucket.count)}
             </span>
           </li>
         ))}

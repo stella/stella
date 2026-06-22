@@ -11,6 +11,7 @@ import {
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import {
   Select,
   SelectItem,
@@ -21,6 +22,7 @@ import {
 import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { startOfWeek } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { ClientOperationError } from "@/lib/errors";
@@ -121,16 +123,16 @@ function TimesheetsPage() {
 
   const dateLabel =
     view === "day"
-      ? currentDate.toLocaleDateString(undefined, {
+      ? currentDate.toLocaleDateString(getFormattingLocale(), {
           weekday: "long",
           year: "numeric",
           month: "long",
           day: "numeric",
         })
-      : `${monday.toLocaleDateString(undefined, {
+      : `${monday.toLocaleDateString(getFormattingLocale(), {
           month: "short",
           day: "numeric",
-        })} – ${addDays(monday, 6).toLocaleDateString(undefined, {
+        })} – ${addDays(monday, 6).toLocaleDateString(getFormattingLocale(), {
           month: "short",
           day: "numeric",
           year: "numeric",
@@ -254,7 +256,7 @@ function TimesheetsPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronLeftIcon className="size-4" />
+              <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
             </Button>
             <span className="min-w-[10rem] text-center text-sm">
               {dateLabel}
@@ -267,7 +269,7 @@ function TimesheetsPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronRightIcon className="size-4" />
+              <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
             </Button>
           </div>
         </div>

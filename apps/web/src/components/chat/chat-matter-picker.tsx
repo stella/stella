@@ -273,6 +273,7 @@ export const ChatMatterPicker = ({
             />
             <input
               className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-xs outline-none"
+              dir="auto"
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
                 // base-ui's Menu listens for keystrokes (typeahead
@@ -367,7 +368,9 @@ export const ChatMatterPicker = ({
                             color: swatch,
                           }}
                         />
-                        <span className="truncate text-xs">{m.name}</span>
+                        <span className="truncate text-xs" dir="auto">
+                          {m.name}
+                        </span>
                       </span>
                     </MenuCheckboxItem>
                   );

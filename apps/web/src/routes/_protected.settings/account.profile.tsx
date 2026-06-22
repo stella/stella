@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { type PropsWithChildren, useState } from "react";
 import { useFormStatus } from "react-dom";
 
 import {
@@ -29,6 +29,11 @@ import {
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import {
+  LANG_ENDONYMS,
+  supportedLanguages,
+  useI18nStore,
+} from "@/i18n/i18n-store";
 import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
@@ -43,6 +48,7 @@ export const Route = createFileRoute("/_protected/settings/account/profile")({
 });
 
 const SESSION_ROW_KEYS = ["a", "b", "c"];
+const PREFERENCE_ROW_KEYS = ["language", "calendar", "weekStart", "numbers"];
 
 // Mirrors the real profile fragment: settings header, the timezone +
 // word-edit-identity Frame, and the sessions section, so the layout does
@@ -77,6 +83,20 @@ function ProfilePagePending() {
             <Skeleton className="h-9 w-20 rounded-md" />
           </div>
         </FramePanel>
+      </Frame>
+
+      <Frame>
+        <div className="divide-border divide-y">
+          {PREFERENCE_ROW_KEYS.map((key) => (
+            <div
+              className="flex items-center justify-between gap-4 p-3"
+              key={key}
+            >
+              <Skeleton className="h-4 w-28" />
+              <Skeleton className="h-9 w-56 rounded-md" />
+            </div>
+          ))}
+        </div>
       </Frame>
 
       <section className="flex flex-col gap-2">
@@ -243,6 +263,7 @@ function ProfilePageBody() {
                 {t("settings.account.preferredNameDescription")}
               </p>
               <Input
+                dir="auto"
                 id="preferred-name-input"
                 maxLength={120}
                 placeholder={t("settings.account.preferredNamePlaceholder")}
@@ -258,6 +279,7 @@ function ProfilePageBody() {
                 {t("settings.account.wordEditShortcutDescription")}
               </p>
               <Input
+                dir="ltr"
                 id="word-edit-shortcut-input"
                 maxLength={16}
                 placeholder={t("settings.account.wordEditShortcutPlaceholder")}
@@ -269,6 +291,8 @@ function ProfilePageBody() {
           </form>
         </FramePanel>
       </Frame>
+
+      <LocalePreferences />
 
       <section className="flex flex-col gap-2">
         <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
@@ -289,6 +313,148 @@ function ProfilePageBody() {
     </>
   );
 }
+
+const PreferenceRow = ({
+  children,
+  htmlFor,
+  label,
+}: PropsWithChildren<{ htmlFor: string; label: string }>) => (
+  <div className="flex items-center justify-between gap-4 p-3">
+    <Label className="text-sm font-medium" htmlFor={htmlFor}>
+      {label}
+    </Label>
+    {children}
+  </div>
+);
+
+const LocalePreferences = () => {
+  const t = useTranslations();
+  const lang = useI18nStore((s) => s.lang);
+  const setLang = useI18nStore((s) => s.setLang);
+  const calendar = useI18nStore((s) => s.calendar);
+  const setCalendar = useI18nStore((s) => s.setCalendar);
+  const weekStart = useI18nStore((s) => s.weekStart);
+  const setWeekStart = useI18nStore((s) => s.setWeekStart);
+  const numberingSystem = useI18nStore((s) => s.numberingSystem);
+  const setNumberingSystem = useI18nStore((s) => s.setNumberingSystem);
+
+  // The calendar select collapses "auto" to its resolved value because it has
+  // no Auto option; the numbering select binds to the raw store value so its
+  // own Auto option can round-trip.
+  const activeCalendar = calendar === "auto" ? "gregory" : calendar;
+
+  return (
+    <Frame>
+      <div className="divide-border divide-y">
+        <PreferenceRow htmlFor="language-select" label={t("common.language")}>
+          <Select
+            onValueChange={(value) => {
+              if (value) {
+                void setLang(value);
+              }
+            }}
+            value={lang}
+          >
+            <SelectTrigger className="w-56" id="language-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              {supportedLanguages.map((code) => (
+                <SelectItem key={code} value={code}>
+                  {LANG_ENDONYMS[code]}
+                </SelectItem>
+              ))}
+            </SelectPopup>
+          </Select>
+        </PreferenceRow>
+
+        <PreferenceRow
+          htmlFor="calendar-select"
+          label={t("appearance.calendar")}
+        >
+          <Select
+            onValueChange={(value) => {
+              if (value) {
+                setCalendar(value);
+              }
+            }}
+            value={activeCalendar}
+          >
+            <SelectTrigger className="w-56" id="calendar-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="gregory">
+                {t("appearance.calendarGregorian")}
+              </SelectItem>
+              <SelectItem value="islamic-umalqura">
+                {t("appearance.calendarHijri")}
+              </SelectItem>
+            </SelectPopup>
+          </Select>
+        </PreferenceRow>
+
+        <PreferenceRow
+          htmlFor="week-start-select"
+          label={t("appearance.weekStart")}
+        >
+          <Select
+            onValueChange={(value) => {
+              if (value) {
+                setWeekStart(value);
+              }
+            }}
+            value={weekStart}
+          >
+            <SelectTrigger className="w-56" id="week-start-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="auto">
+                {t("appearance.weekStartAuto")}
+              </SelectItem>
+              <SelectItem value="saturday">
+                {t("appearance.weekStartSaturday")}
+              </SelectItem>
+              <SelectItem value="sunday">
+                {t("appearance.weekStartSunday")}
+              </SelectItem>
+              <SelectItem value="monday">
+                {t("appearance.weekStartMonday")}
+              </SelectItem>
+            </SelectPopup>
+          </Select>
+        </PreferenceRow>
+
+        <PreferenceRow htmlFor="numbers-select" label={t("appearance.numbers")}>
+          <Select
+            onValueChange={(value) => {
+              if (value) {
+                setNumberingSystem(value);
+              }
+            }}
+            value={numberingSystem}
+          >
+            <SelectTrigger className="w-56" id="numbers-select">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectPopup>
+              <SelectItem value="auto">
+                {t("appearance.numbersAuto")}
+              </SelectItem>
+              <SelectItem value="latn">
+                {t("appearance.numbersWestern")}
+              </SelectItem>
+              <SelectItem value="arab">
+                {t("appearance.numbersEastern")}
+              </SelectItem>
+            </SelectPopup>
+          </Select>
+        </PreferenceRow>
+      </div>
+    </Frame>
+  );
+};
 
 const ProfileSubmitButton = ({ label }: { label: string }) => {
   const { pending } = useFormStatus();

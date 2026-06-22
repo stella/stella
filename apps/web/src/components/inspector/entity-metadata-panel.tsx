@@ -14,7 +14,7 @@ import {
   useSuspenseQuery,
 } from "@tanstack/react-query";
 import { Sparkles } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
@@ -144,7 +144,6 @@ const EntityMetadataContent = ({
   entity,
 }: EntityMetadataContentProps) => {
   const t = useTranslations();
-  const locale = useLocale();
   const queryClient = useQueryClient();
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const sawWorkflowRunning = useRef(false);
@@ -347,8 +346,8 @@ const EntityMetadataContent = ({
           {updatedAtIso !== null && (
             <ReadOnlyRow
               label={t("inspector.metadata.updatedAt")}
-              title={formatFullTimestamp(updatedAtIso, locale)}
-              value={formatRelativeTime(updatedAtIso, locale)}
+              title={formatFullTimestamp(updatedAtIso)}
+              value={formatRelativeTime(updatedAtIso)}
             />
           )}
         </div>

@@ -4,6 +4,7 @@ import { posthog } from "posthog-js";
 import type { API } from "@stll/api/types";
 
 import { env } from "@/env";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getSimulateSlowLoadDelayMs } from "@/lib/dev-store";
 
 const eden = treaty<API>(env.VITE_API_URL, {
@@ -24,8 +25,20 @@ const eden = treaty<API>(env.VITE_API_URL, {
       return {};
     }
 
+    // Carry the app's current UI/formatting locale so server-side i18n
+    // (default view names, Intl formatting) follows the in-app language
+    // rather than the browser's Accept-Language. The full tag preserves
+    // Unicode (-u-) calendar/numbering extensions.
+    const result: Record<string, string> = {
+      "Accept-Language": getFormattingLocale(),
+    };
+
     const sessionId = posthog.get_session_id();
-    return sessionId ? { "x-posthog-session-id": sessionId } : {};
+    if (sessionId) {
+      result["x-posthog-session-id"] = sessionId;
+    }
+
+    return result;
   },
 });
 

@@ -29,7 +29,6 @@ import {
 } from "@stll/ui/components/table";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient, revokeAuthSession } from "@/lib/auth";
 import type { SessionRevocationToken } from "@/lib/auth";
@@ -46,7 +45,6 @@ const MISSING_VALUE = "-";
 
 export const SessionsCard = () => {
   const t = useTranslations();
-  const lang = useI18nStore((s) => s.lang);
   const [{ data: sessions }, { data: currentSession }] = useSuspenseQueries({
     queries: [sessionsOptions, sessionOptions],
   });
@@ -89,10 +87,8 @@ export const SessionsCard = () => {
                 <TableRow key={session.id}>
                   <TableCell>{deviceLabel}</TableCell>
                   <TableCell>{session.ipAddress || MISSING_VALUE}</TableCell>
-                  <TableCell
-                    title={formatFullTimestamp(session.updatedAt, lang)}
-                  >
-                    {formatRelativeTime(session.updatedAt, lang)}
+                  <TableCell title={formatFullTimestamp(session.updatedAt)}>
+                    {formatRelativeTime(session.updatedAt)}
                   </TableCell>
                   <TableCell className="text-end">
                     {isCurrent ? (

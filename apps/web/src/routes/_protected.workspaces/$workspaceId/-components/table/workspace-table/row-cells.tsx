@@ -12,6 +12,7 @@ import {
 import { ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
 
 import { Checkbox } from "@stll/ui/components/checkbox";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -784,11 +785,13 @@ const FolderCell = ({
       }}
     >
       <button className="flex shrink-0 items-center" type="button">
-        <ChevronRightIcon
+        <DirectionalIcon
           className={cn(
             "size-3.5 transition-transform",
             isExpanded && "rotate-90",
           )}
+          flip={!isExpanded}
+          icon={ChevronRightIcon}
         />
       </button>
       {isExpanded ? (
@@ -810,6 +813,7 @@ const FolderCell = ({
       ) : (
         <button
           className="truncate text-start text-sm"
+          dir="auto"
           onDoubleClick={(e) => {
             e.stopPropagation();
             setEditValue(name);

@@ -8,8 +8,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { LIMITS } from "@/api/lib/limits";
-import { extractLangFromRequest } from "@/api/lib/locale";
-import { getDefaultViews } from "@/api/lib/views";
+import { extractLangFromRequest, type SupportedLang } from "@/api/lib/locale";
+import { getDefaultViews, localizeDefaultViewName } from "@/api/lib/views";
 import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 
 const config = {
@@ -24,11 +24,16 @@ const toViewResponse = (
     position: number;
     createdAt: Date;
   },
+  lang: SupportedLang,
   layout = parseViewLayoutSafe(view.layout),
 ) => ({
   version: 1 as const,
   id: view.id,
-  name: view.name,
+  name: localizeDefaultViewName({
+    lang,
+    layoutType: layout.type,
+    name: view.name,
+  }),
   layout,
   position: view.position,
   createdAt: view.createdAt.toISOString(),
@@ -37,6 +42,7 @@ const toViewResponse = (
 const readViews = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, request, recordAuditEvent }) {
+    const lang = extractLangFromRequest(request);
     const views = yield* Result.await(
       safeDb((tx) =>
         tx
@@ -50,7 +56,6 @@ const readViews = createSafeHandler(
 
     // Seed default views on first access (replaces actor onWake).
     if (views.length === 0) {
-      const lang = extractLangFromRequest(request);
       const workspaceProperties = yield* Result.await(
         safeDb((tx) =>
           tx.query.properties.findMany({
@@ -116,10 +121,10 @@ const readViews = createSafeHandler(
               .limit(LIMITS.viewsCount),
           ),
         );
-        return Result.ok(existing.map((view) => toViewResponse(view)));
+        return Result.ok(existing.map((view) => toViewResponse(view, lang)));
       }
 
-      return Result.ok(inserted.map((view) => toViewResponse(view)));
+      return Result.ok(inserted.map((view) => toViewResponse(view, lang)));
     }
 
     // Clean stale property references from layouts.
@@ -139,7 +144,7 @@ const readViews = createSafeHandler(
       views.map((view) => {
         const layout = parseViewLayoutSafe(view.layout);
         cleanStalePropertyIds(layout, propertyIds);
-        return toViewResponse(view, layout);
+        return toViewResponse(view, lang, layout);
       }),
     );
   },

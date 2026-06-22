@@ -68,7 +68,6 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
-import { useI18nStore } from "@/i18n/i18n-store";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
@@ -688,7 +687,6 @@ const MatterItem = ({
   // while the popover is open).
   const isPinned = usePinnedStore((s) => s.isPinned(ws.id));
   const t = useTranslations();
-  const lang = useI18nStore((s) => s.lang);
   const { state, setOpen, isMobile } = useSidebar();
   const [menuOpen, setMenuOpen] = useState(false);
   const [ctxAnchor, setCtxAnchor] = useState<{
@@ -757,7 +755,7 @@ const MatterItem = ({
     );
   }, [ws.id, canDrag]);
 
-  const relTime = formatRelativeTime(ws.lastActivityAt, lang);
+  const relTime = formatRelativeTime(ws.lastActivityAt);
 
   const startRename = () => {
     setMenuOpen(false);
@@ -793,6 +791,7 @@ const MatterItem = ({
           <Input
             autoFocus
             className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
+            dir="auto"
             onBlur={() => {
               void rename.commit();
             }}
@@ -851,10 +850,13 @@ const MatterItem = ({
           >
             <MatterIcon color={ws.color} id={ws.id} />
             <span className="flex min-w-0 flex-col">
-              <span className="truncate">{ws.name}</span>
+              <span className="truncate" dir="auto">
+                {ws.name}
+              </span>
               <span
                 className="text-muted-foreground truncate text-[0.625rem] leading-tight opacity-60 transition-opacity duration-200 group-hover/sidebar-menu-button:opacity-100"
-                title={formatFullTimestamp(ws.lastActivityAt, lang)}
+                dir="auto"
+                title={formatFullTimestamp(ws.lastActivityAt)}
               >
                 {ws.client
                   ? ws.client.displayName

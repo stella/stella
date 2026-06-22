@@ -15,6 +15,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Popover, PopoverPopup } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -195,8 +196,19 @@ export const ChatMentionList = ({
         return true;
       }
 
-      // ArrowRight on a workspace item drills down
-      if (event.key === "ArrowRight" && !drillTarget) {
+      // The drill-down chevron mirrors under RTL (DirectionalIcon), so the
+      // horizontal arrows must follow visual direction: the key pointing
+      // "into" the group is ArrowRight under LTR and ArrowLeft under RTL.
+      // Read the rendered list's computed direction so this stays correct
+      // regardless of how the host app or an enclosing subtree sets `dir`.
+      const isRtl =
+        listRef.current !== null &&
+        getComputedStyle(listRef.current).direction === "rtl";
+      const drillInKey = isRtl ? "ArrowLeft" : "ArrowRight";
+      const drillOutKey = isRtl ? "ArrowRight" : "ArrowLeft";
+
+      // The inline-forward arrow on a workspace item drills down
+      if (event.key === drillInKey && !drillTarget) {
         const item = activeItems.at(safeIndex);
         if (item?.category === "workspace") {
           handleDrillDown(item);
@@ -204,8 +216,8 @@ export const ChatMentionList = ({
         }
       }
 
-      // ArrowLeft exits drill-down
-      if (event.key === "ArrowLeft" && drillTarget) {
+      // The inline-back arrow exits drill-down
+      if (event.key === drillOutKey && drillTarget) {
         handleBack();
         return true;
       }
@@ -241,7 +253,10 @@ export const ChatMentionList = ({
               size="sm"
               variant="ghost"
             >
-              <ArrowLeftIcon className="size-3.5 shrink-0" />
+              <DirectionalIcon
+                className="size-3.5 shrink-0"
+                icon={ArrowLeftIcon}
+              />
               <LayersIcon className="size-3.5 shrink-0" />
               <span className="truncate">{drillTarget.name}</span>
             </Button>
@@ -323,7 +338,10 @@ export const ChatMentionList = ({
                             size="icon-sm"
                             variant="ghost"
                           >
-                            <ChevronRightIcon className="size-3.5" />
+                            <DirectionalIcon
+                              className="size-3.5"
+                              icon={ChevronRightIcon}
+                            />
                           </Button>
                         )}
                       </div>

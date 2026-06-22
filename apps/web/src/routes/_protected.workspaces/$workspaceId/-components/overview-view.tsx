@@ -59,7 +59,11 @@ import {
 } from "@/components/empty-screen";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useI18nStore } from "@/i18n/i18n-store";
+import {
+  getFormatter,
+  getFormattingLocale,
+  useI18nStore,
+} from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -131,6 +135,16 @@ const getLocaleDayLabel = (
   const date = new Date(2026, 0, 4 + firstWeekday + dayIndex);
   return date.toLocaleDateString(locale, { weekday: "narrow" }).toUpperCase();
 };
+
+// Round to one decimal and render the locale's translated `hour` unit, so the
+// suffix follows the active language rather than a hardcoded English "h".
+const formatHours = (hours: number) =>
+  getFormatter().number(Math.round(hours * 10) / 10, {
+    style: "unit",
+    unit: "hour",
+    unitDisplay: "short",
+    maximumFractionDigits: 1,
+  });
 
 // ── Main component ───────────────────────────────────────
 
@@ -422,7 +436,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               });
             }
           }}
-          value={String(data.documentCount)}
+          value={getFormatter().number(data.documentCount)}
         />
         <StatCard
           icon={<SquareCheckIcon className="size-4" />}
@@ -436,7 +450,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               });
             }
           }}
-          value={`${data.taskCount}`}
+          value={getFormatter().number(data.taskCount)}
         />
         <StatCard
           icon={<CalendarClockIcon className="size-4" />}
@@ -457,7 +471,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             if (!date) {
               return "—";
             }
-            return new Date(date).toLocaleDateString(lang, {
+            return new Date(date).toLocaleDateString(getFormattingLocale(), {
               month: "short",
               day: "numeric",
             });
@@ -472,7 +486,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               params: { workspaceId },
             });
           }}
-          value={`${Math.round(totalHoursThisWeek * 10) / 10}h`}
+          value={formatHours(totalHoursThisWeek)}
         />
       </div>
 
@@ -563,7 +577,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                               <>
                                 {task.assignedTo ? " · " : ""}
                                 {new Date(task.dueDate).toLocaleDateString(
-                                  lang,
+                                  getFormattingLocale(),
                                   {
                                     month: "short",
                                     day: "numeric",
@@ -800,7 +814,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                     {cell}
                                   </PopoverTrigger>
                                   <TooltipPopup>
-                                    {Math.round(hours * 10) / 10}h
+                                    {formatHours(hours)}
                                   </TooltipPopup>
                                 </TooltipRoot>
                                 <PopoverPopup className="w-56" sideOffset={8}>
@@ -813,7 +827,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                         firstWeekday,
                                       )}
                                       {" · "}
-                                      {Math.round(hours * 10) / 10}h
+                                      {formatHours(hours)}
                                     </p>
                                     {entries.length > 0 ? (
                                       <div className="space-y-1.5">
@@ -826,9 +840,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                               {entry.description}
                                             </span>
                                             <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                                              {Math.round(entry.hours * 10) /
-                                                10}
-                                              h
+                                              {formatHours(entry.hours)}
                                             </span>
                                           </div>
                                         ))}
@@ -846,7 +858,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                         })}
                       </div>
                       <span className="text-muted-foreground w-10 shrink-0 text-end text-xs tabular-nums">
-                        {total > 0 ? `${total}h` : ""}
+                        {total > 0 ? formatHours(total) : ""}
                       </span>
                     </div>
                   );
@@ -861,7 +873,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium tabular-nums">
                     {totalHoursThisWeek > 0
-                      ? `${Math.round(totalHoursThisWeek * 10) / 10}h`
+                      ? formatHours(totalHoursThisWeek)
                       : ""}
                   </span>
                   {prevWeekHours !== null &&
@@ -945,7 +957,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               <OverviewRow
                 entity={entity}
                 key={entity.entityId}
-                lang={lang}
                 workspaceId={workspaceId}
               />
             ))}
@@ -1037,10 +1048,9 @@ type OverviewEntity = {
 type OverviewRowProps = {
   entity: OverviewEntity;
   workspaceId: string;
-  lang: string;
 };
 
-const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
+const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
   const [contextOpen, setContextOpen] = useState(false);
   const [contextAnchor, setContextAnchor] = useState<VirtualAnchor | null>(
     null,
@@ -1209,10 +1219,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   })();
 
   const t = useTranslations();
-  const relTime = formatRelativeTime(
-    entity.updatedAt ?? entity.createdAt,
-    lang,
-  );
+  const relTime = formatRelativeTime(entity.updatedAt ?? entity.createdAt);
 
   /** Entities whose updatedAt is within this window of createdAt
    *  are considered "just uploaded" rather than "edited". */
@@ -1264,15 +1271,14 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
           </span>
         </span>
         {icon}
-        <span className="truncate">{entity.name}</span>
+        <span className="truncate" dir="auto">
+          {entity.name}
+        </span>
       </span>
       {relTime && (
         <span
           className="text-muted-foreground shrink-0 text-xs tabular-nums"
-          title={formatFullTimestamp(
-            entity.updatedAt ?? entity.createdAt,
-            lang,
-          )}
+          title={formatFullTimestamp(entity.updatedAt ?? entity.createdAt)}
         >
           {relTime}
         </span>

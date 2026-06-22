@@ -8,6 +8,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import {
@@ -345,6 +346,7 @@ const CreateRateTableForm = ({
             {(field) => (
               <Input
                 autoFocus
+                dir="auto"
                 onChange={(e) => field.handleChange(e.currentTarget.value)}
                 placeholder={t("billing.rates.tableNamePlaceholder")}
                 value={field.state.value}
@@ -357,6 +359,7 @@ const CreateRateTableForm = ({
           <form.Field name="currency">
             {(field) => (
               <Input
+                dir="ltr"
                 maxLength={3}
                 onChange={(e) =>
                   field.handleChange(e.currentTarget.value.toUpperCase())
@@ -509,7 +512,7 @@ const RateEntriesView = ({
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Button className="size-7" onClick={onBack} size="icon" variant="ghost">
-          <ArrowLeftIcon className="size-4" />
+          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
         </Button>
         <h3 className="text-sm font-medium">
           {table?.name ?? t("billing.rates.rateEntries")}
@@ -743,6 +746,7 @@ const CreateRateEntryForm = ({
           <form.Field name="hourlyRate">
             {(field) => (
               <Input
+                dir="ltr"
                 inputMode="decimal"
                 onChange={(e) => field.handleChange(e.currentTarget.value)}
                 placeholder="350.00"

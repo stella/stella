@@ -360,6 +360,7 @@ const CreateOrganizationForm = ({
                 <FieldLabel>{t("common.organizationName")}</FieldLabel>
                 <Input
                   autoFocus
+                  dir="auto"
                   onBlur={field.handleBlur}
                   onChange={(event) => {
                     const value = event.target.value;
@@ -379,6 +380,7 @@ const CreateOrganizationForm = ({
               <Field name={field.name}>
                 <FieldLabel>{t("common.urlIdentifier")}</FieldLabel>
                 <Input
+                  dir="ltr"
                   onBlur={field.handleBlur}
                   onChange={(event) => field.handleChange(event.target.value)}
                   placeholder={t("common.urlIdentifierPlaceholder")}

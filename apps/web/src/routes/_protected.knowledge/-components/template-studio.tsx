@@ -45,7 +45,7 @@ import { TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useDebouncedCallback } from "use-debounce";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
 import {
@@ -82,6 +82,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
 import {
@@ -2409,7 +2410,10 @@ const GestureSplitRow = ({
             {open ? (
               <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
             ) : (
-              <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+              <DirectionalIcon
+                className="text-muted-foreground size-3.5 shrink-0"
+                icon={ChevronRightIcon}
+              />
             )}
           </Button>
         )}
@@ -3575,6 +3579,7 @@ const StudioInsertRow = () => {
             <MenuSubPopup>
               {linkedClauses.map((link) => (
                 <MenuItem
+                  dir="auto"
                   key={link.id}
                   onClick={() =>
                     actions.insertClauseSlot(
@@ -3822,6 +3827,7 @@ const GuidanceNote = ({
   onBlur: () => void;
   placeholder: string;
 }) => {
+  const format = useFormatter();
   const overRecommended = value.length > GUIDANCE_RECOMMENDED_LENGTH;
   return (
     <div className="flex flex-col gap-1.5">
@@ -3829,6 +3835,7 @@ const GuidanceNote = ({
       <Textarea
         aria-label={label}
         className="text-sm"
+        dir="auto"
         maxLength={GUIDANCE_MAX_LENGTH}
         onBlur={onBlur}
         onChange={(e) => onChange(e.target.value)}
@@ -3842,7 +3849,7 @@ const GuidanceNote = ({
           overRecommended ? "text-warning" : "text-muted-foreground",
         )}
       >
-        {value.length}
+        {format.number(value.length)}
       </span>
     </div>
   );
@@ -4225,6 +4232,7 @@ const ConditionFieldEditor = ({
         <Input
           className="h-9 text-sm"
           defaultValue={field.label}
+          dir="auto"
           key={field.path}
           onBlur={(e) => {
             const next = e.currentTarget.value.trim();
@@ -4477,6 +4485,7 @@ const ConditionQuestionBuilder = ({
       </p>
       <Input
         className="h-9 text-sm"
+        dir="auto"
         onBlur={commit}
         onChange={(e) => setLabel(e.currentTarget.value)}
         onKeyDown={(e) => {
@@ -4617,7 +4626,10 @@ const ConditionAdvanced = ({
         {open ? (
           <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
         ) : (
-          <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+          <DirectionalIcon
+            className="text-muted-foreground size-3.5 shrink-0"
+            icon={ChevronRightIcon}
+          />
         )}
         <span className="text-muted-foreground font-medium">
           {t("templates.studio.conditionAdvanced")}
@@ -4681,6 +4693,7 @@ const ConditionExprEditor = ({
     <Input
       autoFocus
       className="h-8 font-mono text-xs"
+      dir="ltr"
       onBlur={commit}
       onChange={(e) => setValue(e.currentTarget.value)}
       onKeyDown={(e) => {
@@ -4735,7 +4748,7 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
             {t("clauses.noLinkedClauses")}
           </p>
         ) : (
-          <div className="rounded-md border p-2.5 text-sm">
+          <div className="rounded-md border p-2.5 text-sm" dir="auto">
             {link.clause === null ? (
               <span className="text-destructive">
                 {t("clauses.clauseDeleted")}
@@ -4815,7 +4828,7 @@ const FieldNavigator = ({
             {showUnused ? (
               <ChevronDownIcon className="size-3.5" />
             ) : (
-              <ChevronRightIcon className="size-3.5" />
+              <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
             )}
             {t("templates.unusedFields", { count: unplaced.length })}
           </button>
@@ -4951,7 +4964,10 @@ const OutlineRow = ({
                 </span>
               ) : null}
               <FieldCapabilityIcons field={field} />
-              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+              <DirectionalIcon
+                className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100"
+                icon={ChevronRightIcon}
+              />
             </span>
           )}
         </button>
@@ -4979,7 +4995,9 @@ const OutlineRow = ({
           <span className="bg-muted text-muted-foreground flex size-7 shrink-0 items-center justify-center rounded-md">
             <TextQuoteIcon className="size-4" />
           </span>
-          <span className="truncate">{node.name}</span>
+          <span className="truncate" dir="auto">
+            {node.name}
+          </span>
         </button>
         <Button
           aria-label={t("templates.studio.insertAtCaret")}
@@ -5029,7 +5047,10 @@ const OutlineRow = ({
               {loopField === undefined ? null : (
                 <FieldCapabilityIcons field={loopField} />
               )}
-              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+              <DirectionalIcon
+                className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100"
+                icon={ChevronRightIcon}
+              />
             </span>
           </button>
         </li>
@@ -5114,7 +5135,7 @@ const OutlineGroupRow = ({
             {open ? (
               <ChevronDownIcon className="size-3.5" />
             ) : (
-              <ChevronRightIcon className="size-3.5" />
+              <DirectionalIcon className="size-3.5" icon={ChevronRightIcon} />
             )}
           </button>
         ) : null}
@@ -5203,7 +5224,7 @@ const ScopeHeader = ({
           size="icon-sm"
           variant="ghost"
         >
-          <ArrowLeftIcon />
+          <DirectionalIcon icon={ArrowLeftIcon} />
         </Button>
       )}
       <div className="min-w-0 flex-1">
@@ -5460,7 +5481,7 @@ const FieldFace = ({
                 size="icon-sm"
                 variant="ghost"
               >
-                <ChevronLeftIcon />
+                <DirectionalIcon icon={ChevronLeftIcon} />
               </Button>
               <Button
                 aria-label={t("common.next")}
@@ -5469,7 +5490,7 @@ const FieldFace = ({
                 size="icon-sm"
                 variant="ghost"
               >
-                <ChevronRightIcon />
+                <DirectionalIcon icon={ChevronRightIcon} />
               </Button>
               <Button
                 aria-label={t("common.delete")}
@@ -5627,6 +5648,7 @@ const FieldFace = ({
             <>
               <Input
                 className="h-8 font-mono text-xs"
+                dir="ltr"
                 onChange={(e) => onUpdate({ formula: e.target.value })}
                 placeholder={t("templates.fieldFormulaExpression")}
                 value={field.formula}
@@ -5811,6 +5833,7 @@ const SaveRecipeDialog = ({
             <Label htmlFor="recipe-name">{t("common.name")}</Label>
             <Input
               autoFocus
+              dir="auto"
               id="recipe-name"
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {
@@ -5889,6 +5912,7 @@ const FieldPathEditor = ({
     <Input
       autoFocus
       className="h-7 font-mono text-xs"
+      dir="auto"
       onBlur={commit}
       onChange={(e) => setValue(e.currentTarget.value)}
       onKeyDown={(e) => {

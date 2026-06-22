@@ -98,6 +98,7 @@ function ComboboxInput({
         render={
           <Input
             className="has-disabled:opacity-100"
+            dir="auto"
             nativeInput
             size={sizeValue}
           />

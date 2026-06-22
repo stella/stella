@@ -3,6 +3,8 @@ import type { ReactNode } from "react";
 import { ArrowLeftIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+
 import { OnboardingProgress } from "@/routes/onboarding/-components/onboarding-progress";
 
 type OnboardingLayoutProps = {
@@ -48,7 +50,7 @@ export const OnboardingLayout = ({
               style={{ insetInlineStart: "-12px" }}
               type="button"
             >
-              <ArrowLeftIcon className="size-4" />
+              <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
             </button>
           )}
           <OnboardingProgress

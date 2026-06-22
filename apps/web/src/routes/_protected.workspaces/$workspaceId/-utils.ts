@@ -1,4 +1,4 @@
-import { getFormatter, useI18nStore } from "@/i18n/i18n-store";
+import { getFormatter, getFormattingLocale } from "@/i18n/i18n-store";
 import { startOfWeek } from "@/i18n/week";
 import type {
   WorkspaceEntity,
@@ -134,8 +134,7 @@ export const formatRelativeTime = (
     return "-";
   }
 
-  const lang = useI18nStore.getState().lang;
-  const currentLocale = locale ?? lang;
+  const currentLocale = locale ?? getFormattingLocale();
 
   const date = new Date(isoString);
   const now = Date.now();
@@ -191,7 +190,7 @@ export const formatFullTimestamp = (
     return null;
   }
 
-  const currentLocale = locale ?? useI18nStore.getState().lang;
+  const currentLocale = locale ?? getFormattingLocale();
 
   return new Date(isoString).toLocaleString(currentLocale, {
     dateStyle: "full",

@@ -5,6 +5,7 @@ import { ChevronLeftIcon, ChevronRightIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { startOfWeek } from "@/i18n/week";
@@ -86,10 +87,10 @@ function ExpensesPage() {
     setCurrentDate(new Date());
   };
 
-  const dateLabel = `${monday.toLocaleDateString(undefined, {
+  const dateLabel = `${monday.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
-  })} – ${sunday.toLocaleDateString(undefined, {
+  })} – ${sunday.toLocaleDateString(locale, {
     month: "short",
     day: "numeric",
     year: "numeric",
@@ -112,7 +113,7 @@ function ExpensesPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronLeftIcon className="size-4" />
+              <DirectionalIcon className="size-4" icon={ChevronLeftIcon} />
             </Button>
             <span className="min-w-[10rem] text-center text-sm">
               {dateLabel}
@@ -123,7 +124,7 @@ function ExpensesPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronRightIcon className="size-4" />
+              <DirectionalIcon className="size-4" icon={ChevronRightIcon} />
             </Button>
           </div>
         </div>

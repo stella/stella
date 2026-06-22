@@ -7,6 +7,7 @@ import {
   FolderOpenIcon,
 } from "lucide-react";
 
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 // Shared presentation for the file/folder tree used by the workspace Files view
@@ -78,11 +79,13 @@ export const FileTreeNameCell = ({
   >
     <TreeGuideLines depth={depth} />
     {isFolder ? (
-      <ChevronRightIcon
+      <DirectionalIcon
         className={cn(
           "size-3.5 shrink-0 transition-transform",
           expanded && "rotate-90",
         )}
+        flip={!expanded}
+        icon={ChevronRightIcon}
       />
     ) : (
       <span className="w-3.5 shrink-0" />
@@ -208,7 +211,7 @@ export function FileTree({
                 {renderName ? (
                   renderName(node)
                 ) : (
-                  <span className="truncate" title={node.name}>
+                  <span className="truncate" dir="auto" title={node.name}>
                     {node.name}
                   </span>
                 )}

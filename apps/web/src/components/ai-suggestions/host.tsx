@@ -35,7 +35,7 @@ import {
   WandSparklesIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import {
   applySuggestions,
@@ -57,6 +57,7 @@ import type {
   AISuggestionSeverity,
 } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import {
   Tooltip,
   TooltipPopup,
@@ -75,6 +76,7 @@ import type { ChatEditorController } from "@/components/chat-editor-provider";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
@@ -1435,7 +1437,7 @@ export function SuggestionStepper({
         size="icon-sm"
         variant="ghost"
       >
-        <ChevronLeftIcon />
+        <DirectionalIcon icon={ChevronLeftIcon} />
       </Button>
       <span className="text-muted-foreground min-w-12 text-center text-xs tabular-nums">
         {t("chat.suggestionStep", {
@@ -1449,7 +1451,7 @@ export function SuggestionStepper({
         size="icon-sm"
         variant="ghost"
       >
-        <ChevronRightIcon />
+        <DirectionalIcon icon={ChevronRightIcon} />
       </Button>
       <Button className="ms-1" onClick={onDismiss} size="sm" variant="ghost">
         {t("folio.dismiss")}
@@ -1486,6 +1488,7 @@ export function PromptBar(props: PromptBarProps) {
   } = props;
 
   const t = useTranslations();
+  const format = useFormatter();
   const { canSubmit, editor, isEmpty } = editorController;
 
   const isGenerating = status === "generating";
@@ -1716,7 +1719,7 @@ export function PromptBar(props: PromptBarProps) {
       {layout === "floating" && pendingCount > 0 && (
         <span className="flex h-8 shrink-0 items-center ps-0.5">
           <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
-            {pendingCount}
+            {format.number(pendingCount)}
           </span>
         </span>
       )}
@@ -2158,7 +2161,9 @@ function UserBubble({ message }: { message: UserThreadMessage }) {
         {message.pastedText && (
           <span className="text-info bg-info/10 inline-flex w-fit items-center gap-0.5 rounded px-1.5 text-[10.5px] font-medium tabular-nums">
             {t("chat.pastedChars", {
-              count: message.pastedText.length.toLocaleString(),
+              count: message.pastedText.length.toLocaleString(
+                getFormattingLocale(),
+              ),
             })}
           </span>
         )}

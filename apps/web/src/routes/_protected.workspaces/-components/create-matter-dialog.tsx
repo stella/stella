@@ -64,7 +64,9 @@ const SelectedClient = ({ client }: { client: MatterDraftClient }) => (
     ) : (
       <BuildingIcon className="text-muted-foreground size-4" />
     )}
-    <span className="truncate text-sm font-medium">{client.displayName}</span>
+    <span className="truncate text-sm font-medium" dir="auto">
+      {client.displayName}
+    </span>
   </div>
 );
 
@@ -453,6 +455,7 @@ const CreateMatterDialogBody = ({
             <Input
               aria-invalid={nameInvalid}
               autoFocus={!!selectedClient}
+              dir="auto"
               ref={nameInputRef}
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {

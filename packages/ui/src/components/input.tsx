@@ -50,6 +50,7 @@ function Input({
         <input
           className={inputClassName}
           data-slot="input"
+          dir="auto"
           size={typeof size === "number" ? size : undefined}
           {...props}
         />

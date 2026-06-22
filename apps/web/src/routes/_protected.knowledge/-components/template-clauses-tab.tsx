@@ -25,6 +25,7 @@ import {
   AlertDialogTitle,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -297,7 +298,9 @@ const LinkedClauseRow = ({
     <li className="flex flex-col px-4 py-3">
       <div className="flex items-center gap-3">
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium">{link.clause?.title}</p>
+          <p className="text-sm font-medium" dir="auto">
+            {link.clause?.title}
+          </p>
           <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
             {link.slotName && <SlotChip slotName={link.slotName} />}
             {link.clauseVariant && <span>{link.clauseVariant.label}</span>}
@@ -440,7 +443,7 @@ const OutdatedChanges = ({
           {isDiffOpen ? (
             <ChevronDownIcon className="size-3" />
           ) : (
-            <ChevronRightIcon className="size-3" />
+            <DirectionalIcon className="size-3" icon={ChevronRightIcon} />
           )}
           {t("fileDetail.showDiff")}
         </Button>

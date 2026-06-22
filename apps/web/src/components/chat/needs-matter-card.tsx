@@ -13,6 +13,7 @@ import {
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useChatMatters } from "@/components/chat/chat-matters-context";
@@ -280,6 +281,7 @@ const MatterPickerSection = ({
           />
           <input
             className="placeholder:text-foreground-placeholder h-7 w-full min-w-0 bg-transparent text-xs outline-none"
+            dir="auto"
             disabled={isSubmitting}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t("inspector.matterPicker.searchPlaceholder")}
@@ -344,6 +346,7 @@ const MatterPickerSection = ({
                           "shrink-0 text-[10px]",
                           isSelected ? "opacity-80" : "text-muted-foreground",
                         )}
+                        dir="auto"
                       >
                         {m.client.displayName}
                       </span>
@@ -387,13 +390,16 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
     <>
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-xs font-semibold">
+        <span className="truncate text-xs font-semibold" dir="auto">
           {output.fileName}
         </span>
         {canOpen && (
           <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px]">
             {t("chat.createDocument.openInFolio")}
-            <ArrowRightIcon className="size-3 shrink-0" />
+            <DirectionalIcon
+              className="size-3 shrink-0"
+              icon={ArrowRightIcon}
+            />
           </span>
         )}
       </div>

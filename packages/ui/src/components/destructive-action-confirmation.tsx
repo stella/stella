@@ -61,6 +61,7 @@ function DestructiveActionConfirmation({
         spellCheck={false}
         type="text"
         value={value}
+        dir="auto"
         {...props}
       />
     </Field>

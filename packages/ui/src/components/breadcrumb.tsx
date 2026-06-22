@@ -6,6 +6,7 @@ import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
 import { ChevronRight, MoreHorizontal } from "lucide-react";
 
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
 function Breadcrumb({ ...props }: React.ComponentProps<"nav">) {
@@ -76,7 +77,7 @@ function BreadcrumbSeparator({
       role="presentation"
       {...props}
     >
-      {children ?? <ChevronRight />}
+      {children ?? <DirectionalIcon icon={ChevronRight} />}
     </li>
   );
 }

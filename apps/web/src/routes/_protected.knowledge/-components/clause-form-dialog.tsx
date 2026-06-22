@@ -215,6 +215,7 @@ const ClauseFormDialogBody = ({
             {t("clauses.titleLabel")}
           </label>
           <Input
+            dir="auto"
             id="clause-title"
             onChange={(e) =>
               setForm((f) => ({
@@ -232,6 +233,7 @@ const ClauseFormDialogBody = ({
             {t("common.description")}
           </label>
           <Input
+            dir="auto"
             id="clause-description"
             onChange={(e) =>
               setForm((f) => ({
@@ -250,6 +252,7 @@ const ClauseFormDialogBody = ({
               {t("common.language")}
             </label>
             <Input
+              dir="auto"
               id="clause-language"
               maxLength={10}
               onChange={(e) =>
@@ -309,6 +312,7 @@ const ClauseFormDialogBody = ({
           </label>
           <Textarea
             className="min-h-[60px]"
+            dir="auto"
             id="clause-usage-notes"
             onChange={(e) =>
               setForm((f) => ({

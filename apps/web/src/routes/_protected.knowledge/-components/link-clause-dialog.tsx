@@ -269,6 +269,7 @@ export const LinkClauseDialog = ({
               <Input
                 aria-label={t("clauses.searchClauses")}
                 className="ps-8"
+                dir="auto"
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder={t("clauses.searchClauses")}
                 value={search}
@@ -281,7 +282,7 @@ export const LinkClauseDialog = ({
             >
               <option value="">{t("clauses.allClauses")}</option>
               {categories.map((cat) => (
-                <option key={cat.id} value={cat.id}>
+                <option dir="auto" key={cat.id} value={cat.id}>
                   {cat.name}
                 </option>
               ))}
@@ -320,7 +321,10 @@ export const LinkClauseDialog = ({
                     type="button"
                   >
                     <TextQuoteIcon className="text-muted-foreground size-4 shrink-0" />
-                    <span className="min-w-0 flex-1 truncate font-medium">
+                    <span
+                      className="min-w-0 flex-1 truncate font-medium"
+                      dir="auto"
+                    >
                       {clause.title}
                     </span>
                     <span className="text-muted-foreground shrink-0 text-xs">
@@ -423,6 +427,7 @@ export const LinkClauseDialog = ({
             {slotValue === SLOT_VALUE_CUSTOM && (
               <Input
                 aria-label={t("clauses.slotName")}
+                dir="auto"
                 onChange={(e) => setCustomSlotName(e.target.value)}
                 placeholder={t("clauses.slotNamePlaceholder")}
                 value={customSlotName}

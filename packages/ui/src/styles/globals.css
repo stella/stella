@@ -9,8 +9,8 @@
 
 @theme inline {
   --font-sans:
-    "DM Sans", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
-    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    "DM Sans", "Noto Sans Arabic", ui-sans-serif, system-ui, sans-serif,
+    "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-sidebar-ring: var(--sidebar-ring);
@@ -59,6 +59,11 @@
   @keyframes skeleton {
     to {
       background-position: -200% 0;
+    }
+  }
+  @keyframes skeleton-rtl {
+    to {
+      background-position: 200% 0;
     }
   }
   @keyframes caret-blink {
@@ -1040,6 +1045,41 @@
   }
   body {
     @apply bg-background text-foreground text-pretty;
+  }
+
+  /* Letter-spacing breaks Arabic's cursive joins; never apply tracking
+   * under RTL. `!important` overrides per-element Tailwind tracking-*
+   * utilities (which set letter-spacing directly, so a plain inherited
+   * reset would not reach them). Latin runs inside RTL stay isolated via
+   * <bdi>, so this does not regress embedded Latin spacing. */
+  html[dir="rtl"] * {
+    letter-spacing: normal !important;
+  }
+
+  /* Arabic script sits taller and needs more leading than Latin; bump the
+   * inherited line-height under RTL so dense legal copy stays readable.
+   * Inherited (not !important) so component line-clamp/leading utilities
+   * still win where they set their own value. */
+  html[dir="rtl"] {
+    line-height: 1.6;
+  }
+
+  /* Truncated cells almost always hold a single data value (a name, file,
+   * client, title). A Latin value in the RTL UI has its neutral trailing
+   * characters (".", "/", "()") reordered by the bidi algorithm — e.g.
+   * "Tatra Motor a.s." renders as ".Tatra Motor a.s". `unicode-bidi:
+   * plaintext` resolves each such element's base direction from its own
+   * content (the CSS form of dir="auto") so the value keeps its order.
+   * Scoped to `.truncate` (single-value displays) to avoid touching
+   * mixed-direction running text, which should use <bdi> instead. */
+  html[dir="rtl"] :where(.truncate) {
+    unicode-bidi: plaintext;
+  }
+
+  /* The skeleton shimmer sweeps a fixed physical direction; mirror it
+   * under RTL so the highlight travels with the reading direction. */
+  html[dir="rtl"] [data-slot="skeleton"] {
+    animation-name: skeleton-rtl;
   }
 
   /* https://tailwindcss.com/docs/upgrade-guide#buttons-use-the-default-cursor */

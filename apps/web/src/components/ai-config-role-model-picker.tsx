@@ -137,6 +137,7 @@ export const AIConfigRoleModelPicker = ({
                     role: roleLabel,
                   })}
                   className="min-w-0"
+                  dir="auto"
                   disabled={disabled || !selectedProvider}
                   onChange={(event) => {
                     const modelId = event.target.value;

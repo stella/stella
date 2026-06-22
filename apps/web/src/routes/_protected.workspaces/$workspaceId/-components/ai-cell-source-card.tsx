@@ -1,4 +1,4 @@
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import {
   PreviewCard,
@@ -80,7 +80,9 @@ export const AICellSourceCard = ({
                 kind="document"
                 mimeType={primaryFile.mimeType}
               />
-              <span className="truncate">{primaryFile.fileName}</span>
+              <span className="truncate" dir="auto">
+                {primaryFile.fileName}
+              </span>
               {sourceFiles.length > 1 && (
                 <span className="text-muted-foreground shrink-0">
                   +{sourceFiles.length - 1}
@@ -147,14 +149,13 @@ const CellFlagProvenanceRow = ({
   provenance,
 }: CellFlagProvenanceRowProps) => {
   const getFlagLabel = useFlagLabel();
-  const locale = useLocale();
   const flag = cellFlagsById.get(flagId);
   if (!flag) {
     return null;
   }
   const Icon = flag.icon;
   const relativeTime = provenance
-    ? formatRelativeTime(provenance.addedAt, locale)
+    ? formatRelativeTime(provenance.addedAt)
     : null;
 
   return (
