@@ -573,10 +573,13 @@
       "name": "@stll/scripts",
       "version": "0.0.0",
       "bin": {
+        "glossary-gen": "src/glossary-gen.ts",
         "i18n-check": "src/i18n-check.ts",
+        "i18n-lint": "src/i18n-lint.ts",
         "i18n-typegen": "src/i18n-typegen.ts",
       },
       "dependencies": {
+        "@formatjs/icu-messageformat-parser": "3.5.1",
         "@stll/ai-catalog": "workspace:*",
         "better-result": "catalog:",
       },

@@ -1,0 +1,247 @@
+import { describe, expect, test } from "bun:test";
+
+import { LOCALES, parseGlossary } from "./glossary-gen";
+import {
+  buildForbiddenRules,
+  findDroppedExactSelectors,
+  findDroppedPlurals,
+  findForbiddenTerms,
+  findIcuError,
+  findMissingPluralCategories,
+  findPlaceholderMismatch,
+  isSuppressed,
+} from "./i18n-lint";
+import type { LintBaseline } from "./i18n-lint";
+
+describe("findPlaceholderMismatch", () => {
+  test("returns null when the variable sets match (order is irrelevant)", () => {
+    expect(
+      findPlaceholderMismatch("Hi {name}, {count}", "{count} – {name}"),
+    ).toBeNull();
+  });
+
+  test("flags a dropped variable", () => {
+    expect(findPlaceholderMismatch("Sent to {email}", "Odesláno")).toEqual({
+      missing: ["email"],
+      extra: [],
+    });
+  });
+
+  test("flags a renamed variable as both missing and extra", () => {
+    expect(findPlaceholderMismatch("{a}", "{b}")).toEqual({
+      missing: ["a"],
+      extra: ["b"],
+    });
+  });
+
+  test("tracks rich-text tag names (t.rich), not just their children", () => {
+    expect(
+      findPlaceholderMismatch("<terms>Terms</terms>", "<link>Podmínky</link>"),
+    ).toEqual({ missing: ["<terms>"], extra: ["<link>"] });
+  });
+
+  test("counts the plural argument, not the # placeholder", () => {
+    expect(
+      findPlaceholderMismatch(
+        "{count, plural, one {# item} other {# items}}",
+        "{count, plural, one {# položka} few {# položky} other {# položek}}",
+      ),
+    ).toBeNull();
+  });
+});
+
+describe("findIcuError", () => {
+  test("returns null for valid ICU", () => {
+    expect(findIcuError("{count, plural, one {#} other {#}}")).toBeNull();
+  });
+
+  test("returns a message for broken ICU", () => {
+    expect(findIcuError("{count, plural, one {#}")).not.toBeNull();
+  });
+});
+
+describe("findMissingPluralCategories", () => {
+  test("flags Polish missing few/many for an English-shaped plural", () => {
+    expect(
+      findMissingPluralCategories("{n, plural, one {#} other {#}}", "pl"),
+    ).toEqual(expect.arrayContaining(["n#few", "n#many"]));
+  });
+
+  test("passes when the locale needs only the present categories", () => {
+    expect(
+      findMissingPluralCategories("{n, plural, one {#} other {#}}", "de"),
+    ).toEqual([]);
+  });
+
+  test("does not require cs/sk fractional-only `many` for integer UI counts", () => {
+    expect(
+      findMissingPluralCategories(
+        "{n, plural, one {#} few {#} other {#}}",
+        "cs",
+      ),
+    ).toEqual([]);
+  });
+
+  test("does not count exact selectors like =0 toward CLDR categories", () => {
+    expect(
+      findMissingPluralCategories(
+        "{n, plural, =0 {none} one {#} other {#}}",
+        "en",
+      ),
+    ).toEqual([]);
+  });
+
+  test("degrades to [] for an invalid locale code instead of throwing", () => {
+    expect(
+      findMissingPluralCategories("{n, plural, one {#} other {#}}", "!"),
+    ).toEqual([]);
+  });
+});
+
+describe("findDroppedPlurals", () => {
+  test("flags a source plural flattened to plain interpolation", () => {
+    expect(
+      findDroppedPlurals("{count, plural, one {#} other {#}}", "{count} items"),
+    ).toEqual(["count"]);
+  });
+
+  test("passes when the target keeps the plural", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {#} other {#}}",
+        "{count, plural, one {#} few {#} other {#}}",
+      ),
+    ).toEqual([]);
+  });
+
+  test("flags a plural that dropped the count from every branch", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {# file} other {# files}}",
+        "{count, plural, one {file} other {files}}",
+      ),
+    ).toEqual(["count"]);
+  });
+
+  test("allows one branch to omit the count when another shows it", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {# file} other {# files}}",
+        "{count, plural, one {jeden soubor} other {# souborů}}",
+      ),
+    ).toEqual([]);
+  });
+
+  test("does not count a nested plural's # as the outer count", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {# file} other {# files}}",
+        "{count, plural, one {{n, plural, other {#}}} other {{n, plural, other {#}}}}",
+      ),
+    ).toEqual(["count"]);
+  });
+
+  test("counts a {count, number} formatted node as showing the count", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {# file} other {# files}}",
+        "{count, plural, one {{count, number} soubor} other {{count, number} souborů}}",
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("findDroppedExactSelectors", () => {
+  test("flags a dropped source exact selector (=0 zero-state)", () => {
+    expect(
+      findDroppedExactSelectors(
+        "{count, plural, =0 {No results} one {# result} other {# results}}",
+        "{count, plural, one {# výsledek} few {# výsledky} other {# výsledků}}",
+      ),
+    ).toEqual(["count=0"]);
+  });
+
+  test("passes when the target keeps the source's exact selectors", () => {
+    expect(
+      findDroppedExactSelectors(
+        "{count, plural, =0 {No results} other {# results}}",
+        "{count, plural, =0 {Žádné} other {# výsledků}}",
+      ),
+    ).toEqual([]);
+  });
+});
+
+describe("isSuppressed", () => {
+  const baseline: LintBaseline = {
+    placeholder: { "a.b": { cs: { source: "Open {x}", target: "Otevřít" } } },
+    icu: {},
+    plural: {},
+    terminology: {},
+  };
+
+  test("suppresses only when both source and target are unchanged", () => {
+    expect(
+      isSuppressed(baseline, "placeholder", "a.b", "cs", {
+        source: "Open {x}",
+        target: "Otevřít",
+      }),
+    ).toBe(true);
+  });
+
+  test("re-checks when the translation is edited", () => {
+    expect(
+      isSuppressed(baseline, "placeholder", "a.b", "cs", {
+        source: "Open {x}",
+        target: "Edited",
+      }),
+    ).toBe(false);
+  });
+
+  test("re-checks when the en source changes under a stale translation", () => {
+    expect(
+      isSuppressed(baseline, "placeholder", "a.b", "cs", {
+        source: "Open {x} and {y}",
+        target: "Otevřít",
+      }),
+    ).toBe(false);
+  });
+});
+
+describe("terminology", () => {
+  const fill = (value: string): Record<string, string> =>
+    Object.fromEntries(LOCALES.map((locale) => [locale, value]));
+  const rules = buildForbiddenRules(
+    parseGlossary(
+      JSON.stringify({
+        verbs: [],
+        legalConcepts: [
+          {
+            id: "matter",
+            en: "Matter",
+            forbidden: { de: ["Sache"] },
+            translations: fill("x"),
+          },
+        ],
+        ptBR: [],
+      }),
+    ),
+  );
+
+  test("flags a forbidden rendering when the source is about the concept", () => {
+    expect(
+      findForbiddenTerms("Open this matter", "Diese Sache öffnen", "de", rules),
+    ).toEqual(["Sache"]);
+  });
+
+  test("does not fire when the source is unrelated to the concept", () => {
+    expect(
+      findForbiddenTerms("A factual question", "Eine reine Sache", "de", rules),
+    ).toEqual([]);
+  });
+
+  test("matches whole words only (no substring false positives)", () => {
+    expect(
+      findForbiddenTerms("Open this matter", "Sachenrecht gilt", "de", rules),
+    ).toEqual([]);
+  });
+});

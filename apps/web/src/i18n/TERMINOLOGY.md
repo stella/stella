@@ -97,6 +97,8 @@ languages (es, fr) naturally collapse both to one verb — that is fine.
 
 Slavic, Baltic, Germanic, Finno-Ugric:
 
+<!-- glossary-gen:verbs-slavic-baltic start -->
+
 | Verb         | Czech        | Slovak       | Polish      | German        | Estonian   | Hungarian     | Lithuanian  | Latvian      |
 | ------------ | ------------ | ------------ | ----------- | ------------- | ---------- | ------------- | ----------- | ------------ |
 | **Save**     | Uložit       | Uložiť       | Zapisz      | Speichern     | Salvesta   | Mentés        | Išsaugoti   | Saglabāt     |
@@ -113,7 +115,11 @@ Slavic, Baltic, Germanic, Finno-Ugric:
 | **Sign in**  | Přihlásit se | Prihlásiť sa | Zaloguj się | Anmelden      | Logi sisse | Bejelentkezés | Prisijungti | Pieslēgties  |
 | **Sign out** | Odhlásit se  | Odhlásiť sa  | Wyloguj się | Abmelden      | Logi välja | Kijelentkezés | Atsijungti  | Atslēgties   |
 
+<!-- glossary-gen:verbs-slavic-baltic end -->
+
 Romance:
+
+<!-- glossary-gen:verbs-romance start -->
 
 | Verb         | Spanish        | French         | Brazilian Portuguese |
 | ------------ | -------------- | -------------- | -------------------- |
@@ -130,6 +136,30 @@ Romance:
 | **Export**   | Exportar       | Exporter       | Exportar             |
 | **Sign in**  | Iniciar sesión | Se connecter   | Faça login           |
 | **Sign out** | Cerrar sesión  | Se déconnecter | Sair                 |
+
+<!-- glossary-gen:verbs-romance end -->
+
+Arabic:
+
+<!-- glossary-gen:verbs-arabic start -->
+
+| Verb         | Arabic       |
+| ------------ | ------------ |
+| **Save**     | حفظ          |
+| **Cancel**   | إلغاء        |
+| **Confirm**  | تأكيد        |
+| **Delete**   | حذف          |
+| **Remove**   | إزالة        |
+| **Add**      | إضافة        |
+| **Edit**     | تحرير        |
+| **Close**    | إغلاق        |
+| **Send**     | إرسال        |
+| **Download** | تنزيل        |
+| **Export**   | تصدير        |
+| **Sign in**  | تسجيل الدخول |
+| **Sign out** | تسجيل الخروج |
+
+<!-- glossary-gen:verbs-arabic end -->
 
 Note: cs **Remove** is "Odebrat" (not "Odstranit", which collides with
 Delete); sk uses "Odstrániť" for Remove and "Vymazať" for Delete.
@@ -287,6 +317,8 @@ travail" / "tööruum".
 
 Slavic, Baltic, Germanic, Finno-Ugric:
 
+<!-- glossary-gen:legal-slavic-baltic start -->
+
 | Concept      | Czech      | Slovak     | Polish         | German         | Estonian      | Hungarian            | Lithuanian      | Latvian      |
 | ------------ | ---------- | ---------- | -------------- | -------------- | ------------- | -------------------- | --------------- | ------------ |
 | **Matter**   | Spis       | Spis       | Sprawa         | Akte           | Toimik        | Ügy                  | Byla            | Lieta        |
@@ -300,7 +332,11 @@ Slavic, Baltic, Germanic, Finno-Ugric:
 | **Draft**    | Koncept    | Koncept    | Wersja robocza | Entwurf        | Mustand       | Piszkozat            | Juodraštis      | Melnraksts   |
 | **Contact**  | Kontakt    | Kontakt    | Kontakt        | Kontakt        | Kontakt       | Kapcsolat            | Kontaktas       | Kontakts     |
 
+<!-- glossary-gen:legal-slavic-baltic end -->
+
 Romance:
+
+<!-- glossary-gen:legal-romance start -->
 
 | Concept      | Spanish        | French        | Brazilian Portuguese |
 | ------------ | -------------- | ------------- | -------------------- |
@@ -314,6 +350,27 @@ Romance:
 | **Tag**      | Etiqueta       | Étiquette     | Etiqueta             |
 | **Draft**    | Borrador       | Brouillon     | Rascunho             |
 | **Contact**  | Contacto       | Contact       | Contato              |
+
+<!-- glossary-gen:legal-romance end -->
+
+Arabic:
+
+<!-- glossary-gen:legal-arabic start -->
+
+| Concept      | Arabic           |
+| ------------ | ---------------- |
+| **Matter**   | ملف              |
+| **Case law** | الاجتهاد القضائي |
+| **Court**    | محكمة            |
+| **Party**    | طرف              |
+| **Clause**   | بند              |
+| **Template** | قالب             |
+| **Folder**   | مجلد             |
+| **Tag**      | وسم              |
+| **Draft**    | مسودة            |
+| **Contact**  | جهة اتصال        |
+
+<!-- glossary-gen:legal-arabic end -->
 
 Notes:
 
@@ -332,6 +389,8 @@ Notes:
 
 Use Brazilian legal and law-firm terminology, not generic Portuguese:
 
+<!-- glossary-gen:ptbr-special start -->
+
 | English          | pt-BR                       | Notes                                                                                  |
 | ---------------- | --------------------------- | -------------------------------------------------------------------------------------- |
 | Matter           | Caso                        | Product workspace for client/legal work; use `processo` only for judicial proceedings. |
@@ -344,3 +403,5 @@ Use Brazilian legal and law-firm terminology, not generic Portuguese:
 | Opposing counsel | Advogado da parte contrária | Clearer than literal `conselho oposto`.                                                |
 | Expert witness   | Perito                      | Brazilian procedural role; avoid literal `testemunha especialista`.                    |
 | Tracked changes  | Controle de alterações      | Microsoft Word UI term in Brazilian Portuguese.                                        |
+
+<!-- glossary-gen:ptbr-special end -->
