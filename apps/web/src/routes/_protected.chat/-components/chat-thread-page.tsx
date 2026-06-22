@@ -435,15 +435,21 @@ export const ChatThreadPage = ({
             workspaceId={workspaceId ?? threadRef.threadId}
           />
           {/* Soft fades so messages dissolve into the floating header and
-              composer instead of being clipped at a hard edge. */}
-          <div
-            aria-hidden="true"
-            className="from-background pointer-events-none absolute inset-x-0 top-12 mx-auto h-10 w-full max-w-5xl bg-linear-to-b to-transparent"
-          />
-          <div
-            aria-hidden="true"
-            className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
-          />
+              composer instead of being clipped at a hard edge. Only when a
+              conversation exists — the centered empty-state suggestions
+              must stay crisp, not dimmed by the bottom fade. */}
+          {messages.length > 0 && (
+            <>
+              <div
+                aria-hidden="true"
+                className="from-background pointer-events-none absolute inset-x-0 top-12 mx-auto h-10 w-full max-w-5xl bg-linear-to-b to-transparent"
+              />
+              <div
+                aria-hidden="true"
+                className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
+              />
+            </>
+          )}
           <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-5xl px-4 pb-4">
             <SuggestedFollowupChips
               isGenerating={isGenerating}
