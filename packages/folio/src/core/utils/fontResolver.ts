@@ -535,6 +535,21 @@ export function resolveFontFamily(docxFontName: string): ResolvedFont {
   };
 }
 
+const CSS_NEWLINE_ESCAPES: Record<string, string> = {
+  "\n": "\\a ",
+  "\r": "\\d ",
+  "\f": "\\c ",
+};
+
+/**
+ * Escape a DOCX-supplied font name for a double-quoted CSS string.
+ */
+function escapeQuotedFontName(fontName: string): string {
+  return fontName
+    .replace(/["\\]/g, "\\$&")
+    .replace(/[\n\r\f]/g, (char) => CSS_NEWLINE_ESCAPES[char] ?? char);
+}
+
 /**
  * Quote a font name if it contains spaces or special characters
  */
@@ -555,7 +570,7 @@ function quoteFontName(fontName: string): string {
 
   // Quote if contains spaces or special characters
   if (/[\s,'"()]/.test(fontName)) {
-    return `"${fontName.replace(/"/g, '\\"')}"`;
+    return `"${escapeQuotedFontName(fontName)}"`;
   }
 
   return fontName;

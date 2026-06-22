@@ -101,3 +101,23 @@ describe("fontResolver — aliased families keep the authored name first", () =>
     expect(cssFallback.match(/PMingLiU/giu)?.length).toBe(1);
   });
 });
+
+describe("fontResolver — untrusted family names are quoted safely", () => {
+  test("escapes backslashes and quotes inside quoted CSS family names", () => {
+    const { cssFallback } = resolveFontFamily('Evil\\"};x:y');
+
+    expect(cssFallback.startsWith('"')).toBe(true);
+    expect(cssFallback).toContain("\\\\");
+    expect(cssFallback).toContain('\\"');
+    expect(/[^\\]"\};x/u.test(cssFallback)).toBe(false);
+  });
+
+  test("hex-escapes CSS newline characters inside quoted family names", () => {
+    const { cssFallback } = resolveFontFamily("a\nb\rc\fd");
+
+    expect(cssFallback).not.toMatch(/[\n\r\f]/u);
+    expect(cssFallback).toContain("\\a ");
+    expect(cssFallback).toContain("\\d ");
+    expect(cssFallback).toContain("\\c ");
+  });
+});
