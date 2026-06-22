@@ -268,10 +268,21 @@ function DatePickerPopover({
       const current = focusedDate || value || firstDay.date;
       let next: string | null = null;
 
+      // The day grid lays out inline (right-to-left under RTL), so the
+      // horizontal arrows must follow visual direction: ArrowLeft advances
+      // a day when the grid flows right-to-left. Read the rendered grid's
+      // computed direction so this stays correct regardless of how the host
+      // app or an enclosing subtree sets `dir`. Up/Down are block-axis and
+      // never mirror.
+      const isRtl =
+        gridRef.current !== null &&
+        getComputedStyle(gridRef.current).direction === "rtl";
+      const horizontalStep = isRtl ? -1 : 1;
+
       if (e.key === "ArrowRight") {
-        next = addDays(current, 1);
+        next = addDays(current, horizontalStep);
       } else if (e.key === "ArrowLeft") {
-        next = addDays(current, -1);
+        next = addDays(current, -horizontalStep);
       } else if (e.key === "ArrowDown") {
         next = addDays(current, 7);
       } else if (e.key === "ArrowUp") {
