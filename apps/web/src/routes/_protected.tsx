@@ -592,7 +592,12 @@ function WorkspaceInspectorSidePanel() {
     if (!isDragging.current) {
       return;
     }
-    const newWidth = window.innerWidth - e.clientX;
+    // The pane docks to the inline-end edge: that's the right in LTR
+    // (width = distance from the right) and the left in RTL (width =
+    // distance from the left). Without the RTL branch the delta is
+    // inverted and the drag oscillates.
+    const isRtl = document.documentElement.dir === "rtl";
+    const newWidth = isRtl ? e.clientX : window.innerWidth - e.clientX;
     setWidth(
       Math.min(
         INSPECTOR_PANE_MAX_WIDTH,
