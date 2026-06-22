@@ -42,7 +42,7 @@ export const CatalogueDetailPreview = ({
 }: CatalogueDetailPreviewProps) => {
   const t = useTranslations();
   const isFirstParty = entry.author === "stella";
-  const labelKey = nativeToolLabelKey(entry.slug);
+  const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
 
   return (
     <div className="flex h-full max-h-full w-full items-stretch justify-center overflow-hidden">

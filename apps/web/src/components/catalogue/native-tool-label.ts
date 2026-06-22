@@ -21,6 +21,8 @@ const NATIVE_TOOL_LABEL_KEYS: Record<string, NativeToolLabelKey> = {
   "web-search": "catalogue.toolNames.webSearch",
 };
 
-export const nativeToolLabelKey = (
-  slug: string,
-): NativeToolLabelKey | undefined => NATIVE_TOOL_LABEL_KEYS[slug];
+export const nativeToolLabelKey = (entry: {
+  slug: string;
+  kind: string;
+}): NativeToolLabelKey | undefined =>
+  entry.kind === "native-tool" ? NATIVE_TOOL_LABEL_KEYS[entry.slug] : undefined;

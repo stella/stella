@@ -18,6 +18,7 @@ import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/ca
  */
 export type CatalogueRowDisplay = {
   slug: string;
+  kind: "skill" | "mcp" | "native-tool";
   displayName: string;
   description: string;
   author: string;
@@ -57,7 +58,10 @@ export const CatalogueRow = ({
 }: CatalogueRowProps) => {
   const t = useTranslations();
   const isFirstParty = display.author === "stella";
-  const labelKey = nativeToolLabelKey(display.slug);
+  const labelKey = nativeToolLabelKey({
+    slug: display.slug,
+    kind: display.kind,
+  });
   const displayName = labelKey ? t(labelKey) : display.displayName;
 
   return (

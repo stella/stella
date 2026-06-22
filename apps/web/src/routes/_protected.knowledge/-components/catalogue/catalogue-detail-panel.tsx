@@ -60,7 +60,7 @@ export const CatalogueDetailPanel = ({
       (entry.kind === "mcp" && entry.installedConnectorSlug !== null) ||
       (entry.kind === "skill" && entry.installedSkillId !== null));
   const homepageUrl = sanitizeHref(entry.homepage ?? entry.authorUrl);
-  const labelKey = nativeToolLabelKey(entry.slug);
+  const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
 
   return (
     <div className="flex h-full min-h-0 w-full flex-col">

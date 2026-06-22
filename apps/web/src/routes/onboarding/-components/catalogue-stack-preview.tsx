@@ -162,7 +162,7 @@ const Row = ({
 }) => {
   const t = useTranslations();
   const delay = Math.min(index, STAGGER_CAP) * STAGGER_MS;
-  const labelKey = nativeToolLabelKey(entry.slug);
+  const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
 
   const content = (
     <>
