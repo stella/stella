@@ -623,19 +623,37 @@ function WorkspaceInspectorSidePanel() {
     // The toast offset is consumed via a logical `end-` utility, so the same
     // value reserves the correct edge in both directions.
     document.documentElement.style.setProperty(TOAST_RIGHT_OFFSET_VAR, widthPx);
-    // Folio reads --folio-find-replace-right as a PHYSICAL right offset to keep
-    // its dialog off the inspector. The pane docks on the right only in LTR; in
-    // RTL it docks left (end-0), so the right edge is clear — reserve nothing.
+    // Folio's find/replace overlay is `justify-end`, so it packs against the
+    // inline-end edge: the right in LTR, the LEFT under RTL. The inspector
+    // docks to that same edge, so reserve the offset on whichever physical
+    // side both occupy and clear the other. In LTR reserve the right (left
+    // keeps its default); in RTL the pane docks left (end-0), so reserve the
+    // left and clear the right. The overlay reads --folio-find-replace-left in
+    // its width calc too, so setting it also keeps the dialog from overflowing
+    // the inspector.
     const isRtl = document.documentElement.dir === "rtl";
     document.documentElement.style.setProperty(
       "--folio-find-replace-right",
       isRtl ? "0px" : widthPx,
     );
+    if (isRtl) {
+      document.documentElement.style.setProperty(
+        "--folio-find-replace-left",
+        widthPx,
+      );
+    } else {
+      document.documentElement.style.removeProperty(
+        "--folio-find-replace-left",
+      );
+    }
 
     return () => {
       document.documentElement.style.removeProperty(TOAST_RIGHT_OFFSET_VAR);
       document.documentElement.style.removeProperty(
         "--folio-find-replace-right",
+      );
+      document.documentElement.style.removeProperty(
+        "--folio-find-replace-left",
       );
     };
   }, [widthPx, loadedLang]);
