@@ -171,7 +171,7 @@ export const ExpenseForm = ({
           <form.Field name="amount">
             {(field) => (
               <Input
-                dir="auto"
+                dir="ltr"
                 inputMode="decimal"
                 onBlur={() => {
                   const cents = Math.round(

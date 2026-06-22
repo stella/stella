@@ -746,7 +746,7 @@ const CreateRateEntryForm = ({
           <form.Field name="hourlyRate">
             {(field) => (
               <Input
-                dir="auto"
+                dir="ltr"
                 inputMode="decimal"
                 onChange={(e) => field.handleChange(e.currentTarget.value)}
                 placeholder="350.00"

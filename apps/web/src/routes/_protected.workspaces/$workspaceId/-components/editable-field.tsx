@@ -430,7 +430,7 @@ const InlineIntEditor = ({
     <Input
       autoFocus
       className="h-8 text-sm"
-      dir="auto"
+      dir="ltr"
       inputMode="numeric"
       onBlur={() => {
         const num = Math.round(Number(draft));

@@ -11,8 +11,15 @@
 // Allowed: a `dir` attribute is present, OR `type` is a structured kind
 // that must stay LTR (tel/email/url/number/password/date…), OR `type` is
 // a dynamic expression we can't resolve (skipped to avoid false flags).
+//
+// Also flagged: a NUMERIC input (`inputMode="numeric"|"decimal"`) with
+// `dir="auto"`. A value like "0:30" or "350.00" has no strong directional
+// character, so `dir="auto"` falls back to the surrounding RTL direction and
+// the field aligns/edits backwards — numeric inputs must use `dir="ltr"`.
 
 const INPUT_LIKE = new Set(["input", "textarea", "Input", "Textarea"]);
+
+const NUMERIC_INPUT_MODES = new Set(["numeric", "decimal"]);
 
 // `type` values that are NOT free text — these stay LTR, no `dir` needed.
 const STRUCTURED_TYPES = new Set([
@@ -56,9 +63,15 @@ export default {
           missingDir:
             "Free-text input needs a `dir` for bidirectional content. Add " +
             'dir="auto" (structured inputs like tel/email/url/number stay LTR).',
+          numericDirAuto:
+            'Numeric input (inputMode "numeric"/"decimal") must use dir="ltr", ' +
+            'not dir="auto": a value with no strong directional character ' +
+            "inherits the surrounding RTL direction and edits backwards.",
         },
       },
       create(context) {
+        const literalValue = (attr) =>
+          attr?.value?.type === "Literal" ? attr.value.value : undefined;
         return {
           JSXOpeningElement(node) {
             if (
@@ -67,15 +80,22 @@ export default {
             ) {
               return;
             }
-            if (getAttr(node, "dir") !== undefined) {
+            const dirAttr = getAttr(node, "dir");
+            // Numeric inputs must stay LTR; dir="auto" resolves to RTL here.
+            if (
+              NUMERIC_INPUT_MODES.has(
+                literalValue(getAttr(node, "inputMode")),
+              ) &&
+              literalValue(dirAttr) === "auto"
+            ) {
+              context.report({ node: dirAttr, messageId: "numericDirAuto" });
               return;
             }
+            if (dirAttr !== undefined) {
+              return;
+            }
+            const typeValue = literalValue(getAttr(node, "type"));
             const typeAttr = getAttr(node, "type");
-            // Resolve a string-literal `type`; skip dynamic types.
-            const typeValue =
-              typeAttr?.value?.type === "Literal"
-                ? typeAttr.value.value
-                : undefined;
             if (
               typeof typeValue === "string" &&
               STRUCTURED_TYPES.has(typeValue)

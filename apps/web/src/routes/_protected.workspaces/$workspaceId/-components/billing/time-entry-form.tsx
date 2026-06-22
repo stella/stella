@@ -198,7 +198,7 @@ export const TimeEntryForm = ({
               {(field) => (
                 <Input
                   className="flex-1"
-                  dir="auto"
+                  dir="ltr"
                   inputMode="decimal"
                   onBlur={() => {
                     const cents = Math.round(

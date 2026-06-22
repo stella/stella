@@ -933,7 +933,7 @@ const CreateContactDialog = ({
                         <Field name={field.name}>
                           <div className="flex gap-2">
                             <Input
-                              dir="auto"
+                              dir="ltr"
                               inputMode="numeric"
                               onBlur={field.handleBlur}
                               onChange={(e) => {

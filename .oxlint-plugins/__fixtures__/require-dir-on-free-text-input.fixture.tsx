@@ -24,8 +24,15 @@ export const _textarea = () => (
   <textarea />
 );
 
-// --- Allowed: `dir` present, or a structured (LTR) type ---
+// --- Flagged: numeric input with dir="auto" (must be dir="ltr") ---
+export const _numericAuto = () => (
+  // oxlint-disable-next-line require-dir-on-free-text-input/require-dir-on-free-text-input
+  <input dir="auto" inputMode="decimal" placeholder="0.00" />
+);
+
+// --- Allowed: `dir` present, structured (LTR) type, or numeric+ltr ---
 export const _ok1 = () => <input dir="auto" type="text" />;
 export const _ok2 = () => <input type="email" />;
 export const _ok3 = () => <input type="number" />;
 export const _ok4 = () => <textarea dir="auto" />;
+export const _ok5 = () => <input dir="ltr" inputMode="decimal" />;
