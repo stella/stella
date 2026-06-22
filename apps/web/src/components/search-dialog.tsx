@@ -796,6 +796,7 @@ export const SearchDialog = ({
             <CommandInput
               autoFocus
               className="text-sm"
+              dir="auto"
               onKeyDownCapture={handleCommandInputKeyDownCapture}
               placeholder={t("search.placeholder")}
             />

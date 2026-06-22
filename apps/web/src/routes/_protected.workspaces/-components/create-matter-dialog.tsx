@@ -453,6 +453,7 @@ const CreateMatterDialogBody = ({
             <Input
               aria-invalid={nameInvalid}
               autoFocus={!!selectedClient}
+              dir="auto"
               ref={nameInputRef}
               onChange={(e) => setName(e.currentTarget.value)}
               onKeyDown={(e) => {

@@ -125,6 +125,7 @@ export const EditableRow = ({
         <Input
           autoFocus
           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
+          dir={type === "number" ? undefined : "auto"}
           maxLength={maxLength}
           onBlur={() => {
             void rename.commit();
