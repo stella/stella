@@ -70,15 +70,18 @@ function CommandInput({
   onChange,
   ...props
 }: CommandInputProps) {
-  // Base UI's Autocomplete owns the value at the root, so the input is always
-  // uncontrolled here: seed empty and track the text via onChange.
-  const contentDir = useContentDir({
-    dir,
+  // Base UI's Autocomplete owns the value at the root, so onChange only fires
+  // for native typing — a programmatic value (e.g. a recent search) would not
+  // update it. A controlled consumer can therefore pass an explicit
+  // `dir={contentDir(value)}` which wins; otherwise fall back to tracking the
+  // typed text here.
+  const tracked = useContentDir({
+    dir: undefined,
     value: undefined,
     defaultValue: undefined,
   });
   const handleChange: NonNullable<CommandInputProps["onChange"]> = (event) => {
-    contentDir.trackValue(event.currentTarget.value);
+    tracked.trackValue(event.currentTarget.value);
     onChange?.(event);
   };
   return (
@@ -98,7 +101,7 @@ function CommandInput({
         data-slot="command-input"
         size={typeof size === "number" ? size : undefined}
         {...props}
-        dir={contentDir.dir}
+        dir={dir ?? tracked.dir}
         onChange={handleChange}
       />
     </div>
