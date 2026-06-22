@@ -12,10 +12,14 @@
 // that must stay LTR (tel/email/url/number/password/date…), OR `type` is
 // a dynamic expression we can't resolve (skipped to avoid false flags).
 //
-// Also flagged: a NUMERIC input (`inputMode="numeric"|"decimal"`) with
-// `dir="auto"`. A value like "0:30" or "350.00" has no strong directional
-// character, so `dir="auto"` falls back to the surrounding RTL direction and
-// the field aligns/edits backwards — numeric inputs must use `dir="ltr"`.
+// Also flagged: a FREE-TEXT input in a numeric `inputMode`
+// ("numeric"|"decimal") whose `dir` is absent or not `"ltr"`. A value like
+// "0:30" or "350.00" has no strong directional character, so it falls back to
+// the surrounding RTL direction and the field aligns/edits backwards — these
+// must use `dir="ltr"`. The message points straight at `dir="ltr"` (not the
+// generic "add dir=auto" hint) so such an input is never told to add a value
+// the rule would immediately re-flag. A real `type="number"` (or any
+// structured type) is already LTR by the browser and stays exempt.
 
 const INPUT_LIKE = new Set(["input", "textarea", "Input", "Textarea"]);
 
@@ -63,10 +67,10 @@ export default {
           missingDir:
             "Free-text input needs a `dir` for bidirectional content. Add " +
             'dir="auto" (structured inputs like tel/email/url/number stay LTR).',
-          numericDirAuto:
-            'Numeric input (inputMode "numeric"/"decimal") must use dir="ltr", ' +
-            'not dir="auto": a value with no strong directional character ' +
-            "inherits the surrounding RTL direction and edits backwards.",
+          numericDir:
+            'Numeric input (inputMode "numeric"/"decimal") must use dir="ltr": ' +
+            "a value with no strong directional character inherits the " +
+            "surrounding RTL direction and edits backwards.",
         },
       },
       create(context) {
@@ -81,25 +85,35 @@ export default {
               return;
             }
             const dirAttr = getAttr(node, "dir");
-            // Numeric inputs must stay LTR; dir="auto" resolves to RTL here.
+            const typeValue = literalValue(getAttr(node, "type"));
+            const typeAttr = getAttr(node, "type");
+            const isStructuredType =
+              typeof typeValue === "string" && STRUCTURED_TYPES.has(typeValue);
+            // A `type="number"` (or any structured type) input is already LTR
+            // by the browser and never accepts RTL text, so it needs no `dir`.
+            if (isStructuredType) {
+              return;
+            }
+            // A free-text input in a numeric `inputMode` ("0:30", "350.00")
+            // must stay LTR: its value has no strong directional character, so
+            // `dir="auto"` (or no dir) resolves to the surrounding RTL
+            // direction and the field aligns/edits backwards. Enforce
+            // `dir="ltr"` directly — and point the message straight at it, not
+            // the generic "add dir=auto" hint, which the rule would only
+            // re-flag on the next pass.
             if (
               NUMERIC_INPUT_MODES.has(
                 literalValue(getAttr(node, "inputMode")),
               ) &&
-              literalValue(dirAttr) === "auto"
+              literalValue(dirAttr) !== "ltr"
             ) {
-              context.report({ node: dirAttr, messageId: "numericDirAuto" });
+              context.report({
+                node: dirAttr ?? node,
+                messageId: "numericDir",
+              });
               return;
             }
             if (dirAttr !== undefined) {
-              return;
-            }
-            const typeValue = literalValue(getAttr(node, "type"));
-            const typeAttr = getAttr(node, "type");
-            if (
-              typeof typeValue === "string" &&
-              STRUCTURED_TYPES.has(typeValue)
-            ) {
               return;
             }
             if (typeAttr !== undefined && typeValue === undefined) {
