@@ -135,6 +135,82 @@ const CITATION_AUTHORITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const IDLE_THRESHOLD = 3;
 const IDLE_DELAY_MS = 24 * 60 * 60 * 1000;
 
+// Liveness watchdog. A self-scheduling timer measures how late it fires
+// versus its interval; sustained lag means the event loop is starved (a
+// runaway cycle or a wedged connection pool) and the daemon is making no
+// progress. After enough consecutive starved ticks it exits so ECS can
+// relaunch a fresh task, instead of sitting alive-but-stuck forever (the
+// per-adapter retry/backoff only recovers from *thrown* errors, not from
+// awaits that never settle). Thresholds are well above any healthy pause:
+// idle adapters keep the loop responsive, so lag stays near zero.
+const WATCHDOG_TICK_MS = 10_000;
+const WATCHDOG_LAG_THRESHOLD_MS = 90_000;
+const WATCHDOG_MAX_STARVED_TICKS = 3;
+
+// Hard wall-clock ceiling on a single held cycle. The lag watchdog catches a
+// CPU-starved loop, but a cycle wedged on an await that ignores the per-cycle
+// signal (e.g. a DB call before/after the pipeline's AbortSignal) leaves the
+// loop responsive AND keeps its concurrency slot, which would park every other
+// adapter. If a cycle outlives this ceiling — well above the longest adapter
+// maxCycleMs (30m) plus slack — the worker is wedged: exit so ECS relaunches.
+const CYCLE_HARD_DEADLINE_MS = 45 * 60 * 1000;
+
+type Semaphore = {
+  acquire: (signal?: AbortSignal) => Promise<void>;
+  release: () => void;
+};
+
+/**
+ * Fair counting semaphore: bounds how many holders run concurrently and
+ * hands the slot to the longest-waiting acquirer on release. An optional
+ * abort signal removes a pending waiter and rejects with AbortError.
+ */
+const createSemaphore = (label: string, capacity: number): Semaphore => {
+  const max = Math.max(1, capacity);
+  let active = 0;
+  const queue: (() => void)[] = [];
+
+  const acquire = async (signal?: AbortSignal): Promise<void> => {
+    if (signal?.aborted) {
+      throw new DOMException(`${label} acquisition aborted`, "AbortError");
+    }
+    if (active < max) {
+      active++;
+      await Promise.resolve();
+      return;
+    }
+    await new Promise<void>((resolve, reject) => {
+      const entry = () => {
+        signal?.removeEventListener("abort", onAbort);
+        active++;
+        resolve();
+      };
+      const onAbort = () => {
+        const idx = queue.indexOf(entry);
+        if (idx !== -1) {
+          queue.splice(idx, 1);
+        }
+        reject(new DOMException(`${label} acquisition aborted`, "AbortError"));
+      };
+      queue.push(entry);
+      signal?.addEventListener("abort", onAbort, { once: true });
+    });
+  };
+
+  const release = (): void => {
+    if (active === 0) {
+      panic(`${label} semaphore released without an active acquisition`);
+    }
+    active--;
+    const next = queue.shift();
+    if (next) {
+      return next();
+    }
+  };
+
+  return { acquire, release };
+};
+
 /**
  * Max adapters doing DB-heavy work (insert + search index +
  * citation extraction) simultaneously. The pipeline acquires
@@ -146,49 +222,66 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
   1,
   LEGAL_ATLAS_RUNNER_ENV.maxConcurrentDbWrites,
 );
+const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
 
-let activeDbSlots = 0;
-const dbSlotQueue: (() => void)[] = [];
-
-const acquireDbSlot = async (signal?: AbortSignal): Promise<void> => {
-  if (signal?.aborted) {
-    throw new DOMException("DB slot acquisition aborted", "AbortError");
-  }
-  if (activeDbSlots < MAX_CONCURRENT_DB_WRITES) {
-    activeDbSlots++;
-    await Promise.resolve();
-    return;
-  }
-  await new Promise<void>((resolve, reject) => {
-    const entry = () => {
-      signal?.removeEventListener("abort", onAbort);
-      activeDbSlots++;
-      resolve();
-    };
-    const onAbort = () => {
-      const idx = dbSlotQueue.indexOf(entry);
-      if (idx !== -1) {
-        dbSlotQueue.splice(idx, 1);
-      }
-      reject(new DOMException("DB slot acquisition aborted", "AbortError"));
-    };
-    dbSlotQueue.push(entry);
-    signal?.addEventListener("abort", onAbort, { once: true });
-  });
-};
-
-const releaseDbSlot = (): void => {
-  activeDbSlots--;
-  const next = dbSlotQueue.shift();
-  if (next) {
-    return next();
-  }
-};
+/**
+ * Max adapter cycles running concurrently. Unlike the DB-write slot, this
+ * also covers the fetch + finaldoc-enrich + AST-parse phase, which is
+ * CPU-heavy and otherwise unbounded: every source would crawl its backlog
+ * at once and saturate a small worker, so no page completes within its
+ * cycle budget. Bounding cycles lets a few sources make real progress and
+ * advance their cursors instead of collapsing under N-way contention.
+ */
+const MAX_CONCURRENT_ADAPTER_CYCLES = Math.max(
+  1,
+  LEGAL_ATLAS_RUNNER_ENV.maxConcurrentAdapterCycles,
+);
+const cycleSemaphore = createSemaphore(
+  "adapter cycle",
+  MAX_CONCURRENT_ADAPTER_CYCLES,
+);
 
 const writeHeartbeat = () => {
   void Bun.write(HEARTBEAT_PATH, new Date().toISOString()).catch(() => {
     // Non-fatal; health check will notice staleness
   });
+};
+
+/**
+ * Start the event-loop liveness watchdog (daemon mode only). Self-schedules
+ * every WATCHDOG_TICK_MS and compares actual delay to the expected interval;
+ * each tick whose lag exceeds WATCHDOG_LAG_THRESHOLD_MS counts as starved,
+ * and WATCHDOG_MAX_STARVED_TICKS in a row triggers a process exit so ECS
+ * relaunches a healthy task. A single fast tick clears the streak.
+ */
+const startEventLoopWatchdog = (): void => {
+  let starvedTicks = 0;
+  let expectedAt = performance.now() + WATCHDOG_TICK_MS;
+
+  const tick = () => {
+    const lag = performance.now() - expectedAt;
+    if (lag > WATCHDOG_LAG_THRESHOLD_MS) {
+      starvedTicks++;
+      logError(
+        `[watchdog] event loop starved: lag=${Math.round(lag)}ms ` +
+          `(${starvedTicks}/${WATCHDOG_MAX_STARVED_TICKS})`,
+      );
+      if (starvedTicks >= WATCHDOG_MAX_STARVED_TICKS) {
+        logError(
+          "[watchdog] sustained event-loop starvation; exiting for ECS restart",
+        );
+        process.exit(1);
+      }
+    } else {
+      starvedTicks = 0;
+    }
+    expectedAt = performance.now() + WATCHDOG_TICK_MS;
+    // unref: the watchdog observes the loop, it must not be the sole handle
+    // keeping the process alive once everything else has finished.
+    setTimeout(tick, WATCHDOG_TICK_MS).unref();
+  };
+
+  setTimeout(tick, WATCHDOG_TICK_MS).unref();
 };
 
 // Adapters to skip. Set DISABLED_ADAPTERS env var to a
@@ -290,6 +383,7 @@ type CycleOutcome = "completed" | "failed" | "timeout";
 type CycleResult = {
   outcome: CycleOutcome;
   inserted: number;
+  pagesProcessed: number;
 };
 
 /**
@@ -329,7 +423,7 @@ const runOneCycle = async (
     result = await runIngestionPipeline({
       source,
       scopedDb: ingestionDb,
-      dbSlot: { acquire: acquireDbSlot, release: releaseDbSlot },
+      dbSlot: dbWriteSemaphore,
       signal: AbortSignal.timeout(cycleMs),
       ...(bounds.maxPages !== undefined && { maxPages: bounds.maxPages }),
       ...(bounds.maxDecisions !== undefined && {
@@ -395,7 +489,11 @@ const runOneCycle = async (
     logError(`[${adapterKey}] Failed: ${errorMessage}`);
   }
 
-  return { outcome, inserted: result?.inserted ?? 0 };
+  return {
+    outcome,
+    inserted: result?.inserted ?? 0,
+    pagesProcessed: result?.pagesProcessed ?? 0,
+  };
 };
 
 /**
@@ -404,22 +502,62 @@ const runOneCycle = async (
  */
 // eslint-disable-next-line sonarjs/cognitive-complexity -- preserves the daemon's existing retry, alert, and idle-backoff state machine.
 const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
-  let consecutiveFailures = 0;
-  /** Separate counter for backoff; not reset by alert threshold. */
+  /**
+   * Consecutive cycles with no forward progress — a hard failure OR a timeout
+   * that completed zero pages. A single streak so an adapter that alternates
+   * between the two (each of which would otherwise reset the other's counter)
+   * still reaches the sustained-failure alert.
+   */
+  let noProgressStreak = 0;
+  /** Separate counter for backoff; not reset by the alert threshold. */
   let backoffFailures = 0;
   /** Consecutive completed cycles with zero inserts; drives idle backoff. */
   let idleCycles = 0;
 
   while (true) {
     try {
-      // oxlint-disable-next-line no-await-in-loop -- continuous daemon: each adapter cycle must finish before the next so the persisted cursor advances in order
-      const { outcome, inserted } = await runOneCycle(adapterKey, name);
+      // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
+      // the DB-write slot, so without this every source crawls its backlog
+      // at once and saturates the worker. Held only for the cycle and
+      // released before the inter-cycle delay, so idle adapters free the slot.
+      // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
+      await cycleSemaphore.acquire();
+      let cycle: CycleResult;
+      // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
+      // ignore the per-cycle abort signal (the source lookup before it is
+      // created, the event write after the pipeline); if one wedges on a
+      // broken connection the cycle never returns, the finally never runs, and
+      // the slot parks every other adapter. The lag watchdog can't see an
+      // I/O-wait hang (the loop stays responsive), so bound it here: if a cycle
+      // outlives the ceiling, exit so ECS relaunches a healthy task.
+      const deadline = setTimeout(() => {
+        logError(
+          `[${adapterKey}] cycle exceeded ${CYCLE_HARD_DEADLINE_MS}ms hard deadline (wedged await); exiting for ECS restart`,
+        );
+        process.exit(1);
+      }, CYCLE_HARD_DEADLINE_MS);
+      deadline.unref();
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
+        cycle = await runOneCycle(adapterKey, name);
+      } finally {
+        clearTimeout(deadline);
+        cycleSemaphore.release();
+      }
+      const { outcome, inserted, pagesProcessed } = cycle;
+
+      // Forward progress = a clean cycle, or a timeout that still advanced at
+      // least one page. A "failed" or a zero-page "timeout" is a stall; both
+      // grow the one streak, so an adapter alternating between them still
+      // reaches the alert.
+      const madeProgress =
+        outcome === "completed" ||
+        (outcome === "timeout" && pagesProcessed > 0);
+      noProgressStreak = madeProgress ? 0 : noProgressStreak + 1;
 
       if (outcome === "failed") {
-        consecutiveFailures++;
         backoffFailures++;
       } else {
-        consecutiveFailures = 0;
         backoffFailures = 0;
         // Only "completed" outcomes count toward idle. A "timeout"
         // means the cycle hit MAX_CYCLE_MS mid-work; the adapter is
@@ -441,7 +579,8 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         }
       }
     } catch (error) {
-      consecutiveFailures++;
+      // A thrown cycle made no forward progress either.
+      noProgressStreak++;
       backoffFailures++;
       const msg = error instanceof Error ? error.message : String(error);
       if (isTransientConnectionError(msg)) {
@@ -451,14 +590,19 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       }
     }
 
-    if (consecutiveFailures >= SUSTAINED_FAILURE_THRESHOLD) {
+    // A run of no-progress cycles (failures and/or zero-page timeouts) means
+    // the source is stalled; surface it on the sustained-failure metric.
+    if (noProgressStreak >= SUSTAINED_FAILURE_THRESHOLD) {
       logger.error("case_law.ingestion.sustained_failure", {
         adapterKey,
-        consecutiveFailures,
+        noProgressStreak,
       });
-      // Reset alert counter to avoid flooding; backoffFailures
-      // stays high so the delay doesn't collapse.
-      consecutiveFailures = 0;
+      // Reset to avoid flooding; backoffFailures stays high so the delay
+      // doesn't collapse. The value is read again at the top of the next
+      // iteration (`noProgressStreak + 1`); the rule's forward-only liveness
+      // can't see the loop back-edge.
+      // oxlint-disable-next-line no-useless-assignment -- reset read on next loop iteration
+      noProgressStreak = 0;
     }
 
     writeHeartbeat();
@@ -559,6 +703,7 @@ export const runCaseLawIngest = async (
   // All adapters: independent concurrent loops.
   daemonMode = true;
   logInfo("Ingestion daemon started.");
+  startEventLoopWatchdog();
   await refreshS3();
   await refreshCorpusS3();
   writeHeartbeat();
