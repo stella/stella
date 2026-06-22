@@ -103,7 +103,7 @@
     "diff": "9.0.0",
     "drizzle-kit": "1.0.0-rc.1",
     "drizzle-orm": "1.0.0-rc.1",
-    "elysia": "1.4.29",
+    "elysia": "1.4.28",
     "eslint": "10.5.0",
     "eslint-plugin-drizzle": "0.2.3",
     "eslint-plugin-sonarjs": "4.0.3",
