@@ -241,7 +241,7 @@ export const ChatMentionList = ({
               size="sm"
               variant="ghost"
             >
-              <ArrowLeftIcon className="size-3.5 shrink-0" />
+              <ArrowLeftIcon className="size-3.5 shrink-0 rtl:-scale-x-100" />
               <LayersIcon className="size-3.5 shrink-0" />
               <span className="truncate">{drillTarget.name}</span>
             </Button>
@@ -323,7 +323,7 @@ export const ChatMentionList = ({
                             size="icon-sm"
                             variant="ghost"
                           >
-                            <ChevronRightIcon className="size-3.5" />
+                            <ChevronRightIcon className="size-3.5 rtl:-scale-x-100" />
                           </Button>
                         )}
                       </div>

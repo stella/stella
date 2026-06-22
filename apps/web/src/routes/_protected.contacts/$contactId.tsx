@@ -159,7 +159,7 @@ function ContactDetailPage() {
           size="icon-xs"
           variant="ghost"
         >
-          <ArrowLeftIcon className="size-4" />
+          <ArrowLeftIcon className="size-4 rtl:-scale-x-100" />
         </Button>
         <div className="flex items-center gap-2">
           {contact.type === "person" ? (

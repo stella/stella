@@ -81,7 +81,7 @@ function InvoiceDetailPage() {
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <Link params={{ workspaceId }} to="/workspaces/$workspaceId/invoices">
           <Button size="icon" variant="ghost">
-            <ArrowLeftIcon className="size-4" />
+            <ArrowLeftIcon className="size-4 rtl:-scale-x-100" />
           </Button>
         </Link>
         <h1 className="text-sm font-medium">

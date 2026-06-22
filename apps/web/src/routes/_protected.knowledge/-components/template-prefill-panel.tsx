@@ -141,7 +141,7 @@ export const TemplatePrefillPanel = ({
         {expanded ? (
           <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
         ) : (
-          <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
+          <ChevronRightIcon className="text-muted-foreground size-4 shrink-0 rtl:-scale-x-100" />
         )}
         <WandSparklesIcon className="text-muted-foreground size-4 shrink-0" />
         <span className="text-sm font-medium">

@@ -937,7 +937,7 @@ const RedlinePreview = ({
   const arrow = (
     <ArrowRightIcon
       aria-hidden="true"
-      className="text-foreground-ghost mx-1 inline size-3.5 align-middle"
+      className="text-foreground-ghost mx-1 inline size-3.5 align-middle rtl:-scale-x-100"
     />
   );
 

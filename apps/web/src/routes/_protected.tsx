@@ -635,12 +635,12 @@ function WorkspaceInspectorSidePanel() {
     >
       <div className="bg-sidebar relative" style={{ width: widthPx }} />
       <div
-        className="fixed inset-y-0 right-0 z-10 hidden h-svh md:flex"
+        className="fixed inset-y-0 end-0 z-10 hidden h-svh md:flex"
         style={{ width: widthPx }}
       >
         {showPaneContent && (
           <div
-            className="hover:bg-border active:bg-border absolute inset-y-0 -left-px z-20 flex w-1 cursor-col-resize items-center justify-center border-l"
+            className="hover:bg-border active:bg-border absolute inset-y-0 -start-px z-20 flex w-1 cursor-col-resize items-center justify-center border-s"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}

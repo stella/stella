@@ -440,7 +440,7 @@ const OutdatedChanges = ({
           {isDiffOpen ? (
             <ChevronDownIcon className="size-3" />
           ) : (
-            <ChevronRightIcon className="size-3" />
+            <ChevronRightIcon className="size-3 rtl:-scale-x-100" />
           )}
           {t("fileDetail.showDiff")}
         </Button>

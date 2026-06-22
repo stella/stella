@@ -927,7 +927,7 @@ export const ExternalReferencePanel = ({
                 title={t("folio.findReplace.previousShortcut")}
                 variant="ghost"
               >
-                <ChevronLeftIcon className="size-3.5" />
+                <ChevronLeftIcon className="size-3.5 rtl:-scale-x-100" />
               </Button>
               <Button
                 aria-label={t("folio.findReplace.next")}
@@ -937,7 +937,7 @@ export const ExternalReferencePanel = ({
                 title={t("folio.findReplace.nextShortcut")}
                 variant="ghost"
               >
-                <ChevronRightIcon className="size-3.5" />
+                <ChevronRightIcon className="size-3.5 rtl:-scale-x-100" />
               </Button>
               <Button
                 aria-label={t("folio.findReplace.close")}

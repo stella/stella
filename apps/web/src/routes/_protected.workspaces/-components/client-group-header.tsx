@@ -37,6 +37,7 @@ export const ClientGroupHeader = ({
         className={cn(
           "text-muted-foreground size-3.5 shrink-0 transition-transform",
           !collapsed && "rotate-90",
+          collapsed && "rtl:-scale-x-100",
         )}
       />
       <h3 className="text-sm font-semibold">

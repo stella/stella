@@ -509,7 +509,7 @@ const RateEntriesView = ({
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
         <Button className="size-7" onClick={onBack} size="icon" variant="ghost">
-          <ArrowLeftIcon className="size-4" />
+          <ArrowLeftIcon className="size-4 rtl:-scale-x-100" />
         </Button>
         <h3 className="text-sm font-medium">
           {table?.name ?? t("billing.rates.rateEntries")}

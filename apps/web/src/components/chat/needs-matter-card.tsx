@@ -393,7 +393,7 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
         {canOpen && (
           <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px]">
             {t("chat.createDocument.openInFolio")}
-            <ArrowRightIcon className="size-3 shrink-0" />
+            <ArrowRightIcon className="size-3 shrink-0 rtl:-scale-x-100" />
           </span>
         )}
       </div>

@@ -1435,7 +1435,7 @@ export function SuggestionStepper({
         size="icon-sm"
         variant="ghost"
       >
-        <ChevronLeftIcon />
+        <ChevronLeftIcon className="rtl:-scale-x-100" />
       </Button>
       <span className="text-muted-foreground min-w-12 text-center text-xs tabular-nums">
         {t("chat.suggestionStep", {
@@ -1449,7 +1449,7 @@ export function SuggestionStepper({
         size="icon-sm"
         variant="ghost"
       >
-        <ChevronRightIcon />
+        <ChevronRightIcon className="rtl:-scale-x-100" />
       </Button>
       <Button className="ms-1" onClick={onDismiss} size="sm" variant="ghost">
         {t("folio.dismiss")}

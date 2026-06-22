@@ -254,7 +254,7 @@ function TimesheetsPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronLeftIcon className="size-4" />
+              <ChevronLeftIcon className="size-4 rtl:-scale-x-100" />
             </Button>
             <span className="min-w-[10rem] text-center text-sm">
               {dateLabel}
@@ -267,7 +267,7 @@ function TimesheetsPage() {
               size="icon"
               variant="ghost"
             >
-              <ChevronRightIcon className="size-4" />
+              <ChevronRightIcon className="size-4 rtl:-scale-x-100" />
             </Button>
           </div>
         </div>

@@ -919,7 +919,6 @@ export default defineConfig({
         "apps/web/src/**/conversation.tsx",
         "packages/ui/src/**/toast.tsx",
         "packages/ui/src/**/tabs.tsx",
-        "apps/web/src/**/_protected.tsx",
         "apps/web/src/**/kanban-column.tsx",
         "apps/web/src/**/workspace-table.tsx",
         "apps/web/src/**/workspace-table/**/*.tsx",

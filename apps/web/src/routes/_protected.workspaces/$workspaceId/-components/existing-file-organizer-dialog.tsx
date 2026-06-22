@@ -752,7 +752,7 @@ const UserInstructionsSection = ({
           {expanded ? (
             <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
           ) : (
-            <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+            <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0 rtl:-scale-x-100" />
           )}
           <span className="shrink-0 font-medium">
             {t("workspaces.importOrganizer.instructionsTitle")}
@@ -1081,7 +1081,7 @@ const OrganizerFolderNode = ({
           {isExpanded ? (
             <ChevronDownIcon className="size-3.5" />
           ) : (
-            <ChevronRightIcon className="size-3.5" />
+            <ChevronRightIcon className="size-3.5 rtl:-scale-x-100" />
           )}
         </button>
         <div
@@ -1295,7 +1295,7 @@ const DeleteFoldersSection = ({
         {expanded ? (
           <ChevronDownIcon className="text-muted-foreground size-3.5" />
         ) : (
-          <ChevronRightIcon className="text-muted-foreground size-3.5" />
+          <ChevronRightIcon className="text-muted-foreground size-3.5 rtl:-scale-x-100" />
         )}
         <Trash2Icon className="text-muted-foreground size-4" />
         <span className="font-medium">

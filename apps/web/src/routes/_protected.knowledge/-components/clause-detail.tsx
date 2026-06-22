@@ -483,7 +483,7 @@ const ClauseHeader = ({
         size="icon-sm"
         variant="ghost"
       >
-        <ArrowLeftIcon />
+        <ArrowLeftIcon className="rtl:-scale-x-100" />
       </Button>
 
       {editingTitle && canEdit ? (

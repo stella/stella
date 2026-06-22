@@ -88,7 +88,7 @@ const NewDocumentFromTemplateDialogBody = ({
                 type="button"
                 variant="ghost"
               >
-                <ArrowLeftIcon />
+                <ArrowLeftIcon className="rtl:-scale-x-100" />
                 {t("common.goBack")}
               </Button>
             </div>

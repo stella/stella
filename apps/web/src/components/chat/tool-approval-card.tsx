@@ -475,7 +475,7 @@ const UpdateSummary = ({ input, workspaceId }: UpdateSummaryProps) => {
             {oldVal && (
               <>
                 <SelectBadge property={property} value={oldVal} />
-                <ArrowRightIcon className="text-muted-foreground size-3 shrink-0" />
+                <ArrowRightIcon className="text-muted-foreground size-3 shrink-0 rtl:-scale-x-100" />
               </>
             )}
             <SelectBadge property={property} value={displayNew} />

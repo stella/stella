@@ -788,6 +788,7 @@ const FolderCell = ({
           className={cn(
             "size-3.5 transition-transform",
             isExpanded && "rotate-90",
+            !isExpanded && "rtl:-scale-x-100",
           )}
         />
       </button>

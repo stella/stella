@@ -40,10 +40,10 @@ export const CalendarHeader = ({
         {t("common.today")}
       </Button>
       <Button onClick={onNavigatePrev} size="icon-sm" variant="ghost">
-        <ChevronLeftIcon />
+        <ChevronLeftIcon className="rtl:-scale-x-100" />
       </Button>
       <Button onClick={onNavigateNext} size="icon-sm" variant="ghost">
-        <ChevronRightIcon />
+        <ChevronRightIcon className="rtl:-scale-x-100" />
       </Button>
       <Popover>
         <PopoverTrigger
@@ -68,7 +68,7 @@ export const CalendarHeader = ({
               size="icon-xs"
               variant="ghost"
             >
-              <ChevronLeftIcon />
+              <ChevronLeftIcon className="rtl:-scale-x-100" />
             </Button>
             <span className="text-xs font-medium">{year}</span>
             <Button
@@ -78,7 +78,7 @@ export const CalendarHeader = ({
               size="icon-xs"
               variant="ghost"
             >
-              <ChevronRightIcon />
+              <ChevronRightIcon className="rtl:-scale-x-100" />
             </Button>
           </div>
           <div className="grid grid-cols-3 gap-1">

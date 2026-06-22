@@ -82,6 +82,7 @@ export const FileTreeNameCell = ({
         className={cn(
           "size-3.5 shrink-0 transition-transform",
           expanded && "rotate-90",
+          !expanded && "rtl:-scale-x-100",
         )}
       />
     ) : (

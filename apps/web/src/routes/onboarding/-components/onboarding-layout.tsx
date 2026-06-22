@@ -48,7 +48,7 @@ export const OnboardingLayout = ({
               style={{ insetInlineStart: "-12px" }}
               type="button"
             >
-              <ArrowLeftIcon className="size-4" />
+              <ArrowLeftIcon className="size-4 rtl:-scale-x-100" />
             </button>
           )}
           <OnboardingProgress

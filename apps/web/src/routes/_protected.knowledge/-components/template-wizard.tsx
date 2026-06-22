@@ -526,7 +526,7 @@ export const ConfigureStep = ({
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center gap-2 border-b px-4 py-2">
         <Button onClick={onBack} size="sm" variant="ghost">
-          <ArrowLeftIcon />
+          <ArrowLeftIcon className="rtl:-scale-x-100" />
           {t("templates.backToList")}
         </Button>
       </div>
@@ -590,7 +590,7 @@ export const ConfigureStep = ({
                       {isExpanded ? (
                         <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
                       ) : (
-                        <ChevronRightIcon className="text-muted-foreground size-4 shrink-0" />
+                        <ChevronRightIcon className="text-muted-foreground size-4 shrink-0 rtl:-scale-x-100" />
                       )}
                       <span className="min-w-0 flex-1 font-medium">
                         {field.label || field.path}

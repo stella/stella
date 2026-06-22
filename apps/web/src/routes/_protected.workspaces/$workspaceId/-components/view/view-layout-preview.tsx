@@ -266,7 +266,7 @@ const ListPreview = () => (
       <span className="truncate">{SAMPLE_NAMES.contract}</span>
     </span>
     <span className="flex min-w-0 items-center gap-1.5 px-1 py-0.5 font-medium">
-      <ChevronRightIcon className="text-muted-foreground size-3 shrink-0" />
+      <ChevronRightIcon className="text-muted-foreground size-3 shrink-0 rtl:-scale-x-100" />
       <EntityKindIcon className="size-3.5 shrink-0" kind="folder" />
       <span className="truncate">{SAMPLE_NAMES.evidence}</span>
     </span>

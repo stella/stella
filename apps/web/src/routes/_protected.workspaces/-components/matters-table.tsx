@@ -437,6 +437,7 @@ const MattersTableGroup = ({
               className={cn(
                 "text-muted-foreground size-3.5 shrink-0 transition-transform",
                 !collapsed && "rotate-90",
+                collapsed && "rtl:-scale-x-100",
               )}
             />
             {group.type === "client" && (

@@ -348,6 +348,7 @@ const FolderPicker = ({
                 className={cn(
                   "size-3 transition-transform",
                   isExpanded && "rotate-90",
+                  !isExpanded && "rtl:-scale-x-100",
                 )}
               />
             </button>

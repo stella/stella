@@ -414,7 +414,7 @@ export const DocumentAiSourceBar = ({
           size="icon-xs"
           variant="ghost"
         >
-          <ChevronLeftIcon className="size-3.5" />
+          <ChevronLeftIcon className="size-3.5 rtl:-scale-x-100" />
         </Button>
         <span className="text-muted-foreground min-w-8 text-center text-[10px] tabular-nums">
           {currentIdx + 1} / {slots.length}
@@ -440,7 +440,7 @@ export const DocumentAiSourceBar = ({
           size="icon-xs"
           variant="ghost"
         >
-          <ChevronRightIcon className="size-3.5" />
+          <ChevronRightIcon className="size-3.5 rtl:-scale-x-100" />
         </Button>
       </div>
       {isAnswerExpanded && shortAnswer !== null && (

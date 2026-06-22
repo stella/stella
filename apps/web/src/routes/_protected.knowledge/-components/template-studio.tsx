@@ -2409,7 +2409,7 @@ const GestureSplitRow = ({
             {open ? (
               <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
             ) : (
-              <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+              <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0 rtl:-scale-x-100" />
             )}
           </Button>
         )}
@@ -4617,7 +4617,7 @@ const ConditionAdvanced = ({
         {open ? (
           <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
         ) : (
-          <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0" />
+          <ChevronRightIcon className="text-muted-foreground size-3.5 shrink-0 rtl:-scale-x-100" />
         )}
         <span className="text-muted-foreground font-medium">
           {t("templates.studio.conditionAdvanced")}
@@ -4815,7 +4815,7 @@ const FieldNavigator = ({
             {showUnused ? (
               <ChevronDownIcon className="size-3.5" />
             ) : (
-              <ChevronRightIcon className="size-3.5" />
+              <ChevronRightIcon className="size-3.5 rtl:-scale-x-100" />
             )}
             {t("templates.unusedFields", { count: unplaced.length })}
           </button>
@@ -4951,7 +4951,7 @@ const OutlineRow = ({
                 </span>
               ) : null}
               <FieldCapabilityIcons field={field} />
-              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100 rtl:-scale-x-100" />
             </span>
           )}
         </button>
@@ -5029,7 +5029,7 @@ const OutlineRow = ({
               {loopField === undefined ? null : (
                 <FieldCapabilityIcons field={loopField} />
               )}
-              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100" />
+              <ChevronRightIcon className="size-3.5 opacity-0 transition-opacity group-hover:opacity-100 rtl:-scale-x-100" />
             </span>
           </button>
         </li>
@@ -5114,7 +5114,7 @@ const OutlineGroupRow = ({
             {open ? (
               <ChevronDownIcon className="size-3.5" />
             ) : (
-              <ChevronRightIcon className="size-3.5" />
+              <ChevronRightIcon className="size-3.5 rtl:-scale-x-100" />
             )}
           </button>
         ) : null}
@@ -5203,7 +5203,7 @@ const ScopeHeader = ({
           size="icon-sm"
           variant="ghost"
         >
-          <ArrowLeftIcon />
+          <ArrowLeftIcon className="rtl:-scale-x-100" />
         </Button>
       )}
       <div className="min-w-0 flex-1">
@@ -5460,7 +5460,7 @@ const FieldFace = ({
                 size="icon-sm"
                 variant="ghost"
               >
-                <ChevronLeftIcon />
+                <ChevronLeftIcon className="rtl:-scale-x-100" />
               </Button>
               <Button
                 aria-label={t("common.next")}
@@ -5469,7 +5469,7 @@ const FieldFace = ({
                 size="icon-sm"
                 variant="ghost"
               >
-                <ChevronRightIcon />
+                <ChevronRightIcon className="rtl:-scale-x-100" />
               </Button>
               <Button
                 aria-label={t("common.delete")}

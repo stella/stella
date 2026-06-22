@@ -36,7 +36,7 @@ export const LeaveConfirmDialog = ({
         </AlertDialogHeader>
         <AlertDialogFooter className="justify-between sm:justify-between">
           <AlertDialogClose render={<Button variant="ghost" />}>
-            <ArrowLeftIcon />
+            <ArrowLeftIcon className="rtl:-scale-x-100" />
             {cancelLabel}
           </AlertDialogClose>
           <div className="flex items-center gap-2">
