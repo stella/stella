@@ -16,7 +16,7 @@ import {
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -703,17 +703,20 @@ type SummaryStatProps = {
   tone: "primary" | "muted";
 };
 
-const SummaryStat = ({ count, label, tone }: SummaryStatProps) => (
-  <span
-    className={cn(
-      "flex items-center gap-1.5",
-      tone === "muted" && "text-muted-foreground",
-    )}
-  >
-    <span className="font-medium tabular-nums">{count}</span>
-    <span className="text-muted-foreground">{label}</span>
-  </span>
-);
+const SummaryStat = ({ count, label, tone }: SummaryStatProps) => {
+  const format = useFormatter();
+  return (
+    <span
+      className={cn(
+        "flex items-center gap-1.5",
+        tone === "muted" && "text-muted-foreground",
+      )}
+    >
+      <span className="font-medium tabular-nums">{format.number(count)}</span>
+      <span className="text-muted-foreground">{label}</span>
+    </span>
+  );
+};
 
 type UserInstructionsSectionProps = {
   disabled: boolean;

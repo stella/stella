@@ -35,7 +35,7 @@ import {
   WandSparklesIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import {
   applySuggestions,
@@ -1488,6 +1488,7 @@ export function PromptBar(props: PromptBarProps) {
   } = props;
 
   const t = useTranslations();
+  const format = useFormatter();
   const { canSubmit, editor, isEmpty } = editorController;
 
   const isGenerating = status === "generating";
@@ -1718,7 +1719,7 @@ export function PromptBar(props: PromptBarProps) {
       {layout === "floating" && pendingCount > 0 && (
         <span className="flex h-8 shrink-0 items-center ps-0.5">
           <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
-            {pendingCount}
+            {format.number(pendingCount)}
           </span>
         </span>
       )}

@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
@@ -207,11 +207,14 @@ const ReferenceCell = ({ workspace }: CellProps) => (
   </span>
 );
 
-const EntityCountCell = ({ workspace }: CellProps) => (
-  <span className="text-muted-foreground tabular-nums">
-    {workspace.entityCount}
-  </span>
-);
+const EntityCountCell = ({ workspace }: CellProps) => {
+  const format = useFormatter();
+  return (
+    <span className="text-muted-foreground tabular-nums">
+      {format.number(workspace.entityCount)}
+    </span>
+  );
+};
 
 const LastActivityCell = ({ workspace }: CellProps) => (
   <span

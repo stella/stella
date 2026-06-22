@@ -1,5 +1,6 @@
 import { useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
+import { useFormatter } from "use-intl";
 
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
@@ -20,6 +21,7 @@ export const ClientGroupHeader = ({
   onToggle,
 }: ClientGroupHeaderProps) => {
   const navigate = useNavigate();
+  const format = useFormatter();
   const matterCount = group.workspaces.length;
 
   return (
@@ -78,7 +80,7 @@ export const ClientGroupHeader = ({
           "text-muted-foreground text-[0.625rem] tabular-nums",
         )}
       >
-        {matterCount}
+        {format.number(matterCount)}
       </span>
       {group.type === "client" && group.responsibleAttorneyName && (
         <>

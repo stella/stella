@@ -59,7 +59,11 @@ import {
 } from "@/components/empty-screen";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { getFormattingLocale, useI18nStore } from "@/i18n/i18n-store";
+import {
+  getFormatter,
+  getFormattingLocale,
+  useI18nStore,
+} from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -422,7 +426,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               });
             }
           }}
-          value={String(data.documentCount)}
+          value={getFormatter().number(data.documentCount)}
         />
         <StatCard
           icon={<SquareCheckIcon className="size-4" />}
@@ -436,7 +440,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               });
             }
           }}
-          value={`${data.taskCount}`}
+          value={getFormatter().number(data.taskCount)}
         />
         <StatCard
           icon={<CalendarClockIcon className="size-4" />}
@@ -472,7 +476,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               params: { workspaceId },
             });
           }}
-          value={`${Math.round(totalHoursThisWeek * 10) / 10}h`}
+          value={`${getFormatter().number(Math.round(totalHoursThisWeek * 10) / 10)}h`}
         />
       </div>
 

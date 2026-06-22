@@ -300,6 +300,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-locale-format.ts",
     "./.oxlint-plugins/require-dir-on-free-text-input.ts",
     "./.oxlint-plugins/require-dir-on-rendered-name.ts",
+    "./.oxlint-plugins/no-unformatted-number.ts",
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -597,6 +598,17 @@ export default defineConfig({
       ],
       rules: {
         "require-dir-on-rendered-name/require-dir-on-rendered-name": "error",
+      },
+    },
+    {
+      // Numbers must go through the locale formatter so digits localize.
+      files: [
+        "apps/web/src/**/*.tsx",
+        "packages/ui/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-unformatted-number.fixture.tsx",
+      ],
+      rules: {
+        "no-unformatted-number/no-unformatted-number": "error",
       },
     },
     {

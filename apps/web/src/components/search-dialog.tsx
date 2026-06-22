@@ -1459,27 +1459,30 @@ const FacetBucketList = ({
   buckets,
   selected,
   onChange,
-}: FacetBucketListProps) => (
-  <div className="space-y-0.5">
-    {buckets.map((bucket) => (
-      <Button
-        className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
-        key={bucket.value}
-        onClick={() => onChange(bucket.value)}
-        size="sm"
-        variant="ghost"
-      >
-        <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
-        <span className="flex-1 truncate text-start">
-          {bucket.label ?? bucket.value}
-        </span>
-        <span className="text-muted-foreground tabular-nums">
-          {bucket.count}
-        </span>
-      </Button>
-    ))}
-  </div>
-);
+}: FacetBucketListProps) => {
+  const format = useFormatter();
+  return (
+    <div className="space-y-0.5">
+      {buckets.map((bucket) => (
+        <Button
+          className="h-auto w-full justify-start gap-2 px-2 py-1 text-xs"
+          key={bucket.value}
+          onClick={() => onChange(bucket.value)}
+          size="sm"
+          variant="ghost"
+        >
+          <Checkbox checked={selected.includes(bucket.value)} tabIndex={-1} />
+          <span className="flex-1 truncate text-start">
+            {bucket.label ?? bucket.value}
+          </span>
+          <span className="text-muted-foreground tabular-nums">
+            {format.number(bucket.count)}
+          </span>
+        </Button>
+      ))}
+    </div>
+  );
+};
 
 const FACET_SEARCH_DEBOUNCE_MS = 250;
 const FACET_SEARCH_LIMIT = 20;
