@@ -1,10 +1,13 @@
 import type { SVGProps } from "react";
 
-import { useLocale } from "use-intl";
+import { useI18nStore } from "@/i18n/i18n-store";
 
 export const StellaWordmark = (props: SVGProps<SVGSVGElement>) => {
-  const locale = useLocale();
-  if (locale === "ar") {
+  // Use the base UI language, not `useLocale()`: the provider's formatting
+  // locale carries extensions (e.g. `ar-u-ca-gregory-nu-arab`), so an
+  // equality check against "ar" there would never match.
+  const lang = useI18nStore((state) => state.lang);
+  if (lang === "ar") {
     return <StellaWordmarkArabic {...props} />;
   }
   return <StellaWordmarkLatin {...props} />;
