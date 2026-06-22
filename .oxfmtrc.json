@@ -9,7 +9,8 @@
     "**/dist/**",
     "**/.react-email/**",
     "apps/api/src/db/schema.ts",
-    "**/i18n-check-baseline.json"
+    "**/i18n-check-baseline.json",
+    "**/i18n-lint-baseline.json"
   ],
   "printWidth": 80,
   "sortImports": {

@@ -1,0 +1,519 @@
+{
+  "placeholder": {},
+  "icu": {},
+  "plural": {
+    "billing.invoices.totalEntries": [
+      "cs",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "billing.rates.rateCount": [
+      "cs",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "billing.selectedCount": [
+      "cs",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "catalogue.installPack": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "catalogue.packDescription": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "catalogue.packInstalled": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "chat.pastedText.fromClipboard": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "chat.queuedAttachmentCount": [
+      "cs",
+      "sk"
+    ],
+    "chat.tool.docxEditMore": [
+      "cs",
+      "sk"
+    ],
+    "chat.tool.docxEditSummary": [
+      "cs",
+      "sk"
+    ],
+    "chat.toolCall.characterCount": [
+      "cs",
+      "sk"
+    ],
+    "clauses.clauseCount": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "clauses.importResult": [
+      "cs",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "clauses.importSuccess": [
+      "cs",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "clauses.syncedAllResult": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pt-BR"
+    ],
+    "clauses.versionCount": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "common.deletedCount": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pl",
+      "sk"
+    ],
+    "contacts.alsoPartyIn": [
+      "cs",
+      "es",
+      "lt",
+      "pl",
+      "sk"
+    ],
+    "fileDetail.changesDetected": [
+      "cs",
+      "es",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "sk"
+    ],
+    "knowledge.agentSkills.resources": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pt-BR"
+    ],
+    "onboarding.catalogueContinueWithCount": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pt-BR",
+      "sk"
+    ],
+    "onboarding.cataloguePreviewCount": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pt-BR",
+      "sk"
+    ],
+    "onboarding.someInvitesFailed": [
+      "cs",
+      "sk"
+    ],
+    "search.resultCount": [
+      "cs",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "settings.organization.usageSeats": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pt-BR",
+      "sk"
+    ],
+    "settings.organization.usageUnitCount": [
+      "cs",
+      "sk"
+    ],
+    "templates.checkErrors": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "templates.checkWarnings": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "templates.conditionCount": [
+      "cs",
+      "es",
+      "lt",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "templates.emptyFieldsWarning": [
+      "cs",
+      "es",
+      "fr",
+      "pt-BR",
+      "sk"
+    ],
+    "templates.fieldCount": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "templates.prefillApplied": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "templates.registryFilled": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "templates.structureWarnings": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "templates.unusedFields": [
+      "cs",
+      "es",
+      "fr",
+      "hu",
+      "pt-BR",
+      "sk"
+    ],
+    "templates.usedTimes": [
+      "es",
+      "fr",
+      "lt",
+      "pt-BR"
+    ],
+    "templates.validationMinItems": [
+      "es",
+      "fr",
+      "lt",
+      "pt-BR"
+    ],
+    "workspaces.copyToMatter.descriptionCount": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pt-BR",
+      "sk"
+    ],
+    "workspaces.deleteItems": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "sk"
+    ],
+    "workspaces.deleteItemsDescription": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "sk"
+    ],
+    "workspaces.deleteSelectedRowsDescription": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "workspaces.documentsCount": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "workspaces.entitiesCount": [
+      "cs",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "workspaces.files.renamedToAvoidConflicts": [
+      "cs",
+      "es",
+      "sk"
+    ],
+    "workspaces.files.retryFailed": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pl",
+      "sk"
+    ],
+    "workspaces.files.uploadedPartially": [
+      "cs",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "workspaces.filters.chips.client": [
+      "cs",
+      "sk"
+    ],
+    "workspaces.filters.chips.team": [
+      "cs",
+      "sk"
+    ],
+    "workspaces.importOrganizer.description": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "sk"
+    ],
+    "workspaces.importOrganizer.emptyFoldersToDelete": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "sk"
+    ],
+    "workspaces.infosoud.eventCount": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "sk"
+    ],
+    "workspaces.infosoud.importAgendaResult": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "sk"
+    ],
+    "workspaces.mattersCount": [
+      "cs",
+      "es",
+      "fr",
+      "sk"
+    ],
+    "workspaces.overview.membersCount": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "sk"
+    ],
+    "workspaces.properties.bulk.createdMany": [
+      "sk"
+    ],
+    "workspaces.properties.bulk.createMany": [
+      "sk"
+    ],
+    "workspaces.tasksCount": [
+      "cs",
+      "es",
+      "fr",
+      "lt",
+      "lv",
+      "pl",
+      "sk"
+    ],
+    "workspaces.views.fieldsSelected": [
+      "cs",
+      "es",
+      "sk"
+    ]
+  },
+  "terminology": {
+    "billing.matterRequired": [
+      "ar"
+    ],
+    "billing.selectMatter": [
+      "ar"
+    ],
+    "billing.selectMatterToStart": [
+      "ar",
+      "et"
+    ],
+    "chat.createDocument.pickMatterPrompt": [
+      "ar"
+    ],
+    "chat.emptyThreadDescription": [
+      "de",
+      "sk"
+    ],
+    "chat.greetingSubtitle": [
+      "de"
+    ],
+    "clauses.clauseDeletedHint": [
+      "sk"
+    ],
+    "common.matter": [
+      "ar"
+    ],
+    "contacts.alsoPartyIn": [
+      "ar"
+    ],
+    "contacts.noMattersAsClient": [
+      "ar"
+    ],
+    "inspector.matterPicker.description": [
+      "ar"
+    ],
+    "inspector.matterPicker.noMatter": [
+      "ar"
+    ],
+    "inspector.matterPicker.noResults": [
+      "ar"
+    ],
+    "navigation.newMatter": [
+      "ar"
+    ],
+    "search.kinds.matter": [
+      "ar",
+      "et",
+      "sk"
+    ],
+    "templates.checkNoIssues": [
+      "sk"
+    ],
+    "templates.confirmDelete": [
+      "sk"
+    ],
+    "templates.fieldLookupFormatTemplate": [
+      "sk"
+    ],
+    "templates.moveToMatter": [
+      "ar"
+    ],
+    "templates.newTemplate": [
+      "sk"
+    ],
+    "templates.studio.scopeTemplate": [
+      "sk"
+    ],
+    "templates.templateDeleted": [
+      "sk"
+    ],
+    "templates.templateRenamed": [
+      "sk"
+    ],
+    "templates.templateSaved": [
+      "sk"
+    ],
+    "templates.untitledTemplate": [
+      "sk"
+    ],
+    "templates.useTemplateHint": [
+      "ar"
+    ],
+    "templates.whenToUsePlaceholder": [
+      "sk"
+    ],
+    "workspaces.copyToMatter.description": [
+      "ar"
+    ],
+    "workspaces.copyToMatter.descriptionCount": [
+      "ar"
+    ],
+    "workspaces.copyToMatter.menuItem": [
+      "ar"
+    ],
+    "workspaces.copyToMatter.title": [
+      "ar"
+    ],
+    "workspaces.createNewWorkspace": [
+      "ar"
+    ],
+    "workspaces.emptyMatters.description": [
+      "ar",
+      "et"
+    ],
+    "workspaces.emptyMatters.title": [
+      "ar",
+      "et"
+    ],
+    "workspaces.importOrganizer.instructionsHelp": [
+      "ar"
+    ],
+    "workspaces.mattersCount": [
+      "ar",
+      "et"
+    ],
+    "workspaces.newMatter": [
+      "ar",
+      "et"
+    ],
+    "workspaces.noMatters": [
+      "ar",
+      "et"
+    ],
+    "workspaces.properties.scopeMatter": [
+      "et"
+    ],
+    "workspaces.properties.scopeMatterDescription": [
+      "et"
+    ],
+    "workspaces.views.templates.created": [
+      "sk"
+    ],
+    "workspaces.views.templates.deleted": [
+      "sk"
+    ]
+  }
+}

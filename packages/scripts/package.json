@@ -4,7 +4,9 @@
   "private": true,
   "license": "Apache-2.0",
   "bin": {
+    "glossary-gen": "src/glossary-gen.ts",
     "i18n-check": "src/i18n-check.ts",
+    "i18n-lint": "src/i18n-lint.ts",
     "i18n-typegen": "src/i18n-typegen.ts"
   },
   "type": "module",
@@ -17,6 +19,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
+    "@formatjs/icu-messageformat-parser": "3.5.1",
     "@stll/ai-catalog": "workspace:*",
     "better-result": "catalog:"
   },
