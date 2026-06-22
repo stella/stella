@@ -838,13 +838,13 @@ const RowStats = ({ template, lang }: RowStatsProps) => {
   if (template.lastUsedAt) {
     segments.push(
       t("templates.lastUsedAgo", {
-        time: formatRelativeTime(template.lastUsedAt, lang),
+        time: formatRelativeTime(template.lastUsedAt),
       }),
     );
   }
   segments.push(
     t("templates.updatedAgo", {
-      time: formatRelativeTime(template.updatedAt, lang),
+      time: formatRelativeTime(template.updatedAt),
     }),
   );
 

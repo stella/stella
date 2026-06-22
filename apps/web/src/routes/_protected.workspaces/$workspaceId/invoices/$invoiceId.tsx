@@ -44,6 +44,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { usePermissions } from "@/hooks/use-permissions";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -358,7 +359,9 @@ const InvoiceDetail = ({
         {invoice.paidAt && (
           <InfoCell
             label={t("billing.invoices.paidAt")}
-            value={new Date(invoice.paidAt).toLocaleDateString()}
+            value={new Date(invoice.paidAt).toLocaleDateString(
+              getFormattingLocale(),
+            )}
           />
         )}
       </div>

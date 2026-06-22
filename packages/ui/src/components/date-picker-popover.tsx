@@ -473,7 +473,7 @@ function DatePickerPopover({
               size="icon-xs"
               variant="ghost"
             >
-              <ChevronLeftIcon />
+              <ChevronLeftIcon className="rtl:-scale-x-100" />
             </Button>
             <button
               className={cn(
@@ -502,7 +502,7 @@ function DatePickerPopover({
               size="icon-xs"
               variant="ghost"
             >
-              <ChevronRightIcon />
+              <ChevronRightIcon className="rtl:-scale-x-100" />
             </Button>
           </div>
 

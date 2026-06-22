@@ -87,7 +87,7 @@ function PaginationPrevious({
       size="default"
       {...props}
     >
-      <ChevronLeftIcon className="sm:-ms-1" />
+      <ChevronLeftIcon className="sm:-ms-1 rtl:-scale-x-100" />
       <span className="max-sm:hidden">Previous</span>
     </PaginationLink>
   );
@@ -105,7 +105,7 @@ function PaginationNext({
       {...props}
     >
       <span className="max-sm:hidden">Next</span>
-      <ChevronRightIcon className="sm:-me-1" />
+      <ChevronRightIcon className="sm:-me-1 rtl:-scale-x-100" />
     </PaginationLink>
   );
 }

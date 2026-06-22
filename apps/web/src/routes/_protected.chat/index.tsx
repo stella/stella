@@ -33,7 +33,6 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
 import { usePermissions } from "@/hooks/use-permissions";
-import { useI18nStore } from "@/i18n/i18n-store";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -76,7 +75,6 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 function ChatIndex() {
   const t = useTranslations();
-  const lang = useI18nStore((s) => s.lang);
   const { ensureAIAvailable } = useAIKeyGate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -435,7 +433,7 @@ function ChatIndex() {
                           />
                         }
                         iconTone="matter"
-                        meta={formatRelativeTime(matter.lastActivityAt, lang)}
+                        meta={formatRelativeTime(matter.lastActivityAt)}
                         title={matter.name}
                       />
                     </Link>
@@ -508,7 +506,7 @@ function ChatIndex() {
                   >
                     <LandingItemText
                       icon={<MessageSquareIcon className="size-4" />}
-                      meta={`${chat.workspaceName} - ${formatRelativeTime(chat.updatedAt, lang)}`}
+                      meta={`${chat.workspaceName} - ${formatRelativeTime(chat.updatedAt)}`}
                       title={chat.title}
                     />
                   </Link>
@@ -521,7 +519,7 @@ function ChatIndex() {
                   >
                     <LandingItemText
                       icon={<MessageSquareIcon className="size-4" />}
-                      meta={formatRelativeTime(chat.updatedAt, lang)}
+                      meta={formatRelativeTime(chat.updatedAt)}
                       title={chat.title}
                     />
                   </Link>

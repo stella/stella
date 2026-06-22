@@ -14,7 +14,7 @@ import {
   XIcon,
 } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import {
   MenuGroup,
@@ -300,10 +300,9 @@ type CellLockBadgeProps = {
 
 const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
   const t = useTranslations();
-  const locale = useLocale();
   const displayName = provenance?.lockedByName ?? null;
   const relativeTime = provenance
-    ? formatRelativeTime(provenance.lockedAt, locale)
+    ? formatRelativeTime(provenance.lockedAt)
     : null;
 
   const tooltipContent = provenance ? (
@@ -358,11 +357,8 @@ const FlagProvenanceTooltip = ({
   metadata,
 }: FlagProvenanceTooltipProps) => {
   const getFlagLabel = useFlagLabel();
-  const locale = useLocale();
   const displayName = metadata?.addedByName ?? null;
-  const relativeTime = metadata
-    ? formatRelativeTime(metadata.addedAt, locale)
-    : null;
+  const relativeTime = metadata ? formatRelativeTime(metadata.addedAt) : null;
   const label = getFlagLabel(flag.id);
 
   if (!metadata) {

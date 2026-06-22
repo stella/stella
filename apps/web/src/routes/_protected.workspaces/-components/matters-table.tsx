@@ -15,7 +15,7 @@ import {
 } from "@stll/ui/components/table";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useI18nStore } from "@/i18n/i18n-store";
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getMatterColor } from "@/lib/matter-colors";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
@@ -210,20 +210,20 @@ const EntityCountCell = ({ workspace }: CellProps) => (
   </span>
 );
 
-const LastActivityCell = ({ workspace }: CellProps) => {
-  const lang = useI18nStore((s) => s.lang);
-  return (
-    <span
-      className="text-muted-foreground"
-      title={new Date(workspace.lastActivityAt).toLocaleString(lang, {
+const LastActivityCell = ({ workspace }: CellProps) => (
+  <span
+    className="text-muted-foreground"
+    title={new Date(workspace.lastActivityAt).toLocaleString(
+      getFormattingLocale(),
+      {
         dateStyle: "full",
         timeStyle: "medium",
-      })}
-    >
-      {formatRelativeTime(workspace.lastActivityAt, lang)}
-    </span>
-  );
-};
+      },
+    )}
+  >
+    {formatRelativeTime(workspace.lastActivityAt)}
+  </span>
+);
 
 /** Format a Date as `YYYY-MM-DD` in local time (locale-neutral, ISO-style). */
 const toLocalISODate = (date: Date): string => {
@@ -242,12 +242,11 @@ const TeamCell = ({ workspace }: CellProps) => (
 );
 
 const CreatedAtCell = ({ workspace }: CellProps) => {
-  const lang = useI18nStore((s) => s.lang);
   const date = new Date(workspace.createdAt);
   return (
     <span
       className="text-muted-foreground tabular-nums"
-      title={date.toLocaleString(lang, {
+      title={date.toLocaleString(getFormattingLocale(), {
         dateStyle: "full",
         timeStyle: "medium",
       })}

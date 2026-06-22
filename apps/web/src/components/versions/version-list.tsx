@@ -17,7 +17,7 @@ import {
   Loader2Icon,
   WandSparklesIcon,
 } from "lucide-react";
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { markerPattern } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
@@ -88,7 +88,6 @@ export const VersionRow = ({
   summarize,
 }: VersionRowProps) => {
   const t = useTranslations();
-  const locale = useLocale();
   const [isDiffOpen, setIsDiffOpen] = useState(false);
   const [diff, setDiff] = useState<AsyncContent<VersionDiffSegment[]>>({
     status: "idle",
@@ -174,9 +173,9 @@ export const VersionRow = ({
         </span>
         <span
           className="text-muted-foreground shrink-0 text-xs"
-          title={formatFullTimestamp(createdAt, locale)}
+          title={formatFullTimestamp(createdAt)}
         >
-          {formatRelativeTime(createdAt, locale)}
+          {formatRelativeTime(createdAt)}
         </span>
       </div>
     </>

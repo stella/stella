@@ -1,4 +1,4 @@
-import { useLocale, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import {
   PreviewCard,
@@ -147,14 +147,13 @@ const CellFlagProvenanceRow = ({
   provenance,
 }: CellFlagProvenanceRowProps) => {
   const getFlagLabel = useFlagLabel();
-  const locale = useLocale();
   const flag = cellFlagsById.get(flagId);
   if (!flag) {
     return null;
   }
   const Icon = flag.icon;
   const relativeTime = provenance
-    ? formatRelativeTime(provenance.addedAt, locale)
+    ? formatRelativeTime(provenance.addedAt)
     : null;
 
   return (

@@ -59,7 +59,7 @@ import {
 } from "@/components/empty-screen";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
-import { useI18nStore } from "@/i18n/i18n-store";
+import { getFormattingLocale, useI18nStore } from "@/i18n/i18n-store";
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -457,7 +457,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
             if (!date) {
               return "—";
             }
-            return new Date(date).toLocaleDateString(lang, {
+            return new Date(date).toLocaleDateString(getFormattingLocale(), {
               month: "short",
               day: "numeric",
             });
@@ -945,7 +945,6 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               <OverviewRow
                 entity={entity}
                 key={entity.entityId}
-                lang={lang}
                 workspaceId={workspaceId}
               />
             ))}
@@ -1037,10 +1036,9 @@ type OverviewEntity = {
 type OverviewRowProps = {
   entity: OverviewEntity;
   workspaceId: string;
-  lang: string;
 };
 
-const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
+const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
   const [contextOpen, setContextOpen] = useState(false);
   const [contextAnchor, setContextAnchor] = useState<VirtualAnchor | null>(
     null,
@@ -1209,10 +1207,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
   })();
 
   const t = useTranslations();
-  const relTime = formatRelativeTime(
-    entity.updatedAt ?? entity.createdAt,
-    lang,
-  );
+  const relTime = formatRelativeTime(entity.updatedAt ?? entity.createdAt);
 
   /** Entities whose updatedAt is within this window of createdAt
    *  are considered "just uploaded" rather than "edited". */
@@ -1269,10 +1264,7 @@ const OverviewRow = ({ entity, workspaceId, lang }: OverviewRowProps) => {
       {relTime && (
         <span
           className="text-muted-foreground shrink-0 text-xs tabular-nums"
-          title={formatFullTimestamp(
-            entity.updatedAt ?? entity.createdAt,
-            lang,
-          )}
+          title={formatFullTimestamp(entity.updatedAt ?? entity.createdAt)}
         >
           {relTime}
         </span>

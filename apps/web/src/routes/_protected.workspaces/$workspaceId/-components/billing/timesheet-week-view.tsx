@@ -3,6 +3,7 @@ import { useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
+import { getFormattingLocale } from "@/i18n/i18n-store";
 import {
   formatDecimalHours,
   formatMinutes,
@@ -116,7 +117,7 @@ export const TimesheetWeekView = ({
                     type="button"
                   >
                     <div className="text-muted-foreground text-xs">
-                      {d.toLocaleDateString(undefined, {
+                      {d.toLocaleDateString(getFormattingLocale(), {
                         weekday: "short",
                       })}
                     </div>
