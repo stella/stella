@@ -36,8 +36,11 @@ test("chat composer sends a message and renders the assistant reply", async ({
   // Sending from /chat fires the request and navigates to the new
   // thread (apps/web/src/routes/_protected.chat/index.tsx:389); the
   // thread id is a client-generated uuidv7.
+  // The thread-creation request + client nav can exceed the default 10s expect
+  // timeout on a cold CI runner — the same headroom the waits below use.
   await expect(page).toHaveURL(
     /\/chat\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u,
+    { timeout: 30_000 },
   );
 
   const transcript = page.getByRole("log");
