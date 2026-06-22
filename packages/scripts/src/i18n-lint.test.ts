@@ -90,6 +90,12 @@ describe("findMissingPluralCategories", () => {
       ),
     ).toEqual([]);
   });
+
+  test("degrades to [] for an invalid locale code instead of throwing", () => {
+    expect(
+      findMissingPluralCategories("{n, plural, one {#} other {#}}", "!"),
+    ).toEqual([]);
+  });
 });
 
 describe("findDroppedPlurals", () => {
@@ -133,6 +139,15 @@ describe("findDroppedPlurals", () => {
         "{count, plural, one {{n, plural, other {#}}} other {{n, plural, other {#}}}}",
       ),
     ).toEqual(["count"]);
+  });
+
+  test("counts a {count, number} formatted node as showing the count", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {# file} other {# files}}",
+        "{count, plural, one {{count, number} soubor} other {{count, number} souborů}}",
+      ),
+    ).toEqual([]);
   });
 });
 

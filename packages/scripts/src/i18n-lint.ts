@@ -157,9 +157,17 @@ const pluralCategories = (
   if (cached) {
     return cached;
   }
-  const categories = new Intl.PluralRules(locale, {
-    type,
-  }).resolvedOptions().pluralCategories;
+  // An unsupported or malformed locale code makes Intl.PluralRules throw a
+  // RangeError; degrade to "no required categories" so one stray/invalid file
+  // can't crash the whole lint run (boundary call into a runtime built-in).
+  let categories: readonly string[];
+  try {
+    categories = new Intl.PluralRules(locale, {
+      type,
+    }).resolvedOptions().pluralCategories;
+  } catch {
+    categories = [];
+  }
   pluralCategoryCache.set(cacheKey, categories);
   return categories;
 };
@@ -219,6 +227,9 @@ const pluralShowsCount = (
 ): boolean => {
   let shows = false;
   const scan = (elements: MessageFormatElement[], direct: boolean): void => {
+    if (shows) {
+      return;
+    }
     for (const element of elements) {
       // `#` binds to the nearest enclosing plural, so it only proves the outer
       // count is shown when found directly. Resetting `direct` for a nested
@@ -227,7 +238,15 @@ const pluralShowsCount = (
       if (direct && element.type === TYPE.pound) {
         shows = true;
       }
-      if (element.type === TYPE.argument && element.value === argName) {
+      // The count can be shown formatted (`{count, number}` → TYPE.number, and
+      // likewise date/time), not only as a bare `{count}` argument.
+      if (
+        (element.type === TYPE.argument ||
+          element.type === TYPE.number ||
+          element.type === TYPE.date ||
+          element.type === TYPE.time) &&
+        element.value === argName
+      ) {
         shows = true;
       }
       if (element.type === TYPE.plural || element.type === TYPE.select) {
