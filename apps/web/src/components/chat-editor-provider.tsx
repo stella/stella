@@ -100,8 +100,9 @@ const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
 // opposite direction — e.g. a Latin suggestion inside the Arabic "tab to ask"
 // placeholder, whose trailing "?" would otherwise reorder to the wrong side.
 // The plain-string equivalent of wrapping in <bdi>.
-const FIRST_STRONG_ISOLATE = String.fromCodePoint(0x2068);
-const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(0x2069);
+// U+2068 FIRST STRONG ISOLATE, U+2069 POP DIRECTIONAL ISOLATE.
+const FIRST_STRONG_ISOLATE = String.fromCodePoint(8296);
+const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(8297);
 const isolateBidi = (value: string): string =>
   `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
 
