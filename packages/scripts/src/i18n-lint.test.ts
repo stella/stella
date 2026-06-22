@@ -106,6 +106,24 @@ describe("findDroppedPlurals", () => {
       ),
     ).toEqual([]);
   });
+
+  test("flags a plural that dropped the count from every branch", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {# file} other {# files}}",
+        "{count, plural, one {file} other {files}}",
+      ),
+    ).toEqual(["count"]);
+  });
+
+  test("allows one branch to omit the count when another shows it", () => {
+    expect(
+      findDroppedPlurals(
+        "{count, plural, one {# file} other {# files}}",
+        "{count, plural, one {jeden soubor} other {# souborů}}",
+      ),
+    ).toEqual([]);
+  });
 });
 
 describe("isSuppressed", () => {

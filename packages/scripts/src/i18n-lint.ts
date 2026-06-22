@@ -195,29 +195,66 @@ export const findMissingPluralCategories = (
   return missing;
 };
 
-const collectPluralArgs = (
+/** Whether a plural's branches reference its count (via `#` or `{arg}`). */
+const pluralShowsCount = (
+  options: Record<string, { value: MessageFormatElement[] }>,
+  argName: string,
+): boolean => {
+  let shows = false;
+  const scan = (elements: MessageFormatElement[]): void => {
+    for (const element of elements) {
+      if (element.type === TYPE.pound) {
+        shows = true;
+      }
+      if (element.type === TYPE.argument && element.value === argName) {
+        shows = true;
+      }
+      if (element.type === TYPE.plural || element.type === TYPE.select) {
+        for (const option of Object.values(element.options)) {
+          scan(option.value);
+        }
+      }
+      if (element.type === TYPE.tag) {
+        scan(element.children);
+      }
+    }
+  };
+  for (const option of Object.values(options)) {
+    scan(option.value);
+  }
+  return shows;
+};
+
+/** Map each plural argument to whether any of its branches shows the count. */
+const collectPluralCounts = (
   elements: MessageFormatElement[],
-  names: Set<string>,
+  counts: Map<string, boolean>,
 ): void => {
   for (const element of elements) {
     if (element.type === TYPE.plural) {
-      names.add(element.value);
+      counts.set(
+        element.value,
+        (counts.get(element.value) ?? false) ||
+          pluralShowsCount(element.options, element.value),
+      );
     }
     if (element.type === TYPE.plural || element.type === TYPE.select) {
       for (const option of Object.values(element.options)) {
-        collectPluralArgs(option.value, names);
+        collectPluralCounts(option.value, counts);
       }
     }
     if (element.type === TYPE.tag) {
-      collectPluralArgs(element.children, names);
+      collectPluralCounts(element.children, counts);
     }
   }
 };
 
 /**
- * Arguments the source pluralizes but the target flattened to plain
- * interpolation (e.g. en `{count, plural, …}` rendered as `{count}`), which
- * placeholder parity and the target-only category check both miss.
+ * Source plural arguments the target no longer pluralizes with a visible count:
+ * the plural node is gone (flattened to plain interpolation) or it kept the
+ * selector but dropped the count (`#`/`{arg}`) from every branch. Placeholder
+ * parity and the category check miss both, so the count silently disappears. A
+ * single branch may still omit the count as long as another branch shows it.
  */
 export const findDroppedPlurals = (
   source: string,
@@ -228,11 +265,20 @@ export const findDroppedPlurals = (
   if (!sourceAst || !targetAst) {
     return [];
   }
-  const sourceArgs = new Set<string>();
-  const targetArgs = new Set<string>();
-  collectPluralArgs(sourceAst, sourceArgs);
-  collectPluralArgs(targetAst, targetArgs);
-  return [...sourceArgs].filter((arg) => !targetArgs.has(arg));
+  const sourceCounts = new Map<string, boolean>();
+  const targetCounts = new Map<string, boolean>();
+  collectPluralCounts(sourceAst, sourceCounts);
+  collectPluralCounts(targetAst, targetCounts);
+  const dropped: string[] = [];
+  for (const [arg, sourceShows] of sourceCounts) {
+    if (
+      !targetCounts.has(arg) ||
+      (sourceShows && targetCounts.get(arg) === false)
+    ) {
+      dropped.push(arg);
+    }
+  }
+  return dropped;
 };
 
 const escapeRegExp = (value: string): string =>
