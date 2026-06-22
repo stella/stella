@@ -95,6 +95,16 @@ export const CHAT_FILE_INPUT_ACCEPT =
 const EMPTY_ATTACHMENTS: ChatDraftAttachment[] = [];
 const EMPTY_CHAT_DRAFT_DOC = createEmptyChatDraftDoc();
 
+// Wrap an interpolated value in Unicode directional isolates (FSI…PDI) so an
+// embedded run keeps its own direction inside a translated string of the
+// opposite direction — e.g. a Latin suggestion inside the Arabic "tab to ask"
+// placeholder, whose trailing "?" would otherwise reorder to the wrong side.
+// The plain-string equivalent of wrapping in <bdi>.
+const FIRST_STRONG_ISOLATE = String.fromCodePoint(0x2068);
+const POP_DIRECTIONAL_ISOLATE = String.fromCodePoint(0x2069);
+const isolateBidi = (value: string): string =>
+  `${FIRST_STRONG_ISOLATE}${value}${POP_DIRECTIONAL_ISOLATE}`;
+
 type EntityMentionPage = {
   entities: WorkspaceEntity[];
 };
@@ -499,7 +509,7 @@ export const useChatEditor = ({
   const t = useTranslations();
   const defaultPlaceholder = t("chat.placeholder");
   const tabToAskText = suggestedFollowupPrompt
-    ? t("chat.tabToAsk", { prompt: suggestedFollowupPrompt })
+    ? t("chat.tabToAsk", { prompt: isolateBidi(suggestedFollowupPrompt) })
     : undefined;
   const resolvedPlaceholder = tabToAskText ?? placeholder ?? defaultPlaceholder;
   const placeholderRef = useRef(resolvedPlaceholder);

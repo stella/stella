@@ -36,6 +36,10 @@ export const MessageResponseImpl = memo(
     // wouldn't run for messages whose children text was identical
     // when first rendered with no plugins.
     <Streamdown
+      // Chat content can be any language regardless of the UI locale, so let
+      // each message resolve its own direction (Latin -> LTR, Arabic -> RTL)
+      // instead of inheriting the RTL shell and reordering Latin punctuation.
+      dir="auto"
       key={rehypePluginsKey(rehypePlugins)}
       className={cn(
         "size-full [&>*:first-child]:mt-0 [&>*:last-child]:mb-0",

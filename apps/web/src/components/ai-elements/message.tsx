@@ -122,7 +122,7 @@ const MessageResponseFallback = ({
   children,
   className,
 }: MessageResponseProps) => (
-  <div className={cn("size-full whitespace-pre-wrap", className)}>
+  <div className={cn("size-full whitespace-pre-wrap", className)} dir="auto">
     {renderFallbackChildren(children)}
   </div>
 );

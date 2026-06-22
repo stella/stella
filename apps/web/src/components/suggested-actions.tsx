@@ -98,7 +98,7 @@ export const SuggestedActions = ({
             variant={surface === "plain" ? "outline" : "ghost"}
           >
             {action.icon}
-            <span className={cn(!horizontal && "min-w-0 truncate")}>
+            <span className={cn(!horizontal && "min-w-0 truncate")} dir="auto">
               {action.label}
             </span>
           </Button>
