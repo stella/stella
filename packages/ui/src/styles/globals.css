@@ -1042,6 +1042,15 @@
     @apply bg-background text-foreground text-pretty;
   }
 
+  /* Letter-spacing breaks Arabic's cursive joins; never apply tracking
+   * under RTL. `!important` overrides per-element Tailwind tracking-*
+   * utilities (which set letter-spacing directly, so a plain inherited
+   * reset would not reach them). Latin runs inside RTL stay isolated via
+   * <bdi>, so this does not regress embedded Latin spacing. */
+  html[dir="rtl"] * {
+    letter-spacing: normal !important;
+  }
+
   /* https://tailwindcss.com/docs/upgrade-guide#buttons-use-the-default-cursor */
   button:not(:disabled),
   [role="button"]:not(:disabled) {
