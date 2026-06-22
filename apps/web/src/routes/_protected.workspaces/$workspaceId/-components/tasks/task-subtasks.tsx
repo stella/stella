@@ -1,5 +1,5 @@
 import { CheckCircle2Icon, CircleIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { cn } from "@stll/ui/lib/utils";
 
@@ -13,6 +13,7 @@ export const SubtasksSection = ({
   onToggle,
 }: SubtasksSectionProps) => {
   const t = useTranslations("tasks");
+  const format = useFormatter();
 
   if (subtasks.length === 0) {
     return null;
@@ -21,7 +22,7 @@ export const SubtasksSection = ({
   return (
     <div className="border-t px-4 py-3">
       <h3 className="text-muted-foreground mb-2 text-xs font-medium">
-        {t("subtasks")} ({subtasks.length})
+        {t("subtasks")} ({format.number(subtasks.length)})
       </h3>
       <div className="space-y-1">
         {subtasks.map((sub) => (
