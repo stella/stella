@@ -4,7 +4,10 @@ import type * as React from "react";
 
 import { Input as InputPrimitive } from "@base-ui/react/input";
 
-import { useContentDir } from "@stll/ui/hooks/use-content-dir";
+import {
+  isStructuredInputType,
+  useContentDir,
+} from "@stll/ui/hooks/use-content-dir";
 import { cn } from "@stll/ui/lib/utils";
 
 type InputProps = Omit<
@@ -27,7 +30,9 @@ function Input({
   ...props
 }: InputProps) {
   const contentDir = useContentDir({
-    dir,
+    // Structured/neutral-value types (token, URL, number, date…) stay LTR
+    // unless the caller forces a direction; only free-text resolves by content.
+    dir: dir ?? (isStructuredInputType(props.type) ? "ltr" : undefined),
     value: props.value,
     defaultValue: props.defaultValue,
   });

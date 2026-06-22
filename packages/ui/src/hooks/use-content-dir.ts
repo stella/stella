@@ -38,6 +38,25 @@ type UseContentDirResult = {
   trackValue: (text: string) => void;
 };
 
+// Text-bearing input types that must stay LTR regardless of the UI direction
+// (tokens, URLs, numbers, dates): their values are neutral/structured, so
+// content-based `dir="auto"` is unsafe and an empty field must not inherit RTL.
+const STRUCTURED_INPUT_TYPES = new Set([
+  "email",
+  "url",
+  "tel",
+  "number",
+  "password",
+  "date",
+  "datetime-local",
+  "time",
+  "month",
+  "week",
+]);
+
+export const isStructuredInputType = (type: string | undefined): boolean =>
+  type !== undefined && STRUCTURED_INPUT_TYPES.has(type);
+
 const hasText = (value: FieldValue): boolean => {
   if (typeof value === "string") {
     return value.length > 0;
