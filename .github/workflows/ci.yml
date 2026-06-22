@@ -528,10 +528,22 @@ jobs:
         # `--wait` only on long-running services; `minio-setup` is a one-shot
         # bucket-creator container that exits 0, which `--wait` treats as
         # "not running" and fails the whole command. Run it separately in
-        # the foreground so we still block on its success.
+        # the foreground so we still block on its success. The whole bring-up
+        # is retried: image pulls and `--wait` health checks occasionally fail
+        # transiently on CI runners. Tear the stack down between attempts so a
+        # half-started stack does not poison the retry.
         run: |
-          docker compose --profile dev up -d --wait postgres minio valkey gotenberg
-          docker compose --profile dev up minio-setup
+          for attempt in 1 2 3; do
+            if docker compose --profile dev up -d --wait postgres minio valkey gotenberg \
+              && docker compose --profile dev up minio-setup; then
+              exit 0
+            fi
+            echo "::warning::docker stack start failed (attempt ${attempt}/3); tearing down and retrying"
+            docker compose --profile dev down --volumes --remove-orphans || true
+            sleep 10
+          done
+          echo "::error::docker stack failed to start after 3 attempts"
+          exit 1
 
       - name: Run database migrations
         if: steps.changed.outputs.run == 'true'
