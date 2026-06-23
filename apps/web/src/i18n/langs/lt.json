@@ -2281,7 +2281,7 @@
       "showOnlyWhen": "Šis laukas rodomas tik tada, kai:",
       "textPlusAi": "Asmuo + DI",
       "useExisting": "Naudoti esamą lauką {name}",
-      "whoFills": "Kas tai užpildys?"
+      "whoFills": "Kas vėliau užpildys šį lauką?"
     },
     "tagPlaceholder": "Įveskite žymą ir paspauskite Enter",
     "tags": "Žymos",

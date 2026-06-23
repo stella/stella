@@ -370,14 +370,42 @@
     {
       "id": "clause",
       "en": "Clause",
-      "note": "cs \"Doložka\" for a clause library; \"Klauzule\" is acceptable. ar بند for a generic contract clause; reserve مادة for statutes/codes and شرط for genuinely conditional stipulations.",
+      "note": "cs uses \"Ustanovení\" / sk \"Ustanovenie\" (the clause library renders as \"Vzorová ustanovení\" / \"Vzorové ustanovenia\"); \"Klauzule\" / \"Klauzula\" and their inflected forms must not be used. ar بند for a generic contract clause; reserve مادة for statutes/codes and شرط for genuinely conditional stipulations.",
       "forbidden": {
-        "ar": ["مادة"]
+        "ar": ["مادة"],
+        "cs": [
+          "klauzule",
+          "klauzuli",
+          "klauzulí",
+          "klauzulím",
+          "klauzulích",
+          "klauzulemi",
+          "klauzula",
+          "klauzuly",
+          "klauzulu",
+          "klauzulo",
+          "klauzul",
+          "klauzulám",
+          "klauzulách",
+          "klauzulami"
+        ],
+        "sk": [
+          "klauzula",
+          "klauzuly",
+          "klauzule",
+          "klauzulu",
+          "klauzulo",
+          "klauzulou",
+          "klauzúl",
+          "klauzulám",
+          "klauzulách",
+          "klauzulami"
+        ]
       },
       "translations": {
         "ar": "بند",
-        "cs": "Doložka",
-        "sk": "Klauzula",
+        "cs": "Ustanovení",
+        "sk": "Ustanovenie",
         "pl": "Klauzula",
         "de": "Klausel",
         "et": "Klausel",
@@ -392,14 +420,26 @@
     {
       "id": "template",
       "en": "Template",
-      "note": "sk prefers \"Vzor\" (native legal-document register) over \"Šablóna\". ar قالب for a template; reserve نموذج for fillable forms/specimens.",
+      "note": "cs/sk use \"Vzor\" (native legal-document register); \"Šablona\" / \"Šablóna\" and their inflected forms must not be used. ar قالب for a template; reserve نموذج for fillable forms/specimens.",
       "forbidden": {
         "ar": ["نموذج"],
+        "cs": [
+          "šablona",
+          "šablony",
+          "šabloně",
+          "šablonu",
+          "šablono",
+          "šablonou",
+          "šablon",
+          "šablonám",
+          "šablonách",
+          "šablonami"
+        ],
         "sk": ["Šablóna", "šablónu", "šablóny", "šablón", "šablóne", "šablónou"]
       },
       "translations": {
         "ar": "قالب",
-        "cs": "Šablona",
+        "cs": "Vzor",
         "sk": "Vzor",
         "pl": "Szablon",
         "de": "Vorlage",

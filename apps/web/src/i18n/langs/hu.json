@@ -2281,7 +2281,7 @@
       "showOnlyWhen": "Ez a mező csak akkor jelenik meg, ha:",
       "textPlusAi": "Személy + MI",
       "useExisting": "A meglévő {name} mező használata",
-      "whoFills": "Ki tölti ki?"
+      "whoFills": "Ki tölti ki később ezt a mezőt?"
     },
     "tagPlaceholder": "Írjon be egy címkét, majd nyomjon Entert",
     "tags": "Címkék",

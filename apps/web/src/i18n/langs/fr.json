@@ -2281,7 +2281,7 @@
       "showOnlyWhen": "Ce champ s’affiche uniquement lorsque :",
       "textPlusAi": "Personne + IA",
       "useExisting": "Utiliser le champ existant {name}",
-      "whoFills": "Qui le remplit ?"
+      "whoFills": "Qui remplira ce champ par la suite ?"
     },
     "tagPlaceholder": "Saisissez une étiquette et appuyez sur Entrée",
     "tags": "Étiquettes",
