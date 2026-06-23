@@ -1,4 +1,4 @@
-import { Suspense } from "react";
+import { lazy, Suspense } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
@@ -9,18 +9,17 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import type {
+  InspectorRailIconProps,
+  InspectorViewRenderProps,
+} from "@/components/inspector/view-registry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
-import { CatalogueBrowser } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
-import {
-  ToolDetailRailIcon,
-  ToolDetailView,
-  type ToolDetailPayload,
-} from "@/routes/_protected.knowledge/-components/catalogue/tool-detail-view";
+import type { ToolDetailPayload } from "@/routes/_protected.knowledge/-components/catalogue/tool-detail-view";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
   catalogueKeys,
@@ -28,15 +27,53 @@ import {
 } from "@/routes/_protected.knowledge/-queries/catalogue";
 import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
+const LazyCatalogueBrowser = lazy(async () => {
+  const module =
+    await import("@/routes/_protected.knowledge/-components/catalogue/catalogue-browser");
+  return { default: module.CatalogueBrowser };
+});
+
+const LazyToolDetailView = lazy(async () => {
+  const module =
+    await import("@/routes/_protected.knowledge/-components/catalogue/tool-detail-view");
+  return { default: module.ToolDetailView };
+});
+
+const LazyToolDetailRailIcon = lazy(async () => {
+  const module =
+    await import("@/routes/_protected.knowledge/-components/catalogue/tool-detail-view");
+  return { default: module.ToolDetailRailIcon };
+});
+
 // Tool-detail tabs live next to a route; they auto-close when the
 // user navigates away from `/knowledge/tools` so the rail doesn't
 // keep stale entries for a page the user has left.
 registerInspectorView<ToolDetailPayload>({
   type: "tool-detail",
-  render: ToolDetailView,
-  railIcon: ToolDetailRailIcon,
+  render: ToolDetailViewRenderer,
+  railIcon: ToolDetailRailIconRenderer,
   navigationPolicy: "close-on-route-leave",
 });
+
+function ToolDetailViewRenderer(
+  props: InspectorViewRenderProps<ToolDetailPayload>,
+) {
+  return (
+    <Suspense fallback={null}>
+      <LazyToolDetailView {...props} />
+    </Suspense>
+  );
+}
+
+function ToolDetailRailIconRenderer(
+  props: InspectorRailIconProps<ToolDetailPayload>,
+) {
+  return (
+    <Suspense fallback={null}>
+      <LazyToolDetailRailIcon {...props} />
+    </Suspense>
+  );
+}
 
 const KIND_VALUES = ["all", "skill", "mcp"] as const;
 
@@ -237,7 +274,7 @@ function ToolsCatalogue({ initialKind, organizationId }: ToolsCatalogueProps) {
     organizationSettingsOptions(organizationId),
   );
   return (
-    <CatalogueBrowser
+    <LazyCatalogueBrowser
       initialKind={initialKind}
       organizationId={organizationId}
       practiceJurisdictions={settings.practiceJurisdictions}

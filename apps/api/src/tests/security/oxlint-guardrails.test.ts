@@ -355,6 +355,20 @@ describe("custom oxlint guardrails", () => {
     expect(entityRouteSource).not.toContain("ensureRouteQueryData");
   });
 
+  test("tools route keeps heavy catalogue UI behind Suspense", () => {
+    const toolsRouteSource = readRootFixture(
+      "apps/web/src/routes/_protected.knowledge/tools.tsx",
+    );
+
+    expect(toolsRouteSource).toContain("const LazyCatalogueBrowser = lazy");
+    expect(toolsRouteSource).toContain("catalogue/catalogue-browser");
+    expect(toolsRouteSource).toContain("const LazyToolDetailView = lazy");
+    expect(toolsRouteSource).toContain("const LazyToolDetailRailIcon = lazy");
+    expect(toolsRouteSource).not.toContain("import { CatalogueBrowser");
+    expect(toolsRouteSource).not.toContain("ToolDetailView,");
+    expect(toolsRouteSource).not.toContain("ToolDetailRailIcon,");
+  });
+
   test("redirect-only route lint forbids render components", () => {
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-component-on-redirect-route.ts",
