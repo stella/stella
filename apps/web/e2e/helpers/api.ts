@@ -113,3 +113,21 @@ export const apiUploadDocx = async (
     renamed: boolean;
   };
 };
+
+export const apiDownloadFileField = async (
+  request: APIRequestContext,
+  workspaceId: string,
+  fieldId: string,
+): Promise<Buffer> => {
+  const metadata = await apiGet<{ presignedUrl: string }>(
+    request,
+    `/files/${workspaceId}/url/${fieldId}?purpose=download`,
+  );
+  const response = await request.get(metadata.presignedUrl);
+  if (!response.ok()) {
+    throw new Error(
+      `GET presigned file ${fieldId} -> ${String(response.status())}: ${await response.text()}`,
+    );
+  }
+  return await response.body();
+};
