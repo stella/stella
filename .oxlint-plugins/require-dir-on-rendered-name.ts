@@ -33,18 +33,6 @@ const NAME_PROPS = new Set([
 
 const SELF_ISOLATING = new Set(["BidiText", "UserText"]);
 const RAW_ISOLATING = new Set(["bdi", "bdo"]);
-const TEXT_ELEMENTS = new Set([
-  "div",
-  "h1",
-  "h2",
-  "h3",
-  "h4",
-  "h5",
-  "h6",
-  "p",
-  "span",
-  ...RAW_ISOLATING,
-]);
 
 const hasDirAttr = (opening) =>
   opening.attributes.some(
@@ -110,7 +98,6 @@ export default {
             // Sole child: dir="auto" on the element isolates it.
             if (kids.length === 1) {
               if (
-                TEXT_ELEMENTS.has(opening.name.name) &&
                 (hasDirAttr(opening) ||
                   RAW_ISOLATING.has(opening.name.name))
               ) {

@@ -39,6 +39,10 @@ export const _rawDir = () => (
   // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
   <span dir="auto">{x.displayName}</span>
 );
+export const _rawDirLink = () => (
+  // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
+  <a dir="auto">{x.displayName}</a>
+);
 export const _rawBdi = () => (
   // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
   <bdi>{x.displayName}</bdi>
