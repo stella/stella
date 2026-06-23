@@ -14,9 +14,46 @@ const DISPLAY_FIELD_TYPES = new Set([
   "clip",
 ]);
 
+const BIDI_TEXT_COMPONENTS = new Set(["BidiText", "UserText"]);
+
 const isMemberLike = (node) =>
   node?.type === "MemberExpression" ||
   node?.type === "OptionalMemberExpression";
+
+const jsxElementName = (name) => {
+  if (name?.type === "JSXIdentifier") {
+    return name.name;
+  }
+
+  return null;
+};
+
+const getJsxAttr = (node, name) =>
+  node.attributes.find(
+    (attr) =>
+      attr.type === "JSXAttribute" &&
+      attr.name?.type === "JSXIdentifier" &&
+      attr.name.name === name,
+  );
+
+const literalAttrValue = (attr) => {
+  if (!attr?.value) {
+    return undefined;
+  }
+
+  if (attr.value.type === "Literal") {
+    return attr.value.value;
+  }
+
+  if (
+    attr.value.type === "JSXExpressionContainer" &&
+    attr.value.expression?.type === "Literal"
+  ) {
+    return attr.value.expression.value;
+  }
+
+  return undefined;
+};
 
 const rootIdentifierName = (node) => {
   const unwrapped = unwrapExpression(node);
@@ -174,6 +211,36 @@ export default {
               node,
               messageId: "noWorkspaceFieldValueDrift",
               data: { type },
+            });
+          },
+        };
+      },
+    },
+    "no-raw-field-value-bidi-text": {
+      meta: {
+        type: "problem",
+        messages: {
+          noRawFieldValueBidiText:
+            'Workspace field value text with `dir="auto"` must use <BidiText /> so bidi isolation stays attached.',
+        },
+      },
+      create(context) {
+        return {
+          JSXOpeningElement(node) {
+            const elementName = jsxElementName(node.name);
+            const dirAttr = getJsxAttr(node, "dir");
+
+            if (
+              !elementName ||
+              BIDI_TEXT_COMPONENTS.has(elementName) ||
+              literalAttrValue(dirAttr) !== "auto"
+            ) {
+              return;
+            }
+
+            context.report({
+              node: dirAttr ?? node,
+              messageId: "noRawFieldValueBidiText",
             });
           },
         };

@@ -250,6 +250,9 @@ describe("custom oxlint guardrails", () => {
       "no-workspace-field-value-drift/no-workspace-field-value-drift",
     );
     expect(configSource).toContain(
+      "no-workspace-field-value-drift/no-raw-field-value-bidi-text",
+    );
+    expect(configSource).toContain(
       "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx",
     );
     expect(configSource).toContain(
@@ -265,6 +268,8 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain('"single-select"');
     expect(pluginSource).toContain("isFieldContentTypeAccess");
     expect(pluginSource).toContain("<FieldValue /> or <EditableField />");
+    expect(pluginSource).toContain("BIDI_TEXT_COMPONENTS");
+    expect(pluginSource).toContain("noRawFieldValueBidiText");
   });
 
   test("public SEO endpoints cannot import auth or protected code", () => {

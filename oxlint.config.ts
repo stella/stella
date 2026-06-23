@@ -1094,6 +1094,15 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value.tsx",
+        ".oxlint-plugins/__fixtures__/no-workspace-field-value-drift.fixture.tsx",
+      ],
+      rules: {
+        "no-workspace-field-value-drift/no-raw-field-value-bidi-text": "error",
+      },
+    },
+    {
       files: ["apps/web/src/routes/**/*.{ts,tsx}"],
       rules: {
         "@tanstack/router/create-route-property-order": "error",

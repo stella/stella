@@ -6,6 +6,7 @@ import { BidiText } from "@stll/ui/components/bidi-text";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import type { WorkspaceFieldContent, WorkspaceProperty } from "@/lib/types";
+import { getClipFieldValueLabel } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value.logic";
 import {
   emptyColor,
   resolveOptionColor,
@@ -162,9 +163,9 @@ const PendingFieldValue = ({
           strokeWidth={2.25}
         />
         {hasPreview ? (
-          <div className="line-clamp-2 min-w-0" dir="auto">
+          <BidiText as="div" className="line-clamp-2 min-w-0">
             {trimmedPreview}
-          </div>
+          </BidiText>
         ) : (
           <PendingSkeleton contentType={contentType} />
         )}
@@ -242,9 +243,12 @@ const TextFieldValue = ({
     }
 
     return (
-      <span className="text-muted-foreground line-clamp-2 min-w-0 basis-full text-xs leading-4">
+      <BidiText
+        as="span"
+        className="text-muted-foreground line-clamp-2 min-w-0 basis-full text-xs leading-4"
+      >
         {content.value}
-      </span>
+      </BidiText>
     );
   }
 
@@ -252,9 +256,9 @@ const TextFieldValue = ({
     variant === "table" ? "line-clamp-2" : "line-clamp-2 text-sm";
 
   return (
-    <span className={className} dir="auto">
+    <BidiText as="span" className={className}>
       {content.value}
-    </span>
+    </BidiText>
   );
 };
 
@@ -315,7 +319,8 @@ const SelectFieldValue = ({
 
   if (variant === "kanban") {
     return (
-      <span
+      <BidiText
+        as="span"
         className="max-w-full truncate rounded px-1.5 py-0.5 text-xs leading-none font-medium"
         style={{
           backgroundColor: color?.background,
@@ -323,7 +328,7 @@ const SelectFieldValue = ({
         }}
       >
         {value ?? t("common.empty")}
-      </span>
+      </BidiText>
     );
   }
 
@@ -340,9 +345,9 @@ const SelectFieldValue = ({
       }}
     >
       {variant === "table" && !value && <SquareMinusIcon className="size-4" />}
-      <span className="truncate" dir="auto">
+      <BidiText as="span" className="truncate">
         {value ?? t("common.empty")}
-      </span>
+      </BidiText>
     </span>
   );
 };
@@ -392,20 +397,29 @@ const ClipFieldValue = ({
   content: Extract<WorkspaceFieldContent, { type: "clip" }>;
   variant: FieldValueVariant;
 }) => {
-  const value = content.citation ?? content.url;
+  const value = getClipFieldValueLabel({
+    citation: content.citation,
+    url: content.url,
+  });
 
   if (variant === "kanban") {
     return (
-      <span className="text-muted-foreground bg-muted/60 truncate rounded px-1.5 py-0.5 text-xs leading-none">
+      <BidiText
+        as="span"
+        className="text-muted-foreground bg-muted/60 truncate rounded px-1.5 py-0.5 text-xs leading-none"
+      >
         {value}
-      </span>
+      </BidiText>
     );
   }
 
   return (
-    <span className="text-muted-foreground block truncate text-sm" dir="auto">
+    <BidiText
+      as="span"
+      className="text-muted-foreground block truncate text-sm"
+    >
       {value}
-    </span>
+    </BidiText>
   );
 };
 

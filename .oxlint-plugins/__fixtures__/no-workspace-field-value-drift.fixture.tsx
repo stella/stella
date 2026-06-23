@@ -90,7 +90,18 @@ export const _propertyTypeBranch = () => {
   return null;
 };
 
+export const _rawBidiText = () => (
+  // oxlint-disable-next-line no-workspace-field-value-drift/no-raw-field-value-bidi-text
+  <div dir="auto">שלום v ABC-123</div>
+);
+
+export const _isolatedBidiText = () => (
+  <BidiText as="div">שלום v ABC-123</BidiText>
+);
+
 const FieldValue = (_props: {
   content: WorkspaceFieldContent | undefined;
   property: WorkspaceProperty;
 }) => null;
+
+const BidiText = (_props: { as: "div"; children: string }) => null;
