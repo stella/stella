@@ -1275,10 +1275,16 @@ export function measureParagraph(
         // width in the wrap decision so a note marker or format-only word
         // split is not stranded on the next line (eigenpal/docx-editor#991).
         const isRunTail = nextBreak === text.length;
-        const glueWidth =
+        const rawGlueWidth =
           // eslint-disable-next-line unicorn/prefer-at -- hot path: direct index avoids .at() overhead.
           isRunTail && word.length > 0 && !isBreakChar(word[word.length - 1])
             ? (trailingGlueWidths[runIndex] ?? 0)
+            : 0;
+        const glueWidth =
+          rawGlueWidth > 0 &&
+          wordWidth + rawGlueWidth <=
+            currentLine.availableWidth + WIDTH_TOLERANCE
+            ? rawGlueWidth
             : 0;
         if (
           currentLine.width > 0 &&

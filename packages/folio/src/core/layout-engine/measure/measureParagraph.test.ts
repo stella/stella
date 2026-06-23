@@ -279,6 +279,31 @@ describe("measureParagraph cross-run line breaking", () => {
       }
     }, fakeMeasure);
   });
+
+  test("hard-breaks oversized glued split words by line capacity", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = "abcdefghijkl".split("").map((text, index) => ({
+        kind: "text",
+        text,
+        bold: index % 2 === 0,
+      }));
+      const { lines } = measureParagraph(paragraph(runs), width("abcd"));
+
+      expect(lines[0]).toMatchObject({
+        fromRun: 0,
+        fromChar: 0,
+        toRun: 3,
+        toChar: 1,
+      });
+      expect(lines[1]).toMatchObject({
+        fromRun: 4,
+        fromChar: 0,
+        toRun: 7,
+        toChar: 1,
+      });
+      expect(lines).toHaveLength(3);
+    }, fakeMeasure);
+  });
 });
 
 describe("inline image paragraph measurement", () => {
