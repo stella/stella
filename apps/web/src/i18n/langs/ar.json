@@ -2281,7 +2281,7 @@
       "showOnlyWhen": "يظهر هذا الحقل فقط عندما:",
       "textPlusAi": "شخص + الذكاء الاصطناعي",
       "useExisting": "استخدام {name} الموجود",
-      "whoFills": "مَن يعبّئ هذا؟"
+      "whoFills": "مَن يعبّئ هذا الحقل لاحقًا؟"
     },
     "tagPlaceholder": "اكتب وسمًا واضغط Enter",
     "tags": "الوسوم",

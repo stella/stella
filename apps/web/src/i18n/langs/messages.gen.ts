@@ -2284,7 +2284,7 @@ type Messages = {
       "showOnlyWhen": "This field shows only when:";
       "textPlusAi": "Person + AI";
       "useExisting": "Use existing {name}";
-      "whoFills": "Who fills this?";
+      "whoFills": "Who fills this field later?";
     };
     "tagPlaceholder": "Type a tag and press Enter";
     "tags": "Tags";

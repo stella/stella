@@ -319,18 +319,18 @@ Slavic, Baltic, Germanic, Finno-Ugric:
 
 <!-- glossary-gen:legal-slavic-baltic start -->
 
-| Concept      | Czech      | Slovak     | Polish         | German         | Estonian      | Hungarian            | Lithuanian      | Latvian      |
-| ------------ | ---------- | ---------- | -------------- | -------------- | ------------- | -------------------- | --------------- | ------------ |
-| **Matter**   | Spis       | Spis       | Sprawa         | Akte           | Toimik        | Ügy                  | Byla            | Lieta        |
-| **Case law** | Judikatura | Judikatúra | Orzecznictwo   | Rechtsprechung | Kohtupraktika | Ítélkezési gyakorlat | Teismų praktika | Tiesu prakse |
-| **Court**    | Soud       | Súd        | Sąd            | Gericht        | Kohus         | Bíróság              | Teismas         | Tiesa        |
-| **Party**    | Strana     | Strana     | Strona         | Partei         | Osapool       | Fél                  | Šalis           | Puse         |
-| **Clause**   | Doložka    | Klauzula   | Klauzula       | Klausel        | Klausel       | Kikötés              | Sąlyga          | Klauzula     |
-| **Template** | Šablona    | Vzor       | Szablon        | Vorlage        | Mall          | Sablon               | Šablonas        | Veidne       |
-| **Folder**   | Složka     | Priečinok  | Folder         | Ordner         | Kaust         | Mappa                | Aplankas        | Mape         |
-| **Tag**      | Štítek     | Štítok     | Tag            | Schlagwort     | Silt          | Címke                | Žyma            | Birka        |
-| **Draft**    | Koncept    | Koncept    | Wersja robocza | Entwurf        | Mustand       | Piszkozat            | Juodraštis      | Melnraksts   |
-| **Contact**  | Kontakt    | Kontakt    | Kontakt        | Kontakt        | Kontakt       | Kapcsolat            | Kontaktas       | Kontakts     |
+| Concept      | Czech      | Slovak      | Polish         | German         | Estonian      | Hungarian            | Lithuanian      | Latvian      |
+| ------------ | ---------- | ----------- | -------------- | -------------- | ------------- | -------------------- | --------------- | ------------ |
+| **Matter**   | Spis       | Spis        | Sprawa         | Akte           | Toimik        | Ügy                  | Byla            | Lieta        |
+| **Case law** | Judikatura | Judikatúra  | Orzecznictwo   | Rechtsprechung | Kohtupraktika | Ítélkezési gyakorlat | Teismų praktika | Tiesu prakse |
+| **Court**    | Soud       | Súd         | Sąd            | Gericht        | Kohus         | Bíróság              | Teismas         | Tiesa        |
+| **Party**    | Strana     | Strana      | Strona         | Partei         | Osapool       | Fél                  | Šalis           | Puse         |
+| **Clause**   | Ustanovení | Ustanovenie | Klauzula       | Klausel        | Klausel       | Kikötés              | Sąlyga          | Klauzula     |
+| **Template** | Vzor       | Vzor        | Szablon        | Vorlage        | Mall          | Sablon               | Šablonas        | Veidne       |
+| **Folder**   | Složka     | Priečinok   | Folder         | Ordner         | Kaust         | Mappa                | Aplankas        | Mape         |
+| **Tag**      | Štítek     | Štítok      | Tag            | Schlagwort     | Silt          | Címke                | Žyma            | Birka        |
+| **Draft**    | Koncept    | Koncept     | Wersja robocza | Entwurf        | Mustand       | Piszkozat            | Juodraštis      | Melnraksts   |
+| **Contact**  | Kontakt    | Kontakt     | Kontakt        | Kontakt        | Kontakt       | Kapcsolat            | Kontaktas       | Kontakts     |
 
 <!-- glossary-gen:legal-slavic-baltic end -->
 
@@ -379,9 +379,12 @@ Notes:
   Judilibre open-data umbrella; "Tribunal" is too narrow).
 - **fr Dossier** serves both Matter and Folder; the collision is
   idiomatic and unavoidable, context disambiguates.
-- **sk Template** prefers "Vzor" (native legal-document register) over
-  "Šablóna". **cs Clause**: "Doložka" for a clause library; "Klauzule"
-  is acceptable.
+- **cs/sk Template** is always "Vzor" (native legal-document register);
+  "Šablona" / "Šablóna" and their inflected forms must not be used.
+  **cs/sk Clause** is always "Ustanovení" / "Ustanovenie"
+  (the clause library renders as "Vzorová ustanovení" / "Vzorové
+  ustanovenia"); "Klauzule" / "Klauzula" and their inflected forms must
+  not be used.
 - **lv Case law** = "Tiesu prakse" for a broad decisions database;
   reserve "Judikatūra" for binding Supreme-Court precedent only.
 

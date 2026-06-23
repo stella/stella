@@ -2281,7 +2281,7 @@
       "showOnlyWhen": "Dieses Feld erscheint nur, wenn:",
       "textPlusAi": "Person + KI",
       "useExisting": "Vorhandenes Feld {name} verwenden",
-      "whoFills": "Wer füllt das aus?"
+      "whoFills": "Wer füllt dieses Feld später aus?"
     },
     "tagPlaceholder": "Schlagwort eingeben und Enter drücken",
     "tags": "Schlagwörter",

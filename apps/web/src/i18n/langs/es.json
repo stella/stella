@@ -2281,7 +2281,7 @@
       "showOnlyWhen": "Este campo se muestra solo cuando:",
       "textPlusAi": "Persona + IA",
       "useExisting": "Usar el campo existente {name}",
-      "whoFills": "¿Quién lo rellena?"
+      "whoFills": "¿Quién rellenará este campo más tarde?"
     },
     "tagPlaceholder": "Escribe una etiqueta y pulsa Enter",
     "tags": "Etiquetas",
