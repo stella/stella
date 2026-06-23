@@ -50,6 +50,7 @@ const isDev = import.meta.env.DEV;
 
 type SidebarUserMenuProps = {
   user: {
+    activeOrganizationId: string;
     email: string;
     image: string | null | undefined;
     name: string | undefined;
@@ -68,7 +69,9 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
-  const { data: organization } = useQuery(organizationOptions);
+  const { data: organization } = useQuery(
+    organizationOptions(user.activeOrganizationId),
+  );
 
   const displayName = user.name ?? user.email;
   const orgName = organization?.name;

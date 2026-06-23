@@ -8,6 +8,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
 import {
   organizationSettingsKeys,
@@ -18,7 +19,10 @@ export const PromptCachingCard = () => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const { data: settings } = useQuery(organizationSettingsOptions);
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { data: settings } = useQuery(
+    organizationSettingsOptions(activeOrganizationId),
+  );
 
   const mutation = useMutation({
     // Send only the prompt-caching field so a stale matter-numbering

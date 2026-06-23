@@ -31,6 +31,7 @@ import { UserIdentity } from "@/components/user-avatar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -229,7 +230,8 @@ export const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
-  const orgQuery = useQuery(organizationOptions);
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const orgQuery = useQuery(organizationOptions(activeOrganizationId));
   const org = orgQuery.data;
   const { data: existingMembers = [] } = useQuery(
     workspaceMembersOptions(workspaceId),

@@ -11,6 +11,7 @@ import {
 } from "@stll/ui/components/popover";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { matchesPattern, previewReference } from "@/lib/matter-reference";
 import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
@@ -18,7 +19,10 @@ export type MatterNumberHintProps = InlineProps | PopoverProps;
 
 export const MatterNumberHint = (props: MatterNumberHintProps) => {
   const t = useTranslations();
-  const { data: settings } = useQuery(organizationSettingsOptions);
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { data: settings } = useQuery(
+    organizationSettingsOptions(activeOrganizationId),
+  );
 
   if (!settings) {
     return null;

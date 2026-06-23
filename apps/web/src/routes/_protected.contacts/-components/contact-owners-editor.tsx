@@ -25,10 +25,12 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
-  const { data: organization } = useQuery(organizationOptions);
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
+  const { data: organization } = useQuery(
+    organizationOptions(activeOrganizationId),
+  );
 
   const memberItems = (organization?.members ?? []).map((member) => ({
     email: member.user.email,

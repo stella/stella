@@ -34,8 +34,9 @@ type SmokeRoute = {
   path: string;
   settleMs?: number;
   // Where the route settles. Defaults to rendering in place (the pathname stays
-  // put). `redirectsTo` pins a deterministic beforeLoad/Navigate target so a
-  // regression that silently bounces the page to another route is caught.
+  // put). `redirectsTo` pins a deterministic beforeLoad/Navigate target and
+  // waits for that target before asserting the destination shell, so cold
+  // redirect aliases do not sit on the root loader until the <main> timeout.
   // `settles` covers routes whose destination depends on env or runtime data
   // (freshly minted ids, dev-only gates), where only "left /auth and rendered"
   // is assertable.
@@ -193,7 +194,10 @@ const createWorkspaceRoutes = (workspace: TestWorkspace): SmokeRoute[] => [
   {
     template: "/workspaces/$workspaceId",
     path: `/workspaces/${workspace.id}`,
-    expectation: { kind: "settles" },
+    expectation: {
+      kind: "redirectsTo",
+      to: `/workspaces/${workspace.id}/${workspace.viewId}`,
+    },
   },
   {
     template: "/workspaces/$workspaceId/expenses",
@@ -206,7 +210,10 @@ const createWorkspaceRoutes = (workspace: TestWorkspace): SmokeRoute[] => [
   {
     template: "/workspaces/$workspaceId/timesheets",
     path: `/workspaces/${workspace.id}/timesheets`,
-    expectation: { kind: "settles" },
+    expectation: {
+      kind: "redirectsTo",
+      to: `/workspaces/${workspace.id}/${workspace.viewId}`,
+    },
   },
   {
     template: "/workspaces/$workspaceId/$viewId",
@@ -299,6 +306,7 @@ const renderSmokeRoute = async ({
 }) => {
   await page.goto(route.path, { waitUntil: "domcontentloaded" });
   await expect(page, route.template).not.toHaveURL(/\/auth(?:\/|$)/u);
+  await waitForRedirectDestination(page, route);
   await assertNoRouteBoundary(page, route.template);
   // Cold-compiled route chunks can take longer than the default 10s expect
   // timeout to paint <main> on a fresh CI runner.
@@ -323,10 +331,41 @@ const assertFinalDestination = (page: Page, route: SmokeRoute) => {
     return;
   }
 
+  const expected = expectedDestination(route, page.url());
+  const actual = new URL(page.url());
+
+  expect(
+    comparableHref(actual, expected.assertSearch),
+    `${route.template} settled on an unexpected route`,
+  ).toBe(expected.href);
+};
+
+const waitForRedirectDestination = async (page: Page, route: SmokeRoute) => {
+  if (route.expectation?.kind !== "redirectsTo") {
+    return;
+  }
+
+  const expected = expectedDestination(route, page.url());
+
+  await expect(page, `${route.template} reached redirect target`).toHaveURL(
+    (actual) => comparableHref(actual, expected.assertSearch) === expected.href,
+    { timeout: 30_000 },
+  );
+};
+
+type ExpectedDestination = {
+  href: string;
+  assertSearch: boolean;
+};
+
+const expectedDestination = (
+  route: SmokeRoute,
+  baseUrl: string,
+): ExpectedDestination => {
+  const expectation = route.expectation ?? { kind: "rendersInPlace" };
   const target =
     expectation.kind === "redirectsTo" ? expectation.to : route.path;
-  const expected = new URL(target, page.url());
-  const actual = new URL(page.url());
+  const expected = new URL(target, baseUrl);
 
   // A redirectsTo target opts into search assertion by spelling out a query
   // string (e.g. the legacy knowledge redirects must preserve ?kind=...).
@@ -335,17 +374,15 @@ const assertFinalDestination = (page: Page, route: SmokeRoute) => {
   // route) bounces to a different pathname, which this assertion already catches.
   const assertSearch =
     expectation.kind === "redirectsTo" && expected.search !== "";
-  const expectedHref = assertSearch
-    ? expected.pathname + expected.search
-    : expected.pathname;
-  const actualHref = assertSearch
-    ? actual.pathname + actual.search
-    : actual.pathname;
 
-  expect(actualHref, `${route.template} settled on an unexpected route`).toBe(
-    expectedHref,
-  );
+  return {
+    assertSearch,
+    href: comparableHref(expected, assertSearch),
+  };
 };
+
+const comparableHref = (url: URL, assertSearch: boolean) =>
+  assertSearch ? url.pathname + url.search : url.pathname;
 
 const assertNoRouteBoundary = async (page: Page, routeTemplate: string) => {
   await expect(

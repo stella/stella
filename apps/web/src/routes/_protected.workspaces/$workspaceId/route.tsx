@@ -18,10 +18,7 @@ import { api } from "@/lib/api";
 import { APIError, toAPIError } from "@/lib/errors";
 import { HOTKEYS } from "@/lib/hotkeys";
 import { pageTitle, pageTitleLiteral } from "@/lib/page-title";
-import {
-  ensureCriticalQueryData,
-  prefetchNonCriticalQuery,
-} from "@/lib/react-query";
+import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { useWorkspaceSSE } from "@/lib/sse";
 import { useWorkspaceChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -109,14 +106,14 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId")({
         .catch(onPrefetchError);
     }
 
-    void prefetchNonCriticalQuery(
+    void prefetchRouteQuery(
       qc,
       workflowOptions({ key: { workspaceId: wsId } }),
       onPrefetchError,
     );
-    void prefetchNonCriticalQuery(qc, viewsOptions(wsId), onPrefetchError);
-    void prefetchNonCriticalQuery(qc, overviewOptions(wsId), onPrefetchError);
-    void prefetchNonCriticalQuery(qc, propertiesOptions(wsId), onPrefetchError);
+    void prefetchRouteQuery(qc, viewsOptions(wsId), onPrefetchError);
+    void prefetchRouteQuery(qc, overviewOptions(wsId), onPrefetchError);
+    void prefetchRouteQuery(qc, propertiesOptions(wsId), onPrefetchError);
 
     return workspace;
   },
@@ -136,7 +133,7 @@ const loadWorkspaceOrRedirect = async (
   workspaceId: string,
 ) => {
   try {
-    return await ensureCriticalQueryData(
+    return await ensureRouteQueryData(
       queryClient,
       workspaceOptions(workspaceId),
     );

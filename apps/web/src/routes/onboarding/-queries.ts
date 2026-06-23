@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 type NativeToolDeployAvailabilityKey = readonly [
   "onboarding",
@@ -28,4 +29,5 @@ export const nativeToolDeployAvailabilityOptions = queryOptions({
 
     return response.data;
   },
+  staleTime: ROUTE_QUERY_STALE_TIME_MS,
 });

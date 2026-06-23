@@ -296,4 +296,149 @@ describe("custom oxlint guardrails", () => {
       ".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx",
     );
   });
+
+  test("route loader query lint points at route-fresh helpers", () => {
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-raw-route-query-client.ts",
+    );
+    const configSource = readRootFixture("oxlint.config.ts");
+    const reactQuerySource = readRootFixture("apps/web/src/lib/react-query.ts");
+
+    expect(pluginSource).toContain("ensureRouteQueryData");
+    expect(pluginSource).toContain("ensureRouteInfiniteQueryData");
+    expect(pluginSource).toContain("fetchRouteQuery");
+    expect(pluginSource).toContain("prefetchRouteQuery");
+    expect(pluginSource).toContain("ensureCriticalQueryData");
+    expect(pluginSource).toContain("prefetchNonCriticalQuery");
+    expect(pluginSource).toContain("route-seeded queries carry");
+    expect(pluginSource).toContain("pendingComponent");
+    expect(pluginSource).toContain("useQueryClient().getQueryData");
+    expect(pluginSource).toContain("abandoned pending renders");
+    expect(reactQuerySource).toContain("ensureRouteInfiniteQueryData");
+    expect(reactQuerySource).toContain("fetchInfiniteQuery");
+
+    expect(configSource).toContain(
+      "./.oxlint-plugins/no-raw-route-query-client.ts",
+    );
+    expect(configSource).toContain(
+      "no-raw-route-query-client/no-raw-route-query-client",
+    );
+    expect(configSource).toContain(
+      ".oxlint-plugins/__fixtures__/no-raw-route-query-client.fixture.tsx",
+    );
+  });
+
+  test("protected shell chrome queries stay non-critical and route-fresh", () => {
+    const protectedRouteSource = readRootFixture(
+      "apps/web/src/routes/_protected.tsx",
+    );
+    const aiConfigQuerySource = readRootFixture(
+      "apps/web/src/routes/_protected.organization/-ai-config-queries.ts",
+    );
+    const organizationQuerySource = readRootFixture(
+      "apps/web/src/routes/_protected.organization/-queries.ts",
+    );
+    const workspacesQuerySource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/-queries.ts",
+    );
+
+    expect(protectedRouteSource).not.toContain("ensureRouteQueryData");
+    expect(protectedRouteSource).toContain("prefetchRouteQuery");
+    expect(protectedRouteSource).toContain("aiAvailabilityOptions");
+    expect(protectedRouteSource).toContain("roleOptions");
+    expect(protectedRouteSource).not.toContain("organizationOptions");
+    expect(protectedRouteSource).not.toContain("workspacesNavigationOptions");
+    expect(protectedRouteSource).toContain("AIAvailabilityProvider");
+    expect(protectedRouteSource).toContain("AppSidebar");
+    expect(protectedRouteSource).toContain("ChatMentionProviders");
+    expect(aiConfigQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");
+    expect(aiConfigQuerySource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+    expect(organizationQuerySource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+    expect(workspacesQuerySource).toContain("workspacesNavigationOptions");
+    expect(workspacesQuerySource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+  });
+
+  test("route-seeded entity queries keep observer freshness", () => {
+    const routeSource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
+    );
+    const entityQuerySource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts",
+    );
+    const entitiesWindowOptionsSource = entityQuerySource.slice(
+      entityQuerySource.indexOf("export const entitiesWindowOptions"),
+      entityQuerySource.indexOf("export const filesystemEntitiesOptions"),
+    );
+    const filesystemEntitiesOptionsSource = entityQuerySource.slice(
+      entityQuerySource.indexOf("export const filesystemEntitiesOptions"),
+      entityQuerySource.indexOf("export const kanbanGroupOptions"),
+    );
+
+    expect(routeSource).toContain("ensureRouteInfiniteQueryData");
+    expect(routeSource).toContain("entitiesWindowOptions");
+    expect(routeSource).toContain("ensureRouteQueryData");
+    expect(routeSource).toContain("filesystemEntitiesOptions");
+    expect(entityQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");
+    expect(entitiesWindowOptionsSource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+    expect(filesystemEntitiesOptionsSource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+  });
+
+  test("legacy entity redirects do not block protected shell commit", () => {
+    const entityRouteSource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/entities/$entityId.tsx",
+    );
+
+    expect(entityRouteSource).toContain("component: LegacyEntityRedirect");
+    expect(entityRouteSource).toContain("useQuery");
+    expect(entityRouteSource).toContain("DocxLoadingShell");
+    expect(entityRouteSource).toContain("Navigate");
+    expect(entityRouteSource).not.toContain("beforeLoad");
+    expect(entityRouteSource).not.toContain("ensureRouteQueryData");
+  });
+
+  test("tools route keeps heavy catalogue UI behind Suspense", () => {
+    const toolsRouteSource = readRootFixture(
+      "apps/web/src/routes/_protected.knowledge/tools.tsx",
+    );
+
+    expect(toolsRouteSource).toContain("const LazyCatalogueBrowser = lazy");
+    expect(toolsRouteSource).toContain("catalogue/catalogue-browser");
+    expect(toolsRouteSource).toContain("const LazyToolDetailView = lazy");
+    expect(toolsRouteSource).toContain("const LazyToolDetailRailIcon = lazy");
+    expect(toolsRouteSource).not.toContain("import { CatalogueBrowser");
+    expect(toolsRouteSource).not.toContain("ToolDetailView,");
+    expect(toolsRouteSource).not.toContain("ToolDetailRailIcon,");
+  });
+
+  test("redirect-only route lint forbids render components", () => {
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-component-on-redirect-route.ts",
+    );
+    const configSource = readRootFixture("oxlint.config.ts");
+
+    expect(pluginSource).toContain("throw redirect");
+    expect(pluginSource).toContain("component");
+    expect(pluginSource).toContain("pendingComponent");
+    expect(pluginSource).toContain("abandoned before mount");
+
+    expect(configSource).toContain(
+      "./.oxlint-plugins/no-component-on-redirect-route.ts",
+    );
+    expect(configSource).toContain(
+      "no-component-on-redirect-route/no-component-on-redirect-route",
+    );
+    expect(configSource).toContain(
+      ".oxlint-plugins/__fixtures__/no-component-on-redirect-route.fixture.tsx",
+    );
+  });
 });

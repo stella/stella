@@ -144,7 +144,10 @@ export const Route = createFileRoute(
 
 function Members() {
   const t = useTranslations();
-  const { data } = useSuspenseQuery(organizationOptions);
+  const activeOrganizationId = Route.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const { data } = useSuspenseQuery(organizationOptions(activeOrganizationId));
   const { data: currentUserRole } = useSuspenseQuery(roleOptions);
   const userId = Route.useRouteContext({
     select: (ctx) => ctx.user.id,

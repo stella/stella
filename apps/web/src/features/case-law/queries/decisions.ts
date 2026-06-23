@@ -3,6 +3,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { assertPublicLawApiData } from "@/lib/public-law-api";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -79,6 +80,7 @@ export const decisionFacetsOptions = () =>
 
       return data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
 export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
@@ -191,6 +193,7 @@ export const decisionsInfiniteOptions = (filters: DecisionListFilters = {}) =>
     // string | null; `null` alone infers `null`.
     initialPageParam: null as string | null,
     getNextPageParam: (lastPage) => lastPage.nextCursor,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
 export const decisionOptions = (decisionId: string) =>
@@ -210,6 +213,7 @@ export const decisionOptions = (decisionId: string) =>
 
       return data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
 export const decisionBySlugOptions = ({ language, slug }: DecisionBySlugKey) =>
@@ -232,4 +236,5 @@ export const decisionBySlugOptions = ({ language, slug }: DecisionBySlugKey) =>
 
       return data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

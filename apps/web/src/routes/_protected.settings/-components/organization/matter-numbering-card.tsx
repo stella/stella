@@ -19,6 +19,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
 import {
   organizationSettingsKeys,
@@ -37,7 +38,10 @@ const PATTERN_PRESETS = [
 const PADDING_OPTIONS = [2, 3, 4, 5, 6] as const;
 
 export const MatterNumberingCard = () => {
-  const { data: settings } = useQuery(organizationSettingsOptions);
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { data: settings } = useQuery(
+    organizationSettingsOptions(activeOrganizationId),
+  );
 
   if (!settings) {
     return null;

@@ -1,46 +1,59 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { useQuery } from "@tanstack/react-query";
+import { Navigate, createFileRoute } from "@tanstack/react-router";
 
-import { ensureCriticalQueryData } from "@/lib/react-query";
+import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
 /**
- * Legacy entity detail route. Redirects to the unified PDF reader
- * with the versions sidebar open.
+ * Legacy entity detail route. Resolves the current file field after the
+ * protected shell commits, then redirects to the unified PDF reader with the
+ * versions sidebar open.
  */
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/entities/$entityId",
 )({
-  beforeLoad: async ({ context, params }) => {
-    const data = await ensureCriticalQueryData(
-      context.queryClient,
-      entityVersionsOptions({
-        workspaceId: params.workspaceId,
-        entityId: params.entityId,
-      }),
+  component: LegacyEntityRedirect,
+});
+
+function LegacyEntityRedirect() {
+  const { workspaceId, entityId } = Route.useParams({
+    select: (p) => ({ workspaceId: p.workspaceId, entityId: p.entityId }),
+  });
+  const versionDataQuery = useQuery(
+    entityVersionsOptions({ workspaceId, entityId }),
+  );
+
+  if (versionDataQuery.isPending) {
+    return <DocxLoadingShell />;
+  }
+
+  if (versionDataQuery.isError) {
+    throw versionDataQuery.error;
+  }
+
+  const currentVersion = versionDataQuery.data.versions.find(
+    (v) => v.id === versionDataQuery.data.currentVersionId,
+  );
+  const fieldId = currentVersion?.file?.fieldId;
+
+  if (!fieldId) {
+    return (
+      <Navigate
+        params={{ workspaceId, viewId: "all" }}
+        to="/workspaces/$workspaceId/$viewId"
+      />
     );
+  }
 
-    // Find the current version's file field ID
-    const currentVersion = data.versions.find(
-      (v) => v.id === data.currentVersionId,
-    );
-    const fieldId = currentVersion?.file?.fieldId;
-
-    if (!fieldId) {
-      // No viewable file; fall back to the workspace root
-      throw redirect({
-        to: "/workspaces/$workspaceId/$viewId",
-        params: { workspaceId: params.workspaceId, viewId: "all" },
-      });
-    }
-
-    throw redirect({
-      to: "/workspaces/$workspaceId/$viewId/document",
-      params: { workspaceId: params.workspaceId, viewId: "all" },
-      search: {
-        entity: params.entityId,
+  return (
+    <Navigate
+      params={{ workspaceId, viewId: "all" }}
+      search={{
+        entity: entityId,
         field: fieldId,
         panel: "versions" as const,
-      },
-    });
-  },
-});
+      }}
+      to="/workspaces/$workspaceId/$viewId/document"
+    />
+  );
+}

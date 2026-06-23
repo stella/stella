@@ -16,6 +16,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAuthClientError } from "@/lib/errors";
 import { toFormErrors } from "@/lib/schema";
 import {
@@ -30,7 +31,8 @@ export const OrganizationProfileCard = () => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const { data } = useSuspenseQuery(organizationOptions);
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { data } = useSuspenseQuery(organizationOptions(activeOrganizationId));
   const [pendingName, setPendingName] = useState<string | null>(null);
 
   const form = useForm({

@@ -67,6 +67,7 @@ import {
 import { getFirstWeekday } from "@/i18n/week";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { routeQueryOptions } from "@/lib/react-query";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
@@ -301,10 +302,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   }, [weekStart]);
 
   const { data: timeEntries } = useQuery(
-    timeEntriesOptions(workspaceId, {
-      dateFrom: toISODate(weekStart),
-      dateTo: toISODate(weekEnd),
-    }),
+    routeQueryOptions(
+      timeEntriesOptions(workspaceId, {
+        dateFrom: toISODate(weekStart),
+        dateTo: toISODate(weekEnd),
+      }),
+    ),
   );
 
   // Previous week for trend comparison
@@ -320,10 +323,12 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   }, [weekStart]);
 
   const { data: prevTimeEntries } = useQuery(
-    timeEntriesOptions(workspaceId, {
-      dateFrom: toISODate(prevWeekStart),
-      dateTo: toISODate(prevWeekEnd),
-    }),
+    routeQueryOptions(
+      timeEntriesOptions(workspaceId, {
+        dateFrom: toISODate(prevWeekStart),
+        dateTo: toISODate(prevWeekEnd),
+      }),
+    ),
   );
 
   const prevWeekHours = useMemo(

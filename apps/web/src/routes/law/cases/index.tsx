@@ -35,7 +35,10 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
-import { ensureCriticalQueryData } from "@/lib/react-query";
+import {
+  ensureRouteInfiniteQueryData,
+  ensureRouteQueryData,
+} from "@/lib/react-query";
 
 const optionalBrowseStringSchema = (maxLength: number) =>
   v.optional(
@@ -120,10 +123,11 @@ export const Route = createFileRoute("/law/cases/")({
   loaderDeps: ({ search }) => search,
   loader: async ({ context: { queryClient }, deps }) => {
     const [decisionPages] = await Promise.all([
-      queryClient.ensureInfiniteQueryData(
+      ensureRouteInfiniteQueryData(
+        queryClient,
         decisionsInfiniteOptions(createDecisionFiltersFromSearch(deps)),
       ),
-      ensureCriticalQueryData(queryClient, decisionFacetsOptions()),
+      ensureRouteQueryData(queryClient, decisionFacetsOptions()),
     ]);
 
     return {

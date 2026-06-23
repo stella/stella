@@ -1,7 +1,7 @@
 import { queryOptions } from "@tanstack/react-query";
 
-import { authClient } from "@/lib/auth";
 import { toAuthClientError } from "@/lib/errors";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const rootKeys = {
   session: ["session"],
@@ -11,6 +11,7 @@ export const rootKeys = {
 export const sessionOptions = queryOptions({
   queryKey: rootKeys.session,
   queryFn: async () => {
+    const { authClient } = await import("@/lib/auth");
     const result = await authClient.getSession();
 
     if (result.error) {
@@ -19,11 +20,13 @@ export const sessionOptions = queryOptions({
 
     return result.data;
   },
+  staleTime: ROUTE_QUERY_STALE_TIME_MS,
 });
 
 export const roleOptions = queryOptions({
   queryKey: rootKeys.role,
   queryFn: async () => {
+    const { authClient } = await import("@/lib/auth");
     const result = await authClient.organization.getActiveMemberRole();
 
     if (result.error) {
@@ -32,4 +35,5 @@ export const roleOptions = queryOptions({
 
     return result.data.role;
   },
+  staleTime: ROUTE_QUERY_STALE_TIME_MS,
 });

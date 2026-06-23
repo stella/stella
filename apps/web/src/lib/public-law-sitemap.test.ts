@@ -505,9 +505,9 @@ describe("public law sitemap", () => {
     const source = await readSource("apps/web/src/routes/law/cases/index.tsx");
 
     expect(source).toContain("loader:");
-    expect(source).toContain("ensureInfiniteQueryData");
+    expect(source).toContain("ensureRouteInfiniteQueryData");
     expect(source).toContain(
-      "ensureCriticalQueryData(queryClient, decisionFacetsOptions())",
+      "ensureRouteQueryData(queryClient, decisionFacetsOptions())",
     );
     expect(source).toContain("decisionsInfiniteOptions(");
     expect(source).toContain("validateSearch: searchSchema");

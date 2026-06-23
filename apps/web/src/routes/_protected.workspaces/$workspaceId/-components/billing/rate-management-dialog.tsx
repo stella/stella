@@ -24,6 +24,7 @@ import { DatePickerPopover } from "@/components/date-picker-popover";
 import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
@@ -407,12 +408,15 @@ const RateEntriesView = ({
 }) => {
   const t = useTranslations();
   const [showForm, setShowForm] = useState(false);
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
 
   const { data: tables } = useSuspenseQuery(rateTablesOptions(workspaceId));
   const { data: entries } = useQuery(
     rateEntriesOptions(workspaceId, rateTableId),
   );
-  const { data: org } = useSuspenseQuery(organizationOptions);
+  const { data: org } = useSuspenseQuery(
+    organizationOptions(activeOrganizationId),
+  );
 
   const table = tables.find((tbl) => tbl.id === rateTableId);
   const analytics = useAnalytics();

@@ -3,8 +3,11 @@ import { describe, expect, mock, test } from "bun:test";
 
 import {
   CriticalQueryTimeoutError,
+  ROUTE_QUERY_STALE_TIME_MS,
   ensureCriticalQueryData,
+  ensureRouteInfiniteQueryData,
   prefetchNonCriticalQuery,
+  routeQueryOptions,
 } from "@/lib/react-query";
 
 const wait = async (ms: number) =>
@@ -91,6 +94,49 @@ describe("ensureCriticalQueryData", () => {
     expect(result).toBe("ok");
     expect(abortReceived).toBe(false);
     expect(queryClient.getQueryData<string>(queryKey)).toBe("ok");
+  });
+});
+
+describe("routeQueryOptions", () => {
+  test("adds the route freshness window by default", () => {
+    const options = routeQueryOptions({
+      queryKey: ["route-query"],
+      queryFn: async () => "ok",
+    });
+
+    expect(options.staleTime).toBe(ROUTE_QUERY_STALE_TIME_MS);
+  });
+
+  test("preserves explicit stale time overrides", () => {
+    const options = routeQueryOptions({
+      queryKey: ["route-query", "explicit"],
+      queryFn: async () => "ok",
+      staleTime: Number.POSITIVE_INFINITY,
+    });
+
+    expect(options.staleTime).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe("ensureRouteInfiniteQueryData", () => {
+  test("fetches when cached infinite data is stale", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = ["route-infinite-query"] as const;
+
+    queryClient.setQueryData(queryKey, {
+      pageParams: [0],
+      pages: ["stale"],
+    });
+
+    const data = await ensureRouteInfiniteQueryData(queryClient, {
+      getNextPageParam: () => undefined,
+      initialPageParam: 0,
+      queryFn: async () => "fresh",
+      queryKey,
+      staleTime: 0,
+    });
+
+    expect(data.pages).toEqual(["fresh"]);
   });
 });
 

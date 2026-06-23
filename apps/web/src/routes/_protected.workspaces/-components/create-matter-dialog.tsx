@@ -212,7 +212,7 @@ const CreateMatterDialogBody = ({
   const clientInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
   const { data: organization } = useQuery({
-    ...organizationOptions,
+    ...organizationOptions(currentUser.activeOrganizationId),
   });
   const { data: workspacesData } = useQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),

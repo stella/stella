@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 
 type OrganizationAIConfigKey = {
@@ -38,6 +39,7 @@ export const aiConfigOptions = ({ organizationId }: AIConfigOptionsInput) =>
 
       return response.data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
 /**
@@ -63,4 +65,5 @@ export const aiAvailabilityOptions = ({
 
       return response.data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

@@ -590,7 +590,7 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: |
           for i in {1..60}; do
-            if curl -sf http://localhost:3001/health > /dev/null 2>&1; then
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3001/health > /dev/null 2>&1; then
               echo "API up after ${i}s"
               exit 0
             fi
@@ -611,7 +611,7 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: |
           for i in {1..60}; do
-            if curl -sf http://localhost:3000 > /dev/null 2>&1; then
+            if curl --connect-timeout 2 --max-time 5 -sf http://localhost:3000 > /dev/null 2>&1; then
               echo "Web up after ${i}s"
               exit 0
             fi

@@ -62,10 +62,11 @@ import {
 import { HOTKEYS } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { prefetchNonCriticalQuery } from "@/lib/react-query";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { roleOptions } from "@/routes/-queries";
 import { useGlobalChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-global-chat-mention-registration";
+import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
@@ -127,17 +128,20 @@ export const Route = createFileRoute("/_protected")({
       throw redirect({ to: "/auth/organization", replace: true });
     }
 
-    // Prefetch role so useSuspenseQuery in the component is a
-    // cache hit instead of a serial round-trip after child loaders.
-    // staleTime: Infinity → only fetch on cold cache, not every
-    // navigation. Errors surface to the user via useSuspenseQuery.
-    void prefetchNonCriticalQuery(
+    const activeOrganizationId = authContext.session.activeOrganizationId;
+
+    // These shell queries only gate optional affordances. Warm them with the
+    // route freshness policy, but never block the protected shell: slow AI
+    // config, role, or sidebar data should not take down /chat or /settings.
+    const onPrefetchError = (error: unknown) => {
+      getAnalytics().captureError(error);
+    };
+    void prefetchRouteQuery(
       context.queryClient,
-      { ...roleOptions, staleTime: Infinity },
-      (error: unknown) => {
-        getAnalytics().captureError(error);
-      },
+      aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+      onPrefetchError,
     );
+    void prefetchRouteQuery(context.queryClient, roleOptions, onPrefetchError);
 
     // Seed the pinned-matters store from localStorage before the
     // sidebar renders. The store's `init` is idempotent (skips when
@@ -148,7 +152,7 @@ export const Route = createFileRoute("/_protected")({
     return {
       user: {
         id: authContext.session.userId,
-        activeOrganizationId: authContext.session.activeOrganizationId,
+        activeOrganizationId,
         name: authContext.user.name || undefined,
         email: authContext.user.email,
         image: authContext.user.image,

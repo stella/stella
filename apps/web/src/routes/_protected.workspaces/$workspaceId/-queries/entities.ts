@@ -4,6 +4,7 @@ import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceEntity, WorkspaceField } from "@/lib/types";
@@ -180,6 +181,7 @@ export const entitiesWindowOptions = (key: EntitiesWindowOptionsInput) =>
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
 export const filesystemEntitiesOptions = (
@@ -216,6 +218,7 @@ export const filesystemEntitiesOptions = (
 
       return { entities };
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
 export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
