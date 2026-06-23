@@ -45,21 +45,26 @@ CREATE POLICY "auth_user_select" ON "user" AS PERMISSIVE FOR SELECT TO "stella" 
     WHERE m.user_id = "user".id
       AND m.organization_id = (SELECT current_setting('app.organization_id', true))
   )
-  OR EXISTS (
-    SELECT 1
-    FROM task_assignees ta
-    JOIN workspaces w ON w.id = ta.workspace_id
-    WHERE ta.user_id = "user".id
-      AND ta.workspace_id = ANY((SELECT current_setting('app.workspace_ids', true))::uuid[])
-      AND w.organization_id = (SELECT current_setting('app.organization_id', true))
-  )
-  OR EXISTS (
-    SELECT 1
-    FROM entities e
-    JOIN workspaces w ON w.id = e.workspace_id
-    WHERE (e.created_by = "user".id OR e.last_edited_by = "user".id)
-      AND e.workspace_id = ANY((SELECT current_setting('app.workspace_ids', true))::uuid[])
-      AND w.organization_id = (SELECT current_setting('app.organization_id', true))
+  OR (
+    "user".deleted_at IS NOT NULL
+    AND (
+      EXISTS (
+        SELECT 1
+        FROM task_assignees ta
+        JOIN workspaces w ON w.id = ta.workspace_id
+        WHERE ta.user_id = "user".id
+          AND ta.workspace_id = ANY((SELECT current_setting('app.workspace_ids', true))::uuid[])
+          AND w.organization_id = (SELECT current_setting('app.organization_id', true))
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM entities e
+        JOIN workspaces w ON w.id = e.workspace_id
+        WHERE (e.created_by = "user".id OR e.last_edited_by = "user".id)
+          AND e.workspace_id = ANY((SELECT current_setting('app.workspace_ids', true))::uuid[])
+          AND w.organization_id = (SELECT current_setting('app.organization_id', true))
+      )
+    )
   )
 ));
 --> statement-breakpoint
