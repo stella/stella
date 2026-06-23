@@ -63,8 +63,7 @@
     "@types/react-dom": "catalog:react19",
     "fast-check": "catalog:",
     "react": "catalog:react19",
-    "react-dom": "catalog:react19",
-    "typescript": "catalog:"
+    "react-dom": "catalog:react19"
   },
   "peerDependencies": {
     "react": "^19.0.0",
