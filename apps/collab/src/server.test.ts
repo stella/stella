@@ -344,6 +344,41 @@ describe("collaboration server", () => {
     }
   });
 
+  test("does not persist snapshots for read-only sessions", async () => {
+    const fakeApi = createFakeStellaApi({ canEdit: false });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+    });
+
+    const ydoc = new Doc();
+    const provider = createProvider({
+      name: "folio_collab_session_test",
+      token: "collab_token_test",
+      url: collabServer.websocketUrl,
+      ydoc,
+    });
+
+    try {
+      await waitFor(
+        () => provider.isAuthenticated,
+        "Provider did not authenticate.",
+      );
+
+      ydoc.getText("body").insert(0, "read-only local edit");
+      await Bun.sleep(150);
+
+      expect(fakeApi.storeRequests()).toBe(0);
+    } finally {
+      provider.destroy();
+      ydoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
   test("rejects clients when stella API authorization fails", async () => {
     const fakeApi = createFakeStellaApi();
     const collabServer = await createCollabServer({
