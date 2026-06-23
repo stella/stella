@@ -353,7 +353,7 @@ const TemplateDetail = ({
   // Publish the open template to the breadcrumb (Knowledge › Templates › Name)
   // and wire its "Templates" crumb back to the list; clear on leave.
   useExternalSyncEffect(() => {
-    setNavOpen({ templateId: template.id, name: template.name, exit: onBack });
+    setNavOpen({ id: template.id, name: template.name, exit: onBack });
     return () => clearNav();
   }, [template.id, template.name, onBack, setNavOpen, clearNav]);
 

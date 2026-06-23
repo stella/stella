@@ -10,6 +10,7 @@ import {
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
 
+import { ClausesBreadcrumb } from "@/components/breadcrumbs/clauses-breadcrumb";
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
 import { PdfBreadcrumb } from "@/components/breadcrumbs/pdf-breadcrumb";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
@@ -109,12 +110,7 @@ export const AppBreadcrumbs = () => {
         {t("navigation.contacts")}
       </BreadcrumbLink>,
     ),
-    defineBreadcrumb(
-      ["/knowledge/clauses"],
-      <BreadcrumbLink to="/knowledge/clauses">
-        {t("common.clauses")}
-      </BreadcrumbLink>,
-    ),
+    defineBreadcrumb(["/knowledge/clauses"], <ClausesBreadcrumb />),
     defineBreadcrumb(["/contacts/$contactId"], renderContactBreadcrumb),
     defineBreadcrumb(
       ["/knowledge/prompts"],

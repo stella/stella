@@ -2,7 +2,6 @@ import { useCallback, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
-  ArrowLeftIcon,
   ChevronDownIcon,
   ChevronUpIcon,
   Loader2Icon,
@@ -44,7 +43,6 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import {
   DropdownMenu,
@@ -64,6 +62,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { api } from "@/lib/api";
@@ -79,6 +78,7 @@ import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/cl
 import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
 import { ClauseEditor } from "@/routes/_protected.knowledge/-components/clause-editor";
 import type { ClauseParagraph } from "@/routes/_protected.knowledge/-components/clause-editor-types";
+import { useClauseNavStore } from "@/routes/_protected.knowledge/-components/clause-nav-store";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
 import {
   clauseDetailOptions,
@@ -327,7 +327,7 @@ const DetailContent = ({
   );
 };
 
-// \u2500\u2500 Header (back, inline title, category, delete) \u2500\u2500\u2500\u2500
+// \u2500\u2500 Header (inline title, category, delete) \u2500\u2500\u2500\u2500
 
 const ClauseHeader = ({
   detail,
@@ -358,6 +358,9 @@ const ClauseHeader = ({
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [savingVersion, setSavingVersion] = useState(false);
+  const setNavOpen = useClauseNavStore((s) => s.setOpen);
+  const setNavName = useClauseNavStore((s) => s.setName);
+  const clearNav = useClauseNavStore((s) => s.clear);
 
   // Snapshot the current head body as a new version. The head is already
   // autosaved, so this only appends to history (no data is at risk).
@@ -402,6 +405,14 @@ const ClauseHeader = ({
     onBack();
   }, [dirtySinceVersion, onBack]);
 
+  // Publish the open clause to the breadcrumb (Knowledge › Vzorová ustanovení ›
+  // Name) and wire its list crumb back through the same unsaved-version guard
+  // the in-page back affordance used; clear on leave.
+  useExternalSyncEffect(() => {
+    setNavOpen({ id: clauseId, name: detail.title, exit: handleBack });
+    return () => clearNav();
+  }, [clauseId, detail.title, handleBack, setNavOpen, clearNav]);
+
   const saveTitle = useCallback(async () => {
     const trimmed = titleDraft.trim();
     setEditingTitle(false);
@@ -425,8 +436,10 @@ const ClauseHeader = ({
       return;
     }
 
+    // Reflect the rename in the breadcrumb instantly, ahead of the refetch.
+    setNavName(trimmed);
     onRefresh();
-  }, [clauseId, detail.title, titleDraft, t, onRefresh]);
+  }, [clauseId, detail.title, titleDraft, t, onRefresh, setNavName]);
 
   const saveCategory = useCallback(
     async (value: string) => {
@@ -478,15 +491,6 @@ const ClauseHeader = ({
 
   return (
     <div className="flex items-center gap-2">
-      <Button
-        aria-label={t("common.back")}
-        onClick={handleBack}
-        size="icon-sm"
-        variant="ghost"
-      >
-        <DirectionalIcon icon={ArrowLeftIcon} />
-      </Button>
-
       {editingTitle && canEdit ? (
         <InlineEdit
           className="flex-1"
