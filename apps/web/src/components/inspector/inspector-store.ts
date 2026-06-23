@@ -237,6 +237,11 @@ type State = {
   /** Increments on every activation; lets the UI flash
    *  a tab that is re-selected (e.g., open same file). */
   activationSeq: number;
+  /** One-shot targeted flash: `flashTab` bumps `flashSeq` and points
+   *  `flashTabId` at a specific tab so the rail can flash it to draw
+   *  attention even when it is not the active tab. */
+  flashTabId: string | null;
+  flashSeq: number;
   /**
    * One-shot rename request. Set by the rail's right-click menu;
    * the active tab's ribbon reads it, enters edit mode, and clears
@@ -444,6 +449,9 @@ type Actions = {
   ) => void;
   updateLabel: (tabId: string, label: string) => void;
   updateTaskStatus: (taskId: string, status: string | null) => void;
+  /** Flash a specific rail tab to draw attention to it (e.g. after a
+   *  field is clicked in the document), even if it is not active. */
+  flashTab: (tabId: string) => void;
   /** Set the minimized state directly. */
   setMinimized: (minimized: boolean) => void;
   /** Flip the minimized state (right-side button toggle). */
@@ -1042,6 +1050,8 @@ export const useInspectorStore = create<State & Actions>()(
     tabs: [],
     activeId: null,
     activationSeq: 0,
+    flashTabId: null,
+    flashSeq: 0,
     pendingRenameTabId: null,
     minimized: false,
     pendingBlockScroll: null,
@@ -1392,6 +1402,12 @@ export const useInspectorStore = create<State & Actions>()(
         if (state.reviveSuggestion?.id === id) {
           state.reviveSuggestion = null;
         }
+      }),
+
+    flashTab: (tabId) =>
+      set((state) => {
+        state.flashTabId = tabId;
+        state.flashSeq += 1;
       }),
 
     closeTabsForRoute: (routeId) =>
