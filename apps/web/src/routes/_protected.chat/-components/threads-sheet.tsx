@@ -115,7 +115,7 @@ export const ThreadsSheet = ({
           {triggerLabel}
         </SheetTrigger>
       )}
-      <SheetPopup side="right">
+      <SheetPopup side="inline-end">
         <SheetHeader>
           <SheetTitle>{triggerLabel}</SheetTitle>
         </SheetHeader>

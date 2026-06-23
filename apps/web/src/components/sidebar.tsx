@@ -188,7 +188,7 @@ function Sidebar({
           data-mobile="true"
           data-sidebar="sidebar"
           data-slot="sidebar"
-          side={side}
+          side={side === "left" ? "inline-start" : "inline-end"}
           style={{
             "--sidebar-width": SIDEBAR_WIDTH_MOBILE,
           }}
