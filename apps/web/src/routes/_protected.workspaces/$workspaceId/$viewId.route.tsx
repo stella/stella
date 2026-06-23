@@ -1,4 +1,4 @@
-import { useQuery, useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   Outlet,
@@ -410,11 +410,14 @@ function ViewPendingComponent() {
   const { workspaceId, viewId } = Route.useParams({
     select: (p) => ({ workspaceId: p.workspaceId, viewId: p.viewId }),
   });
-  const { data: layoutType } = useQuery({
-    ...viewsOptions(workspaceId),
-    select: (views) =>
-      (views.find((view) => view.id === viewId) ?? views.at(0))?.layout.type,
-  });
+  const queryClient = useQueryClient();
+  const viewsQueryOptions = viewsOptions(workspaceId);
+  const cachedViews = queryClient.getQueryData<WorkspaceView[]>(
+    viewsQueryOptions.queryKey,
+  );
+  const layoutType = (
+    cachedViews?.find((view) => view.id === viewId) ?? cachedViews?.at(0)
+  )?.layout.type;
 
   return (
     <>

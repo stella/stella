@@ -309,6 +309,9 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain("ensureCriticalQueryData");
     expect(pluginSource).toContain("prefetchNonCriticalQuery");
     expect(pluginSource).toContain("route-seeded queries carry");
+    expect(pluginSource).toContain("pendingComponent");
+    expect(pluginSource).toContain("useQueryClient().getQueryData");
+    expect(pluginSource).toContain("abandoned pending renders");
 
     expect(configSource).toContain(
       "./.oxlint-plugins/no-raw-route-query-client.ts",

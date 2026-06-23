@@ -5,6 +5,8 @@
 // rule MUST flag. If the rule regresses, the matching disable becomes unused
 // and `--report-unused-disable-directives-severity=error` fails CI.
 
+import * as ReactQuery from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 
 import {
@@ -26,7 +28,18 @@ declare const infiniteOptions: {
   getNextPageParam: () => null;
 };
 
+function PendingComponent() {
+  // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
+  useQuery(options);
+
+  const queryClient = useQueryClient();
+  queryClient.getQueryData(options.queryKey);
+
+  return null;
+}
+
 export const Route = createFileRoute("/__fixture")({
+  pendingComponent: PendingComponent,
   loader: async ({ context: { queryClient } }) => {
     // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
     await ensureCriticalQueryData(queryClient, options);
@@ -43,5 +56,13 @@ export const Route = createFileRoute("/__fixture")({
     await ensureRouteQueryData(queryClient, options);
     await ensureRouteInfiniteQueryData(queryClient, infiniteOptions);
     await prefetchRouteQuery(queryClient, options, () => undefined);
+  },
+});
+
+export const InlinePendingRoute = createFileRoute("/__fixture/inline")({
+  pendingComponent: () => {
+    // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
+    ReactQuery.useSuspenseQuery(options);
+    return null;
   },
 });
