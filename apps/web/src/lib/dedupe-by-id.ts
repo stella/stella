@@ -8,7 +8,9 @@
  */
 export const dedupeById = <T extends { id: string }>(items: T[]): T[] => {
   const lastIndexById = new Map<string, number>();
-  items.forEach((item, index) => lastIndexById.set(item.id, index));
+  for (const [index, item] of items.entries()) {
+    lastIndexById.set(item.id, index);
+  }
   if (lastIndexById.size === items.length) {
     return items;
   }
