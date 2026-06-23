@@ -3,13 +3,14 @@
 //
 // A Latin name with trailing neutral characters inside the RTL UI gets
 // reordered — e.g. "Tatra Motor a.s." renders as ".Tatra Motor a.s" —
-// unless the element resolves direction from its own content. The fix is
-// `dir="auto"` on the element (or wrapping the value in <bdi>).
+// unless the element resolves direction from its own content. The preferred
+// fix is wrapping the value in <BidiText> / <UserText> (or <bdi> for raw HTML).
 //
 // Flagged: an element whose only child is `{<expr>.<nameProp>}` (a known
 // user-content name property) and which has no `dir` attribute.
-// Allowed: a `dir` attribute is present, the element is <bdi>/<bdo>, or the
-// value is anything other than a bare member access to a name property.
+// Allowed: a `dir` attribute is present, the element is <BidiText>,
+// <UserText>, <bdi>/<bdo>, or the value is anything other than a bare member
+// access to a name property.
 
 const NAME_PROPS = new Set([
   "displayName",
@@ -28,7 +29,7 @@ const NAME_PROPS = new Set([
   "folderName",
 ]);
 
-const SELF_ISOLATING = new Set(["bdi", "bdo"]);
+const SELF_ISOLATING = new Set(["BidiText", "UserText", "bdi", "bdo"]);
 
 const hasDirAttr = (opening) =>
   opening.attributes.some(
@@ -58,12 +59,12 @@ export default {
         messages: {
           missingDir:
             "User-provided name rendered without bidi isolation reorders " +
-            'under RTL (e.g. ".Tatra Motor a.s"). Add dir="auto" to the ' +
-            "element (or wrap the value in <bdi>).",
+            'under RTL (e.g. ".Tatra Motor a.s"). Wrap the value in ' +
+            '<BidiText> / <UserText>, or add dir="auto" to the element.',
           missingBidi:
             "User-provided name rendered alongside other content reorders " +
-            "under RTL; wrap it in <bdi> (dir on the parent would also " +
-            "reorder its siblings).",
+            "under RTL; wrap it in <BidiText> / <UserText> (dir on the " +
+            "parent would also reorder its siblings).",
         },
       },
       create(context) {

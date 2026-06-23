@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -378,7 +379,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
             </span>
             {selectedContact ? (
               <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                <span dir="auto">{selectedContact.displayName}</span>
+                <BidiText>{selectedContact.displayName}</BidiText>
                 <Button
                   className="ms-auto"
                   onClick={() => setSelectedContact(null)}
@@ -661,7 +662,7 @@ const AddPartyDialog = ({
             </span>
             {selectedContact ? (
               <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                <span dir="auto">{selectedContact.displayName}</span>
+                <BidiText>{selectedContact.displayName}</BidiText>
                 <Button
                   className="ms-auto"
                   onClick={() => setSelectedContact(null)}

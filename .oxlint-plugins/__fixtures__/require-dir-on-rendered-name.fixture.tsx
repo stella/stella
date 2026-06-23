@@ -5,12 +5,16 @@
 // a regression makes them unused and CI fails. Lines without a directive
 // cover the allow-list and must keep passing.
 
+import type { ReactNode } from "react";
+
 declare const x: {
   displayName: string;
   fileName: string;
   name: string;
   client: { displayName: string };
 };
+declare const BidiText: (props: { children: ReactNode }) => ReactNode;
+declare const UserText: (props: { children: ReactNode }) => ReactNode;
 
 // --- Flagged: a bare user-content name property rendered without dir ---
 export const _display = () => (
@@ -36,3 +40,5 @@ export const _nameWithSibling = () => (
 export const _ok1 = () => <span dir="auto">{x.displayName}</span>;
 export const _ok2 = () => <bdi>{x.displayName}</bdi>;
 export const _ok3 = () => <span>{x.name}</span>;
+export const _ok4 = () => <BidiText>{x.displayName}</BidiText>;
+export const _ok5 = () => <UserText>{x.fileName}</UserText>;
