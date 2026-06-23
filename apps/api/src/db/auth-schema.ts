@@ -28,6 +28,7 @@ export const user = pgTable(
     timezoneId: text("timezone_id").default("UTC").notNull(),
     preferredName: text("preferred_name"),
     wordEditShortcut: text("word_edit_shortcut"),
+    deletedAt: timestamp("deleted_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -57,6 +58,7 @@ export const AUTH_USER_STELLA_SELECT_COLUMNS = {
   timezoneId: "timezone_id",
   preferredName: "preferred_name",
   wordEditShortcut: "word_edit_shortcut",
+  deletedAt: "deleted_at",
   createdAt: "created_at",
   updatedAt: "updated_at",
 } as const satisfies AuthUserColumnNameByField;

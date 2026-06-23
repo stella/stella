@@ -1,6 +1,7 @@
 declare const __brand: unique symbol;
 
 export type SafeIdType =
+  | "accountDeletionRequest"
   | "agentSkill"
   | "agentSkillResource"
   | "anonymizationAllowlistEntry"

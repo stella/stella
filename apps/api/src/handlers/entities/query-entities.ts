@@ -1,5 +1,14 @@
 import { Result, panic } from "better-result";
-import { and, count, eq, inArray, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNotNull,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -73,6 +82,7 @@ export type QueryEntityResult = {
   createdAt: string;
   createdBy: string | null;
   createdByImage: string | null;
+  createdByDeletedAt: string | null;
   version: number;
   updatedAt: string | null;
   status: string | null;
@@ -782,10 +792,12 @@ const queryEntitiesGenerator = async function* ({
             string | null
           >`coalesce(nullif(trim(${user.name}), ''), ${user.email})`,
           createdByImage: user.image,
+          createdByDeletedAt: user.deletedAt,
           lastEditedByName: sql<
             string | null
           >`coalesce(nullif(trim(${lastEditor.name}), ''), ${lastEditor.email})`,
           lastEditedByImage: lastEditor.image,
+          lastEditedByDeletedAt: lastEditor.deletedAt,
           status: entities.status,
           priority: entities.priority,
           dueDate: entities.dueDate,
@@ -816,12 +828,27 @@ const queryEntitiesGenerator = async function* ({
           createdByMembers,
           eq(entities.createdBy, createdByMembers.userId),
         )
-        .leftJoin(user, eq(createdByMembers.userId, user.id))
+        .leftJoin(
+          user,
+          or(
+            eq(createdByMembers.userId, user.id),
+            and(eq(entities.createdBy, user.id), isNotNull(user.deletedAt)),
+          ),
+        )
         .leftJoin(
           lastEditorMembers,
           eq(entities.lastEditedBy, lastEditorMembers.userId),
         )
-        .leftJoin(lastEditor, eq(lastEditorMembers.userId, lastEditor.id))
+        .leftJoin(
+          lastEditor,
+          or(
+            eq(lastEditorMembers.userId, lastEditor.id),
+            and(
+              eq(entities.lastEditedBy, lastEditor.id),
+              isNotNull(lastEditor.deletedAt),
+            ),
+          ),
+        )
         .where(idFilter);
     }),
     safeDb((tx) =>
@@ -977,6 +1004,10 @@ const queryEntitiesGenerator = async function* ({
       createdAt: entity.createdAt.toISOString(),
       createdBy: entity.lastEditedByName ?? entity.createdByName ?? null,
       createdByImage: entity.lastEditedByImage ?? entity.createdByImage ?? null,
+      createdByDeletedAt:
+        entity.lastEditedByDeletedAt?.toISOString() ??
+        entity.createdByDeletedAt?.toISOString() ??
+        null,
       version: versionCountMap.get(entity.id) ?? 0,
       updatedAt: entity.updatedAt?.toISOString() ?? null,
       status: entity.status,

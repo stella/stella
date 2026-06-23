@@ -570,6 +570,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                                 mention={{
                                   name: task.assignedTo,
                                   image: task.assignedToImage,
+                                  deletedAt: task.assignedToDeletedAt,
                                 }}
                               />
                             )}
@@ -713,21 +714,21 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               {t("common.logTime")}
             </Button>
           </div>
-          <div className="flex-1 rounded-lg border">
+          <div className="bg-background flex-1 overflow-hidden rounded-lg border">
             {/* Day labels — i18n via Intl.DateTimeFormat */}
-            <div className="flex items-center gap-3 border-b px-3 py-1.5">
-              <span className="w-20 shrink-0 @lg:w-28" />
-              <div className="flex flex-1 justify-between">
+            <div className="flex min-h-12 items-center gap-3 border-b px-4 py-2">
+              <span className="w-16 shrink-0 @sm:w-20 @lg:w-28" />
+              <div className="flex min-w-0 flex-1 justify-between">
                 {Array.from({ length: 7 }, (_, i) => (
                   <span
-                    className="text-muted-foreground w-7 text-center text-[0.625rem]"
+                    className="text-muted-foreground w-5 text-center text-[0.625rem] @sm:w-7"
                     key={i}
                   >
                     {getLocaleDayLabel(i, lang, firstWeekday)}
                   </span>
                 ))}
               </div>
-              <span className="w-10 shrink-0" />
+              <span className="hidden w-10 shrink-0 @sm:block" />
             </div>
             <div className="divide-y">
               {(() => {
@@ -743,10 +744,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
                   return (
                     <div
-                      className="flex items-center gap-3 px-3 py-2"
+                      className="flex min-h-14 items-center gap-3 px-4 py-2.5"
                       key={member.userId}
                     >
-                      <div className="flex w-20 shrink-0 items-center gap-2 @lg:w-28">
+                      <div className="flex w-16 shrink-0 items-center gap-2 @sm:w-20 @lg:w-28">
                         <Avatar className="size-5 text-[0.5rem]">
                           {member.image && <AvatarImage src={member.image} />}
                           <AvatarFallback>
@@ -758,9 +759,11 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                               .slice(0, 2)}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="truncate text-xs">{member.name}</span>
+                        <span className="min-w-0 truncate text-xs">
+                          {member.name}
+                        </span>
                       </div>
-                      <div className="flex flex-1 justify-between">
+                      <div className="flex min-w-0 flex-1 justify-between">
                         {member.daily.map((hours, dayIdx) => {
                           const opacity = maxDaily > 0 ? hours / maxDaily : 0;
                           const entries = member.dailyEntries[dayIdx] ?? [];
@@ -768,7 +771,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           const cell = (
                             <div
                               className={cn(
-                                "bg-primary/10 size-5 rounded-sm transition-transform",
+                                "bg-primary/10 size-4 rounded-sm transition-transform @sm:size-5",
                                 hours > 0 && "cursor-pointer hover:scale-110",
                               )}
                               style={
@@ -784,7 +787,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           if (hours === 0) {
                             return (
                               <div
-                                className="flex w-7 justify-center"
+                                className="flex w-5 justify-center @sm:w-7"
                                 key={dayIdx}
                               >
                                 {cell}
@@ -794,7 +797,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
                           return (
                             <div
-                              className="flex w-7 justify-center"
+                              className="flex w-5 justify-center @sm:w-7"
                               key={dayIdx}
                             >
                               <Popover>
@@ -857,7 +860,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                           );
                         })}
                       </div>
-                      <span className="text-muted-foreground w-10 shrink-0 text-end text-xs tabular-nums">
+                      <span className="text-muted-foreground hidden w-10 shrink-0 text-end text-xs tabular-nums @sm:block">
                         {total > 0 ? formatHours(total) : ""}
                       </span>
                     </div>
@@ -865,8 +868,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                 });
               })()}
             </div>
-            <div className="border-t px-3 py-2">
-              <div className="flex items-center justify-between">
+            <div className="border-t px-4 py-3">
+              <div className="flex items-center justify-between gap-3">
                 <span className="text-muted-foreground text-xs">
                   {t("workspaces.overview.totalThisWeek")}
                 </span>
@@ -952,7 +955,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               {t("common.uploadFiles")}
             </Button>
           </div>
-          <div className="divide-y rounded-lg border">
+          <div className="bg-background divide-y overflow-hidden rounded-lg border">
             {recentEntities.map((entity) => (
               <OverviewRow
                 entity={entity}
@@ -1040,8 +1043,10 @@ type OverviewEntity = {
   createdAt: string;
   createdBy: string | null;
   createdByImage: string | null;
+  createdByDeletedAt: string | null;
   assignedTo: string | null;
   assignedToImage: string | null;
+  assignedToDeletedAt: string | null;
   updatedAt: string | null;
 };
 
@@ -1092,6 +1097,7 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
       createdAt: entity.createdAt,
       createdBy: entity.createdBy,
       createdByImage: entity.createdByImage,
+      createdByDeletedAt: entity.createdByDeletedAt,
       updatedAt: entity.updatedAt,
       version: 0,
       status: entity.status,
@@ -1246,6 +1252,7 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
           mention={{
             name: entity.createdBy,
             image: entity.createdByImage,
+            deletedAt: entity.createdByDeletedAt,
           }}
         />
       )}

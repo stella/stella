@@ -20,6 +20,7 @@
   },
   "otp": {
     "changeEmail": "Użyj tego kodu, aby zweryfikować swój nowy adres e-mail.",
+    "deleteAccount": "Użyj tego kodu, aby zweryfikować usunięcie swojego konta.",
     "emailVerification": "Użyj tego kodu, aby zweryfikować swój adres e-mail.",
     "expires": "Ten kod wygasa za 5 minut.",
     "forgetPassword": "Użyj tego kodu, aby zresetować hasło.",

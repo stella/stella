@@ -218,6 +218,7 @@ export type WorkspaceEntity = {
   createdAt: string;
   createdBy: string | null;
   createdByImage: string | null;
+  createdByDeletedAt: string | null;
   updatedAt: string | null;
   version: number;
   status: string | null;
@@ -272,6 +273,7 @@ export type FileMention = {
 export type PersonMention = {
   name: string;
   image: string | null;
+  deletedAt?: string | null;
   /** Only set when space is extremely constrained. */
   hideAvatar?: boolean;
 };

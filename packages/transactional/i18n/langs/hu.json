@@ -20,6 +20,7 @@
   },
   "otp": {
     "changeEmail": "Használja ezt a kódot az új e-mail címe megerősítéséhez.",
+    "deleteAccount": "Használja ezt a kódot a fiókja törlésének ellenőrzéséhez.",
     "emailVerification": "Használja ezt a kódot az e-mail címe megerősítéséhez.",
     "expires": "Ez a kód 5 perc múlva lejár.",
     "forgetPassword": "Használja ezt a kódot a jelszava visszaállításához.",

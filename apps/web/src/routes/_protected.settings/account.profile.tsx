@@ -3,6 +3,7 @@ import { useFormStatus } from "react-dom";
 
 import {
   useMutation,
+  useQuery,
   useQueryClient,
   useSuspenseQuery,
 } from "@tanstack/react-query";
@@ -10,6 +11,19 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import {
+  DestructiveActionConfirmation,
+  useDestructiveActionConfirmation,
+} from "@stll/ui/components/destructive-action-confirmation";
+import {
+  Dialog,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogPanel,
+  DialogPopup,
+} from "@stll/ui/components/dialog";
 import {
   Frame,
   FrameDescription,
@@ -34,8 +48,11 @@ import {
   supportedLanguages,
   useI18nStore,
 } from "@/i18n/i18n-store";
+import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth";
-import { toAuthClientError } from "@/lib/errors";
+import { toAPIError, toAuthClientError } from "@/lib/errors";
+import type { SafeId } from "@/lib/safe-id";
+import { toSafeId } from "@/lib/safe-id";
 import { COMMON_TIMEZONES } from "@/lib/timezones";
 import type { CommonTimezone } from "@/lib/timezones";
 import { sessionOptions } from "@/routes/-queries";
@@ -145,6 +162,9 @@ function ProfilePageBody() {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const { data: session } = useSuspenseQuery(sessionOptions);
+  const deleteAccountConfirmation = useDestructiveActionConfirmation(
+    t("settings.account.deleteAccountConfirmationPhrase"),
+  );
   const storedTz = session?.user.timezoneId ?? "UTC";
   const currentTz = isCommonTimezone(storedTz) ? storedTz : "UTC";
   const [preferredName, setPreferredName] = useState(
@@ -153,6 +173,88 @@ function ProfilePageBody() {
   const [wordEditShortcut, setWordEditShortcut] = useState(
     () => session?.user.wordEditShortcut ?? "",
   );
+
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpError, setOtpError] = useState<string | null>(null);
+  const [step, setStep] = useState<"loading" | "tasks" | "confirm" | "otp">(
+    "loading",
+  );
+  const [reassignments, setReassignments] = useState<Record<string, string>>(
+    {},
+  );
+
+  const {
+    data: pendingTasksData,
+    error: pendingTasksError,
+    isFetching: isPendingTasksFetching,
+    refetch: refetchPendingTasks,
+  } = useQuery({
+    queryKey: ["me", "delete", "pending-tasks"],
+    queryFn: async () => {
+      const res = await api.me.delete["pending-tasks"].get();
+      if (res.error) {
+        throw toAPIError(res.error);
+      }
+      return res.data;
+    },
+    enabled: isDeleteDialogOpen,
+  });
+
+  const sendOtpMutation = useMutation({
+    mutationFn: async () => {
+      setOtpError(null);
+      const res = await api.me.delete["send-otp"].post();
+      if (res.error) {
+        throw toAPIError(res.error);
+      }
+      return res.data;
+    },
+    onSuccess: () => {
+      setStep("otp");
+      stellaToast.add({
+        title: t("settings.account.otpSentSuccess"),
+        type: "success",
+      });
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : t("errors.actionFailed");
+      setOtpError(msg);
+    },
+  });
+
+  const verifyDeleteMutation = useMutation({
+    mutationFn: async (payload: {
+      code: string;
+      reassignments?: {
+        entityId: SafeId<"entity">;
+        reassignedUserId: string;
+      }[];
+    }) => {
+      setOtpError(null);
+      const res = await api.me.delete.verify.post(payload);
+      if (res.error) {
+        throw toAPIError(res.error);
+      }
+      return res.data;
+    },
+    onSuccess: async () => {
+      stellaToast.add({
+        title: t("settings.account.deleteAccountSuccess"),
+        type: "success",
+      });
+      try {
+        await authClient.signOut();
+      } catch {
+        // Session might already be invalidated on the server
+      }
+      window.location.href = "/auth";
+    },
+    onError: (err: unknown) => {
+      const msg = err instanceof Error ? err.message : t("errors.actionFailed");
+      setOtpError(msg);
+    },
+  });
 
   const updateTimezone = useMutation({
     mutationFn: async (timezoneId: string) => {
@@ -204,6 +306,74 @@ function ProfilePageBody() {
       });
     },
   });
+
+  const activeTasks = pendingTasksData?.tasks ?? [];
+  const activeTaskMembers = pendingTasksData?.members ?? [];
+  type ActiveTask = (typeof activeTasks)[number];
+  type ActiveTaskMember = (typeof activeTaskMembers)[number];
+  type ActiveTaskGroup = {
+    workspaceId: string;
+    workspaceName: string;
+    tasks: ActiveTask[];
+    members: ActiveTaskMember[];
+  };
+  const activeTaskGroups: ActiveTaskGroup[] = [];
+  const activeTaskGroupsByWorkspace = new Map<string, ActiveTaskGroup>();
+  for (const task of activeTasks) {
+    let group = activeTaskGroupsByWorkspace.get(task.workspaceId);
+    if (!group) {
+      group = {
+        workspaceId: task.workspaceId,
+        workspaceName: task.workspaceName,
+        tasks: [],
+        members: activeTaskMembers.filter(
+          (member) => member.workspaceId === task.workspaceId,
+        ),
+      };
+      activeTaskGroupsByWorkspace.set(task.workspaceId, group);
+      activeTaskGroups.push(group);
+    }
+    group.tasks.push(task);
+  }
+  const allActiveTasksHaveReassignments = activeTasks.every((task) => {
+    const reassignedUserId = reassignments[task.entityId];
+    if (!reassignedUserId) {
+      return false;
+    }
+
+    return activeTaskMembers.some(
+      (member) =>
+        member.workspaceId === task.workspaceId &&
+        member.userId === reassignedUserId,
+    );
+  });
+  let dialogStep:
+    | "loading"
+    | "tasks"
+    | "confirm"
+    | "otp"
+    | "pendingTasksError" = step;
+  if (step === "loading" && pendingTasksError) {
+    dialogStep = "pendingTasksError";
+  }
+  if (step === "loading" && pendingTasksData && !pendingTasksError) {
+    dialogStep = activeTasks.length > 0 ? "tasks" : "confirm";
+  }
+  const pendingTasksErrorMessage =
+    pendingTasksError instanceof Error
+      ? pendingTasksError.message
+      : t("errors.actionFailed");
+  const dialogTitle =
+    dialogStep === "tasks"
+      ? t("settings.account.deleteAccountTasksTitle")
+      : t("settings.account.deleteAccount");
+  let dialogDescription = t("settings.account.deleteAccountConfirmDescription");
+  if (dialogStep === "otp") {
+    dialogDescription = t("settings.account.deleteAccountOtpDescription");
+  }
+  if (dialogStep === "tasks") {
+    dialogDescription = "";
+  }
 
   return (
     <>
@@ -300,15 +470,308 @@ function ProfilePageBody() {
         <SessionsCard />
       </section>
 
-      {/* TODO: danger zone (follow-up PR). Both surfaces are
-          designed but their backends aren't built yet, so they
-          ship together rather than as fake placeholders.
-          - Export my data: async job (gather user data → ZIP →
-            S3 → emailed download link). Needs a job runner first.
-          - Delete account: OTP-verified flow (POST
-            /me/delete/send-otp + POST /me/delete/verify); must
-            reject sole-org-owners, revoke all sessions, call
-            auth.api.deleteUser, redirect to /auth. */}
+      <Frame className="border-destructive/32">
+        <FrameHeader>
+          <FrameTitle className="text-destructive-foreground">
+            {t("settings.account.dangerZone")}
+          </FrameTitle>
+          <FrameDescription>
+            {t("settings.account.dangerZoneDescription")}
+          </FrameDescription>
+        </FrameHeader>
+        <FramePanel>
+          <div className="flex flex-col gap-4 p-4">
+            <p className="text-muted-foreground text-sm">
+              {t("settings.account.deleteAccountWarning")}
+            </p>
+            <div>
+              <Button
+                variant="destructive"
+                onClick={() => setIsDeleteDialogOpen(true)}
+              >
+                {t("settings.account.deleteAccount")}
+              </Button>
+            </div>
+          </div>
+        </FramePanel>
+      </Frame>
+
+      <Dialog
+        open={isDeleteDialogOpen}
+        onOpenChange={(open) => {
+          if (!open) {
+            setIsDeleteDialogOpen(false);
+            setOtpCode("");
+            setOtpError(null);
+            setReassignments({});
+            setStep("loading");
+            deleteAccountConfirmation.reset();
+          }
+        }}
+      >
+        <DialogPopup>
+          <DialogHeader>
+            <DialogTitle>{dialogTitle}</DialogTitle>
+            <DialogDescription>{dialogDescription}</DialogDescription>
+          </DialogHeader>
+          <DialogPanel>
+            <div className="flex flex-col gap-4 py-2">
+              {otpError && (
+                <div className="border-destructive/20 bg-destructive/10 text-destructive-foreground rounded-lg border p-3 text-sm">
+                  {otpError}
+                </div>
+              )}
+              {dialogStep === "loading" && (
+                <div className="flex justify-center py-4">
+                  <span className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+                </div>
+              )}
+              {dialogStep === "pendingTasksError" && (
+                <div className="flex flex-col items-start gap-3">
+                  <div className="border-destructive/20 bg-destructive/10 text-destructive-foreground rounded-lg border p-3 text-sm">
+                    {pendingTasksErrorMessage}
+                  </div>
+                  <Button
+                    loading={isPendingTasksFetching}
+                    variant="outline"
+                    onClick={() => {
+                      void refetchPendingTasks();
+                    }}
+                  >
+                    {t("common.retry")}
+                  </Button>
+                </div>
+              )}
+              {dialogStep === "tasks" && (
+                <div className="flex flex-col gap-4">
+                  <p className="text-muted-foreground text-sm">
+                    {t("settings.account.deleteAccountTasksDescription")}
+                  </p>
+                  <div className="flex max-h-[280px] flex-col gap-3 overflow-y-auto pe-1">
+                    {activeTaskGroups.map((group) => (
+                      <div
+                        className="border-border flex flex-col gap-3 rounded-lg border p-3"
+                        key={group.workspaceId}
+                      >
+                        <div className="flex flex-col gap-2">
+                          <div className="text-muted-foreground text-xs">
+                            <span dir="auto">{group.workspaceName}</span>
+                          </div>
+                          {group.members.length > 0 ? (
+                            <Select
+                              onValueChange={(userId) => {
+                                if (
+                                  typeof userId !== "string" ||
+                                  userId.length === 0
+                                ) {
+                                  return;
+                                }
+
+                                setReassignments((prev) => {
+                                  const next = { ...prev };
+                                  for (const task of group.tasks) {
+                                    next[task.entityId] = userId;
+                                  }
+                                  return next;
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue
+                                  placeholder={t(
+                                    "settings.account.deleteAccountTaskBulkReassign",
+                                  )}
+                                />
+                              </SelectTrigger>
+                              <SelectPopup>
+                                {group.members.map((candidate) => (
+                                  <SelectItem
+                                    key={candidate.userId}
+                                    value={candidate.userId}
+                                  >
+                                    {candidate.userName}
+                                  </SelectItem>
+                                ))}
+                              </SelectPopup>
+                            </Select>
+                          ) : (
+                            <p className="text-muted-foreground text-xs italic">
+                              {t(
+                                "settings.account.deleteAccountTaskReassignNone",
+                              )}
+                            </p>
+                          )}
+                        </div>
+                        {group.tasks.map((task) => {
+                          const candidates = group.members;
+                          return (
+                            <div
+                              key={task.assigneeId}
+                              className="bg-muted/20 flex flex-col gap-1 rounded-md p-3"
+                            >
+                              <div className="text-muted-foreground flex text-xs">
+                                <span className="bg-muted rounded px-1.5 py-0.5 font-mono text-[10px] capitalize">
+                                  {task.role}
+                                </span>
+                              </div>
+                              <span className="text-sm font-medium">
+                                {task.taskName}
+                              </span>
+                              <div className="mt-2">
+                                {candidates.length > 0 ? (
+                                  <Select
+                                    value={reassignments[task.entityId] || ""}
+                                    onValueChange={(val) => {
+                                      setReassignments((prev) => ({
+                                        ...prev,
+                                        [task.entityId]: val || "",
+                                      }));
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue
+                                        placeholder={t(
+                                          "settings.account.deleteAccountTaskReassignPlaceholder",
+                                        )}
+                                      />
+                                    </SelectTrigger>
+                                    <SelectPopup>
+                                      {candidates.map((candidate) => (
+                                        <SelectItem
+                                          key={candidate.userId}
+                                          value={candidate.userId}
+                                        >
+                                          {candidate.userName}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectPopup>
+                                  </Select>
+                                ) : (
+                                  <p className="text-muted-foreground text-xs italic">
+                                    {t(
+                                      "settings.account.deleteAccountTaskReassignNone",
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {dialogStep === "confirm" && (
+                <div className="flex flex-col gap-4">
+                  <p className="text-muted-foreground text-sm">
+                    {t("settings.account.deleteAccountWarningExplanation")}
+                  </p>
+                  <DestructiveActionConfirmation
+                    confirmation={t(
+                      "settings.account.deleteAccountConfirmationPhrase",
+                    )}
+                    label={t("settings.account.deleteAccountConfirmationLabel")}
+                    onValueChange={deleteAccountConfirmation.onValueChange}
+                    placeholder={t(
+                      "settings.account.deleteAccountConfirmationPhrase",
+                    )}
+                    value={deleteAccountConfirmation.value}
+                  />
+                </div>
+              )}
+              {dialogStep === "tasks" && (
+                <DestructiveActionConfirmation
+                  confirmation={t(
+                    "settings.account.deleteAccountConfirmationPhrase",
+                  )}
+                  label={t("settings.account.deleteAccountConfirmationLabel")}
+                  onValueChange={deleteAccountConfirmation.onValueChange}
+                  placeholder={t(
+                    "settings.account.deleteAccountConfirmationPhrase",
+                  )}
+                  value={deleteAccountConfirmation.value}
+                />
+              )}
+              {dialogStep === "otp" && (
+                <div className="flex flex-col gap-2">
+                  <Label htmlFor="otp-input">
+                    {t("settings.account.enterOtp")}
+                  </Label>
+                  <Input
+                    dir="ltr"
+                    id="otp-input"
+                    placeholder="123456"
+                    maxLength={6}
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    value={otpCode}
+                    onChange={(e) =>
+                      setOtpCode(e.target.value.replace(/\D/gu, ""))
+                    }
+                    className="max-w-[200px] text-center text-lg tracking-widest"
+                  />
+                </div>
+              )}
+            </div>
+          </DialogPanel>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => {
+                setIsDeleteDialogOpen(false);
+                setOtpCode("");
+                setOtpError(null);
+                setReassignments({});
+                setStep("loading");
+                deleteAccountConfirmation.reset();
+              }}
+              disabled={
+                sendOtpMutation.isPending || verifyDeleteMutation.isPending
+              }
+            >
+              {t("common.cancel")}
+            </Button>
+            {dialogStep === "otp" ? (
+              <Button
+                variant="destructive"
+                onClick={() =>
+                  verifyDeleteMutation.mutate({
+                    code: otpCode,
+                    reassignments: Object.entries(reassignments)
+                      .filter(([_, val]) => !!val)
+                      .map(([entityId, reassignedUserId]) => ({
+                        entityId: toSafeId<"entity">(entityId),
+                        reassignedUserId,
+                      })),
+                  })
+                }
+                disabled={
+                  otpCode.length !== 6 || verifyDeleteMutation.isPending
+                }
+                loading={verifyDeleteMutation.isPending}
+              >
+                {t("settings.account.confirmDelete")}
+              </Button>
+            ) : (
+              <Button
+                variant="destructive"
+                onClick={() => sendOtpMutation.mutate()}
+                disabled={
+                  sendOtpMutation.isPending ||
+                  dialogStep === "loading" ||
+                  dialogStep === "pendingTasksError" ||
+                  !deleteAccountConfirmation.confirmed ||
+                  (dialogStep === "tasks" && !allActiveTasksHaveReassignments)
+                }
+                loading={sendOtpMutation.isPending}
+              >
+                {t("settings.account.sendOtpCode")}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogPopup>
+      </Dialog>
     </>
   );
 }

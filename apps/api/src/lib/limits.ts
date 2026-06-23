@@ -27,6 +27,10 @@ export const LIMITS = {
   myTasksMax: 200,
   /** Max task-assignment rows scanned to resolve the caller's tasks. */
   myTasksAssignmentScanLimit: 500,
+  /** Max active task assignments that account deletion will reassign in one pass. */
+  accountDeletionTaskAssignmentsMax: 500,
+  /** Max workspace member candidates returned for account-deletion task handoff. */
+  accountDeletionTaskReassignmentCandidatesMax: 2000,
   /** Max entity-link rows returned per direction for one task. */
   taskEntityLinksPerDirectionMax: 200,
   entitySummariesPageSize: 200,
@@ -315,4 +319,6 @@ export const API_RATE_LIMITS = {
    *  source IP, so this is loose enough for production while
    *  still bounding the worst case. */
   hostedUsageWebhook: { duration: 60_000, max: 300 },
+  /** Delete account OTP email request limit: 5 requests per minute. */
+  deleteAccountOtp: { duration: 60_000, max: 5 },
 } as const;

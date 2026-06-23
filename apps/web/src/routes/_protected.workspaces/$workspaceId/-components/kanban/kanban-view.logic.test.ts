@@ -19,6 +19,7 @@ const entity = (
   createdAt: "2026-01-01T00:00:00.000Z",
   createdBy: null,
   createdByImage: null,
+  createdByDeletedAt: null,
   updatedAt: null,
   version: 1,
   status: kind === "task" ? "open" : null,

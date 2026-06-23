@@ -20,6 +20,7 @@
   },
   "otp": {
     "changeEmail": "Use este código para verificar seu novo endereço de e-mail.",
+    "deleteAccount": "Use este código para verificar a exclusão de sua conta.",
     "emailVerification": "Use este código para verificar seu endereço de e-mail.",
     "expires": "Este código expira em 5 minutos.",
     "forgetPassword": "Use este código para redefinir sua senha.",

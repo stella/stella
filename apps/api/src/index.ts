@@ -34,6 +34,7 @@ import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes
 import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
+import { meRoute } from "@/api/handlers/me/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { propertiesRoute } from "@/api/handlers/properties/routes";
@@ -58,6 +59,7 @@ import { viewTemplatesRoute } from "@/api/handlers/view-templates/routes";
 import { viewsRoute } from "@/api/handlers/views/routes";
 import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
+import { initAccountDeletionCleanupWorker } from "@/api/lib/account-deletion-cleanup-queue";
 import { captureRequestError, getAnalytics } from "@/api/lib/analytics";
 import { getAuth } from "@/api/lib/auth";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
@@ -388,6 +390,7 @@ const api = new Elysia()
       .use(viewsRoute)
       .use(tasksRoute)
       .use(myTasksRoute)
+      .use(meRoute)
       .use(devRoute)
       .use(verifyAuthRoute),
   );
@@ -431,6 +434,9 @@ const fileDerivativeWorker = initFileDerivativeWorker();
 // BullMQ workflow worker for AI extraction.
 const workflowWorker = initWorkflowWorker();
 
+// BullMQ worker for durable account-deletion storage cleanup.
+const accountDeletionCleanupWorker = initAccountDeletionCleanupWorker();
+
 api.listen(getApiPort());
 
 // Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ
@@ -454,7 +460,11 @@ const shutdownWorkers = async (signal: string): Promise<void> => {
     });
   });
   await Promise.race([
-    Promise.allSettled([workflowWorker.close(), fileDerivativeWorker.close()]),
+    Promise.allSettled([
+      workflowWorker.close(),
+      fileDerivativeWorker.close(),
+      accountDeletionCleanupWorker.close(),
+    ]),
     Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
   ]);
   logger.info("api.shutdown_complete", { signal });

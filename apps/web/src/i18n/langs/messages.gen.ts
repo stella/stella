@@ -1355,6 +1355,7 @@ type Messages = {
     "openChat": "Open chat";
     "reopenTab": "Reopen {name}";
     "showPane": "Show pane";
+    "title": "Inspector";
   };
   "knowledge": {
     "agentSkills": {
@@ -1854,6 +1855,22 @@ type Messages = {
       "beta": "Beta Features";
       "betaCaseLawDescription": "Show the public case law search and reader in the sidebar";
       "betaDescription": "Try features that are still in development";
+      "confirmDelete": "Confirm delete account";
+      "dangerZone": "Danger zone";
+      "dangerZoneDescription": "Permanently delete your account access and private account data.";
+      "deleteAccount": "Delete account";
+      "deleteAccountConfirmDescription": "Are you sure you want to delete your account? You will lose access permanently.";
+      "deleteAccountConfirmationLabel": "Type this phrase to continue";
+      "deleteAccountConfirmationPhrase": "Deletion is irreversible.";
+      "deleteAccountOtpDescription": "We sent a 6-digit verification code to your email. Enter it below to confirm deletion.";
+      "deleteAccountSuccess": "Your account has been successfully deleted.";
+      "deleteAccountTaskBulkReassign": "Transfer all active tasks in this workspace...";
+      "deleteAccountTaskReassignNone": "No other members in this workspace";
+      "deleteAccountTaskReassignPlaceholder": "Select a member...";
+      "deleteAccountTasksDescription": "You have active tasks assigned to you. Transfer them to other workspace members to keep work moving.";
+      "deleteAccountTasksTitle": "Transfer active tasks";
+      "deleteAccountWarning": "Deletion is irreversible. Your login and private account data will be removed.";
+      "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
       "desktopAppDescription": "Open documents and files directly in stella from your computer.";
       "desktopDescription": "Install stella on your computer";
@@ -1861,11 +1878,14 @@ type Messages = {
       "desktopDownloadOtherMac": "On Windows? Download for Windows";
       "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments";
       "desktopDownloadWindows": "Download for Windows";
+      "enterOtp": "Verification code";
+      "otpSentSuccess": "Verification code sent to your email.";
       "preferredName": "Preferred name";
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.";
       "preferredNamePlaceholder": "Your name";
       "profile": "Profile";
       "profileDescription": "Manage your personal preferences";
+      "sendOtpCode": "Send verification code";
       "timezone": "Timezone";
       "timezoneDescription": "Used for timestamps in notifications and emails";
       "timezoneSaved": "Timezone updated";
@@ -1971,6 +1991,7 @@ type Messages = {
     };
     "assignees": "Assignees";
     "clearDate": "Clear date";
+    "deletedAccount": "Deleted account";
     "dueDate": "Due date";
     "linkEntity": "Link entity";
     "linkedEntities": "Linked entities";
@@ -2850,6 +2871,8 @@ type Messages = {
         "locked": "Locked";
         "unlock": "Unlock cell";
       };
+      "portraitDescription": "Tables need a wider viewport on mobile. Turn your device sideways to continue.";
+      "portraitTitle": "Rotate to landscape";
       "reorderReadOnly": "Table rows follow the current sort";
       "tightContent": "Tight";
       "wrapContent": "Wrap content";

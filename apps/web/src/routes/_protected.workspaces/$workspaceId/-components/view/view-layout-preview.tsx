@@ -349,6 +349,7 @@ const mockTask = ({
   createdAt: PREVIEW_CREATED_AT,
   createdBy: null,
   createdByImage: null,
+  createdByDeletedAt: null,
   updatedAt: null,
   version: 1,
   status,

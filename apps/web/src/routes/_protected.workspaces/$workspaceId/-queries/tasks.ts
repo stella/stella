@@ -22,6 +22,7 @@ type TaskDetailAssignee = {
     id: string;
     name: string | null;
     image: string | null;
+    deletedAt: Date | null;
   };
 };
 
