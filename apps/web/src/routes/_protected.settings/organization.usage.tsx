@@ -111,9 +111,9 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
       <FramePanel>
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <BidiText as="h2" className="text-lg font-medium">
-              {data.policy.displayName}
-            </BidiText>
+            <h2 className="text-lg font-medium">
+              <BidiText>{data.policy.displayName}</BidiText>
+            </h2>
             <p className="text-muted-foreground text-sm">
               {data.entitlement.cancelAtPeriodEnd
                 ? t("settings.organization.usageEndsOnTemplate", {

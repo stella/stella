@@ -170,9 +170,9 @@ function ContactDetailPage() {
           ) : (
             <BuildingIcon className="text-muted-foreground size-5" />
           )}
-          <BidiText as="h1" className="text-xl font-bold">
-            {contact.displayName}
-          </BidiText>
+          <h1 className="text-xl font-bold">
+            <BidiText>{contact.displayName}</BidiText>
+          </h1>
           <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">
             {t(`contacts.type.${contact.type}`)}
           </span>
