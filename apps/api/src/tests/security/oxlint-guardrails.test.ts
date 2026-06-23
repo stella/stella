@@ -440,6 +440,17 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
+  test("presigned upload integration test does not mock presign helpers", () => {
+    const uploadIntegrationSource = readRootFixture(
+      "apps/api/src/handlers/uploads/presigned-upload.integration.test.ts",
+    );
+
+    expect(uploadIntegrationSource).toContain('mock.module("@/api/lib/s3"');
+    expect(uploadIntegrationSource).not.toContain(
+      'mock.module("@/api/lib/s3-presign"',
+    );
+  });
+
   test("redirect-only route lint forbids render components", () => {
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-component-on-redirect-route.ts",

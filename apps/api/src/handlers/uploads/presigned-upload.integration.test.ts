@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -22,12 +21,6 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 const deleteObjectMock = mock(async () => undefined);
-const presignUploadUrlMock = mock(async () =>
-  Result.ok({
-    headers: { "content-type": "application/pdf" },
-    url: "https://uploads.example.test/presigned",
-  }),
-);
 
 const realS3 = await import("@/api/lib/s3");
 
@@ -39,17 +32,6 @@ void mock.module("@/api/lib/s3", () => ({
       arrayBuffer: async () => new ArrayBuffer(0),
     }),
   }),
-}));
-
-const realS3Presign = await import("@/api/lib/s3-presign");
-
-void mock.module("@/api/lib/s3-presign", () => ({
-  ...realS3Presign,
-  copyObject: mock(async () => Result.ok(undefined)),
-  headObject: mock(async () =>
-    Result.err({ message: "not found", status: 404 }),
-  ),
-  presignUploadUrl: presignUploadUrlMock,
 }));
 
 const { default: abortUpload } = await import("./abort");
@@ -110,7 +92,6 @@ describe("presigned upload mutation flow", () => {
     const uploadId = getUploadId(presignResult);
     seededUploadIds.push(uploadId);
 
-    expect(presignUploadUrlMock).toHaveBeenCalledTimes(1);
     expect(
       await testDb.query.pendingUploads.findFirst({
         where: { id: { eq: uploadId } },
