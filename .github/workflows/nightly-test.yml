@@ -30,7 +30,10 @@ jobs:
       - name: Install dependencies
         run: bash scripts/bun-ci-retry.sh --ignore-scripts
         env:
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # .npmrc references NPM_TOKEN, but this workflow can be manually
+          # dispatched on a branch ref. Do not expose the real token to
+          # branch-controlled install scripts.
+          NPM_TOKEN: ""
 
       - name: Prepare environment
         run: |
