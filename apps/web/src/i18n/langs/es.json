@@ -2289,6 +2289,9 @@
       "showOnlyIf": "Mostrar solo si…",
       "showOnlyIfHelp": "Haz que este campo aparezca en el documento solo cuando se cumpla una condición.",
       "showOnlyWhen": "Este campo se muestra solo cuando:",
+      "slashCreateField": "Crear campo «{name}»",
+      "slashEmpty": "Sin coincidencias",
+      "slashHint": "Escribe para filtrar campos o nombrar uno nuevo",
       "textPlusAi": "Persona + IA",
       "useExisting": "Usar el campo existente {name}",
       "whoFills": "¿Quién rellenará este campo más tarde?"

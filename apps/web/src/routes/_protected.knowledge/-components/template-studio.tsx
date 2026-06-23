@@ -53,8 +53,12 @@ import { useFormatter, useTranslations } from "use-intl";
 import type { TemplateRecipeDefinition } from "@stll/api/types";
 import {
   buildPositionalText,
+  clearTemplateSlashMenu,
+  consumeTemplateSlashQuery,
+  getFolioCaretViewportRect,
   getFolioSelectionViewportRect,
   getTemplateDirectives,
+  getTemplateSlashMenu,
   setTemplatePreviewValues,
 } from "@stll/folio";
 import type {
@@ -63,6 +67,8 @@ import type {
   DocxEditorRef,
   TemplatePreviewSpan,
   TemplatePreviewValue,
+  TemplateSlashMenuKeyAction,
+  TemplateSlashMenuState,
 } from "@stll/folio";
 import { displayLanguageName } from "@stll/locales";
 import {
@@ -278,6 +284,85 @@ type SelectionGesture = GestureSelection & {
   left: number;
   top: number;
   placement: "above" | "below";
+};
+
+// ── Slash-command menu ───────────────────────────────────
+
+/** Width budget for clamping the slash menu inside the host (a single menu
+ *  column, narrower than the gesture popover's menu + preview). */
+const SLASH_MENU_HALF_WIDTH_PX = 130;
+/** Rough rendered height of the slash menu, for the above/below flip. */
+const SLASH_MENU_EST_HEIGHT_PX = 240;
+const SLASH_MENU_OFFSET_PX = 6;
+/** Cap on existing fields offered for reuse so a large template's field list
+ *  never turns the menu into an unbounded scroll. */
+const SLASH_MENU_MAX_FIELDS = 8;
+
+/** The open slash menu, positioned at the caret. `left`/`top` are relative to
+ *  the overlay host (the menu's offset parent), like the gesture popover. */
+type SlashMenu = {
+  from: number;
+  query: string;
+  left: number;
+  top: number;
+  placement: "above" | "below";
+};
+
+/** One actionable row in the slash menu. `create-field` carries the path the
+ *  query would become (or the default `field` when the query is empty);
+ *  `existing-field` reuses a registered field without forcing focus. */
+type SlashItem =
+  | { kind: "create-field"; path: string }
+  | { kind: "create-condition" }
+  | { kind: "create-clause" }
+  | { kind: "existing-field"; path: string; label: string };
+
+/** Build the slash menu's rows for the current query. Existing fields whose
+ *  label or path match lead (reuse first); the create-field fallback turns the
+ *  typed query into a new field name; condition and clause creators round out
+ *  the same vocabulary as the selection gesture. An empty query shows the three
+ *  creators plus the recent/all fields. */
+const buildSlashItems = (query: string, fields: StudioField[]): SlashItem[] => {
+  const trimmed = query.trim();
+  const needle = trimmed.toLowerCase();
+  const matchesField = (field: StudioField): boolean => {
+    if (needle === "") {
+      return true;
+    }
+    const label = field.label === "" ? field.path : field.label;
+    return (
+      field.path.toLowerCase().includes(needle) ||
+      label.toLowerCase().includes(needle)
+    );
+  };
+  const existing: SlashItem[] = fields
+    .filter(matchesField)
+    .slice(0, SLASH_MENU_MAX_FIELDS)
+    .map((field) => ({
+      kind: "existing-field",
+      path: field.path,
+      label: field.label === "" ? field.path : field.label,
+    }));
+  const createPath = trimmed === "" ? "field" : slugify(trimmed);
+  const reuseExact = fields.some((field) => field.path === createPath);
+  const createField: SlashItem[] = reuseExact
+    ? []
+    : [{ kind: "create-field", path: createPath }];
+  // Keyword-match the structural creators so a query like "if"/"clause" surfaces
+  // them; an empty query always shows both.
+  const showCondition =
+    needle === "" || "condition".includes(needle) || "if".includes(needle);
+  const showClause = needle === "" || "clause".includes(needle);
+  const condition: SlashItem = { kind: "create-condition" };
+  const clause: SlashItem = { kind: "create-clause" };
+  const structural: SlashItem[] = [
+    ...(showCondition ? [condition] : []),
+    ...(showClause ? [clause] : []),
+  ];
+  if (needle === "") {
+    return [...createField, ...structural, ...existing];
+  }
+  return [...existing, ...createField, ...structural];
 };
 
 /** Session-lived answers for the selection popover, keyed by exact selection
@@ -1308,6 +1393,206 @@ export const TemplateStudioPage = ({
     [showGesture, enrichGesture],
   );
 
+  // ── Slash-command menu ───────────────────────────────────
+  // Typing `/` at a marker boundary opens a keyboard-first menu at the caret to
+  // insert a template marker: filter existing fields to reuse, or turn the typed
+  // query into a new field (Condition / Clause round out the same vocabulary as
+  // the selection gesture). Folio's plugin owns the trigger; this host renders
+  // the menu and performs the insertion.
+  const [slash, setSlashState] = useState<SlashMenu | null>(null);
+  // Mirrors for the plugin's synchronous key handler, which fires outside the
+  // React render cycle and needs the freshest highlighted row + item list.
+  const slashHighlightRef = useRef(0);
+  const [slashHighlight, setSlashHighlightState] = useState(0);
+  const setSlashHighlight = (index: number) => {
+    slashHighlightRef.current = index;
+    setSlashHighlightState(index);
+  };
+  const studioFields = useTemplateStudioStore((s) => s.fields);
+  const slashItems = useMemo(
+    () => (slash === null ? [] : buildSlashItems(slash.query, studioFields)),
+    [slash, studioFields],
+  );
+
+  const positionSlashMenu = useCallback((query: string, from: number) => {
+    const view = editorViewRef.current;
+    const host = overlayHostRef.current;
+    if (!view || !host) {
+      return;
+    }
+    // Folio paints the caret asynchronously after the selection change; retry
+    // across a few frames until it exists, then anchor the menu at it.
+    let attempts = 0;
+    const read = () => {
+      const liveView = editorViewRef.current;
+      if (!liveView) {
+        return;
+      }
+      const live = getTemplateSlashMenu(liveView.state);
+      if (!live.active || live.from !== from) {
+        return;
+      }
+      const rect = getFolioCaretViewportRect(liveView);
+      if (!rect) {
+        attempts++;
+        if (attempts < 10) {
+          requestAnimationFrame(read);
+        }
+        return;
+      }
+      const hostRect = host.getBoundingClientRect();
+      const fitsBelow =
+        rect.bottom -
+          hostRect.top +
+          SLASH_MENU_OFFSET_PX +
+          SLASH_MENU_EST_HEIGHT_PX <
+        host.clientHeight;
+      const placement = fitsBelow ? "below" : "above";
+      const left = rect.left - hostRect.left;
+      setSlashState({
+        from,
+        query,
+        left: Math.min(
+          Math.max(left, SLASH_MENU_HALF_WIDTH_PX),
+          Math.max(
+            SLASH_MENU_HALF_WIDTH_PX,
+            host.clientWidth - SLASH_MENU_HALF_WIDTH_PX,
+          ),
+        ),
+        top:
+          placement === "below"
+            ? rect.bottom - hostRect.top
+            : rect.top - hostRect.top,
+        placement,
+      });
+    };
+    requestAnimationFrame(read);
+  }, []);
+
+  const onSlashMenuChange = (state: TemplateSlashMenuState) => {
+    if (!state.active) {
+      setSlashState(null);
+      return;
+    }
+    // Reset the highlight to the top row whenever the query changes; the row
+    // list is rebuilt and the previous index may point at a gone item.
+    setSlashHighlight(0);
+    positionSlashMenu(state.query, state.from);
+  };
+
+  const dismissSlash = useCallback(() => {
+    const view = editorViewRef.current;
+    if (view && getTemplateSlashMenu(view.state).active) {
+      view.dispatch(clearTemplateSlashMenu(view.state.tr));
+    }
+    setSlashState(null);
+  }, []);
+
+  // Replace the typed `/query` with the chosen marker. New fields land selected
+  // (so syncSelection opens the field face); reused fields and structural
+  // markers insert without forcing focus there.
+  const commitSlashItem = (item: SlashItem) => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return;
+    }
+    const consumed = consumeTemplateSlashQuery(view.state);
+    if (consumed === null) {
+      return;
+    }
+    const { from } = consumed;
+    if (item.kind === "create-field") {
+      const marker = `{{${item.path}}}`;
+      const tr = consumed.tr.insertText(marker, from);
+      // Select the field name inside the inserted marker so syncSelection opens
+      // the inspector face for the fresh field.
+      const namePos = from + 2;
+      tr.setSelection(
+        TextSelection.create(tr.doc, namePos, namePos + item.path.length),
+      ).scrollIntoView();
+      view.dispatch(tr);
+      view.focus();
+      upsertField(item.path, {});
+      markDirty();
+      setSlashState(null);
+      return;
+    }
+    if (item.kind === "existing-field") {
+      const tr = consumed.tr
+        .insertText(`{{${item.path}}}`, from)
+        .scrollIntoView();
+      view.dispatch(tr);
+      view.focus();
+      markDirty();
+      setSlashState(null);
+      return;
+    }
+    if (item.kind === "create-clause") {
+      view.dispatch(consumed.tr.scrollIntoView());
+      insertClause();
+      setSlashState(null);
+      return;
+    }
+    // create-condition: drop the query, then insert the block at the caret (now
+    // collapsed at `from`) via the shared block helper.
+    view.dispatch(consumed.tr.scrollIntoView());
+    insertCondition();
+    setSlashState(null);
+  };
+
+  const onSlashMenuKeyAction = (
+    action: TemplateSlashMenuKeyAction,
+  ): boolean => {
+    // Derive the rows fresh from the live trigger so the synchronous key
+    // handler never acts on a stale render's list.
+    const view = editorViewRef.current;
+    const live = view ? getTemplateSlashMenu(view.state) : null;
+    if (live === null || !live.active) {
+      return false;
+    }
+    const items = buildSlashItems(
+      live.query,
+      useTemplateStudioStore.getState().fields,
+    );
+    if (items.length === 0) {
+      return false;
+    }
+    if (action === "up") {
+      setSlashHighlight(
+        (slashHighlightRef.current - 1 + items.length) % items.length,
+      );
+      return true;
+    }
+    if (action === "down") {
+      setSlashHighlight((slashHighlightRef.current + 1) % items.length);
+      return true;
+    }
+    // commit
+    const item = items.at(slashHighlightRef.current) ?? items.at(0);
+    if (item === undefined) {
+      return false;
+    }
+    commitSlashItem(item);
+    return true;
+  };
+
+  // Scroll inside the document (or any pointer/context action that moves the
+  // caret away) tears the menu down; Escape is handled inside the plugin.
+  const slashShown = slash !== null;
+  useExternalSyncEffect(() => {
+    if (!slashShown) {
+      return undefined;
+    }
+    const host = overlayHostRef.current;
+    const dismiss = () => dismissSlash();
+    host?.addEventListener("scroll", dismiss, { capture: true });
+    host?.addEventListener("contextmenu", dismiss, { capture: true });
+    return () => {
+      host?.removeEventListener("scroll", dismiss, { capture: true });
+      host?.removeEventListener("contextmenu", dismiss, { capture: true });
+    };
+  }, [slashShown, dismissSlash]);
+
   // Loop recipes mirror insertOrWrapBlock's caret branch: the opener, one
   // marker paragraph per field, and the closer land after the current
   // paragraph (block directives must occupy their own paragraph).
@@ -1997,10 +2282,21 @@ export const TemplateStudioPage = ({
                 syncSelection();
               }}
               onSelectionTextChange={onGestureSelectionChange}
+              onSlashMenuChange={onSlashMenuChange}
+              onSlashMenuKeyAction={onSlashMenuKeyAction}
               showTemplateDirectives={showDirectives}
             />
           </Suspense>
         </div>
+        {slash !== null && (
+          <SlashMenuPopover
+            slash={slash}
+            items={slashItems}
+            highlight={slashHighlight}
+            onHighlight={setSlashHighlight}
+            onSelect={commitSlashItem}
+          />
+        )}
         {gesture !== null && (
           <SelectionGesturePopover
             enrichment={enrichment}
@@ -2186,6 +2482,156 @@ const SelectionGesturePopover = ({
       </MenuPreviewLayout>
     </div>
   );
+};
+
+/** Keyboard-first menu anchored at the caret, opened by typing `/` in template
+ *  prose. The highlighted row tracks the slash plugin's Up/Down/Enter; clicks
+ *  use `keepEditorFocus` so the painted caret stays put while inserting. */
+const SlashMenuPopover = ({
+  slash,
+  items,
+  highlight,
+  onHighlight,
+  onSelect,
+}: {
+  slash: SlashMenu;
+  items: SlashItem[];
+  highlight: number;
+  onHighlight: (index: number) => void;
+  onSelect: (item: SlashItem) => void;
+}) => {
+  const t = useTranslations();
+  const fields = useTemplateStudioStore((s) => s.fields);
+  return (
+    <div
+      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(20rem,70vh)] w-[min(90vw,16rem)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      role="listbox"
+      style={{
+        left: slash.left,
+        top: slash.top,
+        transform:
+          slash.placement === "above"
+            ? `translate(0, calc(-100% - ${SLASH_MENU_OFFSET_PX}px))`
+            : `translate(0, ${SLASH_MENU_OFFSET_PX}px)`,
+      }}
+    >
+      <p className="text-muted-foreground px-2 pt-1 pb-1.5 text-[11px] leading-snug">
+        {t("templates.studio.slashHint")}
+      </p>
+      {items.length === 0 && (
+        <p className="text-muted-foreground px-2 py-2 text-xs">
+          {t("templates.studio.slashEmpty")}
+        </p>
+      )}
+      {items.map((item, index) => (
+        <SlashMenuRow
+          key={slashItemKey(item)}
+          fields={fields}
+          item={item}
+          selected={index === highlight}
+          onHighlight={() => onHighlight(index)}
+          onSelect={() => onSelect(item)}
+        />
+      ))}
+    </div>
+  );
+};
+
+/** Stable React key + listbox identity for a slash row. */
+const slashItemKey = (item: SlashItem): string => {
+  if (item.kind === "create-field") {
+    return `create-field:${item.path}`;
+  }
+  if (item.kind === "existing-field") {
+    return `existing:${item.path}`;
+  }
+  return item.kind;
+};
+
+const SlashMenuRow = ({
+  item,
+  selected,
+  fields,
+  onHighlight,
+  onSelect,
+}: {
+  item: SlashItem;
+  selected: boolean;
+  fields: StudioField[];
+  onHighlight: () => void;
+  onSelect: () => void;
+}) => {
+  const t = useTranslations();
+  const { icon: Icon, label, sublabel } = slashRowFace(item, fields, t);
+  return (
+    <Button
+      aria-selected={selected}
+      className={cn(
+        "w-full justify-start gap-2 font-normal",
+        selected && "bg-accent text-accent-foreground",
+      )}
+      onClick={onSelect}
+      onMouseDown={keepEditorFocus}
+      onMouseEnter={onHighlight}
+      role="option"
+      size="sm"
+      tabIndex={-1}
+      variant="ghost"
+    >
+      <Icon className="text-muted-foreground size-3.5 shrink-0" />
+      <span className="flex-1 truncate text-start">{label}</span>
+      {sublabel !== undefined && (
+        <span className="text-muted-foreground shrink-0 truncate text-xs">
+          {sublabel}
+        </span>
+      )}
+    </Button>
+  );
+};
+
+type SlashRowFace = {
+  icon: LucideIcon;
+  label: string;
+  sublabel: string | undefined;
+};
+
+/** The icon + label vocabulary for a slash row, mirroring the gesture menu:
+ *  Field / Condition / Clause for creators, value-type icons for reuse. */
+const slashRowFace = (
+  item: SlashItem,
+  fields: StudioField[],
+  t: ReturnType<typeof useTranslations>,
+): SlashRowFace => {
+  if (item.kind === "create-field") {
+    return {
+      icon: BracesIcon,
+      label: t("templates.studio.slashCreateField", { name: item.path }),
+      sublabel: undefined,
+    };
+  }
+  if (item.kind === "create-condition") {
+    return {
+      icon: SplitIcon,
+      label: t("templates.studio.showOnlyIf"),
+      sublabel: undefined,
+    };
+  }
+  if (item.kind === "create-clause") {
+    return {
+      icon: TextQuoteIcon,
+      label: t("templates.studio.scopeClause"),
+      sublabel: undefined,
+    };
+  }
+  const field = fields.find((f) => f.path === item.path);
+  const icon = field
+    ? VALUE_TYPE_META[inputTypeValueKind(field.inputType)].icon
+    : BracesIcon;
+  return {
+    icon,
+    label: item.label,
+    sublabel: item.label === item.path ? undefined : item.path,
+  };
 };
 
 /** What each gesture-menu insert produces, shown in the preview pane while a

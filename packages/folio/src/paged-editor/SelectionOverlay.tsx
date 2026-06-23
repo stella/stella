@@ -124,6 +124,7 @@ const Caret: React.FC<{
   <div
     style={caretStyles(position, color, width, isFocused, blinkInterval)}
     data-testid="caret"
+    data-folio-caret-rect=""
   />
 );
 

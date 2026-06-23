@@ -2292,6 +2292,9 @@ type Messages = {
       "showOnlyIf": "Show only if…";
       "showOnlyIfHelp": "Make this field appear in the document only when a condition holds.";
       "showOnlyWhen": "This field shows only when:";
+      "slashCreateField": "Create field “{name}”";
+      "slashEmpty": "No matches";
+      "slashHint": "Type to filter fields or name a new one";
       "textPlusAi": "Person + AI";
       "useExisting": "Use existing {name}";
       "whoFills": "Who fills this field later?";

@@ -82,7 +82,10 @@ export {
   setFocusedSuggestionMeta,
 } from "./core/prosemirror/plugins/aiSuggestionDecorations";
 export { scrollFolioPositionIntoView } from "./paged-editor/scrollToPmPosition";
-export { getFolioSelectionViewportRect } from "./paged-editor/selectionViewportRect";
+export {
+  getFolioCaretViewportRect,
+  getFolioSelectionViewportRect,
+} from "./paged-editor/selectionViewportRect";
 export {
   createAICitationDecorationsPlugin,
   setAICitationsMeta,
@@ -108,6 +111,14 @@ export {
   type TemplatePreviewValue,
   type TemplatePreviewValues,
 } from "./core/prosemirror/plugins/templatePreviewValues";
+export {
+  clearTemplateSlashMenu,
+  consumeTemplateSlashQuery,
+  getTemplateSlashMenu,
+  templateSlashMenuKey,
+  type TemplateSlashMenuKeyAction,
+  type TemplateSlashMenuState,
+} from "./core/prosemirror/plugins/templateSlashMenu";
 export {
   acceptAutocompleteSuggestion,
   acceptAutocompleteWord,

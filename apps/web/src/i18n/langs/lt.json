@@ -2289,6 +2289,9 @@
       "showOnlyIf": "Rodyti tik jei…",
       "showOnlyIfHelp": "Šis laukas dokumente rodomas tik tada, kai galioja sąlyga.",
       "showOnlyWhen": "Šis laukas rodomas tik tada, kai:",
+      "slashCreateField": "Sukurti lauką „{name}“",
+      "slashEmpty": "Atitikmenų nėra",
+      "slashHint": "Rašykite, kad filtruotumėte laukus arba pavadintumėte naują",
       "textPlusAi": "Asmuo + DI",
       "useExisting": "Naudoti esamą lauką {name}",
       "whoFills": "Kas vėliau užpildys šį lauką?"

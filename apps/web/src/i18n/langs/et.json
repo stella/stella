@@ -2289,6 +2289,9 @@
       "showOnlyIf": "Kuva ainult siis, kui…",
       "showOnlyIfHelp": "Lase sellel väljal dokumendis kuvada ainult siis, kui tingimus kehtib.",
       "showOnlyWhen": "See väli kuvatakse ainult siis, kui:",
+      "slashCreateField": "Loo väli „{name}“",
+      "slashEmpty": "Vasteid pole",
+      "slashHint": "Tipi väljade filtreerimiseks või uue nimetamiseks",
       "textPlusAi": "Isik + TI",
       "useExisting": "Kasuta olemasolevat välja {name}",
       "whoFills": "Kes selle välja hiljem täidab?"

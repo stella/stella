@@ -2289,6 +2289,9 @@
       "showOnlyIf": "Zobrazit, jen pokud…",
       "showOnlyIfHelp": "Toto pole se v dokumentu zobrazí, jen když platí podmínka.",
       "showOnlyWhen": "Toto pole se zobrazí, jen když:",
+      "slashCreateField": "Vytvořit pole „{name}“",
+      "slashEmpty": "Žádné shody",
+      "slashHint": "Pište pro filtrování polí nebo pojmenování nového",
       "textPlusAi": "Osoba + AI",
       "useExisting": "Použít existující pole {name}",
       "whoFills": "Kdo bude následně vyplňovat dané pole?"

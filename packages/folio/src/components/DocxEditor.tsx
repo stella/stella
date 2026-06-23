@@ -163,6 +163,7 @@ import {
 } from "../core/prosemirror/plugins/suggestionMode";
 import { createTemplateDirectivesPlugin } from "../core/prosemirror/plugins/templateDirectives";
 import { createTemplatePreviewValuesPlugin } from "../core/prosemirror/plugins/templatePreviewValues";
+import { templateSlashMenuPlugin } from "../core/prosemirror/plugins/templateSlashMenu";
 import type { Comment } from "../core/types/content";
 import type {
   Document,
@@ -475,6 +476,8 @@ export function DocxEditor({
   selectedAnonymizationCanonical = null,
   anonymizationSelectionSeq,
   showTemplateDirectives = false,
+  onSlashMenuChange,
+  onSlashMenuKeyAction,
   customContextMenuItems,
   onCustomContextAction,
   collaboration,
@@ -689,6 +692,23 @@ export function DocxEditor({
     () => createTemplateDirectivesPlugin(),
     [],
   );
+  // Slash-command trigger for the template editor. Owns only the
+  // `/`-trigger state and the open-menu keyboard contract; the host
+  // (template-studio) renders the menu and performs the insertion.
+  // Callbacks read through refs so the plugin identity stays stable.
+  const onSlashMenuChangeRef = useRef(onSlashMenuChange);
+  onSlashMenuChangeRef.current = onSlashMenuChange;
+  const onSlashMenuKeyActionRef = useRef(onSlashMenuKeyAction);
+  onSlashMenuKeyActionRef.current = onSlashMenuKeyAction;
+  const templateSlashMenu = useMemo(
+    () =>
+      templateSlashMenuPlugin({
+        onChange: (slashState) => onSlashMenuChangeRef.current?.(slashState),
+        onKeyAction: (action) =>
+          onSlashMenuKeyActionRef.current?.(action) ?? false,
+      }),
+    [],
+  );
   // Inert until a host pushes preview values (template fill preview).
   const templatePreviewPlugin = useMemo(
     () => createTemplatePreviewValuesPlugin(),
@@ -702,7 +722,9 @@ export function DocxEditor({
       aiSuggestionPlugin,
       aiCitationPlugin,
       anonymizationDecorationsPlugin,
-      ...(showTemplateDirectives ? [templateDirectivesPlugin] : []),
+      ...(showTemplateDirectives
+        ? [templateDirectivesPlugin, templateSlashMenu]
+        : []),
       templatePreviewPlugin,
     ],
     [
@@ -714,6 +736,7 @@ export function DocxEditor({
       anonymizationDecorationsPlugin,
       showTemplateDirectives,
       templateDirectivesPlugin,
+      templateSlashMenu,
       templatePreviewPlugin,
     ],
   );
