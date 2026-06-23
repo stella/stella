@@ -78,12 +78,12 @@ export default {
         return {
           JSXElement(node) {
             const opening = node.openingElement;
-            if (opening.name.type !== "JSXIdentifier") {
-              return;
-            }
-            if (
-              SELF_ISOLATING.has(opening.name.name)
-            ) {
+            // Compound components (`<Foo.Label>`) have a member-expression name
+            // with no string identifier; they can still wrap a tracked name, so
+            // keep inspecting their children instead of bailing out.
+            const elementName =
+              opening.name.type === "JSXIdentifier" ? opening.name.name : null;
+            if (elementName !== null && SELF_ISOLATING.has(elementName)) {
               return;
             }
             const kids = meaningfulChildren(node.children);
@@ -98,8 +98,8 @@ export default {
             // Sole child: dir="auto" on the element isolates it.
             if (kids.length === 1) {
               if (
-                (hasDirAttr(opening) ||
-                  RAW_ISOLATING.has(opening.name.name))
+                hasDirAttr(opening) ||
+                (elementName !== null && RAW_ISOLATING.has(elementName))
               ) {
                 context.report({ node: opening, messageId: "preferComponent" });
                 return;

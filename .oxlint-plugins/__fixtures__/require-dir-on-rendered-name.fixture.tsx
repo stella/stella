@@ -15,6 +15,9 @@ declare const x: {
 };
 declare const BidiText: (props: { children: ReactNode }) => ReactNode;
 declare const UserText: (props: { children: ReactNode }) => ReactNode;
+declare const Foo: {
+  Label: (props: { children: ReactNode; dir?: string }) => ReactNode;
+};
 
 // --- Flagged: a bare user-content name property rendered without dir ---
 export const _display = () => (
@@ -48,6 +51,10 @@ export const _rawDirLink = () => (
 export const _rawBdi = () => (
   // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
   <bdi>{x.displayName}</bdi>
+);
+export const _compound = () => (
+  // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
+  <Foo.Label dir="auto">{x.displayName}</Foo.Label>
 );
 
 // --- Allowed: wrapper present or a non-name expression ---
