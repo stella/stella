@@ -1,5 +1,14 @@
 import { Result, panic } from "better-result";
-import { and, count, eq, inArray, notInArray, or, sql } from "drizzle-orm";
+import {
+  and,
+  count,
+  eq,
+  inArray,
+  isNotNull,
+  notInArray,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
@@ -819,12 +828,27 @@ const queryEntitiesGenerator = async function* ({
           createdByMembers,
           eq(entities.createdBy, createdByMembers.userId),
         )
-        .leftJoin(user, eq(createdByMembers.userId, user.id))
+        .leftJoin(
+          user,
+          or(
+            eq(createdByMembers.userId, user.id),
+            and(eq(entities.createdBy, user.id), isNotNull(user.deletedAt)),
+          ),
+        )
         .leftJoin(
           lastEditorMembers,
           eq(entities.lastEditedBy, lastEditorMembers.userId),
         )
-        .leftJoin(lastEditor, eq(lastEditorMembers.userId, lastEditor.id))
+        .leftJoin(
+          lastEditor,
+          or(
+            eq(lastEditorMembers.userId, lastEditor.id),
+            and(
+              eq(entities.lastEditedBy, lastEditor.id),
+              isNotNull(lastEditor.deletedAt),
+            ),
+          ),
+        )
         .where(idFilter);
     }),
     safeDb((tx) =>

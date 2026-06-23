@@ -246,6 +246,13 @@ export const getPendingTasksAndMembers = async (
             eq(workspaceMembers.userId, currentUserId),
           ),
         )
+        .innerJoin(
+          member,
+          and(
+            eq(member.organizationId, workspaces.organizationId),
+            eq(member.userId, currentUserId),
+          ),
+        )
         .where(
           and(
             eq(taskAssignees.userId, currentUserId),
@@ -279,6 +286,17 @@ export const getPendingTasksAndMembers = async (
                 userName: user.name,
               })
               .from(workspaceMembers)
+              .innerJoin(
+                workspaces,
+                eq(workspaces.id, workspaceMembers.workspaceId),
+              )
+              .innerJoin(
+                member,
+                and(
+                  eq(member.organizationId, workspaces.organizationId),
+                  eq(member.userId, workspaceMembers.userId),
+                ),
+              )
               .innerJoin(user, eq(user.id, workspaceMembers.userId))
               .where(
                 and(
@@ -447,7 +465,6 @@ export const verifyAndDeleteUser = async (
         await tx.delete(account).where(eq(account.userId, currentUserId));
         // eslint-disable-next-line auth-lifecycle/no-direct-auth-artifact-delete -- Account deletion must revoke Better Auth session artifacts.
         await tx.delete(session).where(eq(session.userId, currentUserId));
-        await tx.delete(member).where(eq(member.userId, currentUserId));
         // Delete invitations sent by the user, and also invitations sent to the user's email
         await tx
           .delete(invitation)
@@ -494,11 +511,19 @@ export const verifyAndDeleteUser = async (
           })
           .from(taskAssignees)
           .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
+          .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
           .innerJoin(
             workspaceMembers,
             and(
               eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
               eq(workspaceMembers.userId, currentUserId),
+            ),
+          )
+          .innerJoin(
+            member,
+            and(
+              eq(member.organizationId, workspaces.organizationId),
+              eq(member.userId, currentUserId),
             ),
           )
           .where(
@@ -549,6 +574,17 @@ export const verifyAndDeleteUser = async (
               tx
                 .select({ one: sql`1` })
                 .from(workspaceMembers)
+                .innerJoin(
+                  workspaces,
+                  eq(workspaces.id, workspaceMembers.workspaceId),
+                )
+                .innerJoin(
+                  member,
+                  and(
+                    eq(member.organizationId, workspaces.organizationId),
+                    eq(member.userId, currentUserId),
+                  ),
+                )
                 .where(
                   and(
                     eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
@@ -581,6 +617,17 @@ export const verifyAndDeleteUser = async (
                   workspaceId: workspaceMembers.workspaceId,
                 })
                 .from(workspaceMembers)
+                .innerJoin(
+                  workspaces,
+                  eq(workspaces.id, workspaceMembers.workspaceId),
+                )
+                .innerJoin(
+                  member,
+                  and(
+                    eq(member.organizationId, workspaces.organizationId),
+                    eq(member.userId, workspaceMembers.userId),
+                  ),
+                )
                 .where(
                   and(
                     inArray(workspaceMembers.workspaceId, taskWorkspaceIds),
@@ -635,6 +682,7 @@ export const verifyAndDeleteUser = async (
           taskReassignmentCount = updates.length;
         }
 
+        await tx.delete(member).where(eq(member.userId, currentUserId));
         await tx
           .delete(workspaceMembers)
           .where(eq(workspaceMembers.userId, currentUserId));
