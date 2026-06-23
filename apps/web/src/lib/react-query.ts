@@ -47,14 +47,10 @@ const formatQueryKey = (queryKey: QueryKey): string => {
   }
 };
 
-export const ensureCriticalQueryData = async <
-  TQueryFnData,
-  TError = Error,
-  TData = TQueryFnData,
-  TQueryKey extends QueryKey = QueryKey,
->(
+const withCriticalQueryTimeout = async <TData>(
   queryClient: QueryClient,
-  options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
+  queryKey: QueryKey,
+  operation: () => Promise<TData>,
   config: EnsureCriticalQueryDataConfig = {},
 ): Promise<TData> => {
   const timeoutMs = config.timeoutMs ?? CRITICAL_QUERY_TIMEOUT_MS;
@@ -62,20 +58,20 @@ export const ensureCriticalQueryData = async <
 
   try {
     return await Promise.race([
-      queryClient.ensureQueryData(options),
+      operation(),
       new Promise<never>((_resolve, reject) => {
         timeoutId = setTimeout(() => {
           void queryClient.cancelQueries(
             {
               exact: true,
-              queryKey: options.queryKey,
+              queryKey,
             },
             { revert: false },
           );
           reject(
             new CriticalQueryTimeoutError({
-              message: `Critical query timed out after ${timeoutMs}ms: ${formatQueryKey(options.queryKey)}`,
-              queryKey: options.queryKey,
+              message: `Critical query timed out after ${timeoutMs}ms: ${formatQueryKey(queryKey)}`,
+              queryKey,
               timeoutMs,
             }),
           );
@@ -88,6 +84,23 @@ export const ensureCriticalQueryData = async <
     }
   }
 };
+
+export const ensureCriticalQueryData = async <
+  TQueryFnData,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  queryClient: QueryClient,
+  options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
+  config: EnsureCriticalQueryDataConfig = {},
+): Promise<TData> =>
+  await withCriticalQueryTimeout(
+    queryClient,
+    options.queryKey,
+    async () => await queryClient.ensureQueryData(options),
+    config,
+  );
 
 export const prefetchNonCriticalQuery = async <
   TQueryFnData,
@@ -132,9 +145,10 @@ export const ensureRouteQueryData = async <
   options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
   config: EnsureCriticalQueryDataConfig = {},
 ): Promise<TData> =>
-  await ensureCriticalQueryData(
+  await withCriticalQueryTimeout(
     queryClient,
-    routeQueryOptions(options),
+    options.queryKey,
+    async () => await queryClient.fetchQuery(routeQueryOptions(options)),
     config,
   );
 
