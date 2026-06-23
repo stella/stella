@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildAccountDeletionTaskReassignmentTargets,
   isAccountDeletionActiveTaskStatus,
+  partitionAccountDeletionTaskAssignmentsByMembership,
   validateAccountDeletionTaskReassignmentTargets,
 } from "@/api/lib/account-deletion-reassignment";
 import type {
@@ -73,6 +74,22 @@ describe("account deletion task handoff rules", () => {
       { entityId: taskOneId, reassignedUserId: replacementUserId },
       { entityId: taskTwoId, reassignedUserId: otherReplacementUserId },
     ] satisfies AccountDeletionTaskReassignment[]);
+  });
+
+  test("splits active assignments by current workspace membership", () => {
+    const partition = partitionAccountDeletionTaskAssignmentsByMembership({
+      currentWorkspaceIds: new Set([workspaceOneId]),
+      taskAssignments: assignments,
+    });
+
+    expect(partition).toEqual({
+      currentMembershipAssignments: [
+        { entityId: taskOneId, workspaceId: workspaceOneId },
+      ],
+      staleAssignments: [{ entityId: taskTwoId, workspaceId: workspaceTwoId }],
+    } satisfies ReturnType<
+      typeof partitionAccountDeletionTaskAssignmentsByMembership
+    >);
   });
 
   test("rejects deletion when an active task has no handoff target", () => {

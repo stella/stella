@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
+import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 
 import {
   account,
@@ -35,7 +35,7 @@ import {
   workspaceViewTemplates,
   workspaces,
 } from "@/api/db/schema";
-import { createUserFileKey } from "@/api/handlers/files/utils";
+import { createFileKey, createUserFileKey } from "@/api/handlers/files/utils";
 import {
   enqueueAccountDeletionCleanup,
   processAccountDeletionCleanupRequest,
@@ -43,18 +43,24 @@ import {
 import {
   ACTIVE_TASK_REASSIGNMENT_STATUSES,
   buildAccountDeletionTaskReassignmentTargets,
+  partitionAccountDeletionTaskAssignmentsByMembership,
   validateAccountDeletionTaskReassignmentTargets,
 } from "@/api/lib/account-deletion-reassignment";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
+import { FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE } from "@/api/lib/folio-collab-sessions";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import {
   brandPersistedOrganizationId,
   brandPersistedUserId,
+  brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
+
+const DELETED_ACCOUNT_DISPLAY_NAME = "Deleted account";
 
 /**
  * Fetches the user email by ID.
@@ -223,6 +229,13 @@ export const getPendingTasksAndMembers = async (
         .from(taskAssignees)
         .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
         .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
+        .innerJoin(
+          workspaceMembers,
+          and(
+            eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
+            eq(workspaceMembers.userId, currentUserId),
+          ),
+        )
         .where(
           and(
             eq(taskAssignees.userId, currentUserId),
@@ -263,7 +276,19 @@ export const getPendingTasksAndMembers = async (
                   ne(workspaceMembers.userId, currentUserId),
                 ),
               )
+              .limit(LIMITS.accountDeletionTaskReassignmentCandidatesMax + 1)
           : [];
+
+      if (
+        otherMembers.length >
+        LIMITS.accountDeletionTaskReassignmentCandidatesMax
+      ) {
+        throw new HandlerError({
+          status: 400,
+          message:
+            "Too many workspace members to load for account deletion task reassignment.",
+        });
+      }
 
       return {
         tasks: userAssignments as ActiveTaskAssignment[],
@@ -271,11 +296,13 @@ export const getPendingTasksAndMembers = async (
       };
     },
     catch: (err) =>
-      new HandlerError({
-        status: 500,
-        message: "Database query failed",
-        cause: err,
-      }),
+      err instanceof HandlerError
+        ? err
+        : new HandlerError({
+            status: 500,
+            message: "Database query failed",
+            cause: err,
+          }),
   });
 
 /**
@@ -294,7 +321,7 @@ export const verifyAndDeleteUser = async (
     try: async () => {
       const identifier = `delete-account:${email}`;
       const deletionRequestId = createSafeId<"accountDeletionRequest">();
-      let s3KeysToDelete: string[] = [];
+      const s3KeysToDelete: string[] = [];
       let taskReassignmentCount = 0;
 
       await rootDb.transaction(async (tx) => {
@@ -395,6 +422,7 @@ export const verifyAndDeleteUser = async (
             .from(workspaceMembers)
             .where(eq(workspaceMembers.userId, currentUserId))
         ).map((row) => row.workspaceId);
+        const currentWorkspaceIds = new Set<string>(workspaceIds);
 
         // audit: skip — ephemeral verification code deletion
         await tx
@@ -450,7 +478,7 @@ export const verifyAndDeleteUser = async (
         // 5. Active task assignee records require handoff. Completed/cancelled
         // assignments remain as historical activity on the deleted user row.
         const reassignmentItems = [...(reassignments ?? [])];
-        const currentTaskAssignments = await tx
+        const activeTaskAssignments = await tx
           .select({
             entityId: taskAssignees.entityId,
             workspaceId: taskAssignees.workspaceId,
@@ -470,7 +498,7 @@ export const verifyAndDeleteUser = async (
           .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
 
         if (
-          currentTaskAssignments.length >
+          activeTaskAssignments.length >
           LIMITS.accountDeletionTaskAssignmentsMax
         ) {
           throw new HandlerError({
@@ -478,6 +506,30 @@ export const verifyAndDeleteUser = async (
             message:
               "Too many active task assignments to reassign during account deletion.",
           });
+        }
+
+        const {
+          currentMembershipAssignments: currentTaskAssignments,
+          staleAssignments: staleTaskAssignments,
+        } = partitionAccountDeletionTaskAssignmentsByMembership({
+          currentWorkspaceIds,
+          taskAssignments: activeTaskAssignments,
+        });
+
+        if (staleTaskAssignments.length > 0) {
+          await Promise.all(
+            staleTaskAssignments.map((assignment) =>
+              tx
+                .delete(taskAssignees)
+                .where(
+                  and(
+                    eq(taskAssignees.entityId, assignment.entityId),
+                    eq(taskAssignees.userId, currentUserId),
+                    eq(taskAssignees.workspaceId, assignment.workspaceId),
+                  ),
+                ),
+            ),
+          );
         }
 
         if (currentTaskAssignments.length > 0) {
@@ -561,6 +613,34 @@ export const verifyAndDeleteUser = async (
           .where(eq(workspaceMembers.userId, currentUserId));
 
         // 6. Desktop edit sessions and handoffs (cascade on createdBy → user.id)
+        const desktopCheckpointRows = await tx
+          .select({
+            checkpointFileId: desktopEditSessions.checkpointFileId,
+            organizationId: workspaces.organizationId,
+            workspaceId: desktopEditSessions.workspaceId,
+          })
+          .from(desktopEditSessions)
+          .innerJoin(
+            workspaces,
+            eq(workspaces.id, desktopEditSessions.workspaceId),
+          )
+          .where(
+            and(
+              eq(desktopEditSessions.createdBy, currentUserId),
+              isNotNull(desktopEditSessions.checkpointUpdatedAt),
+            ),
+          );
+        s3KeysToDelete.push(
+          ...desktopCheckpointRows.map((row) =>
+            createFileKey({
+              fileId: row.checkpointFileId,
+              mimeType: DOCX_MIME_TYPE,
+              organizationId: brandPersistedOrganizationId(row.organizationId),
+              workspaceId: brandPersistedWorkspaceId(row.workspaceId),
+            }),
+          ),
+        );
+
         await tx
           .delete(desktopEditHandoffs)
           .where(eq(desktopEditHandoffs.createdBy, currentUserId));
@@ -569,6 +649,50 @@ export const verifyAndDeleteUser = async (
           .where(eq(desktopEditSessions.createdBy, currentUserId));
 
         // 7. Folio collab sessions — tokens cascade when session is deleted
+        const folioCheckpointRows = await tx
+          .select({
+            docxCheckpointFileId: folioCollabSessions.docxCheckpointFileId,
+            docxCheckpointUpdatedAt:
+              folioCollabSessions.docxCheckpointUpdatedAt,
+            organizationId: workspaces.organizationId,
+            workspaceId: folioCollabSessions.workspaceId,
+            yjsSnapshotFileId: folioCollabSessions.yjsSnapshotFileId,
+            yjsSnapshotUpdatedAt: folioCollabSessions.yjsSnapshotUpdatedAt,
+          })
+          .from(folioCollabSessions)
+          .innerJoin(
+            workspaces,
+            eq(workspaces.id, folioCollabSessions.workspaceId),
+          )
+          .where(eq(folioCollabSessions.createdBy, currentUserId));
+        for (const row of folioCheckpointRows) {
+          if (row.yjsSnapshotUpdatedAt !== null) {
+            s3KeysToDelete.push(
+              createFileKey({
+                fileId: row.yjsSnapshotFileId,
+                mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+                organizationId: brandPersistedOrganizationId(
+                  row.organizationId,
+                ),
+                workspaceId: brandPersistedWorkspaceId(row.workspaceId),
+              }),
+            );
+          }
+
+          if (row.docxCheckpointUpdatedAt !== null) {
+            s3KeysToDelete.push(
+              createFileKey({
+                fileId: row.docxCheckpointFileId,
+                mimeType: DOCX_MIME_TYPE,
+                organizationId: brandPersistedOrganizationId(
+                  row.organizationId,
+                ),
+                workspaceId: brandPersistedWorkspaceId(row.workspaceId),
+              }),
+            );
+          }
+        }
+
         await tx
           .delete(folioCollabSessions)
           .where(eq(folioCollabSessions.createdBy, currentUserId));
@@ -591,17 +715,19 @@ export const verifyAndDeleteUser = async (
           .where(eq(userFiles.userId, currentUserId));
 
         if (files.length > 0) {
-          s3KeysToDelete = files.flatMap((file) =>
-            file.thumbnailFileId
-              ? [
-                  file.s3Key,
-                  createUserFileKey({
-                    fileId: file.thumbnailFileId,
-                    mimeType: "image/webp",
-                    userId: brandPersistedUserId(file.userId),
-                  }),
-                ]
-              : [file.s3Key],
+          s3KeysToDelete.push(
+            ...files.flatMap((file) =>
+              file.thumbnailFileId
+                ? [
+                    file.s3Key,
+                    createUserFileKey({
+                      fileId: file.thumbnailFileId,
+                      mimeType: "image/webp",
+                      userId: brandPersistedUserId(file.userId),
+                    }),
+                  ]
+                : [file.s3Key],
+            ),
           );
         }
         await tx.delete(userFiles).where(eq(userFiles.userId, currentUserId));
@@ -648,6 +774,7 @@ export const verifyAndDeleteUser = async (
             email: `deleted-${currentUserId}@stella.placeholder`,
             emailVerified: false,
             image: null,
+            name: DELETED_ACCOUNT_DISPLAY_NAME,
             preferredName: null,
             wordEditShortcut: null,
             deletedAt: new Date(),

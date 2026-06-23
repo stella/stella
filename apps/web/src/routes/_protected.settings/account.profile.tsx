@@ -184,7 +184,12 @@ function ProfilePageBody() {
     {},
   );
 
-  const { data: pendingTasksData } = useQuery({
+  const {
+    data: pendingTasksData,
+    error: pendingTasksError,
+    isFetching: isPendingTasksFetching,
+    refetch: refetchPendingTasks,
+  } = useQuery({
     queryKey: ["me", "delete", "pending-tasks"],
     queryFn: async () => {
       const res = await api.me.delete["pending-tasks"].get();
@@ -342,10 +347,22 @@ function ProfilePageBody() {
         member.userId === reassignedUserId,
     );
   });
-  let dialogStep = step;
-  if (step === "loading" && pendingTasksData) {
+  let dialogStep:
+    | "loading"
+    | "tasks"
+    | "confirm"
+    | "otp"
+    | "pendingTasksError" = step;
+  if (step === "loading" && pendingTasksError) {
+    dialogStep = "pendingTasksError";
+  }
+  if (step === "loading" && pendingTasksData && !pendingTasksError) {
     dialogStep = activeTasks.length > 0 ? "tasks" : "confirm";
   }
+  const pendingTasksErrorMessage =
+    pendingTasksError instanceof Error
+      ? pendingTasksError.message
+      : t("errors.actionFailed");
   const dialogTitle =
     dialogStep === "tasks"
       ? t("settings.account.deleteAccountTasksTitle")
@@ -507,6 +524,22 @@ function ProfilePageBody() {
               {dialogStep === "loading" && (
                 <div className="flex justify-center py-4">
                   <span className="border-primary h-6 w-6 animate-spin rounded-full border-2 border-t-transparent" />
+                </div>
+              )}
+              {dialogStep === "pendingTasksError" && (
+                <div className="flex flex-col items-start gap-3">
+                  <div className="border-destructive/20 bg-destructive/10 text-destructive-foreground rounded-lg border p-3 text-sm">
+                    {pendingTasksErrorMessage}
+                  </div>
+                  <Button
+                    loading={isPendingTasksFetching}
+                    variant="outline"
+                    onClick={() => {
+                      void refetchPendingTasks();
+                    }}
+                  >
+                    {t("common.retry")}
+                  </Button>
                 </div>
               )}
               {dialogStep === "tasks" && (
@@ -727,6 +760,7 @@ function ProfilePageBody() {
                 disabled={
                   sendOtpMutation.isPending ||
                   dialogStep === "loading" ||
+                  dialogStep === "pendingTasksError" ||
                   !deleteAccountConfirmation.confirmed ||
                   (dialogStep === "tasks" && !allActiveTasksHaveReassignments)
                 }

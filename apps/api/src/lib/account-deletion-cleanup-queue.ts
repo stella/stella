@@ -25,6 +25,11 @@ type AccountDeletionCleanupJobData = {
   requestId: SafeId<"accountDeletionRequest">;
 };
 
+type AccountDeletionCleanupQueue = Pick<
+  Queue<AccountDeletionCleanupJobData>,
+  "add" | "getJob"
+>;
+
 type AccountDeletionCleanupRequestDeps = {
   deleteS3Keys: typeof deleteS3Keys;
   logger: Pick<typeof logger, "warn">;
@@ -61,11 +66,26 @@ const getQueue = (): Queue<AccountDeletionCleanupJobData> => {
 export const enqueueAccountDeletionCleanup = async (
   requestId: SafeId<"accountDeletionRequest">,
 ): Promise<void> => {
-  await getQueue().add(
-    STORAGE_CLEANUP_JOB_NAME,
-    { requestId },
-    { jobId: createBullMqJobId(requestId, STORAGE_CLEANUP_JOB_NAME) },
-  );
+  await enqueueAccountDeletionCleanupJob({ queue: getQueue(), requestId });
+};
+
+export const enqueueAccountDeletionCleanupJob = async ({
+  queue,
+  requestId,
+}: {
+  queue: AccountDeletionCleanupQueue;
+  requestId: SafeId<"accountDeletionRequest">;
+}): Promise<void> => {
+  const jobId = createBullMqJobId(requestId, STORAGE_CLEANUP_JOB_NAME);
+  const existingJob = await queue.getJob(jobId);
+  if (existingJob) {
+    const state = await existingJob.getState();
+    if (state === "failed") {
+      await existingJob.remove();
+    }
+  }
+
+  await queue.add(STORAGE_CLEANUP_JOB_NAME, { requestId }, { jobId });
 };
 
 export const processAccountDeletionCleanupRequest = async (

@@ -23,6 +23,11 @@ export type AccountDeletionTaskReassignmentTarget =
     reassignedUserId: string;
   };
 
+export type AccountDeletionTaskAssignmentMembershipPartition = {
+  currentMembershipAssignments: AccountDeletionTaskAssignment[];
+  staleAssignments: AccountDeletionTaskAssignment[];
+};
+
 export const isAccountDeletionActiveTaskStatus = (
   status: string | null,
 ): boolean =>
@@ -70,6 +75,28 @@ export const buildAccountDeletionTaskReassignmentTargets = ({
   }
 
   return targets;
+};
+
+export const partitionAccountDeletionTaskAssignmentsByMembership = ({
+  currentWorkspaceIds,
+  taskAssignments,
+}: {
+  currentWorkspaceIds: ReadonlySet<string>;
+  taskAssignments: readonly AccountDeletionTaskAssignment[];
+}): AccountDeletionTaskAssignmentMembershipPartition => {
+  const currentMembershipAssignments: AccountDeletionTaskAssignment[] = [];
+  const staleAssignments: AccountDeletionTaskAssignment[] = [];
+
+  for (const assignment of taskAssignments) {
+    if (currentWorkspaceIds.has(assignment.workspaceId)) {
+      currentMembershipAssignments.push(assignment);
+      continue;
+    }
+
+    staleAssignments.push(assignment);
+  }
+
+  return { currentMembershipAssignments, staleAssignments };
 };
 
 export const validateAccountDeletionTaskReassignmentTargets = ({

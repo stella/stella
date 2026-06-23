@@ -80,8 +80,10 @@ const rootDbMock = {
   })),
 };
 
-const { processAccountDeletionCleanupRequest } =
-  await import("./account-deletion-cleanup-queue");
+const {
+  enqueueAccountDeletionCleanupJob,
+  processAccountDeletionCleanupRequest,
+} = await import("./account-deletion-cleanup-queue");
 
 const cleanupDeps = asTestRaw<
   NonNullable<Parameters<typeof processAccountDeletionCleanupRequest>[1]>
@@ -157,5 +159,31 @@ describe("account deletion cleanup queue", () => {
 
     expect(deleteS3KeysMock).not.toHaveBeenCalled();
     expect(updateSets).toEqual([]);
+  });
+
+  test("removes a retained failed job before re-enqueueing cleanup", async () => {
+    const removeFailedJobMock = mock(async () => {});
+    const addJobMock = mock(async () => {});
+    const queue = asTestRaw<
+      Parameters<typeof enqueueAccountDeletionCleanupJob>[0]["queue"]
+    >({
+      add: addJobMock,
+      getJob: mock(async () => ({
+        getState: mock(async () => "failed"),
+        remove: removeFailedJobMock,
+      })),
+    });
+
+    await enqueueAccountDeletionCleanupJob({ queue, requestId });
+
+    expect(removeFailedJobMock).toHaveBeenCalled();
+    expect(addJobMock).toHaveBeenCalledWith(
+      "storage-cleanup",
+      { requestId },
+      {
+        jobId:
+          "00000000%2D0000%2D0000%2D0000%2D000000000001-storage%2Dcleanup",
+      },
+    );
   });
 });
