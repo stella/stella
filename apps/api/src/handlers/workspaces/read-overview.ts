@@ -58,10 +58,20 @@ export const readOverviewHandler = async ({
               },
             },
             createdByUser: {
-              columns: { name: true, email: true, image: true },
+              columns: {
+                name: true,
+                email: true,
+                image: true,
+                deletedAt: true,
+              },
             },
             lastEditedByUser: {
-              columns: { name: true, email: true, image: true },
+              columns: {
+                name: true,
+                email: true,
+                image: true,
+                deletedAt: true,
+              },
             },
             assignees: {
               columns: {},
@@ -69,7 +79,12 @@ export const readOverviewHandler = async ({
               limit: 1,
               with: {
                 user: {
-                  columns: { name: true, email: true, image: true },
+                  columns: {
+                    name: true,
+                    email: true,
+                    image: true,
+                    deletedAt: true,
+                  },
                 },
               },
             },
@@ -154,8 +169,10 @@ export const readOverviewHandler = async ({
       updatedAt: e.updatedAt?.toISOString() ?? null,
       createdBy: displayName,
       createdByImage: editor?.image ?? null,
+      createdByDeletedAt: editor?.deletedAt?.toISOString() ?? null,
       assignedTo: assigneeName,
       assignedToImage: primaryAssignee?.image ?? null,
+      assignedToDeletedAt: primaryAssignee?.deletedAt?.toISOString() ?? null,
     };
   });
 

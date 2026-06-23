@@ -18,16 +18,33 @@ export const PersonMentionLabel = ({
   mention,
   className,
   avatarClassName = "size-5 shrink-0 text-[8px]",
-}: PersonMentionLabelProps) => (
-  <span className={cn("inline-flex items-center gap-1.5", className)}>
-    {!mention.hideAvatar && (
-      <Avatar className={avatarClassName}>
-        {mention.image && (
-          <AvatarImage alt={mention.name} src={mention.image} />
-        )}
-        <AvatarFallback>{getInitials(mention.name)}</AvatarFallback>
-      </Avatar>
-    )}
-    {mention.name}
-  </span>
-);
+}: PersonMentionLabelProps) => {
+  const isDeleted =
+    mention.deletedAt !== null && mention.deletedAt !== undefined;
+
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5",
+        isDeleted && "text-muted-foreground",
+        className,
+      )}
+    >
+      {!mention.hideAvatar && (
+        <Avatar
+          className={cn(avatarClassName, isDeleted && "opacity-60 grayscale")}
+        >
+          {mention.image && (
+            <AvatarImage alt={mention.name} src={mention.image} />
+          )}
+          <AvatarFallback
+            className={cn(isDeleted && "bg-muted text-muted-foreground")}
+          >
+            {getInitials(mention.name)}
+          </AvatarFallback>
+        </Avatar>
+      )}
+      {mention.name}
+    </span>
+  );
+};

@@ -1351,7 +1351,8 @@
     },
     "openChat": "Ouvrir la conversation",
     "reopenTab": "Rouvrir {name}",
-    "showPane": "Afficher le volet"
+    "showPane": "Afficher le volet",
+    "title": "Inspecteur"
   },
   "knowledge": {
     "agentSkills": {
@@ -1853,19 +1854,20 @@
       "betaDescription": "Essayez des fonctionnalités encore en développement",
       "confirmDelete": "Confirmer la suppression du compte",
       "dangerZone": "Zone de danger",
-      "dangerZoneDescription": "Supprimer définitivement votre compte et toutes les données associées.",
+      "dangerZoneDescription": "Supprimer définitivement votre accès au compte et les données privées du compte.",
       "deleteAccount": "Supprimer le compte",
-      "deleteAccountConfirmDescription": "Êtes-vous sûr de vouloir supprimer votre compte ? Cette action est définitive et irréversible.",
+      "deleteAccountConfirmDescription": "Êtes-vous sûr de vouloir supprimer votre compte ? Vous perdrez définitivement l'accès.",
       "deleteAccountConfirmationLabel": "Saisissez cette phrase pour continuer",
       "deleteAccountConfirmationPhrase": "La suppression est irréversible.",
       "deleteAccountOtpDescription": "Nous avons envoyé un code de vérification à 6 chiffres à votre adresse e-mail. Saisissez-le ci-dessous pour confirmer la suppression.",
       "deleteAccountSuccess": "Votre compte a été supprimé avec succès.",
+      "deleteAccountTaskBulkReassign": "Transférer toutes les tâches actives de cet espace de travail...",
       "deleteAccountTaskReassignNone": "Aucun autre membre dans cet espace de travail",
       "deleteAccountTaskReassignPlaceholder": "Sélectionner un membre...",
-      "deleteAccountTasksDescription": "Des tâches en attente vous sont attribuées. Réassignez-les à d'autres membres de l'espace de travail pour assurer la continuité.",
-      "deleteAccountTasksTitle": "Réassigner les tâches en attente",
-      "deleteAccountWarning": "La suppression est irréversible. Toutes vos données seront supprimées.",
-      "deleteAccountWarningExplanation": "Nous enverrons un code de vérification à votre adresse e-mail pour confirmer cette demande. Si vous êtes le seul propriétaire d'une organisation, vous devez d'abord transférer la propriété ou supprimer l'organisation.",
+      "deleteAccountTasksDescription": "Des tâches actives vous sont attribuées. Transférez-les à d'autres membres de l'espace de travail pour que le travail continue.",
+      "deleteAccountTasksTitle": "Transférer les tâches actives",
+      "deleteAccountWarning": "La suppression est irréversible. Vos identifiants de connexion et données privées du compte seront supprimés.",
+      "deleteAccountWarningExplanation": "Nous enverrons un code de vérification à votre adresse e-mail pour confirmer cette demande. L'historique terminé de l'espace de travail restera attribué à votre compte supprimé.",
       "desktop": "Bureau",
       "desktopAppDescription": "Ouvrez des documents et des fichiers directement dans stella depuis votre ordinateur.",
       "desktopDescription": "Installez stella sur votre ordinateur",
@@ -1986,6 +1988,7 @@
     },
     "assignees": "Assignés",
     "clearDate": "Effacer la date",
+    "deletedAccount": "Compte supprimé",
     "dueDate": "Échéance",
     "linkEntity": "Lier un élément",
     "linkedEntities": "Éléments liés",
@@ -2865,6 +2868,8 @@
         "locked": "Verrouillée",
         "unlock": "Déverrouiller la cellule"
       },
+      "portraitDescription": "Les tableaux ont besoin de plus de largeur sur mobile. Tournez l’appareil pour continuer.",
+      "portraitTitle": "Passez en paysage",
       "reorderReadOnly": "Les lignes du tableau suivent le tri actuel",
       "tightContent": "Compact",
       "wrapContent": "Retour à la ligne"

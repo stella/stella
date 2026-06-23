@@ -1351,7 +1351,8 @@
     },
     "openChat": "Otvoriť chat",
     "reopenTab": "Znova otvoriť {name}",
-    "showPane": "Zobraziť panel"
+    "showPane": "Zobraziť panel",
+    "title": "Inšpektor"
   },
   "knowledge": {
     "agentSkills": {
@@ -1853,19 +1854,20 @@
       "betaDescription": "Vyskúšajte funkcie, ktoré sú stále vo vývoji",
       "confirmDelete": "Potvrdiť vymazanie účtu",
       "dangerZone": "Nebezpečná zóna",
-      "dangerZoneDescription": "Natrvalo vymazať váš účet a všetky priradené údaje.",
+      "dangerZoneDescription": "Natrvalo vymazať prístup k účtu a súkromné údaje účtu.",
       "deleteAccount": "Vymazať účet",
-      "deleteAccountConfirmDescription": "Naozaj chcete vymazať svoj účet? Táto akcia je trvalá a nedá sa vrátiť späť.",
+      "deleteAccountConfirmDescription": "Naozaj chcete vymazať svoj účet? O prístup prídete natrvalo.",
       "deleteAccountConfirmationLabel": "Ak chcete pokračovať, opíšte túto frázu",
       "deleteAccountConfirmationPhrase": "Vymazanie je nezvratný krok.",
       "deleteAccountOtpDescription": "Na váš e-mail sme odoslali 6-miestny overovací kód. Pre potvrdenie vymazania ho zadajte nižšie.",
       "deleteAccountSuccess": "Váš účet bol úspešne vymazaný.",
+      "deleteAccountTaskBulkReassign": "Previesť všetky aktívne úlohy v tomto pracovnom priestore...",
       "deleteAccountTaskReassignNone": "Žiadni iní členovia v tomto pracovnom priestore",
       "deleteAccountTaskReassignPlaceholder": "Vybrať člena...",
-      "deleteAccountTasksDescription": "Máte priradené čakajúce úlohy. Znovu ich priraďte ostatným členom pracovného priestoru, aby ste zaistili kontinuitu.",
-      "deleteAccountTasksTitle": "Znovu priradiť čakajúce úlohy",
-      "deleteAccountWarning": "Vymazanie je nezvratný krok. Všetky vaše údaje budú odstránené.",
-      "deleteAccountWarningExplanation": "Na vašu e-mailovú adresu pošleme overovací kód na potvrdenie tejto požiadavky. Ak ste jediným vlastníkom akejkoľvek organizácie, musíte najprv previesť vlastníctvo alebo organizáciu vymazať.",
+      "deleteAccountTasksDescription": "Máte priradené aktívne úlohy. Preveďte ich na iných členov pracovného priestoru, aby práca pokračovala.",
+      "deleteAccountTasksTitle": "Previesť aktívne úlohy",
+      "deleteAccountWarning": "Vymazanie je nezvratný krok. Prihlasovacie údaje a súkromné údaje účtu budú odstránené.",
+      "deleteAccountWarningExplanation": "Na vašu e-mailovú adresu pošleme overovací kód na potvrdenie tejto požiadavky. Dokončená história pracovných priestorov zostane priradená k vymazanému účtu.",
       "desktop": "Aplikácia pre počítač",
       "desktopAppDescription": "Otvárajte dokumenty a súbory priamo v stella z vášho počítača.",
       "desktopDescription": "Nainštalujte si stella do počítača",
@@ -1986,6 +1988,7 @@
     },
     "assignees": "Priradení",
     "clearDate": "Vymazať dátum",
+    "deletedAccount": "Vymazaný účet",
     "dueDate": "Termín",
     "linkEntity": "Prepojiť položku",
     "linkedEntities": "Prepojené položky",
@@ -2865,6 +2868,8 @@
         "locked": "Uzamknuté",
         "unlock": "Odomknúť bunku"
       },
+      "portraitDescription": "Tabuľky na mobile potrebujú širšie zobrazenie. Otočte zariadenie na šírku a pokračujte.",
+      "portraitTitle": "Otočte na šírku",
       "reorderReadOnly": "Riadky tabuľky sa riadia aktuálnym zoradením",
       "tightContent": "Tesne",
       "wrapContent": "Zalomiť text"

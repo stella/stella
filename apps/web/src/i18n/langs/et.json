@@ -1351,7 +1351,8 @@
     },
     "openChat": "Ava vestlus",
     "reopenTab": "Ava {name} uuesti",
-    "showPane": "Kuva paneel"
+    "showPane": "Kuva paneel",
+    "title": "Inspektor"
   },
   "knowledge": {
     "agentSkills": {
@@ -1853,19 +1854,20 @@
       "betaDescription": "Proovige funktsioone, mis on alles arendamisel",
       "confirmDelete": "Kinnita konto kustutamine",
       "dangerZone": "Ohutsoon",
-      "dangerZoneDescription": "Kustuta oma konto ja kõik seotud andmed jäädavalt.",
+      "dangerZoneDescription": "Kustuta konto juurdepääs ja konto privaatsed andmed jäädavalt.",
       "deleteAccount": "Kustuta konto",
-      "deleteAccountConfirmDescription": "Kas olete kindel, et soovite oma konto kustutada? See toiming on tagasivõtmatu.",
+      "deleteAccountConfirmDescription": "Kas olete kindel, et soovite oma konto kustutada? Kaotate juurdepääsu jäädavalt.",
       "deleteAccountConfirmationLabel": "Jätkamiseks sisestage see fraas",
       "deleteAccountConfirmationPhrase": "Kustutamine on pöördumatu.",
       "deleteAccountOtpDescription": "Saatsime teie e-postile 6-kohalise kinnituskoodi. Sisestage see allpool kustutamise kinnitamiseks.",
       "deleteAccountSuccess": "Teie konto on edukalt kustutatud.",
+      "deleteAccountTaskBulkReassign": "Anna kõik selle tööruumi aktiivsed ülesanded üle...",
       "deleteAccountTaskReassignNone": "Selles tööruumis pole teisi liikmeid",
       "deleteAccountTaskReassignPlaceholder": "Vali liige...",
-      "deleteAccountTasksDescription": "Teile on määratud ootel ülesandeid. Jätkusuutlikkuse tagamiseks määrake need teistele tööruumi liikmetele.",
-      "deleteAccountTasksTitle": "Määra ootel ülesanded uuesti",
-      "deleteAccountWarning": "Kustutamine on pöördumatu. Kõik teie andmed eemaldatakse.",
-      "deleteAccountWarningExplanation": "Saadame teie e-posti aadressile kinnituskoodi selle taotluse kinnitamiseks. Kui olete mõne organisatsiooni ainus omanik, peate esmalt omanikuõigused üle andma või organisatsiooni kustutama.",
+      "deleteAccountTasksDescription": "Teile on määratud aktiivseid ülesandeid. Andke need teistele tööruumi liikmetele üle, et töö jätkuks.",
+      "deleteAccountTasksTitle": "Anna aktiivsed ülesanded üle",
+      "deleteAccountWarning": "Kustutamine on pöördumatu. Teie sisselogimisandmed ja konto privaatsed andmed eemaldatakse.",
+      "deleteAccountWarningExplanation": "Saadame teie e-posti aadressile kinnituskoodi selle taotluse kinnitamiseks. Lõpetatud tööruumi ajalugu jääb seotuks teie kustutatud kontoga.",
       "desktop": "Töölaud",
       "desktopAppDescription": "Avage dokumendid ja failid otse stella-s oma arvutist.",
       "desktopDescription": "Installige stella oma arvutisse",
@@ -1986,6 +1988,7 @@
     },
     "assignees": "Määratud",
     "clearDate": "Tühjenda kuupäev",
+    "deletedAccount": "Kustutatud konto",
     "dueDate": "Tähtaeg",
     "linkEntity": "Seo kirje",
     "linkedEntities": "Seotud kirjed",
@@ -2865,6 +2868,8 @@
         "locked": "Lukus",
         "unlock": "Vabasta lahter"
       },
+      "portraitDescription": "Tabelid vajavad mobiilis laiemat vaadet. Jätkamiseks pööra seade külili.",
+      "portraitTitle": "Pööra rõhtpaigutusse",
       "reorderReadOnly": "Tabeliread järgivad praegust sortimist",
       "tightContent": "Kompaktne",
       "wrapContent": "Murra tekst"

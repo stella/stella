@@ -1351,7 +1351,8 @@
     },
     "openChat": "Otwórz czat",
     "reopenTab": "Otwórz ponownie {name}",
-    "showPane": "Pokaż panel"
+    "showPane": "Pokaż panel",
+    "title": "Inspektor"
   },
   "knowledge": {
     "agentSkills": {
@@ -1853,19 +1854,20 @@
       "betaDescription": "Wypróbuj funkcje, które są wciąż w fazie rozwoju",
       "confirmDelete": "Potwierdź usunięcie konta",
       "dangerZone": "Strefa zagrożenia",
-      "dangerZoneDescription": "Trwale usuń swoje konto i wszystkie powiązane dane.",
+      "dangerZoneDescription": "Trwale usuń dostęp do konta i prywatne dane konta.",
       "deleteAccount": "Usuń konto",
-      "deleteAccountConfirmDescription": "Czy na pewno chcesz usunąć swoje konto? Ta operacja jest trwała i nie można jej cofnąć.",
+      "deleteAccountConfirmDescription": "Czy na pewno chcesz usunąć swoje konto? Utracisz dostęp na stałe.",
       "deleteAccountConfirmationLabel": "Wpisz tę frazę, aby kontynuować",
       "deleteAccountConfirmationPhrase": "Usunięcie jest nieodwracalne.",
       "deleteAccountOtpDescription": "Wysłaliśmy 6-cyfrowy kod weryfikacyjny na Twój adres e-mail. Wprowadź go poniżej, aby potwierdzić usunięcie.",
       "deleteAccountSuccess": "Twoje konto zostało pomyślnie usunięte.",
+      "deleteAccountTaskBulkReassign": "Przenieś wszystkie aktywne zadania w tym obszarze roboczym...",
       "deleteAccountTaskReassignNone": "Brak innych członków w tym obszarze roboczym",
       "deleteAccountTaskReassignPlaceholder": "Wybierz członka...",
-      "deleteAccountTasksDescription": "Masz przypisane oczekujące zadania. Przypisz je ponownie innym członkom obszaru roboczego, aby zapewnić ciągłość.",
-      "deleteAccountTasksTitle": "Ponownie przypisz oczekujące zadania",
-      "deleteAccountWarning": "Usunięcie jest nieodwracalne. Wszystkie Twoje dane zostaną usunięte.",
-      "deleteAccountWarningExplanation": "Wyślemy kod weryfikacyjny na Twój adres e-mail, aby potwierdzić to żądanie. Jeśli jesteś jedynym właścicielem jakiejkolwiek organizacji, musisz najpierw przenieść własność lub usunąć organizację.",
+      "deleteAccountTasksDescription": "Masz przypisane aktywne zadania. Przenieś je do innych członków obszaru roboczego, aby praca mogła trwać dalej.",
+      "deleteAccountTasksTitle": "Przenieś aktywne zadania",
+      "deleteAccountWarning": "Usunięcie jest nieodwracalne. Dane logowania i prywatne dane konta zostaną usunięte.",
+      "deleteAccountWarningExplanation": "Wyślemy kod weryfikacyjny na Twój adres e-mail, aby potwierdzić to żądanie. Ukończona historia obszarów roboczych pozostanie przypisana do usuniętego konta.",
       "desktop": "Aplikacja na komputer",
       "desktopAppDescription": "Otwieraj dokumenty i pliki bezpośrednio w stella ze swojego komputera.",
       "desktopDescription": "Zainstaluj stella na swoim komputerze",
@@ -1986,6 +1988,7 @@
     },
     "assignees": "Przypisani",
     "clearDate": "Wyczyść datę",
+    "deletedAccount": "Usunięte konto",
     "dueDate": "Termin",
     "linkEntity": "Powiąż element",
     "linkedEntities": "Powiązane elementy",
@@ -2865,6 +2868,8 @@
         "locked": "Zablokowana",
         "unlock": "Odblokuj komórkę"
       },
+      "portraitDescription": "Tabele na telefonie wymagają szerszego widoku. Obróć urządzenie poziomo, aby kontynuować.",
+      "portraitTitle": "Obróć do poziomu",
       "reorderReadOnly": "Wiersze tabeli są zgodne z bieżącym sortowaniem",
       "tightContent": "Kompaktowo",
       "wrapContent": "Zawijaj tekst"

@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, eq, inArray, isNull, ne, or } from "drizzle-orm";
 
 import {
   account,
@@ -16,6 +16,7 @@ import {
 } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import {
+  accountDeletionRequests,
   agentSkills,
   chatThreads,
   desktopEditHandoffs,
@@ -34,10 +35,26 @@ import {
   workspaceViewTemplates,
   workspaces,
 } from "@/api/db/schema";
-import { createUserFileKey, deleteS3Keys } from "@/api/handlers/files/utils";
-import type { SafeId } from "@/api/lib/branded-types";
+import { createUserFileKey } from "@/api/handlers/files/utils";
+import {
+  enqueueAccountDeletionCleanup,
+  processAccountDeletionCleanupRequest,
+} from "@/api/lib/account-deletion-cleanup-queue";
+import {
+  ACTIVE_TASK_REASSIGNMENT_STATUSES,
+  buildAccountDeletionTaskReassignmentTargets,
+  validateAccountDeletionTaskReassignmentTargets,
+} from "@/api/lib/account-deletion-reassignment";
+import { captureError } from "@/api/lib/analytics";
+import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { errorTag } from "@/api/lib/errors/utils";
+import { LIMITS } from "@/api/lib/limits";
+import { logger } from "@/api/lib/observability/logger";
+import {
+  brandPersistedOrganizationId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 
 /**
  * Fetches the user email by ID.
@@ -166,7 +183,7 @@ export const createDeleteAccountOtp = async (
       }),
   });
 
-export type PendingTask = {
+export type ActiveTaskAssignment = {
   assigneeId: string;
   entityId: string;
   role: "assignee" | "reviewer";
@@ -182,12 +199,15 @@ export type WorkspaceMemberInfo = {
 };
 
 /**
- * Fetches all pending tasks assigned to the user along with other workspace members for reassignment.
+ * Fetches active tasks assigned to the user along with other workspace members for reassignment.
  */
 export const getPendingTasksAndMembers = async (
   currentUserId: string,
 ): Promise<
-  Result<{ tasks: PendingTask[]; members: WorkspaceMemberInfo[] }, HandlerError>
+  Result<
+    { tasks: ActiveTaskAssignment[]; members: WorkspaceMemberInfo[] },
+    HandlerError
+  >
 > =>
   await Result.tryPromise({
     try: async () => {
@@ -203,14 +223,25 @@ export const getPendingTasksAndMembers = async (
         .from(taskAssignees)
         .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
         .innerJoin(workspaces, eq(workspaces.id, taskAssignees.workspaceId))
-        .innerJoin(
-          workspaceMembers,
+        .where(
           and(
-            eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
-            eq(workspaceMembers.userId, currentUserId),
+            eq(taskAssignees.userId, currentUserId),
+            eq(entities.kind, "task"),
+            or(
+              isNull(entities.status),
+              inArray(entities.status, ACTIVE_TASK_REASSIGNMENT_STATUSES),
+            ),
           ),
         )
-        .where(eq(taskAssignees.userId, currentUserId));
+        .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
+
+      if (userAssignments.length > LIMITS.accountDeletionTaskAssignmentsMax) {
+        throw new HandlerError({
+          status: 400,
+          message:
+            "Too many active task assignments to reassign during account deletion.",
+        });
+      }
 
       const workspaceIds = [
         ...new Set(userAssignments.map((a) => a.workspaceId)),
@@ -235,7 +266,7 @@ export const getPendingTasksAndMembers = async (
           : [];
 
       return {
-        tasks: userAssignments as PendingTask[],
+        tasks: userAssignments as ActiveTaskAssignment[],
         members: otherMembers,
       };
     },
@@ -262,7 +293,9 @@ export const verifyAndDeleteUser = async (
   await Result.tryPromise({
     try: async () => {
       const identifier = `delete-account:${email}`;
+      const deletionRequestId = createSafeId<"accountDeletionRequest">();
       let s3KeysToDelete: string[] = [];
+      let taskReassignmentCount = 0;
 
       await rootDb.transaction(async (tx) => {
         // Lock the user row to serialize deletion of this account
@@ -349,17 +382,29 @@ export const verifyAndDeleteUser = async (
           });
         }
 
+        const organizationIds = (
+          await tx
+            .select({ organizationId: member.organizationId })
+            .from(member)
+            .where(eq(member.userId, currentUserId))
+        ).map((row) => brandPersistedOrganizationId(row.organizationId));
+
+        const workspaceIds = (
+          await tx
+            .select({ workspaceId: workspaceMembers.workspaceId })
+            .from(workspaceMembers)
+            .where(eq(workspaceMembers.userId, currentUserId))
+        ).map((row) => row.workspaceId);
+
         // audit: skip — ephemeral verification code deletion
         await tx
           .delete(verification)
           .where(eq(verification.id, verificationRow.id));
 
-        // The user row is anonymized (UPDATE) rather than deleted to preserve
-        // rows in tables with onDelete:restrict (templates.createdBy, clauses.createdBy,
-        // usageEvents.userId, etc.) which form the audit trail. Because no DELETE
-        // fires on the user row, none of the onDelete:cascade / onDelete:set null
-        // constraints trigger automatically — we must clean up every linked table
-        // explicitly below.
+        // The user row is retained for historical attribution in collaborative
+        // records. Account deletion revokes access and clears private profile
+        // fields, but completed/cancelled task history can still show who did
+        // the work with a deleted-account marker.
 
         // 1. Auth credentials, sessions, and invitations (auth-schema tables)
         await tx.delete(account).where(eq(account.userId, currentUserId));
@@ -396,16 +441,14 @@ export const verifyAndDeleteUser = async (
           .delete(mcpOAuthState)
           .where(eq(mcpOAuthState.userId, currentUserId));
 
-        // 4. Workspace memberships — clear lead role then delete member rows
+        // 4. Workspace lead role — membership deletion happens after task handoff
         await tx
           .update(workspaces)
           .set({ leadUserId: null })
           .where(eq(workspaces.leadUserId, currentUserId));
-        await tx
-          .delete(workspaceMembers)
-          .where(eq(workspaceMembers.userId, currentUserId));
 
-        // 5. Task assignee records (reassign where requested, otherwise cascade)
+        // 5. Active task assignee records require handoff. Completed/cancelled
+        // assignments remain as historical activity on the deleted user row.
         const reassignmentItems = [...(reassignments ?? [])];
         const currentTaskAssignments = await tx
           .select({
@@ -413,30 +456,42 @@ export const verifyAndDeleteUser = async (
             workspaceId: taskAssignees.workspaceId,
           })
           .from(taskAssignees)
-          .where(eq(taskAssignees.userId, currentUserId));
+          .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
+          .where(
+            and(
+              eq(taskAssignees.userId, currentUserId),
+              eq(entities.kind, "task"),
+              or(
+                isNull(entities.status),
+                inArray(entities.status, ACTIVE_TASK_REASSIGNMENT_STATUSES),
+              ),
+            ),
+          )
+          .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
+
+        if (
+          currentTaskAssignments.length >
+          LIMITS.accountDeletionTaskAssignmentsMax
+        ) {
+          throw new HandlerError({
+            status: 400,
+            message:
+              "Too many active task assignments to reassign during account deletion.",
+          });
+        }
 
         if (currentTaskAssignments.length > 0) {
-          const targetByEntityId = new Map(
-            reassignmentItems.map((item) => [
-              item.entityId,
-              item.reassignedUserId,
-            ]),
-          );
-          const missingAssignment = currentTaskAssignments.find(
-            (assignment) => !targetByEntityId.has(assignment.entityId),
-          );
-          if (missingAssignment) {
-            throw new HandlerError({
-              status: 400,
-              message:
-                "All pending task assignments must be reassigned before deleting your account.",
+          const reassignmentTargets =
+            buildAccountDeletionTaskReassignmentTargets({
+              currentTaskAssignments,
+              currentUserId,
+              reassignments: reassignmentItems,
             });
-          }
-
-          const reassignmentUserIds = reassignmentItems.map(
-            (item) => item.reassignedUserId,
+          const reassignmentUserIds = reassignmentTargets.map(
+            (target) => target.reassignedUserId,
           );
-          const workspaceIds = currentTaskAssignments.map(
+
+          const taskWorkspaceIds = currentTaskAssignments.map(
             (assignment) => assignment.workspaceId,
           );
           const validMembershipKeys = new Set(
@@ -449,7 +504,7 @@ export const verifyAndDeleteUser = async (
                 .from(workspaceMembers)
                 .where(
                   and(
-                    inArray(workspaceMembers.workspaceId, workspaceIds),
+                    inArray(workspaceMembers.workspaceId, taskWorkspaceIds),
                     inArray(workspaceMembers.userId, reassignmentUserIds),
                   ),
                 )
@@ -477,43 +532,11 @@ export const verifyAndDeleteUser = async (
             ).map((row) => `${row.entityId}:${row.userId}`),
           );
 
-          const updates: {
-            entityId: SafeId<"entity">;
-            reassignedUserId: string;
-          }[] = [];
-          for (const assignment of currentTaskAssignments) {
-            const reassignedUserId = targetByEntityId.get(assignment.entityId);
-            if (!reassignedUserId) {
-              throw new HandlerError({
-                status: 400,
-                message:
-                  "All pending task assignments must be reassigned before deleting your account.",
-              });
-            }
-
-            const membershipKey = `${assignment.workspaceId}:${reassignedUserId}`;
-            const assignmentKey = `${assignment.entityId}:${reassignedUserId}`;
-            if (!validMembershipKeys.has(membershipKey)) {
-              throw new HandlerError({
-                status: 400,
-                message:
-                  "Task reassignment target must be a member of the task workspace.",
-              });
-            }
-
-            if (existingReassignmentKeys.has(assignmentKey)) {
-              throw new HandlerError({
-                status: 400,
-                message:
-                  "Selected task reassignment target is already assigned to one of the tasks.",
-              });
-            }
-
-            updates.push({
-              entityId: assignment.entityId,
-              reassignedUserId,
-            });
-          }
+          const updates = validateAccountDeletionTaskReassignmentTargets({
+            existingReassignmentKeys,
+            targets: reassignmentTargets,
+            validMembershipKeys,
+          });
 
           await Promise.all(
             updates.map((item) =>
@@ -530,10 +553,12 @@ export const verifyAndDeleteUser = async (
                 ),
             ),
           );
+          taskReassignmentCount = updates.length;
         }
+
         await tx
-          .delete(taskAssignees)
-          .where(eq(taskAssignees.userId, currentUserId));
+          .delete(workspaceMembers)
+          .where(eq(workspaceMembers.userId, currentUserId));
 
         // 6. Desktop edit sessions and handoffs (cascade on createdBy → user.id)
         await tx
@@ -605,29 +630,33 @@ export const verifyAndDeleteUser = async (
           .delete(rateEntries)
           .where(eq(rateEntries.userId, currentUserId));
 
-        // 3. Clear personal data in the user table and release the original email address
+        await tx.insert(accountDeletionRequests).values({
+          id: deletionRequestId,
+          userId: currentUserId,
+          organizationIds,
+          workspaceIds,
+          taskReassignmentCount,
+          status: s3KeysToDelete.length > 0 ? "pending" : "completed",
+          storageCleanup: { s3Keys: s3KeysToDelete },
+          completedAt: s3KeysToDelete.length > 0 ? null : new Date(),
+        });
+
+        // 13. Mark the account deleted and release private contact/login fields.
         await tx
           .update(user)
           .set({
-            name: "Deleted User",
             email: `deleted-${currentUserId}@stella.placeholder`,
             emailVerified: false,
             image: null,
             preferredName: null,
             wordEditShortcut: null,
+            deletedAt: new Date(),
           })
           .where(eq(user.id, currentUserId));
       });
 
       if (s3KeysToDelete.length > 0) {
-        const deleteResult = await deleteS3Keys(s3KeysToDelete);
-        if (Result.isError(deleteResult)) {
-          throw new HandlerError({
-            status: 500,
-            message: "Failed to delete user files from storage",
-            cause: deleteResult.error,
-          });
-        }
+        await enqueueStorageCleanupOrLog(deletionRequestId);
       }
     },
     catch: (err) =>
@@ -639,3 +668,27 @@ export const verifyAndDeleteUser = async (
             cause: err,
           }),
   });
+
+const enqueueStorageCleanupOrLog = async (
+  deletionRequestId: SafeId<"accountDeletionRequest">,
+): Promise<void> => {
+  try {
+    await enqueueAccountDeletionCleanup(deletionRequestId);
+  } catch (error) {
+    captureError(error, { deletionRequestId });
+    logger.error("account_deletion_cleanup.enqueue_failed", {
+      "error.type": errorTag(error),
+      deletionRequestId,
+    });
+
+    void processAccountDeletionCleanupRequest(deletionRequestId).catch(
+      (cleanupError: unknown) => {
+        captureError(cleanupError, { deletionRequestId });
+        logger.error("account_deletion_cleanup.inline_failed", {
+          "error.type": errorTag(cleanupError),
+          deletionRequestId,
+        });
+      },
+    );
+  }
+};

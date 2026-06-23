@@ -1351,7 +1351,8 @@
     },
     "openChat": "Atvērt tērzēšanu",
     "reopenTab": "Atkārtoti atvērt {name}",
-    "showPane": "Rādīt paneli"
+    "showPane": "Rādīt paneli",
+    "title": "Inspektors"
   },
   "knowledge": {
     "agentSkills": {
@@ -1853,19 +1854,20 @@
       "betaDescription": "Izmēģiniet funkcijas, kas vēl tiek izstrādātas",
       "confirmDelete": "Apstiprināt konta dzēšanu",
       "dangerZone": "Bīstamā zona",
-      "dangerZoneDescription": "Neatgriezeniski dzēst jūsu kontu un visus saistītos datus.",
+      "dangerZoneDescription": "Neatgriezeniski dzēst konta piekļuvi un privātos konta datus.",
       "deleteAccount": "Dzēst kontu",
-      "deleteAccountConfirmDescription": "Vai tiešām vēlaties dzēst savu kontu? Šī darbība ir neatgriezeniska.",
+      "deleteAccountConfirmDescription": "Vai tiešām vēlaties dzēst savu kontu? Piekļuvi zaudēsiet neatgriezeniski.",
       "deleteAccountConfirmationLabel": "Lai turpinātu, ievadiet šo frāzi",
       "deleteAccountConfirmationPhrase": "Dzēšana ir neatgriezeniska.",
       "deleteAccountOtpDescription": "Mēs nosūtījām 6 ciparu apstiprinājuma kodu uz jūsu e-pastu. Ievadiet to zemāk, lai apstiprinātu dzēšanu.",
       "deleteAccountSuccess": "Jūsu konts ir veiksmīgi dzēsts.",
+      "deleteAccountTaskBulkReassign": "Nodot visus aktīvos uzdevumus šajā darba vietā...",
       "deleteAccountTaskReassignNone": "Šajā darba vietā nav citu dalībnieku",
       "deleteAccountTaskReassignPlaceholder": "Izvēlēties dalībnieku...",
-      "deleteAccountTasksDescription": "Jums ir piešķirti nepabeigti uzdevumi. Pārdaliet tos citiem darba vietas dalībniekiem, lai nodrošinātu nepārtrauktību.",
-      "deleteAccountTasksTitle": "Pārdalīt nepabeigtos uzdevumus",
-      "deleteAccountWarning": "Dzēšana ir neatgriezeniska. Visi jūsu dati tiks noņemti.",
-      "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājumu kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Ja esat vienīgais kādas organizācijas īpašnieks, vispirms ir jānodod īpašumtiesības vai jādzēš organizācija.",
+      "deleteAccountTasksDescription": "Jums ir piešķirti aktīvi uzdevumi. Nododiet tos citiem darba vietas dalībniekiem, lai darbs turpinātos.",
+      "deleteAccountTasksTitle": "Nodot aktīvos uzdevumus",
+      "deleteAccountWarning": "Dzēšana ir neatgriezeniska. Pieteikšanās dati un privātie konta dati tiks noņemti.",
+      "deleteAccountWarningExplanation": "Mēs nosūtīsim apstiprinājuma kodu uz jūsu e-pasta adresi, lai apstiprinātu šo pieprasījumu. Pabeigtā darba vietu vēsture paliks piesaistīta jūsu dzēstajam kontam.",
       "desktop": "Datorlietotne",
       "desktopAppDescription": "Atveriet dokumentus un failus tieši stella no sava datora.",
       "desktopDescription": "Instalējiet stella savā datorā",
@@ -1986,6 +1988,7 @@
     },
     "assignees": "Atbildīgie",
     "clearDate": "Notīrīt datumu",
+    "deletedAccount": "Dzēsts konts",
     "dueDate": "Izpildes termiņš",
     "linkEntity": "Saistīt ierakstu",
     "linkedEntities": "Saistītie ieraksti",
@@ -2865,6 +2868,8 @@
         "locked": "Bloķēta",
         "unlock": "Atbloķēt šūnu"
       },
+      "portraitDescription": "Tabulām mobilajā ierīcē vajag platāku skatu. Pagrieziet ierīci sāniski, lai turpinātu.",
+      "portraitTitle": "Pagrieziet ainavas režīmā",
       "reorderReadOnly": "Tabulas rindas seko pašreizējai kārtošanai",
       "tightContent": "Kompakti",
       "wrapContent": "Aplauzt tekstu"

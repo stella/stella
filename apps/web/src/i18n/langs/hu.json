@@ -1351,7 +1351,8 @@
     },
     "openChat": "Chat megnyitása",
     "reopenTab": "{name} újranyitása",
-    "showPane": "Panel megjelenítése"
+    "showPane": "Panel megjelenítése",
+    "title": "Ellenőrző panel"
   },
   "knowledge": {
     "agentSkills": {
@@ -1853,19 +1854,20 @@
       "betaDescription": "Próbálja ki a még fejlesztés alatt álló funkciókat",
       "confirmDelete": "Fiók törlésének megerősítése",
       "dangerZone": "Veszélyes zóna",
-      "dangerZoneDescription": "Fiókja és minden kapcsolódó adat végleges törlése.",
+      "dangerZoneDescription": "Fiókhozzáférése és a fiók privát adatainak végleges törlése.",
       "deleteAccount": "Fiók törlése",
-      "deleteAccountConfirmDescription": "Biztosan törölni szeretné a fiókját? Ez a művelet végleges és nem vonható vissza.",
+      "deleteAccountConfirmDescription": "Biztosan törölni szeretné a fiókját? A hozzáférést végleg elveszíti.",
       "deleteAccountConfirmationLabel": "A folytatáshoz írja be ezt a kifejezést",
       "deleteAccountConfirmationPhrase": "A törlés visszafordíthatatlan.",
       "deleteAccountOtpDescription": "Küldtünk egy 6 jegyű ellenőrző kódot az e-mail címére. A törlés megerősítéséhez adja meg alább.",
       "deleteAccountSuccess": "Fiókja sikeresen törölve lett.",
+      "deleteAccountTaskBulkReassign": "Az összes aktív feladat átadása ebben a munkaterületben...",
       "deleteAccountTaskReassignNone": "Nincs más tag ezen a munkaterületen",
       "deleteAccountTaskReassignPlaceholder": "Tag kiválasztása...",
-      "deleteAccountTasksDescription": "Függőben lévő feladatok vannak hozzárendelve Önhöz. A folytonosság biztosítása érdekében ossza ki azokat a munkaterület más tagjainak.",
-      "deleteAccountTasksTitle": "Függőben lévő feladatok újbóli kiosztása",
-      "deleteAccountWarning": "A törlés visszafordíthatatlan. Minden adata törlődik.",
-      "deleteAccountWarningExplanation": "A kérés megerősítéséhez ellenőrző kódot küldünk az e-mail címére. Ha Ön egy szervezet egyedüli tulajdonosa, először át kell ruháznia a tulajdonjogot, vagy törölnie kell a szervezetet.",
+      "deleteAccountTasksDescription": "Aktív feladatok vannak Önhöz rendelve. Adja át őket a munkaterület más tagjainak, hogy a munka folytatódjon.",
+      "deleteAccountTasksTitle": "Aktív feladatok átadása",
+      "deleteAccountWarning": "A törlés visszafordíthatatlan. Bejelentkezési adatai és a fiók privát adatai törlődnek.",
+      "deleteAccountWarningExplanation": "A kérés megerősítéséhez ellenőrző kódot küldünk az e-mail címére. A befejezett munkaterületi előzmények a törölt fiókjához rendelve maradnak.",
       "desktop": "Asztali alkalmazás",
       "desktopAppDescription": "Nyisson meg dokumentumokat és fájlokat közvetlenül a stella-ban a számítógépéről.",
       "desktopDescription": "Telepítse a Stellát a számítógépére",
@@ -1986,6 +1988,7 @@
     },
     "assignees": "Felelősök",
     "clearDate": "Dátum törlése",
+    "deletedAccount": "Törölt fiók",
     "dueDate": "Határidő",
     "linkEntity": "Elem kapcsolása",
     "linkedEntities": "Kapcsolt elemek",
@@ -2865,6 +2868,8 @@
         "locked": "Zárolva",
         "unlock": "Cella feloldása"
       },
+      "portraitDescription": "A táblázatok mobilon szélesebb nézetet igényelnek. Fordítsa oldalra az eszközt a folytatáshoz.",
+      "portraitTitle": "Fordítsa fekvő módba",
       "reorderReadOnly": "A táblázatsorok az aktuális rendezést követik",
       "tightContent": "Kompakt",
       "wrapContent": "Szöveg tördelése"

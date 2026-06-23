@@ -18,6 +18,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { DatePickerPopover as DatePickerPopoverBase } from "@/components/date-picker-popover";
 import type { DatePickerPopoverProps as DatePickerPopoverBaseProps } from "@/components/date-picker-popover";
+import { UserAvatar } from "@/components/user-avatar";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
@@ -134,6 +135,10 @@ type DatePickerPopoverProps = Omit<
   "locale" | "clearLabel" | "todayLabel" | "overdueLabel"
 >;
 
+const hasDeletedAccount = (
+  deletedAt: Date | string | null | undefined,
+): boolean => deletedAt !== null && deletedAt !== undefined;
+
 export const DatePickerPopover = (props: DatePickerPopoverProps) => {
   const t = useTranslations("tasks");
   const locale = useLocale();
@@ -158,6 +163,7 @@ type AssigneePickerProps = {
       id: string;
       name: string | null;
       image: string | null;
+      deletedAt?: Date | string | null;
     };
   }[];
 };
@@ -234,20 +240,25 @@ export const AssigneePicker = ({
           className="group/assignee flex items-center gap-1.5 rounded-md px-1.5 py-0.5"
           key={a.user.id}
         >
-          {a.user.image ? (
-            <img
-              alt={a.user.name ?? ""}
-              className="size-4 rounded-full"
-              height={16}
-              src={a.user.image}
-              width={16}
-            />
-          ) : (
-            <span className="bg-primary/10 flex size-4 items-center justify-center rounded-full text-[10px] font-medium">
-              {a.user.name?.[0]?.toUpperCase() ?? "?"}
+          <UserAvatar
+            className="size-4 text-[10px]"
+            deleted={hasDeletedAccount(a.user.deletedAt)}
+            image={a.user.image}
+            name={a.user.name}
+          />
+          <span
+            className={cn(
+              "flex-1 truncate text-sm",
+              hasDeletedAccount(a.user.deletedAt) && "text-muted-foreground",
+            )}
+          >
+            {a.user.name}
+          </span>
+          {hasDeletedAccount(a.user.deletedAt) ? (
+            <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-[10px]">
+              {t("deletedAccount")}
             </span>
-          )}
-          <span className="flex-1 truncate text-sm">{a.user.name}</span>
+          ) : null}
           <Button
             className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100"
             disabled={removeAssignee.isPending}

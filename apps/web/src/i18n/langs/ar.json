@@ -1351,7 +1351,8 @@
     },
     "openChat": "فتح المحادثة",
     "reopenTab": "إعادة فتح {name}",
-    "showPane": "إظهار اللوحة"
+    "showPane": "إظهار اللوحة",
+    "title": "لوحة الفحص"
   },
   "knowledge": {
     "agentSkills": {
@@ -1853,19 +1854,20 @@
       "betaDescription": "جرّب ميزات لا تزال قيد التطوير",
       "confirmDelete": "تأكيد حذف الحساب",
       "dangerZone": "منطقة الخطر",
-      "dangerZoneDescription": "احذف حسابك وكل البيانات المرتبطة به نهائيًا.",
+      "dangerZoneDescription": "احذف الوصول إلى حسابك وبيانات الحساب الخاصة نهائيًا.",
       "deleteAccount": "حذف الحساب",
-      "deleteAccountConfirmDescription": "هل أنت متأكد من رغبتك في حذف حسابك؟ هذا الإجراء نهائي ولا يمكن التراجع عنه.",
+      "deleteAccountConfirmDescription": "هل أنت متأكد من رغبتك في حذف حسابك؟ ستفقد الوصول نهائيًا.",
       "deleteAccountConfirmationLabel": "اكتب هذه العبارة للمتابعة",
       "deleteAccountConfirmationPhrase": "الحذف إجراء لا رجعة فيه.",
       "deleteAccountOtpDescription": "أرسلنا رمز تحقق مكوّنًا من 6 أرقام إلى بريدك الإلكتروني. أدخله أدناه لتأكيد الحذف.",
       "deleteAccountSuccess": "تم حذف حسابك بنجاح.",
+      "deleteAccountTaskBulkReassign": "نقل كل المهام النشطة في مساحة العمل هذه...",
       "deleteAccountTaskReassignNone": "لا يوجد أعضاء آخرون في مساحة العمل هذه",
       "deleteAccountTaskReassignPlaceholder": "اختر عضوًا...",
-      "deleteAccountTasksDescription": "لديك مهام معلّقة مسندة إليك. أعد إسنادها إلى أعضاء آخرين في مساحة العمل لضمان الاستمرارية.",
-      "deleteAccountTasksTitle": "إعادة إسناد المهام المعلّقة",
-      "deleteAccountWarning": "الحذف إجراء لا رجعة فيه. ستُزال كل بياناتك.",
-      "deleteAccountWarningExplanation": "سنرسل رمز تحقق إلى عنوان بريدك الإلكتروني لتأكيد هذا الطلب. إذا كنت المالك الوحيد لأي مؤسسة، فعليك نقل الملكية أو حذف المؤسسة أولًا.",
+      "deleteAccountTasksDescription": "لديك مهام نشطة مسندة إليك. انقلها إلى أعضاء آخرين في مساحة العمل حتى يستمر العمل.",
+      "deleteAccountTasksTitle": "نقل المهام النشطة",
+      "deleteAccountWarning": "الحذف إجراء لا رجعة فيه. ستُزال بيانات تسجيل الدخول وبيانات الحساب الخاصة.",
+      "deleteAccountWarningExplanation": "سنرسل رمز تحقق إلى عنوان بريدك الإلكتروني لتأكيد هذا الطلب. سيبقى سجل مساحات العمل المكتمل منسوبًا إلى حسابك المحذوف.",
       "desktop": "سطح المكتب",
       "desktopAppDescription": "افتح المستندات والملفات مباشرةً في stella من جهاز الكمبيوتر الخاص بك.",
       "desktopDescription": "ثبّت stella على جهاز الكمبيوتر الخاص بك",
@@ -1986,6 +1988,7 @@
     },
     "assignees": "المُكلَّفون",
     "clearDate": "مسح التاريخ",
+    "deletedAccount": "حساب محذوف",
     "dueDate": "تاريخ الاستحقاق",
     "linkEntity": "ربط كيان",
     "linkedEntities": "الكيانات المرتبطة",
@@ -2865,6 +2868,8 @@
         "locked": "مقفلة",
         "unlock": "إلغاء قفل الخلية"
       },
+      "portraitDescription": "تحتاج الجداول إلى مساحة أوسع على الهاتف. أدر جهازك أفقيًا للمتابعة.",
+      "portraitTitle": "أدر الجهاز إلى الوضع الأفقي",
       "reorderReadOnly": "تتبع صفوف الجدول الترتيب الحالي",
       "tightContent": "مضغوط",
       "wrapContent": "التفاف المحتوى"

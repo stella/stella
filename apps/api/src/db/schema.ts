@@ -184,6 +184,19 @@ export type PracticeJurisdiction = {
   isPrimary: boolean;
 };
 
+export const ACCOUNT_DELETION_REQUEST_STATUSES = [
+  "pending",
+  "processing",
+  "completed",
+  "failed",
+] as const;
+export type AccountDeletionRequestStatus =
+  (typeof ACCOUNT_DELETION_REQUEST_STATUSES)[number];
+
+export type AccountDeletionStorageCleanup = {
+  s3Keys: string[];
+};
+
 const tsvector = customType<{ data: string }>({
   dataType: () => "tsvector",
 });
@@ -4200,6 +4213,59 @@ export const usageAllocations = p.pgTable(
       to: stella,
       using: sql`false`,
     }),
+  ],
+);
+
+export const accountDeletionRequests = p.pgTable(
+  "account_deletion_requests",
+  {
+    id: pUuid<"accountDeletionRequest">().primaryKey(),
+    userId: p
+      .text("user_id")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+    organizationIds: safeOrganizationId("organization_ids")
+      .array()
+      .notNull()
+      .default([]),
+    workspaceIds: safeWorkspaceId("workspace_ids")
+      .array()
+      .notNull()
+      .default([]),
+    taskReassignmentCount: p
+      .integer("task_reassignment_count")
+      .notNull()
+      .default(0),
+    status: p
+      .varchar("status", { length: 16 })
+      .$type<AccountDeletionRequestStatus>()
+      .notNull()
+      .default("pending"),
+    storageCleanup: jsonb("storage_cleanup")
+      .$type<AccountDeletionStorageCleanup>()
+      .notNull(),
+    attemptCount: p.integer("attempt_count").notNull().default(0),
+    errorMessage: p.text("error_message"),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p
+      .timestamp("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+    completedAt: p.timestamp("completed_at"),
+  },
+  (table) => [
+    p.index("account_deletion_requests_user_created_idx").on(
+      table.userId,
+      table.createdAt,
+      table.id,
+    ),
+    p.index("account_deletion_requests_status_created_idx").on(
+      table.status,
+      table.createdAt,
+      table.id,
+    ),
+    ...userPolicies(),
   ],
 );
 

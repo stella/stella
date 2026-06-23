@@ -302,15 +302,41 @@ function ProfilePageBody() {
     },
   });
 
-  const pendingTasks = pendingTasksData?.tasks ?? [];
-  const pendingMembers = pendingTasksData?.members ?? [];
-  const allPendingTasksHaveReassignments = pendingTasks.every((task) => {
+  const activeTasks = pendingTasksData?.tasks ?? [];
+  const activeTaskMembers = pendingTasksData?.members ?? [];
+  type ActiveTask = (typeof activeTasks)[number];
+  type ActiveTaskMember = (typeof activeTaskMembers)[number];
+  type ActiveTaskGroup = {
+    workspaceId: string;
+    workspaceName: string;
+    tasks: ActiveTask[];
+    members: ActiveTaskMember[];
+  };
+  const activeTaskGroups: ActiveTaskGroup[] = [];
+  const activeTaskGroupsByWorkspace = new Map<string, ActiveTaskGroup>();
+  for (const task of activeTasks) {
+    let group = activeTaskGroupsByWorkspace.get(task.workspaceId);
+    if (!group) {
+      group = {
+        workspaceId: task.workspaceId,
+        workspaceName: task.workspaceName,
+        tasks: [],
+        members: activeTaskMembers.filter(
+          (member) => member.workspaceId === task.workspaceId,
+        ),
+      };
+      activeTaskGroupsByWorkspace.set(task.workspaceId, group);
+      activeTaskGroups.push(group);
+    }
+    group.tasks.push(task);
+  }
+  const allActiveTasksHaveReassignments = activeTasks.every((task) => {
     const reassignedUserId = reassignments[task.entityId];
     if (!reassignedUserId) {
       return false;
     }
 
-    return pendingMembers.some(
+    return activeTaskMembers.some(
       (member) =>
         member.workspaceId === task.workspaceId &&
         member.userId === reassignedUserId,
@@ -318,7 +344,7 @@ function ProfilePageBody() {
   });
   let dialogStep = step;
   if (step === "loading" && pendingTasksData) {
-    dialogStep = pendingTasks.length > 0 ? "tasks" : "confirm";
+    dialogStep = activeTasks.length > 0 ? "tasks" : "confirm";
   }
   const dialogTitle =
     dialogStep === "tasks"
@@ -489,64 +515,117 @@ function ProfilePageBody() {
                     {t("settings.account.deleteAccountTasksDescription")}
                   </p>
                   <div className="flex max-h-[280px] flex-col gap-3 overflow-y-auto pe-1">
-                    {pendingTasks.map((task) => {
-                      const candidates = pendingMembers.filter(
-                        (m) => m.workspaceId === task.workspaceId,
-                      );
-                      return (
-                        <div
-                          key={task.assigneeId}
-                          className="border-border bg-muted/20 flex flex-col gap-1 rounded-lg border p-3"
-                        >
-                          <div className="text-muted-foreground flex justify-between text-xs">
-                            <span dir="auto">{task.workspaceName}</span>
-                            <span className="bg-muted rounded px-1.5 py-0.5 font-mono text-[10px] capitalize">
-                              {task.role}
-                            </span>
+                    {activeTaskGroups.map((group) => (
+                      <div
+                        className="border-border flex flex-col gap-3 rounded-lg border p-3"
+                        key={group.workspaceId}
+                      >
+                        <div className="flex flex-col gap-2">
+                          <div className="text-muted-foreground text-xs">
+                            <span dir="auto">{group.workspaceName}</span>
                           </div>
-                          <span className="text-sm font-medium">
-                            {task.taskName}
-                          </span>
-                          <div className="mt-2">
-                            {candidates.length > 0 ? (
-                              <Select
-                                value={reassignments[task.entityId] || ""}
-                                onValueChange={(val) => {
-                                  setReassignments((prev) => ({
-                                    ...prev,
-                                    [task.entityId]: val || "",
-                                  }));
-                                }}
-                              >
-                                <SelectTrigger className="w-full">
-                                  <SelectValue
-                                    placeholder={t(
-                                      "settings.account.deleteAccountTaskReassignPlaceholder",
-                                    )}
-                                  />
-                                </SelectTrigger>
-                                <SelectPopup>
-                                  {candidates.map((candidate) => (
-                                    <SelectItem
-                                      key={candidate.userId}
-                                      value={candidate.userId}
-                                    >
-                                      {candidate.userName}
-                                    </SelectItem>
-                                  ))}
-                                </SelectPopup>
-                              </Select>
-                            ) : (
-                              <p className="text-muted-foreground text-xs italic">
-                                {t(
-                                  "settings.account.deleteAccountTaskReassignNone",
-                                )}
-                              </p>
-                            )}
-                          </div>
+                          {group.members.length > 0 ? (
+                            <Select
+                              onValueChange={(userId) => {
+                                if (
+                                  typeof userId !== "string" ||
+                                  userId.length === 0
+                                ) {
+                                  return;
+                                }
+
+                                setReassignments((prev) => {
+                                  const next = { ...prev };
+                                  for (const task of group.tasks) {
+                                    next[task.entityId] = userId;
+                                  }
+                                  return next;
+                                });
+                              }}
+                            >
+                              <SelectTrigger className="w-full">
+                                <SelectValue
+                                  placeholder={t(
+                                    "settings.account.deleteAccountTaskBulkReassign",
+                                  )}
+                                />
+                              </SelectTrigger>
+                              <SelectPopup>
+                                {group.members.map((candidate) => (
+                                  <SelectItem
+                                    key={candidate.userId}
+                                    value={candidate.userId}
+                                  >
+                                    {candidate.userName}
+                                  </SelectItem>
+                                ))}
+                              </SelectPopup>
+                            </Select>
+                          ) : (
+                            <p className="text-muted-foreground text-xs italic">
+                              {t(
+                                "settings.account.deleteAccountTaskReassignNone",
+                              )}
+                            </p>
+                          )}
                         </div>
-                      );
-                    })}
+                        {group.tasks.map((task) => {
+                          const candidates = group.members;
+                          return (
+                            <div
+                              key={task.assigneeId}
+                              className="bg-muted/20 flex flex-col gap-1 rounded-md p-3"
+                            >
+                              <div className="text-muted-foreground flex text-xs">
+                                <span className="bg-muted rounded px-1.5 py-0.5 font-mono text-[10px] capitalize">
+                                  {task.role}
+                                </span>
+                              </div>
+                              <span className="text-sm font-medium">
+                                {task.taskName}
+                              </span>
+                              <div className="mt-2">
+                                {candidates.length > 0 ? (
+                                  <Select
+                                    value={reassignments[task.entityId] || ""}
+                                    onValueChange={(val) => {
+                                      setReassignments((prev) => ({
+                                        ...prev,
+                                        [task.entityId]: val || "",
+                                      }));
+                                    }}
+                                  >
+                                    <SelectTrigger className="w-full">
+                                      <SelectValue
+                                        placeholder={t(
+                                          "settings.account.deleteAccountTaskReassignPlaceholder",
+                                        )}
+                                      />
+                                    </SelectTrigger>
+                                    <SelectPopup>
+                                      {candidates.map((candidate) => (
+                                        <SelectItem
+                                          key={candidate.userId}
+                                          value={candidate.userId}
+                                        >
+                                          {candidate.userName}
+                                        </SelectItem>
+                                      ))}
+                                    </SelectPopup>
+                                  </Select>
+                                ) : (
+                                  <p className="text-muted-foreground text-xs italic">
+                                    {t(
+                                      "settings.account.deleteAccountTaskReassignNone",
+                                    )}
+                                  </p>
+                                )}
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
@@ -649,7 +728,7 @@ function ProfilePageBody() {
                   sendOtpMutation.isPending ||
                   dialogStep === "loading" ||
                   !deleteAccountConfirmation.confirmed ||
-                  (dialogStep === "tasks" && !allPendingTasksHaveReassignments)
+                  (dialogStep === "tasks" && !allActiveTasksHaveReassignments)
                 }
                 loading={sendOtpMutation.isPending}
               >

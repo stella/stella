@@ -71,6 +71,7 @@ const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
     createdAt: entity.createdAt,
     createdBy: entity.createdBy,
     createdByImage: entity.createdByImage,
+    createdByDeletedAt: entity.createdByDeletedAt,
     updatedAt: entity.updatedAt,
     version: entity.version,
     status: entity.status,

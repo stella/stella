@@ -27,6 +27,8 @@ export const LIMITS = {
   myTasksMax: 200,
   /** Max task-assignment rows scanned to resolve the caller's tasks. */
   myTasksAssignmentScanLimit: 500,
+  /** Max active task assignments that account deletion will reassign in one pass. */
+  accountDeletionTaskAssignmentsMax: 500,
   /** Max entity-link rows returned per direction for one task. */
   taskEntityLinksPerDirectionMax: 200,
   entitySummariesPageSize: 200,

@@ -70,6 +70,7 @@ export const myTasksHandler = async ({ userId, scopedDb }: MyTasksProps) => {
                 id: true,
                 name: true,
                 image: true,
+                deletedAt: true,
               },
             },
           },
