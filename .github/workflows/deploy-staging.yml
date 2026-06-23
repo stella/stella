@@ -130,16 +130,21 @@ jobs:
               break
             fi
 
-            run_id="$(
+            if ! run_list="$(
               gh run list \
                 --repo "$INFRA_REPO" \
                 --workflow promote-release.yml \
                 --event workflow_dispatch \
                 --json databaseId,createdAt,displayTitle \
                 --jq ".[] | select(.createdAt >= \"$dispatched_at\") | select(.displayTitle == \"$expected_title\") | .databaseId" \
-                --limit 10 \
-                | head -n 1
-            )"
+                --limit 10 2>&1
+            )"; then
+              echo "::warning::Could not list infra promotion runs yet: ${run_list}" >&2
+              sleep 2
+              continue
+            fi
+
+            run_id="$(printf '%s\n' "$run_list" | head -n 1)"
 
             if [[ -z "$run_id" ]]; then
               sleep 2
@@ -151,10 +156,56 @@ jobs:
             exit 1
           fi
 
-          gh run watch "$run_id" \
-            --repo "$INFRA_REPO" \
-            --compact \
-            --exit-status
+          watch_run_with_retry() {
+            local run_id="$1"
+            local max_attempts=180
+            local sleep_seconds=10
+            local max_consecutive_errors=12
+            local consecutive_errors=0
+
+            echo "Watching infra run ${run_id}..."
+            for attempt in $(seq 1 "$max_attempts"); do
+              if ! run_state="$(
+                gh run view "$run_id" \
+                  --repo "$INFRA_REPO" \
+                  --json status,conclusion,url \
+                  --jq '[.status, (.conclusion // ""), .url] | @tsv' 2>&1
+              )"; then
+                consecutive_errors=$((consecutive_errors + 1))
+                echo "::warning::Could not read infra run status (${consecutive_errors}/${max_consecutive_errors} transient errors): ${run_state}" >&2
+                if (( consecutive_errors >= max_consecutive_errors )); then
+                  echo "::error::Giving up after repeated GitHub API errors while watching infra run ${run_id}." >&2
+                  return 1
+                fi
+                sleep "$sleep_seconds"
+                continue
+              fi
+
+              consecutive_errors=0
+              IFS=$'\t' read -r status conclusion url <<< "$run_state"
+
+              if [[ "$status" == "completed" ]]; then
+                if [[ "$conclusion" == "success" ]]; then
+                  echo "Infra run succeeded: ${url}"
+                  return 0
+                fi
+
+                echo "::error::Infra run completed with conclusion '${conclusion}': ${url}" >&2
+                gh run view "$run_id" --repo "$INFRA_REPO" --log-failed || true
+                return 1
+              fi
+
+              if (( attempt == 1 || attempt % 6 == 0 )); then
+                echo "Infra run status: ${status} (${attempt}/${max_attempts})"
+              fi
+              sleep "$sleep_seconds"
+            done
+
+            echo "::error::Infra run ${run_id} did not complete within $((max_attempts * sleep_seconds / 60)) minutes." >&2
+            return 1
+          }
+
+          watch_run_with_retry "$run_id"
 
   # Post-deploy verification: authenticate via the secret-guarded
   # /smoke/session endpoint and click through the deployed app so a
