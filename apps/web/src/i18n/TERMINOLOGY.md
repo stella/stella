@@ -326,7 +326,7 @@ Slavic, Baltic, Germanic, Finno-Ugric:
 | **Court**    | Soud       | Súd         | Sąd            | Gericht        | Kohus         | Bíróság              | Teismas         | Tiesa        |
 | **Party**    | Strana     | Strana      | Strona         | Partei         | Osapool       | Fél                  | Šalis           | Puse         |
 | **Clause**   | Ustanovení | Ustanovenie | Klauzula       | Klausel        | Klausel       | Kikötés              | Sąlyga          | Klauzula     |
-| **Template** | Vzor       | Vzor        | Szablon        | Vorlage        | Mall          | Sablon               | Šablonas        | Veidne       |
+| **Template** | Vzor       | Vzor        | Wzór           | Vorlage        | Mall          | Sablon               | Šablonas        | Veidne       |
 | **Folder**   | Složka     | Priečinok   | Folder         | Ordner         | Kaust         | Mappa                | Aplankas        | Mape         |
 | **Tag**      | Štítek     | Štítok      | Tag            | Schlagwort     | Silt          | Címke                | Žyma            | Birka        |
 | **Draft**    | Koncept    | Koncept     | Wersja robocza | Entwurf        | Mustand       | Piszkozat            | Juodraštis      | Melnraksts   |
@@ -381,8 +381,12 @@ Notes:
   idiomatic and unavoidable, context disambiguates.
 - **cs/sk Template** is always "Vzor" (native legal-document register);
   "Šablona" / "Šablóna" and their inflected forms must not be used.
-  **de/fr/pt-BR Template** is always the native "Vorlage" / "Modèle" /
-  "Modelo"; the raw English loanword "Template" must not be used.
+  **pl Template** is always "Wzór" ("wzór umowy" / "wzór dokumentu");
+  "Szablon" and its inflected forms must not be used. The canonical is
+  strictly "wzór", never "wzorzec" (the art. 384 k.c. standard-terms
+  concept). **de/fr/pt-BR Template** is always the native "Vorlage" /
+  "Modèle" / "Modelo"; the raw English loanword "Template" must not be
+  used.
   **cs/sk Clause** is always "Ustanovení" / "Ustanovenie"
   (the clause library renders as "Vzorová ustanovení" / "Vzorové
   ustanovenia"); "Klauzule" / "Klauzula" and their inflected forms must

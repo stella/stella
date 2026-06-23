@@ -420,7 +420,7 @@
     {
       "id": "template",
       "en": "Template",
-      "note": "cs/sk use \"Vzor\" (native legal-document register); \"Šablona\" / \"Šablóna\" and their inflected forms must not be used. de/fr/pt-BR use the native \"Vorlage\" / \"Modèle\" / \"Modelo\"; the raw English loanword \"Template\" must not be used. ar قالب for a template; reserve نموذج for fillable forms/specimens.",
+      "note": "cs/sk use \"Vzor\" (native legal-document register); \"Šablona\" / \"Šablóna\" and their inflected forms must not be used. pl uses \"Wzór\" (\"wzór umowy\" / \"wzór dokumentu\"); \"Szablon\" and its inflected forms must not be used (canonical is strictly \"wzór\", never \"wzorzec\", which is the art. 384 k.c. standard-terms concept). de/fr/pt-BR use the native \"Vorlage\" / \"Modèle\" / \"Modelo\"; the raw English loanword \"Template\" must not be used. ar قالب for a template; reserve نموذج for fillable forms/specimens.",
       "forbidden": {
         "ar": ["نموذج"],
         "cs": [
@@ -445,13 +445,24 @@
         ],
         "de": ["Template", "Templates"],
         "fr": ["Template", "Templates"],
-        "pt-BR": ["Template", "Templates"]
+        "pt-BR": ["Template", "Templates"],
+        "pl": [
+          "szablon",
+          "szablonu",
+          "szablonie",
+          "szablonem",
+          "szablony",
+          "szablonów",
+          "szablonom",
+          "szablonami",
+          "szablonach"
+        ]
       },
       "translations": {
         "ar": "قالب",
         "cs": "Vzor",
         "sk": "Vzor",
-        "pl": "Szablon",
+        "pl": "Wzór",
         "de": "Vorlage",
         "et": "Mall",
         "hu": "Sablon",
