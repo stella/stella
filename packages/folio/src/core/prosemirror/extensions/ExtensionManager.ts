@@ -20,7 +20,7 @@ import type {
 } from "./types";
 
 export class ExtensionManager {
-  private extensions: AnyExtension[];
+  private readonly extensions: AnyExtension[];
   private schema: Schema | null = null;
   private plugins: PMPlugin[] = [];
   private commands: CommandMap = {};

@@ -10,7 +10,7 @@
  */
 
 export abstract class Subscribable<TSnapshot> {
-  private listeners = new Set<() => void>();
+  private readonly listeners = new Set<() => void>();
   private snapshot: TSnapshot;
 
   constructor(initialSnapshot: TSnapshot) {

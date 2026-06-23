@@ -451,10 +451,10 @@ export class HistoryManager<T> {
   private undoStack: HistoryEntry<T>[] = [];
   private redoStack: HistoryEntry<T>[] = [];
   private currentState: T;
-  private maxEntries: number;
-  private groupingInterval: number;
+  private readonly maxEntries: number;
+  private readonly groupingInterval: number;
   private lastPushTime: number = 0;
-  private isEqual: (a: T, b: T) => boolean;
+  private readonly isEqual: (a: T, b: T) => boolean;
 
   constructor(
     initialState: T,

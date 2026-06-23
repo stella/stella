@@ -117,9 +117,9 @@ export class LayoutPainter {
   private blockLookup: BlockLookup = new Map();
   private pageStates: PageState[] = [];
   private totalPages = 0;
-  private options: PainterOptions;
-  private doc: Document;
-  private registry: FeatureRegistry;
+  private readonly options: PainterOptions;
+  private readonly doc: Document;
+  private readonly registry: FeatureRegistry;
 
   constructor(options: PainterOptions = {}) {
     this.options = options;

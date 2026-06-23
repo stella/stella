@@ -33,7 +33,7 @@ export class LayoutSelectionGate {
   #pendingRender: RenderCallback | null = null;
 
   /** Registered render callbacks */
-  #renderCallbacks = new Set<RenderCallback>();
+  readonly #renderCallbacks = new Set<RenderCallback>();
 
   /**
    * Set the document state sequence (call when document changes).

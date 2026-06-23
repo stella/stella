@@ -31,8 +31,8 @@ export const scopedGenerator =
  */
 export class InMemoryRateLimitContext implements Context {
   private durationMs = 60_000;
-  private store = new Map<string, RateLimitEntry>();
-  private cleanupTimer: ReturnType<typeof setInterval>;
+  private readonly store = new Map<string, RateLimitEntry>();
+  private readonly cleanupTimer: ReturnType<typeof setInterval>;
 
   constructor() {
     this.cleanupTimer = setInterval(

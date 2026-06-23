@@ -184,7 +184,7 @@ export default defineConfig({
     "typescript/no-inferrable-types": "off",
     "typescript/consistent-return": "error",
     "typescript/dot-notation": "error",
-    "typescript/prefer-readonly": "off",
+    "typescript/prefer-readonly": "error",
     "typescript/no-unnecessary-type-conversion": "error",
     "typescript/no-unnecessary-condition": [
       "error",
