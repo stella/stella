@@ -37,6 +37,7 @@ Project: root
 - @elysiajs/cors 1.4.2 — MIT
 - @elysiajs/eden 1.4.9 — MIT
 - @floating-ui/react-dom 2.1.8 — MIT
+- @formatjs/icu-messageformat-parser 3.5.1 — MIT
 - @hocuspocus/provider 4.2.0 — MIT
 - @hocuspocus/server 4.2.0 — MIT
 - @libpdf/core 0.4.0 — MIT
@@ -78,6 +79,7 @@ Project: root
 - @tiptap/extension-heading 3.26.1 — MIT
 - @tiptap/extension-history 3.26.1 — MIT
 - @tiptap/extension-italic 3.26.1 — MIT
+- @tiptap/extension-list 3.26.1 — MIT
 - @tiptap/extension-mention 3.26.1 — MIT
 - @tiptap/extension-paragraph 3.26.1 — MIT
 - @tiptap/extension-placeholder 3.26.1 — MIT
