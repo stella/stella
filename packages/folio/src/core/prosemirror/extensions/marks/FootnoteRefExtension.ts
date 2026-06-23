@@ -52,11 +52,15 @@ export const FootnoteRefExtension = createMarkExtension({
       const attrs = expectFootnoteRefMarkAttrs(mark);
       const id = String(attrs.id);
       const noteType = attrs.noteType ?? "footnote";
-      const tagName = attrs.vertAlign === "superscript" ? "sup" : "span";
+      const isSuperscript = attrs.vertAlign === "superscript";
+      const tagName = isSuperscript ? "sup" : "span";
+      const alignClass = isSuperscript
+        ? "docx-note-ref-superscript"
+        : "docx-note-ref-baseline";
       return [
         tagName,
         {
-          class: `docx-${noteType}-ref`,
+          class: `docx-${noteType}-ref ${alignClass}`,
           "data-id": id,
           "data-note-type": noteType,
         },

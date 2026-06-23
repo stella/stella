@@ -403,6 +403,9 @@
 .prosemirror-editor .ProseMirror .docx-endnote-ref {
   color: var(--doc-link, #0066cc);
   cursor: pointer;
+}
+
+.prosemirror-editor .ProseMirror .docx-note-ref-superscript {
   vertical-align: super;
   font-size: smaller;
 }

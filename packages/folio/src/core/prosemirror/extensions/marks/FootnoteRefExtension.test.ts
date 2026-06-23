@@ -91,7 +91,7 @@ describe("FootnoteRefExtension toDOM", () => {
     expect(dom).toEqual([
       "span",
       {
-        class: "docx-footnote-ref",
+        class: "docx-footnote-ref docx-note-ref-baseline",
         "data-id": "7",
         "data-note-type": "footnote",
       },
@@ -117,7 +117,7 @@ describe("FootnoteRefExtension toDOM", () => {
     expect(dom).toEqual([
       "sup",
       {
-        class: "docx-footnote-ref",
+        class: "docx-footnote-ref docx-note-ref-superscript",
         "data-id": "7",
         "data-note-type": "footnote",
       },
