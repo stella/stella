@@ -81,13 +81,13 @@
     "orSignInWithEmail": "arba prisijunkite el. paštu",
     "organizationNamePlaceholder": "Mano organizacija",
     "rateLimitExceeded": "Per daug bandymų. Bandykite dar kartą vėliau.",
-    "resendCode": "Siųsti kodą dar kartą adresu {email}",
+    "resendCode": "Siųsti kodą dar kartą adresu <email>{emailAddress}</email>",
     "selectOrganization": "Pasirinkite organizaciją",
     "signIn": "Prisijungti",
     "signInBeforeInvitation": "Norėdami priimti kvietimą į organizaciją, pirmiausia turite prisijungti.",
     "subtitle": "Dokumentai, teismų praktika ir peržiūra po kontrole. Su AI pagalba.",
     "useDifferentEmail": "Naudoti kitą el. pašto adresą",
-    "weSentCodeTo": "Išsiuntėme kodą adresu {email}"
+    "weSentCodeTo": "Išsiuntėme kodą adresu <email>{emailAddress}</email>"
   },
   "billing": {
     "addEntry": "Pridėti įrašą",

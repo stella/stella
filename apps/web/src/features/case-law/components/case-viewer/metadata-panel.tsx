@@ -275,7 +275,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
           <ul className="space-y-1">
             {decision.citationsFrom.slice(0, 10).map((citation) => (
               <li className="text-muted-foreground text-xs" key={citation.id}>
-                <bdi>{citation.citationText}</bdi>
+                <BidiText>{citation.citationText}</BidiText>
               </li>
             ))}
           </ul>
@@ -290,7 +290,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
           <ul className="space-y-1">
             {decision.citationsTo.slice(0, 10).map((citation) => (
               <li className="text-muted-foreground text-xs" key={citation.id}>
-                <bdi>{citation.citationText}</bdi>
+                <BidiText>{citation.citationText}</BidiText>
               </li>
             ))}
           </ul>

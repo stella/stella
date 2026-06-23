@@ -35,10 +35,16 @@ export const _nameWithSibling = () => (
     {x.displayName} <small>(archived)</small>
   </span>
 );
+export const _rawDir = () => (
+  // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
+  <span dir="auto">{x.displayName}</span>
+);
+export const _rawBdi = () => (
+  // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
+  <bdi>{x.displayName}</bdi>
+);
 
-// --- Allowed: dir present, <bdi>, or a non-name expression ---
-export const _ok1 = () => <span dir="auto">{x.displayName}</span>;
-export const _ok2 = () => <bdi>{x.displayName}</bdi>;
-export const _ok3 = () => <span>{x.name}</span>;
-export const _ok4 = () => <BidiText>{x.displayName}</BidiText>;
-export const _ok5 = () => <UserText>{x.fileName}</UserText>;
+// --- Allowed: wrapper present or a non-name expression ---
+export const _ok1 = () => <span>{x.name}</span>;
+export const _ok2 = () => <BidiText>{x.displayName}</BidiText>;
+export const _ok3 = () => <UserText>{x.fileName}</UserText>;

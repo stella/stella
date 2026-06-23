@@ -81,13 +81,13 @@
     "orSignInWithEmail": "or sign in with email",
     "organizationNamePlaceholder": "My organization",
     "rateLimitExceeded": "Too many attempts. Please try again later.",
-    "resendCode": "Send code again to {email}",
+    "resendCode": "Send code again to <email>{emailAddress}</email>",
     "selectOrganization": "Select an organization",
     "signIn": "Sign in",
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.",
     "subtitle": "Documents, case law, and review under control. Powered by AI.",
     "useDifferentEmail": "Use a different email",
-    "weSentCodeTo": "We sent a code to {email}"
+    "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>"
   },
   "billing": {
     "addEntry": "Add entry",

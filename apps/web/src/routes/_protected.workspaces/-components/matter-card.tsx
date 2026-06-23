@@ -10,6 +10,7 @@ import {
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/components/preview-card";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { cn } from "@stll/ui/lib/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
@@ -146,12 +147,11 @@ export const MatterCard = ({
               (workspace.client ? (
                 <Link
                   className="text-muted-foreground hover:text-foreground relative z-10 -mt-1 truncate text-xs hover:underline"
-                  dir="auto"
                   onClick={(e) => e.stopPropagation()}
                   params={{ contactId: workspace.client.id }}
                   to="/contacts/$contactId"
                 >
-                  {workspace.client.displayName}
+                  <BidiText>{workspace.client.displayName}</BidiText>
                 </Link>
               ) : (
                 <span className="text-muted-foreground -mt-1 truncate text-xs italic">

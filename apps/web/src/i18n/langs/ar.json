@@ -81,13 +81,13 @@
     "orSignInWithEmail": "أو سجّل الدخول بالبريد الإلكتروني",
     "organizationNamePlaceholder": "مؤسستي",
     "rateLimitExceeded": "محاولات كثيرة جدًا. يُرجى المحاولة مرة أخرى لاحقًا.",
-    "resendCode": "إرسال الرمز مرة أخرى إلى {email}",
+    "resendCode": "إرسال الرمز مرة أخرى إلى <email>{emailAddress}</email>",
     "selectOrganization": "اختر مؤسسة",
     "signIn": "تسجيل الدخول",
     "signInBeforeInvitation": "يجب تسجيل الدخول قبل أن تتمكن من قبول دعوة للانضمام إلى مؤسسة.",
     "subtitle": "المستندات والسوابق القضائية والمراجعة تحت السيطرة. مدعومة بالذكاء الاصطناعي.",
     "useDifferentEmail": "استخدام بريد إلكتروني مختلف",
-    "weSentCodeTo": "أرسلنا رمزًا إلى {email}"
+    "weSentCodeTo": "أرسلنا رمزًا إلى <email>{emailAddress}</email>"
   },
   "billing": {
     "addEntry": "إضافة إدخال",

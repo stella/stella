@@ -1,16 +1,15 @@
-// Require `dir` when rendering a user-provided NAME as an element's text,
-// so it isn't bidi-reordered under an RTL UI.
+// Require BidiText/UserText when rendering a user-provided identifier as an
+// element's text, so it isn't bidi-reordered under an RTL UI.
 //
 // A Latin name with trailing neutral characters inside the RTL UI gets
 // reordered — e.g. "Tatra Motor a.s." renders as ".Tatra Motor a.s" —
-// unless the element resolves direction from its own content. The preferred
-// fix is wrapping the value in <BidiText> / <UserText> (or <bdi> for raw HTML).
+// unless the element resolves direction from its own content as an isolated run.
+// The preferred fix is wrapping the value in <BidiText> / <UserText>.
 //
-// Flagged: an element whose only child is `{<expr>.<nameProp>}` (a known
-// user-content name property) and which has no `dir` attribute.
-// Allowed: a `dir` attribute is present, the element is <BidiText>,
-// <UserText>, <bdi>/<bdo>, or the value is anything other than a bare member
-// access to a name property.
+// Flagged: an app JSX element whose only child is `{<expr>.<nameProp>}` (a
+// known user-content identifier property) and which is not <BidiText> /
+// <UserText>. Raw `dir` and raw <bdi>/<bdo> are intentionally flagged so app
+// code converges on one typed wrapper.
 
 const NAME_PROPS = new Set([
   "displayName",
@@ -27,9 +26,25 @@ const NAME_PROPS = new Set([
   "entityName",
   "fileName",
   "folderName",
+  "email",
+  "caseNumber",
+  "citationText",
 ]);
 
-const SELF_ISOLATING = new Set(["BidiText", "UserText", "bdi", "bdo"]);
+const SELF_ISOLATING = new Set(["BidiText", "UserText"]);
+const RAW_ISOLATING = new Set(["bdi", "bdo"]);
+const TEXT_ELEMENTS = new Set([
+  "div",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "p",
+  "span",
+  ...RAW_ISOLATING,
+]);
 
 const hasDirAttr = (opening) =>
   opening.attributes.some(
@@ -60,19 +75,25 @@ export default {
           missingDir:
             "User-provided name rendered without bidi isolation reorders " +
             'under RTL (e.g. ".Tatra Motor a.s"). Wrap the value in ' +
-            '<BidiText> / <UserText>, or add dir="auto" to the element.',
+            "<BidiText> / <UserText>.",
           missingBidi:
             "User-provided name rendered alongside other content reorders " +
             "under RTL; wrap it in <BidiText> / <UserText> (dir on the " +
             "parent would also reorder its siblings).",
+          preferComponent:
+            "Use <BidiText> / <UserText> for rendered user-provided text. " +
+            'Raw dir="auto" / <bdi> does not provide the app-level typed ' +
+            "contract.",
         },
       },
       create(context) {
         return {
           JSXElement(node) {
             const opening = node.openingElement;
+            if (opening.name.type !== "JSXIdentifier") {
+              return;
+            }
             if (
-              opening.name.type === "JSXIdentifier" &&
               SELF_ISOLATING.has(opening.name.name)
             ) {
               return;
@@ -88,13 +109,21 @@ export default {
             }
             // Sole child: dir="auto" on the element isolates it.
             if (kids.length === 1) {
+              if (
+                TEXT_ELEMENTS.has(opening.name.name) &&
+                (hasDirAttr(opening) ||
+                  RAW_ISOLATING.has(opening.name.name))
+              ) {
+                context.report({ node: opening, messageId: "preferComponent" });
+                return;
+              }
               if (!hasDirAttr(opening)) {
                 context.report({ node: opening, messageId: "missingDir" });
               }
               return;
             }
             // Mixed children: dir on the element would reorder the siblings too,
-            // so the name itself must be wrapped in <bdi>.
+            // so the name itself must be wrapped in BidiText/UserText.
             for (const child of nameKids) {
               context.report({ node: child, messageId: "missingBidi" });
             }

@@ -2,6 +2,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
 import { useFormatter } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -50,7 +51,6 @@ export const ClientGroupHeader = ({
         ) : (
           <span
             className="hover:underline"
-            dir="auto"
             onClick={(e) => {
               e.stopPropagation();
               void navigate({
@@ -70,7 +70,7 @@ export const ClientGroupHeader = ({
             role="link"
             tabIndex={0}
           >
-            {group.clientName}
+            <BidiText>{group.clientName}</BidiText>
           </span>
         )}
       </h3>
@@ -85,9 +85,9 @@ export const ClientGroupHeader = ({
       {group.type === "client" && group.responsibleAttorneyName && (
         <>
           <span className="text-foreground-subtle">·</span>
-          <span className="text-muted-foreground text-xs" dir="auto">
+          <BidiText as="span" className="text-muted-foreground text-xs">
             {group.responsibleAttorneyName}
-          </span>
+          </BidiText>
         </>
       )}
     </button>

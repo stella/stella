@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Avatar,
   AvatarFallback,
@@ -102,19 +103,27 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
               <div className="flex min-w-0 flex-col justify-center">
                 {user.name ? (
                   <>
-                    <span className="truncate text-sm font-medium">
+                    <BidiText as="span" className="truncate text-sm font-medium">
                       {user.name}
-                    </span>
+                    </BidiText>
                     {user.email && (
-                      <span className="text-muted-foreground truncate text-xs">
+                      <BidiText
+                        as="span"
+                        className="text-muted-foreground truncate text-xs"
+                        direction="ltr"
+                      >
                         {user.email}
-                      </span>
+                      </BidiText>
                     )}
                   </>
                 ) : (
-                  <span className="truncate text-sm font-medium">
+                  <BidiText
+                    as="span"
+                    className="truncate text-sm font-medium"
+                    direction={user.email ? "ltr" : "auto"}
+                  >
                     {user.email || t("common.user")}
-                  </span>
+                  </BidiText>
                 )}
               </div>
               <ChevronsUpDownIcon className="ms-auto size-4 opacity-50" />

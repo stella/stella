@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
@@ -314,7 +315,9 @@ function Members() {
               <TableBody>
                 {filteredInvitations.map((invitation) => (
                   <TableRow key={invitation.id}>
-                    <TableCell>{invitation.email}</TableCell>
+                    <TableCell>
+                      <BidiText direction="ltr">{invitation.email}</BidiText>
+                    </TableCell>
                     <TableCell>
                       {t(`organization.roles.${invitation.role}`)}
                     </TableCell>

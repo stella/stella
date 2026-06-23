@@ -81,13 +81,13 @@
     "orSignInWithEmail": "või logi sisse e-postiga",
     "organizationNamePlaceholder": "Minu organisatsioon",
     "rateLimitExceeded": "Liiga palju katseid. Palun proovige hiljem uuesti.",
-    "resendCode": "Saada kood uuesti aadressile {email}",
+    "resendCode": "Saada kood uuesti aadressile <email>{emailAddress}</email>",
     "selectOrganization": "Valige organisatsioon",
     "signIn": "Logi sisse",
     "signInBeforeInvitation": "Enne organisatsiooni kutse vastuvõtmist peate sisse logima.",
     "subtitle": "Dokumendid, kohtupraktika ja ülevaatus kontrolli all. Tehisintellekti abiga.",
     "useDifferentEmail": "Kasuta teist e-posti aadressi",
-    "weSentCodeTo": "Saatsime koodi aadressile {email}"
+    "weSentCodeTo": "Saatsime koodi aadressile <email>{emailAddress}</email>"
   },
   "billing": {
     "addEntry": "Lisa kanne",

@@ -36,6 +36,7 @@ import {
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Menu,
   MenuItem,
@@ -1411,9 +1412,9 @@ const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate" title={name}>
+          <BidiText as="span" className="truncate" title={name}>
             {name}
-          </span>
+          </BidiText>
           {node.activeEditBy && (
             <ActiveEditBadge
               className="shrink-0"

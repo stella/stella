@@ -56,6 +56,7 @@ import type {
   AISuggestionPreset,
   AISuggestionSeverity,
 } from "@stll/folio";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import {
@@ -2307,7 +2308,7 @@ function CitationChip(props: CitationChipProps) {
             onClick={() => onActivate(citation)}
             aria-label={t("chat.openCitation", { label: citation.label })}
           >
-            <bdi>[{citation.label}]</bdi>
+            <BidiText>[{citation.label}]</BidiText>
           </button>
         }
       />

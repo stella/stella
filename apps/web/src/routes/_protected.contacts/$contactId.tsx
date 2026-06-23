@@ -9,6 +9,7 @@ import {
 import { ArrowLeftIcon, BuildingIcon, PlusIcon, UserIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
@@ -169,9 +170,9 @@ function ContactDetailPage() {
           ) : (
             <BuildingIcon className="text-muted-foreground size-5" />
           )}
-          <h1 className="text-xl font-bold" dir="auto">
+          <BidiText as="h1" className="text-xl font-bold">
             {contact.displayName}
-          </h1>
+          </BidiText>
           <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">
             {t(`contacts.type.${contact.type}`)}
           </span>
@@ -431,9 +432,9 @@ function ContactDetailPage() {
                     workspaceId={matter.id}
                   >
                     <MatterIcon matter={matter} />
-                    <span className="font-medium" dir="auto">
+                    <BidiText as="span" className="font-medium">
                       {matter.name}
-                    </span>
+                    </BidiText>
                     <span className="text-muted-foreground ms-auto text-xs">
                       {t("common.createdAt", {
                         date: new Date(matter.createdAt).toLocaleDateString(

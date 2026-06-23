@@ -15,6 +15,7 @@ import {
 import { MessageSquareIcon, TrashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   Sheet,
@@ -283,7 +284,7 @@ const ThreadGroup = ({
     return (
       <div className="flex flex-col gap-1">
         <p className="text-muted-foreground px-1 text-xs font-medium uppercase">
-          {heading}
+          <BidiText>{heading}</BidiText>
         </p>
         <p className="text-muted-foreground py-4 text-center text-sm">
           {emptyLabel}
@@ -295,7 +296,7 @@ const ThreadGroup = ({
   return (
     <div className="flex flex-col gap-1">
       <p className="text-muted-foreground px-1 text-xs font-medium uppercase">
-        {heading}
+        <BidiText>{heading}</BidiText>
       </p>
       {threads.map((thread) => {
         const threadRef: ChatThreadRef =
@@ -335,11 +336,11 @@ const ThreadGroup = ({
                     },
                   })}
             >
-              <span className="truncate text-sm font-medium">
+              <BidiText as="span" className="truncate text-sm font-medium">
                 {isPlaceholderThreadTitle(thread.title)
                   ? t("chat.newChat")
                   : thread.title}
-              </span>
+              </BidiText>
               <span className="text-muted-foreground text-xs">
                 {new Date(thread.createdAt).toLocaleDateString(
                   getFormattingLocale(),

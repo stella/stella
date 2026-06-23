@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
@@ -305,9 +306,9 @@ const MatterDocumentPicker = ({
                 }
                 onCheckedChange={() => toggle(doc.entityId)}
               />
-              <span className="min-w-0 truncate">
+              <BidiText as="span" className="min-w-0 truncate">
                 {doc.name ?? doc.fileName}
-              </span>
+              </BidiText>
             </label>
           );
         })}

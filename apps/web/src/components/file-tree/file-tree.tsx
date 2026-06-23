@@ -7,6 +7,7 @@ import {
   FolderOpenIcon,
 } from "lucide-react";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -211,9 +212,13 @@ export function FileTree({
                 {renderName ? (
                   renderName(node)
                 ) : (
-                  <span className="truncate" dir="auto" title={node.name}>
+                  <BidiText
+                    as="span"
+                    className="truncate"
+                    title={node.name}
+                  >
                     {node.name}
-                  </span>
+                  </BidiText>
                 )}
               </FileTreeNameCell>
             </div>

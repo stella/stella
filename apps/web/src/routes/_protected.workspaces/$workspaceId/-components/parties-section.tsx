@@ -176,11 +176,10 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           )}
           <Link
             className="min-w-0 truncate text-sm font-medium hover:underline"
-            dir="auto"
             params={{ contactId: client.id }}
             to="/contacts/$contactId"
           >
-            {client.displayName}
+            <BidiText>{client.displayName}</BidiText>
           </Link>
         </div>
       </section>
@@ -512,11 +511,10 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       )}
       <Link
         className="text-sm font-medium hover:underline"
-        dir="auto"
         params={{ contactId: contact.id }}
         to="/contacts/$contactId"
       >
-        {contact.displayName}
+        <BidiText>{contact.displayName}</BidiText>
       </Link>
       <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">
         {t(roleKey)}

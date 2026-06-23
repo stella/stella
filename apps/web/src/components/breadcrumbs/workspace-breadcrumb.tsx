@@ -10,6 +10,7 @@ import {
   BreadcrumbItem,
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   ColorPicker,
   ColorPickerContent,
@@ -144,14 +145,13 @@ export const WorkspaceBreadcrumb = ({
       <BreadcrumbItem className="min-w-8 shrink">
         <Link
           className="hover:text-foreground min-w-0 truncate transition-colors"
-          dir="auto"
           onClick={() => {
             updateMattersConfig({ clientFilter: client.id });
           }}
           title={client.displayName}
           to="/workspaces"
         >
-          {client.displayName}
+          <BidiText>{client.displayName}</BidiText>
         </Link>
       </BreadcrumbItem>
       <BreadcrumbSeparator className="shrink-0" />
@@ -311,9 +311,9 @@ export const WorkspaceBreadcrumb = ({
                     }}
                   />
                 </span>
-                <span className="truncate" dir="auto">
+                <BidiText as="span" className="truncate">
                   {displayName}
-                </span>
+                </BidiText>
                 {workspace.reference && !isEditingRef ? (
                   <span
                     className="text-foreground-muted shrink-0 text-sm"

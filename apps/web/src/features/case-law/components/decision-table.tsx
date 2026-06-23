@@ -1,6 +1,7 @@
 import { Link } from "@tanstack/react-router";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import { createCaseLawDecisionRouteParams } from "@/lib/case-law-route";
@@ -162,7 +163,7 @@ const renderCaseNumberCell = (decision: Decision) => {
           }}
           to="/law/$country/cases/$court/$language/$slug"
         >
-          <bdi>{caseNumber}</bdi>
+          <BidiText>{caseNumber}</BidiText>
         </Link>
       ) : (
         <Link
@@ -174,7 +175,7 @@ const renderCaseNumberCell = (decision: Decision) => {
           }}
           to="/law/$country/cases/$court/$slug"
         >
-          <bdi>{caseNumber}</bdi>
+          <BidiText>{caseNumber}</BidiText>
         </Link>
       )}
       {headline && (

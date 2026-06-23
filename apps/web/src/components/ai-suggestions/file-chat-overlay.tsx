@@ -36,6 +36,7 @@ import type {
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
 } from "@stll/folio";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { cn } from "@stll/ui/lib/utils";
 
 import { PromptBar } from "@/components/ai-suggestions/host";
@@ -1274,9 +1275,12 @@ const FileChatOverlayInner = ({
             (activeFile || activeExternal) && filePlaceholderAction ? (
               <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
                 <span className="shrink-0">{filePlaceholderAction}</span>
-                <span className="text-foreground-label max-w-64 truncate">
+                <BidiText
+                  as="span"
+                  className="text-foreground-label max-w-64 truncate"
+                >
                   {activeFile?.fileName ?? activeExternal?.title}
-                </span>
+                </BidiText>
               </span>
             ) : undefined
           }

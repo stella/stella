@@ -81,13 +81,13 @@
     "orSignInWithEmail": "oder mit E-Mail anmelden",
     "organizationNamePlaceholder": "Meine Organisation",
     "rateLimitExceeded": "Zu viele Versuche. Bitte versuchen Sie es später erneut.",
-    "resendCode": "Code erneut an {email} senden",
+    "resendCode": "Code erneut an <email>{emailAddress}</email> senden",
     "selectOrganization": "Organisation auswählen",
     "signIn": "Anmelden",
     "signInBeforeInvitation": "Sie müssen sich anmelden, bevor Sie eine Einladung zu einer Organisation annehmen können.",
     "subtitle": "Dokumente, Rechtsprechung und Prüfung im Griff. Mit Hilfe von KI.",
     "useDifferentEmail": "Andere E-Mail verwenden",
-    "weSentCodeTo": "Wir haben einen Code an {email} gesendet"
+    "weSentCodeTo": "Wir haben einen Code an <email>{emailAddress}</email> gesendet"
   },
   "billing": {
     "addEntry": "Eintrag hinzufügen",

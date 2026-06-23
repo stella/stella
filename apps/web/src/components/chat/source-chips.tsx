@@ -11,6 +11,7 @@ import type {
   ChatPart,
   ChatSourceDocument,
 } from "@stll/api/types";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { cn } from "@stll/ui/lib/utils";
 
 import { openEntityInInspector } from "@/components/chat/entity-open";
@@ -266,7 +267,9 @@ const ExternalSourceChip = ({
         loaded={faviconRequested}
         url={source.url}
       />
-      <span className="max-w-[20ch] truncate">{source.title}</span>
+      <BidiText as="span" className="max-w-[20ch] truncate">
+        {source.title}
+      </BidiText>
     </button>
   );
 };
@@ -389,7 +392,9 @@ const SourceChip = ({
         kind={sourceDocument.kind}
         mimeType={sourceDocument.mimeType}
       />
-      <span className="max-w-[20ch] truncate">{sourceDocument.title}</span>
+      <BidiText as="span" className="max-w-[20ch] truncate">
+        {sourceDocument.title}
+      </BidiText>
     </button>
   );
 };

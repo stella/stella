@@ -13,6 +13,7 @@ import {
 import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   Combobox,
@@ -64,9 +65,9 @@ const SelectedClient = ({ client }: { client: MatterDraftClient }) => (
     ) : (
       <BuildingIcon className="text-muted-foreground size-4" />
     )}
-    <span className="truncate text-sm font-medium" dir="auto">
+    <BidiText as="span" className="truncate text-sm font-medium">
       {client.displayName}
-    </span>
+    </BidiText>
   </div>
 );
 
