@@ -53,7 +53,6 @@ export const ChatInputSurface = ({
   onStop,
   anonymized = false,
 }: ChatInputSurfaceProps) => {
-  const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
   const {
     attachments,
@@ -163,34 +162,65 @@ export const ChatInputSurface = ({
           type="file"
         />
         <div className="ms-auto flex items-center gap-1">
-          {isGenerating && onStop && (
-            <Button
-              aria-label={t("chat.stopResponse")}
-              className="shrink-0"
-              onClick={onStop}
-              size="icon-sm"
-              variant="outline"
-            >
-              <SquareIcon className="size-3.5" />
-            </Button>
-          )}
-          <Button
-            aria-label={t("chat.sendPrompt")}
-            className={cn(
-              "bg-foreground text-background hover:bg-foreground/90 shrink-0",
-              (submitDisabled || !canSubmit) && "opacity-50",
-            )}
-            disabled={submitDisabled || !canSubmit}
-            onClick={() => {
+          <ChatSubmitButton
+            canSend={!submitDisabled && canSubmit}
+            isGenerating={isGenerating}
+            onSend={() => {
               void submitDraft();
             }}
-            size="icon-sm"
-            variant="default"
-          >
-            <ArrowUpIcon className="size-3.5" />
-          </Button>
+            onStop={onStop}
+          />
         </div>
       </div>
     </div>
+  );
+};
+
+type ChatSubmitButtonProps = {
+  canSend: boolean;
+  isGenerating: boolean;
+  onSend: () => void;
+  onStop?: (() => void) | undefined;
+};
+
+// The single primary affordance morphs between send and stop so a
+// running turn is cancelled from the same button that submits it,
+// rather than a separate control sitting beside the input.
+const ChatSubmitButton = ({
+  canSend,
+  isGenerating,
+  onSend,
+  onStop,
+}: ChatSubmitButtonProps) => {
+  const t = useTranslations();
+
+  if (isGenerating && onStop) {
+    return (
+      <Button
+        aria-label={t("chat.stopResponse")}
+        className="bg-foreground text-background hover:bg-foreground/90 shrink-0"
+        onClick={onStop}
+        size="icon-sm"
+        variant="default"
+      >
+        <SquareIcon className="size-3.5" />
+      </Button>
+    );
+  }
+
+  return (
+    <Button
+      aria-label={t("chat.sendPrompt")}
+      className={cn(
+        "bg-foreground text-background hover:bg-foreground/90 shrink-0",
+        !canSend && "opacity-50",
+      )}
+      disabled={!canSend}
+      onClick={onSend}
+      size="icon-sm"
+      variant="default"
+    >
+      <ArrowUpIcon className="size-3.5" />
+    </Button>
   );
 };

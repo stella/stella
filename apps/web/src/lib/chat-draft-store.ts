@@ -90,6 +90,33 @@ export const createChatDraftState = (
   updatedAt: overrides?.updatedAt ?? Date.now(),
 });
 
+export const areDraftDocsEqual = (
+  left: JSONContent,
+  right: JSONContent,
+): boolean => JSON.stringify(left) === JSON.stringify(right);
+
+type NextDraftForEditorUpdateOptions = {
+  attachments: ChatDraftAttachment[];
+  nextDoc: JSONContent;
+  storedDoc: JSONContent;
+};
+
+// Decides whether a tiptap `update` event should be persisted to the draft
+// store. Returns `null` for no-op updates whose document matches what is
+// already stored: tiptap emits `update` even for transactions that leave the
+// document unchanged (e.g. editor props re-applied while the page re-renders
+// during response streaming). Persisting an identical draft would churn the
+// store entry's reference, retrigger the editor's onUpdate, and loop until
+// React's max-update-depth guard throws. Only genuine edits yield a new state.
+export const nextDraftForEditorUpdate = ({
+  attachments,
+  nextDoc,
+  storedDoc,
+}: NextDraftForEditorUpdateOptions): ChatDraftState | null =>
+  areDraftDocsEqual(nextDoc, storedDoc)
+    ? null
+    : createChatDraftState({ attachments, doc: nextDoc });
+
 export const useChatDraftStore = create<ChatDraftStore>((set, get) => ({
   clearDraft: (threadKey) =>
     set((state) => {

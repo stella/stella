@@ -22,7 +22,7 @@ import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 import type { EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
-import type { Editor, JSONContent } from "@tiptap/react";
+import type { Editor } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
@@ -55,8 +55,10 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import {
+  areDraftDocsEqual,
   createChatDraftState,
   createEmptyChatDraftDoc,
+  nextDraftForEditorUpdate,
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -225,9 +227,6 @@ const isSuggestionPluginActive = (state: EditorState): boolean =>
     const pluginState: unknown = plugin.getState(state);
     return isSuggestionPluginState(pluginState) && pluginState.active;
   });
-
-const areDocsEqual = (left: JSONContent, right: JSONContent) =>
-  JSON.stringify(left) === JSON.stringify(right);
 
 const getEditorHtml = (editor: Editor) =>
   editor.isEmpty ? "" : editor.getHTML().trim();
@@ -547,7 +546,7 @@ export const useChatEditor = ({
   const draftDoc = draft?.doc ?? EMPTY_CHAT_DRAFT_DOC;
   const attachments = draft?.attachments ?? EMPTY_ATTACHMENTS;
   const [isEmpty, setIsEmpty] = useState(() =>
-    areDocsEqual(draftDoc, EMPTY_CHAT_DRAFT_DOC),
+    areDraftDocsEqual(draftDoc, EMPTY_CHAT_DRAFT_DOC),
   );
   const attachmentsRef = useRef(attachments);
   attachmentsRef.current = attachments;
@@ -719,17 +718,26 @@ export const useChatEditor = ({
       return;
     }
 
+    // `nextDraftForEditorUpdate` returns null for no-op updates whose document
+    // already matches the stored draft. tiptap emits `update` even when a
+    // transaction leaves the document unchanged (e.g. editor props re-applied
+    // while the page re-renders during response streaming); persisting an
+    // identical draft would churn the store reference, retrigger this handler,
+    // and loop until React's max-update-depth guard throws.
+    const nextDraft = nextDraftForEditorUpdate({
+      attachments: attachmentsRef.current,
+      nextDoc: nextEditor.getJSON(),
+      storedDoc: draftDoc,
+    });
+    if (!nextDraft) {
+      return;
+    }
+
     if (!isNavigatingHistoryRef.current) {
       messageHistoryIndexRef.current = null;
     }
 
-    setDraft(
-      threadKey,
-      createChatDraftState({
-        attachments: attachmentsRef.current,
-        doc: nextEditor.getJSON(),
-      }),
-    );
+    setDraft(threadKey, nextDraft);
 
     if (!nextEditor.isEmpty) {
       markDraftStarted();
@@ -1057,7 +1065,7 @@ export const useChatEditor = ({
     if (!isUsableEditor(editor)) {
       return undefined;
     }
-    if (areDocsEqual(editor.getJSON(), draftDoc)) {
+    if (areDraftDocsEqual(editor.getJSON(), draftDoc)) {
       setIsEmpty(editor.isEmpty);
       return undefined;
     }
