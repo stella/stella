@@ -1,3 +1,4 @@
+-- stella-migration-safety: reviewed destructive-change - DROP POLICY only replaces the user SELECT RLS policy in this migration; no data is removed, and rollback is a forward migration that recreates the prior policy definition.
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "user"
