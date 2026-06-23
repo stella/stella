@@ -381,6 +381,8 @@ Notes:
   idiomatic and unavoidable, context disambiguates.
 - **cs/sk Template** is always "Vzor" (native legal-document register);
   "Šablona" / "Šablóna" and their inflected forms must not be used.
+  **de/fr/pt-BR Template** is always the native "Vorlage" / "Modèle" /
+  "Modelo"; the raw English loanword "Template" must not be used.
   **cs/sk Clause** is always "Ustanovení" / "Ustanovenie"
   (the clause library renders as "Vzorová ustanovení" / "Vzorové
   ustanovenia"); "Klauzule" / "Klauzula" and their inflected forms must

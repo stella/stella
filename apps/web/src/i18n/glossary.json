@@ -420,7 +420,7 @@
     {
       "id": "template",
       "en": "Template",
-      "note": "cs/sk use \"Vzor\" (native legal-document register); \"Šablona\" / \"Šablóna\" and their inflected forms must not be used. ar قالب for a template; reserve نموذج for fillable forms/specimens.",
+      "note": "cs/sk use \"Vzor\" (native legal-document register); \"Šablona\" / \"Šablóna\" and their inflected forms must not be used. de/fr/pt-BR use the native \"Vorlage\" / \"Modèle\" / \"Modelo\"; the raw English loanword \"Template\" must not be used. ar قالب for a template; reserve نموذج for fillable forms/specimens.",
       "forbidden": {
         "ar": ["نموذج"],
         "cs": [
@@ -435,7 +435,17 @@
           "šablonách",
           "šablonami"
         ],
-        "sk": ["Šablóna", "šablónu", "šablóny", "šablón", "šablóne", "šablónou"]
+        "sk": [
+          "Šablóna",
+          "šablónu",
+          "šablóny",
+          "šablón",
+          "šablóne",
+          "šablónou"
+        ],
+        "de": ["Template", "Templates"],
+        "fr": ["Template", "Templates"],
+        "pt-BR": ["Template", "Templates"]
       },
       "translations": {
         "ar": "قالب",
