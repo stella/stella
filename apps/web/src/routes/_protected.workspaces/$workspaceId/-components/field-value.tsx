@@ -256,7 +256,8 @@ const DateFieldValue = ({
 }) => {
   const format = useFormatter();
 
-  if (!content.value) {
+  const date = content.value ? new Date(content.value) : null;
+  if (!date || Number.isNaN(date.getTime())) {
     if (variant === "table") {
       return (
         <SelectFieldValue property={property} value={null} variant={variant} />
@@ -265,7 +266,7 @@ const DateFieldValue = ({
     return <EmptyFieldValue variant={variant} />;
   }
 
-  const formatted = format.dateTime(new Date(content.value), {
+  const formatted = format.dateTime(date, {
     year: "numeric",
     month: "short",
     day: "numeric",
