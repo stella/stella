@@ -1,6 +1,6 @@
 import type {
-  EnsureInfiniteQueryDataOptions,
   EnsureQueryDataOptions,
+  FetchInfiniteQueryOptions,
   FetchQueryOptions,
   InfiniteData,
   QueryClient,
@@ -187,12 +187,19 @@ export const ensureRouteInfiniteQueryData = async <
   TPageParam = unknown,
 >(
   queryClient: QueryClient,
-  options: EnsureInfiniteQueryDataOptions<
+  options: FetchInfiniteQueryOptions<
     TQueryFnData,
     TError,
     TData,
     TQueryKey,
     TPageParam
   >,
+  config: EnsureCriticalQueryDataConfig = {},
 ): Promise<InfiniteData<TData, TPageParam>> =>
-  await queryClient.ensureInfiniteQueryData(routeQueryOptions(options));
+  await withCriticalQueryTimeout(
+    queryClient,
+    options.queryKey,
+    async () =>
+      await queryClient.fetchInfiniteQuery(routeQueryOptions(options)),
+    config,
+  );

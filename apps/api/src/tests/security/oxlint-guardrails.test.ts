@@ -302,6 +302,7 @@ describe("custom oxlint guardrails", () => {
       ".oxlint-plugins/no-raw-route-query-client.ts",
     );
     const configSource = readRootFixture("oxlint.config.ts");
+    const reactQuerySource = readRootFixture("apps/web/src/lib/react-query.ts");
 
     expect(pluginSource).toContain("ensureRouteQueryData");
     expect(pluginSource).toContain("ensureRouteInfiniteQueryData");
@@ -313,6 +314,8 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain("pendingComponent");
     expect(pluginSource).toContain("useQueryClient().getQueryData");
     expect(pluginSource).toContain("abandoned pending renders");
+    expect(reactQuerySource).toContain("ensureRouteInfiniteQueryData");
+    expect(reactQuerySource).toContain("fetchInfiniteQuery");
 
     expect(configSource).toContain(
       "./.oxlint-plugins/no-raw-route-query-client.ts",
@@ -325,19 +328,67 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
-  test("protected shell AI availability query stays route-fresh", () => {
+  test("protected shell chrome queries stay non-critical and route-fresh", () => {
     const protectedRouteSource = readRootFixture(
       "apps/web/src/routes/_protected.tsx",
     );
     const aiConfigQuerySource = readRootFixture(
       "apps/web/src/routes/_protected.organization/-ai-config-queries.ts",
     );
+    const organizationQuerySource = readRootFixture(
+      "apps/web/src/routes/_protected.organization/-queries.ts",
+    );
+    const workspacesQuerySource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/-queries.ts",
+    );
 
-    expect(protectedRouteSource).toContain("ensureRouteQueryData");
+    expect(protectedRouteSource).not.toContain("ensureRouteQueryData");
+    expect(protectedRouteSource).toContain("prefetchRouteQuery");
     expect(protectedRouteSource).toContain("aiAvailabilityOptions");
+    expect(protectedRouteSource).toContain("roleOptions");
+    expect(protectedRouteSource).not.toContain("organizationOptions");
+    expect(protectedRouteSource).not.toContain("workspacesNavigationOptions");
     expect(protectedRouteSource).toContain("AIAvailabilityProvider");
+    expect(protectedRouteSource).toContain("AppSidebar");
+    expect(protectedRouteSource).toContain("ChatMentionProviders");
     expect(aiConfigQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");
     expect(aiConfigQuerySource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+    expect(organizationQuerySource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+    expect(workspacesQuerySource).toContain("workspacesNavigationOptions");
+    expect(workspacesQuerySource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+  });
+
+  test("route-seeded entity queries keep observer freshness", () => {
+    const routeSource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx",
+    );
+    const entityQuerySource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts",
+    );
+    const entitiesWindowOptionsSource = entityQuerySource.slice(
+      entityQuerySource.indexOf("export const entitiesWindowOptions"),
+      entityQuerySource.indexOf("export const filesystemEntitiesOptions"),
+    );
+    const filesystemEntitiesOptionsSource = entityQuerySource.slice(
+      entityQuerySource.indexOf("export const filesystemEntitiesOptions"),
+      entityQuerySource.indexOf("export const kanbanGroupOptions"),
+    );
+
+    expect(routeSource).toContain("ensureRouteInfiniteQueryData");
+    expect(routeSource).toContain("entitiesWindowOptions");
+    expect(routeSource).toContain("ensureRouteQueryData");
+    expect(routeSource).toContain("filesystemEntitiesOptions");
+    expect(entityQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");
+    expect(entitiesWindowOptionsSource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+    expect(filesystemEntitiesOptionsSource).toContain(
       "staleTime: ROUTE_QUERY_STALE_TIME_MS",
     );
   });

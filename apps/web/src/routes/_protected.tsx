@@ -62,7 +62,7 @@ import {
 import { HOTKEYS } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { roleOptions } from "@/routes/-queries";
 import { useGlobalChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-global-chat-mention-registration";
@@ -130,24 +130,18 @@ export const Route = createFileRoute("/_protected")({
 
     const activeOrganizationId = authContext.session.activeOrganizationId;
 
-    // AIAvailabilityProvider lives in this route shell and subscribes
-    // immediately, so make its query a fresh cache hit before rendering.
-    await ensureRouteQueryData(
-      context.queryClient,
-      aiAvailabilityOptions({ organizationId: activeOrganizationId }),
-    );
-
-    // Prefetch role so useSuspenseQuery in the component is a
-    // cache hit instead of a serial round-trip after child loaders.
-    // roleOptions carries a bounded freshness window; org-switch flows
-    // explicitly refetch it via useInvalidateSession.
+    // These shell queries only gate optional affordances. Warm them with the
+    // route freshness policy, but never block the protected shell: slow AI
+    // config, role, or sidebar data should not take down /chat or /settings.
+    const onPrefetchError = (error: unknown) => {
+      getAnalytics().captureError(error);
+    };
     void prefetchRouteQuery(
       context.queryClient,
-      roleOptions,
-      (error: unknown) => {
-        getAnalytics().captureError(error);
-      },
+      aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+      onPrefetchError,
     );
+    void prefetchRouteQuery(context.queryClient, roleOptions, onPrefetchError);
 
     // Seed the pinned-matters store from localStorage before the
     // sidebar renders. The store's `init` is idempotent (skips when

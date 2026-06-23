@@ -59,6 +59,7 @@ export const workspacesNavigationOptions = (activeOrganizationId: string) =>
 
       return response.data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
 export const workspaceOptions = (workspaceId: string) =>

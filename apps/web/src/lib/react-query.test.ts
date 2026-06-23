@@ -5,6 +5,7 @@ import {
   CriticalQueryTimeoutError,
   ROUTE_QUERY_STALE_TIME_MS,
   ensureCriticalQueryData,
+  ensureRouteInfiniteQueryData,
   prefetchNonCriticalQuery,
   routeQueryOptions,
 } from "@/lib/react-query";
@@ -114,6 +115,28 @@ describe("routeQueryOptions", () => {
     });
 
     expect(options.staleTime).toBe(Number.POSITIVE_INFINITY);
+  });
+});
+
+describe("ensureRouteInfiniteQueryData", () => {
+  test("fetches when cached infinite data is stale", async () => {
+    const queryClient = new QueryClient();
+    const queryKey = ["route-infinite-query"] as const;
+
+    queryClient.setQueryData(queryKey, {
+      pageParams: [0],
+      pages: ["stale"],
+    });
+
+    const data = await ensureRouteInfiniteQueryData(queryClient, {
+      getNextPageParam: () => undefined,
+      initialPageParam: 0,
+      queryFn: async () => "fresh",
+      queryKey,
+      staleTime: 0,
+    });
+
+    expect(data.pages).toEqual(["fresh"]);
   });
 });
 
