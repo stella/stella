@@ -25,6 +25,18 @@ type AccountDeletionCleanupJobData = {
   requestId: SafeId<"accountDeletionRequest">;
 };
 
+type AccountDeletionCleanupRequestDeps = {
+  deleteS3Keys: typeof deleteS3Keys;
+  logger: Pick<typeof logger, "warn">;
+  rootDb: Pick<typeof rootDb, "select" | "update">;
+};
+
+const defaultCleanupRequestDeps: AccountDeletionCleanupRequestDeps = {
+  deleteS3Keys,
+  logger,
+  rootDb,
+};
+
 let queue: Queue<AccountDeletionCleanupJobData> | null = null;
 let queueConnection: ReturnType<typeof createBullMqConnection> | null = null;
 
@@ -58,8 +70,9 @@ export const enqueueAccountDeletionCleanup = async (
 
 export const processAccountDeletionCleanupRequest = async (
   requestId: SafeId<"accountDeletionRequest">,
+  deps: AccountDeletionCleanupRequestDeps = defaultCleanupRequestDeps,
 ): Promise<void> => {
-  const request = await rootDb
+  const request = await deps.rootDb
     .select({
       id: accountDeletionRequests.id,
       status: accountDeletionRequests.status,
@@ -71,7 +84,7 @@ export const processAccountDeletionCleanupRequest = async (
     .then((rows) => rows.at(0));
 
   if (!request) {
-    logger.warn("account_deletion_cleanup.request_missing", { requestId });
+    deps.logger.warn("account_deletion_cleanup.request_missing", { requestId });
     return;
   }
 
@@ -80,7 +93,7 @@ export const processAccountDeletionCleanupRequest = async (
   }
 
   const s3Keys = request.storageCleanup.s3Keys;
-  await rootDb
+  await deps.rootDb
     .update(accountDeletionRequests)
     .set({
       attemptCount: sql`${accountDeletionRequests.attemptCount} + 1`,
@@ -91,13 +104,13 @@ export const processAccountDeletionCleanupRequest = async (
     .where(eq(accountDeletionRequests.id, requestId));
 
   if (s3Keys.length === 0) {
-    await markCleanupCompleted(requestId);
+    await markCleanupCompleted(requestId, deps.rootDb);
     return;
   }
 
-  const deleteResult = await deleteS3Keys(s3Keys);
+  const deleteResult = await deps.deleteS3Keys(s3Keys);
   if (Result.isError(deleteResult)) {
-    await rootDb
+    await deps.rootDb
       .update(accountDeletionRequests)
       .set({
         errorMessage: deleteResult.error.message,
@@ -109,7 +122,7 @@ export const processAccountDeletionCleanupRequest = async (
     throw deleteResult.error;
   }
 
-  await markCleanupCompleted(requestId);
+  await markCleanupCompleted(requestId, deps.rootDb);
 };
 
 export const enqueuePendingAccountDeletionCleanupRequests =
@@ -204,8 +217,9 @@ export const initAccountDeletionCleanupWorker = () => {
 
 const markCleanupCompleted = async (
   requestId: SafeId<"accountDeletionRequest">,
+  db: AccountDeletionCleanupRequestDeps["rootDb"] = rootDb,
 ): Promise<void> => {
-  await rootDb
+  await db
     .update(accountDeletionRequests)
     .set({
       completedAt: new Date(),

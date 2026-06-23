@@ -2,6 +2,7 @@ import { Result, type Result as BetterResult } from "better-result";
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 type RequestStatus = "pending" | "processing" | "completed" | "failed";
 
@@ -79,28 +80,16 @@ const rootDbMock = {
   })),
 };
 
-void mock.module("@/api/db/root", () => ({
-  rootDb: rootDbMock,
-}));
-
-void mock.module("@/api/handlers/files/utils", () => ({
-  deleteS3Keys: deleteS3KeysMock,
-}));
-
-void mock.module("@/api/lib/analytics", () => ({
-  captureError: mock(() => {}),
-}));
-
-void mock.module("@/api/lib/observability/logger", () => ({
-  logger: {
-    error: mock(() => {}),
-    info: mock(() => {}),
-    warn: mock(() => {}),
-  },
-}));
-
 const { processAccountDeletionCleanupRequest } =
   await import("./account-deletion-cleanup-queue");
+
+const cleanupDeps = asTestRaw<
+  NonNullable<Parameters<typeof processAccountDeletionCleanupRequest>[1]>
+>({
+  deleteS3Keys: deleteS3KeysMock,
+  logger: { warn: mock(() => {}) },
+  rootDb: rootDbMock,
+});
 
 const createRequestRow = (overrides: Partial<RequestRow> = {}): RequestRow => ({
   id: requestId,
@@ -122,7 +111,7 @@ describe("account deletion cleanup queue", () => {
   });
 
   test("deletes S3 keys and marks the request completed", async () => {
-    await processAccountDeletionCleanupRequest(requestId);
+    await processAccountDeletionCleanupRequest(requestId, cleanupDeps);
 
     expect(deleteS3KeysMock).toHaveBeenCalledWith([
       "user/file-a",
@@ -143,7 +132,7 @@ describe("account deletion cleanup queue", () => {
 
     let thrown: unknown;
     try {
-      await processAccountDeletionCleanupRequest(requestId);
+      await processAccountDeletionCleanupRequest(requestId, cleanupDeps);
     } catch (error) {
       thrown = error;
     }
@@ -164,7 +153,7 @@ describe("account deletion cleanup queue", () => {
   test("skips completed requests", async () => {
     requestRow = createRequestRow({ status: "completed" });
 
-    await processAccountDeletionCleanupRequest(requestId);
+    await processAccountDeletionCleanupRequest(requestId, cleanupDeps);
 
     expect(deleteS3KeysMock).not.toHaveBeenCalled();
     expect(updateSets).toEqual([]);
