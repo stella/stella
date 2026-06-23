@@ -207,7 +207,10 @@ const ChatSubmitButton = ({
       size="icon-sm"
       variant="default"
     >
-      <span aria-hidden="true" className="pointer-events-none relative size-3.5">
+      <span
+        aria-hidden="true"
+        className="pointer-events-none relative size-3.5"
+      >
         <SquareIcon
           className={cn(
             "absolute inset-0 size-full transition-[opacity,transform] duration-150 ease-out",
