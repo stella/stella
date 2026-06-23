@@ -12,6 +12,10 @@ import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
+  DestructiveActionConfirmation,
+  useDestructiveActionConfirmation,
+} from "@stll/ui/components/destructive-action-confirmation";
+import {
   Dialog,
   DialogDescription,
   DialogFooter,
@@ -158,6 +162,9 @@ function ProfilePageBody() {
   const t = useTranslations();
   const queryClient = useQueryClient();
   const { data: session } = useSuspenseQuery(sessionOptions);
+  const deleteAccountConfirmation = useDestructiveActionConfirmation(
+    t("settings.account.deleteAccountConfirmationPhrase"),
+  );
   const storedTz = session?.user.timezoneId ?? "UTC";
   const currentTz = isCommonTimezone(storedTz) ? storedTz : "UTC";
   const [preferredName, setPreferredName] = useState(
@@ -455,6 +462,7 @@ function ProfilePageBody() {
             setOtpError(null);
             setReassignments({});
             setStep("loading");
+            deleteAccountConfirmation.reset();
           }
         }}
       >
@@ -543,9 +551,35 @@ function ProfilePageBody() {
                 </div>
               )}
               {dialogStep === "confirm" && (
-                <p className="text-muted-foreground text-sm">
-                  {t("settings.account.deleteAccountWarningExplanation")}
-                </p>
+                <div className="flex flex-col gap-4">
+                  <p className="text-muted-foreground text-sm">
+                    {t("settings.account.deleteAccountWarningExplanation")}
+                  </p>
+                  <DestructiveActionConfirmation
+                    confirmation={t(
+                      "settings.account.deleteAccountConfirmationPhrase",
+                    )}
+                    label={t("settings.account.deleteAccountConfirmationLabel")}
+                    onValueChange={deleteAccountConfirmation.onValueChange}
+                    placeholder={t(
+                      "settings.account.deleteAccountConfirmationPhrase",
+                    )}
+                    value={deleteAccountConfirmation.value}
+                  />
+                </div>
+              )}
+              {dialogStep === "tasks" && (
+                <DestructiveActionConfirmation
+                  confirmation={t(
+                    "settings.account.deleteAccountConfirmationPhrase",
+                  )}
+                  label={t("settings.account.deleteAccountConfirmationLabel")}
+                  onValueChange={deleteAccountConfirmation.onValueChange}
+                  placeholder={t(
+                    "settings.account.deleteAccountConfirmationPhrase",
+                  )}
+                  value={deleteAccountConfirmation.value}
+                />
               )}
               {dialogStep === "otp" && (
                 <div className="flex flex-col gap-2">
@@ -578,6 +612,7 @@ function ProfilePageBody() {
                 setOtpError(null);
                 setReassignments({});
                 setStep("loading");
+                deleteAccountConfirmation.reset();
               }}
               disabled={
                 sendOtpMutation.isPending || verifyDeleteMutation.isPending
@@ -613,6 +648,7 @@ function ProfilePageBody() {
                 disabled={
                   sendOtpMutation.isPending ||
                   dialogStep === "loading" ||
+                  !deleteAccountConfirmation.confirmed ||
                   (dialogStep === "tasks" && !allPendingTasksHaveReassignments)
                 }
                 loading={sendOtpMutation.isPending}

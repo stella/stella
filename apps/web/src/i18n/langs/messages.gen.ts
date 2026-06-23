@@ -1859,13 +1859,15 @@ type Messages = {
       "dangerZoneDescription": "Permanently delete your account and all associated data.";
       "deleteAccount": "Delete account";
       "deleteAccountConfirmDescription": "Are you sure you want to delete your account? This action is permanent and cannot be undone.";
+      "deleteAccountConfirmationLabel": "Type this phrase to continue";
+      "deleteAccountConfirmationPhrase": "Deletion is irreversible.";
       "deleteAccountOtpDescription": "We sent a 6-digit verification code to your email. Enter it below to confirm deletion.";
       "deleteAccountSuccess": "Your account has been successfully deleted.";
       "deleteAccountTaskReassignNone": "No other members in this workspace";
       "deleteAccountTaskReassignPlaceholder": "Select a member...";
       "deleteAccountTasksDescription": "You have pending tasks assigned to you. Reassign them to other workspace members to ensure continuity.";
       "deleteAccountTasksTitle": "Reassign pending tasks";
-      "deleteAccountWarning": "Once you delete your account, there is no going back. All organization memberships, auth credentials, and active sessions will be permanently removed.";
+      "deleteAccountWarning": "Deletion is irreversible. All your data will be removed.";
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. If you are the sole owner of any organization, you must transfer ownership or delete the organization first.";
       "desktop": "Desktop";
       "desktopAppDescription": "Open documents and files directly in stella from your computer.";
