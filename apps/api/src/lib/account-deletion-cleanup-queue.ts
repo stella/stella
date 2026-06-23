@@ -66,18 +66,21 @@ const getQueue = (): Queue<AccountDeletionCleanupJobData> => {
 export const enqueueAccountDeletionCleanup = async (
   requestId: SafeId<"accountDeletionRequest">,
 ): Promise<void> => {
-  await enqueueAccountDeletionCleanupJob({ queue: getQueue(), requestId });
+  await enqueueAccountDeletionCleanupJob({
+    cleanupQueue: getQueue(),
+    requestId,
+  });
 };
 
 export const enqueueAccountDeletionCleanupJob = async ({
-  queue,
+  cleanupQueue,
   requestId,
 }: {
-  queue: AccountDeletionCleanupQueue;
+  cleanupQueue: AccountDeletionCleanupQueue;
   requestId: SafeId<"accountDeletionRequest">;
 }): Promise<void> => {
   const jobId = createBullMqJobId(requestId, STORAGE_CLEANUP_JOB_NAME);
-  const existingJob = await queue.getJob(jobId);
+  const existingJob = await cleanupQueue.getJob(jobId);
   if (existingJob) {
     const state = await existingJob.getState();
     if (state === "failed") {
@@ -85,7 +88,7 @@ export const enqueueAccountDeletionCleanupJob = async ({
     }
   }
 
-  await queue.add(STORAGE_CLEANUP_JOB_NAME, { requestId }, { jobId });
+  await cleanupQueue.add(STORAGE_CLEANUP_JOB_NAME, { requestId }, { jobId });
 };
 
 export const processAccountDeletionCleanupRequest = async (

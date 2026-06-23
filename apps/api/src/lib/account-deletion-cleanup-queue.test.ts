@@ -164,8 +164,8 @@ describe("account deletion cleanup queue", () => {
   test("removes a retained failed job before re-enqueueing cleanup", async () => {
     const removeFailedJobMock = mock(async () => {});
     const addJobMock = mock(async () => {});
-    const queue = asTestRaw<
-      Parameters<typeof enqueueAccountDeletionCleanupJob>[0]["queue"]
+    const cleanupQueue = asTestRaw<
+      Parameters<typeof enqueueAccountDeletionCleanupJob>[0]["cleanupQueue"]
     >({
       add: addJobMock,
       getJob: mock(async () => ({
@@ -174,7 +174,7 @@ describe("account deletion cleanup queue", () => {
       })),
     });
 
-    await enqueueAccountDeletionCleanupJob({ queue, requestId });
+    await enqueueAccountDeletionCleanupJob({ cleanupQueue, requestId });
 
     expect(removeFailedJobMock).toHaveBeenCalled();
     expect(addJobMock).toHaveBeenCalledWith(
