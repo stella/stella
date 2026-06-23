@@ -283,6 +283,35 @@ const smokeRoute = async ({
   context: BrowserContext;
   route: SmokeRoute;
 }) => {
+  const expectation = route.expectation;
+
+  if (expectation?.kind === "redirectsTo") {
+    // Redirect aliases do not own UI. Assert the alias lands correctly, then
+    // smoke the declared target directly so browser-error collection belongs to
+    // the page that actually renders.
+    await assertRedirectRoute({ context, route, expectation });
+    await smokeRouteTarget({
+      context,
+      route: {
+        template: `${route.template} target`,
+        path: expectation.to,
+        ...(route.settleMs === undefined ? {} : { settleMs: route.settleMs }),
+        expectation: { kind: "redirectsTo", to: expectation.to },
+      },
+    });
+    return;
+  }
+
+  await smokeRouteTarget({ context, route });
+};
+
+const smokeRouteTarget = async ({
+  context,
+  route,
+}: {
+  context: BrowserContext;
+  route: SmokeRoute;
+}) => {
   const page = await context.newPage();
   const browserErrors = createBrowserErrorCollector();
   const detachPage = browserErrors.trackPage(page);
@@ -291,6 +320,28 @@ const smokeRoute = async ({
     await renderSmokeRoute({ browserErrors, page, route });
   } finally {
     detachPage();
+    await page.close();
+  }
+};
+
+const assertRedirectRoute = async ({
+  context,
+  route,
+  expectation,
+}: {
+  context: BrowserContext;
+  route: SmokeRoute;
+  expectation: { kind: "redirectsTo"; to: string };
+}) => {
+  const page = await context.newPage();
+  const redirectRoute = { ...route, expectation };
+
+  try {
+    await page.goto(redirectRoute.path, { waitUntil: "domcontentloaded" });
+    await expect(page, redirectRoute.template).not.toHaveURL(/\/auth(?:\/|$)/u);
+    await waitForRedirectDestination(page, redirectRoute);
+    assertFinalDestination(page, redirectRoute);
+  } finally {
     await page.close();
   }
 };
