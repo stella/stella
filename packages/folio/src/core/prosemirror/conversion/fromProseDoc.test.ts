@@ -462,6 +462,35 @@ describe("fromProseDoc", () => {
     expect(run.formatting?.vertAlign).toBe("baseline");
   });
 
+  test("exports subscript overrides on superscript note references", () => {
+    const footnoteRef = schema.mark("footnoteRef", {
+      id: "1",
+      noteType: "footnote",
+      vertAlign: "superscript",
+    });
+    const subscript = schema.mark("subscript");
+    const pmDoc = schema.node("doc", null, [
+      schema.node("paragraph", null, [
+        schema.text("1", [footnoteRef, subscript]),
+      ]),
+    ]);
+
+    const roundTripped = fromProseDoc(pmDoc);
+    const block = roundTripped.package.document.content.at(0);
+
+    expect(block?.type).toBe("paragraph");
+    if (block?.type !== "paragraph") {
+      return;
+    }
+    const run = block.content.at(0);
+    expect(run?.type).toBe("run");
+    if (run?.type !== "run") {
+      return;
+    }
+    expect(run.content).toEqual([{ type: "footnoteRef", id: 1 }]);
+    expect(run.formatting?.vertAlign).toBe("subscript");
+  });
+
   test("round-trips tracked-change image atoms", () => {
     const document: Document = {
       package: {
