@@ -71,3 +71,10 @@
   height: 0;
   pointer-events: none;
 }
+
+/* This contenteditable shows no visible native selection highlight (folio
+   defines its own for the same reason); give the body an explicit, theme-aware
+   one so word and range selection are visible. */
+.clause-editor ::selection {
+  background-color: color-mix(in srgb, var(--color-primary) 24%, transparent);
+}
