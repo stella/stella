@@ -241,6 +241,31 @@ describe("toFlowBlocks run-level OOXML marks", () => {
     expect(run.superscript).toBeUndefined();
   });
 
+  test("lets explicit subscript override note-reference superscript attrs", () => {
+    for (const marks of [
+      [
+        {
+          markName: "footnoteRef",
+          attrs: { id: 1, noteType: "footnote", vertAlign: "superscript" },
+        },
+        { markName: "subscript" },
+      ],
+      [
+        { markName: "subscript" },
+        {
+          markName: "footnoteRef",
+          attrs: { id: 1, noteType: "footnote", vertAlign: "superscript" },
+        },
+      ],
+    ] as const) {
+      const blocks = toFlowBlocks(buildRunWithMarks("1", marks), {});
+      const run = firstRun(blocks);
+      expect(run.footnoteRefId).toBe(1);
+      expect(run.subscript).toBe(true);
+      expect(run.superscript).toBeUndefined();
+    }
+  });
+
   test("does not raise a footnote anchor with explicit baseline vertAlign", () => {
     const blocks = toFlowBlocks(
       buildSingleRunDoc("1", "footnoteRef", {

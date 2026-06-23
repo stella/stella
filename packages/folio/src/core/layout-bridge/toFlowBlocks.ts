@@ -425,6 +425,7 @@ function extractRunFormatting(
   theme?: Theme | null,
 ): RunFormatting {
   const formatting: RunFormatting = {};
+  let hasNoteRef = false;
 
   for (const mark of marks) {
     switch (mark.type.name) {
@@ -607,6 +608,7 @@ function extractRunFormatting(
       }
 
       case "footnoteRef": {
+        hasNoteRef = true;
         const attrs = expectFootnoteRefMarkAttrs(mark);
         if (attrs.vertAlign === "superscript") {
           formatting.superscript = true;
@@ -658,6 +660,10 @@ function extractRunFormatting(
       default:
         break;
     }
+  }
+
+  if (hasNoteRef && formatting.subscript) {
+    delete formatting.superscript;
   }
 
   return formatting;
