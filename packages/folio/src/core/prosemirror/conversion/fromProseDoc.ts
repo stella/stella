@@ -1394,8 +1394,11 @@ function createNoteReferenceRun(noteRefMark: Mark): Run {
     type: "run",
     content: [noteRef],
   };
-  if (noteAttrs.vertAlign === "baseline") {
-    run.formatting = { vertAlign: "baseline" };
+  if (
+    noteAttrs.vertAlign === "baseline" ||
+    noteAttrs.vertAlign === "superscript"
+  ) {
+    run.formatting = { vertAlign: noteAttrs.vertAlign };
   }
   return run;
 }

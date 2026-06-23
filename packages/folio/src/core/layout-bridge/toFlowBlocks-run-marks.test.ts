@@ -211,6 +211,20 @@ describe("toFlowBlocks run-level OOXML marks", () => {
     expect(footnoteRun.superscript).toBe(true);
   });
 
+  test("keeps explicit note-reference superscript on footnote anchors", () => {
+    const footnote = toFlowBlocks(
+      buildSingleRunDoc("1", "footnoteRef", {
+        id: 1,
+        noteType: "footnote",
+        vertAlign: "superscript",
+      }),
+      {},
+    );
+    const footnoteRun = firstRun(footnote);
+    expect(footnoteRun.footnoteRefId).toBe(1);
+    expect(footnoteRun.superscript).toBe(true);
+  });
+
   test("does not raise a footnote anchor that carries an explicit subscript", () => {
     // The superscript default must never override an explicit subscript on the
     // same run, regardless of mark order (eigenpal/docx-editor#845).

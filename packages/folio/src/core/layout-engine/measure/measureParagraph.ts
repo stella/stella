@@ -479,7 +479,7 @@ function isBreakChar(char: string | undefined): boolean {
 function trimTrailingSpacesAndTabs(text: string): string {
   let end = text.length;
   while (end > 0) {
-    const char = text.at(end - 1);
+    const char = text[end - 1];
     if (char !== " " && char !== "\t") {
       break;
     }
@@ -504,7 +504,7 @@ function trailingGlueWidth(runs: Run[], afterIndex: number): number {
     if (!text) {
       continue;
     }
-    if (isBreakChar(text.at(0))) {
+    if (isBreakChar(text[0])) {
       break;
     }
 
@@ -515,7 +515,7 @@ function trailingGlueWidth(runs: Run[], afterIndex: number): number {
       continue;
     }
 
-    const firstBreak = breaks.at(0);
+    const firstBreak = breaks[0];
     if (firstBreak === undefined) {
       break;
     }
@@ -1269,7 +1269,8 @@ export function measureParagraph(
         // split is not stranded on the next line (eigenpal/docx-editor#991).
         const isRunTail = nextBreak === text.length;
         const glueWidth =
-          isRunTail && word.length > 0 && !isBreakChar(word.at(-1))
+          // eslint-disable-next-line unicorn/prefer-at -- hot path: direct index avoids .at() overhead.
+          isRunTail && word.length > 0 && !isBreakChar(word[word.length - 1])
             ? trailingGlueWidth(runs, runIndex)
             : 0;
         if (

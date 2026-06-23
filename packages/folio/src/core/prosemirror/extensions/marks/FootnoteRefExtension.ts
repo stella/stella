@@ -14,7 +14,7 @@ import type { ExtensionContext, ExtensionRuntime } from "../types";
 const noteRefAttrsFromDom = (
   dom: HTMLElement,
   noteType: "footnote" | "endnote",
-  vertAlign?: "baseline",
+  vertAlign?: "baseline" | "superscript",
 ): Record<string, string> => ({
   id: dom.dataset["id"] ?? "",
   noteType: dom.dataset["noteType"] ?? noteType,
@@ -33,11 +33,11 @@ export const FootnoteRefExtension = createMarkExtension({
     parseDOM: [
       {
         tag: "sup.docx-footnote-ref",
-        getAttrs: (dom) => noteRefAttrsFromDom(dom, "footnote"),
+        getAttrs: (dom) => noteRefAttrsFromDom(dom, "footnote", "superscript"),
       },
       {
         tag: "sup.docx-endnote-ref",
-        getAttrs: (dom) => noteRefAttrsFromDom(dom, "endnote"),
+        getAttrs: (dom) => noteRefAttrsFromDom(dom, "endnote", "superscript"),
       },
       {
         tag: "span.docx-footnote-ref",
@@ -52,7 +52,7 @@ export const FootnoteRefExtension = createMarkExtension({
       const attrs = expectFootnoteRefMarkAttrs(mark);
       const id = String(attrs.id);
       const noteType = attrs.noteType ?? "footnote";
-      const tagName = attrs.vertAlign === "baseline" ? "span" : "sup";
+      const tagName = attrs.vertAlign === "superscript" ? "sup" : "span";
       return [
         tagName,
         {
@@ -83,6 +83,7 @@ export const FootnoteRefExtension = createMarkExtension({
           const mark = footnoteRefType.create({
             id: String(id),
             noteType,
+            vertAlign: "superscript",
           });
           const text = schema.text(String(id), [mark]);
           const tr = state.tr.replaceSelectionWith(text, false);

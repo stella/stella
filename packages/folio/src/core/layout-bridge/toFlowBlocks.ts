@@ -608,6 +608,9 @@ function extractRunFormatting(
 
       case "footnoteRef": {
         const attrs = expectFootnoteRefMarkAttrs(mark);
+        if (attrs.vertAlign === "superscript") {
+          formatting.superscript = true;
+        }
         const id =
           typeof attrs.id === "string"
             ? Number.parseInt(attrs.id, 10)
