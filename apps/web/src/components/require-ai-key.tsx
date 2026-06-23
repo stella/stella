@@ -214,9 +214,10 @@ export function AIKeyRequiredDialog({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: config } = useQuery(
-    aiConfigOptions({ organizationId: activeOrganizationId }),
-  );
+  const { data: config } = useQuery({
+    ...aiConfigOptions({ organizationId: activeOrganizationId }),
+    enabled: open,
+  });
   const [providers, setProviders] = useState<ProviderCredentialDraft[]>(() => [
     createProviderCredentialDraft(),
   ]);

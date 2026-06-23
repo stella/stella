@@ -62,10 +62,11 @@ import {
 import { HOTKEYS } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { prefetchRouteQuery } from "@/lib/react-query";
+import { ensureRouteQueryData, prefetchRouteQuery } from "@/lib/react-query";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { roleOptions } from "@/routes/-queries";
 import { useGlobalChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-global-chat-mention-registration";
+import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-config-queries";
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
@@ -127,6 +128,15 @@ export const Route = createFileRoute("/_protected")({
       throw redirect({ to: "/auth/organization", replace: true });
     }
 
+    const activeOrganizationId = authContext.session.activeOrganizationId;
+
+    // AIAvailabilityProvider lives in this route shell and subscribes
+    // immediately, so make its query a fresh cache hit before rendering.
+    await ensureRouteQueryData(
+      context.queryClient,
+      aiAvailabilityOptions({ organizationId: activeOrganizationId }),
+    );
+
     // Prefetch role so useSuspenseQuery in the component is a
     // cache hit instead of a serial round-trip after child loaders.
     // roleOptions carries a bounded freshness window; org-switch flows
@@ -148,7 +158,7 @@ export const Route = createFileRoute("/_protected")({
     return {
       user: {
         id: authContext.session.userId,
-        activeOrganizationId: authContext.session.activeOrganizationId,
+        activeOrganizationId,
         name: authContext.user.name || undefined,
         email: authContext.user.email,
         image: authContext.user.image,

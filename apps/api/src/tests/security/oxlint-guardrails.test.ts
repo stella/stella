@@ -325,6 +325,23 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
+  test("protected shell AI availability query stays route-fresh", () => {
+    const protectedRouteSource = readRootFixture(
+      "apps/web/src/routes/_protected.tsx",
+    );
+    const aiConfigQuerySource = readRootFixture(
+      "apps/web/src/routes/_protected.organization/-ai-config-queries.ts",
+    );
+
+    expect(protectedRouteSource).toContain("ensureRouteQueryData");
+    expect(protectedRouteSource).toContain("aiAvailabilityOptions");
+    expect(protectedRouteSource).toContain("AIAvailabilityProvider");
+    expect(aiConfigQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");
+    expect(aiConfigQuerySource).toContain(
+      "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+  });
+
   test("redirect-only route lint forbids render components", () => {
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-component-on-redirect-route.ts",
