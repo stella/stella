@@ -21,8 +21,19 @@ import type { ShortcutContext, ShortcutHint } from "@/lib/hotkeys";
 
 const HOLD_DELAY_MS = 500;
 const HIGHLIGHT_DURATION_MS = 150;
+const SHORTCUT_HINTS_MIN_WIDTH_PX = 768;
 
 export function ShortcutHintsOverlay() {
+  const shouldRenderShortcutHints = useShortcutHintsViewport();
+
+  if (!shouldRenderShortcutHints) {
+    return null;
+  }
+
+  return <ShortcutHintsOverlayContent />;
+}
+
+function ShortcutHintsOverlayContent() {
   const t = useTranslations();
   const isModHeld = useKeyHold(MOD_KEY);
   const [isVisible, setIsVisible] = useState(false);
@@ -141,6 +152,35 @@ export function ShortcutHintsOverlay() {
     </Dialog>
   );
 }
+
+const useShortcutHintsViewport = () => {
+  const [shouldRender, setShouldRender] = useState(() => {
+    if (typeof window === "undefined") {
+      return false;
+    }
+
+    return window.matchMedia(`(min-width: ${SHORTCUT_HINTS_MIN_WIDTH_PX}px)`)
+      .matches;
+  });
+
+  useExternalSyncEffect(() => {
+    const mediaQuery = window.matchMedia(
+      `(min-width: ${SHORTCUT_HINTS_MIN_WIDTH_PX}px)`,
+    );
+    const syncViewport = () => {
+      setShouldRender(mediaQuery.matches);
+    };
+
+    syncViewport();
+    mediaQuery.addEventListener("change", syncViewport);
+
+    return () => {
+      mediaQuery.removeEventListener("change", syncViewport);
+    };
+  }, []);
+
+  return shouldRender;
+};
 
 const useShortcutContext = (): ShortcutContext => {
   const pdfMatch = useMatch({

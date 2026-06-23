@@ -42,6 +42,7 @@ import { useConfigStore } from "@/stores/config-store";
 
 const MAX_VISIBLE_AVATARS = 3;
 const MATTER_INLINE_EDIT_SELECTOR = "[data-matter-inline-edit]";
+const MATTERS_TABLE_NAME_COLUMN_WIDTH_PX = 260;
 
 type MattersTableProps = {
   workspaces: Workspace[];
@@ -81,8 +82,12 @@ export const MattersTable = ({
   const columns = COLUMNS.filter((col) =>
     col.id === "name" ? true : visibleColumnSet.has(col.id),
   );
+  const minTableWidth = columns.reduce(
+    (sum, column) => sum + column.widthPx,
+    0,
+  );
 
-  const filterTrigger = (id: string) => {
+  const filterTrigger = (id: ColumnDef["id"]) => {
     if (!isFilterableColumnId(id)) {
       return null;
     }
@@ -90,14 +95,11 @@ export const MattersTable = ({
   };
 
   return (
-    <Frame>
-      <Table className="table-fixed">
+    <Frame className="overflow-hidden rounded-lg sm:rounded-2xl">
+      <Table className="table-fixed" style={{ minWidth: `${minTableWidth}px` }}>
         <colgroup>
           {columns.map((col) => (
-            <col
-              key={col.id}
-              style={col.width ? { width: col.width } : undefined}
-            />
+            <col key={col.id} style={{ width: `${col.widthPx}px` }} />
           ))}
         </colgroup>
         <TableHeader>
@@ -240,11 +242,15 @@ const toLocalISODate = (date: Date): string => {
 };
 
 const TeamCell = ({ workspace }: CellProps) => (
-  <TeamAvatars
-    leadUserId={workspace.leadUserId}
-    maxVisible={MAX_VISIBLE_AVATARS}
-    members={workspace.members}
-  />
+  <div className="flex min-w-0 justify-end sm:justify-start">
+    <TeamAvatars
+      leadUserId={workspace.leadUserId}
+      maxVisible={MAX_VISIBLE_AVATARS}
+      members={workspace.members}
+      size="size-5 sm:size-6"
+      textSize="text-[0.55rem] sm:text-[0.625rem]"
+    />
+  </div>
 );
 
 const CreatedAtCell = ({ workspace }: CellProps) => {
@@ -266,20 +272,20 @@ type ColumnDef =
   | {
       id: MattersColumnId | "name";
       sortKey: MattersSortKey;
-      width?: string;
+      widthPx: number;
       Cell: (props: CellProps) => React.ReactNode;
     }
   | {
       id: MattersColumnId;
       sortKey?: undefined;
-      width?: string;
+      widthPx: number;
       Cell: (props: CellProps) => React.ReactNode;
     };
 
 type MattersTableRowProps = {
   workspace: Workspace;
   globalIndex: number;
-  columns: ColumnDef[];
+  columns: readonly ColumnDef[];
   focusIndex: number;
 };
 
@@ -371,40 +377,45 @@ const MattersTableRow = ({
   );
 };
 
-const COLUMNS: ColumnDef[] = [
-  { id: "name", sortKey: "name", Cell: NameCell },
-  { id: "client", sortKey: "clientName", width: "240px", Cell: ClientCell },
-  { id: "team", width: "160px", Cell: TeamCell },
+const COLUMNS = [
+  {
+    id: "name",
+    sortKey: "name",
+    widthPx: MATTERS_TABLE_NAME_COLUMN_WIDTH_PX,
+    Cell: NameCell,
+  },
+  { id: "client", sortKey: "clientName", widthPx: 240, Cell: ClientCell },
+  { id: "team", widthPx: 160, Cell: TeamCell },
   {
     id: "reference",
     sortKey: "reference",
-    width: "120px",
+    widthPx: 120,
     Cell: ReferenceCell,
   },
   {
     id: "entityCount",
     sortKey: "entityCount",
-    width: "96px",
+    widthPx: 96,
     Cell: EntityCountCell,
   },
   {
     id: "lastActivityAt",
     sortKey: "lastActivityAt",
-    width: "140px",
+    widthPx: 140,
     Cell: LastActivityCell,
   },
   {
     id: "createdAt",
     sortKey: "createdAt",
-    width: "120px",
+    widthPx: 120,
     Cell: CreatedAtCell,
   },
-];
+] as const satisfies readonly ColumnDef[];
 
 type MattersTableGroupProps = {
   group: WorkspaceGroup;
   workspaces: Workspace[];
-  columns: ColumnDef[];
+  columns: readonly ColumnDef[];
   focusIndex: number;
   collapsed: boolean;
   onToggle: () => void;

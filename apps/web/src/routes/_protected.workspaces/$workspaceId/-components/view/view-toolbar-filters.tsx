@@ -110,9 +110,17 @@ export const FilterChips = ({
         onAddAdvanced={() => append(emptyAdvancedGroup())}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
-          <Button className="gap-1.5" size="xs" variant="ghost">
+          <Button
+            aria-label={t("workspaces.views.filter")}
+            className="gap-1.5"
+            size="xs"
+            title={t("workspaces.views.filter")}
+            variant="ghost"
+          >
             <FilterIcon className="size-3.5" />
-            {t("workspaces.views.filter")}
+            <span className="hidden sm:inline">
+              {t("workspaces.views.filter")}
+            </span>
           </Button>
         }
       />
@@ -150,9 +158,17 @@ export const FilterChips = ({
         onAddAdvanced={() => append(emptyAdvancedGroup())}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
-          <Button className="gap-1.5" size="xs" variant="ghost">
+          <Button
+            aria-label={t("workspaces.views.filter")}
+            className="gap-1.5"
+            size="xs"
+            title={t("workspaces.views.filter")}
+            variant="ghost"
+          >
             <FilterIcon className="size-3.5" />
-            {t("workspaces.views.filter")}
+            <span className="hidden sm:inline">
+              {t("workspaces.views.filter")}
+            </span>
           </Button>
         }
       />

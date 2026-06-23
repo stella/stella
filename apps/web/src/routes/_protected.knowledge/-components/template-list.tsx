@@ -74,9 +74,11 @@ import { DOCX_MIME, TOOLBAR_ROW_MIN_HEIGHT } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
+import { CategoryMobileFilterBar } from "@/routes/_protected.knowledge/-components/category-sidebar";
 import {
   CategoryFormDialog,
   TemplateCategorySidebar,
+  useTemplateCategoryLabels,
 } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import type { TemplateCategoryItem } from "@/routes/_protected.knowledge/-components/template-category-sidebar";
 import { TEMPLATE_DRAG_MIME } from "@/routes/_protected.knowledge/-components/template-drag";
@@ -145,6 +147,8 @@ export const TemplateList = ({
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [isDragOver, setIsDragOver] = useState(false);
   const [density, setDensity] = useState<TemplateDensity>(readTemplateDensity);
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
+  const categoryLabels = useTemplateCategoryLabels();
 
   const changeDensity = (next: TemplateDensity) => {
     setDensity(next);
@@ -259,7 +263,7 @@ export const TemplateList = ({
 
   return (
     <div
-      className="relative flex min-h-0 flex-1"
+      className="relative flex min-h-0 flex-1 flex-col md:flex-row"
       onDragLeave={handleDragLeave}
       onDragOver={handleDragOver}
       onDrop={handleDrop}
@@ -272,21 +276,23 @@ export const TemplateList = ({
         </div>
       )}
 
-      <TemplateCategorySidebar
-        categories={categories}
-        onAssignCategory={assignCategory}
-        onCategoriesChanged={onCategoriesChanged}
-        onSelect={onCategorySelect}
-        onSelectTag={setTagFilter}
-        selectedId={selectedCategoryId}
-        selectedTag={tagFilter}
-        tags={allTags}
-      />
+      <div className="hidden md:contents">
+        <TemplateCategorySidebar
+          categories={categories}
+          onAssignCategory={assignCategory}
+          onCategoriesChanged={onCategoriesChanged}
+          onSelect={onCategorySelect}
+          onSelectTag={setTagFilter}
+          selectedId={selectedCategoryId}
+          selectedTag={tagFilter}
+          tags={allTags}
+        />
+      </div>
 
-      <div className="flex min-h-0 flex-1 flex-col border-s">
+      <div className="flex min-h-0 flex-1 flex-col md:border-s">
         <div
           className={cn(
-            "flex items-center justify-between gap-3 border-b px-4",
+            "flex flex-wrap items-center justify-between gap-2 border-b px-4 py-2 md:py-0",
             TOOLBAR_ROW_MIN_HEIGHT,
           )}
         >
@@ -339,6 +345,26 @@ export const TemplateList = ({
           </div>
         </div>
 
+        <CategoryMobileFilterBar
+          canCreate={canCreateTemplate}
+          categories={categories}
+          extraFilters={allTags.map((tag) => ({
+            id: tag,
+            label: tag,
+            active: tagFilter === tag,
+            icon: <TagIcon className="size-3.5" />,
+            onSelect: () => setTagFilter(tagFilter === tag ? null : tag),
+          }))}
+          labels={categoryLabels}
+          onCreateCategory={() => setCreateCategoryOpen(true)}
+          onSelect={onCategorySelect}
+          onSelectAll={() => {
+            onCategorySelect(null);
+            setTagFilter(null);
+          }}
+          selectedId={selectedCategoryId}
+        />
+
         <div className="flex-1 overflow-y-auto">
           {visibleTemplates.length === 0 && (
             <div className="flex items-center justify-center p-8">
@@ -365,6 +391,12 @@ export const TemplateList = ({
           </ul>
         </div>
       </div>
+
+      <CategoryFormDialog
+        onOpenChange={setCreateCategoryOpen}
+        onSaved={onCategoriesChanged}
+        open={createCategoryOpen}
+      />
     </div>
   );
 };
@@ -672,21 +704,36 @@ const TemplateRow = ({
   // mirroring the clause list; Use (fill) stays an explicit CTA.
   const actions = (
     <div className="relative z-10 flex shrink-0 items-center gap-2">
-      <Button onClick={() => setUseOpen(true)} size="xs" variant="outline">
+      <Button
+        className="max-sm:hidden"
+        onClick={() => setUseOpen(true)}
+        size="xs"
+        variant="outline"
+      >
         {t("templates.useTemplate")}
       </Button>
-      <Tooltip
-        content={template.authorName}
-        render={<span className="inline-flex" />}
-      >
-        <UserAvatar
-          className="size-6 shrink-0 text-[0.5625rem]"
-          image={template.authorImage}
-          name={template.authorName}
-        />
-      </Tooltip>
+      <span className="hidden sm:inline-flex">
+        <Tooltip
+          content={template.authorName}
+          render={<span className="inline-flex" />}
+        >
+          <UserAvatar
+            className="size-6 shrink-0 text-[0.5625rem]"
+            image={template.authorImage}
+            name={template.authorName}
+          />
+        </Tooltip>
+      </span>
       <DropdownMenu>
-        <DropdownMenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
+        <DropdownMenuTrigger
+          render={
+            <Button
+              aria-label={t("common.actions")}
+              size="icon-xs"
+              variant="ghost"
+            />
+          }
+        >
           <MoreHorizontalIcon />
         </DropdownMenuTrigger>
         <DropdownMenuContent>

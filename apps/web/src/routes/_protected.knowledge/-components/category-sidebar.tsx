@@ -78,6 +78,14 @@ export type CategoryLabels = {
   namePlaceholder: string;
 };
 
+export type CategoryMobileExtraFilter = {
+  id: string;
+  label: string;
+  active: boolean;
+  onSelect: () => void;
+  icon?: React.ReactNode;
+};
+
 /** Drag-and-drop wiring, supplied only by features that support reassigning a
  *  dragged item onto a category (Templates). When omitted, no drop targets
  *  render (Clauses). */
@@ -191,6 +199,177 @@ export const CategorySidebar = ({
       />
     </div>
   );
+};
+
+type CategoryMobileFilterBarProps = {
+  categories: CategoryEntity[];
+  selectedId: string | null;
+  labels: CategoryLabels;
+  canCreate: boolean;
+  onSelect: (id: string | null) => void;
+  onCreateCategory: () => void;
+  onSelectAll?: () => void;
+  extraFilters?: readonly CategoryMobileExtraFilter[];
+};
+
+type CategoryMobileFilterOption =
+  | { type: "all"; label: string; active: boolean }
+  | { type: "uncategorized"; label: string; active: boolean }
+  | { type: "category"; id: string; label: string; active: boolean }
+  | {
+      type: "extra";
+      id: string;
+      label: string;
+      active: boolean;
+      icon: React.ReactNode | undefined;
+      onSelect: () => void;
+    };
+
+const CATEGORY_MOBILE_FILTER_TYPE_CLASS = {
+  all: "",
+  uncategorized: "",
+  category: "",
+  extra: "border-dashed",
+} as const satisfies Record<CategoryMobileFilterOption["type"], string>;
+
+export const CategoryMobileFilterBar = ({
+  categories,
+  selectedId,
+  labels,
+  canCreate,
+  onSelect,
+  onCreateCategory,
+  onSelectAll,
+  extraFilters = [],
+}: CategoryMobileFilterBarProps) => {
+  const t = useTranslations();
+  const hasActiveExtraFilter = extraFilters.some((filter) => filter.active);
+  const options: CategoryMobileFilterOption[] = [
+    {
+      type: "all",
+      label: labels.all,
+      active: selectedId === null && !hasActiveExtraFilter,
+    },
+    {
+      type: "uncategorized",
+      label: t("common.uncategorized"),
+      active: selectedId === "uncategorized",
+    },
+  ];
+
+  for (const category of categories) {
+    options.push({
+      type: "category",
+      id: category.id,
+      label: category.name,
+      active: selectedId === category.id,
+    });
+  }
+
+  for (const filter of extraFilters) {
+    options.push({
+      type: "extra",
+      id: filter.id,
+      label: filter.label,
+      active: filter.active,
+      icon: filter.icon,
+      onSelect: filter.onSelect,
+    });
+  }
+
+  return (
+    <div className="border-b px-3 py-2 md:hidden">
+      <div className="flex gap-1 overflow-x-auto pb-0.5">
+        {options.map((option) => (
+          <CategoryMobileFilterButton
+            key={getCategoryMobileFilterKey(option)}
+            onSelect={onSelect}
+            onSelectAll={onSelectAll}
+            option={option}
+          />
+        ))}
+        {canCreate && (
+          <Button
+            className="h-8 shrink-0"
+            onClick={onCreateCategory}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <PlusIcon />
+            {labels.createCategory}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+type CategoryMobileFilterButtonProps = {
+  option: CategoryMobileFilterOption;
+  onSelect: (id: string | null) => void;
+  onSelectAll: (() => void) | undefined;
+};
+
+const CategoryMobileFilterButton = ({
+  option,
+  onSelect,
+  onSelectAll,
+}: CategoryMobileFilterButtonProps) => {
+  const onClick = () => {
+    switch (option.type) {
+      case "all":
+        if (onSelectAll) {
+          onSelectAll();
+          return;
+        }
+        onSelect(null);
+        return;
+      case "uncategorized":
+        onSelect("uncategorized");
+        return;
+      case "category":
+        onSelect(option.id);
+        return;
+      case "extra":
+        option.onSelect();
+        return;
+    }
+  };
+
+  return (
+    <button
+      aria-pressed={option.active}
+      className={cn(
+        "border-input bg-popover text-foreground relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition-colors pointer-coarse:after:absolute pointer-coarse:after:start-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-11 pointer-coarse:after:w-full pointer-coarse:after:-translate-y-1/2",
+        CATEGORY_MOBILE_FILTER_TYPE_CLASS[option.type],
+        option.active
+          ? "border-foreground bg-foreground text-background"
+          : "hover:bg-muted",
+      )}
+      onClick={onClick}
+      type="button"
+    >
+      {option.type === "extra" && option.icon}
+      <span className="max-w-40 truncate" dir="auto">
+        {option.label}
+      </span>
+    </button>
+  );
+};
+
+const getCategoryMobileFilterKey = (
+  option: CategoryMobileFilterOption,
+): string => {
+  switch (option.type) {
+    case "all":
+    case "uncategorized":
+      return option.type;
+    case "category":
+      return `category:${option.id}`;
+    case "extra":
+      return `extra:${option.id}`;
+  }
 };
 
 // ── Drop target ─────────────────────────────────────

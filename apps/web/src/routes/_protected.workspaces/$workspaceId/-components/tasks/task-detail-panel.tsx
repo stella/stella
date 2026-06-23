@@ -2,21 +2,22 @@ import { useEffect, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useRouteContext } from "@tanstack/react-router";
-import { XIcon } from "lucide-react";
+import { ArrowLeftIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import {
   isTaskPriority,
   isTaskStatus,
@@ -52,12 +53,15 @@ export const TaskDetailPanel = ({
   taskId,
 }: TaskDetailPanelProps) => {
   const t = useTranslations("tasks");
+  const tCommon = useTranslations("common");
   const closeTab = useInspectorStore((s) => s.closeTab);
+  const setMinimized = useInspectorStore((s) => s.setMinimized);
   const isNewTask = useInspectorStore((s) => {
     const found = s.tabs.find((tab) => tab.id === taskId);
     return found?.type === "task" && found.isNew;
   });
   const clearNewFlag = useInspectorStore((s) => s.clearTaskNewFlag);
+  const handleBack = () => setMinimized(true);
   const handleClose = () => closeTab(taskId);
   const queryClient = useQueryClient();
   const userId = useRouteContext({
@@ -224,8 +228,24 @@ export const TaskDetailPanel = ({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
+          <Button
+            aria-label={tCommon("back")}
+            className="-ms-1 md:hidden"
+            onClick={handleBack}
+            size="icon-sm"
+            title={tCommon("back")}
+            variant="ghost"
+          >
+            <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
+          </Button>
           <Skeleton className="h-4 flex-1" />
-          <Button onClick={handleClose} size="icon-xs" variant="ghost">
+          <Button
+            aria-label={tCommon("close")}
+            onClick={handleClose}
+            size="icon-xs"
+            title={tCommon("close")}
+            variant="ghost"
+          >
             <XIcon className="size-3.5" />
           </Button>
         </div>
@@ -247,10 +267,26 @@ export const TaskDetailPanel = ({
             TOOLBAR_ROW_HEIGHT,
           )}
         >
+          <Button
+            aria-label={tCommon("back")}
+            className="-ms-1 md:hidden"
+            onClick={handleBack}
+            size="icon-sm"
+            title={tCommon("back")}
+            variant="ghost"
+          >
+            <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
+          </Button>
           <span className="text-muted-foreground flex-1 text-xs">
             {t("notFound")}
           </span>
-          <Button onClick={handleClose} size="icon-xs" variant="ghost">
+          <Button
+            aria-label={tCommon("close")}
+            onClick={handleClose}
+            size="icon-xs"
+            title={tCommon("close")}
+            variant="ghost"
+          >
             <XIcon className="size-3.5" />
           </Button>
         </div>
@@ -279,10 +315,26 @@ export const TaskDetailPanel = ({
           TOOLBAR_ROW_HEIGHT,
         )}
       >
+        <Button
+          aria-label={tCommon("back")}
+          className="-ms-1 md:hidden"
+          onClick={handleBack}
+          size="icon-sm"
+          title={tCommon("back")}
+          variant="ghost"
+        >
+          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
+        </Button>
         <span className="min-w-0 flex-1 truncate text-xs font-medium">
           {isNewTask ? t("newTask") : name}
         </span>
-        <Button onClick={handleClose} size="icon-xs" variant="ghost">
+        <Button
+          aria-label={tCommon("close")}
+          onClick={handleClose}
+          size="icon-xs"
+          title={tCommon("close")}
+          variant="ghost"
+        >
           <XIcon className="size-3.5" />
         </Button>
       </div>

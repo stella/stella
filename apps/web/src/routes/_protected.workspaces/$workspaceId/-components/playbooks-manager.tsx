@@ -114,14 +114,18 @@ export const PlaybooksManager = ({ workspaceId }: PlaybooksManagerProps) => {
   return (
     <>
       <Button
+        aria-label={t("workspaces.playbooks.action")}
         className="text-muted-foreground hover:bg-accent gap-1 px-2 font-normal"
         onClick={() => setOpen(true)}
         size="xs"
+        title={t("workspaces.playbooks.action")}
         type="button"
         variant="ghost"
       >
         <WandSparklesIcon className="size-3" />
-        {t("workspaces.playbooks.action")}
+        <span className="hidden sm:inline">
+          {t("workspaces.playbooks.action")}
+        </span>
       </Button>
       {open && (
         <PlaybooksDialog

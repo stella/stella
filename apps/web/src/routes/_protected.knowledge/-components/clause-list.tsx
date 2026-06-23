@@ -18,10 +18,18 @@ import {
 } from "@stll/ui/components/input-group";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import {
+  ResponsiveActionToolbar,
+  ResponsiveActionToolbarItem,
+} from "@/components/responsive-action-toolbar";
 import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
-import { CategorySidebar } from "@/routes/_protected.knowledge/-components/category-sidebar";
+import {
+  CategoryFormDialog,
+  CategoryMobileFilterBar,
+  CategorySidebar,
+} from "@/routes/_protected.knowledge/-components/category-sidebar";
 import type {
   CategoryLabels,
   CategoryOps,
@@ -81,6 +89,9 @@ export const ClauseList = ({
   const canCreateClause = usePermissions({ clause: ["create"] });
   const [searchInput, setSearchInput] = useState("");
   const [importOpen, setImportOpen] = useState(false);
+  const [createCategoryOpen, setCreateCategoryOpen] = useState(false);
+  const categoryLabels = useClauseCategoryLabels();
+  const categoryOps = useClauseCategoryOps();
 
   const debouncedSearch = useDebouncedCallback(
     (value: string) => onSearch(value),
@@ -124,58 +135,103 @@ export const ClauseList = ({
   };
 
   return (
-    <div className="flex min-h-0 flex-1">
-      {/* Category sidebar */}
-      <ClauseCategorySidebar
-        categories={categories}
-        onCategoriesChanged={onCategoriesChanged}
-        onSelect={onCategorySelect}
-        selectedId={selectedCategoryId}
-      />
+    <div className="flex min-h-0 flex-1 flex-col md:flex-row">
+      <div className="hidden md:contents">
+        <ClauseCategorySidebar
+          categories={categories}
+          labels={categoryLabels}
+          onCategoriesChanged={onCategoriesChanged}
+          onSelect={onCategorySelect}
+          ops={categoryOps}
+          selectedId={selectedCategoryId}
+        />
+      </div>
 
-      {/* Clause list */}
-      <div className="flex min-h-0 flex-1 flex-col border-s">
-        <div className="flex items-center justify-between border-b px-4 py-2">
-          <InputGroup className="me-3 flex-1">
-            <InputGroupInput
-              onChange={handleSearchChange}
-              placeholder={t("clauses.searchPlaceholder")}
-              size="sm"
-              value={searchInput}
-            />
-            <InputGroupAddon>
-              <SearchIcon />
-            </InputGroupAddon>
-          </InputGroup>
-          <div className="flex gap-1">
-            {canCreateClause && (
-              <Button
-                onClick={() => setImportOpen(true)}
-                size="sm"
-                variant="outline"
-              >
-                <UploadIcon />
-                {t("clauses.import")}
-              </Button>
-            )}
-            <Button
-              onClick={() => {
-                void handleExport();
-              }}
-              size="sm"
-              variant="outline"
+      <div className="flex min-h-0 flex-1 flex-col md:border-s">
+        <div className="border-b px-4 py-2">
+          <ResponsiveActionToolbar>
+            <ResponsiveActionToolbarItem slot="primary">
+              <InputGroup className="min-h-11 sm:min-h-0">
+                <InputGroupInput
+                  className="max-sm:h-11 max-sm:leading-11"
+                  onChange={handleSearchChange}
+                  placeholder={t("clauses.searchPlaceholder")}
+                  size="sm"
+                  type="search"
+                  value={searchInput}
+                />
+                <InputGroupAddon>
+                  <SearchIcon />
+                </InputGroupAddon>
+              </InputGroup>
+            </ResponsiveActionToolbarItem>
+            <ResponsiveActionToolbarItem
+              className="ms-auto sm:ms-0"
+              slot="action"
             >
-              <DownloadIcon />
-              {t("clauses.export")}
-            </Button>
-            {canCreateClause && (
-              <Button onClick={onNewClause} size="sm">
-                <PlusIcon />
-                {t("clauses.createClause")}
-              </Button>
-            )}
-          </div>
+              <div className="flex gap-1">
+                {canCreateClause && (
+                  <Button
+                    aria-label={t("clauses.import")}
+                    onClick={() => setImportOpen(true)}
+                    size="sm"
+                    title={t("clauses.import")}
+                    variant="outline"
+                  >
+                    <UploadIcon />
+                    <span className="hidden sm:inline">
+                      {t("clauses.import")}
+                    </span>
+                  </Button>
+                )}
+                <Button
+                  aria-label={t("clauses.export")}
+                  onClick={() => {
+                    void handleExport();
+                  }}
+                  size="sm"
+                  title={t("clauses.export")}
+                  variant="outline"
+                >
+                  <DownloadIcon />
+                  <span className="hidden sm:inline">
+                    {t("clauses.export")}
+                  </span>
+                </Button>
+                {canCreateClause && (
+                  <Button
+                    aria-label={t("clauses.createClause")}
+                    onClick={onNewClause}
+                    size="sm"
+                    title={t("clauses.createClause")}
+                  >
+                    <PlusIcon />
+                    <span className="hidden sm:inline">
+                      {t("clauses.createClause")}
+                    </span>
+                  </Button>
+                )}
+              </div>
+            </ResponsiveActionToolbarItem>
+          </ResponsiveActionToolbar>
         </div>
+
+        <CategoryMobileFilterBar
+          canCreate={canCreateClause}
+          categories={categories}
+          labels={categoryLabels}
+          onCreateCategory={() => setCreateCategoryOpen(true)}
+          onSelect={onCategorySelect}
+          selectedId={selectedCategoryId}
+        />
+
+        <CategoryFormDialog
+          labels={categoryLabels}
+          onChanged={onCategoriesChanged}
+          onOpenChange={setCreateCategoryOpen}
+          open={createCategoryOpen}
+          ops={categoryOps}
+        />
 
         <ClauseImportDialog
           onImported={onRefresh}
@@ -278,6 +334,8 @@ type ClauseCategorySidebarProps = {
   selectedId: string | null;
   onSelect: (id: string | null) => void;
   onCategoriesChanged: () => void;
+  labels: CategoryLabels;
+  ops: CategoryOps;
 };
 
 /** Thin wrapper over the shared `CategorySidebar`: resolves clause
@@ -288,12 +346,12 @@ const ClauseCategorySidebar = ({
   selectedId,
   onSelect,
   onCategoriesChanged,
+  labels,
+  ops,
 }: ClauseCategorySidebarProps) => {
   const canCreate = usePermissions({ clause: ["create"] });
   const canUpdate = usePermissions({ clause: ["update"] });
   const canDelete = usePermissions({ clause: ["delete"] });
-  const ops = useClauseCategoryOps();
-  const labels = useClauseCategoryLabels();
 
   return (
     <CategorySidebar

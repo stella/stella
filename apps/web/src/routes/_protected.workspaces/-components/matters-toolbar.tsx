@@ -73,7 +73,7 @@ export const MattersToolbar = ({
       )}
     >
       <Input
-        className="w-64 max-w-[40%]"
+        className="min-w-0 flex-1 sm:w-64 sm:max-w-[40%] sm:flex-none"
         onChange={(e) => onSearchChange(e.currentTarget.value)}
         placeholder={t("common.search")}
         ref={searchRef}
@@ -84,9 +84,18 @@ export const MattersToolbar = ({
       <ToolbarSeparator />
 
       <Menu>
-        <MenuTrigger render={<Button size="xs" variant="ghost" />}>
+        <MenuTrigger
+          render={
+            <Button
+              aria-label={t("common.sort")}
+              size="xs"
+              title={t("common.sort")}
+              variant="ghost"
+            />
+          }
+        >
           <SlidersHorizontalIcon />
-          <span className="text-muted-foreground text-xs">
+          <span className="text-muted-foreground hidden text-xs sm:inline">
             {sortLabels[config.sortKey]}
           </span>
           {config.sortDesc ? (
@@ -154,17 +163,26 @@ export const MattersToolbar = ({
           })
         }
         size="xs"
+        title={
+          config.viewMode === "grid"
+            ? t("workspaces.views.layouts.table")
+            : t("workspaces.views.layouts.grid")
+        }
         variant="ghost"
       >
         {config.viewMode === "grid" ? (
           <>
             <ListIcon />
-            {t("workspaces.views.layouts.table")}
+            <span className="hidden sm:inline">
+              {t("workspaces.views.layouts.table")}
+            </span>
           </>
         ) : (
           <>
             <LayoutGridIcon />
-            {t("workspaces.views.layouts.grid")}
+            <span className="hidden sm:inline">
+              {t("workspaces.views.layouts.grid")}
+            </span>
           </>
         )}
       </Button>
@@ -197,9 +215,15 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
   }
 
   return (
-    <Button className={className} onClick={() => openCreateMatter()} size="xs">
+    <Button
+      aria-label={t("workspaces.newMatter")}
+      className={className}
+      onClick={() => openCreateMatter()}
+      size="xs"
+      title={t("workspaces.newMatter")}
+    >
       <PlusIcon />
-      {t("workspaces.newMatter")}
+      <span className="hidden sm:inline">{t("workspaces.newMatter")}</span>
     </Button>
   );
 };

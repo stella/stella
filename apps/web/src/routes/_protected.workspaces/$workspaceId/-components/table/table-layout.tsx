@@ -17,6 +17,7 @@ import {
   FilteredEmptyState,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { GroupedTableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout";
+import { MobileTableOrientationGate } from "@/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate";
 import {
   DEFAULT_TABLE_COLUMN_MIN_SIZE,
   useTableColumns,
@@ -116,6 +117,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   useSyncSelectedEntities({ viewId: view.id, treeData });
 
   const table = useTable({
+    key: `workspace-table:${workspaceId}:${view.id}`,
     features: workspaceTableFeatures,
     columnResizeMode: "onChange",
     data: treeData,
@@ -154,7 +156,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   }
 
   return (
-    <>
+    <MobileTableOrientationGate>
       <WorkspaceTable
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
@@ -172,6 +174,6 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
           </Suspense>
         </ClientOnly>
       ) : null}
-    </>
+    </MobileTableOrientationGate>
   );
 };
