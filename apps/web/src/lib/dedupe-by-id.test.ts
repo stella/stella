@@ -3,9 +3,11 @@ import { describe, expect, test } from "bun:test";
 import { dedupeById } from "@/lib/dedupe-by-id";
 
 describe("dedupeById", () => {
-  test("returns the list unchanged when all ids are unique", () => {
+  test("returns the same reference when all ids are unique", () => {
     const items = [{ id: "a" }, { id: "b" }, { id: "c" }];
-    expect(dedupeById(items)).toEqual(items);
+    // Identity, not just equality: memoized consumers rely on the no-duplicate
+    // common case staying referentially stable.
+    expect(dedupeById(items)).toBe(items);
   });
 
   // Regression guard: during the per-turn refetch handoff the chat transcript
