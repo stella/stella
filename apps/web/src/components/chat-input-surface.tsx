@@ -183,9 +183,9 @@ type ChatSubmitButtonProps = {
   onStop?: (() => void) | undefined;
 };
 
-// The single primary affordance morphs between send and stop so a
-// running turn is cancelled from the same button that submits it,
-// rather than a separate control sitting beside the input.
+// The single primary affordance morphs in place: the same Button (and DOM node)
+// shows the send arrow to submit a draft and the stop square to cancel a running
+// turn, so focus state and the icon transition survive the state change.
 const ChatSubmitButton = ({
   canSend,
   isGenerating,
@@ -193,34 +193,37 @@ const ChatSubmitButton = ({
   onStop,
 }: ChatSubmitButtonProps) => {
   const t = useTranslations();
-
-  if (isGenerating && onStop) {
-    return (
-      <Button
-        aria-label={t("chat.stopResponse")}
-        className="bg-foreground text-background hover:bg-foreground/90 shrink-0"
-        onClick={onStop}
-        size="icon-sm"
-        variant="default"
-      >
-        <SquareIcon className="size-3.5" />
-      </Button>
-    );
-  }
+  const isStop = isGenerating && onStop !== undefined;
 
   return (
     <Button
-      aria-label={t("chat.sendPrompt")}
+      aria-label={isStop ? t("chat.stopResponse") : t("chat.sendPrompt")}
       className={cn(
         "bg-foreground text-background hover:bg-foreground/90 shrink-0",
-        !canSend && "opacity-50",
+        !isStop && !canSend && "opacity-50",
       )}
-      disabled={!canSend}
-      onClick={onSend}
+      disabled={!isStop && !canSend}
+      onClick={isStop ? onStop : onSend}
       size="icon-sm"
       variant="default"
     >
-      <ArrowUpIcon className="size-3.5" />
+      <span
+        aria-hidden="true"
+        className="pointer-events-none relative size-3.5"
+      >
+        <SquareIcon
+          className={cn(
+            "absolute inset-0 size-full transition-[opacity,transform] duration-150 ease-out",
+            isStop ? "scale-100 opacity-100" : "scale-75 opacity-0",
+          )}
+        />
+        <ArrowUpIcon
+          className={cn(
+            "absolute inset-0 size-full transition-[opacity,transform] duration-150 ease-out",
+            isStop ? "scale-75 opacity-0" : "scale-100 opacity-100",
+          )}
+        />
+      </span>
     </Button>
   );
 };
