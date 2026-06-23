@@ -33,6 +33,9 @@ function PendingComponent() {
   // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
   useQuery(options);
 
+  // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
+  ReactQuery.useSuspenseQuery(options);
+
   const queryClient = useQueryClient();
   queryClient.getQueryData(options.queryKey);
 
@@ -61,13 +64,5 @@ export const Route = createFileRoute("/__fixture")({
     await ensureRouteInfiniteQueryData(queryClient, infiniteOptions);
     await fetchRouteQuery(queryClient, options);
     await prefetchRouteQuery(queryClient, options, () => undefined);
-  },
-});
-
-export const InlinePendingRoute = createFileRoute("/__fixture/inline")({
-  pendingComponent: function InlinePendingComponent() {
-    // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
-    ReactQuery.useSuspenseQuery(options);
-    return null;
   },
 });
