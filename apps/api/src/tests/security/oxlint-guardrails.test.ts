@@ -237,6 +237,41 @@ describe("custom oxlint guardrails", () => {
     expect(pluginSource).toContain("Navigate");
   });
 
+  test("workspace field value surfaces must use the shared renderer", () => {
+    const configSource = readRootFixture("oxlint.config.ts");
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-workspace-field-value-drift.ts",
+    );
+
+    expect(configSource).toContain(
+      "./.oxlint-plugins/no-workspace-field-value-drift.ts",
+    );
+    expect(configSource).toContain(
+      "no-workspace-field-value-drift/no-workspace-field-value-drift",
+    );
+    expect(configSource).toContain(
+      "no-workspace-field-value-drift/no-raw-field-value-bidi-text",
+    );
+    expect(configSource).toContain(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx",
+    );
+    expect(configSource).toContain(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx",
+    );
+    expect(configSource).toContain(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx",
+    );
+    expect(configSource).toContain(
+      "apps/web/src/components/inspector/entity-metadata-panel.tsx",
+    );
+    expect(pluginSource).toContain("DISPLAY_FIELD_TYPES");
+    expect(pluginSource).toContain('"single-select"');
+    expect(pluginSource).toContain("isFieldContentTypeAccess");
+    expect(pluginSource).toContain("<FieldValue /> or <EditableField />");
+    expect(pluginSource).toContain("BIDI_TEXT_COMPONENTS");
+    expect(pluginSource).toContain("noRawFieldValueBidiText");
+  });
+
   test("public SEO endpoints cannot import auth or protected code", () => {
     const configSource = readRootFixture("oxlint.config.ts");
 

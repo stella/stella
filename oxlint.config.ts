@@ -358,6 +358,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-centered-scroll-column.ts",
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
+    "./.oxlint-plugins/no-workspace-field-value-drift.ts",
   ],
 
   overrides: [
@@ -829,6 +830,15 @@ export default defineConfig({
       },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-workspace-field-value-drift.fixture.tsx",
+      ],
+      rules: {
+        "no-workspace-field-value-drift/no-workspace-field-value-drift":
+          "error",
+      },
+    },
+    {
       files: [".oxlint-plugins/__fixtures__/require-query-limit.fixture.ts"],
       rules: {
         "require-query-limit/require-query-limit": "error",
@@ -1066,6 +1076,30 @@ export default defineConfig({
       ],
       rules: {
         "no-shared-suspense-query/no-shared-suspense-query": "error",
+      },
+    },
+    {
+      // Field value display must stay centralized in FieldValue /
+      // EditableField. These surfaces own table/kanban/inspector shell
+      // behavior, but must not reimplement per-field display branches.
+      files: [
+        "apps/web/src/components/inspector/entity-metadata-panel.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-result.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx",
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx",
+      ],
+      rules: {
+        "no-workspace-field-value-drift/no-workspace-field-value-drift":
+          "error",
+      },
+    },
+    {
+      files: [
+        "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value.tsx",
+        ".oxlint-plugins/__fixtures__/no-workspace-field-value-drift.fixture.tsx",
+      ],
+      rules: {
+        "no-workspace-field-value-drift/no-raw-field-value-bidi-text": "error",
       },
     },
     {

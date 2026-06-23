@@ -1,3 +1,4 @@
+import type { WorkspaceEntity } from "@/lib/types";
 import { getInternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 export type KanbanCardMetadataVisibility = {
@@ -17,3 +18,16 @@ export const getKanbanCardMetadataVisibility = (
   showDueDate:
     !isTask && visibleCardFields.includes(getInternalPropertyId("due-date")),
 });
+
+export const getKanbanCardRenameInitialValue = (
+  entity: WorkspaceEntity,
+  fallbackName: string,
+) => {
+  const textField = Object.values(entity.fields).find(
+    (field) => field.content.type === "text",
+  );
+  const textName =
+    textField?.content.type === "text" ? textField.content.value.trim() : "";
+
+  return textName || fallbackName;
+};

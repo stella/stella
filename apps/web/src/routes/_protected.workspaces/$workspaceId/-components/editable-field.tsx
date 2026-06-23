@@ -13,7 +13,7 @@
 import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { useFormatter, useTranslations } from "use-intl";
+import { useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -29,11 +29,11 @@ import type {
   WorkspaceProperty,
 } from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
-import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
 import {
-  emptyColor,
-  resolveOptionColor,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
+  FieldValue,
+  IntFieldValue,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/field-value";
+import { FieldValueSelect } from "@/routes/_protected.workspaces/$workspaceId/-components/field-value-select";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
@@ -71,11 +71,11 @@ export const EditableField = ({
     content?.type === "unsupported" ||
     content?.type === "clip"
   ) {
-    return <ReadOnlyDisplay content={content} />;
+    return <FieldValue content={content} property={property} />;
   }
 
   if (readonly) {
-    return <ReadOnlyValue content={content} property={property} />;
+    return <FieldValue content={content} property={property} />;
   }
 
   return (
@@ -91,112 +91,6 @@ export const EditableField = ({
       workspaceId={workspaceId}
     />
   );
-};
-
-// -- Read-only fallbacks --
-
-const ReadOnlyDisplay = ({
-  content,
-}: {
-  content: WorkspaceFieldContent | undefined;
-}) => {
-  const t = useTranslations();
-
-  if (!content) {
-    return <span className="text-muted-foreground text-sm">—</span>;
-  }
-
-  if (content.type === "pending") {
-    return (
-      <span className="text-muted-foreground flex items-center gap-1.5 text-sm">
-        {t("workspaces.fields.calculating")}
-        <span className="bg-muted-foreground size-2 animate-pulse rounded-full" />
-      </span>
-    );
-  }
-
-  if (content.type === "error") {
-    return (
-      <span className="text-destructive text-sm italic">
-        {t("workspaces.fields.errored")}
-      </span>
-    );
-  }
-
-  if (content.type === "unsupported") {
-    return (
-      <span className="text-muted-foreground block truncate text-sm italic">
-        {t("workspaces.fields.formatNotSupported")}
-      </span>
-    );
-  }
-
-  if (content.type === "clip") {
-    return (
-      <span className="text-muted-foreground block truncate text-sm">
-        {content.url}
-      </span>
-    );
-  }
-
-  return <span className="text-muted-foreground text-sm">—</span>;
-};
-
-const ReadOnlyValue = ({
-  content,
-  property,
-}: {
-  content: WorkspaceFieldContent | undefined;
-  property: WorkspaceProperty;
-}) => {
-  const format = useFormatter();
-
-  if (!content || content.type === "error" || content.type === "pending") {
-    return <span className="text-muted-foreground text-sm">—</span>;
-  }
-
-  if (content.type === "text") {
-    return <span className="line-clamp-2 text-sm">{content.value}</span>;
-  }
-
-  if (content.type === "date") {
-    if (!content.value) {
-      return <span className="text-muted-foreground text-sm">—</span>;
-    }
-    return (
-      <span className="text-sm">
-        {format.dateTime(new Date(content.value), {
-          year: "numeric",
-          month: "short",
-          day: "numeric",
-          timeZone: "UTC",
-        })}
-      </span>
-    );
-  }
-
-  if (content.type === "int") {
-    return <IntDisplay currency={content.currency} value={content.value} />;
-  }
-
-  if (content.type === "single-select") {
-    return <SelectChip property={property} value={content.value} />;
-  }
-
-  if (content.type === "multi-select") {
-    if (content.value.length === 0) {
-      return <span className="text-muted-foreground text-sm">—</span>;
-    }
-    return (
-      <div className="flex flex-wrap gap-1">
-        {content.value.map((v) => (
-          <SelectChip key={v} property={property} value={v} />
-        ))}
-      </div>
-    );
-  }
-
-  return <span className="text-muted-foreground text-sm">—</span>;
 };
 
 // -- Inline editor --
@@ -422,7 +316,7 @@ const InlineIntEditor = ({
         }}
         type="button"
       >
-        <IntDisplay currency={currency} value={value} />
+        <IntFieldValue content={{ type: "int", version: 1, value, currency }} />
       </button>
     );
   }
@@ -451,75 +345,5 @@ const InlineIntEditor = ({
       }}
       value={draft}
     />
-  );
-};
-
-// -- Shared display helpers --
-
-const intDisplayClass =
-  "block min-w-0 max-w-full truncate tabular-nums text-start text-sm";
-
-const IntDisplay = ({
-  value,
-  currency,
-}: {
-  value: number;
-  currency: string | null;
-}) => {
-  const format = useFormatter();
-
-  if (!currency) {
-    return <span className={intDisplayClass}>{format.number(value)}</span>;
-  }
-
-  try {
-    const formatted = format.number(value, {
-      style: "currency",
-      currency,
-      minimumFractionDigits: 0,
-    });
-    return <span className={intDisplayClass}>{formatted}</span>;
-  } catch {
-    return (
-      <span className={intDisplayClass}>
-        {format.number(value)} {currency}
-      </span>
-    );
-  }
-};
-
-const SelectChip = ({
-  property,
-  value,
-}: {
-  property: WorkspaceProperty;
-  value: string | null;
-}) => {
-  const t = useTranslations();
-
-  const color = (() => {
-    if (!value) {
-      return emptyColor;
-    }
-    if (
-      property.content.type !== "single-select" &&
-      property.content.type !== "multi-select"
-    ) {
-      return undefined;
-    }
-    const opt = property.content.options.find((o) => o.value === value)?.color;
-    return opt ? resolveOptionColor(opt) : undefined;
-  })();
-
-  return (
-    <span
-      className="flex w-max items-center gap-x-1 rounded px-1 py-0.25 text-sm font-medium"
-      style={{
-        backgroundColor: color?.background,
-        color: color?.foreground,
-      }}
-    >
-      {value ?? t("common.empty")}
-    </span>
   );
 };
