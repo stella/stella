@@ -304,6 +304,29 @@ describe("measureParagraph cross-run line breaking", () => {
       expect(lines).toHaveLength(3);
     }, fakeMeasure);
   });
+
+  test("keeps glue when the next line can fit a cluster narrowed off the first line", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = [
+        { kind: "text", text: "a " },
+        { kind: "text", text: "b", bold: true },
+        { kind: "text", text: "cde" },
+      ];
+      const { lines } = measureParagraph(
+        {
+          ...paragraph(runs),
+          attrs: {
+            listMarker: "1.",
+            listMarkerSuffix: "nothing",
+          },
+        },
+        width("abcde"),
+      );
+
+      expect(lineStartsAtRun(lines, 1)).toBe(true);
+      expect(lineStartsAtRun(lines, 2)).toBe(false);
+    }, fakeMeasure);
+  });
 });
 
 describe("inline image paragraph measurement", () => {

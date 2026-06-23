@@ -821,14 +821,11 @@ export function measureParagraph(
       : {}),
   };
 
-  /**
-   * Finalize and push the current line to the lines array
-   */
-  const finalizeLine = (): void => {
+  const calculateLineTypography = (line: LineState): LineTypography => {
     const typography = calculateTypographyMetrics(
-      currentLine.maxFontSize,
+      line.maxFontSize,
       spacing,
-      currentLine.maxFontMetrics,
+      line.maxFontMetrics,
     );
 
     // If an inline image or stacked equation is taller than the text-based
@@ -836,8 +833,8 @@ export function measureParagraph(
     // as tall glyphs on the text baseline.
     const finalTypography = { ...typography };
     const inlineObjectHeight = Math.max(
-      currentLine.maxImageHeightPx,
-      currentLine.maxMathHeightPx,
+      line.maxImageHeightPx,
+      line.maxMathHeightPx,
     );
     if (inlineObjectHeight > finalTypography.lineHeight) {
       const objectHeight = inlineObjectHeight;
@@ -847,7 +844,7 @@ export function measureParagraph(
       // with the painter's image-only `runsForLine.length === 1 && isImageRun(...)`
       // test in renderLine — the two pick paired line-height + alignment
       // strategies and disagreeing reintroduces the floating-label bug.
-      if (currentLine.fromRun === currentLine.toRun) {
+      if (line.fromRun === line.toRun) {
         // Object alone on the line: grow to the object height plus the
         // parent font's descent on BOTH sides so the row has visible
         // breathing room above and below it.
@@ -863,6 +860,50 @@ export function measureParagraph(
         finalTypography.ascent = objectHeight;
       }
     }
+
+    return finalTypography;
+  };
+
+  const getPostWrapAvailableWidth = (): number => {
+    if (!floatingZones || floatingZones.length === 0) {
+      return bodyContentWidth;
+    }
+
+    const lineTypography = calculateLineTypography(currentLine);
+    let nextCumulativeHeight = cumulativeHeight + lineTypography.lineHeight;
+    const estimatedLineHeight =
+      ptToPx(DEFAULT_FONT_SIZE) * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+    const absoluteY = paragraphYOffset + nextCumulativeHeight;
+    const clearY = findClearLineY(
+      absoluteY,
+      estimatedLineHeight,
+      floatingZones,
+      bodyContentWidth,
+      MIN_WRAP_SEGMENT_WIDTH,
+    );
+    const skip = clearY - absoluteY;
+    if (skip > 0) {
+      nextCumulativeHeight += skip;
+    }
+
+    const floatingMargins = getFloatingMargins(
+      nextCumulativeHeight,
+      estimatedLineHeight,
+      floatingZones,
+      paragraphYOffset,
+    );
+
+    return Math.max(
+      1,
+      getFloatingAvailableWidth(floatingMargins, bodyContentWidth),
+    );
+  };
+
+  /**
+   * Finalize and push the current line to the lines array
+   */
+  const finalizeLine = (): void => {
+    const finalTypography = calculateLineTypography(currentLine);
 
     const line: MeasuredLine = {
       fromRun: currentLine.fromRun,
@@ -1283,7 +1324,7 @@ export function measureParagraph(
         const glueWidth =
           rawGlueWidth > 0 &&
           wordWidth + rawGlueWidth <=
-            currentLine.availableWidth + WIDTH_TOLERANCE
+            getPostWrapAvailableWidth() + WIDTH_TOLERANCE
             ? rawGlueWidth
             : 0;
         if (
