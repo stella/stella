@@ -65,7 +65,7 @@ export const Route = createFileRoute("/__fixture")({
 });
 
 export const InlinePendingRoute = createFileRoute("/__fixture/inline")({
-  pendingComponent: () => {
+  pendingComponent: function InlinePendingComponent() {
     // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
     ReactQuery.useSuspenseQuery(options);
     return null;
