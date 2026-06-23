@@ -41,7 +41,7 @@ export const _rawDir = () => (
 );
 export const _rawDirLink = () => (
   // oxlint-disable-next-line require-dir-on-rendered-name/require-dir-on-rendered-name
-  <a dir="auto" href="#">
+  <a dir="auto" href="/contacts">
     {x.displayName}
   </a>
 );
