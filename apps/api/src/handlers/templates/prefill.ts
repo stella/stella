@@ -136,7 +136,9 @@ const extractFieldValues = async ({
       serviceTier: "standard",
     }),
     output: Output.object({ schema: strictOutputSchema(prefillOutputSchema) }),
-    system: SYSTEM_PROMPT,
+    // Anchor relative dates in the sources ("as of today", deadlines) to the
+    // request date; ISO 8601 keeps it unambiguous across locales.
+    system: `${SYSTEM_PROMPT}\nToday is ${new Date().toISOString().slice(0, 10)}.`,
     ...aiAnalytics.stepCallbacks,
   });
   const { fields } = await result.output;
