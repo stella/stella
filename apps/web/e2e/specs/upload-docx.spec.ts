@@ -270,7 +270,9 @@ test.describe("DOCX upload + inspector", () => {
             entity,
             testWorkspace.filePropertyId,
           );
-          return fileField?.id !== originalFileField!.id ? fileField?.id : null;
+          return fileField && fileField.id !== originalFileField!.id
+            ? fileField.id
+            : null;
         },
         {
           message: "saved DOCX version appears on the entity",
