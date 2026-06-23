@@ -418,6 +418,16 @@ type VerticalTabProps = {
   onClose: () => void;
 };
 
+const flashTabElement = (el: HTMLElement) => {
+  el.animate(
+    [
+      { backgroundColor: "var(--color-primary)", opacity: 0.7 },
+      { backgroundColor: "transparent", opacity: 1 },
+    ],
+    { duration: 400, easing: "ease-out" },
+  );
+};
+
 const VerticalTab = ({
   tab,
   active,
@@ -465,22 +475,23 @@ const VerticalTab = ({
   useExternalSyncEffect(() => {
     const el = tabRef.current;
     if (el && active && activationSeq !== prevSeq.current) {
-      el.animate(
-        [
-          {
-            backgroundColor: "var(--color-primary)",
-            opacity: 0.7,
-          },
-          {
-            backgroundColor: "transparent",
-            opacity: 1,
-          },
-        ],
-        { duration: 400, easing: "ease-out" },
-      );
+      flashTabElement(el);
     }
     prevSeq.current = activationSeq;
   }, [active, activationSeq]);
+
+  // Targeted flash: flash this tab when something asks for it by id
+  // (e.g. clicking a field in the document), regardless of active state.
+  const flashSeq = useInspectorStore((s) => s.flashSeq);
+  const flashTabId = useInspectorStore((s) => s.flashTabId);
+  const prevFlashSeq = useRef(flashSeq);
+  useExternalSyncEffect(() => {
+    const el = tabRef.current;
+    if (el && flashSeq !== prevFlashSeq.current && flashTabId === tab.id) {
+      flashTabElement(el);
+    }
+    prevFlashSeq.current = flashSeq;
+  }, [flashSeq, flashTabId, tab.id]);
 
   return (
     <>

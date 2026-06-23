@@ -26,6 +26,7 @@ import {
   CopyIcon,
   HashIcon,
   LandmarkIcon,
+  LayoutTemplateIcon,
   ListFilterIcon,
   Loader2Icon,
   MessageCircleQuestionIcon,
@@ -238,9 +239,10 @@ const GESTURE_SHOW_DELAY_MS = 150;
  *  Make-field row. The instant buttons never wait for this. */
 const GESTURE_ENRICH_DELAY_MS = 500;
 const GESTURE_POPOVER_OFFSET_PX = 8;
-/** Half the popover's widest layout (menu column + preview pane ≈ 440px), for
- *  clamping its centered position inside the host so it never spills out. */
-const GESTURE_POPOVER_HALF_WIDTH_PX = 220;
+/** Half the popover's widest layout (menu column + 256px preview pane, capped
+ *  at the 30rem/480px max-width), for clamping its centered position inside the
+ *  host so it never spills out. */
+const GESTURE_POPOVER_HALF_WIDTH_PX = 240;
 /** Rough rendered height of the menu + preview, for the above/below flip. */
 const GESTURE_POPOVER_EST_HEIGHT_PX = 280;
 /** At most this many existing field paths ride along in the enrichment
@@ -360,6 +362,7 @@ export const TemplateStudioPage = ({
   const markSaved = useTemplateStudioStore((s) => s.markSaved);
   const openView = useInspectorStore((s) => s.openView);
   const closeTab = useInspectorStore((s) => s.closeTab);
+  const flashTab = useInspectorStore((s) => s.flashTab);
 
   const [hasSelection, setHasSelection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -589,6 +592,11 @@ export const TemplateStudioPage = ({
     // marker switches; the face's back chevron leaves deliberately.
     if (covering !== undefined) {
       setSelected(covering);
+      // Landing in a field marker flashes the studio's rail tab so the
+      // user's eye is drawn to where its settings appear.
+      if (covering.kind === "placeholder") {
+        flashTab(templateStudioTabId(templateId));
+      }
     } else {
       // Refresh a stale range for the still-shown directive (its position
       // may have shifted with edits) without dropping the face.
@@ -601,7 +609,7 @@ export const TemplateStudioPage = ({
       }
     }
     setOutline(buildOutline(directives));
-  }, [setSelected, setOutline]);
+  }, [setSelected, setOutline, flashTab, templateId]);
 
   // ── Bilingual mirroring ──────────────────────────────────
   // A structural gesture inside a table cell with exactly one text-bearing
@@ -2075,7 +2083,7 @@ const SelectionGesturePopover = ({
   const [preview, setPreview] = useState<GestureInsertKind | null>(null);
   return (
     <div
-      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80vh)] max-w-[min(92vw,30rem)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80vh)] max-w-[min(92vw,30rem,100%)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
       role="group"
       style={{
         left: gesture.left,
@@ -3603,7 +3611,7 @@ const StudioInsertRow = () => {
 
 const TemplateStudioRailIcon = (
   _props: InspectorRailIconProps<TemplateStudioPayload>,
-) => <BracesIcon size={SIDE_RAIL_TAB_ICON_SIZE_PX} />;
+) => <LayoutTemplateIcon size={SIDE_RAIL_TAB_ICON_SIZE_PX} />;
 
 registerInspectorView<TemplateStudioPayload>({
   navigationPolicy: "close-on-route-leave",
@@ -5168,8 +5176,11 @@ const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
   }
   return (
     <>
-      <span className="truncate">{label}</span>
-      <code className="text-muted-foreground min-w-0 truncate text-[10px] opacity-0 transition-opacity group-hover:opacity-100">
+      <span className="min-w-0 truncate">{label}</span>
+      {/* The field code only enters the layout on hover, so the label gets
+          the full width and truncates solely when the code is actually
+          shown — not pre-shrunk to reserve space for a hidden element. */}
+      <code className="text-muted-foreground hidden min-w-0 truncate text-[10px] group-hover:block">
         {path}
       </code>
     </>
