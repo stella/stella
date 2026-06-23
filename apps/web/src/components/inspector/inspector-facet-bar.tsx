@@ -82,7 +82,7 @@ export const FacetBar = <F extends string>({
     const container = containerRef.current;
     const measure = measureRef.current;
     if (!container || !measure) {
-      return;
+      return undefined;
     }
 
     const recompute = () => {
@@ -93,7 +93,7 @@ export const FacetBar = <F extends string>({
       const gap = Number.parseFloat(style.columnGap || "0");
       const available = container.clientWidth - padX;
 
-      const cells = [...measure.children] as HTMLElement[];
+      const cells = [...measure.children];
       const triggerWidth = cells.at(-1)?.getBoundingClientRect().width ?? 0;
       const chipWidths = cells
         .slice(0, facets.length)
