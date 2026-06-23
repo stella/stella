@@ -1051,14 +1051,18 @@ export const TemplateStudioPage = ({
         host.clientHeight;
       const placement = fitsBelow ? "below" : "above";
       const center = rect.left + rect.width / 2 - hostRect.left;
+      // The popover is also capped at the host width (max-w: …,100%), so in a
+      // pane narrower than its natural width the real half-width is host/2 —
+      // clamp with that to keep it from spilling past the edge.
+      const halfWidth = Math.min(
+        GESTURE_POPOVER_HALF_WIDTH_PX,
+        host.clientWidth / 2,
+      );
       setGesture({
         ...sel,
         left: Math.min(
-          Math.max(center, GESTURE_POPOVER_HALF_WIDTH_PX),
-          Math.max(
-            GESTURE_POPOVER_HALF_WIDTH_PX,
-            host.clientWidth - GESTURE_POPOVER_HALF_WIDTH_PX,
-          ),
+          Math.max(center, halfWidth),
+          Math.max(halfWidth, host.clientWidth - halfWidth),
         ),
         top:
           placement === "below"
