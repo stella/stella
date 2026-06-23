@@ -22,7 +22,6 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
-import { composeRefs } from "@/lib/slot";
 import { BottomRow } from "@/routes/_protected.workspaces/$workspaceId/-components/bottom-row";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
@@ -128,6 +127,23 @@ export const WorkspaceTable = ({
     useState<ExpandedTableCell | null>(null);
   const [wrapperWidth, setWrapperWidth] = useState(0);
   const [verticalScrollbarWidth, setVerticalScrollbarWidth] = useState(0);
+
+  const updateWrapperWidth = useCallback((nextWrapperWidth: number) => {
+    setWrapperWidth((current) =>
+      current === nextWrapperWidth ? current : nextWrapperWidth,
+    );
+  }, []);
+
+  const updateVerticalScrollbarWidth = useCallback(
+    (nextVerticalScrollbarWidth: number) => {
+      setVerticalScrollbarWidth((current) =>
+        current === nextVerticalScrollbarWidth
+          ? current
+          : nextVerticalScrollbarWidth,
+      );
+    },
+    [],
+  );
 
   useExternalSyncEffect(() => {
     if (!expandedTableCell) {
@@ -451,25 +467,25 @@ export const WorkspaceTable = ({
     );
   }, [handleColumnReorder, t]);
 
-  const tableWrapperObserverRef = useCallback(
-    (element: HTMLDivElement | null) => {
-      if (!element) {
-        return undefined;
-      }
+  useExternalSyncEffect(() => {
+    const element = tableWrapperRef.current;
+    if (!element) {
+      return undefined;
+    }
 
-      setWrapperWidth(element.clientWidth);
-      setVerticalScrollbarWidth(getVerticalScrollbarWidth(element));
+    const updateMetrics = () => {
+      const nextWrapperWidth = element.clientWidth;
+      const nextVerticalScrollbarWidth = getVerticalScrollbarWidth(element);
+      updateWrapperWidth(nextWrapperWidth);
+      updateVerticalScrollbarWidth(nextVerticalScrollbarWidth);
+    };
 
-      const resizeObserver = new ResizeObserver(() => {
-        setWrapperWidth(element.clientWidth);
-        setVerticalScrollbarWidth(getVerticalScrollbarWidth(element));
-      });
-      resizeObserver.observe(element);
+    updateMetrics();
+    const resizeObserver = new ResizeObserver(updateMetrics);
+    resizeObserver.observe(element);
 
-      return () => resizeObserver.disconnect();
-    },
-    [],
-  );
+    return () => resizeObserver.disconnect();
+  }, [inlineFlow, updateVerticalScrollbarWidth, updateWrapperWidth]);
 
   useLayoutEffect(() => {
     const element = tableWrapperRef.current;
@@ -494,11 +510,6 @@ export const WorkspaceTable = ({
     }
   }, [horizontalMaxScroll]);
 
-  const tableWrapperComposedRef = useMemo(
-    () => composeRefs(tableWrapperRef, tableWrapperObserverRef),
-    [tableWrapperObserverRef],
-  );
-
   return (
     <div
       className={cn(
@@ -511,7 +522,7 @@ export const WorkspaceTable = ({
         className={
           inlineFlow ? "w-full" : "scrollbar-subtle h-full overflow-auto"
         }
-        ref={tableWrapperComposedRef}
+        ref={tableWrapperRef}
       >
         <div
           aria-colcount={visibleColumnCount}

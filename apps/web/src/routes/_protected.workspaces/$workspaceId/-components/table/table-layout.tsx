@@ -4,7 +4,6 @@ import {
   useSuspenseInfiniteQuery,
   useSuspenseQuery,
 } from "@tanstack/react-query";
-import { ClientOnly } from "@tanstack/react-router";
 import { useTable } from "@tanstack/react-table";
 import { TableIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
@@ -36,15 +35,17 @@ import {
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { toTableEntities } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
-const loadTableDevtools = async () => {
+const loadTableDevtoolsGate = async () => {
   const tableDevtoolsModule =
-    await import("@/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools");
+    await import("@/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools-gate");
 
   return tableDevtoolsModule;
 };
 
 // Keeps the devtools package out of production bundles.
-const TableDevtools = import.meta.env.DEV ? lazy(loadTableDevtools) : null;
+const TableDevtoolsGate = import.meta.env.DEV
+  ? lazy(loadTableDevtoolsGate)
+  : null;
 
 type TableLayoutProps = {
   workspaceId: string;
@@ -187,12 +188,10 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
         contentMode={tableState.contentMode}
         workspaceId={workspaceId}
       />
-      {TableDevtools ? (
-        <ClientOnly>
-          <Suspense fallback={null}>
-            <TableDevtools table={table} />
-          </Suspense>
-        </ClientOnly>
+      {TableDevtoolsGate ? (
+        <Suspense fallback={null}>
+          <TableDevtoolsGate table={table} />
+        </Suspense>
       ) : null}
     </MobileTableOrientationGate>
   );

@@ -609,6 +609,27 @@ export const CatalogueBrowser = ({
   );
 };
 
+type CatalogueBrowserWithRouteDataProps = {
+  canManageCustomTools: boolean;
+  organizationId: string;
+  initialKind?: CatalogueBrowserFilterKind | undefined;
+  practiceJurisdictions: readonly PracticeJurisdiction[];
+};
+
+export const CatalogueBrowserWithRouteData = ({
+  canManageCustomTools,
+  organizationId,
+  initialKind,
+  practiceJurisdictions,
+}: CatalogueBrowserWithRouteDataProps) => (
+  <CatalogueBrowser
+    canManageCustomTools={canManageCustomTools}
+    initialKind={initialKind}
+    organizationId={organizationId}
+    practiceJurisdictions={practiceJurisdictions}
+  />
+);
+
 type CatalogueEntryRowProps = {
   entry: CatalogueEntry;
   focused: boolean;
