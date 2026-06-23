@@ -46,7 +46,7 @@ function SheetViewport({
   return (
     <SheetPrimitive.Viewport
       className={cn(
-        "fixed inset-0 z-50 grid",
+        "fixed inset-0 z-50",
         side === "block-end" && "grid grid-rows-[1fr_auto] pt-12",
         side === "block-start" && "grid grid-rows-[auto_1fr] pb-12",
         side === "inline-start" && "flex justify-start",
