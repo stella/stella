@@ -50,6 +50,7 @@ import {
 } from "@/components/responsive-action-toolbar";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
+import { roleOptions } from "@/routes/-queries";
 import {
   BlueprintGallerySheet,
   type BlueprintCreatedSkill,
@@ -59,6 +60,7 @@ import {
   catalogueKeys,
   catalogueOptions,
 } from "@/routes/_protected.knowledge/-queries/catalogue";
+import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
 
 import { AddMcpServerSheet } from "./add-mcp-server-sheet";
 import { isEffectivelyInstalled, type CatalogueEntry } from "./catalogue-types";
@@ -606,6 +608,34 @@ export const CatalogueBrowser = ({
         open={blueprintGalleryOpen}
       />
     </div>
+  );
+};
+
+type CatalogueBrowserWithRouteDataProps = {
+  organizationId: string;
+  initialKind?: CatalogueBrowserFilterKind | undefined;
+};
+
+export const CatalogueBrowserWithRouteData = ({
+  organizationId,
+  initialKind,
+}: CatalogueBrowserWithRouteDataProps) => {
+  const { data: settings } = useSuspenseQuery(
+    organizationSettingsOptions(organizationId),
+  );
+  const { data: role } = useSuspenseQuery(roleOptions);
+  // Match the backend gate: only admins/owners can create MCP connectors
+  // (see `POST /mcp/connectors`). Members would see the form open and
+  // the submit 403, so hide the affordance entirely.
+  const canManageCustomTools = role === "admin" || role === "owner";
+
+  return (
+    <CatalogueBrowser
+      canManageCustomTools={canManageCustomTools}
+      initialKind={initialKind}
+      organizationId={organizationId}
+      practiceJurisdictions={settings.practiceJurisdictions}
+    />
   );
 };
 

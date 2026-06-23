@@ -1,6 +1,6 @@
 import { lazy, Suspense } from "react";
 
-import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
@@ -18,10 +18,7 @@ import { api } from "@/lib/api";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
-import {
-  CatalogueBrowser,
-  type CatalogueBrowserFilterKind,
-} from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
+import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import type { ToolDetailPayload } from "@/routes/_protected.knowledge/-components/catalogue/tool-detail-view";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
@@ -34,6 +31,12 @@ const LazyToolDetailView = lazy(async () => {
   const module =
     await import("@/routes/_protected.knowledge/-components/catalogue/tool-detail-view");
   return { default: module.ToolDetailView };
+});
+
+const LazyCatalogueBrowser = lazy(async () => {
+  const module =
+    await import("@/routes/_protected.knowledge/-components/catalogue/catalogue-browser");
+  return { default: module.CatalogueBrowserWithRouteData };
 });
 
 const LazyToolDetailRailIcon = lazy(async () => {
@@ -179,7 +182,7 @@ function ToolsPage() {
     <div className="flex flex-1 flex-col overflow-y-auto p-6">
       <ToolsPageHeader />
       <Suspense fallback={<ToolsCatalogueSkeleton />}>
-        <ToolsCatalogue
+        <LazyCatalogueBrowser
           initialKind={initialKind}
           key={initialKind ?? "all"}
           organizationId={organizationId}
@@ -258,30 +261,5 @@ function ToolsPagePending() {
       <ToolsPageHeader />
       <ToolsCatalogueSkeleton />
     </div>
-  );
-}
-
-type ToolsCatalogueProps = {
-  initialKind: CatalogueBrowserFilterKind | undefined;
-  organizationId: string;
-};
-
-function ToolsCatalogue({ initialKind, organizationId }: ToolsCatalogueProps) {
-  const { data: settings } = useSuspenseQuery(
-    organizationSettingsOptions(organizationId),
-  );
-  const { data: role } = useSuspenseQuery(roleOptions);
-  // Match the backend gate: only admins/owners can create MCP connectors
-  // (see `POST /mcp/connectors`). Members would see the form open and
-  // the submit 403, so hide the affordance entirely.
-  const canManageCustomTools = role === "admin" || role === "owner";
-
-  return (
-    <CatalogueBrowser
-      canManageCustomTools={canManageCustomTools}
-      initialKind={initialKind}
-      organizationId={organizationId}
-      practiceJurisdictions={settings.practiceJurisdictions}
-    />
   );
 }
