@@ -138,6 +138,16 @@ export const ensureRouteQueryData = async <
     config,
   );
 
+export const fetchRouteQuery = async <
+  TQueryFnData,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  queryClient: QueryClient,
+  options: FetchQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+): Promise<TData> => await queryClient.fetchQuery(routeQueryOptions(options));
+
 export const prefetchRouteQuery = async <
   TQueryFnData,
   TError = Error,

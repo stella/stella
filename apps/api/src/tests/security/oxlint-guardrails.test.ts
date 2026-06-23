@@ -305,6 +305,7 @@ describe("custom oxlint guardrails", () => {
 
     expect(pluginSource).toContain("ensureRouteQueryData");
     expect(pluginSource).toContain("ensureRouteInfiniteQueryData");
+    expect(pluginSource).toContain("fetchRouteQuery");
     expect(pluginSource).toContain("prefetchRouteQuery");
     expect(pluginSource).toContain("ensureCriticalQueryData");
     expect(pluginSource).toContain("prefetchNonCriticalQuery");

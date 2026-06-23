@@ -13,6 +13,7 @@ import {
   ensureCriticalQueryData,
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
+  fetchRouteQuery,
   prefetchNonCriticalQuery,
   prefetchRouteQuery,
 } from "@/lib/react-query";
@@ -53,8 +54,12 @@ export const Route = createFileRoute("/__fixture")({
     // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
     await queryClient.ensureInfiniteQueryData(infiniteOptions);
 
+    // oxlint-disable-next-line no-raw-route-query-client/no-raw-route-query-client
+    await queryClient.fetchQuery(options);
+
     await ensureRouteQueryData(queryClient, options);
     await ensureRouteInfiniteQueryData(queryClient, infiniteOptions);
+    await fetchRouteQuery(queryClient, options);
     await prefetchRouteQuery(queryClient, options, () => undefined);
   },
 });

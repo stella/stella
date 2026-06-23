@@ -3,7 +3,7 @@ import { getImportedName, getPropertyName, isIdentifier } from "./utils.ts";
 const RAW_QUERY_CLIENT_METHODS = new Map([
   ["ensureQueryData", "ensureRouteQueryData"],
   ["ensureInfiniteQueryData", "ensureRouteInfiniteQueryData"],
-  ["fetchQuery", "prefetchRouteQuery"],
+  ["fetchQuery", "fetchRouteQuery"],
   ["prefetchQuery", "prefetchRouteQuery"],
 ]);
 const RAW_QUERY_CLIENT_RECEIVERS = new Set(["qc", "queryClient"]);
