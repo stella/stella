@@ -347,6 +347,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
+    "./.oxlint-plugins/no-centered-scroll-column.ts",
   ],
 
   overrides: [
@@ -561,6 +562,19 @@ export default defineConfig({
         "no-raw-foreground-opacity/no-raw-foreground-opacity": "error",
         "no-inline-style-colors/no-inline-style-colors": "error",
         "no-physical-properties/no-physical-properties": "error",
+      },
+    },
+    {
+      // A centered, width-capped content column must not own the vertical
+      // scroll, or the scrollbar floats at the column edge instead of the pane
+      // edge next to the inspector rail. Scoped to apps/web (the app shell with
+      // the inspector rail); folio has its own document scroll model.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/no-centered-scroll-column.fixture.tsx",
+      ],
+      rules: {
+        "no-centered-scroll-column/no-centered-scroll-column": "error",
       },
     },
     {

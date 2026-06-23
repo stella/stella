@@ -178,7 +178,9 @@ export const ClauseDetailView = ({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    // Scroll on the full-width pane so the scrollbar tracks the right edge
+    // (next to the inspector rail), not the centered max-w content column.
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto">
       {detailQuery.isPending && (
         <div className="flex flex-1 items-center justify-center p-8">
           <p className="text-muted-foreground text-sm">
@@ -241,7 +243,7 @@ const DetailContent = ({
   const [dirtySinceVersion, setDirtySinceVersion] = useState(false);
 
   return (
-    <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
+    <div className="mx-auto w-full max-w-2xl p-6">
       <ClauseHeader
         canDelete={canDelete}
         canEdit={canEdit}

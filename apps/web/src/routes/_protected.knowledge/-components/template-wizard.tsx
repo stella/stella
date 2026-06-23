@@ -532,104 +532,108 @@ export const ConfigureStep = ({
           {t("templates.backToList")}
         </Button>
       </div>
-      <div className="mx-auto w-full max-w-2xl overflow-y-auto p-6">
-        <div className="mb-6">
-          <h2 className="text-lg font-semibold">
-            {t("templates.configureFields")}
-          </h2>
-        </div>
-
-        {structureErrors.length > 0 && (
-          <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 flex items-start gap-2 rounded-lg border p-3">
-            <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
-            <span className="text-warning-foreground text-sm">
-              {t("templates.structureWarnings", {
-                count: structureErrors.length,
-              })}
-            </span>
+      {/* Scroll on the full-width pane so the scrollbar tracks the right edge
+          (next to the inspector rail), not the centered max-w content column. */}
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto w-full max-w-2xl p-6">
+          <div className="mb-6">
+            <h2 className="text-lg font-semibold">
+              {t("templates.configureFields")}
+            </h2>
           </div>
-        )}
 
-        <form
-          className="flex flex-col gap-5"
-          onSubmit={(...args) => {
-            void handleSave(...args);
-          }}
-        >
-          <Field>
-            <FieldLabel>{t("templates.templateName")}</FieldLabel>
-            <FieldControl
-              render={
-                <Input
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder={t("templates.templateNamePlaceholder")}
-                  value={name}
-                />
-              }
-            />
-          </Field>
-
-          <div className="rounded-lg border">
-            <div className="border-b px-4 py-3">
-              <h3 className="text-muted-foreground text-sm font-medium">
-                {t("templates.fieldCount", {
-                  count: fields.length,
+          {structureErrors.length > 0 && (
+            <div className="border-warning/30 bg-warning/10 dark:bg-warning/10 mb-6 flex items-start gap-2 rounded-lg border p-3">
+              <AlertTriangleIcon className="text-warning-foreground mt-0.5 size-4 shrink-0" />
+              <span className="text-warning-foreground text-sm">
+                {t("templates.structureWarnings", {
+                  count: structureErrors.length,
                 })}
-              </h3>
+              </span>
             </div>
-            <ul className="divide-y">
-              {fields.map((field) => {
-                const isExpanded = expandedField === field.path;
-                return (
-                  <li key={field.path}>
-                    <button
-                      className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start text-sm"
-                      onClick={() =>
-                        setExpandedField(isExpanded ? null : field.path)
-                      }
-                      type="button"
-                    >
-                      {isExpanded ? (
-                        <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
-                      ) : (
-                        <DirectionalIcon
-                          className="text-muted-foreground size-4 shrink-0"
-                          icon={ChevronRightIcon}
+          )}
+
+          <form
+            className="flex flex-col gap-5"
+            onSubmit={(...args) => {
+              void handleSave(...args);
+            }}
+          >
+            <Field>
+              <FieldLabel>{t("templates.templateName")}</FieldLabel>
+              <FieldControl
+                render={
+                  <Input
+                    onChange={(e) => setName(e.target.value)}
+                    placeholder={t("templates.templateNamePlaceholder")}
+                    value={name}
+                  />
+                }
+              />
+            </Field>
+
+            <div className="rounded-lg border">
+              <div className="border-b px-4 py-3">
+                <h3 className="text-muted-foreground text-sm font-medium">
+                  {t("templates.fieldCount", {
+                    count: fields.length,
+                  })}
+                </h3>
+              </div>
+              <ul className="divide-y">
+                {fields.map((field) => {
+                  const isExpanded = expandedField === field.path;
+                  return (
+                    <li key={field.path}>
+                      <button
+                        className="hover:bg-muted/50 flex w-full items-center gap-3 px-4 py-3 text-start text-sm"
+                        onClick={() =>
+                          setExpandedField(isExpanded ? null : field.path)
+                        }
+                        type="button"
+                      >
+                        {isExpanded ? (
+                          <ChevronDownIcon className="text-muted-foreground size-4 shrink-0" />
+                        ) : (
+                          <DirectionalIcon
+                            className="text-muted-foreground size-4 shrink-0"
+                            icon={ChevronRightIcon}
+                          />
+                        )}
+                        <span className="min-w-0 flex-1 font-medium">
+                          {field.label || field.path}
+                        </span>
+                        <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
+                          <ValueTypeLabel inputType={fieldTypeChoice(field)} />
+                        </span>
+                        {field.required && (
+                          <span className="text-muted-foreground shrink-0 text-xs">
+                            {REQUIRED_MARKER}
+                          </span>
+                        )}
+                      </button>
+                      {isExpanded && (
+                        <FieldConfigEditor
+                          field={field}
+                          onUpdate={(patch) => updateField(field.path, patch)}
+                          siblingPaths={fieldPathChoices.filter(
+                            (p) => p !== field.path,
+                          )}
                         />
                       )}
-                      <span className="min-w-0 flex-1 font-medium">
-                        {field.label || field.path}
-                      </span>
-                      <span className="text-muted-foreground flex shrink-0 items-center gap-1 text-xs">
-                        <ValueTypeLabel inputType={fieldTypeChoice(field)} />
-                      </span>
-                      {field.required && (
-                        <span className="text-muted-foreground shrink-0 text-xs">
-                          {REQUIRED_MARKER}
-                        </span>
-                      )}
-                    </button>
-                    {isExpanded && (
-                      <FieldConfigEditor
-                        field={field}
-                        onUpdate={(patch) => updateField(field.path, patch)}
-                        siblingPaths={fieldPathChoices.filter(
-                          (p) => p !== field.path,
-                        )}
-                      />
-                    )}
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
 
-          <div className="flex justify-end gap-2 pt-2">
-            <Button disabled={saving || !name.trim()} type="submit">
-              {t("common.save")}
-            </Button>
-          </div>
-        </form>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button disabled={saving || !name.trim()} type="submit">
+                {t("common.save")}
+              </Button>
+            </div>
+          </form>
+        </div>
       </div>
     </div>
   );
