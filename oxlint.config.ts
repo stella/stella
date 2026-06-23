@@ -112,6 +112,7 @@ export default defineConfig({
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
     "no-unsafe-inner-html/no-unsafe-inner-html": "error",
+    "no-static-devtools-import/no-static-devtools-import": "error",
     "no-static-catalogue-route-import/no-static-catalogue-route-import": [
       "error",
       {
@@ -355,6 +356,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
+    "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
   ],
 
@@ -422,6 +424,14 @@ export default defineConfig({
             ],
           },
         ],
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-static-devtools-import.fixture.tsx",
+      ],
+      rules: {
+        "no-static-devtools-import/no-static-devtools-import": "error",
       },
     },
     {

@@ -121,7 +121,7 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
       }
     }
 
-    await Promise.all([
+    const [, settings, role] = await Promise.all([
       ensureRouteQueryData(context.queryClient, catalogueOptions(orgId)),
       ensureRouteQueryData(
         context.queryClient,
@@ -134,6 +134,11 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
       // route-smoke e2e on /knowledge/skills (and its twin /knowledge/prompts).
       ensureRouteQueryData(context.queryClient, roleOptions),
     ]);
+
+    return {
+      canManageCustomTools: role === "admin" || role === "owner",
+      practiceJurisdictions: settings.practiceJurisdictions,
+    };
   },
   component: ToolsPage,
   pendingComponent: ToolsPagePending,
@@ -149,6 +154,12 @@ function ToolsPage() {
   });
   const initialKind = Route.useSearch({
     select: (s): CatalogueBrowserFilterKind | undefined => s.kind,
+  });
+  const routeData = Route.useLoaderData({
+    select: ({ canManageCustomTools, practiceJurisdictions }) => ({
+      canManageCustomTools,
+      practiceJurisdictions,
+    }),
   });
 
   // OAuth completion lands in a popup tab/window; the popup
@@ -183,9 +194,11 @@ function ToolsPage() {
       <ToolsPageHeader />
       <Suspense fallback={<ToolsCatalogueSkeleton />}>
         <LazyCatalogueBrowser
+          canManageCustomTools={routeData.canManageCustomTools}
           initialKind={initialKind}
           key={initialKind ?? "all"}
           organizationId={organizationId}
+          practiceJurisdictions={routeData.practiceJurisdictions}
         />
       </Suspense>
     </div>

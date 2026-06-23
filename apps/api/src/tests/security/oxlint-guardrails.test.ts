@@ -420,6 +420,9 @@ describe("custom oxlint guardrails", () => {
     expect(toolsRouteSource).toContain(
       "return { default: module.CatalogueBrowserWithRouteData };",
     );
+    expect(toolsRouteSource).toContain("Route.useLoaderData");
+    expect(toolsRouteSource).toContain("canManageCustomTools");
+    expect(toolsRouteSource).toContain("practiceJurisdictions");
     expect(toolsRouteSource).toContain("const LazyToolDetailView = lazy");
     expect(toolsRouteSource).toContain("const LazyToolDetailRailIcon = lazy");
     expect(toolsRouteSource).not.toContain("import { CatalogueBrowser");
@@ -449,6 +452,68 @@ describe("custom oxlint guardrails", () => {
     expect(uploadIntegrationSource).not.toContain(
       'mock.module("@/api/lib/s3-presign"',
     );
+  });
+
+  test("devtools shell lazy-loads TanStack panels", () => {
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-static-devtools-import.ts",
+    );
+    const configSource = readRootFixture("oxlint.config.ts");
+    const devRootSource = readRootFixture(
+      "apps/web/src/components/dev-root.tsx",
+    );
+    const tanstackDevtoolsRootSource = readRootFixture(
+      "apps/web/src/components/tanstack-devtools-root.tsx",
+    );
+    const tableLayoutSource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx",
+    );
+    const tableDevtoolsGateSource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools-gate.tsx",
+    );
+
+    expect(devRootSource).toContain(
+      'import("@/components/tanstack-devtools-root")',
+    );
+    expect(devRootSource).not.toContain("@tanstack/react-table-devtools");
+    expect(devRootSource).not.toContain("@tanstack/react-devtools");
+    expect(tanstackDevtoolsRootSource).toContain(
+      "@tanstack/react-table-devtools",
+    );
+    expect(tanstackDevtoolsRootSource).toContain("tableDevtoolsPlugin()");
+    expect(tableLayoutSource).toContain("TableDevtoolsGate");
+    expect(tableLayoutSource).toContain("table-devtools-gate");
+    expect(tableLayoutSource).not.toContain('table-devtools"');
+    expect(tableDevtoolsGateSource).toContain("state.tanstackDevtools");
+    expect(tableDevtoolsGateSource).toContain("table-devtools");
+
+    expect(pluginSource).toContain("DEVTOOLS_PACKAGES");
+    expect(pluginSource).toContain("@tanstack/react-table-devtools");
+    expect(pluginSource).toContain("DYNAMIC_ONLY_MODULES");
+    expect(pluginSource).toContain("staticDevtoolsPackage");
+    expect(pluginSource).toContain("staticDevtoolsModule");
+    expect(configSource).toContain(
+      "./.oxlint-plugins/no-static-devtools-import.ts",
+    );
+    expect(configSource).toContain(
+      "no-static-devtools-import/no-static-devtools-import",
+    );
+    expect(configSource).toContain(
+      ".oxlint-plugins/__fixtures__/no-static-devtools-import.fixture.tsx",
+    );
+  });
+
+  test("workspace table measures scroll metrics after mount", () => {
+    const tableSource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx",
+    );
+
+    expect(tableSource).toContain("useExternalSyncEffect(() => {");
+    expect(tableSource).toContain("const element = tableWrapperRef.current");
+    expect(tableSource).toContain("new ResizeObserver(updateMetrics)");
+    expect(tableSource).toContain("ref={tableWrapperRef}");
+    expect(tableSource).not.toContain("tableWrapperObserverRef");
+    expect(tableSource).not.toContain("composeRefs(tableWrapperRef");
   });
 
   test("redirect-only route lint forbids render components", () => {

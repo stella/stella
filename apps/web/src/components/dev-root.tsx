@@ -1,10 +1,12 @@
-import { TanStackDevtools } from "@tanstack/react-devtools";
-import { ReactQueryDevtoolsPanel } from "@tanstack/react-query-devtools";
-import { TanStackRouterDevtoolsPanel } from "@tanstack/react-router-devtools";
-import { tableDevtoolsPlugin } from "@tanstack/react-table-devtools";
+import { lazy, Suspense } from "react";
+
 import { useShallow } from "zustand/react/shallow";
 
 import { useDevStore } from "@/lib/dev-store";
+
+const TanStackDevtoolsRoot = lazy(
+  async () => await import("@/components/tanstack-devtools-root"),
+);
 
 export default function DevRoot() {
   const [tanstackDevtools, sourceInspector] = useDevStore(
@@ -12,21 +14,8 @@ export default function DevRoot() {
   );
 
   return tanstackDevtools ? (
-    <TanStackDevtools
-      config={{
-        inspectHotkey: sourceInspector ? ["Shift", "CtrlOrMeta"] : [],
-      }}
-      plugins={[
-        {
-          name: "React Query",
-          render: <ReactQueryDevtoolsPanel />,
-        },
-        {
-          name: "TanStack Router",
-          render: <TanStackRouterDevtoolsPanel />,
-        },
-        tableDevtoolsPlugin(),
-      ]}
-    />
+    <Suspense fallback={null}>
+      <TanStackDevtoolsRoot sourceInspector={sourceInspector} />
+    </Suspense>
   ) : null;
 }
