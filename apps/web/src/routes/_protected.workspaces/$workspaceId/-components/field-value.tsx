@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import type { WorkspaceFieldContent, WorkspaceProperty } from "@/lib/types";
@@ -210,9 +211,12 @@ const FileFieldValue = ({
   }
 
   return (
-    <span className={variant === "table" ? "truncate" : "text-sm"} dir="auto">
+    <BidiText
+      as="span"
+      className={variant === "table" ? "truncate" : "text-sm"}
+    >
       {content.fileName}
-    </span>
+    </BidiText>
   );
 };
 
