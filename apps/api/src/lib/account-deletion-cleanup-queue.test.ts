@@ -181,8 +181,7 @@ describe("account deletion cleanup queue", () => {
       "storage-cleanup",
       { requestId },
       {
-        jobId:
-          "00000000%2D0000%2D0000%2D0000%2D000000000001-storage%2Dcleanup",
+        jobId: "00000000%2D0000%2D0000%2D0000%2D000000000001-storage%2Dcleanup",
       },
     );
   });
