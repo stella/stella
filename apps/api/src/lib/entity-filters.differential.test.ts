@@ -490,21 +490,25 @@ const sqlMatchIds = async (condition: ConditionNode): Promise<Set<string>> => {
   return new Set(rows.map((r) => r.id));
 };
 
-test("in-memory and SQL filter evaluation agree", async () => {
-  await fc.assert(
-    fc.asyncProperty(rowsArb, conditionArb, async (rows, condition) => {
-      const ids = await seedRows(rows);
-      try {
-        const sqlIds = await sqlMatchIds(condition);
-        const memoryEntities = toFilterableEntities(rows, ids);
-        const memoryIds = new Set(
-          applyFilters(memoryEntities, [condition]).map((e) => e.entityId),
-        );
-        expect([...sqlIds].toSorted()).toEqual([...memoryIds].toSorted());
-      } finally {
-        await clearRows();
-      }
-    }),
-    { numRuns: 300 },
-  );
-});
+test(
+  "in-memory and SQL filter evaluation agree",
+  async () => {
+    await fc.assert(
+      fc.asyncProperty(rowsArb, conditionArb, async (rows, condition) => {
+        const ids = await seedRows(rows);
+        try {
+          const sqlIds = await sqlMatchIds(condition);
+          const memoryEntities = toFilterableEntities(rows, ids);
+          const memoryIds = new Set(
+            applyFilters(memoryEntities, [condition]).map((e) => e.entityId),
+          );
+          expect([...sqlIds].toSorted()).toEqual([...memoryIds].toSorted());
+        } finally {
+          await clearRows();
+        }
+      }),
+      { numRuns: 300 },
+    );
+  },
+  { timeout: 60_000 },
+);

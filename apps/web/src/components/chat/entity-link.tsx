@@ -1,5 +1,12 @@
+import { skipToken, useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { FileTextIcon, LandmarkIcon, LayersIcon } from "lucide-react";
+import {
+  FileTextIcon,
+  FolderIcon,
+  LandmarkIcon,
+  LayersIcon,
+  ListTodoIcon,
+} from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
@@ -8,18 +15,69 @@ import type { MentionCategory } from "@/components/chat/chat-mention-href";
 import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
+import { getMatterColor } from "@/lib/matter-colors";
+import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
+import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 const DECISION_HASH_PREFIX = "#stella-decision=";
 
-/** Resolve the icon for an entity by its ID. */
-// TODO: fix me
-export const EntityMentionIcon = ({ entityId: _ }: { entityId: string }) => (
-  <FileTextIcon className="inline size-3 shrink-0" />
-);
+const ICON_CLASS = "inline size-3 shrink-0";
+
+const useResolvedEntity = ({
+  entityId,
+  workspaceId,
+}: {
+  entityId: string;
+  workspaceId: string | undefined;
+}) => {
+  const { data } = useQuery({
+    ...(workspaceId
+      ? entityOptions(workspaceId, entityId)
+      : {
+          queryKey: ["entity-link-disabled"] as const,
+          queryFn: skipToken,
+        }),
+    enabled: workspaceId !== undefined,
+    staleTime: Number.POSITIVE_INFINITY,
+  });
+
+  return data;
+};
+
+export const EntityMentionIcon = ({
+  entityId,
+  workspaceId,
+}: {
+  entityId: string;
+  workspaceId: string | undefined;
+}) => {
+  const entity = useResolvedEntity({ entityId, workspaceId });
+
+  if (entity?.kind === "folder") {
+    return <FolderIcon className={ICON_CLASS} />;
+  }
+
+  if (entity?.kind === "task") {
+    return <ListTodoIcon className={ICON_CLASS} />;
+  }
+
+  for (const field of Object.values(entity?.fields ?? {})) {
+    if (field.content.type === "file" && field.content.mimeType.length > 0) {
+      return (
+        <DocumentIcon
+          className={ICON_CLASS}
+          mimeType={field.content.mimeType}
+        />
+      );
+    }
+  }
+
+  return <FileTextIcon className={ICON_CLASS} />;
+};
 
 const CATEGORY_ICON: Record<
   Exclude<MentionCategory, "entity">,
-  React.ComponentType<{ className?: string }>
+  React.ComponentType<{ className?: string; style?: React.CSSProperties }>
 > = {
   workspace: LayersIcon,
 };
@@ -123,11 +181,16 @@ export const EntityLink = ({
 
   const icon =
     category === "entity" ? (
-      <EntityMentionIcon entityId={id} />
+      <EntityMentionIcon entityId={id} workspaceId={mentionWorkspaceId} />
     ) : (
       (() => {
         const Icon = CATEGORY_ICON[category];
-        return <Icon className="inline size-3 shrink-0" />;
+        return (
+          <Icon
+            className="inline size-3 shrink-0"
+            style={{ color: getMatterColor(id) }}
+          />
+        );
       })()
     );
 

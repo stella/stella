@@ -1,7 +1,4 @@
-// TODO: Add `color` column to clients and workspaces.
-// Clients get a user-assignable color; new workspaces
-// inherit a shade from their client's color by default.
-// Replace this deterministic hash with the stored color.
+// Fallback swatches for older or imported workspaces without a stored color.
 const DEFAULT_MATTER_SWATCH = "--option-blue";
 
 export const MATTER_SWATCHES = [

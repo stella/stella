@@ -12,10 +12,15 @@ import {
   PropertyName,
   PropertyPopoverLabel,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
-import {
-  isPropertyValid,
-  resolveOptionColor,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
+import { resolveOptionColor } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
+
+const isPropertyValid = (property: WorkspaceProperty) => {
+  if (property.tool.type === "manual-input") {
+    return true;
+  }
+
+  return property.tool.prompt.trim().length > 0;
+};
 
 type PropertyPopoverTriggerProps = {
   disabled: boolean;

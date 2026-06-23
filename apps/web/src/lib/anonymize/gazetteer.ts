@@ -1,4 +1,3 @@
-// TODO: FIXME — idb's DBSchema resolves as error type, cascading unsafe-* errors
 import { openDB } from "idb";
 import type { DBSchema, IDBPDatabase } from "idb";
 
@@ -8,7 +7,7 @@ const DB_NAME = "stella-gazetteer";
 const DB_VERSION = 1;
 const STORE_NAME = "entries";
 
-type GazetteerDB = DBSchema & {
+type GazetteerDB = {
   entries: {
     key: string;
     value: GazetteerEntry;
@@ -16,7 +15,7 @@ type GazetteerDB = DBSchema & {
       "by-workspace": string;
     };
   };
-};
+} & DBSchema;
 
 let dbPromise: Promise<IDBPDatabase<GazetteerDB>> | null = null;
 

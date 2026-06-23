@@ -58,7 +58,7 @@ const deleteProperty = createSafeHandler(
         };
       }
 
-      // TODO: allow this in the future
+      // File properties are system-managed until file-property creation exists.
       if (property.content.type === "file") {
         return {
           ok: false as const,

@@ -132,7 +132,7 @@ export const processExtraction = async (
             ciphertext: encrypted.ciphertext,
             iv: encrypted.iv,
             charCount: text.length,
-            // TODO: populate once language detection is wired up
+            // Keep null until a reliable language detector is available.
             language: null,
             extractedAt: new Date(),
           })

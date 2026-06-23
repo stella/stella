@@ -535,8 +535,8 @@ export function AppSidebar(props: AppSidebarProps) {
 
 const RECENTS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
-// TODO: Persist pinned workspaces on the backend (user
-// preference or a `pinned` flag on the workspace member).
+// Pinned workspaces are local UI state until backend user preferences or a
+// workspace-member `pinned` flag exists.
 
 /**
  * Minimum shape required to identify and render a matter.

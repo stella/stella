@@ -15,6 +15,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
+import { hashAuthoredSkillContent } from "./authored-content-hash";
 import { requireEditableSkillOrigin } from "./origin";
 
 const updateSkillParamsSchema = t.Object({
@@ -52,6 +53,7 @@ const config = {
 
 type SkillUpdateFields = {
   body?: string;
+  contentHash?: string;
   description?: string;
   enabled?: boolean;
   name?: string;
@@ -259,12 +261,20 @@ const updateSkill = createSafeRootHandler(
       return Result.ok({ id: params.skillId });
     }
 
-    // TODO(skills-editor): when body/name/description/version change, recompute
-    // contentHash. The current hash is derived from the raw SKILL.md source
-    // (frontmatter + body) plus resources via hashSkillPackage in
-    // skill-package.ts; reusing it requires reconstructing the frontmatter from
-    // stored columns. Leaving the existing hash in place until per-resource
-    // editing lands so the hash stays consistent across editable surfaces.
+    if (
+      updates.body !== undefined ||
+      updates.description !== undefined ||
+      updates.name !== undefined ||
+      updates.version !== undefined
+    ) {
+      updates.contentHash = hashAuthoredSkillContent({
+        body: updates.body ?? existing.body,
+        description: updates.description ?? existing.description,
+        name: updates.name ?? existing.name,
+        version:
+          updates.version !== undefined ? updates.version : existing.version,
+      });
+    }
 
     const updateResult = await safeDb(
       async (tx) =>

@@ -317,10 +317,9 @@ export const czUsAdapter: SourceAdapter = {
   pageTimeoutMs: 120_000,
   maxSyncPages: 20,
 
-  // TODO: NALUS requires a POST with ASP.NET ViewState to
-  // return search results. A GET to the search page returns
-  // the form but no count. Implement POST-based total count
-  // when we add full ÚS historical ingestion.
+  // NALUS requires a POST with ASP.NET ViewState to return search results.
+  // A GET to the search page returns the form but no count; full historical
+  // ÚS ingestion should add a POST-based total count.
   async getTotalCount(_signal) {
     return await Promise.resolve(null);
   },

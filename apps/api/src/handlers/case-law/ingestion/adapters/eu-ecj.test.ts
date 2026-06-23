@@ -68,22 +68,27 @@ describe("euEcjAdapter.fetchPage", () => {
     Bun.sleep = originalSleep;
   });
 
-  // TODO: snapshot outdated after SPARQL response format change — update fixture
-  test.skip(
+  test(
     "parses SPARQL + HTML into multi-lang decisions",
     async () => {
+      const bindings = sparqlFixture.results.bindings.slice(0, 2);
       globalThis.fetch = asFetchMock(
         mock((url: string) => {
           const urlStr = url;
 
           if (urlStr.includes("sparql")) {
             return Promise.resolve(
-              new Response(JSON.stringify(sparqlFixture), {
-                status: 200,
-                headers: {
-                  "Content-Type": "application/sparql-results+json",
+              new Response(
+                JSON.stringify({
+                  results: { bindings },
+                }),
+                {
+                  status: 200,
+                  headers: {
+                    "Content-Type": "application/sparql-results+json",
+                  },
                 },
-              }),
+              ),
             );
           }
 
@@ -112,9 +117,8 @@ describe("euEcjAdapter.fetchPage", () => {
       }
       const page = result.value;
 
-      // 13 real bindings × 24 languages = 312 decisions
-      const BINDING_COUNT = sparqlFixture.results.bindings.length;
-      expect(page.decisions).toHaveLength(BINDING_COUNT * LANG_COUNT);
+      const bindingCount = bindings.length;
+      expect(page.decisions).toHaveLength(bindingCount * LANG_COUNT);
       expect(page.nextCursor).toBe("2024-01-19");
 
       // Verify first binding (C-128/21) produced all languages
@@ -124,19 +128,27 @@ describe("euEcjAdapter.fetchPage", () => {
         .sort();
       expect(langs).toEqual(ECJ_LANGUAGES.map((l) => l.toLowerCase()).sort());
 
-      // Snapshot one representative decision (BG, first lang).
-      // Normalize fulltext to a boolean: exact char count varies
-      // across platforms due to CRLF/LF line ending differences
-      // in the HTML fixture.
       const first = page.decisions[0];
       if (!first) {
         throw new Error("No decisions");
       }
-      expect({
-        ...first,
-        rawHash: "[hash]",
-        fulltext: Boolean(first.fulltext),
-      }).toMatchSnapshot();
+      expect(first.caseNumber).toBe("C-128/21");
+      expect(first.ecli).toBe("ECLI:EU:C:2024:49");
+      expect(first.court).toBe("Court of Justice");
+      expect(first.language).toBe("bg");
+      expect(first.decisionDate).toBe("2024-01-18");
+      expect(first.decisionType).toBe("judgment");
+      expect(first.documentUrl).toBe(
+        "https://eur-lex.europa.eu/legal-content/BG/TXT/HTML/?uri=CELEX:62021CJ0128",
+      );
+      expect(first.sourceUrl).toBe(
+        "https://eur-lex.europa.eu/legal-content/BG/ALL/?uri=CELEX:62021CJ0128",
+      );
+      expect(first.metadata).toEqual({ celex: "62021CJ0128" });
+      expect(first.fulltext?.length).toBeGreaterThan(100);
+      expect(first.rawHash).toHaveLength(64);
+      expect(first.documentAst).toEqual({});
+      expect(first.sourceRaw).toBeUndefined();
     },
     { timeout: 30_000 },
   );

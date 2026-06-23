@@ -403,7 +403,7 @@ const parseItem = (item: CzRegionalApiItem): IngestionResult | null => {
     },
     rawHash: hashContent(raw),
     parserVersion: PARSER_VERSION,
-    // TODO: integrate court-specific parser for AST
+    // Court-specific AST parsing is not available for regional courts yet.
     documentAst: EMPTY_AST,
   };
 };

@@ -1218,7 +1218,7 @@ const SearchRecents = ({
   const t = useTranslations();
   const hasRecents = recentSearches.length > 0 || recentFiles.length > 0;
 
-  // TODO: Add scoped quick-create actions.
+  // Scoped quick-create actions belong here once the action model is settled.
   if (!hasRecents) {
     return (
       <div className="flex h-full items-center justify-center px-4 py-8">

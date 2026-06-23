@@ -7,6 +7,8 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 
+import { hashAuthoredSkillContent } from "./authored-content-hash";
+
 // Default slash-command skills installed for every new user. They
 // mirror the legacy `prompt_shortcuts` defaults — same commands, same
 // bodies — but live in `agent_skills` so the unified surface treats
@@ -41,9 +43,6 @@ const DEFAULT_SKILLS = [
 const config = {
   permissions: { agentSkill: ["create"] },
 } satisfies HandlerConfig;
-
-const hashBody = (body: string): string =>
-  new Bun.CryptoHasher("sha256").update(body).digest("hex").slice(0, 64);
 
 const seedSkills = createSafeRootHandler(
   config,
@@ -84,7 +83,12 @@ const seedSkills = createSafeRootHandler(
           name: skill.name,
           description: skill.description,
           metadata: {},
-          contentHash: hashBody(skill.body),
+          contentHash: hashAuthoredSkillContent({
+            body: skill.body,
+            description: skill.description,
+            name: skill.name,
+            version: null,
+          }),
           body: skill.body,
           enabled: true,
           command: skill.command,

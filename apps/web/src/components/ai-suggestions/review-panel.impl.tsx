@@ -301,8 +301,8 @@ export const ReviewPanelImpl = ({
       // Author the tracked-change marks as the user (their preferred
       // name from account settings) — they're reviewing and
       // accepting the AI's suggestion AS THEMSELVES, not as "AI".
-      // TODO: also surface `wordShortcut` as `<w:initials>` once the
-      // folio DOCX writer is plumbed for it (mark schema + serializer).
+      // Also surface `wordShortcut` as `<w:initials>` once the folio DOCX
+      // writer is plumbed for it (mark schema + serializer).
       ...(wordAuthor.length > 0 && { author: wordAuthor }),
     });
     const applied = result.applied.at(0);
