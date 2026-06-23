@@ -439,7 +439,7 @@ const ClauseHeader = ({
     }
 
     // Reflect the rename in the breadcrumb instantly, ahead of the refetch.
-    setNavName(trimmed);
+    setNavName(clauseId, trimmed);
     onRefresh();
   }, [clauseId, detail.title, titleDraft, t, onRefresh, setNavName]);
 

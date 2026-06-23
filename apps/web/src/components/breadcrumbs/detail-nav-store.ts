@@ -11,8 +11,10 @@ export type OpenDetail = { id: string; name: string; exit: () => void };
 export type DetailNavState = {
   open: OpenDetail | null;
   setOpen: (open: OpenDetail) => void;
-  /** Update the open item's displayed name (e.g. after an inline rename). */
-  setName: (name: string) => void;
+  /** Update the open item's displayed name after an inline rename, keyed by id
+   *  so a rename that resolves after the user already opened another item
+   *  can't clobber the now-open item's breadcrumb. */
+  setName: (id: string, name: string) => void;
   clear: () => void;
 };
 
@@ -20,7 +22,11 @@ export const createDetailNavStore = () =>
   create<DetailNavState>((set) => ({
     open: null,
     setOpen: (open) => set({ open }),
-    setName: (name) =>
-      set((state) => (state.open ? { open: { ...state.open, name } } : state)),
+    setName: (id, name) =>
+      set((state) =>
+        state.open && state.open.id === id
+          ? { open: { ...state.open, name } }
+          : state,
+      ),
     clear: () => set({ open: null }),
   }));

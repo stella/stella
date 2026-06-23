@@ -2832,7 +2832,7 @@ function TemplateStudioInspectorView({
       payload: { templateId },
       ownerRouteId: TEMPLATES_ROUTE_ID,
     });
-    setNavName(next);
+    setNavName(templateId, next);
     void queryClient.invalidateQueries({
       queryKey: knowledgeKeys.templates.all(activeOrganizationId),
     });
