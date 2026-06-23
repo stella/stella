@@ -11,12 +11,12 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Avatar,
   AvatarFallback,
   AvatarImage,
 } from "@stll/ui/components/avatar";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Menu,
   MenuGroup,
@@ -103,7 +103,10 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
               <div className="flex min-w-0 flex-col justify-center">
                 {user.name ? (
                   <>
-                    <BidiText as="span" className="truncate text-sm font-medium">
+                    <BidiText
+                      as="span"
+                      className="truncate text-sm font-medium"
+                    >
                       {user.name}
                     </BidiText>
                     {user.email && (

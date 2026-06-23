@@ -6,11 +6,11 @@ import type { ResolveParams } from "@tanstack/react-router";
 import { LayersIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   BreadcrumbItem,
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
-import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   ColorPicker,
   ColorPickerContent,

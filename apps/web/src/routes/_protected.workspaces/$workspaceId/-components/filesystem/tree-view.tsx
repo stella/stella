@@ -30,13 +30,13 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
   BreadcrumbList,
   BreadcrumbSeparator,
 } from "@stll/ui/components/breadcrumb";
-import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Menu,
   MenuItem,

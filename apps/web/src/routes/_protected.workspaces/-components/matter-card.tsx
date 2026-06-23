@@ -5,12 +5,12 @@ import { Link } from "@tanstack/react-router";
 import { FileIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   PreviewCard,
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/components/preview-card";
-import { BidiText } from "@stll/ui/components/bidi-text";
 import { cn } from "@stll/ui/lib/utils";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";

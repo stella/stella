@@ -212,11 +212,7 @@ export function FileTree({
                 {renderName ? (
                   renderName(node)
                 ) : (
-                  <BidiText
-                    as="span"
-                    className="truncate"
-                    title={node.name}
-                  >
+                  <BidiText as="span" className="truncate" title={node.name}>
                     {node.name}
                   </BidiText>
                 )}
