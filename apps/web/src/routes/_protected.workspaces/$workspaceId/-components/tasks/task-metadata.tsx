@@ -174,6 +174,7 @@ export const AssigneePicker = ({
   assignees,
 }: AssigneePickerProps) => {
   const t = useTranslations("tasks");
+  const tCommon = useTranslations("common");
   const queryClient = useQueryClient();
   const { data: members } = useQuery(workspaceMembersOptions(workspaceId));
 
@@ -260,7 +261,7 @@ export const AssigneePicker = ({
             </span>
           ) : null}
           <Button
-            aria-label={t("common.remove")}
+            aria-label={tCommon("remove")}
             className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100"
             disabled={removeAssignee.isPending}
             onClick={() => removeAssignee.mutate(a.user.id)}
