@@ -794,9 +794,9 @@ export function UiPlayground() {
                 <div className="flex flex-wrap items-center gap-2">
                   <Sheet>
                     <SheetTrigger render={<Button variant="outline" />}>
-                      Right sheet
+                      Inline-end sheet
                     </SheetTrigger>
-                    <SheetPopup side="right" variant="inset">
+                    <SheetPopup side="inline-end" variant="inset">
                       <SheetHeader>
                         <SheetTitle>Matter details</SheetTitle>
                         <SheetDescription>
@@ -829,7 +829,7 @@ export function UiPlayground() {
                     <SheetTrigger render={<Button variant="outline" />}>
                       Bottom sheet
                     </SheetTrigger>
-                    <SheetPopup side="bottom">
+                    <SheetPopup side="block-end">
                       <SheetHeader>
                         <SheetTitle>Batch actions</SheetTitle>
                         <SheetDescription>
