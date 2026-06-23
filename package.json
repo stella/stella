@@ -55,7 +55,7 @@
     "eslint-plugin-drizzle": "catalog:",
     "eslint-plugin-sonarjs": "catalog:",
     "i18n-unused": "^0.19.0",
-    "knip": "^6.16.1",
+    "knip": "^6.17.1",
     "lefthook": "^2.1.9",
     "oxfmt": "catalog:",
     "oxlint": "catalog:",
@@ -80,7 +80,7 @@
   "resolutions": {
     "@emnapi/core": "1.9.1",
     "@emnapi/runtime": "1.9.1",
-    "prosemirror-model": "1.25.8",
+    "prosemirror-model": "1.25.9",
     "prosemirror-transform": "1.12.0",
     "prosemirror-view": "1.41.9"
   },
