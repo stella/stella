@@ -54,25 +54,30 @@ const authUserVisibleCheck = sql`(
         '${sql.raw(SETTING_ORGANIZATION_ID)}', true
       ))
   )
-  OR EXISTS (
-    SELECT 1
-    FROM task_assignees ta
-    JOIN workspaces w ON w.id = ta.workspace_id
-    WHERE ta.user_id = "user".id
-      AND ta.workspace_id = ANY(${wsIdsArray})
-      AND w.organization_id = (SELECT current_setting(
-        '${sql.raw(SETTING_ORGANIZATION_ID)}', true
-      ))
-  )
-  OR EXISTS (
-    SELECT 1
-    FROM entities e
-    JOIN workspaces w ON w.id = e.workspace_id
-    WHERE (e.created_by = "user".id OR e.last_edited_by = "user".id)
-      AND e.workspace_id = ANY(${wsIdsArray})
-      AND w.organization_id = (SELECT current_setting(
-        '${sql.raw(SETTING_ORGANIZATION_ID)}', true
-      ))
+  OR (
+    "user".deleted_at IS NOT NULL
+    AND (
+      EXISTS (
+        SELECT 1
+        FROM task_assignees ta
+        JOIN workspaces w ON w.id = ta.workspace_id
+        WHERE ta.user_id = "user".id
+          AND ta.workspace_id = ANY(${wsIdsArray})
+          AND w.organization_id = (SELECT current_setting(
+            '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+          ))
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM entities e
+        JOIN workspaces w ON w.id = e.workspace_id
+        WHERE (e.created_by = "user".id OR e.last_edited_by = "user".id)
+          AND e.workspace_id = ANY(${wsIdsArray})
+          AND w.organization_id = (SELECT current_setting(
+            '${sql.raw(SETTING_ORGANIZATION_ID)}', true
+          ))
+      )
+    )
   )
 )`;
 

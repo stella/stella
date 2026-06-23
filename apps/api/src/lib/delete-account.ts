@@ -28,6 +28,7 @@ import { rootDb } from "@/api/db/root";
 import {
   accountDeletionRequests,
   agentSkills,
+  auditLogs,
   chatThreads,
   desktopEditHandoffs,
   desktopEditSessions,
@@ -57,6 +58,7 @@ import {
   validateAccountDeletionTaskReassignmentTargets,
 } from "@/api/lib/account-deletion-reassignment";
 import { captureError } from "@/api/lib/analytics";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
@@ -507,6 +509,7 @@ export const verifyAndDeleteUser = async (
         const currentTaskAssignments = await tx
           .select({
             entityId: taskAssignees.entityId,
+            organizationId: workspaces.organizationId,
             workspaceId: taskAssignees.workspaceId,
           })
           .from(taskAssignees)
@@ -663,6 +666,12 @@ export const verifyAndDeleteUser = async (
             targets: reassignmentTargets,
             validMembershipKeys,
           });
+          const assignmentByEntityId = new Map(
+            currentTaskAssignments.map((assignment) => [
+              assignment.entityId,
+              assignment,
+            ]),
+          );
 
           await Promise.all(
             updates.map((item) =>
@@ -678,6 +687,39 @@ export const verifyAndDeleteUser = async (
                   ),
                 ),
             ),
+          );
+          await tx.insert(auditLogs).values(
+            updates.map((item) => {
+              const assignment = assignmentByEntityId.get(item.entityId);
+              if (!assignment) {
+                throw new HandlerError({
+                  status: 500,
+                  message: "Task reassignment source not found.",
+                });
+              }
+
+              return {
+                action: AUDIT_ACTION.UPDATE,
+                changes: {
+                  assigneeUserId: {
+                    new: item.reassignedUserId,
+                    old: currentUserId,
+                  },
+                },
+                metadata: {
+                  accountDeletionRequestId: deletionRequestId,
+                  change: "assignee-reassigned",
+                  fromUserId: currentUserId,
+                  reason: "account-deletion",
+                  toUserId: item.reassignedUserId,
+                },
+                organizationId: assignment.organizationId,
+                resourceId: item.entityId,
+                resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+                userId: currentUserId,
+                workspaceId: assignment.workspaceId,
+              };
+            }),
           );
           taskReassignmentCount = updates.length;
         }
