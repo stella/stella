@@ -300,6 +300,7 @@ export const JurisdictionGlobePreview = ({
               {onChange && (
                 <button
                   aria-label={t("onboarding.jurisdictionRemove", { name })}
+                  title={t("onboarding.jurisdictionRemove", { name })}
                   className="text-muted-foreground hover:text-foreground"
                   onClick={() =>
                     onChange(

@@ -693,7 +693,10 @@ const PropertiesToggle = ({
 
   return (
     <Menu>
-      <MenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
+      <MenuTrigger
+        aria-label={t("common.columns")}
+        render={<Button size="icon-xs" variant="ghost" />}
+      >
         <EyeIcon className="size-3.5" />
       </MenuTrigger>
       <MenuPopup>

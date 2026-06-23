@@ -340,6 +340,7 @@ const FolderPicker = ({
               className="hover:bg-muted rounded p-0.5"
               aria-expanded={isExpanded}
               aria-label={folder.name}
+              title={folder.name}
               onClick={(e) => {
                 e.stopPropagation();
                 toggleExpand(folder.entityId);

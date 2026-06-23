@@ -672,7 +672,13 @@ const PromptBarPlaceholder = ({ tab }: { tab: ChatTab }) => {
           {t("chat.contextPlaceholder", { context: chatContextLabel })}
         </PromptBarPlaceholderContent>
       </div>
-      <Button className="rounded-full" disabled size="icon" type="button">
+      <Button
+        aria-label={t("chat.sendPrompt")}
+        className="rounded-full"
+        disabled
+        size="icon"
+        type="button"
+      >
         <ArrowUpIcon aria-hidden="true" />
       </Button>
     </PromptBarShell>

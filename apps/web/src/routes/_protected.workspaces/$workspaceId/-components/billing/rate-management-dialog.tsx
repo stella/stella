@@ -280,6 +280,7 @@ const RateTablesView = ({
                   </Button>
                 )}
                 <Button
+                  aria-label={t("common.delete")}
                   className="text-destructive size-7"
                   onClick={() => handleDelete(table.id)}
                   size="icon"
@@ -514,7 +515,13 @@ const RateEntriesView = ({
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-2">
-        <Button className="size-7" onClick={onBack} size="icon" variant="ghost">
+        <Button
+          aria-label={t("common.back")}
+          className="size-7"
+          onClick={onBack}
+          size="icon"
+          variant="ghost"
+        >
           <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
         </Button>
         <h3 className="text-sm font-medium">
@@ -606,6 +613,7 @@ const RateEntriesView = ({
               </div>
 
               <Button
+                aria-label={t("common.delete")}
                 className="text-destructive size-7 opacity-0 transition-opacity group-hover:opacity-100"
                 onClick={() => handleDelete(entry.id)}
                 size="icon"

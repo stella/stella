@@ -238,6 +238,7 @@ export const ViewSwitcher = ({
           }}
         >
           <MenuTrigger
+            aria-label={t("common.add")}
             render={
               <Button
                 disabled={createView.isPending}
@@ -544,6 +545,7 @@ const ViewTabMenu = ({
       )}
       <Menu>
         <MenuTrigger
+          aria-label={t("common.actions")}
           render={
             <Button className={className} size="icon-xs" variant="ghost" />
           }

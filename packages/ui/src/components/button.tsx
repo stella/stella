@@ -8,6 +8,7 @@ import { cva } from "class-variance-authority";
 import type { VariantProps } from "class-variance-authority";
 import { LoaderIcon } from "lucide-react";
 
+import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
 import { cn } from "@stll/ui/lib/utils";
 
 const buttonVariants = cva(
@@ -55,6 +56,7 @@ type ButtonProps = {
   variant?: VariantProps<typeof buttonVariants>["variant"];
   size?: VariantProps<typeof buttonVariants>["size"];
   loading?: boolean;
+  tooltip?: React.ReactNode;
 } & useRender.ComponentProps<"button">;
 
 function Button({
@@ -65,6 +67,7 @@ function Button({
   loading,
   children,
   disabled,
+  tooltip,
   ...props
 }: ButtonProps) {
   const typeValue: React.ButtonHTMLAttributes<HTMLButtonElement>["type"] =
@@ -85,10 +88,15 @@ function Button({
     type: typeValue,
   };
 
-  return useRender({
+  const button = useRender({
     defaultTagName: "button",
     props: mergeProps<"button">(defaultProps, props),
     render,
+  });
+
+  return renderTooltipTrigger({
+    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    trigger: button,
   });
 }
 

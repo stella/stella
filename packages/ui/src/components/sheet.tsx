@@ -1,10 +1,13 @@
 "use client";
 
+import type * as React from "react";
+
 import { Dialog as SheetPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
 import { cn } from "@stll/ui/lib/utils";
 
 const Sheet = SheetPrimitive.Root;
@@ -13,12 +16,24 @@ const SheetPortal = SheetPrimitive.Portal;
 
 type SheetSide = "inline-start" | "inline-end" | "block-start" | "block-end";
 
-function SheetTrigger(props: SheetPrimitive.Trigger.Props) {
-  return <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />;
+function SheetTrigger({
+  tooltip,
+  ...props
+}: SheetPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
+  return renderTooltipTrigger({
+    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    trigger: <SheetPrimitive.Trigger data-slot="sheet-trigger" {...props} />,
+  });
 }
 
-function SheetClose(props: SheetPrimitive.Close.Props) {
-  return <SheetPrimitive.Close data-slot="sheet-close" {...props} />;
+function SheetClose({
+  tooltip,
+  ...props
+}: SheetPrimitive.Close.Props & { tooltip?: React.ReactNode }) {
+  return renderTooltipTrigger({
+    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    trigger: <SheetPrimitive.Close data-slot="sheet-close" {...props} />,
+  });
 }
 
 function SheetBackdrop({ className, ...props }: SheetPrimitive.Backdrop.Props) {

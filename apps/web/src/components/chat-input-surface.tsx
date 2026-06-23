@@ -145,6 +145,7 @@ export const ChatInputSurface = ({
       </div>
       <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
         <Button
+          aria-label={t("chat.attachFile")}
           disabled={inputDisabled}
           onClick={openFilePicker}
           size="icon-sm"

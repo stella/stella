@@ -260,6 +260,7 @@ export const AssigneePicker = ({
             </span>
           ) : null}
           <Button
+            aria-label={t("common.remove")}
             className="size-5 opacity-0 transition-opacity group-hover/assignee:opacity-100"
             disabled={removeAssignee.isPending}
             onClick={() => removeAssignee.mutate(a.user.id)}

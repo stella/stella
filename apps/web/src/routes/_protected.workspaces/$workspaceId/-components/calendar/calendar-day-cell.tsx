@@ -140,6 +140,7 @@ export const CalendarDayCell = ({
         {isEditable && (
           <Menu>
             <MenuTrigger
+              aria-label={t("common.add")}
               render={
                 <button
                   aria-label={t("common.add")}

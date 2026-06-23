@@ -18,6 +18,7 @@ import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { deepLConfigOptions, deepLKeys } from "@/lib/deepl/queries";
@@ -96,6 +97,7 @@ export const DeepLKeyCard = () => {
 
   const isConfigured = deeplConfig?.configured === true;
   const canSave = apiKey.trim().length > 0 && !saveMutation.isPending;
+  const removeLabel = t("remove");
 
   return (
     <div className="flex flex-col gap-4">
@@ -117,15 +119,20 @@ export const DeepLKeyCard = () => {
               ({deeplConfig.tier === "free" ? t("tierFree") : t("tierPro")})
             </span>
           </div>
-          <Button
-            aria-label={t("remove")}
-            loading={deleteMutation.isPending}
-            onClick={() => deleteMutation.mutate()}
-            size="sm"
-            variant="ghost"
+          <Tooltip
+            content={removeLabel}
+            render={
+              <Button
+                aria-label={removeLabel}
+                loading={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+                size="sm"
+                variant="ghost"
+              />
+            }
           >
             <Trash2Icon className="size-4" />
-          </Button>
+          </Tooltip>
         </div>
       )}
 

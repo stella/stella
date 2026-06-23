@@ -154,6 +154,9 @@ export const JurisdictionPicker = ({
                   aria-label={t("onboarding.jurisdictionMakePrimary", {
                     name: country.name,
                   })}
+                  title={t("onboarding.jurisdictionMakePrimary", {
+                    name: country.name,
+                  })}
                   className={cn(
                     "hover:bg-background/40 flex size-8 items-center justify-center rounded-md transition-colors",
                     isPrimary

@@ -468,6 +468,7 @@ export const ReviewPanelImpl = ({
             </div>
             <button
               aria-label={t("docxReview.dismiss")}
+              title={t("docxReview.dismiss")}
               className="text-muted-foreground hover:text-foreground rounded-md p-1"
               onClick={() => dismissPanel(entityId)}
               type="button"

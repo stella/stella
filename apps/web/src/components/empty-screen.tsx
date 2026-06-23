@@ -435,7 +435,6 @@ const EmptyScreenVideoOverlay = ({
 
   return (
     <div
-      aria-label={playableVideo.title}
       aria-modal="true"
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/72 p-6 backdrop-blur-sm"
       role="dialog"

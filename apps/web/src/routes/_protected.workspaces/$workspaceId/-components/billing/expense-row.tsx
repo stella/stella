@@ -100,6 +100,7 @@ export const ExpenseRow = ({
       <div className="flex shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
         {expense.status === "draft" && canUpdateExpense && (
           <Button
+            aria-label={t("common.edit")}
             className="size-7"
             onClick={() => onEdit(expense.id)}
             size="icon"
@@ -110,6 +111,7 @@ export const ExpenseRow = ({
         )}
         {expense.status === "draft" && canDeleteExpense && (
           <Button
+            aria-label={t("common.delete")}
             className="text-destructive size-7"
             onClick={() => onDelete(expense.id)}
             size="icon"

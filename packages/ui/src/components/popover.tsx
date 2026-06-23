@@ -1,17 +1,27 @@
 "use client";
 
+import type * as React from "react";
 import type { ComponentProps } from "react";
 
 import { Popover as PopoverPrimitive } from "@base-ui/react/popover";
 
+import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
 import { cn } from "@stll/ui/lib/utils";
 
 const PopoverCreateHandle = PopoverPrimitive.createHandle;
 
 const Popover = PopoverPrimitive.Root;
 
-function PopoverTrigger(props: PopoverPrimitive.Trigger.Props) {
-  return <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />;
+function PopoverTrigger({
+  tooltip,
+  ...props
+}: PopoverPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
+  return renderTooltipTrigger({
+    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    trigger: (
+      <PopoverPrimitive.Trigger data-slot="popover-trigger" {...props} />
+    ),
+  });
 }
 
 function PopoverPopup({

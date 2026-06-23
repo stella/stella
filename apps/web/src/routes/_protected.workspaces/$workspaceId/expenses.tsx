@@ -108,6 +108,7 @@ function ExpensesPage() {
           </Button>
           <div className="flex items-center">
             <Button
+              aria-label={t("common.previous")}
               className="size-7"
               onClick={() => navigateWeek(-1)}
               size="icon"
@@ -119,6 +120,7 @@ function ExpensesPage() {
               {dateLabel}
             </span>
             <Button
+              aria-label={t("common.next")}
               className="size-7"
               onClick={() => navigateWeek(1)}
               size="icon"

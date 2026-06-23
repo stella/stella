@@ -1,7 +1,10 @@
 "use client";
 
+import type * as React from "react";
+
 import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog";
 
+import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
 import { cn } from "@stll/ui/lib/utils";
 
 const AlertDialogCreateHandle = AlertDialogPrimitive.createHandle;
@@ -10,14 +13,20 @@ const AlertDialog = AlertDialogPrimitive.Root;
 
 const AlertDialogPortal = AlertDialogPrimitive.Portal;
 
-function AlertDialogTrigger(props: AlertDialogPrimitive.Trigger.Props) {
-  return (
-    <AlertDialogPrimitive.Trigger
-      data-slot="alert-dialog-trigger"
-      nativeButton={false}
-      {...props}
-    />
-  );
+function AlertDialogTrigger({
+  tooltip,
+  ...props
+}: AlertDialogPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
+  return renderTooltipTrigger({
+    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    trigger: (
+      <AlertDialogPrimitive.Trigger
+        data-slot="alert-dialog-trigger"
+        nativeButton={false}
+        {...props}
+      />
+    ),
+  });
 }
 
 function AlertDialogBackdrop({
@@ -165,10 +174,16 @@ function AlertDialogDescription({
   );
 }
 
-function AlertDialogClose(props: AlertDialogPrimitive.Close.Props) {
-  return (
-    <AlertDialogPrimitive.Close data-slot="alert-dialog-close" {...props} />
-  );
+function AlertDialogClose({
+  tooltip,
+  ...props
+}: AlertDialogPrimitive.Close.Props & { tooltip?: React.ReactNode }) {
+  return renderTooltipTrigger({
+    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    trigger: (
+      <AlertDialogPrimitive.Close data-slot="alert-dialog-close" {...props} />
+    ),
+  });
 }
 
 export {

@@ -45,6 +45,7 @@ export const OnboardingLayout = ({
           {onBack && (
             <button
               aria-label={t("common.goBack")}
+              title={t("common.goBack")}
               className="text-muted-foreground hover:text-foreground absolute -top-12 flex size-8 items-center justify-center rounded-md transition-colors"
               onClick={onBack}
               style={{ insetInlineStart: "-12px" }}

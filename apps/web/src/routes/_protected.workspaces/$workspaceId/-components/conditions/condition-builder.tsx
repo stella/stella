@@ -194,7 +194,13 @@ const NestedGroupRow = ({
         value={value}
       />
     </div>
-    <Button onClick={onRemove} size="icon-xs" type="button" variant="ghost">
+    <Button
+      aria-label={t("common.remove")}
+      onClick={onRemove}
+      size="icon-xs"
+      type="button"
+      variant="ghost"
+    >
       <XIcon />
     </Button>
   </div>
@@ -309,7 +315,13 @@ const LeafRow = ({
         operator={operator}
       />
 
-      <Button onClick={onRemove} size="icon-xs" type="button" variant="ghost">
+      <Button
+        aria-label={t("common.remove")}
+        onClick={onRemove}
+        size="icon-xs"
+        type="button"
+        variant="ghost"
+      >
         <XIcon />
       </Button>
     </div>

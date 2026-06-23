@@ -118,6 +118,7 @@ export const SelfhostUpdateBanner = () => {
         </span>
         <button
           aria-label={t("selfhost.dismissUpdate")}
+          title={t("selfhost.dismissUpdate")}
           className="hover:bg-warning/20 -me-1 rounded-sm p-1"
           onClick={handleDismiss}
           type="button"

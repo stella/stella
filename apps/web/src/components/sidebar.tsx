@@ -263,6 +263,7 @@ function SidebarTrigger({
 
   return (
     <Button
+      aria-label={t("navigation.toggleSidebar")}
       className={cn("size-7", className)}
       data-sidebar="trigger"
       data-slot="sidebar-trigger"

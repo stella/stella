@@ -31,6 +31,7 @@ import type {
   RoleModelSelections,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
+import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -219,6 +220,7 @@ export const AIConfigCard = () => {
   });
 
   const providerValues = getProviderValues(providers);
+  const removeLabel = tCommon("remove");
   const canSave =
     hasUsableProviderDrafts(providers) &&
     serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
@@ -247,14 +249,20 @@ export const AIConfigCard = () => {
               </span>
             ))}
           </div>
-          <Button
-            loading={deleteMutation.isPending}
-            onClick={() => deleteMutation.mutate()}
-            size="sm"
-            variant="ghost"
+          <Tooltip
+            content={removeLabel}
+            render={
+              <Button
+                aria-label={removeLabel}
+                loading={deleteMutation.isPending}
+                onClick={() => deleteMutation.mutate()}
+                size="sm"
+                variant="ghost"
+              />
+            }
           >
             <Trash2Icon className="size-4" />
-          </Button>
+          </Tooltip>
         </div>
       )}
       <Frame>

@@ -152,7 +152,11 @@ function PublicLawSidebar({
   useHotkey(HOTKEYS.SEARCH, openSearch);
 
   return (
-    <Sidebar className="border-sidebar-border/35" collapsible="icon">
+    <Sidebar
+      aria-label={t("navigation.toggleSidebar")}
+      className="border-sidebar-border/35"
+      collapsible="icon"
+    >
       <SidebarHeader className="border-sidebar-border/35 h-12 border-b p-0">
         <div
           className={
@@ -163,6 +167,7 @@ function PublicLawSidebar({
         >
           {!isCollapsed && <StellaWordmark className="h-5 w-auto" />}
           <Button
+            aria-label={t("navigation.toggleSidebar")}
             className="text-muted-foreground size-7"
             onClick={toggleSidebar}
             size="icon"

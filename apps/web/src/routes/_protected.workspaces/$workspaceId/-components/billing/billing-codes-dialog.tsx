@@ -245,6 +245,7 @@ export const BillingCodesDialog = ({
                       <Checkbox checked={code.active} />
                     </Button>
                     <Button
+                      aria-label={t("common.delete")}
                       className="text-destructive size-7"
                       onClick={() => handleDelete(code.id)}
                       size="icon"

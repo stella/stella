@@ -186,8 +186,10 @@ export const InviteStep = ({
                     {email}
                   </BidiText>
                   <button
+                    aria-label={t("common.remove")}
                     className="text-muted-foreground hover:text-foreground"
                     onClick={() => removeEmail(email)}
+                    title={t("common.remove")}
                     type="button"
                   >
                     <XIcon className="size-3" />

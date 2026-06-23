@@ -6,6 +6,7 @@ import { Menu as MenuPrimitive } from "@base-ui/react/menu";
 import { ChevronRightIcon } from "lucide-react";
 
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
+import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
 import { cn } from "@stll/ui/lib/utils";
 
 const MenuCreateHandle = MenuPrimitive.createHandle;
@@ -14,10 +15,16 @@ const Menu = MenuPrimitive.Root;
 
 const MenuPortal = MenuPrimitive.Portal;
 
-function MenuTrigger(props: MenuPrimitive.Trigger.Props) {
-  return (
-    <MenuPrimitive.Trigger data-slot="menu-trigger" nativeButton {...props} />
-  );
+function MenuTrigger({
+  tooltip,
+  ...props
+}: MenuPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
+  return renderTooltipTrigger({
+    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    trigger: (
+      <MenuPrimitive.Trigger data-slot="menu-trigger" nativeButton {...props} />
+    ),
+  });
 }
 
 function MenuPopup({

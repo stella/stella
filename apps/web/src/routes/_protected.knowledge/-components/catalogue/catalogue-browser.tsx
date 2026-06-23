@@ -731,7 +731,6 @@ const CatalogueEntryRow = ({
     // (e.g. anonymisation that gates AI access).
     actions = (
       <span
-        aria-label={t("catalogue.installedShort")}
         className="text-muted-foreground inline-flex items-center gap-1 text-xs"
         title={t("catalogue.installedShort")}
       >

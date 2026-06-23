@@ -333,6 +333,7 @@ export const ChatMentionList = ({
                         </Button>
                         {isWorkspace && (
                           <Button
+                            aria-label={t("common.open")}
                             className="text-muted-foreground size-7 shrink-0"
                             onClick={() => handleDrillDown(item)}
                             size="icon-sm"

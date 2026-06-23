@@ -784,7 +784,12 @@ const FolderCell = ({
         paddingLeft: depth > 0 ? `${depth * 20}px` : undefined,
       }}
     >
-      <button className="flex shrink-0 items-center" type="button">
+      <button
+        aria-label={isExpanded ? "Collapse row" : "Expand row"}
+        className="flex shrink-0 items-center"
+        title={isExpanded ? "Collapse row" : "Expand row"}
+        type="button"
+      >
         <DirectionalIcon
           className={cn(
             "size-3.5 transition-transform",

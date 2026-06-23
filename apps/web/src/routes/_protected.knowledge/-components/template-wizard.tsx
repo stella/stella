@@ -688,11 +688,13 @@ const OptionsTagInput = ({
         >
           {option}
           <button
+            aria-label={t("common.remove")}
             className="h-full shrink-0 cursor-pointer px-1.5 opacity-80 hover:opacity-100"
             onClick={(e) => {
               e.stopPropagation();
               removeOption(i);
             }}
+            title={t("common.remove")}
             type="button"
           >
             <XIcon className="size-3.5" />
