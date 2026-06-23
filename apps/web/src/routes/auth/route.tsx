@@ -30,7 +30,7 @@ function AuthLayout() {
         .dark { --auth-gradient-end: #1a3a5c; }
       `}</style>
       <div className="flex flex-1 flex-col px-8 lg:px-16 xl:px-24">
-        <header className="flex items-end justify-between pt-12">
+        <header className="flex flex-wrap items-end justify-between gap-4 pt-12">
           <div className="flex items-center gap-3">
             <a
               aria-label="stella"
