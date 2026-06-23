@@ -2234,6 +2234,7 @@
       "fillStale": "Ungespeicherte Änderungen — speichern Sie, um mit den aktuellen Feldern auszufüllen.",
       "filledByPerson": "Person",
       "formula": "Formel",
+      "formulaUnknownFields": "Kein Feld: {fields}",
       "insert": "Einfügen",
       "insertAtCaret": "An der Cursorposition einfügen",
       "insertFormatDefault": "Standard",

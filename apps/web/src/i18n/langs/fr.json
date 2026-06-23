@@ -2234,6 +2234,7 @@
       "fillStale": "Modifications non enregistrées — enregistrez pour remplir avec les derniers champs.",
       "filledByPerson": "Personne",
       "formula": "Formule",
+      "formulaUnknownFields": "Champ inexistant : {fields}",
       "insert": "Insérer",
       "insertAtCaret": "Insérer au curseur",
       "insertFormatDefault": "Par défaut",

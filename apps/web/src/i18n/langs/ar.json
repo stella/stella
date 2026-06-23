@@ -2234,6 +2234,7 @@
       "fillStale": "تغييرات غير محفوظة — احفظ للتعبئة بأحدث الحقول.",
       "filledByPerson": "شخص",
       "formula": "صيغة حسابية",
+      "formulaUnknownFields": "ليس حقلاً: {fields}",
       "insert": "إدراج",
       "insertAtCaret": "إدراج عند المؤشّر",
       "insertFormatDefault": "افتراضي",

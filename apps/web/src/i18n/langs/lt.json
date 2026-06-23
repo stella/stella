@@ -2234,6 +2234,7 @@
       "fillStale": "Neišsaugoti pakeitimai — išsaugokite, kad pildytumėte naujausius laukus.",
       "filledByPerson": "Asmuo",
       "formula": "Formulė",
+      "formulaUnknownFields": "Nėra toks laukas: {fields}",
       "insert": "Įterpti",
       "insertAtCaret": "Įterpti ties žymekliu",
       "insertFormatDefault": "Numatytasis",

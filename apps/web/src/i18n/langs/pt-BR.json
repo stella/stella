@@ -2234,6 +2234,7 @@
       "fillStale": "Alterações não salvas — salve para preencher com os campos mais recentes.",
       "filledByPerson": "Pessoa",
       "formula": "Fórmula",
+      "formulaUnknownFields": "Não é um campo: {fields}",
       "insert": "Inserir",
       "insertAtCaret": "Inserir no cursor",
       "insertFormatDefault": "Padrão",

@@ -2234,6 +2234,7 @@
       "fillStale": "Salvestamata muudatused — salvestage, et täita uusimate väljadega.",
       "filledByPerson": "Isik",
       "formula": "Valem",
+      "formulaUnknownFields": "Tundmatu väli: {fields}",
       "insert": "Sisesta",
       "insertAtCaret": "Sisesta kursori kohale",
       "insertFormatDefault": "Vaikimisi",

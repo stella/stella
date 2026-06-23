@@ -2234,6 +2234,7 @@
       "fillStale": "Mentetlen módosítások — mentsen, hogy a legfrissebb mezőkkel töltse ki.",
       "filledByPerson": "Személy",
       "formula": "Képlet",
+      "formulaUnknownFields": "Nem mező: {fields}",
       "insert": "Beszúrás",
       "insertAtCaret": "Beszúrás a kurzorhoz",
       "insertFormatDefault": "Alapértelmezett",

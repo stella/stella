@@ -2234,6 +2234,7 @@
       "fillStale": "Cambios sin guardar: guarda para rellenar con los campos actuales.",
       "filledByPerson": "Persona",
       "formula": "Fórmula",
+      "formulaUnknownFields": "No es un campo: {fields}",
       "insert": "Insertar",
       "insertAtCaret": "Insertar en el cursor",
       "insertFormatDefault": "Predeterminada",

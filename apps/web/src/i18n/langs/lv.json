@@ -2234,6 +2234,7 @@
       "fillStale": "Nesaglabātas izmaiņas — saglabājiet, lai aizpildītu jaunākos laukus.",
       "filledByPerson": "Persona",
       "formula": "Formula",
+      "formulaUnknownFields": "Nav lauks: {fields}",
       "insert": "Ievietot",
       "insertAtCaret": "Ievietot pie kursora",
       "insertFormatDefault": "Noklusējuma",

@@ -2234,6 +2234,7 @@
       "fillStale": "Niezapisane zmiany — zapisz, aby wypełniać najnowsze pola.",
       "filledByPerson": "Osoba",
       "formula": "Formuła",
+      "formulaUnknownFields": "To nie jest pole: {fields}",
       "insert": "Wstaw",
       "insertAtCaret": "Wstaw przy kursorze",
       "insertFormatDefault": "Domyślny",

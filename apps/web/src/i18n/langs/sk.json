@@ -2234,6 +2234,7 @@
       "fillStale": "Neuložené zmeny — uložte, aby sa vypĺňali aktuálne polia.",
       "filledByPerson": "Osoba",
       "formula": "Vzorec",
+      "formulaUnknownFields": "Nie je to pole: {fields}",
       "insert": "Vložiť",
       "insertAtCaret": "Vložiť na pozíciu kurzora",
       "insertFormatDefault": "Predvolená",

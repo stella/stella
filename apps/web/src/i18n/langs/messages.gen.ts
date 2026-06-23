@@ -2237,6 +2237,7 @@ type Messages = {
       "fillStale": "Unsaved changes — save to fill with the latest fields.";
       "filledByPerson": "Person";
       "formula": "Formula";
+      "formulaUnknownFields": "Not a field: {fields}";
       "insert": "Insert";
       "insertAtCaret": "Insert at cursor";
       "insertFormatDefault": "Default";

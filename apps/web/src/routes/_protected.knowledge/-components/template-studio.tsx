@@ -5187,6 +5187,92 @@ const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
   );
 };
 
+// Built-in formula functions are not field references; mirror the evaluator's
+// identifier grammar (compute.ts) so the "not a field" check matches what the
+// engine will actually resolve.
+const FORMULA_FUNCTIONS = new Set([
+  "min",
+  "max",
+  "round",
+  "abs",
+  "floor",
+  "ceil",
+]);
+const FORMULA_IDENT_RE = /[\p{L}_][\p{L}\p{N}_.]*(?:-[\p{L}\p{N}_.]+)*/gu;
+
+type FormulaEditorProps = {
+  currentPath: string;
+  fields: readonly StudioField[];
+  value: string;
+  onChange: (formula: string) => void;
+};
+
+/** Formula value-source editor: the expression input plus clickable chips of
+ *  the other fields you can reference, and a live warning when the expression
+ *  names something that is not a field. */
+const FormulaEditor = ({
+  currentPath,
+  fields,
+  value,
+  onChange,
+}: FormulaEditorProps) => {
+  const t = useTranslations();
+  const others = fields.filter((f) => f.path !== currentPath);
+  const knownPaths = new Set(fields.map((f) => f.path));
+  const referenced = [
+    ...new Set(
+      [...value.matchAll(FORMULA_IDENT_RE)]
+        .map((match) => match[0])
+        .filter((id) => !FORMULA_FUNCTIONS.has(id)),
+    ),
+  ];
+  const unknown = referenced.filter((path) => !knownPaths.has(path));
+
+  const appendField = (path: string) => {
+    // No separator right after an opening operator/paren or on an empty
+    // expression; otherwise a space so adjacent names do not merge.
+    const needsSpace = value !== "" && !/[\s(+\-*/%,]$/u.test(value);
+    onChange(`${value}${needsSpace ? " " : ""}${path}`);
+  };
+
+  return (
+    <>
+      <Input
+        className="h-8 font-mono text-xs"
+        dir="ltr"
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={t("templates.fieldFormulaExpression")}
+        value={value}
+      />
+      {others.length > 0 && (
+        <div className="flex flex-wrap gap-1">
+          {others.map((f) => (
+            <button
+              className="bg-muted text-muted-foreground hover:bg-accent hover:text-foreground rounded px-1.5 py-0.5 font-mono text-[10px] transition-colors"
+              key={f.path}
+              onClick={() => appendField(f.path)}
+              title={f.label || f.path}
+              type="button"
+            >
+              {f.path}
+            </button>
+          ))}
+        </div>
+      )}
+      {unknown.length > 0 && (
+        <p className="text-warning-foreground text-xs">
+          {t("templates.studio.formulaUnknownFields", {
+            fields: unknown.join(", "),
+          })}
+        </p>
+      )}
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        {t("templates.fieldFormulaExpressionHint")}
+      </p>
+    </>
+  );
+};
+
 /** Mini-icons marking what a field can do: registry lookup, AI involvement,
  *  formula derivation, and a quiet dot for required. */
 const FieldCapabilityIcons = ({ field }: { field: StudioField }) => (
@@ -5653,18 +5739,12 @@ const FieldFace = ({
             </>
           ) : null}
           {valueSource === "formula" ? (
-            <>
-              <Input
-                className="h-8 font-mono text-xs"
-                dir="ltr"
-                onChange={(e) => onUpdate({ formula: e.target.value })}
-                placeholder={t("templates.fieldFormulaExpression")}
-                value={field.formula}
-              />
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                {t("templates.fieldFormulaExpressionHint")}
-              </p>
-            </>
+            <FormulaEditor
+              currentPath={field.path}
+              fields={fields}
+              onChange={(formula) => onUpdate({ formula })}
+              value={field.formula ?? ""}
+            />
           ) : null}
           {valueSource === "person" || valueSource === "textAi" ? (
             <label className="text-muted-foreground flex w-fit cursor-pointer items-center gap-1.5 text-xs">
