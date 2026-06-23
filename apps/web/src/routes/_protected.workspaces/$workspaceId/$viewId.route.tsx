@@ -290,23 +290,26 @@ function ViewShell({ activeView, workspaceId }: ViewContentProps) {
 
   return (
     <>
-      <div
-        className={cn(
-          "flex min-w-0 items-center justify-between border-b",
-          TOOLBAR_ROW_HEIGHT,
-        )}
-      >
-        <ViewSwitcher
-          activeViewId={activeView.id}
-          onViewChange={(viewId) => {
-            void navigate({
-              to: "/workspaces/$workspaceId/$viewId",
-              params: { workspaceId, viewId },
-              search: { page: undefined },
-            });
-          }}
-          workspaceId={workspaceId}
-        />
+      <div className="flex min-w-0 flex-col border-b md:flex-row md:items-center md:justify-between">
+        <div
+          className={cn(
+            "flex min-w-0 items-center",
+            TOOLBAR_ROW_HEIGHT,
+            activeView.layout.type !== "overview" && "border-b md:border-b-0",
+          )}
+        >
+          <ViewSwitcher
+            activeViewId={activeView.id}
+            onViewChange={(viewId) => {
+              void navigate({
+                to: "/workspaces/$workspaceId/$viewId",
+                params: { workspaceId, viewId },
+                search: { page: undefined },
+              });
+            }}
+            workspaceId={workspaceId}
+          />
+        </div>
         {activeView.layout.type !== "overview" && (
           <ViewToolbar view={activeView} workspaceId={workspaceId} />
         )}
@@ -423,15 +426,14 @@ function ViewPendingComponent() {
     <>
       <div
         className={cn(
-          "flex min-w-0 items-center justify-between border-b px-3",
-          TOOLBAR_ROW_HEIGHT,
+          "flex min-w-0 flex-col border-b px-3 md:flex-row md:items-center md:justify-between",
         )}
       >
-        <div className="flex items-center gap-1.5">
+        <div className={cn("flex items-center gap-1.5", TOOLBAR_ROW_HEIGHT)}>
           <Skeleton className="h-7 w-24 rounded-md" />
           <Skeleton className="h-7 w-20 rounded-md" />
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className={cn("flex items-center gap-1.5", TOOLBAR_ROW_HEIGHT)}>
           <Skeleton className="size-7 rounded-md" />
           <Skeleton className="size-7 rounded-md" />
           <Skeleton className="h-7 w-24 rounded-md" />

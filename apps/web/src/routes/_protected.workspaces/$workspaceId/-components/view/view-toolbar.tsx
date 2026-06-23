@@ -101,7 +101,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
   };
 
   return (
-    <div className="flex shrink-0 flex-wrap items-center gap-1 px-2 py-1">
+    <div className="flex min-w-0 shrink-0 [scrollbar-width:none] flex-nowrap items-center gap-1 overflow-x-auto px-2 py-1 [-ms-overflow-style:none] md:ms-auto md:flex-wrap md:justify-end md:overflow-visible [&::-webkit-scrollbar]:hidden">
       {view.layout.type === "filesystem" && folderState.hasFolders && (
         <>
           <FolderExpandToggle
@@ -523,18 +523,34 @@ const FilesystemOrganizerAction = ({
   return (
     <>
       <Button
+        aria-label={
+          selectedFiles.length > 0
+            ? t("workspaces.importOrganizer.actionSelected", {
+                count: organizerFiles.length,
+              })
+            : t("workspaces.importOrganizer.action")
+        }
         disabled={organizerFiles.length === 0}
         onClick={() => setOpen(true)}
         size="xs"
+        title={
+          selectedFiles.length > 0
+            ? t("workspaces.importOrganizer.actionSelected", {
+                count: organizerFiles.length,
+              })
+            : t("workspaces.importOrganizer.action")
+        }
         type="button"
         variant="outline"
       >
         <Rows3Icon />
-        {selectedFiles.length > 0
-          ? t("workspaces.importOrganizer.actionSelected", {
-              count: organizerFiles.length,
-            })
-          : t("workspaces.importOrganizer.action")}
+        <span className="hidden sm:inline">
+          {selectedFiles.length > 0
+            ? t("workspaces.importOrganizer.actionSelected", {
+                count: organizerFiles.length,
+              })
+            : t("workspaces.importOrganizer.action")}
+        </span>
       </Button>
       <ExistingFileOrganizerDialog
         existingFolders={existingFolders}
@@ -601,7 +617,7 @@ const GroupByControl = ({
 
   return (
     <span className="flex shrink-0 items-center gap-1 text-xs whitespace-nowrap">
-      <span className="text-muted-foreground shrink-0">
+      <span className="text-muted-foreground hidden shrink-0 sm:inline">
         {t("workspaces.views.groupBy")}
       </span>
       <Select
@@ -613,7 +629,10 @@ const GroupByControl = ({
         }}
         value={resolvedId}
       >
-        <SelectTrigger className="h-6 min-h-0 min-w-24 text-xs" size="sm">
+        <SelectTrigger
+          className="h-7 min-h-0 w-28 text-xs sm:h-6 sm:w-auto sm:min-w-24"
+          size="sm"
+        >
           <SelectValue placeholder={resolvedLabel}>{resolvedLabel}</SelectValue>
         </SelectTrigger>
         <SelectPopup>

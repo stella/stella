@@ -1336,7 +1336,7 @@ export function PromptBarPlaceholderContent({
   children: ReactNode;
 }) {
   return (
-    <span className="text-foreground-muted truncate text-[13px] leading-5">
+    <span className="text-foreground-muted block min-w-0 truncate text-[13px] leading-5">
       {children}
     </span>
   );

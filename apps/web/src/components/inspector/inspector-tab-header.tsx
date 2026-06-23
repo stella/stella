@@ -1,10 +1,13 @@
 import type { MouseEvent, ReactNode } from "react";
 
-import { LayersIcon, XIcon } from "lucide-react";
+import { ArrowLeftIcon, LayersIcon, XIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { InlineEdit } from "@/routes/_protected.workspaces/$workspaceId/-components/inline-edit";
 
@@ -92,56 +95,77 @@ export const InspectorTabHeader = ({
   actions,
   matterColor,
   onClose,
-}: InspectorTabHeaderProps) => (
-  <div
-    className="flex h-12 shrink-0 items-center justify-between border-b px-3"
-    style={
-      matterColor
-        ? {
-            backgroundColor: `color-mix(in srgb, ${matterColor} 2%, transparent)`,
-          }
-        : undefined
-    }
-  >
-    <div className="flex min-w-0 items-center gap-2 overflow-hidden">
-      {rename?.active ? (
-        <InlineEdit
-          inputClassName="w-40 text-xs"
-          onCancel={rename.onCancel}
-          onChange={rename.onChange}
-          onCommit={rename.onCommit}
-          suffix={rename.suffix}
-          value={rename.value}
-        />
-      ) : (
-        <span
-          className={cn(
-            "truncate text-xs font-medium",
-            onStartRename !== undefined && "cursor-text",
-          )}
-          onContextMenu={onLabelContextMenu}
-          onDoubleClick={onStartRename}
+}: InspectorTabHeaderProps) => {
+  const tCommon = useTranslations("common");
+  const setMinimized = useInspectorStore((s) => s.setMinimized);
+
+  return (
+    <div
+      className="flex h-12 shrink-0 items-center justify-between border-b px-3"
+      style={
+        matterColor
+          ? {
+              backgroundColor: `color-mix(in srgb, ${matterColor} 2%, transparent)`,
+            }
+          : undefined
+      }
+    >
+      <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+        <Button
+          aria-label={tCommon("back")}
+          className="-ms-1 md:hidden"
+          onClick={() => setMinimized(true)}
+          size="icon-sm"
+          title={tCommon("back")}
+          variant="ghost"
         >
-          {label}
-        </span>
-      )}
-      {matter !== undefined && !rename?.active && (
-        <>
-          <span aria-hidden="true" className="text-foreground-subtle text-xs">
-            ·
+          <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
+        </Button>
+        {rename?.active ? (
+          <InlineEdit
+            inputClassName="w-40 text-xs"
+            onCancel={rename.onCancel}
+            onChange={rename.onChange}
+            onCommit={rename.onCommit}
+            suffix={rename.suffix}
+            value={rename.value}
+          />
+        ) : (
+          <span
+            className={cn(
+              "truncate text-xs font-medium",
+              onStartRename !== undefined && "cursor-text",
+            )}
+            onContextMenu={onLabelContextMenu}
+            onDoubleClick={onStartRename}
+          >
+            {label}
           </span>
-          {matter}
-        </>
-      )}
+        )}
+        {matter !== undefined && !rename?.active && (
+          <>
+            <span aria-hidden="true" className="text-foreground-subtle text-xs">
+              ·
+            </span>
+            {matter}
+          </>
+        )}
+      </div>
+      <div className="flex shrink-0 items-center gap-1 ps-4">
+        {actions}
+        <Button
+          aria-label={tCommon("close")}
+          onClick={onClose}
+          size="icon-xs"
+          title={tCommon("close")}
+          variant="ghost"
+        >
+          <XIcon className="size-3.5" />
+        </Button>
+      </div>
     </div>
-    <div className="flex shrink-0 items-center gap-1 ps-4">
-      {actions}
-      <Button onClick={onClose} size="icon-xs" variant="ghost">
-        <XIcon className="size-3.5" />
-      </Button>
-    </div>
-  </div>
-);
+  );
+};
 
 /**
  * Standard "matter origin" link for tabs that bind to exactly one

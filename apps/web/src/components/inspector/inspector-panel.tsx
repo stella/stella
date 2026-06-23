@@ -424,20 +424,22 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   });
 
   return (
-    <div className="bg-background flex h-full border-s shadow-lg">
-      <InspectorRail
-        activeId={activeId}
-        minimized={minimized}
-        onActivateTab={(tabId) => {
-          setActive(tabId);
-          setMinimized(false);
-        }}
-        onCloseTab={handleCloseTab}
-        onOpenChat={openChat}
-        onSetMinimized={setMinimized}
-        tabs={tabs}
-        workspaceId={workspaceId}
-      />
+    <div className="bg-background flex h-full shadow-lg md:border-s">
+      <div className="hidden md:contents">
+        <InspectorRail
+          activeId={activeId}
+          minimized={minimized}
+          onActivateTab={(tabId) => {
+            setActive(tabId);
+            setMinimized(false);
+          }}
+          onCloseTab={handleCloseTab}
+          onOpenChat={openChat}
+          onSetMinimized={setMinimized}
+          tabs={tabs}
+          workspaceId={workspaceId}
+        />
+      </div>
 
       {/* Task content */}
       {!minimized &&

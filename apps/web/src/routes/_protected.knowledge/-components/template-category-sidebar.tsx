@@ -100,7 +100,7 @@ const useTemplateCategoryOps = (): CategoryOps => {
   };
 };
 
-const useTemplateCategoryLabels = (): CategoryLabels => {
+export const useTemplateCategoryLabels = (): CategoryLabels => {
   const t = useTranslations();
   return {
     all: t("templates.allTemplates"),

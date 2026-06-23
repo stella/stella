@@ -1,3 +1,4 @@
+import type { DragEvent, ReactNode } from "react";
 import { useCallback, useState } from "react";
 
 import {
@@ -78,6 +79,14 @@ export type CategoryLabels = {
   namePlaceholder: string;
 };
 
+export type CategoryMobileExtraFilter = {
+  id: string;
+  label: string;
+  active: boolean;
+  onSelect: () => void;
+  icon?: ReactNode;
+};
+
 /** Drag-and-drop wiring, supplied only by features that support reassigning a
  *  dragged item onto a category (Templates). When omitted, no drop targets
  *  render (Clauses). */
@@ -100,7 +109,7 @@ type CategorySidebarProps = {
   onCategoryCreated?: (category: CategoryEntity) => void;
   /** Optional extra content rendered below the category list (e.g. the
    *  Templates tag filter). */
-  children?: React.ReactNode;
+  children?: ReactNode;
 };
 
 export const CategorySidebar = ({
@@ -193,13 +202,136 @@ export const CategorySidebar = ({
   );
 };
 
+type CategoryMobileFilterBarProps = {
+  categories: CategoryEntity[];
+  selectedId: string | null;
+  labels: CategoryLabels;
+  canCreate: boolean;
+  onSelect: (id: string | null) => void;
+  onCreateCategory: () => void;
+  onSelectAll?: () => void;
+  extraFilters?: readonly CategoryMobileExtraFilter[];
+};
+
+const EMPTY_CATEGORY_MOBILE_EXTRA_FILTERS: readonly CategoryMobileExtraFilter[] =
+  [];
+
+export const CategoryMobileFilterBar = ({
+  categories,
+  selectedId,
+  labels,
+  canCreate,
+  onSelect,
+  onCreateCategory,
+  onSelectAll,
+  extraFilters,
+}: CategoryMobileFilterBarProps) => {
+  const t = useTranslations();
+  const resolvedExtraFilters =
+    extraFilters ?? EMPTY_CATEGORY_MOBILE_EXTRA_FILTERS;
+  const hasActiveExtraFilter = resolvedExtraFilters.some(
+    (filter) => filter.active,
+  );
+
+  return (
+    <div className="border-b px-3 py-2 md:hidden">
+      <div className="flex gap-1 overflow-x-auto pb-0.5">
+        <CategoryMobileFilterButton
+          active={selectedId === null && !hasActiveExtraFilter}
+          label={labels.all}
+          onSelect={() => {
+            if (onSelectAll) {
+              onSelectAll();
+              return;
+            }
+            onSelect(null);
+          }}
+        />
+        <CategoryMobileFilterButton
+          active={selectedId === "uncategorized"}
+          label={t("common.uncategorized")}
+          onSelect={() => onSelect("uncategorized")}
+        />
+        {categories.map((category) => (
+          <CategoryMobileFilterButton
+            active={selectedId === category.id}
+            key={`category:${category.id}`}
+            label={category.name}
+            onSelect={() => onSelect(category.id)}
+          />
+        ))}
+        {resolvedExtraFilters.map((filter) => (
+          <CategoryMobileFilterButton
+            active={filter.active}
+            icon={filter.icon}
+            key={`extra:${filter.id}`}
+            label={filter.label}
+            onSelect={filter.onSelect}
+            variant="extra"
+          />
+        ))}
+        {canCreate && (
+          <Button
+            className="h-8 shrink-0"
+            onClick={onCreateCategory}
+            size="sm"
+            type="button"
+            variant="ghost"
+          >
+            <PlusIcon />
+            {labels.createCategory}
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+};
+
+type CategoryMobileFilterButtonProps = {
+  label: string;
+  active: boolean;
+  onSelect: () => void;
+  icon?: ReactNode;
+  variant?: "default" | "extra";
+};
+
+const CategoryMobileFilterButton = ({
+  onSelect,
+  label,
+  active,
+  icon,
+  variant,
+}: CategoryMobileFilterButtonProps) => {
+  const resolvedVariant = variant ?? "default";
+
+  return (
+    <button
+      aria-pressed={active}
+      className={cn(
+        "border-input bg-popover text-foreground relative inline-flex h-8 shrink-0 items-center gap-1.5 rounded-md border px-2.5 text-sm font-medium transition-colors pointer-coarse:after:absolute pointer-coarse:after:start-0 pointer-coarse:after:top-1/2 pointer-coarse:after:h-11 pointer-coarse:after:w-full pointer-coarse:after:-translate-y-1/2",
+        resolvedVariant === "extra" && "border-dashed",
+        active
+          ? "border-foreground bg-foreground text-background"
+          : "hover:bg-muted",
+      )}
+      onClick={onSelect}
+      type="button"
+    >
+      {icon ?? null}
+      <span className="max-w-40 truncate" dir="auto">
+        {label}
+      </span>
+    </button>
+  );
+};
+
 // ── Drop target ─────────────────────────────────────
 
 type DropTarget = {
   isDragOver: boolean;
-  onDragOver: (e: React.DragEvent) => void;
-  onDragLeave: (e: React.DragEvent) => void;
-  onDrop: (e: React.DragEvent) => void;
+  onDragOver: (e: DragEvent) => void;
+  onDragLeave: (e: DragEvent) => void;
+  onDrop: (e: DragEvent) => void;
 };
 
 const noop = () => undefined;
@@ -226,7 +358,7 @@ const useCategoryDropTarget = (
     return INERT_DROP_TARGET;
   }
 
-  const onDragOver = (e: React.DragEvent) => {
+  const onDragOver = (e: DragEvent) => {
     if (!e.dataTransfer.types.includes(dragAndDrop.mime)) {
       return;
     }
@@ -235,12 +367,12 @@ const useCategoryDropTarget = (
     setIsDragOver(true);
   };
 
-  const onDragLeave = (e: React.DragEvent) => {
+  const onDragLeave = (e: DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
   };
 
-  const onDrop = (e: React.DragEvent) => {
+  const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setIsDragOver(false);
     const itemId = e.dataTransfer.getData(dragAndDrop.mime);

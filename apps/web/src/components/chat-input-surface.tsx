@@ -127,7 +127,7 @@ export const ChatInputSurface = ({
     >
       <ChatDraftAttachmentChips files={attachments} onRemove={removeFile} />
       <div
-        className="chat-editor relative px-3 pt-2 pb-1"
+        className="chat-editor relative min-w-0 overflow-hidden px-3 pt-2 pb-1"
         onKeyDown={(event) => event.stopPropagation()}
         role="presentation"
       >
@@ -138,7 +138,7 @@ export const ChatInputSurface = ({
         {isEmpty && attachments.length === 0 && (
           <span
             aria-hidden="true"
-            className="text-foreground-placeholder pointer-events-none absolute start-3 top-2 truncate pe-3 text-sm"
+            className="text-foreground-placeholder pointer-events-none absolute inset-x-3 top-2 truncate text-sm"
           >
             {placeholder}
           </span>

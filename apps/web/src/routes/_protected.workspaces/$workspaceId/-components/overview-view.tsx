@@ -104,6 +104,10 @@ type OverviewViewProps = {
   workspaceId: string;
 };
 
+const OVERVIEW_PANEL_CLASS = "bg-background overflow-hidden rounded-lg border";
+const TEAM_HEATMAP_GRID_CLASS =
+  "grid grid-cols-[minmax(3.5rem,1fr)_repeat(7,1.375rem)] items-center gap-x-1 px-3 sm:grid-cols-[minmax(8rem,1fr)_repeat(7,1.75rem)_2.5rem] sm:gap-x-2 sm:px-4";
+
 type UpcomingTaskContext = {
   entityId: string;
   name: string;
@@ -426,7 +430,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   );
 
   return (
-    <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-6 tabular-nums">
+    <div className="@container flex flex-1 flex-col gap-6 overflow-y-auto p-4 tabular-nums sm:p-6">
       {/* Stats grid */}
       <div className="grid gap-3 @sm:grid-cols-2 @3xl:grid-cols-4">
         <StatCard
@@ -708,32 +712,36 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
         </section>
 
         {/* Time & Team */}
-        <section className="flex flex-col">
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-muted-foreground text-sm font-medium">
+        <section className="flex min-w-0 flex-col">
+          <div className="mb-3 flex items-center justify-between gap-3">
+            <h2 className="text-muted-foreground min-w-0 text-sm font-medium">
               <ClockIcon className="me-1.5 inline size-3.5" />
               {t("workspaces.overview.timeAndTeam")}
             </h2>
-            <Button className="h-7 text-xs" disabled size="sm" variant="ghost">
+            <Button
+              className="h-7 shrink-0 text-xs"
+              disabled
+              size="sm"
+              variant="ghost"
+            >
               <PlusIcon className="size-3" />
               {t("common.logTime")}
             </Button>
           </div>
-          <div className="bg-background flex-1 overflow-hidden rounded-lg border">
-            {/* Day labels — i18n via Intl.DateTimeFormat */}
-            <div className="flex min-h-12 items-center gap-3 border-b px-4 py-2">
-              <span className="w-16 shrink-0 @sm:w-20 @lg:w-28" />
-              <div className="flex min-w-0 flex-1 justify-between">
-                {Array.from({ length: 7 }, (_, i) => (
-                  <span
-                    className="text-muted-foreground w-5 text-center text-[0.625rem] @sm:w-7"
-                    key={i}
-                  >
-                    {getLocaleDayLabel(i, lang, firstWeekday)}
-                  </span>
-                ))}
-              </div>
-              <span className="hidden w-10 shrink-0 @sm:block" />
+          <div className={cn(OVERVIEW_PANEL_CLASS, "flex-1")}>
+            <div
+              className={cn(TEAM_HEATMAP_GRID_CLASS, "min-h-12 border-b py-2")}
+            >
+              <span />
+              {Array.from({ length: 7 }, (_, i) => (
+                <span
+                  className="text-muted-foreground text-center text-[0.625rem]"
+                  key={i}
+                >
+                  {getLocaleDayLabel(i, lang, firstWeekday)}
+                </span>
+              ))}
+              <span className="hidden sm:block" />
             </div>
             <div className="divide-y">
               {(() => {
@@ -749,10 +757,10 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
 
                   return (
                     <div
-                      className="flex min-h-14 items-center gap-3 px-4 py-2.5"
+                      className={cn(TEAM_HEATMAP_GRID_CLASS, "min-h-14 py-2.5")}
                       key={member.userId}
                     >
-                      <div className="flex w-16 shrink-0 items-center gap-2 @sm:w-20 @lg:w-28">
+                      <div className="flex min-w-0 items-center gap-2">
                         <Avatar className="size-5 text-[0.5rem]">
                           {member.image && <AvatarImage src={member.image} />}
                           <AvatarFallback>
@@ -764,108 +772,107 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
                               .slice(0, 2)}
                           </AvatarFallback>
                         </Avatar>
-                        <span className="min-w-0 truncate text-xs">
+                        <span className="min-w-0 truncate text-sm">
                           {member.name}
                         </span>
                       </div>
-                      <div className="flex min-w-0 flex-1 justify-between">
-                        {member.daily.map((hours, dayIdx) => {
-                          const opacity = maxDaily > 0 ? hours / maxDaily : 0;
-                          const entries = member.dailyEntries[dayIdx] ?? [];
+                      {member.daily.map((hours, dayIdx) => {
+                        const opacity = maxDaily > 0 ? hours / maxDaily : 0;
+                        const entries = member.dailyEntries[dayIdx] ?? [];
+                        const dayLabel = getLocaleDayLabel(
+                          dayIdx,
+                          lang,
+                          firstWeekday,
+                        );
 
-                          const cell = (
-                            <div
-                              className={cn(
-                                "bg-primary/10 size-4 rounded-sm transition-transform @sm:size-5",
-                                hours > 0 && "cursor-pointer hover:scale-110",
-                              )}
-                              style={
-                                hours > 0
-                                  ? {
-                                      backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
-                                    }
-                                  : undefined
-                              }
-                            />
-                          );
+                        const cell = (
+                          <div
+                            className={cn(
+                              "bg-primary/10 size-5 rounded-sm transition-transform",
+                              hours > 0 && "hover:scale-110",
+                            )}
+                            style={
+                              hours > 0
+                                ? {
+                                    backgroundColor: `color-mix(in srgb, var(--color-primary) ${Math.round(opacity * 80 + 10)}%, transparent)`,
+                                  }
+                                : undefined
+                            }
+                          />
+                        );
 
-                          if (hours === 0) {
-                            return (
-                              <div
-                                className="flex w-5 justify-center @sm:w-7"
-                                key={dayIdx}
-                              >
-                                {cell}
-                              </div>
-                            );
-                          }
-
+                        if (hours === 0) {
                           return (
                             <div
-                              className="flex w-5 justify-center @sm:w-7"
+                              className="flex size-6 items-center justify-center sm:size-7"
                               key={dayIdx}
                             >
-                              <Popover>
-                                <TooltipRoot>
-                                  <PopoverTrigger
-                                    render={
-                                      <TooltipTrigger
-                                        render={
-                                          <button
-                                            className="cursor-pointer"
-                                            type="button"
-                                          />
-                                        }
-                                      />
-                                    }
-                                  >
-                                    {cell}
-                                  </PopoverTrigger>
-                                  <TooltipPopup>
-                                    {formatHours(hours)}
-                                  </TooltipPopup>
-                                </TooltipRoot>
-                                <PopoverPopup className="w-56" sideOffset={8}>
-                                  <div className="p-2">
-                                    <p className="text-muted-foreground mb-2 text-xs font-medium">
-                                      {member.name} ·{" "}
-                                      {getLocaleDayLabel(
-                                        dayIdx,
-                                        lang,
-                                        firstWeekday,
-                                      )}
-                                      {" · "}
-                                      {formatHours(hours)}
-                                    </p>
-                                    {entries.length > 0 ? (
-                                      <div className="space-y-1.5">
-                                        {entries.map((entry) => (
-                                          <div
-                                            className="flex items-start justify-between gap-2"
-                                            key={entry.id}
-                                          >
-                                            <span className="text-xs">
-                                              {entry.description}
-                                            </span>
-                                            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-                                              {formatHours(entry.hours)}
-                                            </span>
-                                          </div>
-                                        ))}
-                                      </div>
-                                    ) : (
-                                      <p className="text-muted-foreground text-xs">
-                                        {t("common.noResults")}
-                                      </p>
-                                    )}
-                                  </div>
-                                </PopoverPopup>
-                              </Popover>
+                              {cell}
                             </div>
                           );
-                        })}
-                      </div>
-                      <span className="text-muted-foreground hidden w-10 shrink-0 text-end text-xs tabular-nums @sm:block">
+                        }
+
+                        return (
+                          <div
+                            className="flex size-6 items-center justify-center sm:size-7"
+                            key={dayIdx}
+                          >
+                            <Popover>
+                              <TooltipRoot>
+                                <PopoverTrigger
+                                  render={
+                                    <TooltipTrigger
+                                      render={
+                                        <button
+                                          aria-label={`${member.name}, ${dayLabel}: ${formatHours(hours)}`}
+                                          className="flex size-6 cursor-pointer items-center justify-center sm:size-7"
+                                          type="button"
+                                        />
+                                      }
+                                    />
+                                  }
+                                >
+                                  {cell}
+                                </PopoverTrigger>
+                                <TooltipPopup>
+                                  {formatHours(hours)}
+                                </TooltipPopup>
+                              </TooltipRoot>
+                              <PopoverPopup className="w-56" sideOffset={8}>
+                                <div className="p-2">
+                                  <p className="text-muted-foreground mb-2 text-xs font-medium">
+                                    {member.name} · {dayLabel}
+                                    {" · "}
+                                    {formatHours(hours)}
+                                  </p>
+                                  {entries.length > 0 ? (
+                                    <div className="space-y-1.5">
+                                      {entries.map((entry) => (
+                                        <div
+                                          className="flex items-start justify-between gap-2"
+                                          key={entry.id}
+                                        >
+                                          <span className="text-xs">
+                                            {entry.description}
+                                          </span>
+                                          <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
+                                            {formatHours(entry.hours)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  ) : (
+                                    <p className="text-muted-foreground text-xs">
+                                      {t("common.noResults")}
+                                    </p>
+                                  )}
+                                </div>
+                              </PopoverPopup>
+                            </Popover>
+                          </div>
+                        );
+                      })}
+                      <span className="text-muted-foreground hidden text-end text-xs tabular-nums sm:block">
                         {total > 0 ? formatHours(total) : ""}
                       </span>
                     </div>
@@ -960,7 +967,7 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
               {t("common.uploadFiles")}
             </Button>
           </div>
-          <div className="bg-background divide-y overflow-hidden rounded-lg border">
+          <div className={cn(OVERVIEW_PANEL_CLASS, "divide-y")}>
             {recentEntities.map((entity) => (
               <OverviewRow
                 entity={entity}

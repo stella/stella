@@ -1,10 +1,6 @@
 import { useState } from "react";
 
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
@@ -48,9 +44,12 @@ import type { ContextMenuAction } from "@/components/context-menu";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { useInspectorView } from "@/components/inspector/use-inspector-view";
 import { McpIcon } from "@/components/mcp-icon";
+import {
+  ResponsiveActionToolbar,
+  ResponsiveActionToolbarItem,
+} from "@/components/responsive-action-toolbar";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
-import { roleOptions } from "@/routes/-queries";
 import {
   BlueprintGallerySheet,
   type BlueprintCreatedSkill,
@@ -87,6 +86,12 @@ type CatalogueBrowserProps = {
    * for the onboarding flow.
    */
   showAddCustom?: boolean;
+  /**
+   * Caller-resolved permission gate for creating custom team tools. The route
+   * owns role loading so this browser cannot trigger a cold non-suspense query
+   * during mount.
+   */
+  canManageCustomTools: boolean;
   /**
    * Seeds the jurisdiction filter so a CZ-based user lands on Tools and
    * sees only CZ + EU entries by default. Mirrors the onboarding step.
@@ -136,16 +141,12 @@ export const CatalogueBrowser = ({
   organizationId,
   initialKind,
   showAddCustom = true,
+  canManageCustomTools,
   practiceJurisdictions,
 }: CatalogueBrowserProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const { data } = useSuspenseQuery(catalogueOptions(organizationId));
-  const { data: role } = useQuery(roleOptions);
-  // Match the backend gate: only admins/owners can create MCP
-  // connectors (see `POST /mcp/connectors`). Members would see the
-  // form open and the submit 403, so hide the affordance entirely.
-  const canAddCustom = role === "admin" || role === "owner";
   const [filter, setFilter] = useState<CatalogueBrowserFilterKind>(
     initialKind ?? "all",
   );
@@ -190,8 +191,6 @@ export const CatalogueBrowser = ({
   const [jurisdictionQuery, setJurisdictionQuery] = useState("");
   const [addMcpOpen, setAddMcpOpen] = useState(false);
   const [blueprintGalleryOpen, setBlueprintGalleryOpen] = useState(false);
-  // Reuse `role` from the canAddCustom block above for team-skill gating.
-  const canManageTeam = role === "admin" || role === "owner";
 
   const entries = data.entries;
 
@@ -290,162 +289,185 @@ export const CatalogueBrowser = ({
   );
   const otherFiltered = filtered.filter((entry) => !entry.isRecommendedForOrg);
   const hasMcpEntries = entries.some((entry) => entry.kind === "mcp");
+  const canShowAddCustom = showAddCustom && canManageCustomTools;
   // On a truly empty MCP catalogue, replace the generic "no entries" + reset
   // line with a prominent add-MCP call to action. Gated to admins/owners
   // like the add-custom menu, since members can't create connectors.
-  const showMcpEmptyCta = filter === "mcp" && !hasMcpEntries && canAddCustom;
+  const showMcpEmptyCta =
+    filter === "mcp" && !hasMcpEntries && canManageCustomTools;
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center gap-2">
-        <InputGroup className="flex-1">
-          <InputGroupAddon>
-            <SearchIcon className="text-muted-foreground" />
-          </InputGroupAddon>
-          <InputGroupInput
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("onboarding.catalogueSearchPlaceholder")}
-            value={query}
-          />
-          {query.length > 0 && (
-            <InputGroupAddon align="inline-end">
-              <Button
-                aria-label={t("onboarding.catalogueClearSearch")}
-                onClick={() => setQuery("")}
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-              >
-                <XIcon />
-              </Button>
+      <ResponsiveActionToolbar>
+        <ResponsiveActionToolbarItem slot="primary">
+          <InputGroup className="min-h-11 sm:min-h-0">
+            <InputGroupAddon>
+              <SearchIcon className="text-muted-foreground" />
             </InputGroupAddon>
-          )}
-        </InputGroup>
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button className="shrink-0" type="button" variant="outline" />
-            }
-          >
-            <GlobeIcon className="size-3.5" />
-            {jurisdictionFilter.size === 0
-              ? t("common.all")
-              : [...jurisdictionFilter].sort().join(", ")}
-            <ChevronDownIcon className="size-3.5" />
-          </PopoverTrigger>
-          <PopoverPopup align="end" className="w-60" side="bottom">
-            <div className="border-border border-b p-2">
-              <InputGroup>
-                <InputGroupAddon>
-                  <SearchIcon className="text-muted-foreground" />
-                </InputGroupAddon>
-                <InputGroupInput
-                  autoFocus
-                  onChange={(e) => setJurisdictionQuery(e.target.value)}
-                  placeholder={t("common.search")}
-                  size="sm"
-                  value={jurisdictionQuery}
+            <InputGroupInput
+              className="max-sm:h-11 max-sm:leading-11"
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("onboarding.catalogueSearchPlaceholder")}
+              type="search"
+              value={query}
+            />
+            {query.length > 0 && (
+              <InputGroupAddon align="inline-end">
+                <Button
+                  aria-label={t("onboarding.catalogueClearSearch")}
+                  onClick={() => setQuery("")}
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                >
+                  <XIcon />
+                </Button>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
+        </ResponsiveActionToolbarItem>
+
+        <ResponsiveActionToolbarItem slot="secondary">
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button
+                  className="h-11 w-full justify-start sm:h-8 sm:w-auto"
+                  type="button"
+                  variant="outline"
                 />
-              </InputGroup>
-            </div>
-            <div className="flex max-h-[260px] flex-col overflow-y-auto p-1">
-              {jurisdictionQuery.trim() === "" && (
-                <>
-                  <button
-                    aria-pressed={jurisdictionFilter.size === 0}
-                    className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
-                    onClick={() => setJurisdictionFilter(new Set())}
-                    type="button"
-                  >
-                    <span
-                      className={cn(
-                        "border-border flex size-4 items-center justify-center rounded-sm border",
-                        jurisdictionFilter.size === 0 &&
-                          "border-foreground bg-foreground",
-                      )}
-                    >
-                      {jurisdictionFilter.size === 0 && (
-                        <CheckIcon className="text-background size-3" />
-                      )}
-                    </span>
-                    <span className="text-foreground font-medium">
-                      {t("common.all")}
-                    </span>
-                  </button>
-                  <div className="bg-border my-1 h-px" />
-                </>
-              )}
-              {(() => {
-                const matches = allJurisdictionCodes.filter((code) =>
-                  code
-                    .toLowerCase()
-                    .includes(jurisdictionQuery.trim().toLowerCase()),
-                );
-                if (matches.length === 0) {
-                  return (
-                    <p className="text-muted-foreground px-2 py-3 text-center text-xs">
-                      {t("common.noResults")}
-                    </p>
-                  );
-                }
-                return matches.map((code) => {
-                  const active = jurisdictionFilter.has(code);
-                  return (
+              }
+            >
+              <GlobeIcon className="size-3.5" />
+              <span className="min-w-0 truncate">
+                {jurisdictionFilter.size === 0
+                  ? t("common.all")
+                  : [...jurisdictionFilter].sort().join(", ")}
+              </span>
+              <ChevronDownIcon className="size-3.5" />
+            </PopoverTrigger>
+            <PopoverPopup align="end" className="w-60" side="bottom">
+              <div className="border-border border-b p-2">
+                <InputGroup>
+                  <InputGroupAddon>
+                    <SearchIcon className="text-muted-foreground" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    autoFocus
+                    onChange={(e) => setJurisdictionQuery(e.target.value)}
+                    placeholder={t("common.search")}
+                    size="sm"
+                    value={jurisdictionQuery}
+                  />
+                </InputGroup>
+              </div>
+              <div className="flex max-h-[260px] flex-col overflow-y-auto p-1">
+                {jurisdictionQuery.trim() === "" && (
+                  <>
                     <button
-                      aria-pressed={active}
+                      aria-pressed={jurisdictionFilter.size === 0}
                       className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
-                      key={code}
-                      onClick={() =>
-                        setJurisdictionFilter((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(code)) {
-                            next.delete(code);
-                          } else {
-                            next.add(code);
-                          }
-                          return next;
-                        })
-                      }
+                      onClick={() => setJurisdictionFilter(new Set())}
                       type="button"
                     >
                       <span
                         className={cn(
                           "border-border flex size-4 items-center justify-center rounded-sm border",
-                          active && "border-foreground bg-foreground",
+                          jurisdictionFilter.size === 0 &&
+                            "border-foreground bg-foreground",
                         )}
                       >
-                        {active && (
+                        {jurisdictionFilter.size === 0 && (
                           <CheckIcon className="text-background size-3" />
                         )}
                       </span>
-                      <span className="text-foreground">{code}</span>
+                      <span className="text-foreground font-medium">
+                        {t("common.all")}
+                      </span>
                     </button>
+                    <div className="bg-border my-1 h-px" />
+                  </>
+                )}
+                {(() => {
+                  const matches = allJurisdictionCodes.filter((code) =>
+                    code
+                      .toLowerCase()
+                      .includes(jurisdictionQuery.trim().toLowerCase()),
                   );
-                });
-              })()}
-            </div>
-          </PopoverPopup>
-        </Popover>
-        {showAddCustom && canAddCustom && (
-          <Menu>
-            <MenuTrigger render={<Button className="shrink-0" type="button" />}>
-              <PlusIcon className="size-3.5" />
-              {t("catalogue.addCustom")}
-              <ChevronDownIcon className="size-3.5" />
-            </MenuTrigger>
-            <MenuPopup align="end" className="w-56">
-              <MenuItem onClick={() => setAddMcpOpen(true)}>
-                <McpIcon className="size-4" />
-                {t("catalogue.addCustomMcp")}
-              </MenuItem>
-              <MenuItem onClick={() => setBlueprintGalleryOpen(true)}>
-                <GraduationCapIcon className="size-4" />
-                {t("catalogue.addCustomSkill")}
-              </MenuItem>
-            </MenuPopup>
-          </Menu>
+                  if (matches.length === 0) {
+                    return (
+                      <p className="text-muted-foreground px-2 py-3 text-center text-xs">
+                        {t("common.noResults")}
+                      </p>
+                    );
+                  }
+                  return matches.map((code) => {
+                    const active = jurisdictionFilter.has(code);
+                    return (
+                      <button
+                        aria-pressed={active}
+                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
+                        key={code}
+                        onClick={() =>
+                          setJurisdictionFilter((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(code)) {
+                              next.delete(code);
+                            } else {
+                              next.add(code);
+                            }
+                            return next;
+                          })
+                        }
+                        type="button"
+                      >
+                        <span
+                          className={cn(
+                            "border-border flex size-4 items-center justify-center rounded-sm border",
+                            active && "border-foreground bg-foreground",
+                          )}
+                        >
+                          {active && (
+                            <CheckIcon className="text-background size-3" />
+                          )}
+                        </span>
+                        <span className="text-foreground">{code}</span>
+                      </button>
+                    );
+                  });
+                })()}
+              </div>
+            </PopoverPopup>
+          </Popover>
+        </ResponsiveActionToolbarItem>
+
+        {canShowAddCustom && (
+          <ResponsiveActionToolbarItem
+            className="ms-auto sm:ms-0"
+            slot="action"
+          >
+            <Menu>
+              <MenuTrigger
+                render={<Button className="h-11 sm:h-8" type="button" />}
+              >
+                <PlusIcon className="size-3.5" />
+                {t("catalogue.addCustom")}
+                <ChevronDownIcon className="size-3.5" />
+              </MenuTrigger>
+              <MenuPopup align="end" className="w-56">
+                <MenuItem onClick={() => setAddMcpOpen(true)}>
+                  <McpIcon className="size-4" />
+                  {t("catalogue.addCustomMcp")}
+                </MenuItem>
+                <MenuItem onClick={() => setBlueprintGalleryOpen(true)}>
+                  <GraduationCapIcon className="size-4" />
+                  {t("catalogue.addCustomSkill")}
+                </MenuItem>
+              </MenuPopup>
+            </Menu>
+          </ResponsiveActionToolbarItem>
         )}
-      </div>
+      </ResponsiveActionToolbar>
 
       {jurisdictionFilter.size > 0 && (
         <p className="text-muted-foreground -mt-3 text-xs">
@@ -578,7 +600,7 @@ export const CatalogueBrowser = ({
         organizationId={organizationId}
       />
       <BlueprintGallerySheet
-        canManageTeam={canManageTeam}
+        canManageTeam={canManageCustomTools}
         onCreated={onBlueprintCreated}
         onOpenChange={setBlueprintGalleryOpen}
         open={blueprintGalleryOpen}

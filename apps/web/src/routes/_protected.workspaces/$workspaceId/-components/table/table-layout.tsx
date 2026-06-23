@@ -17,6 +17,7 @@ import {
   FilteredEmptyState,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
 import { GroupedTableLayout } from "@/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout";
+import { MobileTableOrientationGate } from "@/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate";
 import {
   DEFAULT_TABLE_COLUMN_MIN_SIZE,
   useTableColumns,
@@ -50,18 +51,37 @@ type TableLayoutProps = {
   view: WorkspaceView<"table">;
 };
 
+type WorkspaceTableKeyInput = {
+  workspaceId: string;
+  viewId: string;
+};
+
+const getWorkspaceTableKey = ({
+  workspaceId,
+  viewId,
+}: WorkspaceTableKeyInput) => `workspace-table:${workspaceId}:${viewId}`;
+
 export const TableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   const { openIfAIUnavailable } = useAIKeyGate();
+  const tableKey = getWorkspaceTableKey({ workspaceId, viewId: view.id });
 
   useMountEffect(() => {
     openIfAIUnavailable();
   });
 
   if (view.layout.groupByPropertyId) {
-    return <GroupedTableLayout view={view} workspaceId={workspaceId} />;
+    return (
+      <GroupedTableLayout
+        key={tableKey}
+        view={view}
+        workspaceId={workspaceId}
+      />
+    );
   }
 
-  return <FlatTableLayout view={view} workspaceId={workspaceId} />;
+  return (
+    <FlatTableLayout key={tableKey} view={view} workspaceId={workspaceId} />
+  );
 };
 
 const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
@@ -114,8 +134,10 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
     entityIdChunks: justificationEntityIdChunks,
   });
   useSyncSelectedEntities({ viewId: view.id, treeData });
+  const tableKey = getWorkspaceTableKey({ workspaceId, viewId: view.id });
 
   const table = useTable({
+    key: tableKey,
     features: workspaceTableFeatures,
     columnResizeMode: "onChange",
     data: treeData,
@@ -154,7 +176,7 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
   }
 
   return (
-    <>
+    <MobileTableOrientationGate>
       <WorkspaceTable
         hasNextPage={hasNextPage}
         isFetchingNextPage={isFetchingNextPage}
@@ -172,6 +194,6 @@ const FlatTableLayout = ({ workspaceId, view }: TableLayoutProps) => {
           </Suspense>
         </ClientOnly>
       ) : null}
-    </>
+    </MobileTableOrientationGate>
   );
 };

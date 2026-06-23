@@ -38,6 +38,7 @@ import {
 import type { EntityGroup } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
+import { MobileTableOrientationGate } from "@/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate";
 import {
   DEFAULT_TABLE_COLUMN_MIN_SIZE,
   useTableColumns,
@@ -257,33 +258,35 @@ export const GroupedTableLayout = ({
     // `w-max min-w-full` sizes the column to the widest group's table content
     // so every section — populated, empty, and the add-row — stretches to the
     // full table width (their bands then run the whole scroll width).
-    <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
-      {groups.map((group) => (
-        <GroupSection
+    <MobileTableOrientationGate>
+      <div className="flex w-max min-w-full flex-col" ref={scrollRef}>
+        {groups.map((group) => (
+          <GroupSection
+            columns={columns}
+            count={
+              countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
+            }
+            fieldIds={fieldIds}
+            group={group}
+            groupByPropertyId={groupByPropertyId}
+            key={groupKeyFor(group.value)}
+            optionValues={optionValues}
+            outerScrollRef={scrollRef}
+            reportGroupTreeData={reportGroupTreeData}
+            selectAllPreservableRowIds={allRowIds}
+            sumProperties={sumProperties}
+            tableState={tableState}
+            view={view}
+            workspaceId={workspaceId}
+          />
+        ))}
+        <GroupedAddRow
           columns={columns}
-          count={
-            countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
-          }
-          fieldIds={fieldIds}
-          group={group}
-          groupByPropertyId={groupByPropertyId}
-          key={groupKeyFor(group.value)}
-          optionValues={optionValues}
-          outerScrollRef={scrollRef}
-          reportGroupTreeData={reportGroupTreeData}
-          selectAllPreservableRowIds={allRowIds}
-          sumProperties={sumProperties}
           tableState={tableState}
-          view={view}
           workspaceId={workspaceId}
         />
-      ))}
-      <GroupedAddRow
-        columns={columns}
-        tableState={tableState}
-        workspaceId={workspaceId}
-      />
-    </div>
+      </div>
+    </MobileTableOrientationGate>
   );
 };
 
