@@ -594,16 +594,6 @@ const getInspectorTabWorkspaceId = (
   return exhaustive;
 };
 
-type InspectorSheetSide = "left" | "right";
-
-const getMobileInspectorSheetSide = (): InspectorSheetSide => {
-  if (typeof document === "undefined") {
-    return "right";
-  }
-
-  return document.documentElement.dir === "rtl" ? "left" : "right";
-};
-
 /**
  * Workspace inspector pane — file viewers + chat tabs. Mounted at
  * the protected layout level (next to `TemplateAssistantSidePanel`)
@@ -675,7 +665,6 @@ function WorkspaceInspectorSidePanel() {
   // user hasn't minimized do we widen to the full pane width.
   const widthPx = `${showPaneContent ? width : INSPECTOR_RAIL_WIDTH}px`;
   const reservedInlineEndWidthPx = isMobile ? "0px" : widthPx;
-  const mobileSheetSide = getMobileInspectorSheetSide();
 
   useExternalSyncEffect(() => {
     // The toast offset is consumed via a logical `end-` utility, so the same
@@ -730,7 +719,7 @@ function WorkspaceInspectorSidePanel() {
         <SheetPopup
           className="h-dvh w-full max-w-none border-0 p-0 md:hidden"
           showCloseButton={false}
-          side={mobileSheetSide}
+          side="inline-end"
         >
           <SheetHeader className="sr-only">
             <SheetTitle>{t("inspector.title")}</SheetTitle>

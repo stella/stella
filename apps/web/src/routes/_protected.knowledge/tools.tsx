@@ -273,8 +273,15 @@ function ToolsCatalogue({ initialKind, organizationId }: ToolsCatalogueProps) {
   const { data: settings } = useSuspenseQuery(
     organizationSettingsOptions(organizationId),
   );
+  const { data: role } = useSuspenseQuery(roleOptions);
+  // Match the backend gate: only admins/owners can create MCP connectors
+  // (see `POST /mcp/connectors`). Members would see the form open and
+  // the submit 403, so hide the affordance entirely.
+  const canManageCustomTools = role === "admin" || role === "owner";
+
   return (
     <LazyCatalogueBrowser
+      canManageCustomTools={canManageCustomTools}
       initialKind={initialKind}
       organizationId={organizationId}
       practiceJurisdictions={settings.practiceJurisdictions}

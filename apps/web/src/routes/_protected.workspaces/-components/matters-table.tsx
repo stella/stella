@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { Link, useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
@@ -96,77 +98,82 @@ export const MattersTable = ({
 
   return (
     <Frame className="overflow-hidden rounded-lg sm:rounded-2xl">
-      <Table className="table-fixed" style={{ minWidth: `${minTableWidth}px` }}>
-        <colgroup>
-          {columns.map((col) => (
-            <col key={col.id} style={{ width: `${col.widthPx}px` }} />
-          ))}
-        </colgroup>
-        <TableHeader>
-          <TableRow>
-            {columns.map((col) => {
-              const trailing = filterTrigger(col.id);
-              if (!col.sortKey) {
-                return (
-                  <TableHead className="group/header" key={col.id}>
-                    <span className="inline-flex items-center gap-1">
-                      <span className="truncate">{columnLabels[col.id]}</span>
-                      {trailing}
-                    </span>
-                  </TableHead>
-                );
-              }
-              const key = col.sortKey;
-              const direction: "asc" | "desc" | null = (() => {
-                if (sortKey !== key) {
-                  return null;
+      <div className="overflow-x-auto">
+        <Table
+          className="table-fixed"
+          style={{ minWidth: `${minTableWidth}px` }}
+        >
+          <colgroup>
+            {columns.map((col) => (
+              <col key={col.id} style={{ width: `${col.widthPx}px` }} />
+            ))}
+          </colgroup>
+          <TableHeader>
+            <TableRow>
+              {columns.map((col) => {
+                const trailing = filterTrigger(col.id);
+                if (col.type === "static") {
+                  return (
+                    <TableHead className="group/header" key={col.id}>
+                      <span className="inline-flex items-center gap-1">
+                        <span className="truncate">{columnLabels[col.id]}</span>
+                        {trailing}
+                      </span>
+                    </TableHead>
+                  );
                 }
-                return sortDesc ? "desc" : "asc";
-              })();
-              return (
-                <SortableHead
-                  className="group/header"
-                  key={col.id}
-                  onSort={() => {
-                    if (sortKey === key) {
-                      update({ sortDesc: !sortDesc });
-                    } else {
-                      update({ sortKey: key, sortDesc: true });
-                    }
-                  }}
-                  sortDirection={direction}
-                  trailing={trailing}
-                >
-                  {sortLabels[key]}
-                </SortableHead>
-              );
-            })}
-          </TableRow>
-        </TableHeader>
-        <TableBody>
-          {groups && groups.length > 0
-            ? groups.map((group) => (
-                <MattersTableGroup
-                  collapsed={collapsedGroups.includes(group.groupId)}
-                  columns={columns}
-                  focusIndex={focusIndex}
-                  group={group}
-                  key={group.groupId}
-                  onToggle={() => onToggleGroup(group.groupId)}
-                  workspaces={workspaces}
-                />
-              ))
-            : workspaces.map((ws, i) => (
-                <MattersTableRow
-                  columns={columns}
-                  focusIndex={focusIndex}
-                  globalIndex={i}
-                  key={ws.id}
-                  workspace={ws}
-                />
-              ))}
-        </TableBody>
-      </Table>
+                const key = col.sortKey;
+                const direction: "asc" | "desc" | null = (() => {
+                  if (sortKey !== key) {
+                    return null;
+                  }
+                  return sortDesc ? "desc" : "asc";
+                })();
+                return (
+                  <SortableHead
+                    className="group/header"
+                    key={col.id}
+                    onSort={() => {
+                      if (sortKey === key) {
+                        update({ sortDesc: !sortDesc });
+                      } else {
+                        update({ sortKey: key, sortDesc: true });
+                      }
+                    }}
+                    sortDirection={direction}
+                    trailing={trailing}
+                  >
+                    {sortLabels[key]}
+                  </SortableHead>
+                );
+              })}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {groups && groups.length > 0
+              ? groups.map((group) => (
+                  <MattersTableGroup
+                    collapsed={collapsedGroups.includes(group.groupId)}
+                    columns={columns}
+                    focusIndex={focusIndex}
+                    group={group}
+                    key={group.groupId}
+                    onToggle={() => onToggleGroup(group.groupId)}
+                    workspaces={workspaces}
+                  />
+                ))
+              : workspaces.map((ws, i) => (
+                  <MattersTableRow
+                    columns={columns}
+                    focusIndex={focusIndex}
+                    globalIndex={i}
+                    key={ws.id}
+                    workspace={ws}
+                  />
+                ))}
+          </TableBody>
+        </Table>
+      </div>
     </Frame>
   );
 };
@@ -270,16 +277,17 @@ const CreatedAtCell = ({ workspace }: CellProps) => {
 
 type ColumnDef =
   | {
+      type: "sortable";
       id: MattersColumnId | "name";
       sortKey: MattersSortKey;
       widthPx: number;
-      Cell: (props: CellProps) => React.ReactNode;
+      Cell: (props: CellProps) => ReactNode;
     }
   | {
+      type: "static";
       id: MattersColumnId;
-      sortKey?: undefined;
       widthPx: number;
-      Cell: (props: CellProps) => React.ReactNode;
+      Cell: (props: CellProps) => ReactNode;
     };
 
 type MattersTableRowProps = {
@@ -379,32 +387,43 @@ const MattersTableRow = ({
 
 const COLUMNS = [
   {
+    type: "sortable",
     id: "name",
     sortKey: "name",
     widthPx: MATTERS_TABLE_NAME_COLUMN_WIDTH_PX,
     Cell: NameCell,
   },
-  { id: "client", sortKey: "clientName", widthPx: 240, Cell: ClientCell },
-  { id: "team", widthPx: 160, Cell: TeamCell },
   {
+    type: "sortable",
+    id: "client",
+    sortKey: "clientName",
+    widthPx: 240,
+    Cell: ClientCell,
+  },
+  { type: "static", id: "team", widthPx: 160, Cell: TeamCell },
+  {
+    type: "sortable",
     id: "reference",
     sortKey: "reference",
     widthPx: 120,
     Cell: ReferenceCell,
   },
   {
+    type: "sortable",
     id: "entityCount",
     sortKey: "entityCount",
     widthPx: 96,
     Cell: EntityCountCell,
   },
   {
+    type: "sortable",
     id: "lastActivityAt",
     sortKey: "lastActivityAt",
     widthPx: 140,
     Cell: LastActivityCell,
   },
   {
+    type: "sortable",
     id: "createdAt",
     sortKey: "createdAt",
     widthPx: 120,

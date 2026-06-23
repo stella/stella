@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 
 import { useHotkey, useKeyHold } from "@tanstack/react-hotkeys";
 import type { Hotkey } from "@tanstack/react-hotkeys";
@@ -10,7 +10,7 @@ import { Button } from "@stll/ui/components/button";
 import { Dialog, DialogPopup } from "@stll/ui/components/dialog";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import {
   formatHintKey,
   MOD_KEY,
@@ -22,6 +22,7 @@ import type { ShortcutContext, ShortcutHint } from "@/lib/hotkeys";
 const HOLD_DELAY_MS = 500;
 const HIGHLIGHT_DURATION_MS = 150;
 const SHORTCUT_HINTS_MIN_WIDTH_PX = 768;
+const SHORTCUT_HINTS_MEDIA_QUERY = `(min-width: ${SHORTCUT_HINTS_MIN_WIDTH_PX}px)`;
 
 export function ShortcutHintsOverlay() {
   const shouldRenderShortcutHints = useShortcutHintsViewport();
@@ -36,14 +37,24 @@ export function ShortcutHintsOverlay() {
 function ShortcutHintsOverlayContent() {
   const t = useTranslations();
   const isModHeld = useKeyHold(MOD_KEY);
+  const isMountedRef = useRef(false);
   const [isVisible, setIsVisible] = useState(false);
   const [isSuppressedUntilRelease, setIsSuppressedUntilRelease] =
     useState(false);
 
-  const showDialog = useDebouncedCallback(
-    () => setIsVisible(true),
-    HOLD_DELAY_MS,
-  );
+  const showDialog = useDebouncedCallback(() => {
+    if (isMountedRef.current) {
+      setIsVisible(true);
+    }
+  }, HOLD_DELAY_MS);
+
+  useMountEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      showDialog.cancel();
+    };
+  });
 
   // Cancel overlay when any non-modifier key is pressed with Mod
   // held (the user is executing a shortcut, not browsing hints).
@@ -153,34 +164,26 @@ function ShortcutHintsOverlayContent() {
   );
 }
 
-const useShortcutHintsViewport = () => {
-  const [shouldRender, setShouldRender] = useState(() => {
-    if (typeof window === "undefined") {
-      return false;
-    }
+const subscribeShortcutHintsViewport = (callback: () => void) => {
+  const mediaQuery = window.matchMedia(SHORTCUT_HINTS_MEDIA_QUERY);
+  mediaQuery.addEventListener("change", callback);
 
-    return window.matchMedia(`(min-width: ${SHORTCUT_HINTS_MIN_WIDTH_PX}px)`)
-      .matches;
-  });
-
-  useExternalSyncEffect(() => {
-    const mediaQuery = window.matchMedia(
-      `(min-width: ${SHORTCUT_HINTS_MIN_WIDTH_PX}px)`,
-    );
-    const syncViewport = () => {
-      setShouldRender(mediaQuery.matches);
-    };
-
-    syncViewport();
-    mediaQuery.addEventListener("change", syncViewport);
-
-    return () => {
-      mediaQuery.removeEventListener("change", syncViewport);
-    };
-  }, []);
-
-  return shouldRender;
+  return () => {
+    mediaQuery.removeEventListener("change", callback);
+  };
 };
+
+const getShortcutHintsViewportSnapshot = () =>
+  window.matchMedia(SHORTCUT_HINTS_MEDIA_QUERY).matches;
+
+const getShortcutHintsViewportServerSnapshot = () => false;
+
+const useShortcutHintsViewport = () =>
+  useSyncExternalStore(
+    subscribeShortcutHintsViewport,
+    getShortcutHintsViewportSnapshot,
+    getShortcutHintsViewportServerSnapshot,
+  );
 
 const useShortcutContext = (): ShortcutContext => {
   const pdfMatch = useMatch({
@@ -212,12 +215,36 @@ const HotkeyHint = ({ hint, setIsVisible }: HotkeyHintProps) => {
   const t = useTranslations();
   const context = useShortcutContext();
   const isActive = hint.contexts.some((c) => c === "global" || c === context);
+  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const isMountedRef = useRef(false);
   const [isActivated, setIsActivated] = useState(false);
 
+  useMountEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      if (highlightTimerRef.current !== null) {
+        clearTimeout(highlightTimerRef.current);
+      }
+    };
+  });
+
   const handleActivateHotkey = (hotkey?: Hotkey) => {
+    if (!isMountedRef.current) {
+      return;
+    }
+
     setIsActivated(true);
 
-    setTimeout(() => {
+    if (highlightTimerRef.current !== null) {
+      clearTimeout(highlightTimerRef.current);
+    }
+
+    highlightTimerRef.current = setTimeout(() => {
+      highlightTimerRef.current = null;
+      if (!isMountedRef.current) {
+        return;
+      }
       setIsVisible(false);
       setIsActivated(false);
       if (hotkey) {

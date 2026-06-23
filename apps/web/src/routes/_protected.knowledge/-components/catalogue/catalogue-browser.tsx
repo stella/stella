@@ -1,10 +1,6 @@
 import { useState } from "react";
 
-import {
-  useQuery,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   CheckIcon,
@@ -54,7 +50,6 @@ import {
 } from "@/components/responsive-action-toolbar";
 import type { TranslationKey } from "@/i18n/types";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
-import { roleOptions } from "@/routes/-queries";
 import {
   BlueprintGallerySheet,
   type BlueprintCreatedSkill,
@@ -91,6 +86,12 @@ type CatalogueBrowserProps = {
    * for the onboarding flow.
    */
   showAddCustom?: boolean;
+  /**
+   * Caller-resolved permission gate for creating custom team tools. The route
+   * owns role loading so this browser cannot trigger a cold non-suspense query
+   * during mount.
+   */
+  canManageCustomTools: boolean;
   /**
    * Seeds the jurisdiction filter so a CZ-based user lands on Tools and
    * sees only CZ + EU entries by default. Mirrors the onboarding step.
@@ -140,16 +141,12 @@ export const CatalogueBrowser = ({
   organizationId,
   initialKind,
   showAddCustom = true,
+  canManageCustomTools,
   practiceJurisdictions,
 }: CatalogueBrowserProps) => {
   const t = useTranslations();
   const navigate = useNavigate();
   const { data } = useSuspenseQuery(catalogueOptions(organizationId));
-  const { data: role } = useQuery(roleOptions);
-  // Match the backend gate: only admins/owners can create MCP
-  // connectors (see `POST /mcp/connectors`). Members would see the
-  // form open and the submit 403, so hide the affordance entirely.
-  const canAddCustom = role === "admin" || role === "owner";
   const [filter, setFilter] = useState<CatalogueBrowserFilterKind>(
     initialKind ?? "all",
   );
@@ -194,8 +191,6 @@ export const CatalogueBrowser = ({
   const [jurisdictionQuery, setJurisdictionQuery] = useState("");
   const [addMcpOpen, setAddMcpOpen] = useState(false);
   const [blueprintGalleryOpen, setBlueprintGalleryOpen] = useState(false);
-  // Reuse `role` from the canAddCustom block above for team-skill gating.
-  const canManageTeam = role === "admin" || role === "owner";
 
   const entries = data.entries;
 
@@ -294,10 +289,12 @@ export const CatalogueBrowser = ({
   );
   const otherFiltered = filtered.filter((entry) => !entry.isRecommendedForOrg);
   const hasMcpEntries = entries.some((entry) => entry.kind === "mcp");
+  const canShowAddCustom = showAddCustom && canManageCustomTools;
   // On a truly empty MCP catalogue, replace the generic "no entries" + reset
   // line with a prominent add-MCP call to action. Gated to admins/owners
   // like the add-custom menu, since members can't create connectors.
-  const showMcpEmptyCta = filter === "mcp" && !hasMcpEntries && canAddCustom;
+  const showMcpEmptyCta =
+    filter === "mcp" && !hasMcpEntries && canManageCustomTools;
 
   return (
     <div className="flex flex-col gap-6">
@@ -444,7 +441,7 @@ export const CatalogueBrowser = ({
           </Popover>
         </ResponsiveActionToolbarItem>
 
-        {showAddCustom && canAddCustom && (
+        {canShowAddCustom && (
           <ResponsiveActionToolbarItem
             className="ms-auto sm:ms-0"
             slot="action"
@@ -603,7 +600,7 @@ export const CatalogueBrowser = ({
         organizationId={organizationId}
       />
       <BlueprintGallerySheet
-        canManageTeam={canManageTeam}
+        canManageTeam={canManageCustomTools}
         onCreated={onBlueprintCreated}
         onOpenChange={setBlueprintGalleryOpen}
         open={blueprintGalleryOpen}
