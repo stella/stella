@@ -29,7 +29,10 @@ const presignUploadUrlMock = mock(async () =>
   }),
 );
 
+const realS3 = await import("@/api/lib/s3");
+
 void mock.module("@/api/lib/s3", () => ({
+  ...realS3,
   getS3: () => ({
     delete: deleteObjectMock,
     file: () => ({
@@ -38,7 +41,10 @@ void mock.module("@/api/lib/s3", () => ({
   }),
 }));
 
+const realS3Presign = await import("@/api/lib/s3-presign");
+
 void mock.module("@/api/lib/s3-presign", () => ({
+  ...realS3Presign,
   copyObject: mock(async () => Result.ok(undefined)),
   headObject: mock(async () =>
     Result.err({ message: "not found", status: 404 }),
