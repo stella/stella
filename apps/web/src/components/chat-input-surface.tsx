@@ -53,6 +53,7 @@ export const ChatInputSurface = ({
   onStop,
   anonymized = false,
 }: ChatInputSurfaceProps) => {
+  const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
   const {
     attachments,
@@ -71,6 +72,7 @@ export const ChatInputSurface = ({
     removeFile,
   } = controller;
   const inputDisabled = disabled;
+  const attachFileLabel = t("chat.attachFile");
   // Submitting stays enabled while the assistant streams: a send
   // during a turn is queued by `useChatSession` and dispatched once
   // the response finishes, so overlapping requests can't happen.
@@ -145,7 +147,7 @@ export const ChatInputSurface = ({
       </div>
       <div className="flex items-center gap-0.5 px-1.5 pb-1.5">
         <Button
-          aria-label={t("chat.attachFile")}
+          aria-label={attachFileLabel}
           disabled={inputDisabled}
           onClick={openFilePicker}
           size="icon-sm"
