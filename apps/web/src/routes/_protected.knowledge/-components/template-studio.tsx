@@ -5441,7 +5441,7 @@ const FieldConditionSection = ({
             }
           }}
           size="sm"
-          variant="ghost"
+          variant="outline"
         >
           <SplitIcon className="size-3.5" />
           {t("templates.studio.showOnlyIf")}
@@ -5811,7 +5811,7 @@ const FieldFace = ({
               title={
                 repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
               }
-              variant={repeat.kind === "on" ? "secondary" : "ghost"}
+              variant={repeat.kind === "on" ? "secondary" : "outline"}
             >
               <RepeatIcon className="size-3.5" />
               {t("templates.studio.repeatable")}
