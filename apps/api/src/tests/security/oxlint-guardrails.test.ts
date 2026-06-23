@@ -324,4 +324,26 @@ describe("custom oxlint guardrails", () => {
       ".oxlint-plugins/__fixtures__/no-raw-route-query-client.fixture.tsx",
     );
   });
+
+  test("redirect-only route lint forbids render components", () => {
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-component-on-redirect-route.ts",
+    );
+    const configSource = readRootFixture("oxlint.config.ts");
+
+    expect(pluginSource).toContain("throw redirect");
+    expect(pluginSource).toContain("component");
+    expect(pluginSource).toContain("pendingComponent");
+    expect(pluginSource).toContain("abandoned before mount");
+
+    expect(configSource).toContain(
+      "./.oxlint-plugins/no-component-on-redirect-route.ts",
+    );
+    expect(configSource).toContain(
+      "no-component-on-redirect-route/no-component-on-redirect-route",
+    );
+    expect(configSource).toContain(
+      ".oxlint-plugins/__fixtures__/no-component-on-redirect-route.fixture.tsx",
+    );
+  });
 });

@@ -315,6 +315,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
+    "./.oxlint-plugins/no-component-on-redirect-route.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
@@ -386,6 +387,15 @@ export default defineConfig({
       ],
       rules: {
         "no-raw-route-query-client/no-raw-route-query-client": "error",
+      },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-component-on-redirect-route.fixture.tsx",
+      ],
+      rules: {
+        "no-component-on-redirect-route/no-component-on-redirect-route":
+          "error",
       },
     },
     {
@@ -1030,6 +1040,8 @@ export default defineConfig({
       files: ["apps/web/src/routes/**/*.{ts,tsx}"],
       rules: {
         "@tanstack/router/create-route-property-order": "error",
+        "no-component-on-redirect-route/no-component-on-redirect-route":
+          "error",
         "no-raw-route-query-client/no-raw-route-query-client": "error",
       },
     },
