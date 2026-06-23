@@ -342,6 +342,19 @@ describe("custom oxlint guardrails", () => {
     );
   });
 
+  test("legacy entity redirects do not block protected shell commit", () => {
+    const entityRouteSource = readRootFixture(
+      "apps/web/src/routes/_protected.workspaces/$workspaceId/entities/$entityId.tsx",
+    );
+
+    expect(entityRouteSource).toContain("component: LegacyEntityRedirect");
+    expect(entityRouteSource).toContain("useQuery");
+    expect(entityRouteSource).toContain("DocxLoadingShell");
+    expect(entityRouteSource).toContain("Navigate");
+    expect(entityRouteSource).not.toContain("beforeLoad");
+    expect(entityRouteSource).not.toContain("ensureRouteQueryData");
+  });
+
   test("redirect-only route lint forbids render components", () => {
     const pluginSource = readRootFixture(
       ".oxlint-plugins/no-component-on-redirect-route.ts",
