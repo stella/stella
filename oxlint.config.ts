@@ -112,6 +112,12 @@ export default defineConfig({
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
     "no-spread-input-in-query-key/no-spread-input-in-query-key": "error",
     "no-unsafe-inner-html/no-unsafe-inner-html": "error",
+    "no-static-catalogue-route-import/no-static-catalogue-route-import": [
+      "error",
+      {
+        routeFiles: ["apps/web/src/routes/_protected.knowledge/tools.tsx"],
+      },
+    ],
     "suppression-hygiene/require-description": "error",
     "suppression-hygiene/no-foreign-directive": "error",
     "typescript/ban-ts-comment": [
@@ -349,6 +355,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-spread-input-in-query-key.ts",
     "./.oxlint-plugins/no-unsafe-inner-html.ts",
     "./.oxlint-plugins/no-centered-scroll-column.ts",
+    "./.oxlint-plugins/no-static-catalogue-route-import.ts",
   ],
 
   overrides: [
@@ -401,6 +408,21 @@ export default defineConfig({
     {
       files: [".oxlint-plugins/__fixtures__/no-ref-mirror.fixture.tsx"],
       rules: { "no-ref-mirror/no-ref-mirror": "error" },
+    },
+    {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-static-catalogue-route-import.fixture.tsx",
+      ],
+      rules: {
+        "no-static-catalogue-route-import/no-static-catalogue-route-import": [
+          "error",
+          {
+            routeFiles: [
+              ".oxlint-plugins/__fixtures__/no-static-catalogue-route-import.fixture.tsx",
+            ],
+          },
+        ],
+      },
     },
     {
       files: [
