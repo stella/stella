@@ -46,6 +46,7 @@ import { WebSearchSources } from "@/components/chat/web-search-sources";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 import type { TranslationKey } from "@/i18n/types";
+import { dedupeById } from "@/lib/dedupe-by-id";
 import {
   getUserFileContentUrl,
   getUserFileThumbnailUrl,
@@ -59,7 +60,7 @@ export const ChatThreadMessages = ({
   isGenerating = false,
   isLoadingOlder = false,
   loadOlderError = false,
-  messages,
+  messages: rawMessages,
   onLoadOlder,
   scrollContainerRef,
   onResend,
@@ -77,6 +78,12 @@ export const ChatThreadMessages = ({
   workspaceId,
 }: ChatThreadMessagesProps) => {
   const { activeOrganizationId } = useChatApproval();
+  // The transcript can briefly hold both the optimistic streamed copy and the
+  // persisted copy of one message during the per-turn refetch handoff; both
+  // carry the same id, so React would render it twice. Collapse by id before
+  // any downstream read. Memoized because this component bails out of React
+  // Compiler (see below), so the manual memos here need a stable `messages`.
+  const messages = useMemo(() => dedupeById(rawMessages), [rawMessages]);
   // This component bails out of React Compiler (a suppression below), so its
   // manual memoization is kept (RC will not auto-memoize a bailed component).
   const retryableAssistantMessageId = useMemo(
