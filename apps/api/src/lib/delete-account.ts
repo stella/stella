@@ -1,5 +1,15 @@
 import { Result } from "better-result";
-import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
+import {
+  and,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  ne,
+  notExists,
+  or,
+  sql,
+} from "drizzle-orm";
 
 import {
   account,
@@ -44,7 +54,6 @@ import {
 import {
   ACTIVE_TASK_REASSIGNMENT_STATUSES,
   buildAccountDeletionTaskReassignmentTargets,
-  partitionAccountDeletionTaskAssignmentsByMembership,
   validateAccountDeletionTaskReassignmentTargets,
 } from "@/api/lib/account-deletion-reassignment";
 import { captureError } from "@/api/lib/analytics";
@@ -423,7 +432,6 @@ export const verifyAndDeleteUser = async (
             .from(workspaceMembers)
             .where(eq(workspaceMembers.userId, currentUserId))
         ).map((row) => row.workspaceId);
-        const currentWorkspaceIds = new Set<string>(workspaceIds);
 
         // audit: skip — ephemeral verification code deletion
         await tx
@@ -479,13 +487,20 @@ export const verifyAndDeleteUser = async (
         // 5. Active task assignee records require handoff. Completed/cancelled
         // assignments remain as historical activity on the deleted user row.
         const reassignmentItems = [...(reassignments ?? [])];
-        const activeTaskAssignments = await tx
+        const currentTaskAssignments = await tx
           .select({
             entityId: taskAssignees.entityId,
             workspaceId: taskAssignees.workspaceId,
           })
           .from(taskAssignees)
           .innerJoin(entities, eq(entities.id, taskAssignees.entityId))
+          .innerJoin(
+            workspaceMembers,
+            and(
+              eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
+              eq(workspaceMembers.userId, currentUserId),
+            ),
+          )
           .where(
             and(
               eq(taskAssignees.userId, currentUserId),
@@ -499,7 +514,7 @@ export const verifyAndDeleteUser = async (
           .limit(LIMITS.accountDeletionTaskAssignmentsMax + 1);
 
         if (
-          activeTaskAssignments.length >
+          currentTaskAssignments.length >
           LIMITS.accountDeletionTaskAssignmentsMax
         ) {
           throw new HandlerError({
@@ -509,29 +524,40 @@ export const verifyAndDeleteUser = async (
           });
         }
 
-        const {
-          currentMembershipAssignments: currentTaskAssignments,
-          staleAssignments: staleTaskAssignments,
-        } = partitionAccountDeletionTaskAssignmentsByMembership({
-          currentWorkspaceIds,
-          taskAssignments: activeTaskAssignments,
-        });
-
-        if (staleTaskAssignments.length > 0) {
-          await Promise.all(
-            staleTaskAssignments.map((assignment) =>
+        await tx.delete(taskAssignees).where(
+          and(
+            eq(taskAssignees.userId, currentUserId),
+            inArray(
+              taskAssignees.entityId,
               tx
-                .delete(taskAssignees)
+                .select({ entityId: entities.id })
+                .from(entities)
                 .where(
                   and(
-                    eq(taskAssignees.entityId, assignment.entityId),
-                    eq(taskAssignees.userId, currentUserId),
-                    eq(taskAssignees.workspaceId, assignment.workspaceId),
+                    eq(entities.kind, "task"),
+                    or(
+                      isNull(entities.status),
+                      inArray(
+                        entities.status,
+                        ACTIVE_TASK_REASSIGNMENT_STATUSES,
+                      ),
+                    ),
                   ),
                 ),
             ),
-          );
-        }
+            notExists(
+              tx
+                .select({ one: sql`1` })
+                .from(workspaceMembers)
+                .where(
+                  and(
+                    eq(workspaceMembers.workspaceId, taskAssignees.workspaceId),
+                    eq(workspaceMembers.userId, currentUserId),
+                  ),
+                ),
+            ),
+          ),
+        );
 
         if (currentTaskAssignments.length > 0) {
           const reassignmentTargets =
