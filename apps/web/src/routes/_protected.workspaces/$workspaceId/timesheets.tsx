@@ -6,8 +6,8 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
   // Time tracking is intentionally excluded from the current product surface.
-  // Keep this route redirect-only so abandoned /timesheets navigations cannot
-  // mount the old billing query tree before the redirect commits.
+  // Keep the disabled route redirect-only so dormant UI cannot mount during
+  // direct URL or deep-link navigation.
   beforeLoad: async ({ context, params }) => {
     await redirectToDefaultWorkspaceView({
       queryClient: context.queryClient,
