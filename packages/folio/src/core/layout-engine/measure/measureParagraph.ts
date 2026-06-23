@@ -493,41 +493,42 @@ function trimTrailingSpacesAndTabs(text: string): string {
 }
 
 /**
- * Width of the unbreakable text glued to the end of run `afterIndex`.
+ * Width of the unbreakable text glued to the end of each run.
  * A run boundary is not itself a wrap opportunity: adjacent note markers and
  * format-only word splits must wrap as one cluster.
  */
-function trailingGlueWidth(runs: Run[], afterIndex: number): number {
-  let total = 0;
-  for (let index = afterIndex + 1; index < runs.length; index++) {
-    const run = runs[index];
-    if (!run || !isTextRun(run)) {
-      break;
+function computeTrailingGlueWidths(runs: Run[]): number[] {
+  const widths = Array.from({ length: runs.length }, () => 0);
+  for (let index = runs.length - 1; index >= 0; index--) {
+    const nextRun = runs[index + 1];
+    if (!nextRun || !isTextRun(nextRun)) {
+      continue;
     }
-    const text = run.text;
+
+    const text = nextRun.text;
     if (!text) {
+      widths[index] = widths[index + 1] ?? 0;
       continue;
     }
     if (isSpaceOrTab(text[0])) {
-      break;
+      continue;
     }
 
-    const style = runToFontStyle(run);
+    const style = runToFontStyle(nextRun);
     const breaks = findWordBreaks(text);
     if (breaks.length === 0) {
-      total += measureTextWidth(text, style);
+      widths[index] = measureTextWidth(text, style) + (widths[index + 1] ?? 0);
       continue;
     }
 
     const firstBreak = breaks[0];
     if (firstBreak === undefined) {
-      break;
+      continue;
     }
     const leading = trimTrailingSpacesAndTabs(text.slice(0, firstBreak));
-    total += measureTextWidth(leading, style);
-    break;
+    widths[index] = measureTextWidth(leading, style);
   }
-  return total;
+  return widths;
 }
 
 /**
@@ -798,6 +799,8 @@ export function measureParagraph(
       totalHeight,
     };
   }
+
+  const trailingGlueWidths = computeTrailingGlueWidths(runs);
 
   // Initialize line state
   let currentLine: LineState = {
@@ -1275,7 +1278,7 @@ export function measureParagraph(
         const glueWidth =
           // eslint-disable-next-line unicorn/prefer-at -- hot path: direct index avoids .at() overhead.
           isRunTail && word.length > 0 && !isBreakChar(word[word.length - 1])
-            ? trailingGlueWidth(runs, runIndex)
+            ? (trailingGlueWidths[runIndex] ?? 0)
             : 0;
         if (
           currentLine.width > 0 &&

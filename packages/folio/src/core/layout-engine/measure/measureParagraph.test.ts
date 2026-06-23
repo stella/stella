@@ -261,6 +261,24 @@ describe("measureParagraph cross-run line breaking", () => {
       expect(lineStartsAtRun(lines, 1)).toBe(false);
     }, fakeMeasure);
   });
+
+  test("keeps a long format-only split glued as one cluster", () => {
+    withFakeTextMeasure(() => {
+      const wordRuns: Run[] = "well-known".split("").map((text, index) => ({
+        kind: "text",
+        text,
+        bold: index % 2 === 0,
+      }));
+      const runs: Run[] = [{ kind: "text", text: "alpha " }, ...wordRuns];
+      const maxWidth = width("alpha well-") - 0.6;
+      const { lines } = measureParagraph(paragraph(runs), maxWidth);
+
+      expect(lineStartsAtRun(lines, 1)).toBe(true);
+      for (let runIndex = 2; runIndex < runs.length; runIndex++) {
+        expect(lineStartsAtRun(lines, runIndex)).toBe(false);
+      }
+    }, fakeMeasure);
+  });
 });
 
 describe("inline image paragraph measurement", () => {
