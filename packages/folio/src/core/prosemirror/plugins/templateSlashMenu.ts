@@ -32,16 +32,28 @@ const IDLE: TemplateSlashMenuState = { active: false, from: null, query: "" };
  * host owns the highlighted row and the menu list, so it decides whether each
  * key is consumed; returning `true` lets the plugin `preventDefault` the event.
  */
-export type TemplateSlashMenuKeyAction = "up" | "down" | "commit" | "dismiss";
+export type TemplateSlashMenuKeyAction =
+  | "up"
+  | "down"
+  | "forward"
+  | "back"
+  | "commit"
+  | "dismiss";
 
 export type TemplateSlashMenuPluginOptions = {
   /** Fires whenever the trigger state changes (open, query edit, close). */
   onChange?: (state: TemplateSlashMenuState) => void;
   /**
    * Resolve a navigation/commit key while the menu is open. Returns `true` when
-   * the host consumed it (so the plugin swallows the event). `commit` is the
-   * Enter key; the host inserts the marker itself and then dispatches a clearing
-   * transaction, so the plugin does not mutate the document here.
+   * the host consumed it (so the plugin swallows the event).
+   *  - `up`/`down`    move the highlighted row.
+   *  - `forward`      ArrowRight: enter a submenu row.
+   *  - `back`         ArrowLeft: step out of a submenu.
+   *  - `commit`       Enter: the host inserts the marker, then dispatches a
+   *                   clearing transaction; the plugin does not mutate the doc.
+   *  - `dismiss`      Escape: the host backs out of a submenu and returns `true`
+   *                   to keep the menu open, or returns `false` to let the
+   *                   plugin tear the trigger down.
    */
   onKeyAction?: (action: TemplateSlashMenuKeyAction) => boolean;
 };
@@ -210,13 +222,17 @@ export const templateSlashMenuPlugin = (
         if (action === null) {
           return false;
         }
-        if (action === "dismiss") {
-          view.dispatch(clearTemplateSlashMenu(view.state.tr));
+        const consumed = options.onKeyAction?.(action) ?? false;
+        if (consumed) {
           event.preventDefault();
           return true;
         }
-        const consumed = options.onKeyAction?.(action) ?? false;
-        if (consumed) {
+        // Escape that the host did not consume (no submenu to back out of)
+        // tears the trigger down; other unconsumed keys fall through to the
+        // editor so cursor movement and submit still work when no menu logic
+        // claims them.
+        if (action === "dismiss") {
+          view.dispatch(clearTemplateSlashMenu(view.state.tr));
           event.preventDefault();
           return true;
         }
@@ -233,6 +249,12 @@ const keyToAction = (key: string): TemplateSlashMenuKeyAction | null => {
   }
   if (key === "ArrowDown") {
     return "down";
+  }
+  if (key === "ArrowRight") {
+    return "forward";
+  }
+  if (key === "ArrowLeft") {
+    return "back";
   }
   if (key === "Enter") {
     return "commit";
@@ -253,6 +275,25 @@ export const getTemplateSlashMenu = (
  *  insertion and the teardown commit together. */
 export const clearTemplateSlashMenu = (tr: Transaction): Transaction =>
   tr.setMeta(templateSlashMenuKey, { type: "clear" } satisfies ClearMeta);
+
+/** Delete just the query chars typed after `/`, keeping the `/` and the trigger
+ *  active so a submenu can start its own search from a blank query. No-op (and
+ *  returns the unmodified state) when no trigger is active or the query is
+ *  already empty. */
+export const resetTemplateSlashQuery = (
+  state: EditorState,
+): Transaction | null => {
+  const current = getTemplateSlashMenu(state);
+  if (!current.active) {
+    return null;
+  }
+  const queryStart = current.from + 1;
+  const caret = state.selection.from;
+  if (caret <= queryStart) {
+    return null;
+  }
+  return state.tr.delete(queryStart, caret);
+};
 
 /** Delete the `/query` the author typed, returning the PM range it occupied so
  *  the host can insert a marker in its place. Returns null when no trigger is

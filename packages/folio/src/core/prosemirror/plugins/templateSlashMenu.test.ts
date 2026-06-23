@@ -7,6 +7,7 @@ import {
   clearTemplateSlashMenu,
   consumeTemplateSlashQuery,
   getTemplateSlashMenu,
+  resetTemplateSlashQuery,
   templateSlashMenuKey,
   templateSlashMenuPlugin,
 } from "./templateSlashMenu";
@@ -106,5 +107,28 @@ describe("consumeTemplateSlashQuery", () => {
   test("returns null when no trigger is active", () => {
     const state = stateWith("plain prose", 5);
     expect(consumeTemplateSlashQuery(state)).toBeNull();
+  });
+});
+
+describe("resetTemplateSlashQuery", () => {
+  test("clears the typed query but keeps the slash and the trigger active", () => {
+    let state = stateWith("/clause", 7);
+    state = openAt(state, 0);
+    const tr = resetTemplateSlashQuery(state);
+    expect(tr).not.toBeNull();
+    if (tr === null) {
+      return;
+    }
+    const after = state.apply(tr);
+    expect(after.doc.textContent).toBe("/");
+    const open = getTemplateSlashMenu(after);
+    expect(open.active).toBe(true);
+    expect(open.active && open.query).toBe("");
+  });
+
+  test("returns null when the query is already empty", () => {
+    let state = stateWith("/", 1);
+    state = openAt(state, 0);
+    expect(resetTemplateSlashQuery(state)).toBeNull();
   });
 });

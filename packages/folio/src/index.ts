@@ -115,6 +115,7 @@ export {
   clearTemplateSlashMenu,
   consumeTemplateSlashQuery,
   getTemplateSlashMenu,
+  resetTemplateSlashQuery,
   templateSlashMenuKey,
   type TemplateSlashMenuKeyAction,
   type TemplateSlashMenuState,
