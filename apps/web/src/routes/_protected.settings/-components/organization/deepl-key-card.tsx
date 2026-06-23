@@ -18,7 +18,6 @@ import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { Input } from "@stll/ui/components/input";
 import { stellaToast } from "@stll/ui/components/toast";
 
-import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { deepLConfigOptions, deepLKeys } from "@/lib/deepl/queries";
@@ -119,20 +118,15 @@ export const DeepLKeyCard = () => {
               ({deeplConfig.tier === "free" ? t("tierFree") : t("tierPro")})
             </span>
           </div>
-          <Tooltip
-            content={removeLabel}
-            render={
-              <Button
-                aria-label={removeLabel}
-                loading={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate()}
-                size="sm"
-                variant="ghost"
-              />
-            }
+          <Button
+            aria-label={removeLabel}
+            loading={deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate()}
+            size="sm"
+            variant="ghost"
           >
             <Trash2Icon className="size-4" />
-          </Tooltip>
+          </Button>
         </div>
       )}
 

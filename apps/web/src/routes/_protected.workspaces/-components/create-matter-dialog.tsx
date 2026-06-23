@@ -83,6 +83,7 @@ const OwnerTypeToggle = ({
   const t = useTranslations();
   return (
     <div
+      aria-label={t("workspaces.create.ownerTypeToggle")}
       className="bg-muted/40 inline-flex w-fit gap-1 rounded-lg border p-0.5"
       role="radiogroup"
     >

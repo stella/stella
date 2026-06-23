@@ -31,7 +31,6 @@ import type {
   RoleModelSelections,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
-import Tooltip from "@/components/tooltip";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -249,20 +248,15 @@ export const AIConfigCard = () => {
               </span>
             ))}
           </div>
-          <Tooltip
-            content={removeLabel}
-            render={
-              <Button
-                aria-label={removeLabel}
-                loading={deleteMutation.isPending}
-                onClick={() => deleteMutation.mutate()}
-                size="sm"
-                variant="ghost"
-              />
-            }
+          <Button
+            aria-label={removeLabel}
+            loading={deleteMutation.isPending}
+            onClick={() => deleteMutation.mutate()}
+            size="sm"
+            variant="ghost"
           >
             <Trash2Icon className="size-4" />
-          </Tooltip>
+          </Button>
         </div>
       )}
       <Frame>

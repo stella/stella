@@ -183,28 +183,34 @@ const NestedGroupRow = ({
   facetContext,
   onChange,
   onRemove,
-}: NestedGroupRowProps) => (
-  <div className="border-border/70 bg-muted/20 flex items-start gap-2 rounded-md border p-2">
-    <div className="flex-1">
-      <ConditionBuilder
-        allowGroups
-        facetContext={facetContext}
-        fields={fields}
-        onChange={onChange}
-        value={value}
-      />
+}: NestedGroupRowProps) => {
+  const t = useTranslations();
+  const removeLabel = t("common.remove");
+
+  return (
+    <div className="border-border/70 bg-muted/20 flex items-start gap-2 rounded-md border p-2">
+      <div className="flex-1">
+        <ConditionBuilder
+          allowGroups
+          facetContext={facetContext}
+          fields={fields}
+          onChange={onChange}
+          value={value}
+        />
+      </div>
+      <Button
+        aria-label={removeLabel}
+        onClick={onRemove}
+        size="icon-xs"
+        tooltip={removeLabel}
+        type="button"
+        variant="ghost"
+      >
+        <XIcon />
+      </Button>
     </div>
-    <Button
-      aria-label={t("common.remove")}
-      onClick={onRemove}
-      size="icon-xs"
-      type="button"
-      variant="ghost"
-    >
-      <XIcon />
-    </Button>
-  </div>
-);
+  );
+};
 
 type LeafRowProps = {
   node: ConditionNode;

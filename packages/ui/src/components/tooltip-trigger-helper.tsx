@@ -10,11 +10,16 @@ import {
 
 type TooltipTriggerOptions = {
   trigger: React.ReactElement;
-  tooltip: React.ReactNode | undefined;
+  tooltip: React.ReactNode | undefined | false;
 };
 
 const renderTooltipTrigger = ({ trigger, tooltip }: TooltipTriggerOptions) => {
-  if (tooltip === undefined || tooltip === null || tooltip === "") {
+  if (
+    tooltip === undefined ||
+    tooltip === null ||
+    tooltip === "" ||
+    tooltip === false
+  ) {
     return trigger;
   }
 
