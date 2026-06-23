@@ -92,54 +92,75 @@ const atTriggerBoundary = (state: EditorState, pos: number): boolean => {
   return before === "" || /\s/u.test(before);
 };
 
-/** Re-read the trigger from the live caret: the `/` at `from` plus the run of
- *  query chars up to the caret. Returns null when the trigger no longer holds
- *  (caret moved before the `/`, the `/` was deleted, a non-query char appeared,
- *  or the selection is no longer an empty caret). */
-const readTrigger = (
-  state: EditorState,
-  from: number,
-): { from: number; query: string } | null => {
-  const sel = state.selection;
-  if (!sel.empty) {
-    return null;
-  }
-  const caret = sel.from;
-  if (caret <= from) {
-    return null;
+/** Whether the `/` that opened the trigger is still present at `from`. */
+const slashStillAt = (state: EditorState, from: number): boolean => {
+  if (from < 0 || from > state.doc.content.size) {
+    return false;
   }
   const $from = state.doc.resolve(from);
-  if ($from.parentOffset === 0) {
-    if ($from.parent.textBetween(0, 1, "\n", "\n") !== "/") {
-      return null;
-    }
-  } else {
-    const slash = $from.parent.textBetween(
+  if ($from.parentOffset >= $from.parent.content.size) {
+    return false;
+  }
+  return (
+    $from.parent.textBetween(
       $from.parentOffset,
       $from.parentOffset + 1,
       "\n",
       "\n",
-    );
-    if (slash !== "/") {
-      return null;
-    }
-  }
-  const $caret = state.doc.resolve(caret);
-  if (!$from.sameParent($caret)) {
-    return null;
-  }
-  const query = $from.parent.textBetween(
+    ) === "/"
+  );
+};
+
+/**
+ * The query is the contiguous run of query-grammar chars right after the `/`,
+ * read from the DOCUMENT (not the caret). Anchoring the query to the text — not
+ * the selection — keeps it stable across the paged editor's relayout selection
+ * churn, which would otherwise momentarily report a caret outside the trigger
+ * and tear the menu down mid-type. A non-query char (space, etc.) ends the run.
+ */
+const readQueryRun = (state: EditorState, from: number): string => {
+  const $from = state.doc.resolve(from);
+  const rest = $from.parent.textBetween(
     $from.parentOffset + 1,
-    $caret.parentOffset,
+    $from.parent.content.size,
     "\n",
     "\n",
   );
-  for (const char of query) {
+  let query = "";
+  for (const char of rest) {
     if (!QUERY_CHAR.test(char)) {
-      return null;
+      break;
     }
+    query += char;
   }
-  return { from, query };
+  return query;
+};
+
+/** Whether the caret sits within the trigger span `[from, from + 1 + query]`,
+ *  i.e. the user is still editing the trigger rather than having clicked away. */
+const caretInTrigger = (
+  state: EditorState,
+  from: number,
+  queryLength: number,
+): boolean => {
+  const sel = state.selection;
+  return sel.empty && sel.from >= from && sel.from <= from + 1 + queryLength;
+};
+
+/** Whether the char right after the `/query` run is whitespace — the user typed
+ *  a space to break out of the command. */
+const charAfterIsSpace = (
+  state: EditorState,
+  from: number,
+  queryLength: number,
+): boolean => {
+  const $from = state.doc.resolve(from);
+  const offset = $from.parentOffset + 1 + queryLength;
+  if (offset >= $from.parent.content.size) {
+    return false;
+  }
+  const char = $from.parent.textBetween(offset, offset + 1, "\n", "\n");
+  return char !== "" && /\s/u.test(char);
 };
 
 const sameState = (
@@ -165,15 +186,36 @@ export const templateSlashMenuPlugin = (
         if (!value.active) {
           return value;
         }
-        // While open, re-derive from the live caret. The mapped anchor keeps the
-        // trigger pinned to its `/` across edits before it; a broken trigger
-        // (caret moved off, `/` deleted, space typed) closes the menu.
-        const mappedFrom = tr.mapping.map(value.from);
-        const next = readTrigger(newState, mappedFrom);
-        if (next === null) {
+        // Keep the trigger pinned to its `/` across edits before it.
+        const from = tr.mapping.map(value.from);
+        // The `/` itself being deleted always closes the menu.
+        if (!slashStillAt(newState, from)) {
           return IDLE;
         }
-        return { active: true, from: next.from, query: next.query };
+        // The query is derived from the document text after the `/`, so it stays
+        // correct through the paged editor's relayout selection churn (which can
+        // momentarily move the caret). Only a genuine caret move OUT of the
+        // trigger on a selection-only transaction closes the menu — typing
+        // (doc-changing) never closes on caret grounds, since the caret rides at
+        // the end of the query.
+        const query = readQueryRun(newState, from);
+        // A space typed right after the `/query` ends the command (matches the
+        // "space dismisses" rule); the char after the run is whitespace only
+        // when the user deliberately broke out of the query.
+        if (charAfterIsSpace(newState, from, query.length)) {
+          return IDLE;
+        }
+        // Only a genuine caret move OUT of the trigger on a selection-only
+        // transaction closes the menu — typing (doc-changing) never closes on
+        // caret grounds, since the caret rides at the end of the query.
+        if (
+          !tr.docChanged &&
+          tr.selectionSet &&
+          !caretInTrigger(newState, from, query.length)
+        ) {
+          return IDLE;
+        }
+        return { active: true, from, query };
       },
     },
     view: () => ({
@@ -222,21 +264,17 @@ export const templateSlashMenuPlugin = (
         if (action === null) {
           return false;
         }
-        const consumed = options.onKeyAction?.(action) ?? false;
-        if (consumed) {
-          event.preventDefault();
-          return true;
-        }
-        // Escape that the host did not consume (no submenu to back out of)
-        // tears the trigger down; other unconsumed keys fall through to the
-        // editor so cursor movement and submit still work when no menu logic
-        // claims them.
-        if (action === "dismiss") {
+        const handledByHost = options.onKeyAction?.(action) ?? false;
+        // Escape is the only key that can fall through to dismiss: when the host
+        // does not consume it (already at the root level), tear the trigger
+        // down. Every other navigation key is swallowed while the menu is open
+        // so the document caret never moves out from under it, even when the
+        // host treats the key as a no-op (e.g. ArrowRight on a non-submenu row).
+        if (action === "dismiss" && !handledByHost) {
           view.dispatch(clearTemplateSlashMenu(view.state.tr));
-          event.preventDefault();
-          return true;
         }
-        return false;
+        event.preventDefault();
+        return true;
       },
     },
   };

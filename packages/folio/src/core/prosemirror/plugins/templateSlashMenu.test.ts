@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { EditorState, TextSelection } from "prosemirror-state";
-import type { EditorState as PMEditorState } from "prosemirror-state";
+import type {
+  EditorState as PMEditorState,
+  Transaction,
+} from "prosemirror-state";
 
 import { schema } from "../schema";
 import {
@@ -130,5 +133,157 @@ describe("resetTemplateSlashQuery", () => {
     let state = stateWith("/", 1);
     state = openAt(state, 0);
     expect(resetTemplateSlashQuery(state)).toBeNull();
+  });
+});
+
+// These exercise the plugin's `props.handleKeyDown` / `props.handleTextInput`
+// against a fake view (no DOM): the live keyboard/input path the paged editor
+// drives, which the state-machine tests above never touch. A bug here passes
+// those tests but breaks live, so the contract is pinned directly.
+type FakeView = {
+  state: PMEditorState;
+  dispatch: (tr: Transaction) => void;
+};
+
+const makePluginHarness = (
+  text: string,
+  caret: number,
+  onKeyAction?: (action: TemplateSlashMenuKeyAction) => boolean,
+) => {
+  const plugin = onKeyAction
+    ? templateSlashMenuPlugin({ onKeyAction })
+    : templateSlashMenuPlugin();
+  const doc = schema.node("doc", null, [
+    schema.node("paragraph", null, text === "" ? null : [schema.text(text)]),
+  ]);
+  const view: FakeView = {
+    state: EditorState.create({
+      doc,
+      plugins: [plugin],
+      selection: TextSelection.create(doc, caret + 1),
+    }),
+    dispatch: (tr) => {
+      view.state = view.state.apply(tr);
+    },
+  };
+  const props = plugin.props as {
+    handleKeyDown: (view: FakeView, event: KeyEventLike) => boolean;
+    handleTextInput: (
+      view: FakeView,
+      from: number,
+      to: number,
+      text: string,
+    ) => boolean;
+  };
+  return { view, props };
+};
+
+type KeyEventLike = {
+  key: string;
+  metaKey?: boolean;
+  ctrlKey?: boolean;
+  altKey?: boolean;
+  shiftKey?: boolean;
+  preventDefault: () => void;
+};
+
+const keyEvent = (
+  key: string,
+): KeyEventLike & { defaultPrevented: boolean } => {
+  const event = {
+    key,
+    metaKey: false,
+    ctrlKey: false,
+    altKey: false,
+    shiftKey: false,
+    defaultPrevented: false,
+    preventDefault() {
+      event.defaultPrevented = true;
+    },
+  };
+  return event;
+};
+
+describe("templateSlashMenu handleTextInput", () => {
+  test('typing "/" at a boundary opens the menu and inserts the slash', () => {
+    const { view, props } = makePluginHarness("", 0);
+    const handled = props.handleTextInput(view, 1, 1, "/");
+    expect(handled).toBe(true);
+    expect(view.state.doc.textContent).toBe("/");
+    expect(getTemplateSlashMenu(view.state).active).toBe(true);
+  });
+
+  test('"/" mid-word (no boundary) does not open the menu', () => {
+    // Caret after "a"; the char before the caret is a word char.
+    const { view, props } = makePluginHarness("a", 1);
+    const handled = props.handleTextInput(view, 2, 2, "/");
+    expect(handled).toBe(false);
+    expect(getTemplateSlashMenu(view.state).active).toBe(false);
+  });
+
+  test("a non-slash char falls through so PM inserts and the query extends", () => {
+    const { view, props } = makePluginHarness("/", 1);
+    view.state = openAt(view.state, 0);
+    // A regular char must NOT be consumed here; PM inserts it, and the state
+    // machine extends the query on the resulting transaction.
+    expect(props.handleTextInput(view, 2, 2, "f")).toBe(false);
+    view.state = view.state.apply(view.state.tr.insertText("f", 2));
+    const open = getTemplateSlashMenu(view.state);
+    expect(open.active).toBe(true);
+    expect(open.active && open.query).toBe("f");
+  });
+});
+
+describe("templateSlashMenu handleKeyDown", () => {
+  test("consumes ArrowDown/ArrowUp while open and drives onKeyAction", () => {
+    const actions: TemplateSlashMenuKeyAction[] = [];
+    const { view, props } = makePluginHarness("/", 1, (action) => {
+      actions.push(action);
+      return true;
+    });
+    view.state = openAt(view.state, 0);
+
+    const down = keyEvent("ArrowDown");
+    expect(props.handleKeyDown(view, down)).toBe(true);
+    expect(down.defaultPrevented).toBe(true);
+
+    const up = keyEvent("ArrowUp");
+    expect(props.handleKeyDown(view, up)).toBe(true);
+    expect(up.defaultPrevented).toBe(true);
+
+    expect(actions).toEqual(["down", "up"]);
+  });
+
+  test("consumes Enter/ArrowRight/ArrowLeft while open", () => {
+    const actions: TemplateSlashMenuKeyAction[] = [];
+    const { view, props } = makePluginHarness("/", 1, (action) => {
+      actions.push(action);
+      return action !== "back"; // host treats back as a no-op here
+    });
+    view.state = openAt(view.state, 0);
+
+    for (const key of ["Enter", "ArrowRight", "ArrowLeft"]) {
+      const event = keyEvent(key);
+      // Every navigation key is swallowed so the caret never escapes the menu,
+      // even when the host treats it as a no-op (ArrowLeft → "back" → false).
+      expect(props.handleKeyDown(view, event)).toBe(true);
+      expect(event.defaultPrevented).toBe(true);
+    }
+    expect(actions).toEqual(["commit", "forward", "back"]);
+  });
+
+  test("passes keys through when the menu is closed", () => {
+    const { view, props } = makePluginHarness("hello", 5);
+    const event = keyEvent("ArrowDown");
+    expect(props.handleKeyDown(view, event)).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+  });
+
+  test("Escape the host does not consume tears the trigger down", () => {
+    const { view, props } = makePluginHarness("/", 1, () => false);
+    view.state = openAt(view.state, 0);
+    const event = keyEvent("Escape");
+    expect(props.handleKeyDown(view, event)).toBe(true);
+    expect(getTemplateSlashMenu(view.state).active).toBe(false);
   });
 });
