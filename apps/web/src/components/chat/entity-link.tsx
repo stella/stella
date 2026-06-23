@@ -61,7 +61,7 @@ export const EntityMentionIcon = ({
     return <ListTodoIcon className={ICON_CLASS} />;
   }
 
-  for (const field of entity?.fields ?? []) {
+  for (const field of Object.values(entity?.fields ?? {})) {
     if (field.content.type === "file" && field.content.mimeType.length > 0) {
       return (
         <DocumentIcon
