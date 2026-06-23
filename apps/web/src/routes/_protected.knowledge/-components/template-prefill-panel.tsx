@@ -19,6 +19,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { resolveAppTimeZone } from "@/i18n/time-zone";
 import { api } from "@/lib/api";
 import { DOCX_MIME, PDF_MIME } from "@/lib/consts";
 import { userErrorMessage } from "@/lib/errors";
@@ -91,7 +92,12 @@ export const TemplatePrefillPanel = ({
 
   const runPrefill = async () => {
     setLoading(true);
-    const body: { file?: File; text?: string; entityIds?: string } = {};
+    const body: {
+      file?: File;
+      text?: string;
+      entityIds?: string;
+      timezone: string;
+    } = { timezone: resolveAppTimeZone() };
     if (file) {
       body.file = file;
     }

@@ -87,10 +87,12 @@ export const FacetBar = <F extends string>({
 
     const recompute = () => {
       const style = getComputedStyle(container);
+      // `|| 0`: computed padding can be "" on a detached node and columnGap is
+      // "normal" when no gap is set — both make parseFloat return NaN.
       const padX =
-        Number.parseFloat(style.paddingInlineStart) +
-        Number.parseFloat(style.paddingInlineEnd);
-      const gap = Number.parseFloat(style.columnGap || "0");
+        (Number.parseFloat(style.paddingInlineStart) || 0) +
+        (Number.parseFloat(style.paddingInlineEnd) || 0);
+      const gap = Number.parseFloat(style.columnGap) || 0;
       const available = container.clientWidth - padX;
 
       const cells = [...measure.children];
@@ -119,6 +121,31 @@ export const FacetBar = <F extends string>({
         used += add;
         count += 1;
       }
+
+      // The active facet is pinned into the visible set at render even when it
+      // sits past the greedy fit; it can be wider than the chip it displaces,
+      // so recount reserving the active chip's own width to keep it (and the
+      // trigger) from clipping.
+      const activeIndex = facets.indexOf(facet);
+      if (activeIndex >= count) {
+        const activeWidth = chipWidths[activeIndex] ?? 0;
+        used = activeWidth;
+        count = 0;
+        for (let i = 0; i < chipWidths.length; i++) {
+          if (i === activeIndex) {
+            continue;
+          }
+          const add = chipWidths[i] + gap;
+          if (used + add + gap + triggerWidth > available) {
+            break;
+          }
+          used += add;
+          count += 1;
+        }
+        setVisibleCount(count + 1);
+        return;
+      }
+
       setVisibleCount(count);
     };
 
@@ -127,7 +154,7 @@ export const FacetBar = <F extends string>({
     observer.observe(measure);
     recompute();
     return () => observer.disconnect();
-  }, [facets.length]);
+  }, [facets, facet]);
 
   const overflowing = visibleCount < facets.length;
   const activeIndex = facets.indexOf(facet);

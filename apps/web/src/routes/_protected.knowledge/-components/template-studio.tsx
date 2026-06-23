@@ -5217,7 +5217,15 @@ const FormulaEditor = ({
   onChange,
 }: FormulaEditorProps) => {
   const t = useTranslations();
-  const others = fields.filter((f) => f.path !== currentPath);
+  const currentIndex = fields.findIndex((f) => f.path === currentPath);
+  // Suggest the other fields, minus formula fields defined at/after this one:
+  // formulas resolve in manifest order, so a forward reference would leave this
+  // field unfilled even though the name is "known".
+  const others = fields.filter(
+    (f, index) =>
+      f.path !== currentPath &&
+      !(f.formula !== undefined && index >= currentIndex),
+  );
   const knownPaths = new Set(fields.map((f) => f.path));
   const referenced = [
     ...new Set(
@@ -5247,15 +5255,17 @@ const FormulaEditor = ({
       {others.length > 0 && (
         <div className="flex flex-wrap gap-1">
           {others.map((f) => (
-            <button
-              className="bg-muted text-muted-foreground hover:bg-accent hover:text-foreground rounded px-1.5 py-0.5 font-mono text-[10px] transition-colors"
+            <Button
+              className="font-mono"
               key={f.path}
               onClick={() => appendField(f.path)}
+              size="xs"
               title={f.label || f.path}
               type="button"
+              variant="outline"
             >
               {f.path}
-            </button>
+            </Button>
           ))}
         </div>
       )}
