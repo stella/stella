@@ -1077,10 +1077,9 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
 
   useInspectorFlash(entity.entityId, rowRef);
 
-  // Construct a WorkspaceEntity from overview data so RowActions
-  // can render. The overview endpoint returns enough metadata to
-  // build a synthetic fields record for the primary file.
-  // Previously TODO by @nnad3N — now resolved.
+  // Construct a WorkspaceEntity from overview data so RowActions can render.
+  // The overview endpoint returns enough metadata to build a synthetic fields
+  // record for the primary file.
   const fullEntity = useMemo((): WorkspaceEntity => {
     const fields: WorkspaceEntity["fields"] = {};
     const propertyKey = entity.propertyId ?? entity.fieldId;

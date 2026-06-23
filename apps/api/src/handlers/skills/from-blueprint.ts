@@ -8,6 +8,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
+import { hashAuthoredSkillContent } from "./authored-content-hash";
 import { authorizeSkillInstallScope, installSkill } from "./install";
 import type { ParsedSkillPackage } from "./skill-package";
 import { uniqueSlug } from "./slug";
@@ -36,10 +37,12 @@ const buildParsedBlueprint = (
   }
 
   const { body, metadata } = parseSkillFile(blueprint.source);
-  const contentHash = new Bun.CryptoHasher("sha256")
-    .update(body)
-    .digest("hex")
-    .slice(0, 64);
+  const contentHash = hashAuthoredSkillContent({
+    body,
+    description: metadata.description,
+    name: metadata.name,
+    version: metadata.version,
+  });
 
   return {
     body,

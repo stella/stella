@@ -15,9 +15,9 @@
  * registered and let the parent route to the DOCX main view, where
  * the editor is mounted by default and Accept actually works.
  *
- * TODO: replace this hop with a lightweight in-app approval flow
- * (apply/reject without needing the full editor mounted) so the
- * sidepeek doesn't have to context-switch.
+ * Replace this hop with a lightweight in-app approval flow (apply/reject
+ * without needing the full editor mounted) once sidepeek can edit DOCX
+ * suggestions without context-switching.
  */
 
 import { useEffect, useEffectEvent, useRef } from "react";

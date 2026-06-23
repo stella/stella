@@ -83,10 +83,10 @@ export const scrollPagesToPmPosition = (
   // empty), then refine to the exact run once the
   // IntersectionObserver populates the page content.
   //
-  // TODO: when the AI review session opens, pre-warm the page
-  // shells that contain pending suggestions (one-shot
-  // populate of ~30 pages instead of 200). Lets this scroll
-  // become single-phase again — no rAF refine — and makes
+  // Future optimization: when the AI review session opens,
+  // pre-warm the page shells that contain pending suggestions
+  // (one-shot populate of ~30 pages instead of 200). Lets this
+  // scroll become single-phase again — no rAF refine — and makes
   // navigation feel instant for long documents.
   const shellHit = findPageShellForPmPos(pageContainer, pmPos);
   if (!shellHit) {

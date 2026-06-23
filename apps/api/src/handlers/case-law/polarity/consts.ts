@@ -26,15 +26,6 @@ export type RuleSource = (typeof RULE_SOURCE)[keyof typeof RULE_SOURCE];
  */
 export const PROMOTION_THRESHOLD = 5;
 
-/**
- * Percentage of regex-matched citations to spot-check with
- * LLM for rule confidence tracking.
- *
- * TODO: not yet wired into the classification pipeline;
- * tracked for the confidence-decay iteration.
- */
-export const SPOT_CHECK_RATE = 0.05;
-
 /** Polarity weights for citation scoring. */
 export const POLARITY_WEIGHT = {
   positive: 1,

@@ -53,8 +53,8 @@ afterAll(async () => {
 describe("policy coverage", () => {
   // Tables exempt from RLS
   const EXEMPT = new Set([
-    "search_documents", // TODO in schema
-    "extracted_content", // TODO in schema
+    "search_documents", // search index table, scoped by explicit org/workspace predicates
+    "extracted_content", // encrypted derivative table, scoped by explicit org/workspace predicates
     "invitation", // auth table, no RLS
     "member", // auth table, no RLS
     // The anonymization catalog tables carry a nullable workspace_id

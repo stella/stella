@@ -35,7 +35,7 @@ export type RunFormatting = {
   strike?: boolean;
   color?: string;
   textColorSource?: "direct" | "paragraphDefault";
-  // TODO: cannot tighten to NonNullable<TextFormatting["highlight"]> (the OOXML
+  // Cannot tighten to NonNullable<TextFormatting["highlight"]> (the OOXML
   // named-color union). The bridge stores a *resolved CSS* color here via
   // `resolveHighlightToCss` (named color → hex, or raw `#hex`), so values like
   // `#FFFF00` are not union members. Either keep a separate CSS field or move
@@ -350,7 +350,7 @@ export type TabStop = {
  * Border specification for paragraphs.
  */
 export type BorderStyle = {
-  // TODO: this holds a *CSS* border-style (solid, double, ridge, groove, …),
+  // This holds a *CSS* border-style (solid, double, ridge, groove, …),
   // mapped from OOXML by `OOXML_TO_CSS_BORDER` in the bridge. It is NOT the
   // OOXML `KnownBorderStyle` union (single/thinThickSmallGap/…), and includes
   // CSS-only values (ridge/groove) that have no union member. Move the OOXML→CSS
@@ -490,7 +490,7 @@ export type ParagraphBlock = {
 export type CellBorderSpec = {
   width?: number; // pixels
   color?: string; // CSS color
-  // TODO: CSS border-style mapped from OOXML by the bridge, not the OOXML
+  // CSS border-style mapped from OOXML by the bridge, not the OOXML
   // `KnownBorderStyle` union (see BorderStyle.style). Includes CSS-only values
   // (ridge/groove) with no union member.
   style?: string; // CSS border-style (solid, dashed, dotted, double)

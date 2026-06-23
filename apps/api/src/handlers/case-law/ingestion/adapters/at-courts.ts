@@ -395,7 +395,7 @@ const parseRisItem = async (
     },
     rawHash: hashContent(raw_),
     parserVersion: PARSER_VERSION,
-    // TODO: integrate court-specific parser for AST
+    // Court-specific AST parsing is not available for RIS yet.
     documentAst: EMPTY_AST,
     sourceRaw: undefined,
     sourceRawContentType: "text/html",

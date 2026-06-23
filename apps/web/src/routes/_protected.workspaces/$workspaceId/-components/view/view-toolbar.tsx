@@ -668,7 +668,6 @@ const metadataFields = [
     name: "Last updated",
     icon: ClockIcon,
   },
-  // TODO: waiting for Damian — version is hardcoded to 1
   { id: getInternalPropertyId("version"), name: "Version", icon: HashIcon },
 ] as const;
 

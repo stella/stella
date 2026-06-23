@@ -29,11 +29,6 @@ export const DeleteProperty = ({
   const t = useTranslations();
   const isWorkflowRunning = useIsWorkflowRunning(workspaceId);
   const deleteProperty = useDeleteProperty();
-  // TODO: add ability to create file properties
-  // const { data: canDelete } = useSuspenseQuery({
-  //   ...propertiesOptions(workspaceId),
-  //   select: (data) => data.filter((p) => p.content.type === "file").length >= 1,
-  // });
   const canDelete = property.content.type !== "file";
 
   return (

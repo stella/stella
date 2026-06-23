@@ -1,16 +1,5 @@
 import type { OptionColor } from "@stll/api/types";
 
-import type { WorkspaceProperty } from "@/lib/types";
-
-// TODO: remove this
-export const isPropertyValid = (property: WorkspaceProperty) => {
-  if (property.tool.type === "manual-input") {
-    return true;
-  }
-
-  return property.tool.prompt.trim().length > 0;
-};
-
 export type ColorVariants = {
   background: string;
   foreground: string;

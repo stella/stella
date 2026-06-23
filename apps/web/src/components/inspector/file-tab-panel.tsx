@@ -952,8 +952,8 @@ export const FileTabPanel = ({
               // mounted by default and the same `<SuggestionsFacet>`
               // (rendered by the fullscreen branch above) reuses
               // the registration.
-              // TODO: replace with an in-app approval flow that
-              // doesn't need the full editor mounted.
+              // Replace with an in-app approval flow that doesn't need the
+              // full editor mounted.
               //
               // Only the *active* tab is allowed to redirect.
               // Non-active PDF tabs stay mounted (CSS-hidden) so

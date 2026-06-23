@@ -136,5 +136,5 @@ export const loadAnonymizationGazetteerEntries = async ({
   );
 };
 
-// TODO: Add org-wide custom regex rules here once @stll/anonymize-wasm
-// exposes a safe first-class custom regex detector API.
+// Org-wide custom regex rules belong here once @stll/anonymize-wasm exposes a
+// safe first-class custom regex detector API.

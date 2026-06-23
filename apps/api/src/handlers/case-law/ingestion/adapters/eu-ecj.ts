@@ -414,7 +414,7 @@ export const euEcjAdapter: SourceAdapter = {
               metadata: { celex },
               rawHash: hashContent(raw),
               parserVersion: PARSER_VERSION,
-              // TODO: integrate court-specific parser for AST
+              // Court-specific AST parsing is not available for EUR-Lex yet.
               documentAst: EMPTY_AST,
               sourceRaw: undefined,
             });

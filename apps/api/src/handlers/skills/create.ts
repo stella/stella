@@ -15,6 +15,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 
+import { hashAuthoredSkillContent } from "./authored-content-hash";
 import { authorizeSkillInstallScope } from "./install";
 import { uniqueSlug } from "./slug";
 
@@ -124,12 +125,12 @@ const createSkill = createSafeRootHandler(
 
     const slug = uniqueSlug(body.name);
 
-    // contentHash is an integrity marker; for authored skills it
-    // derives from the body so future edits change the hash.
-    const contentHash = new Bun.CryptoHasher("sha256")
-      .update(body.body)
-      .digest("hex")
-      .slice(0, 64);
+    const contentHash = hashAuthoredSkillContent({
+      body: body.body,
+      description: body.description,
+      name: body.name,
+      version: null,
+    });
 
     const insertResult = await safeDb(async (tx) => {
       const rows = await tx
