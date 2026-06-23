@@ -131,11 +131,11 @@ export const FacetBar = <F extends string>({
         const activeWidth = chipWidths[activeIndex] ?? 0;
         used = activeWidth;
         count = 0;
-        for (let i = 0; i < chipWidths.length; i++) {
+        for (const [i, width] of chipWidths.entries()) {
           if (i === activeIndex) {
             continue;
           }
-          const add = chipWidths[i] + gap;
+          const add = width + gap;
           if (used + add + gap + triggerWidth > available) {
             break;
           }
