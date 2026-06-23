@@ -207,11 +207,20 @@ const ChatSubmitButton = ({
       size="icon-sm"
       variant="default"
     >
-      {isStop ? (
-        <SquareIcon className="size-3.5" />
-      ) : (
-        <ArrowUpIcon className="size-3.5" />
-      )}
+      <span aria-hidden="true" className="pointer-events-none relative size-3.5">
+        <SquareIcon
+          className={cn(
+            "absolute inset-0 size-full transition-[opacity,transform] duration-150 ease-out",
+            isStop ? "scale-100 opacity-100" : "scale-75 opacity-0",
+          )}
+        />
+        <ArrowUpIcon
+          className={cn(
+            "absolute inset-0 size-full transition-[opacity,transform] duration-150 ease-out",
+            isStop ? "scale-75 opacity-0" : "scale-100 opacity-100",
+          )}
+        />
+      </span>
     </Button>
   );
 };
