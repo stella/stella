@@ -629,11 +629,11 @@ const LandingButton = ({ icon, meta, onClick, title }: LandingButtonProps) => (
         >
           {title}
         </BidiText>
-        {meta && (
+        {meta !== undefined && meta !== null ? (
           <span className="text-muted-foreground block truncate text-xs">
             {meta}
           </span>
-        )}
+        ) : null}
       </span>
     </span>
   </button>
@@ -663,11 +663,11 @@ const LandingItemText = ({
       >
         {title}
       </BidiText>
-      {meta && (
+      {meta !== undefined && meta !== null ? (
         <span className="text-muted-foreground block truncate text-xs">
           {meta}
         </span>
-      )}
+      ) : null}
     </span>
   </span>
 );
