@@ -476,6 +476,10 @@ function isBreakChar(char: string | undefined): boolean {
   return char === " " || char === "-" || char === "\t";
 }
 
+function isSpaceOrTab(char: string | undefined): boolean {
+  return char === " " || char === "\t";
+}
+
 function trimTrailingSpacesAndTabs(text: string): string {
   let end = text.length;
   while (end > 0) {
@@ -504,7 +508,7 @@ function trailingGlueWidth(runs: Run[], afterIndex: number): number {
     if (!text) {
       continue;
     }
-    if (isBreakChar(text[0])) {
+    if (isSpaceOrTab(text[0])) {
       break;
     }
 

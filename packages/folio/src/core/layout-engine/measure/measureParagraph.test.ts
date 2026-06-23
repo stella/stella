@@ -210,6 +210,14 @@ describe("measureParagraph cross-run line breaking", () => {
     runIndex: number,
   ): boolean =>
     lines.some((line) => line.fromRun === runIndex && line.fromChar === 0);
+  const lineStartsAt = (
+    lines: { fromRun: number; fromChar: number }[],
+    runIndex: number,
+    charIndex: number,
+  ): boolean =>
+    lines.some(
+      (line) => line.fromRun === runIndex && line.fromChar === charIndex,
+    );
 
   test("keeps an adjacent footnote marker glued to the preceding word", () => {
     withFakeTextMeasure(() => {
@@ -236,6 +244,21 @@ describe("measureParagraph cross-run line breaking", () => {
       const { lines } = measureParagraph(paragraph(runs), maxWidth);
 
       expect(lineStartsAtRun(lines, 1)).toBe(true);
+    }, fakeMeasure);
+  });
+
+  test("keeps a split leading hyphen glued to the preceding run", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = [
+        { kind: "text", text: "alpha well" },
+        { kind: "text", text: "-known" },
+        { kind: "text", text: " topic" },
+      ];
+      const maxWidth = width("alpha well") + width("-") - 0.6;
+      const { lines } = measureParagraph(paragraph(runs), maxWidth);
+
+      expect(lineStartsAt(lines, 0, "alpha ".length)).toBe(true);
+      expect(lineStartsAtRun(lines, 1)).toBe(false);
     }, fakeMeasure);
   });
 });
