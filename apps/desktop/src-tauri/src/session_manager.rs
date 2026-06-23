@@ -8,6 +8,9 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
+// Only `lsof_reports_open` (macOS/Linux) uses this; on Windows that fn
+// compiles to a stub, so the ungated import would be unused.
+#[cfg(any(target_os = "macos", target_os = "linux"))]
 use tokio::process::Command;
 use tokio::sync::Mutex;
 use tokio::task::JoinHandle;
