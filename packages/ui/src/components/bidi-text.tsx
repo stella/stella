@@ -122,7 +122,7 @@ export const UserText = BidiText;
 
 type BidiDirection = "auto" | "ltr" | "rtl";
 
-type BdiTextProps = Omit<React.ComponentPropsWithoutRef<"bdi">, "dir"> & {
+type BdiElementProps = Omit<React.ComponentPropsWithoutRef<"bdi">, "dir"> & {
   as?: "bdi";
   direction?: BidiDirection;
 };
@@ -153,7 +153,7 @@ type HeadingTextProps<THeading extends BidiHeadingElement> = Omit<
 type BidiHeadingElement = "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
 
 type BidiTextProps =
-  | BdiTextProps
+  | BdiElementProps
   | SpanTextProps
   | DivTextProps
   | ParagraphTextProps
