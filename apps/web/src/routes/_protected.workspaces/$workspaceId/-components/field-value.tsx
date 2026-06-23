@@ -24,10 +24,14 @@ export const FieldValue = ({
   content,
   property,
   pendingPreview,
-  variant = "default",
+  variant,
 }: FieldValueProps) => {
+  const resolvedVariant = variant ?? "default";
+
   if (!content) {
-    return variant === "table" ? null : <EmptyFieldValue variant={variant} />;
+    return resolvedVariant === "table" ? null : (
+      <EmptyFieldValue variant={resolvedVariant} />
+    );
   }
 
   if (content.type === "pending") {
@@ -35,35 +39,39 @@ export const FieldValue = ({
       <PendingFieldValue
         contentType={property.content.type}
         preview={pendingPreview}
-        variant={variant}
+        variant={resolvedVariant}
       />
     );
   }
 
   if (content.type === "error") {
-    return <ErrorFieldValue variant={variant} />;
+    return <ErrorFieldValue variant={resolvedVariant} />;
   }
 
   if (content.type === "unsupported") {
-    return <UnsupportedFieldValue variant={variant} />;
+    return <UnsupportedFieldValue variant={resolvedVariant} />;
   }
 
   if (content.type === "file") {
-    return <FileFieldValue content={content} variant={variant} />;
+    return <FileFieldValue content={content} variant={resolvedVariant} />;
   }
 
   if (content.type === "text") {
-    return <TextFieldValue content={content} variant={variant} />;
+    return <TextFieldValue content={content} variant={resolvedVariant} />;
   }
 
   if (content.type === "date") {
     return (
-      <DateFieldValue content={content} property={property} variant={variant} />
+      <DateFieldValue
+        content={content}
+        property={property}
+        variant={resolvedVariant}
+      />
     );
   }
 
   if (content.type === "int") {
-    return <IntFieldValue content={content} variant={variant} />;
+    return <IntFieldValue content={content} variant={resolvedVariant} />;
   }
 
   if (content.type === "single-select") {
@@ -71,7 +79,7 @@ export const FieldValue = ({
       <SelectFieldValue
         property={property}
         value={content.value}
-        variant={variant}
+        variant={resolvedVariant}
       />
     );
   }
@@ -81,23 +89,24 @@ export const FieldValue = ({
       <MultiSelectFieldValue
         property={property}
         value={content.value}
-        variant={variant}
+        variant={resolvedVariant}
       />
     );
   }
 
-  return <ClipFieldValue content={content} variant={variant} />;
+  return <ClipFieldValue content={content} variant={resolvedVariant} />;
 };
 
 export const IntFieldValue = ({
   content,
-  variant = "default",
+  variant,
 }: {
   content: Extract<WorkspaceFieldContent, { type: "int" }>;
   variant?: FieldValueVariant;
 }) => {
   const format = useFormatter();
-  const className = getIntClassName(variant);
+  const resolvedVariant = variant ?? "default";
+  const className = getIntClassName(resolvedVariant);
   const fallback = `${format.number(content.value)} ${content.currency}`;
 
   if (!content.currency) {
