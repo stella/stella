@@ -161,6 +161,35 @@ describe("HF margin extender across multiple section margins (issue #400)", () =
     expect(extend(looseHeaderDistance).top).toBe(108);
   });
 
+  test("extender decides footer overflow per section margins", () => {
+    // eigenpal/docx-editor#988: a roomy body margin can clear the footer
+    // while a later section's thinner margin still overlaps it. The extender
+    // must decide overflow from the margin set it receives, not from the body.
+    const extend = computeHeaderFooterMarginExtender({
+      footerContent: content(30),
+    });
+
+    const bodyMargins = {
+      top: 96,
+      right: 72,
+      bottom: 96,
+      left: 72,
+      header: 48,
+      footer: 48,
+    };
+    const thinSectionMargins = {
+      top: 96,
+      right: 72,
+      bottom: 60,
+      left: 72,
+      header: 48,
+      footer: 48,
+    };
+
+    expect(extend(bodyMargins)).toBe(bodyMargins);
+    expect(extend(thinSectionMargins).bottom).toBe(78);
+  });
+
   test("clamp: an absurdly tall header is clamped so margins never consume the entire page height", () => {
     const margins = {
       top: 96,

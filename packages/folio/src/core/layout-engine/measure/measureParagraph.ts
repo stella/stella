@@ -472,6 +472,60 @@ function findWordBreaks(text: string): number[] {
   return breaks;
 }
 
+function isBreakChar(char: string | undefined): boolean {
+  return char === " " || char === "-" || char === "\t";
+}
+
+function trimTrailingSpacesAndTabs(text: string): string {
+  let end = text.length;
+  while (end > 0) {
+    const char = text.at(end - 1);
+    if (char !== " " && char !== "\t") {
+      break;
+    }
+    end--;
+  }
+  return text.slice(0, end);
+}
+
+/**
+ * Width of the unbreakable text glued to the end of run `afterIndex`.
+ * A run boundary is not itself a wrap opportunity: adjacent note markers and
+ * format-only word splits must wrap as one cluster.
+ */
+function trailingGlueWidth(runs: Run[], afterIndex: number): number {
+  let total = 0;
+  for (let index = afterIndex + 1; index < runs.length; index++) {
+    const run = runs[index];
+    if (!run || !isTextRun(run)) {
+      break;
+    }
+    const text = run.text;
+    if (!text) {
+      continue;
+    }
+    if (isBreakChar(text.at(0))) {
+      break;
+    }
+
+    const style = runToFontStyle(run);
+    const breaks = findWordBreaks(text);
+    if (breaks.length === 0) {
+      total += measureTextWidth(text, style);
+      continue;
+    }
+
+    const firstBreak = breaks.at(0);
+    if (firstBreak === undefined) {
+      break;
+    }
+    const leading = trimTrailingSpacesAndTabs(text.slice(0, firstBreak));
+    total += measureTextWidth(leading, style);
+    break;
+  }
+  return total;
+}
+
 /**
  * Minimum horizontal room a line must offer before we treat it as usable for
  * body text. Below this threshold the line is bumped past obstructing floats
@@ -1209,10 +1263,18 @@ export function measureParagraph(
           continue;
         }
 
-        // Check if word fits on current line
+        // Check if word fits on current line. If this is the last word in a
+        // run and the next run starts without whitespace, include that glued
+        // width in the wrap decision so a note marker or format-only word
+        // split is not stranded on the next line (eigenpal/docx-editor#991).
+        const isRunTail = nextBreak === text.length;
+        const glueWidth =
+          isRunTail && word.length > 0 && !isBreakChar(word.at(-1))
+            ? trailingGlueWidth(runs, runIndex)
+            : 0;
         if (
           currentLine.width > 0 &&
-          currentLine.width + wordWidth >
+          currentLine.width + wordWidth + glueWidth >
             currentLine.availableWidth + WIDTH_TOLERANCE
         ) {
           // Word doesn't fit, start new line

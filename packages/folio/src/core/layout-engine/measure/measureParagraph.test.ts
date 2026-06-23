@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ParagraphBlock, Run } from "../types";
 import {
   smallCapsAwareCharWidth,
   withFakeTextMeasure,
@@ -193,6 +194,49 @@ describe("empty paragraph line-height floor", () => {
 
     expect(measure.totalHeight).toBe(0);
     expect(measure.lines[0]?.lineHeight).toBe(0);
+  });
+});
+
+describe("measureParagraph cross-run line breaking", () => {
+  const style = { fontFamily: "Calibri", fontSize: 11 };
+  const width = (text: string): number => measureTextWidth(text, style);
+  const paragraph = (runs: Run[]): ParagraphBlock => ({
+    kind: "paragraph",
+    id: "p1",
+    runs,
+  });
+  const lineStartsAtRun = (
+    lines: { fromRun: number; fromChar: number }[],
+    runIndex: number,
+  ): boolean =>
+    lines.some((line) => line.fromRun === runIndex && line.fromChar === 0);
+
+  test("keeps an adjacent footnote marker glued to the preceding word", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = [
+        { kind: "text", text: "alpha beta." },
+        { kind: "text", text: "1", superscript: true, footnoteRefId: 1 },
+        { kind: "text", text: " gamma" },
+      ];
+      const maxWidth = width("alpha beta.") + width("1") - 0.6;
+      const { lines } = measureParagraph(paragraph(runs), maxWidth);
+
+      expect(lineStartsAtRun(lines, 1)).toBe(false);
+    }, fakeMeasure);
+  });
+
+  test("allows a normal wrap when whitespace precedes the footnote marker", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = [
+        { kind: "text", text: "alpha beta " },
+        { kind: "text", text: "1", superscript: true, footnoteRefId: 1 },
+        { kind: "text", text: " gamma" },
+      ];
+      const maxWidth = width("alpha beta ") + width("1") - 0.6;
+      const { lines } = measureParagraph(paragraph(runs), maxWidth);
+
+      expect(lineStartsAtRun(lines, 1)).toBe(true);
+    }, fakeMeasure);
   });
 });
 

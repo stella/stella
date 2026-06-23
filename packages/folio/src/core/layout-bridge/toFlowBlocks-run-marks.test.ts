@@ -58,6 +58,7 @@ const schema = new Schema({
         vertAlign: { default: null },
       },
     },
+    superscript: {},
     subscript: {},
   },
 });
@@ -177,18 +178,16 @@ describe("toFlowBlocks run-level OOXML marks", () => {
     expect(firstRun(blocks).textEffect).toBe("shimmer");
   });
 
-  test("raises footnote/endnote reference anchors to superscript by default", () => {
-    // eigenpal/docx-editor#845: Word's FootnoteReference/EndnoteReference
-    // character style is superscript, but the OOXML frequently omits an
-    // explicit run-level vertAlign (e.g. a bare `<w:footnoteReference/>`), so
-    // the flow run must carry superscript regardless of the source mark.
+  test("does not raise bare footnote/endnote reference anchors by default", () => {
+    // eigenpal/docx-editor#994: Word renders a bare note anchor at the
+    // baseline unless the run or resolved character style says superscript.
     const footnote = toFlowBlocks(
       buildSingleRunDoc("1", "footnoteRef", { id: 1, noteType: "footnote" }),
       {},
     );
     const footnoteRun = firstRun(footnote);
     expect(footnoteRun.footnoteRefId).toBe(1);
-    expect(footnoteRun.superscript).toBe(true);
+    expect(footnoteRun.superscript).toBeUndefined();
 
     const endnote = toFlowBlocks(
       buildSingleRunDoc("i", "footnoteRef", { id: 2, noteType: "endnote" }),
@@ -196,7 +195,20 @@ describe("toFlowBlocks run-level OOXML marks", () => {
     );
     const endnoteRun = firstRun(endnote);
     expect(endnoteRun.endnoteRefId).toBe(2);
-    expect(endnoteRun.superscript).toBe(true);
+    expect(endnoteRun.superscript).toBeUndefined();
+  });
+
+  test("keeps style-derived superscript on footnote/endnote anchors", () => {
+    const footnote = toFlowBlocks(
+      buildRunWithMarks("1", [
+        { markName: "footnoteRef", attrs: { id: 1, noteType: "footnote" } },
+        { markName: "superscript" },
+      ]),
+      {},
+    );
+    const footnoteRun = firstRun(footnote);
+    expect(footnoteRun.footnoteRefId).toBe(1);
+    expect(footnoteRun.superscript).toBe(true);
   });
 
   test("does not raise a footnote anchor that carries an explicit subscript", () => {
