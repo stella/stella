@@ -59,15 +59,15 @@ const sleep = async (ms: number) =>
 export class UploadQueue<T> {
   private state: UploadState = "idle";
   private pending: File[] = [];
-  private inflight = new Map<File, AbortController>();
+  private readonly inflight = new Map<File, AbortController>();
   private completed: T[] = [];
   private failed: FailedUpload[] = [];
   private total = 0;
   private retrying = 0;
-  private concurrency: number;
-  private uploadFn: UploadFn<T>;
+  private readonly concurrency: number;
+  private readonly uploadFn: UploadFn<T>;
   private rateLimitTimer: ReturnType<typeof setTimeout> | null = null;
-  private listeners: ListenerMap<T> = {
+  private readonly listeners: ListenerMap<T> = {
     done: new Set(),
     progress: new Set(),
     "rate-limited": new Set(),

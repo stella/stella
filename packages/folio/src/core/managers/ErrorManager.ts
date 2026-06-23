@@ -20,7 +20,7 @@ import type {
 export class ErrorManager extends Subscribable<ErrorManagerSnapshot> {
   private notifications: ErrorNotification[] = [];
   private idCounter = 0;
-  private timers = new Set<ReturnType<typeof setTimeout>>();
+  private readonly timers = new Set<ReturnType<typeof setTimeout>>();
 
   constructor() {
     super({ notifications: [] });
