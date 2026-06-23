@@ -18,7 +18,10 @@ import { api } from "@/lib/api";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
-import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
+import {
+  CatalogueBrowser,
+  type CatalogueBrowserFilterKind,
+} from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import type { ToolDetailPayload } from "@/routes/_protected.knowledge/-components/catalogue/tool-detail-view";
 import { knowledgeKeys } from "@/routes/_protected.knowledge/-queries";
 import {
@@ -26,12 +29,6 @@ import {
   catalogueOptions,
 } from "@/routes/_protected.knowledge/-queries/catalogue";
 import { organizationSettingsOptions } from "@/routes/_protected.organization/-settings-queries";
-
-const LazyCatalogueBrowser = lazy(async () => {
-  const module =
-    await import("@/routes/_protected.knowledge/-components/catalogue/catalogue-browser");
-  return { default: module.CatalogueBrowser };
-});
 
 const LazyToolDetailView = lazy(async () => {
   const module =
@@ -280,7 +277,7 @@ function ToolsCatalogue({ initialKind, organizationId }: ToolsCatalogueProps) {
   const canManageCustomTools = role === "admin" || role === "owner";
 
   return (
-    <LazyCatalogueBrowser
+    <CatalogueBrowser
       canManageCustomTools={canManageCustomTools}
       initialKind={initialKind}
       organizationId={organizationId}
