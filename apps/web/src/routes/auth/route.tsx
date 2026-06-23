@@ -18,10 +18,6 @@ function AuthLayout() {
 
   return (
     <div className="auth-gradient flex min-h-dvh flex-col">
-      <div className="fixed end-4 top-4 z-20 flex items-center gap-2 lg:end-8 lg:top-6">
-        <ThemePicker />
-        <LanguagePicker />
-      </div>
       <style>{`
         .auth-gradient {
           background: linear-gradient(
@@ -34,7 +30,7 @@ function AuthLayout() {
         .dark { --auth-gradient-end: #1a3a5c; }
       `}</style>
       <div className="flex flex-1 flex-col px-8 lg:px-16 xl:px-24">
-        <header className="pt-12">
+        <header className="flex items-end justify-between pt-12">
           <div className="flex items-center gap-3">
             <a
               aria-label="stella"
@@ -46,6 +42,10 @@ function AuthLayout() {
             <span className="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase">
               {t("auth.betaNoticeTitle")}
             </span>
+          </div>
+          <div className="flex items-center gap-2">
+            <ThemePicker />
+            <LanguagePicker />
           </div>
         </header>
         <div className="flex flex-1 flex-col items-center min-[70rem]:flex-row min-[70rem]:items-baseline">
