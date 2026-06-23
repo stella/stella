@@ -425,7 +425,7 @@ function extractRunFormatting(
   theme?: Theme | null,
 ): RunFormatting {
   const formatting: RunFormatting = {};
-  let noteReferenceBaseline = false;
+  let hasNoteRef = false;
 
   for (const mark of marks) {
     switch (mark.type.name) {
@@ -608,9 +608,10 @@ function extractRunFormatting(
       }
 
       case "footnoteRef": {
+        hasNoteRef = true;
         const attrs = expectFootnoteRefMarkAttrs(mark);
-        if (attrs.vertAlign === "baseline") {
-          noteReferenceBaseline = true;
+        if (attrs.vertAlign === "superscript") {
+          formatting.superscript = true;
         }
         const id =
           typeof attrs.id === "string"
@@ -661,19 +662,8 @@ function extractRunFormatting(
     }
   }
 
-  // A footnote/endnote anchor renders superscript by default — Word's built-in
-  // FootnoteReference / EndnoteReference character style sets
-  // `w:vertAlign="superscript"`, and the OOXML often omits an explicit run-level
-  // mark (e.g. a bare `<w:r><w:footnoteReference/></w:r>`). Resolve it after the
-  // mark loop so an explicit subscript on the same run still wins regardless of
-  // mark order (eigenpal/docx-editor#845).
-  if (
-    (formatting.footnoteRefId !== undefined ||
-      formatting.endnoteRefId !== undefined) &&
-    !noteReferenceBaseline &&
-    !formatting.subscript
-  ) {
-    formatting.superscript = true;
+  if (hasNoteRef && formatting.subscript) {
+    delete formatting.superscript;
   }
 
   return formatting;

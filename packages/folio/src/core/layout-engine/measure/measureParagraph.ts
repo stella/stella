@@ -472,6 +472,65 @@ function findWordBreaks(text: string): number[] {
   return breaks;
 }
 
+function isBreakChar(char: string | undefined): boolean {
+  return char === " " || char === "-" || char === "\t";
+}
+
+function isSpaceOrTab(char: string | undefined): boolean {
+  return char === " " || char === "\t";
+}
+
+function trimTrailingSpacesAndTabs(text: string): string {
+  let end = text.length;
+  while (end > 0) {
+    const char = text[end - 1];
+    if (char !== " " && char !== "\t") {
+      break;
+    }
+    end--;
+  }
+  return text.slice(0, end);
+}
+
+/**
+ * Width of the unbreakable text glued to the end of each run.
+ * A run boundary is not itself a wrap opportunity: adjacent note markers and
+ * format-only word splits must wrap as one cluster.
+ */
+function computeTrailingGlueWidths(runs: Run[]): number[] {
+  const widths = Array.from({ length: runs.length }, () => 0);
+  for (let index = runs.length - 1; index >= 0; index--) {
+    const nextRun = runs[index + 1];
+    if (!nextRun || !isTextRun(nextRun)) {
+      continue;
+    }
+
+    const text = nextRun.text;
+    if (!text) {
+      widths[index] = widths[index + 1] ?? 0;
+      continue;
+    }
+    if (isSpaceOrTab(text[0])) {
+      continue;
+    }
+
+    const style = runToFontStyle(nextRun);
+    const breaks = findWordBreaks(text);
+    if (breaks.length === 0) {
+      widths[index] = measureTextWidth(text, style) + (widths[index + 1] ?? 0);
+      continue;
+    }
+
+    const firstBreak = breaks[0];
+    if (firstBreak === undefined) {
+      continue;
+    }
+    const leading = trimTrailingSpacesAndTabs(text.slice(0, firstBreak));
+    widths[index] = measureTextWidth(leading, style);
+  }
+  return widths;
+}
+
 /**
  * Minimum horizontal room a line must offer before we treat it as usable for
  * body text. Below this threshold the line is bumped past obstructing floats
@@ -741,6 +800,8 @@ export function measureParagraph(
     };
   }
 
+  const trailingGlueWidths = computeTrailingGlueWidths(runs);
+
   // Initialize line state
   let currentLine: LineState = {
     fromRun: 0,
@@ -760,14 +821,11 @@ export function measureParagraph(
       : {}),
   };
 
-  /**
-   * Finalize and push the current line to the lines array
-   */
-  const finalizeLine = (): void => {
+  const calculateLineTypography = (line: LineState): LineTypography => {
     const typography = calculateTypographyMetrics(
-      currentLine.maxFontSize,
+      line.maxFontSize,
       spacing,
-      currentLine.maxFontMetrics,
+      line.maxFontMetrics,
     );
 
     // If an inline image or stacked equation is taller than the text-based
@@ -775,8 +833,8 @@ export function measureParagraph(
     // as tall glyphs on the text baseline.
     const finalTypography = { ...typography };
     const inlineObjectHeight = Math.max(
-      currentLine.maxImageHeightPx,
-      currentLine.maxMathHeightPx,
+      line.maxImageHeightPx,
+      line.maxMathHeightPx,
     );
     if (inlineObjectHeight > finalTypography.lineHeight) {
       const objectHeight = inlineObjectHeight;
@@ -786,7 +844,7 @@ export function measureParagraph(
       // with the painter's image-only `runsForLine.length === 1 && isImageRun(...)`
       // test in renderLine — the two pick paired line-height + alignment
       // strategies and disagreeing reintroduces the floating-label bug.
-      if (currentLine.fromRun === currentLine.toRun) {
+      if (line.fromRun === line.toRun) {
         // Object alone on the line: grow to the object height plus the
         // parent font's descent on BOTH sides so the row has visible
         // breathing room above and below it.
@@ -802,6 +860,50 @@ export function measureParagraph(
         finalTypography.ascent = objectHeight;
       }
     }
+
+    return finalTypography;
+  };
+
+  const getPostWrapAvailableWidth = (): number => {
+    if (!floatingZones || floatingZones.length === 0) {
+      return bodyContentWidth;
+    }
+
+    const lineTypography = calculateLineTypography(currentLine);
+    let nextCumulativeHeight = cumulativeHeight + lineTypography.lineHeight;
+    const estimatedLineHeight =
+      ptToPx(DEFAULT_FONT_SIZE) * DEFAULT_LINE_HEIGHT_MULTIPLIER;
+    const absoluteY = paragraphYOffset + nextCumulativeHeight;
+    const clearY = findClearLineY(
+      absoluteY,
+      estimatedLineHeight,
+      floatingZones,
+      bodyContentWidth,
+      MIN_WRAP_SEGMENT_WIDTH,
+    );
+    const skip = clearY - absoluteY;
+    if (skip > 0) {
+      nextCumulativeHeight += skip;
+    }
+
+    const floatingMargins = getFloatingMargins(
+      nextCumulativeHeight,
+      estimatedLineHeight,
+      floatingZones,
+      paragraphYOffset,
+    );
+
+    return Math.max(
+      1,
+      getFloatingAvailableWidth(floatingMargins, bodyContentWidth),
+    );
+  };
+
+  /**
+   * Finalize and push the current line to the lines array
+   */
+  const finalizeLine = (): void => {
+    const finalTypography = calculateLineTypography(currentLine);
 
     const line: MeasuredLine = {
       fromRun: currentLine.fromRun,
@@ -1209,10 +1311,25 @@ export function measureParagraph(
           continue;
         }
 
-        // Check if word fits on current line
+        // Check if word fits on current line. If this is the last word in a
+        // run and the next run starts without whitespace, include that glued
+        // width in the wrap decision so a note marker or format-only word
+        // split is not stranded on the next line (eigenpal/docx-editor#991).
+        const isRunTail = nextBreak === text.length;
+        const rawGlueWidth =
+          // eslint-disable-next-line unicorn/prefer-at -- hot path: direct index avoids .at() overhead.
+          isRunTail && word.length > 0 && !isBreakChar(word[word.length - 1])
+            ? (trailingGlueWidths[runIndex] ?? 0)
+            : 0;
+        const glueWidth =
+          rawGlueWidth > 0 &&
+          wordWidth + rawGlueWidth <=
+            getPostWrapAvailableWidth() + WIDTH_TOLERANCE
+            ? rawGlueWidth
+            : 0;
         if (
           currentLine.width > 0 &&
-          currentLine.width + wordWidth >
+          currentLine.width + wordWidth + glueWidth >
             currentLine.availableWidth + WIDTH_TOLERANCE
         ) {
           // Word doesn't fit, start new line

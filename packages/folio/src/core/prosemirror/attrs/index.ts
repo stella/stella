@@ -156,6 +156,7 @@ const NOTE_TYPES = [
 
 const NOTE_REF_VERT_ALIGNS = [
   "baseline",
+  "superscript",
 ] as const satisfies readonly NonNullable<FootnoteRefAttrs["vertAlign"]>[];
 
 const TEXT_BOX_DOCX_PLACEMENTS = [

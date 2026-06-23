@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ParagraphBlock, Run } from "../types";
 import {
   smallCapsAwareCharWidth,
   withFakeTextMeasure,
@@ -193,6 +194,138 @@ describe("empty paragraph line-height floor", () => {
 
     expect(measure.totalHeight).toBe(0);
     expect(measure.lines[0]?.lineHeight).toBe(0);
+  });
+});
+
+describe("measureParagraph cross-run line breaking", () => {
+  const style = { fontFamily: "Calibri", fontSize: 11 };
+  const width = (text: string): number => measureTextWidth(text, style);
+  const paragraph = (runs: Run[]): ParagraphBlock => ({
+    kind: "paragraph",
+    id: "p1",
+    runs,
+  });
+  const lineStartsAtRun = (
+    lines: { fromRun: number; fromChar: number }[],
+    runIndex: number,
+  ): boolean =>
+    lines.some((line) => line.fromRun === runIndex && line.fromChar === 0);
+  const lineStartsAt = (
+    lines: { fromRun: number; fromChar: number }[],
+    runIndex: number,
+    charIndex: number,
+  ): boolean =>
+    lines.some(
+      (line) => line.fromRun === runIndex && line.fromChar === charIndex,
+    );
+
+  test("keeps an adjacent footnote marker glued to the preceding word", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = [
+        { kind: "text", text: "alpha beta." },
+        { kind: "text", text: "1", superscript: true, footnoteRefId: 1 },
+        { kind: "text", text: " gamma" },
+      ];
+      const maxWidth = width("alpha beta.") + width("1") - 0.6;
+      const { lines } = measureParagraph(paragraph(runs), maxWidth);
+
+      expect(lineStartsAtRun(lines, 1)).toBe(false);
+    }, fakeMeasure);
+  });
+
+  test("allows a normal wrap when whitespace precedes the footnote marker", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = [
+        { kind: "text", text: "alpha beta " },
+        { kind: "text", text: "1", superscript: true, footnoteRefId: 1 },
+        { kind: "text", text: " gamma" },
+      ];
+      const maxWidth = width("alpha beta ") + width("1") - 0.6;
+      const { lines } = measureParagraph(paragraph(runs), maxWidth);
+
+      expect(lineStartsAtRun(lines, 1)).toBe(true);
+    }, fakeMeasure);
+  });
+
+  test("keeps a split leading hyphen glued to the preceding run", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = [
+        { kind: "text", text: "alpha well" },
+        { kind: "text", text: "-known" },
+        { kind: "text", text: " topic" },
+      ];
+      const maxWidth = width("alpha well") + width("-") - 0.6;
+      const { lines } = measureParagraph(paragraph(runs), maxWidth);
+
+      expect(lineStartsAt(lines, 0, "alpha ".length)).toBe(true);
+      expect(lineStartsAtRun(lines, 1)).toBe(false);
+    }, fakeMeasure);
+  });
+
+  test("keeps a long format-only split glued as one cluster", () => {
+    withFakeTextMeasure(() => {
+      const wordRuns: Run[] = "well-known".split("").map((text, index) => ({
+        kind: "text",
+        text,
+        bold: index % 2 === 0,
+      }));
+      const runs: Run[] = [{ kind: "text", text: "alpha " }, ...wordRuns];
+      const maxWidth = width("alpha well-") - 0.6;
+      const { lines } = measureParagraph(paragraph(runs), maxWidth);
+
+      expect(lineStartsAtRun(lines, 1)).toBe(true);
+      for (let runIndex = 2; runIndex < runs.length; runIndex++) {
+        expect(lineStartsAtRun(lines, runIndex)).toBe(false);
+      }
+    }, fakeMeasure);
+  });
+
+  test("hard-breaks oversized glued split words by line capacity", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = "abcdefghijkl".split("").map((text, index) => ({
+        kind: "text",
+        text,
+        bold: index % 2 === 0,
+      }));
+      const { lines } = measureParagraph(paragraph(runs), width("abcd"));
+
+      expect(lines[0]).toMatchObject({
+        fromRun: 0,
+        fromChar: 0,
+        toRun: 3,
+        toChar: 1,
+      });
+      expect(lines[1]).toMatchObject({
+        fromRun: 4,
+        fromChar: 0,
+        toRun: 7,
+        toChar: 1,
+      });
+      expect(lines).toHaveLength(3);
+    }, fakeMeasure);
+  });
+
+  test("keeps glue when the next line can fit a cluster narrowed off the first line", () => {
+    withFakeTextMeasure(() => {
+      const runs: Run[] = [
+        { kind: "text", text: "a " },
+        { kind: "text", text: "b", bold: true },
+        { kind: "text", text: "cde" },
+      ];
+      const { lines } = measureParagraph(
+        {
+          ...paragraph(runs),
+          attrs: {
+            listMarker: "1.",
+            listMarkerSuffix: "nothing",
+          },
+        },
+        width("abcde"),
+      );
+
+      expect(lineStartsAtRun(lines, 1)).toBe(true);
+      expect(lineStartsAtRun(lines, 2)).toBe(false);
+    }, fakeMeasure);
   });
 });
 

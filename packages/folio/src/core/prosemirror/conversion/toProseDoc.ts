@@ -2121,7 +2121,11 @@ function convertRunContent(
       const footnoteMark = schema.mark("footnoteRef", {
         id: content.id.toString(),
         noteType: "footnote",
-        vertAlign: formatting?.vertAlign === "baseline" ? "baseline" : null,
+        vertAlign:
+          formatting?.vertAlign === "baseline" ||
+          formatting?.vertAlign === "superscript"
+            ? formatting.vertAlign
+            : null,
       });
       return [schema.text(content.id.toString(), [...marks, footnoteMark])];
     }
@@ -2131,7 +2135,11 @@ function convertRunContent(
       const endnoteMark = schema.mark("footnoteRef", {
         id: content.id.toString(),
         noteType: "endnote",
-        vertAlign: formatting?.vertAlign === "baseline" ? "baseline" : null,
+        vertAlign:
+          formatting?.vertAlign === "baseline" ||
+          formatting?.vertAlign === "superscript"
+            ? formatting.vertAlign
+            : null,
       });
       return [schema.text(content.id.toString(), [...marks, endnoteMark])];
     }

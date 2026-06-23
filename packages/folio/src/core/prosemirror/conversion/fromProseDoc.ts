@@ -1023,7 +1023,7 @@ function extractParagraphContent(
     if (noteRefMark && !linkMark) {
       // Finish any current content
       flushCurrentInline();
-      content.push(createNoteReferenceRun(noteRefMark));
+      content.push(createNoteReferenceRun(noteRefMark, node.marks));
       return;
     }
 
@@ -1345,7 +1345,7 @@ function createHyperlink(linkMark: Mark): Hyperlink {
 function addNodeToHyperlink(hyperlink: Hyperlink, node: PMNode): void {
   const noteRefMark = node.marks.find((m) => m.type.name === "footnoteRef");
   if (noteRefMark) {
-    hyperlink.children.push(createNoteReferenceRun(noteRefMark));
+    hyperlink.children.push(createNoteReferenceRun(noteRefMark, node.marks));
     return;
   }
 
@@ -1378,7 +1378,29 @@ function addNodeToHyperlink(hyperlink: Hyperlink, node: PMNode): void {
   }
 }
 
-function createNoteReferenceRun(noteRefMark: Mark): Run {
+function getNoteReferenceVertAlign(
+  noteAttrs: ReturnType<typeof expectFootnoteRefMarkAttrs>,
+  marks: readonly Mark[],
+): "baseline" | "superscript" | "subscript" | undefined {
+  if (marks.some((mark) => mark.type.name === "subscript")) {
+    return "subscript";
+  }
+  if (marks.some((mark) => mark.type.name === "superscript")) {
+    return "superscript";
+  }
+  if (
+    noteAttrs.vertAlign === "baseline" ||
+    noteAttrs.vertAlign === "superscript"
+  ) {
+    return noteAttrs.vertAlign;
+  }
+  return undefined;
+}
+
+function createNoteReferenceRun(
+  noteRefMark: Mark,
+  marks: readonly Mark[],
+): Run {
   const noteAttrs = expectFootnoteRefMarkAttrs(noteRefMark);
   const noteType =
     noteAttrs.noteType === "endnote" ? "endnoteRef" : "footnoteRef";
@@ -1394,8 +1416,9 @@ function createNoteReferenceRun(noteRefMark: Mark): Run {
     type: "run",
     content: [noteRef],
   };
-  if (noteAttrs.vertAlign === "baseline") {
-    run.formatting = { vertAlign: "baseline" };
+  const vertAlign = getNoteReferenceVertAlign(noteAttrs, marks);
+  if (vertAlign) {
+    run.formatting = { vertAlign };
   }
   return run;
 }
