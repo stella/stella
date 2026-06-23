@@ -96,6 +96,7 @@ export const DeepLKeyCard = () => {
 
   const isConfigured = deeplConfig?.configured === true;
   const canSave = apiKey.trim().length > 0 && !saveMutation.isPending;
+  const removeLabel = t("remove");
 
   return (
     <div className="flex flex-col gap-4">
@@ -118,7 +119,7 @@ export const DeepLKeyCard = () => {
             </span>
           </div>
           <Button
-            aria-label={t("remove")}
+            aria-label={removeLabel}
             loading={deleteMutation.isPending}
             onClick={() => deleteMutation.mutate()}
             size="sm"

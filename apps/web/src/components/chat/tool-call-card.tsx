@@ -465,6 +465,7 @@ export const ToolCallCard = ({
         {canExpand && (!headerOpensSkillResource || showDetails) && (
           <button
             aria-label={t("chat.toolCall.toggleDetails")}
+            title={t("chat.toolCall.toggleDetails")}
             className="text-muted-foreground hover:text-foreground focus-visible:ring-ring/50 shrink-0 rounded focus-visible:ring-2 focus-visible:outline-none"
             onClick={() => {
               setExpanded((e) => !e);

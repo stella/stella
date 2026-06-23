@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Odstranit označení",
+      "collapseRow": "Sbalit řádek",
+      "expandRow": "Rozbalit řádek",
       "flagCell": "Označit buňku",
       "flags": {
         "contradiction": "Rozpor",

@@ -735,10 +735,12 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
               <BreadcrumbList>
                 <BreadcrumbItem>
                   <button
+                    aria-label={t("workspaces.copyToMatter.rootFolder")}
                     className="text-muted-foreground hover:text-foreground text-xs"
                     onClick={() => {
                       void navigateToFolder();
                     }}
+                    title={t("workspaces.copyToMatter.rootFolder")}
                     type="button"
                   >
                     <FolderIcon className="size-3.5" />

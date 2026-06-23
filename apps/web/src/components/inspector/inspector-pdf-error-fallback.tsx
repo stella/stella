@@ -23,7 +23,12 @@ export const InspectorPdfErrorFallback = ({
           TOOLBAR_ROW_HEIGHT,
         )}
       >
-        <Button onClick={onClose} size="icon-xs" variant="ghost">
+        <Button
+          aria-label={t("common.close")}
+          onClick={onClose}
+          size="icon-xs"
+          variant="ghost"
+        >
           <XIcon className="size-3.5" />
         </Button>
       </div>

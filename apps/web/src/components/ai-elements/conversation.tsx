@@ -109,6 +109,7 @@ export const ConversationScrollButton = ({
     isScrollable &&
     !isAtBottom && (
       <Button
+        aria-label="Scroll to bottom"
         className={cn(
           // The outline variant is translucent in dark mode (content shows
           // through the button) and its `::before` highlight is a rounded

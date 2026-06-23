@@ -219,6 +219,7 @@ export const AIConfigCard = () => {
   });
 
   const providerValues = getProviderValues(providers);
+  const removeLabel = tCommon("remove");
   const canSave =
     hasUsableProviderDrafts(providers) &&
     serializeOverrideModels({ providers: providerValues, roleModels }) !== null;
@@ -248,6 +249,7 @@ export const AIConfigCard = () => {
             ))}
           </div>
           <Button
+            aria-label={removeLabel}
             loading={deleteMutation.isPending}
             onClick={() => deleteMutation.mutate()}
             size="sm"

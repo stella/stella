@@ -275,7 +275,10 @@ const FilterEditBody = ({
           {field.label}
         </span>
         <Menu>
-          <MenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
+          <MenuTrigger
+            aria-label={t("common.actions")}
+            render={<Button size="icon-xs" variant="ghost" />}
+          >
             <MoreHorizontalIcon />
           </MenuTrigger>
           <MenuPopup align="end">

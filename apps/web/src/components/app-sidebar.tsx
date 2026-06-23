@@ -895,7 +895,10 @@ const MatterItem = ({
               }}
               open={menuOpen}
             >
-              <MenuTrigger className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100">
+              <MenuTrigger
+                aria-label={t("common.actions")}
+                className="text-sidebar-foreground ring-sidebar-ring hover:bg-sidebar-accent flex size-5 items-center justify-center rounded-md outline-hidden data-popup-open:opacity-100"
+              >
                 <EllipsisVerticalIcon className="size-4" />
               </MenuTrigger>
               <MenuPopup

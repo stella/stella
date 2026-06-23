@@ -40,10 +40,20 @@ export const CalendarHeader = ({
       <Button onClick={onNavigateToday} size="sm" variant="outline">
         {t("common.today")}
       </Button>
-      <Button onClick={onNavigatePrev} size="icon-sm" variant="ghost">
+      <Button
+        aria-label={t("common.previous")}
+        onClick={onNavigatePrev}
+        size="icon-sm"
+        variant="ghost"
+      >
         <DirectionalIcon icon={ChevronLeftIcon} />
       </Button>
-      <Button onClick={onNavigateNext} size="icon-sm" variant="ghost">
+      <Button
+        aria-label={t("common.next")}
+        onClick={onNavigateNext}
+        size="icon-sm"
+        variant="ghost"
+      >
         <DirectionalIcon icon={ChevronRightIcon} />
       </Button>
       <Popover>
@@ -63,6 +73,7 @@ export const CalendarHeader = ({
         >
           <div className="flex items-center justify-between pb-1">
             <Button
+              aria-label={t("common.previous")}
               onClick={() =>
                 onSetViewDate(new Date(Date.UTC(year - 1, month, 1)))
               }
@@ -73,6 +84,7 @@ export const CalendarHeader = ({
             </Button>
             <span className="text-xs font-medium">{year}</span>
             <Button
+              aria-label={t("common.next")}
               onClick={() =>
                 onSetViewDate(new Date(Date.UTC(year + 1, month, 1)))
               }

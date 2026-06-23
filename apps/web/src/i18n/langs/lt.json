@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Išvalyti žymas",
+      "collapseRow": "Suskleisti eilutę",
+      "expandRow": "Išskleisti eilutę",
       "flagCell": "Pažymėti langelį",
       "flags": {
         "contradiction": "Prieštara",

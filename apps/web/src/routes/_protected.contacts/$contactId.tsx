@@ -156,6 +156,7 @@ function ContactDetailPage() {
       {/* Header */}
       <div className="flex items-center gap-3">
         <Button
+          aria-label={t("common.back")}
           onClick={() => {
             void (async () => await navigate({ to: "/contacts" }))();
           }}

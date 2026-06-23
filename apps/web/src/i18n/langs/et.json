@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Eemalda märgised",
+      "collapseRow": "Ahenda rida",
+      "expandRow": "Laienda rida",
       "flagCell": "Märgista lahter",
       "flags": {
         "contradiction": "Vastuolu",

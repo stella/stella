@@ -308,6 +308,7 @@ export const TemplateList = ({
                 {tagFilter}
                 <button
                   aria-label={t("common.remove")}
+                  title={t("common.remove")}
                   className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
                   onClick={() => setTagFilter(null)}
                   type="button"
@@ -1077,6 +1078,7 @@ const TemplateTagsDialogBody = ({
                 {tag}
                 <button
                   aria-label={t("common.remove")}
+                  title={t("common.remove")}
                   className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
                   onClick={() =>
                     setTags((current) => current.filter((x) => x !== tag))
@@ -1312,6 +1314,7 @@ const TemplateLanguagesField = ({
               <span className="text-muted-foreground uppercase">{tag}</span>
               <button
                 aria-label={t("common.remove")}
+                title={t("common.remove")}
                 className="text-muted-foreground hover:text-foreground rounded-full p-0.5"
                 onClick={() => onChange(languages.filter((x) => x !== tag))}
                 type="button"

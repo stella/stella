@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "مسح العلامات",
+      "collapseRow": "طي الصف",
+      "expandRow": "توسيع الصف",
       "flagCell": "وضع علامة على الخلية",
       "flags": {
         "contradiction": "تناقض",

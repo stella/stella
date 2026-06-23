@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Wyczyść oznaczenia",
+      "collapseRow": "Zwiń wiersz",
+      "expandRow": "Rozwiń wiersz",
       "flagCell": "Oznacz komórkę",
       "flags": {
         "contradiction": "Sprzeczność",

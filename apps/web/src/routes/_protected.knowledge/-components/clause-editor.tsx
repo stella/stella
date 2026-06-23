@@ -593,6 +593,7 @@ export const ClauseEditor = ({
         </Button>
         <div className="bg-border mx-1 h-4 w-px" />
         <Button
+          aria-label={t("folio.bold")}
           className={
             editorReady && editor.isActive("bold") ? "bg-muted" : undefined
           }
@@ -605,6 +606,7 @@ export const ClauseEditor = ({
           <BoldIcon className="size-3.5" />
         </Button>
         <Button
+          aria-label={t("folio.italic")}
           className={
             editorReady && editor.isActive("italic") ? "bg-muted" : undefined
           }
@@ -618,6 +620,7 @@ export const ClauseEditor = ({
         </Button>
         <div className="bg-border mx-1 h-4 w-px" />
         <Button
+          aria-label="H1"
           className={
             editorReady && editor.isActive("heading", { level: 1 })
               ? "bg-muted"
@@ -632,6 +635,7 @@ export const ClauseEditor = ({
           <Heading1Icon className="size-3.5" />
         </Button>
         <Button
+          aria-label="H2"
           className={
             editorReady && editor.isActive("heading", { level: 2 })
               ? "bg-muted"
@@ -646,6 +650,7 @@ export const ClauseEditor = ({
           <Heading2Icon className="size-3.5" />
         </Button>
         <Button
+          aria-label="H3"
           className={
             editorReady && editor.isActive("heading", { level: 3 })
               ? "bg-muted"

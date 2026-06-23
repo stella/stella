@@ -199,6 +199,7 @@ const OptionRow = ({
         value={draft}
       />
       <Button
+        aria-label={t("common.remove")}
         className="text-foreground-placeholder size-5 opacity-0 group-hover:opacity-100"
         onClick={onRemove}
         size="icon-sm"

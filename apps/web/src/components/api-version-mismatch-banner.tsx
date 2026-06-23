@@ -97,6 +97,7 @@ export const ApiVersionMismatchBanner = () => {
         </span>
         <button
           aria-label={t("app.versionMismatch.dismiss")}
+          title={t("app.versionMismatch.dismiss")}
           className="hover:bg-accent-foreground/10 -me-1 rounded-sm p-1"
           onClick={handleDismiss}
           type="button"

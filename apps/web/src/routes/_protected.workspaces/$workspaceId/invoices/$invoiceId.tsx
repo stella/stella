@@ -82,7 +82,7 @@ function InvoiceDetailPage() {
     <div className="flex h-full flex-col">
       <div className="flex items-center gap-3 border-b px-4 py-3">
         <Link params={{ workspaceId }} to="/workspaces/$workspaceId/invoices">
-          <Button size="icon" variant="ghost">
+          <Button aria-label={t("common.back")} size="icon" variant="ghost">
             <DirectionalIcon className="size-4" icon={ArrowLeftIcon} />
           </Button>
         </Link>
@@ -447,6 +447,7 @@ const InvoiceDetail = ({
                     {invoiceStatus === "draft" && (
                       <td className="px-4 py-2">
                         <Button
+                          aria-label={t("common.remove")}
                           className="size-6"
                           onClick={() => removeEntryMutation.mutate(entry.id)}
                           size="icon"
@@ -513,6 +514,7 @@ const InvoiceDetail = ({
                     {invoiceStatus === "draft" && (
                       <td className="px-4 py-2">
                         <Button
+                          aria-label={t("common.remove")}
                           className="size-6"
                           onClick={() =>
                             removeExpenseMutation.mutate(expense.id)

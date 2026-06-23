@@ -2075,7 +2075,6 @@ const SelectionGesturePopover = ({
   const [preview, setPreview] = useState<GestureInsertKind | null>(null);
   return (
     <div
-      aria-label={t("templates.studio.insert")}
       className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80vh)] max-w-[min(92vw,30rem)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
       role="group"
       style={{

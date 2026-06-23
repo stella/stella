@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Borrar marcas",
+      "collapseRow": "Contraer fila",
+      "expandRow": "Expandir fila",
       "flagCell": "Marcar celda",
       "flags": {
         "contradiction": "Contradicción",

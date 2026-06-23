@@ -66,6 +66,7 @@ export const ColumnFilterButton = ({
   return (
     <Popover>
       <PopoverTrigger
+        aria-label={t("common.filter")}
         render={
           <button
             aria-label={t("common.filter")}

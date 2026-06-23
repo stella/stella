@@ -1,4 +1,5 @@
 import { XIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
@@ -15,6 +16,8 @@ export const ChatDraftAttachmentChips = ({
   files,
   onRemove,
 }: ChatDraftAttachmentChipsProps) => {
+  const t = useTranslations();
+
   if (files.length === 0) {
     return null;
   }
@@ -34,6 +37,7 @@ export const ChatDraftAttachmentChips = ({
           />
           <span className="max-w-[120px] truncate">{file.filename}</span>
           <Button
+            aria-label={t("common.remove")}
             className="size-4 p-0"
             onClick={() => onRemove(file.id)}
             size="icon-xs"

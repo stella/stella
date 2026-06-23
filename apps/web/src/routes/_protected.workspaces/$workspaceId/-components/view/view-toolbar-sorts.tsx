@@ -4,6 +4,7 @@ import {
   ArrowUpIcon,
   XIcon,
 } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import {
@@ -96,6 +97,7 @@ const SortChip = ({
   onToggle,
   onRemove,
 }: SortChipProps) => {
+  const t = useTranslations();
   const SortIcon = desc ? ArrowDownIcon : ArrowUpIcon;
   const hint = getSortChipLabel(propertyType, desc);
 
@@ -106,7 +108,12 @@ const SortChip = ({
         {propertyName}
         {hint && <span className="text-muted-foreground">{hint}</span>}
       </Button>
-      <Button onClick={onRemove} size="icon-xs" variant="ghost">
+      <Button
+        aria-label={t("common.remove")}
+        onClick={onRemove}
+        size="icon-xs"
+        variant="ghost"
+      >
         <XIcon />
       </Button>
     </div>
@@ -123,27 +130,34 @@ const AddSortButton = ({
   properties,
   sortedPropertyIds,
   onAdd,
-}: AddSortButtonProps) => (
-  <Menu>
-    <MenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
-      <ArrowUpDownIcon />
-    </MenuTrigger>
-    <MenuPopup>
-      {properties.map((property) => (
-        <MenuItem
-          disabled={sortedPropertyIds.has(property.id)}
-          key={property.id}
-          onClick={() =>
-            onAdd({
-              propertyId: property.id,
-              desc: false,
-            })
-          }
-        >
-          <PropertyIcon type={property.content.type} />
-          {property.name}
-        </MenuItem>
-      ))}
-    </MenuPopup>
-  </Menu>
-);
+}: AddSortButtonProps) => {
+  const t = useTranslations();
+
+  return (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("common.add")}
+        render={<Button size="icon-xs" variant="ghost" />}
+      >
+        <ArrowUpDownIcon />
+      </MenuTrigger>
+      <MenuPopup>
+        {properties.map((property) => (
+          <MenuItem
+            disabled={sortedPropertyIds.has(property.id)}
+            key={property.id}
+            onClick={() =>
+              onAdd({
+                propertyId: property.id,
+                desc: false,
+              })
+            }
+          >
+            <PropertyIcon type={property.content.type} />
+            {property.name}
+          </MenuItem>
+        ))}
+      </MenuPopup>
+    </Menu>
+  );
+};

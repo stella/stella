@@ -224,6 +224,7 @@ const DeleteThreadButton = ({
 
   return (
     <Button
+      aria-label={t("chat.deleteThread")}
       className="me-1 opacity-0 group-hover:opacity-100"
       disabled={deleteThread.isPending}
       onClick={() =>

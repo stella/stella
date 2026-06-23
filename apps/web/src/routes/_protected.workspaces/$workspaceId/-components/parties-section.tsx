@@ -380,6 +380,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
               <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                 <BidiText>{selectedContact.displayName}</BidiText>
                 <Button
+                  aria-label={t("common.remove")}
                   className="ms-auto"
                   onClick={() => setSelectedContact(null)}
                   size="icon-xs"
@@ -662,6 +663,7 @@ const AddPartyDialog = ({
               <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
                 <BidiText>{selectedContact.displayName}</BidiText>
                 <Button
+                  aria-label={t("common.remove")}
                   className="ms-auto"
                   onClick={() => setSelectedContact(null)}
                   size="icon-xs"

@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Markierungen löschen",
+      "collapseRow": "Zeile einklappen",
+      "expandRow": "Zeile erweitern",
       "flagCell": "Zelle markieren",
       "flags": {
         "contradiction": "Widerspruch",

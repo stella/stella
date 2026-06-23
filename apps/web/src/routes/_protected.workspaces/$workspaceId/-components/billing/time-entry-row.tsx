@@ -178,6 +178,7 @@ export const TimeEntryRow = ({
 
           {entry.status === "draft" && canUpdateEntry && (
             <Button
+              aria-label={t("common.edit")}
               className="size-7"
               onClick={() => onEdit(entry.id)}
               size="icon"
@@ -188,6 +189,7 @@ export const TimeEntryRow = ({
           )}
           {entry.status === "draft" && canDeleteEntry && (
             <Button
+              aria-label={t("common.delete")}
               className="text-destructive size-7"
               onClick={() => onDelete(entry.id)}
               size="icon"

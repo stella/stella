@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Effacer les marqueurs",
+      "collapseRow": "Réduire la ligne",
+      "expandRow": "Développer la ligne",
       "flagCell": "Marquer la cellule",
       "flags": {
         "contradiction": "Contradiction",

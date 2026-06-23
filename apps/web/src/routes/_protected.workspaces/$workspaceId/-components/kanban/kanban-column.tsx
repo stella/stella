@@ -402,7 +402,10 @@ export const KanbanColumn = ({
         )}
         {hasColumnActions && (
           <Menu>
-            <MenuTrigger render={<Button size="icon-xs" variant="ghost" />}>
+            <MenuTrigger
+              aria-label={t("common.actions")}
+              render={<Button size="icon-xs" variant="ghost" />}
+            >
               <EllipsisVerticalIcon />
             </MenuTrigger>
             <MenuPopup>

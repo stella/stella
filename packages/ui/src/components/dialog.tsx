@@ -1,10 +1,13 @@
 "use client";
 
+import type * as React from "react";
+
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog";
 import { XIcon } from "lucide-react";
 
 import { Button } from "@stll/ui/components/button";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
+import { renderTooltipTrigger } from "@stll/ui/components/tooltip-trigger-helper";
 import { cn } from "@stll/ui/lib/utils";
 
 const DialogCreateHandle = DialogPrimitive.createHandle;
@@ -13,12 +16,24 @@ const Dialog = DialogPrimitive.Root;
 
 const DialogPortal = DialogPrimitive.Portal;
 
-function DialogTrigger(props: DialogPrimitive.Trigger.Props) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
+function DialogTrigger({
+  tooltip,
+  ...props
+}: DialogPrimitive.Trigger.Props & { tooltip?: React.ReactNode }) {
+  return renderTooltipTrigger({
+    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    trigger: <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />,
+  });
 }
 
-function DialogClose(props: DialogPrimitive.Close.Props) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
+function DialogClose({
+  tooltip,
+  ...props
+}: DialogPrimitive.Close.Props & { tooltip?: React.ReactNode }) {
+  return renderTooltipTrigger({
+    tooltip: tooltip ?? props["aria-label"] ?? props.title,
+    trigger: <DialogPrimitive.Close data-slot="dialog-close" {...props} />,
+  });
 }
 
 function DialogBackdrop({

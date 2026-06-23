@@ -359,6 +359,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-static-devtools-import.ts",
     "./.oxlint-plugins/no-static-catalogue-route-import.ts",
     "./.oxlint-plugins/no-workspace-field-value-drift.ts",
+    "./.oxlint-plugins/icon-button-requires-tooltip.ts",
   ],
 
   overrides: [
@@ -626,6 +627,17 @@ export default defineConfig({
       ],
       rules: {
         "no-centered-scroll-column/no-centered-scroll-column": "error",
+      },
+    },
+    {
+      // Icon-only actions need visible hover/focus affordance for sighted users;
+      // aria-label alone is not discoverable. Decorative icons are ignored.
+      files: [
+        "apps/web/src/**/*.tsx",
+        ".oxlint-plugins/__fixtures__/icon-button-requires-tooltip.fixture.tsx",
+      ],
+      rules: {
+        "icon-button-requires-tooltip/icon-button-requires-tooltip": "error",
       },
     },
     {

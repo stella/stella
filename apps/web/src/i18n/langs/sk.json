@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Vymazať označenia",
+      "collapseRow": "Zbaliť riadok",
+      "expandRow": "Rozbaliť riadok",
       "flagCell": "Označiť bunku",
       "flags": {
         "contradiction": "Rozpor",

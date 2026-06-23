@@ -374,6 +374,7 @@ const RuleRow = ({
         value={rule.value}
       />
       <Button
+        aria-label={t("common.delete")}
         disabled={!removable}
         onClick={onRemove}
         size="icon-xs"

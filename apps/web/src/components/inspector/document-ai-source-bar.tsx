@@ -396,6 +396,7 @@ export const DocumentAiSourceBar = ({
           </span>
         </button>
         <Button
+          aria-label={t("common.previous")}
           disabled={!prevSlot}
           onClick={() => {
             if (!prevSlot) {
@@ -422,6 +423,7 @@ export const DocumentAiSourceBar = ({
           {format.number(currentIdx + 1)} / {format.number(slots.length)}
         </span>
         <Button
+          aria-label={t("common.next")}
           disabled={!nextSlot}
           onClick={() => {
             if (!nextSlot) {

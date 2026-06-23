@@ -1088,6 +1088,7 @@ const ArrayFieldRenderer = ({
           key={`${field.path}-${String(index)}`}
         >
           <Button
+            aria-label={t("common.delete")}
             className="absolute end-2 top-2"
             onClick={() => removeItem(index)}
             size="icon-xs"
