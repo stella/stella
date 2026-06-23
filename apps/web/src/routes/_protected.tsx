@@ -156,9 +156,13 @@ export const Route = createFileRoute("/_protected")({
 
     const activeOrganizationId = authContext.session.activeOrganizationId;
 
-    // These shell queries only gate optional affordances. Warm them with the
-    // route freshness policy, but never block the protected shell: slow AI
-    // config, role, or sidebar data should not take down /chat or /settings.
+    // These shell queries only gate optional affordances. AI config stays
+    // non-blocking. Role is awaited (via the non-throwing prefetch, so a role
+    // fetch failure still cannot take down the shell) so the role cache is hot
+    // before chrome that reads it via a non-suspense useQuery mounts
+    // (app-sidebar, inspector). Otherwise a cold-cache role fetch resolving
+    // mid-mount triggers React's "state update on a not-yet-mounted component"
+    // warning, which the route-smoke e2e treats as a failure.
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error);
     };
@@ -167,7 +171,7 @@ export const Route = createFileRoute("/_protected")({
       aiAvailabilityOptions({ organizationId: activeOrganizationId }),
       onPrefetchError,
     );
-    void prefetchRouteQuery(context.queryClient, roleOptions, onPrefetchError);
+    await prefetchRouteQuery(context.queryClient, roleOptions, onPrefetchError);
 
     // Seed the pinned-matters store from localStorage before the
     // sidebar renders. The store's `init` is idempotent (skips when
