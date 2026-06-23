@@ -7,7 +7,7 @@
   "main": "./src/index.ts",
   "scripts": {
     "test": "bun test src",
-    "typecheck": "tsc --noEmit",
+    "typecheck": "tsgo --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/docx-utils",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/docx-utils",
     "format": "oxfmt ."
@@ -17,7 +17,6 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:",
-    "typescript": "catalog:"
+    "@types/bun": "catalog:"
   }
 }

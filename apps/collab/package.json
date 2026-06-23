@@ -26,7 +26,6 @@
   "devDependencies": {
     "@hocuspocus/provider": "^4.2.0",
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:",
-    "typescript": "catalog:"
+    "@types/bun": "catalog:"
   }
 }

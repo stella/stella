@@ -132,7 +132,6 @@
     "elysia": "catalog:",
     "react-grab": "0.1.44",
     "rollup-plugin-visualizer": "^7.0.1",
-    "typescript": "catalog:",
     "unified": "^11.0.5"
   }
 }

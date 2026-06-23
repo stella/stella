@@ -136,7 +136,6 @@
         "@hocuspocus/provider": "^4.2.0",
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "apps/desktop": {
@@ -157,7 +156,6 @@
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
         "@vitejs/plugin-react": "catalog:",
-        "typescript": "catalog:",
         "vite": "catalog:",
       },
     },
@@ -179,7 +177,6 @@
         "@resvg/resvg-js": "^2.6.2",
         "@types/react": "catalog:react19",
         "@types/react-dom": "catalog:react19",
-        "typescript": "catalog:",
       },
     },
     "apps/legal-atlas-runner": {
@@ -193,7 +190,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "apps/playground": {
@@ -213,7 +209,6 @@
         "@types/react-dom": "catalog:react19",
         "@vitejs/plugin-react": "catalog:",
         "tailwindcss": "catalog:",
-        "typescript": "catalog:",
         "vite": "catalog:",
       },
     },
@@ -330,7 +325,6 @@
         "elysia": "catalog:",
         "react-grab": "0.1.44",
         "rollup-plugin-visualizer": "^7.0.1",
-        "typescript": "catalog:",
         "unified": "^11.0.5",
       },
     },
@@ -340,7 +334,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/anonymize-chat": {
@@ -353,7 +346,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/boe": {
@@ -362,7 +354,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/business-registries": {
@@ -375,7 +366,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/catalogue": {
@@ -388,7 +378,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/conditions": {
@@ -401,7 +390,6 @@
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
         "fast-check": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/country-codes": {
@@ -410,7 +398,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/docx-core": {
@@ -423,7 +410,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/docx-utils": {
@@ -435,7 +421,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/errors": {
@@ -447,7 +432,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/folio": {
@@ -491,7 +475,6 @@
         "fast-check": "catalog:",
         "react": "catalog:react19",
         "react-dom": "catalog:react19",
-        "typescript": "catalog:",
       },
       "peerDependencies": {
         "react": "^19.0.0",
@@ -511,7 +494,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/legal-ast": {
@@ -523,7 +505,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/legal-atlas": {
@@ -536,7 +517,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/locales": {
@@ -545,7 +525,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/money": {
@@ -554,7 +533,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/permissions": {
@@ -566,7 +544,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/scripts": {
@@ -586,7 +563,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/skills": {
@@ -598,7 +574,6 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/template-conditions": {
@@ -612,7 +587,6 @@
         "@stll/typescript-config": "workspace:*",
         "@types/bun": "catalog:",
         "fast-check": "catalog:",
-        "typescript": "catalog:",
       },
     },
     "packages/transactional": {
@@ -629,7 +603,6 @@
         "@stll/typescript-config": "workspace:*",
         "@types/react": "catalog:react19",
         "react-email": "^6.6.0",
-        "typescript": "catalog:",
       },
     },
     "packages/typescript-config": {
@@ -653,7 +626,6 @@
         "@types/bun": "catalog:",
         "@types/react": "catalog:react19",
         "tailwindcss": "catalog:",
-        "typescript": "catalog:",
       },
     },
   },

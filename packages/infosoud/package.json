@@ -44,7 +44,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "rm -rf dist && tsc -p tsconfig.build.json",
+    "build": "rm -rf dist && tsgo -p tsconfig.build.json",
     "extract:codes": "bun scripts/extract-codes.ts",
     "extract:codes:check": "bun scripts/extract-codes.ts --check",
     "pack:dry-run": "bun pm pack --dry-run",
@@ -61,7 +61,6 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:",
-    "typescript": "catalog:"
+    "@types/bun": "catalog:"
   }
 }

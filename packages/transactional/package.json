@@ -31,7 +31,6 @@
     "@react-email/ui": "6.6.0",
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
-    "react-email": "^6.6.0",
-    "typescript": "catalog:"
+    "react-email": "^6.6.0"
   }
 }

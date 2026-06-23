@@ -22,7 +22,6 @@
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
-    "fast-check": "catalog:",
-    "typescript": "catalog:"
+    "fast-check": "catalog:"
   }
 }
