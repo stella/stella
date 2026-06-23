@@ -36,6 +36,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createFileKey, createUserFileKey } from "@/api/handlers/files/utils";
+import { tmpUploadKeys } from "@/api/handlers/uploads/lib";
 import {
   enqueueAccountDeletionCleanup,
   processAccountDeletionCleanupRequest,
@@ -698,6 +699,29 @@ export const verifyAndDeleteUser = async (
           .where(eq(folioCollabSessions.createdBy, currentUserId));
 
         // 8. Pending (in-flight) S3 uploads
+        const stagedUploadRows = await tx
+          .select({
+            id: pendingUploads.id,
+            organizationId: pendingUploads.organizationId,
+            workspaceId: pendingUploads.workspaceId,
+          })
+          .from(pendingUploads)
+          .where(
+            and(
+              eq(pendingUploads.userId, currentUserId),
+              ne(pendingUploads.status, "finalized"),
+            ),
+          );
+        s3KeysToDelete.push(
+          ...stagedUploadRows.flatMap((row) =>
+            tmpUploadKeys({
+              organizationId: row.organizationId,
+              uploadId: row.id,
+              workspaceId: row.workspaceId,
+            }),
+          ),
+        );
+
         await tx
           .delete(pendingUploads)
           .where(eq(pendingUploads.userId, currentUserId));
