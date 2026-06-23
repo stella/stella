@@ -5,6 +5,7 @@ import { Link } from "@tanstack/react-router";
 import { FileIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -146,12 +147,11 @@ export const MatterCard = ({
               (workspace.client ? (
                 <Link
                   className="text-muted-foreground hover:text-foreground relative z-10 -mt-1 truncate text-xs hover:underline"
-                  dir="auto"
                   onClick={(e) => e.stopPropagation()}
                   params={{ contactId: workspace.client.id }}
                   to="/contacts/$contactId"
                 >
-                  {workspace.client.displayName}
+                  <BidiText>{workspace.client.displayName}</BidiText>
                 </Link>
               ) : (
                 <span className="text-muted-foreground -mt-1 truncate text-xs italic">

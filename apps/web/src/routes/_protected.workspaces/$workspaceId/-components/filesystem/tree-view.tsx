@@ -30,6 +30,7 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useLocale, useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -1411,9 +1412,9 @@ const FilesystemRow = ({
         />
       ) : (
         <span className="flex min-w-0 items-center gap-1.5">
-          <span className="truncate" title={name}>
+          <BidiText as="span" className="truncate" title={name}>
             {name}
-          </span>
+          </BidiText>
           {node.activeEditBy && (
             <ActiveEditBadge
               className="shrink-0"

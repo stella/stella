@@ -2,6 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import type { ResolveParams } from "@tanstack/react-router";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
+
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { contactOptions } from "@/routes/_protected.contacts/-queries";
 
@@ -19,7 +21,7 @@ export const ContactBreadcrumb = ({
 
   return (
     <BreadcrumbLink to="/contacts/$contactId">
-      {contact?.displayName ?? contactId}
+      <BidiText>{contact?.displayName ?? contactId}</BidiText>
     </BreadcrumbLink>
   );
 };

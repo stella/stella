@@ -81,13 +81,13 @@
     "orSignInWithEmail": "vai pierakstieties ar e-pastu",
     "organizationNamePlaceholder": "Mana organizācija",
     "rateLimitExceeded": "Pārāk daudz mēģinājumu. Lūdzu, mēģiniet vēlāk.",
-    "resendCode": "Nosūtīt kodu vēlreiz uz {email}",
+    "resendCode": "Nosūtīt kodu vēlreiz uz <email>{emailAddress}</email>",
     "selectOrganization": "Izvēlieties organizāciju",
     "signIn": "Pieslēgties",
     "signInBeforeInvitation": "Lai pieņemtu uzaicinājumu organizācijā, vispirms jāpieslēdzas.",
     "subtitle": "Dokumenti, tiesu prakse un pārskatīšana kontrolēti. Ar AI palīdzību.",
     "useDifferentEmail": "Izmantot citu e-pasta adresi",
-    "weSentCodeTo": "Mēs nosūtījām kodu uz {email}"
+    "weSentCodeTo": "Mēs nosūtījām kodu uz <email>{emailAddress}</email>"
   },
   "billing": {
     "addEntry": "Pievienot ierakstu",

@@ -26,6 +26,7 @@ import type {
   GlobalSearchHit,
   GlobalSearchResultType,
 } from "@stll/api/types";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -1275,13 +1276,15 @@ const SearchRecents = ({
                   <FileTextIcon className="text-muted-foreground size-4 shrink-0" />
                 )}
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate">{file.title}</span>
-                  <span
+                  <BidiText as="span" className="block truncate">
+                    {file.title}
+                  </BidiText>
+                  <BidiText
+                    as="span"
                     className="text-muted-foreground block truncate text-xs"
-                    dir="auto"
                   >
                     {file.workspaceName}
-                  </span>
+                  </BidiText>
                 </span>
               </Button>
             ))}

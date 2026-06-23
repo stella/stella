@@ -81,13 +81,13 @@
     "orSignInWithEmail": "o inicia sesión con el correo electrónico",
     "organizationNamePlaceholder": "Mi Organización",
     "rateLimitExceeded": "Demasiados intentos. Inténtelo de nuevo más tarde.",
-    "resendCode": "Enviar código de nuevo a {email}",
+    "resendCode": "Enviar código de nuevo a <email>{emailAddress}</email>",
     "selectOrganization": "Seleccione una organización",
     "signIn": "Iniciar sesión",
     "signInBeforeInvitation": "Debe iniciar sesión antes de aceptar una invitación a una organización.",
     "subtitle": "Documentos, jurisprudencia y revisión bajo control. Con ayuda de la IA.",
     "useDifferentEmail": "Usar otro correo",
-    "weSentCodeTo": "Hemos enviado un código a {email}"
+    "weSentCodeTo": "Hemos enviado un código a <email>{emailAddress}</email>"
   },
   "billing": {
     "addEntry": "Añadir entrada",

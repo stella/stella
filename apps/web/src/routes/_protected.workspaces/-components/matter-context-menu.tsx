@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { DestructiveConfirmDialog } from "@stll/ui/components/destructive-confirm-dialog";
 import {
@@ -178,10 +179,12 @@ export const MatterMenuHeader = ({
       className="max-w-48 border-s-2 px-2 py-1.5"
       style={{ borderColor: resolveMatterColor(id, color) }}
     >
-      <div className="truncate text-xs font-medium">{name}</div>
-      <div className="text-muted-foreground truncate text-xs">
+      <BidiText as="div" className="truncate text-xs font-medium">
+        {name}
+      </BidiText>
+      <BidiText as="div" className="text-muted-foreground truncate text-xs">
         {clientName ?? t("workspaces.parties.personalLabel")}
-      </div>
+      </BidiText>
     </div>
   );
 };

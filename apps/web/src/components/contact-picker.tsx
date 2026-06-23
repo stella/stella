@@ -6,6 +6,7 @@ import { BuildingIcon, PlusIcon, SearchIcon, UserIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   Combobox,
   ComboboxEmpty,
@@ -145,7 +146,7 @@ export const ContactPicker = ({
                 ) : (
                   <BuildingIcon className="text-muted-foreground size-3.5" />
                 )}
-                <span dir="auto">{contact.displayName}</span>
+                <BidiText>{contact.displayName}</BidiText>
               </div>
             </ComboboxItem>
           ))}

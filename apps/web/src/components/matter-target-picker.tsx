@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
@@ -127,16 +128,16 @@ export const MatterTargetPicker = ({
                       className="size-4 shrink-0"
                       style={{ color: swatch }}
                     />
-                    <span className="min-w-0 flex-1 truncate" dir="auto">
+                    <BidiText as="span" className="min-w-0 flex-1 truncate">
                       {workspace.name}
-                    </span>
+                    </BidiText>
                     {workspace.client?.displayName !== undefined && (
-                      <span
+                      <BidiText
+                        as="span"
                         className="text-muted-foreground max-w-32 shrink-0 truncate text-xs"
-                        dir="auto"
                       >
                         {workspace.client.displayName}
-                      </span>
+                      </BidiText>
                     )}
                   </button>
                 );
@@ -258,9 +259,9 @@ const FolderPicker = ({
             type="button"
           >
             <FolderIcon className="size-4 shrink-0" />
-            <span className="truncate" dir="auto">
+            <BidiText as="span" className="truncate">
               {folder.name}
-            </span>
+            </BidiText>
           </button>
         </div>
         {hasChildren && isExpanded && (

@@ -81,13 +81,13 @@
     "orSignInWithEmail": "lub zaloguj się e-mailem",
     "organizationNamePlaceholder": "Moja organizacja",
     "rateLimitExceeded": "Zbyt wiele prób. Spróbuj ponownie później.",
-    "resendCode": "Wyślij kod ponownie na {email}",
+    "resendCode": "Wyślij kod ponownie na <email>{emailAddress}</email>",
     "selectOrganization": "Wybierz organizację",
     "signIn": "Zaloguj się",
     "signInBeforeInvitation": "Musisz się zalogować, zanim będziesz mógł przyjąć zaproszenie do organizacji.",
     "subtitle": "Dokumenty, orzecznictwo i przegląd pod kontrolą. Z pomocą AI.",
     "useDifferentEmail": "Użyj innego adresu e-mail",
-    "weSentCodeTo": "Wysłaliśmy kod na adres {email}"
+    "weSentCodeTo": "Wysłaliśmy kod na adres <email>{emailAddress}</email>"
   },
   "billing": {
     "addEntry": "Dodaj wpis",

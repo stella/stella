@@ -16,6 +16,7 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   MenuGroup,
   MenuGroupLabel,
@@ -317,7 +318,15 @@ const CellLockBadge = ({ provenance, onUnlock }: CellLockBadgeProps) => {
           {t("workspaces.table.lock.locked")}
         </span>
         <span className="text-muted-foreground block truncate text-xs">
-          {displayName ? `${displayName} · ${relativeTime}` : relativeTime}
+          {displayName ? (
+            <>
+              <BidiText>{displayName}</BidiText>
+              {" · "}
+              {relativeTime}
+            </>
+          ) : (
+            relativeTime
+          )}
         </span>
       </span>
     </span>
@@ -375,7 +384,15 @@ const FlagProvenanceTooltip = ({
       <span className="min-w-0">
         <span className="block truncate font-medium">{label}</span>
         <span className="text-muted-foreground block truncate text-xs">
-          {displayName ? `${displayName} · ${relativeTime}` : relativeTime}
+          {displayName ? (
+            <>
+              <BidiText>{displayName}</BidiText>
+              {" · "}
+              {relativeTime}
+            </>
+          ) : (
+            relativeTime
+          )}
         </span>
       </span>
     </span>

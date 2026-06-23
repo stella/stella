@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useFormatter, useTranslations } from "use-intl";
 
 import { getDocumentAstMetadata } from "@stll/legal-ast/document-ast";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 
 import { getFormattingLocale } from "@/i18n/i18n-store";
@@ -83,7 +84,7 @@ const MetadataField = ({
     value instanceof Date ? (
       value.toLocaleDateString(getFormattingLocale())
     ) : (
-      <bdi>{value}</bdi>
+      <BidiText>{value}</BidiText>
     );
 
   return (
@@ -274,7 +275,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
           <ul className="space-y-1">
             {decision.citationsFrom.slice(0, 10).map((citation) => (
               <li className="text-muted-foreground text-xs" key={citation.id}>
-                <bdi>{citation.citationText}</bdi>
+                <BidiText>{citation.citationText}</BidiText>
               </li>
             ))}
           </ul>
@@ -289,7 +290,7 @@ export const MetadataPanel = ({ decision }: MetadataPanelProps) => {
           <ul className="space-y-1">
             {decision.citationsTo.slice(0, 10).map((citation) => (
               <li className="text-muted-foreground text-xs" key={citation.id}>
-                <bdi>{citation.citationText}</bdi>
+                <BidiText>{citation.citationText}</BidiText>
               </li>
             ))}
           </ul>

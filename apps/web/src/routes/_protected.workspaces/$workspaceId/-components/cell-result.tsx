@@ -4,6 +4,7 @@ import { Result } from "better-result";
 import { Loader2Icon, SquareMinusIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Skeleton } from "@stll/ui/components/skeleton";
 
 import Tooltip from "@/components/tooltip";
@@ -48,9 +49,9 @@ export const CellResult = ({
           strokeWidth={2.25}
         />
         {hasPreview ? (
-          <div className="line-clamp-2 min-w-0" dir="auto">
+          <BidiText as="div" className="line-clamp-2 min-w-0">
             {preview}
-          </div>
+          </BidiText>
         ) : (
           <PendingSkeleton contentType={property.content.type} />
         )}
@@ -229,9 +230,9 @@ const FileCell = ({
           fileName={fileName}
           mimeType={mimeType}
         />
-        <span className="min-w-0 truncate text-start" dir="auto">
+        <BidiText as="span" className="min-w-0 truncate text-start">
           {fileName}
-        </span>
+        </BidiText>
       </Tooltip>
     );
   }
@@ -248,7 +249,9 @@ const FileCell = ({
         fileName={fileName}
         mimeType={mimeType}
       />
-      <span className="min-w-0 truncate text-start">{fileName}</span>
+      <BidiText as="span" className="min-w-0 truncate text-start">
+        {fileName}
+      </BidiText>
     </Tooltip>
   );
 };
@@ -297,9 +300,9 @@ const SelectResult = ({ value, property }: SelectResultProps) => {
       }}
     >
       {!value && <SquareMinusIcon className="size-4" />}
-      <span className="truncate" dir="auto">
+      <BidiText as="span" className="truncate">
         {value ?? t("common.empty")}
-      </span>
+      </BidiText>
     </span>
   );
 };

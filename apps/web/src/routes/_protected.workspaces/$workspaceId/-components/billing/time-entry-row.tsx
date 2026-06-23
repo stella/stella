@@ -11,6 +11,7 @@ import { useTranslations } from "use-intl";
 
 import { prorateHourlyCents } from "@stll/money";
 import type { CentsAmount } from "@stll/money";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { cn } from "@stll/ui/lib/utils";
@@ -87,7 +88,9 @@ export const TimeEntryRow = ({
 
         <div className="flex min-w-0 flex-1 flex-col gap-0.5">
           <div className="flex items-center gap-2">
-            <span className="truncate text-sm font-medium">{matterName}</span>
+            <BidiText as="span" className="truncate text-sm font-medium">
+              {matterName}
+            </BidiText>
             {!entry.billable && (
               <span className="bg-muted text-muted-foreground shrink-0 rounded px-1.5 py-0.5 text-[0.625rem]">
                 {t("billing.nonBillable")}

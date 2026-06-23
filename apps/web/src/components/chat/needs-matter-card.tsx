@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { contentDir } from "@stll/ui/hooks/use-content-dir";
@@ -340,17 +341,19 @@ const MatterPickerSection = ({
                         color: isSelected ? undefined : swatch,
                       }}
                     />
-                    <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                    <BidiText as="span" className="min-w-0 flex-1 truncate">
+                      {m.name}
+                    </BidiText>
                     {m.client?.displayName && (
-                      <span
+                      <BidiText
+                        as="span"
                         className={cn(
                           "shrink-0 text-[10px]",
                           isSelected ? "opacity-80" : "text-muted-foreground",
                         )}
-                        dir="auto"
                       >
                         {m.client.displayName}
-                      </span>
+                      </BidiText>
                     )}
                   </button>
                 );
@@ -391,9 +394,9 @@ const CreatedSuccessCard = ({ output, onOpen }: CreatedSuccessCardProps) => {
     <>
       <DocumentThumbnail />
       <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-        <span className="truncate text-xs font-semibold" dir="auto">
+        <BidiText as="span" className="truncate text-xs font-semibold">
           {output.fileName}
-        </span>
+        </BidiText>
         {canOpen && (
           <span className="text-muted-foreground inline-flex items-center gap-1 text-[11px]">
             {t("chat.createDocument.openInFolio")}

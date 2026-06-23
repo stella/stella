@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { createFileRoute } from "@tanstack/react-router";
 import { useFormatter, useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Frame, FramePanel } from "@stll/ui/components/frame";
 import { Skeleton } from "@stll/ui/components/skeleton";
@@ -110,8 +111,8 @@ function ActiveEntitlementCard({ data }: { data: UsageEntitlement }) {
       <FramePanel>
         <div className="flex items-start justify-between gap-4">
           <div className="space-y-1">
-            <h2 className="text-lg font-medium" dir="auto">
-              {data.policy.displayName}
+            <h2 className="text-lg font-medium">
+              <BidiText>{data.policy.displayName}</BidiText>
             </h2>
             <p className="text-muted-foreground text-sm">
               {data.entitlement.cancelAtPeriodEnd

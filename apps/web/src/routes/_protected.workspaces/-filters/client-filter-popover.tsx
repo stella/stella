@@ -3,6 +3,7 @@ import { useState } from "react";
 import { CheckIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { Separator } from "@stll/ui/components/separator";
@@ -77,9 +78,9 @@ export const ClientFilterPopover = ({
                 onClick={() => toggle(c.id)}
                 type="button"
               >
-                <span className="truncate" dir="auto">
+                <BidiText as="span" className="truncate">
                   {c.displayName}
-                </span>
+                </BidiText>
                 {active && (
                   <CheckIcon className="text-primary size-3.5 shrink-0" />
                 )}

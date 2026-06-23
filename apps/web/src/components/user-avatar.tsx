@@ -3,6 +3,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@stll/ui/components/avatar";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { cn } from "@stll/ui/lib/utils";
 
 import { getInitials } from "@/lib/get-initials";
@@ -74,7 +75,8 @@ export const UserIdentity = ({
         name={displayName}
       />
       <div className="min-w-0 flex-1">
-        <div
+        <BidiText
+          as="div"
           className={cn(
             "truncate text-sm font-medium",
             deleted && "text-muted-foreground",
@@ -82,16 +84,17 @@ export const UserIdentity = ({
           )}
         >
           {displayName}
-        </div>
+        </BidiText>
         {secondaryText ? (
-          <div
+          <BidiText
+            as="div"
             className={cn(
               "text-muted-foreground truncate text-xs",
               secondaryClassName,
             )}
           >
             {secondaryText}
-          </div>
+          </BidiText>
         ) : null}
       </div>
     </div>

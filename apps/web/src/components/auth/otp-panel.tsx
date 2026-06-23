@@ -1,9 +1,11 @@
 import { useState } from "react";
+import type { ReactNode } from "react";
 
 import { useMutation } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   Frame,
@@ -209,11 +211,17 @@ function OTPPanelContent({
   onUseDifferentEmail: () => void;
 }) {
   const t = useTranslations();
+  const renderEmail = (chunks: ReactNode) => (
+    <BidiText direction="ltr">{chunks}</BidiText>
+  );
 
   const header = (
     <>
       <FrameDescription>
-        {t("auth.weSentCodeTo", { email })}
+        {t.rich("auth.weSentCodeTo", {
+          email: renderEmail,
+          emailAddress: email,
+        })}
         {" · "}
         <Button
           className="h-auto p-0 align-baseline text-sm font-normal text-inherit underline"
@@ -274,7 +282,10 @@ function OTPPanelContent({
           size="sm"
           variant="link"
         >
-          {t("auth.resendCode", { email })}
+          {t.rich("auth.resendCode", {
+            email: renderEmail,
+            emailAddress: email,
+          })}
         </Button>
       </div>
     </>

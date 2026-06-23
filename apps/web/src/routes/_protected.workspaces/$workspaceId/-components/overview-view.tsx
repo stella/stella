@@ -25,6 +25,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@stll/ui/components/avatar";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   Menu,
@@ -1290,9 +1291,9 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
           </span>
         </span>
         {icon}
-        <span className="truncate" dir="auto">
+        <BidiText as="span" className="truncate">
           {entity.name}
-        </span>
+        </BidiText>
       </span>
       {relTime && (
         <span

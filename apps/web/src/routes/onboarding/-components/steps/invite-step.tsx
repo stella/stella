@@ -3,6 +3,7 @@ import { useRef, useState } from "react";
 import { AlertTriangleIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { cn } from "@stll/ui/lib/utils";
@@ -181,7 +182,9 @@ export const InviteStep = ({
                   {isExternal && (
                     <AlertTriangleIcon className="text-warning size-3 shrink-0" />
                   )}
-                  {email}
+                  <BidiText as="span" direction="ltr">
+                    {email}
+                  </BidiText>
                   <button
                     className="text-muted-foreground hover:text-foreground"
                     onClick={() => removeEmail(email)}

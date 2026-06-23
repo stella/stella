@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -175,11 +176,10 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           )}
           <Link
             className="min-w-0 truncate text-sm font-medium hover:underline"
-            dir="auto"
             params={{ contactId: client.id }}
             to="/contacts/$contactId"
           >
-            {client.displayName}
+            <BidiText>{client.displayName}</BidiText>
           </Link>
         </div>
       </section>
@@ -378,7 +378,7 @@ const PromoteDialog = ({ workspaceId }: PromoteDialogProps) => {
             </span>
             {selectedContact ? (
               <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                <span dir="auto">{selectedContact.displayName}</span>
+                <BidiText>{selectedContact.displayName}</BidiText>
                 <Button
                   className="ms-auto"
                   onClick={() => setSelectedContact(null)}
@@ -511,11 +511,10 @@ const PartyRow = ({ party, workspaceId }: PartyRowProps) => {
       )}
       <Link
         className="text-sm font-medium hover:underline"
-        dir="auto"
         params={{ contactId: contact.id }}
         to="/contacts/$contactId"
       >
-        {contact.displayName}
+        <BidiText>{contact.displayName}</BidiText>
       </Link>
       <span className="bg-muted text-muted-foreground rounded-md px-2 py-0.5 text-xs">
         {t(roleKey)}
@@ -661,7 +660,7 @@ const AddPartyDialog = ({
             </span>
             {selectedContact ? (
               <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm">
-                <span dir="auto">{selectedContact.displayName}</span>
+                <BidiText>{selectedContact.displayName}</BidiText>
                 <Button
                   className="ms-auto"
                   onClick={() => setSelectedContact(null)}

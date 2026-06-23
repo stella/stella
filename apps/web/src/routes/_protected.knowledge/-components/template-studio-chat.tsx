@@ -42,6 +42,7 @@ import type {
   DocxEditorRef,
   FolioAIEditSnapshot,
 } from "@stll/folio";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -1174,9 +1175,12 @@ const TemplateStudioChatInner = ({
               <span className="shrink-0">
                 {t("chat.editableFilePlaceholderAction")}
               </span>
-              <span className="text-foreground-label max-w-64 truncate">
+              <BidiText
+                as="span"
+                className="text-foreground-label max-w-64 truncate"
+              >
                 {fileName}
-              </span>
+              </BidiText>
             </span>
           }
           layout="floating"

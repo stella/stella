@@ -5,6 +5,7 @@ import { ChevronRightIcon } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 import { useShallow } from "zustand/shallow";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Frame } from "@stll/ui/components/frame";
 import {
@@ -188,9 +189,9 @@ const NameCell = ({ workspace }: CellProps) => (
         backgroundColor: getMatterColor(workspace.id),
       }}
     />
-    <span className="truncate font-medium" dir="auto">
+    <BidiText as="span" className="truncate font-medium">
       {workspace.name}
-    </span>
+    </BidiText>
   </div>
 );
 
@@ -204,9 +205,9 @@ const ClientCell = ({ workspace }: CellProps) => {
     );
   }
   return (
-    <span className="text-muted-foreground block truncate" dir="auto">
+    <BidiText as="span" className="text-muted-foreground block truncate">
       {workspace.client.displayName}
-    </span>
+    </BidiText>
   );
 };
 
@@ -494,12 +495,11 @@ const MattersTableGroup = ({
             ) : (
               <Link
                 className="hover:underline"
-                dir="auto"
                 onClick={(e) => e.stopPropagation()}
                 params={{ contactId: group.clientId }}
                 to="/contacts/$contactId"
               >
-                {group.clientName}
+                <BidiText>{group.clientName}</BidiText>
               </Link>
             )}
             <span

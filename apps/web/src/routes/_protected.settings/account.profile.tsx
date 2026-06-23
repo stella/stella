@@ -10,6 +10,7 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import {
   DestructiveActionConfirmation,
@@ -555,7 +556,7 @@ function ProfilePageBody() {
                       >
                         <div className="flex flex-col gap-2">
                           <div className="text-muted-foreground text-xs">
-                            <span dir="auto">{group.workspaceName}</span>
+                            <BidiText as="span">{group.workspaceName}</BidiText>
                           </div>
                           {group.members.length > 0 ? (
                             <Select

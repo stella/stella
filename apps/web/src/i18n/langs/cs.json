@@ -81,13 +81,13 @@
     "orSignInWithEmail": "nebo se přihlaste e-mailem",
     "organizationNamePlaceholder": "Moje organizace",
     "rateLimitExceeded": "Příliš mnoho pokusů. Zkuste to prosím později.",
-    "resendCode": "Poslat kód znovu na {email}",
+    "resendCode": "Poslat kód znovu na <email>{emailAddress}</email>",
     "selectOrganization": "Vyberte organizaci",
     "signIn": "Přihlásit se",
     "signInBeforeInvitation": "Pro přijetí pozvánky do organizace se musíte nejprve přihlásit.",
     "subtitle": "Dokumenty, judikatura i revize pod kontrolou. S pomocí AI.",
     "useDifferentEmail": "Použít jiný e-mail",
-    "weSentCodeTo": "Kód jsme odeslali na {email}"
+    "weSentCodeTo": "Kód jsme odeslali na <email>{emailAddress}</email>"
   },
   "billing": {
     "addEntry": "Přidat záznam",

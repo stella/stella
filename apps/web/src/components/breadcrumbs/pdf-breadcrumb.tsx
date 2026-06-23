@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { Link, useMatch } from "@tanstack/react-router";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { BreadcrumbItem } from "@stll/ui/components/breadcrumb";
 
 import { fileMetadataOptions } from "@/routes/_protected.workspaces/$workspaceId/-components/files/queries";
@@ -42,7 +43,7 @@ export const PdfBreadcrumb = () => {
         search={currentSearch}
         to="/workspaces/$workspaceId/$viewId/document"
       >
-        {fileName ?? fieldId}
+        <BidiText>{fileName ?? fieldId}</BidiText>
       </Link>
     </BreadcrumbItem>
   );

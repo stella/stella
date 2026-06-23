@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -526,7 +527,13 @@ function ChatIndex() {
                   >
                     <LandingItemText
                       icon={<MessageSquareIcon className="size-4" />}
-                      meta={`${chat.workspaceName} - ${formatRelativeTime(chat.updatedAt)}`}
+                      meta={
+                        <>
+                          <BidiText>{chat.workspaceName}</BidiText>
+                          {" - "}
+                          {formatRelativeTime(chat.updatedAt)}
+                        </>
+                      }
                       title={
                         isPlaceholderThreadTitle(chat.title)
                           ? t("chat.newChat")
@@ -602,9 +609,9 @@ const LandingSection = ({ children, heading }: LandingSectionProps) => (
 
 type LandingButtonProps = {
   icon?: ReactElement;
-  meta?: string | undefined;
+  meta?: ReactNode | undefined;
   onClick: () => void;
-  title: string;
+  title: ReactNode;
 };
 
 const LandingButton = ({ icon, meta, onClick, title }: LandingButtonProps) => (
@@ -616,14 +623,17 @@ const LandingButton = ({ icon, meta, onClick, title }: LandingButtonProps) => (
     <span className="flex min-w-0 items-start gap-2">
       {icon !== undefined && <LandingRowIcon>{icon}</LandingRowIcon>}
       <span className="min-w-0 flex-1">
-        <span className="text-foreground block truncate text-sm font-medium">
+        <BidiText
+          as="span"
+          className="text-foreground block truncate text-sm font-medium"
+        >
           {title}
-        </span>
-        {meta && (
+        </BidiText>
+        {meta !== undefined && meta !== null ? (
           <span className="text-muted-foreground block truncate text-xs">
             {meta}
           </span>
-        )}
+        ) : null}
       </span>
     </span>
   </button>
@@ -632,8 +642,8 @@ const LandingButton = ({ icon, meta, onClick, title }: LandingButtonProps) => (
 type LandingItemTextProps = {
   icon?: ReactElement;
   iconTone?: "muted" | "matter" | undefined;
-  meta?: string | undefined;
-  title: string;
+  meta?: ReactNode | undefined;
+  title: ReactNode;
 };
 
 const LandingItemText = ({
@@ -647,17 +657,17 @@ const LandingItemText = ({
       <LandingRowIcon tone={iconTone}>{icon}</LandingRowIcon>
     )}
     <span className="min-w-0 flex-1">
-      <span
+      <BidiText
+        as="span"
         className="text-foreground block truncate text-sm font-medium"
-        dir="auto"
       >
         {title}
-      </span>
-      {meta && (
+      </BidiText>
+      {meta !== undefined && meta !== null ? (
         <span className="text-muted-foreground block truncate text-xs">
           {meta}
         </span>
-      )}
+      ) : null}
     </span>
   </span>
 );

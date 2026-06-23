@@ -1,5 +1,6 @@
 import { useTranslations } from "use-intl";
 
+import { BidiText } from "@stll/ui/components/bidi-text";
 import {
   PreviewCard,
   PreviewCardPopup,
@@ -80,9 +81,9 @@ export const AICellSourceCard = ({
                 kind="document"
                 mimeType={primaryFile.mimeType}
               />
-              <span className="truncate" dir="auto">
+              <BidiText as="span" className="truncate">
                 {primaryFile.fileName}
-              </span>
+              </BidiText>
               {sourceFiles.length > 1 && (
                 <span className="text-muted-foreground shrink-0">
                   +{sourceFiles.length - 1}

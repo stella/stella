@@ -5,6 +5,7 @@ import { useTranslations } from "use-intl";
 import { useShallow } from "zustand/react/shallow";
 
 import { parseDocumentAst } from "@stll/legal-ast/document-ast";
+import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { OutlineRail } from "@stll/ui/components/outline-rail";
 import type { OutlineItem } from "@stll/ui/components/outline-rail";
@@ -213,7 +214,7 @@ export function DecisionWorkspace(props: DecisionWorkspaceProps) {
         <div>
           <p className="text-muted-foreground text-xs">{decision.court}</p>
           <h1 className="text-xl font-semibold">
-            <bdi>{decision.caseNumber}</bdi>
+            <BidiText>{decision.caseNumber}</BidiText>
           </h1>
         </div>
         {aiEnabled ? (
