@@ -62,7 +62,7 @@ import {
 import { HOTKEYS } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
-import { prefetchNonCriticalQuery } from "@/lib/react-query";
+import { prefetchRouteQuery } from "@/lib/react-query";
 import { loadAuthContext } from "@/routes/-auth-context";
 import { roleOptions } from "@/routes/-queries";
 import { useGlobalChatMentionRegistration } from "@/routes/_protected.chat/-hooks/use-global-chat-mention-registration";
@@ -129,11 +129,11 @@ export const Route = createFileRoute("/_protected")({
 
     // Prefetch role so useSuspenseQuery in the component is a
     // cache hit instead of a serial round-trip after child loaders.
-    // staleTime: Infinity → only fetch on cold cache, not every
-    // navigation. Errors surface to the user via useSuspenseQuery.
-    void prefetchNonCriticalQuery(
+    // roleOptions carries a bounded freshness window; org-switch flows
+    // explicitly refetch it via useInvalidateSession.
+    void prefetchRouteQuery(
       context.queryClient,
-      { ...roleOptions, staleTime: Infinity },
+      roleOptions,
       (error: unknown) => {
         getAnalytics().captureError(error);
       },

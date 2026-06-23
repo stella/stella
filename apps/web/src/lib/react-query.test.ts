@@ -3,8 +3,10 @@ import { describe, expect, mock, test } from "bun:test";
 
 import {
   CriticalQueryTimeoutError,
+  ROUTE_QUERY_STALE_TIME_MS,
   ensureCriticalQueryData,
   prefetchNonCriticalQuery,
+  routeQueryOptions,
 } from "@/lib/react-query";
 
 const wait = async (ms: number) =>
@@ -91,6 +93,27 @@ describe("ensureCriticalQueryData", () => {
     expect(result).toBe("ok");
     expect(abortReceived).toBe(false);
     expect(queryClient.getQueryData<string>(queryKey)).toBe("ok");
+  });
+});
+
+describe("routeQueryOptions", () => {
+  test("adds the route freshness window by default", () => {
+    const options = routeQueryOptions({
+      queryKey: ["route-query"],
+      queryFn: async () => "ok",
+    });
+
+    expect(options.staleTime).toBe(ROUTE_QUERY_STALE_TIME_MS);
+  });
+
+  test("preserves explicit stale time overrides", () => {
+    const options = routeQueryOptions({
+      queryKey: ["route-query", "explicit"],
+      queryFn: async () => "ok",
+      staleTime: Number.POSITIVE_INFINITY,
+    });
+
+    expect(options.staleTime).toBe(Number.POSITIVE_INFINITY);
   });
 });
 

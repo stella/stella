@@ -12,7 +12,7 @@ import { registerInspectorView } from "@/components/inspector/view-registry";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { subscribeToMcpOAuthOutcome } from "@/lib/mcp-oauth-channel";
-import { ensureCriticalQueryData } from "@/lib/react-query";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { roleOptions } from "@/routes/-queries";
 import { CatalogueBrowser } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
 import type { CatalogueBrowserFilterKind } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-browser";
@@ -85,14 +85,17 @@ export const Route = createFileRoute("/_protected/knowledge/tools")({
     }
 
     await Promise.all([
-      ensureCriticalQueryData(context.queryClient, catalogueOptions(orgId)),
-      ensureCriticalQueryData(context.queryClient, organizationSettingsOptions),
+      ensureRouteQueryData(context.queryClient, catalogueOptions(orgId)),
+      ensureRouteQueryData(
+        context.queryClient,
+        organizationSettingsOptions(orgId),
+      ),
       // CatalogueBrowser reads the member role via a non-suspense useQuery; seed
       // it here so it is a synchronous cache hit on mount. Otherwise a cold-cache
       // fetch resolving mid-mount notifies the not-yet-mounted fiber (React
       // "state update on a component that hasn't mounted yet"), which flaked the
       // route-smoke e2e on /knowledge/skills (and its twin /knowledge/prompts).
-      ensureCriticalQueryData(context.queryClient, roleOptions),
+      ensureRouteQueryData(context.queryClient, roleOptions),
     ]);
   },
   component: ToolsPage,
@@ -230,7 +233,9 @@ type ToolsCatalogueProps = {
 };
 
 function ToolsCatalogue({ initialKind, organizationId }: ToolsCatalogueProps) {
-  const { data: settings } = useSuspenseQuery(organizationSettingsOptions);
+  const { data: settings } = useSuspenseQuery(
+    organizationSettingsOptions(organizationId),
+  );
   return (
     <CatalogueBrowser
       initialKind={initialKind}

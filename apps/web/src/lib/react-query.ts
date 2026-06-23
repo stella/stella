@@ -1,10 +1,14 @@
 import type {
+  EnsureInfiniteQueryDataOptions,
   EnsureQueryDataOptions,
   FetchQueryOptions,
+  InfiniteData,
   QueryClient,
   QueryKey,
 } from "@tanstack/react-query";
 import { TaggedError } from "better-result";
+
+import { STALE_TIME } from "@/lib/consts";
 
 /**
  * Typed input shape for query option factories.
@@ -21,6 +25,7 @@ export type QueryOptionsInput<
 > = TContext extends undefined ? TKey : { key: TKey; context: TContext };
 
 const CRITICAL_QUERY_TIMEOUT_MS = 10_000;
+export const ROUTE_QUERY_STALE_TIME_MS = STALE_TIME.FIVE.MINUTES;
 
 export class CriticalQueryTimeoutError extends TaggedError(
   "CriticalQueryTimeoutError",
@@ -100,3 +105,70 @@ export const prefetchNonCriticalQuery = async <
     onError(error);
   }
 };
+
+type RouteFreshenableQueryOptions = {
+  staleTime?: unknown;
+};
+
+const resolveRouteStaleTime = ({
+  staleTime,
+}: RouteFreshenableQueryOptions): number =>
+  typeof staleTime === "number" ? staleTime : ROUTE_QUERY_STALE_TIME_MS;
+
+export const routeQueryOptions = <TOptions extends object>(
+  options: TOptions,
+): TOptions & { staleTime: number } => ({
+  ...options,
+  staleTime: resolveRouteStaleTime(options),
+});
+
+export const ensureRouteQueryData = async <
+  TQueryFnData,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  queryClient: QueryClient,
+  options: EnsureQueryDataOptions<TQueryFnData, TError, TData, TQueryKey>,
+  config: EnsureCriticalQueryDataConfig = {},
+): Promise<TData> =>
+  await ensureCriticalQueryData(
+    queryClient,
+    routeQueryOptions(options),
+    config,
+  );
+
+export const prefetchRouteQuery = async <
+  TQueryFnData,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+>(
+  queryClient: QueryClient,
+  options: FetchQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
+  onError: (error: unknown) => void,
+) => {
+  await prefetchNonCriticalQuery(
+    queryClient,
+    routeQueryOptions(options),
+    onError,
+  );
+};
+
+export const ensureRouteInfiniteQueryData = async <
+  TQueryFnData,
+  TError = Error,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
+  TPageParam = unknown,
+>(
+  queryClient: QueryClient,
+  options: EnsureInfiniteQueryDataOptions<
+    TQueryFnData,
+    TError,
+    TData,
+    TQueryKey,
+    TPageParam
+  >,
+): Promise<InfiniteData<TData, TPageParam>> =>
+  await queryClient.ensureInfiniteQueryData(routeQueryOptions(options));

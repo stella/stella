@@ -52,6 +52,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { UserIdentity } from "@/components/user-avatar";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { organizationOptions } from "@/routes/_protected.organization/-queries";
@@ -493,7 +494,10 @@ export const AddMemberDialog = ({
   const t = useTranslations();
   const queryClient = useQueryClient();
   const addMember = useAddWorkspaceMember();
-  const { data: org, isPending: orgPending } = useQuery(organizationOptions);
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { data: org, isPending: orgPending } = useQuery(
+    organizationOptions(activeOrganizationId),
+  );
   const { data: existingMembers = [] } = useQuery(
     workspaceMembersOptions(workspaceId),
   );

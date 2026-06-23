@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { ensureCriticalQueryData } from "@/lib/react-query";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 
 /**
@@ -11,7 +11,7 @@ export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/entities/$entityId",
 )({
   beforeLoad: async ({ context, params }) => {
-    const data = await ensureCriticalQueryData(
+    const data = await ensureRouteQueryData(
       context.queryClient,
       entityVersionsOptions({
         workspaceId: params.workspaceId,

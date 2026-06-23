@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { WorkspaceProperty } from "@/lib/types";
 
 export const propertiesKeys = {
@@ -23,4 +24,5 @@ export const propertiesOptions = (workspaceId: string) =>
       return response.data;
     },
     refetchOnMount: false,
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

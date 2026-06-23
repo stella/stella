@@ -296,4 +296,28 @@ describe("custom oxlint guardrails", () => {
       ".oxlint-plugins/__fixtures__/no-raw-use-effect.fixture.tsx",
     );
   });
+
+  test("route loader query lint points at route-fresh helpers", () => {
+    const pluginSource = readRootFixture(
+      ".oxlint-plugins/no-raw-route-query-client.ts",
+    );
+    const configSource = readRootFixture("oxlint.config.ts");
+
+    expect(pluginSource).toContain("ensureRouteQueryData");
+    expect(pluginSource).toContain("ensureRouteInfiniteQueryData");
+    expect(pluginSource).toContain("prefetchRouteQuery");
+    expect(pluginSource).toContain("ensureCriticalQueryData");
+    expect(pluginSource).toContain("prefetchNonCriticalQuery");
+    expect(pluginSource).toContain("route-seeded queries carry");
+
+    expect(configSource).toContain(
+      "./.oxlint-plugins/no-raw-route-query-client.ts",
+    );
+    expect(configSource).toContain(
+      "no-raw-route-query-client/no-raw-route-query-client",
+    );
+    expect(configSource).toContain(
+      ".oxlint-plugins/__fixtures__/no-raw-route-query-client.fixture.tsx",
+    );
+  });
 });

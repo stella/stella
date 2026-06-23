@@ -9,6 +9,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { JurisdictionPicker } from "@/components/jurisdiction-picker";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
 import type { PracticeJurisdiction } from "@/lib/jurisdictions";
 import {
@@ -20,7 +21,10 @@ export const OrganizationJurisdictionsCard = () => {
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const { data: settings } = useQuery(organizationSettingsOptions);
+  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { data: settings } = useQuery(
+    organizationSettingsOptions(activeOrganizationId),
+  );
   const serverSelected = settings?.practiceJurisdictions ?? [];
 
   // `useOptimistic` mirrors the server value and applies the latest user

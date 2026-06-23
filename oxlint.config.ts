@@ -381,6 +381,14 @@ export default defineConfig({
       rules: { "no-raw-use-effect/no-raw-use-effect": "error" },
     },
     {
+      files: [
+        ".oxlint-plugins/__fixtures__/no-raw-route-query-client.fixture.tsx",
+      ],
+      rules: {
+        "no-raw-route-query-client/no-raw-route-query-client": "error",
+      },
+    },
+    {
       files: [".oxlint-plugins/__fixtures__/no-ref-mirror.fixture.tsx"],
       rules: { "no-ref-mirror/no-ref-mirror": "error" },
     },

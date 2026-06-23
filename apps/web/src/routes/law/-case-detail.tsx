@@ -25,7 +25,7 @@ import {
   createPublicLawCanonicalUrl,
   createPublicLawHead,
 } from "@/lib/public-law-seo";
-import { ensureCriticalQueryData } from "@/lib/react-query";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import type { SafeId } from "@/lib/safe-id";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -207,7 +207,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
   if (legacyDecisionId) {
     const decision = await ensurePublicDecision(
       async () =>
-        await ensureCriticalQueryData(
+        await ensureRouteQueryData(
           queryClient,
           decisionOptions(extractId(legacyDecisionId)),
         ),
@@ -235,7 +235,7 @@ export const loadPublicCaseLawDecisionRoute = async ({
   );
   const decision = await ensurePublicDecision(
     async () =>
-      await ensureCriticalQueryData(
+      await ensureRouteQueryData(
         queryClient,
         decisionBySlugOptions(
           params.language === undefined || normalizedRouteLanguage === null

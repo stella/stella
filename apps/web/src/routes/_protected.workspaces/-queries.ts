@@ -2,6 +2,7 @@ import { queryOptions } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
+import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 
 export const workspacesKeys = {
   all: ["workspaces"],
@@ -74,6 +75,7 @@ export const workspaceOptions = (workspaceId: string) =>
 
       return response.data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
 
 export const overviewOptions = (workspaceId: string) =>
@@ -90,4 +92,5 @@ export const overviewOptions = (workspaceId: string) =>
 
       return response.data;
     },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

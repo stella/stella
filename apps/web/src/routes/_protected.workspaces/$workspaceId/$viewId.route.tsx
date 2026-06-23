@@ -14,8 +14,9 @@ import { getFormattingLocale } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import {
-  ensureCriticalQueryData,
-  prefetchNonCriticalQuery,
+  ensureRouteInfiniteQueryData,
+  ensureRouteQueryData,
+  prefetchRouteQuery,
 } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 import type { ViewLayout, WorkspaceView } from "@/lib/types";
@@ -37,6 +38,7 @@ import {
   resolveKanbanGroupBy,
   toISODate,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
+import { overviewOptions } from "@/routes/_protected.workspaces/-queries";
 
 // v.object: validateSearch receives the full URL search params
 // including params from child routes; strictObject would reject them.
@@ -76,7 +78,7 @@ export const Route = createFileRoute(
     const { queryClient } = context;
     const isDocumentRoute = isWorkspaceDocumentRoutePath(location.pathname);
 
-    const views = await ensureCriticalQueryData(
+    const views = await ensureRouteQueryData(
       queryClient,
       viewsOptions(workspaceId),
     );
@@ -91,6 +93,8 @@ export const Route = createFileRoute(
         return;
       }
 
+      await ensureRouteQueryData(queryClient, overviewOptions(workspaceId));
+
       const weekStart = getWeekStart(getFormattingLocale());
       const weekEnd = new Date(weekStart);
       weekEnd.setDate(weekEnd.getDate() + 6);
@@ -99,7 +103,7 @@ export const Route = createFileRoute(
       const prevWeekEnd = new Date(weekStart);
       prevWeekEnd.setDate(prevWeekEnd.getDate() - 1);
 
-      void prefetchNonCriticalQuery(
+      void prefetchRouteQuery(
         queryClient,
         timeEntriesOptions(workspaceId, {
           dateFrom: toISODate(weekStart),
@@ -109,7 +113,7 @@ export const Route = createFileRoute(
           getAnalytics().captureError(error);
         },
       );
-      void prefetchNonCriticalQuery(
+      void prefetchRouteQuery(
         queryClient,
         timeEntriesOptions(workspaceId, {
           dateFrom: toISODate(prevWeekStart),
@@ -119,7 +123,7 @@ export const Route = createFileRoute(
           getAnalytics().captureError(error);
         },
       );
-      void prefetchNonCriticalQuery(
+      void prefetchRouteQuery(
         queryClient,
         workspaceMembersOptions(workspaceId),
         (error: unknown) => {
@@ -134,10 +138,7 @@ export const Route = createFileRoute(
       activeView.layout.type === "table" ||
       activeView.layout.type === "kanban";
     const properties = shouldLoadViewProperties
-      ? await ensureCriticalQueryData(
-          queryClient,
-          propertiesOptions(workspaceId),
-        )
+      ? await ensureRouteQueryData(queryClient, propertiesOptions(workspaceId))
       : [];
     const requiredPropertyIds =
       activeView.layout.type === "kanban"
@@ -161,7 +162,8 @@ export const Route = createFileRoute(
     const fieldMode = shouldLoadVisibleFields ? "visible" : "full";
 
     if (activeView.layout.type === "table") {
-      await queryClient.ensureInfiniteQueryData(
+      await ensureRouteInfiniteQueryData(
+        queryClient,
         entitiesWindowOptions({
           workspaceId,
           filters: activeView.layout.filters,
@@ -176,7 +178,7 @@ export const Route = createFileRoute(
     }
 
     if (activeView.layout.type === "filesystem") {
-      await ensureCriticalQueryData(
+      await ensureRouteQueryData(
         queryClient,
         filesystemEntitiesOptions({
           workspaceId,

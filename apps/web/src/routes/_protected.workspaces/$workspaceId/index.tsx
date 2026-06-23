@@ -1,6 +1,6 @@
 import { createFileRoute, redirect } from "@tanstack/react-router";
 
-import { ensureCriticalQueryData } from "@/lib/react-query";
+import { ensureRouteQueryData } from "@/lib/react-query";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId/")({
@@ -12,7 +12,7 @@ export const Route = createFileRoute("/_protected/workspaces/$workspaceId/")({
     // previous workspace that had no views.
     await qc.invalidateQueries({ queryKey: opts.queryKey });
 
-    const views = await ensureCriticalQueryData(qc, opts);
+    const views = await ensureRouteQueryData(qc, opts);
 
     const firstView = views.at(0);
     if (!firstView) {

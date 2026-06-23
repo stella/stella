@@ -1,6 +1,7 @@
-import { useEffect, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 
 import type { AuthenticatedUser } from "@/lib/authenticated-user-context";
+import { sessionOptions } from "@/routes/-queries";
 
 type ClientAuthStatus =
   | { status: "checking"; isAuthenticated: false }
@@ -12,46 +13,35 @@ type ClientAuthStatus =
     };
 
 export const useClientAuthStatus = (): ClientAuthStatus => {
-  const [authStatus, setAuthStatus] = useState<ClientAuthStatus>({
-    status: "checking",
-    isAuthenticated: false,
-  });
+  const { data: sessionData, isError, isPending } = useQuery(sessionOptions);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- session load on mount with a deliberate dynamic import("@/lib/auth"). This hook runs on public/anon law surfaces, so the lazy import keeps the auth client out of the public bundle; sessionOptions imports authClient statically and would regress that. Not a trivial fetch→setState (custom checking/anonymous/authenticated mapping). Keep.
-  useEffect(() => {
-    void (async () => {
-      const { authClient } = await import("@/lib/auth");
-      const result = await authClient.getSession();
+  if (isPending) {
+    return {
+      status: "checking",
+      isAuthenticated: false,
+    };
+  }
 
-      const sessionData = result.data;
-      const activeOrganizationId = sessionData?.session.activeOrganizationId;
-      if (
-        sessionData === null ||
-        activeOrganizationId === undefined ||
-        activeOrganizationId === null
-      ) {
-        setAuthStatus({ status: "anonymous", isAuthenticated: false });
-        return;
-      }
+  const activeOrganizationId = sessionData?.session.activeOrganizationId;
+  if (isError || sessionData === null || !activeOrganizationId) {
+    return {
+      status: "anonymous",
+      isAuthenticated: false,
+    };
+  }
 
-      setAuthStatus({
-        status: "authenticated",
-        isAuthenticated: true,
-        user: {
-          activeOrganizationId,
-          email: sessionData.user.email,
-          id: sessionData.session.userId,
-          image: sessionData.user.image,
-          name: sessionData.user.name || undefined,
-          preferredName: sessionData.user.preferredName,
-          timezoneId: sessionData.user.timezoneId,
-          wordEditShortcut: sessionData.user.wordEditShortcut,
-        },
-      });
-    })().catch(() => {
-      setAuthStatus({ status: "anonymous", isAuthenticated: false });
-    });
-  }, []);
-
-  return authStatus;
+  return {
+    status: "authenticated",
+    isAuthenticated: true,
+    user: {
+      activeOrganizationId,
+      email: sessionData.user.email,
+      id: sessionData.session.userId,
+      image: sessionData.user.image,
+      name: sessionData.user.name || undefined,
+      preferredName: sessionData.user.preferredName,
+      timezoneId: sessionData.user.timezoneId,
+      wordEditShortcut: sessionData.user.wordEditShortcut,
+    },
+  };
 };
