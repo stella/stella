@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Limpar sinalizadores",
+      "collapseRow": "Recolher linha",
+      "expandRow": "Expandir linha",
       "flagCell": "Célula sinalizadora",
       "flags": {
         "contradiction": "Contradição",

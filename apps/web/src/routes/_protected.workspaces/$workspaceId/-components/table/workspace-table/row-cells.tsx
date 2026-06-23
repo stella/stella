@@ -10,6 +10,7 @@ import {
   row_getIsSomeSelected,
 } from "@tanstack/react-table/static-functions";
 import { ChevronRightIcon, FolderIcon, FolderOpenIcon } from "lucide-react";
+import { useTranslations } from "use-intl";
 
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
@@ -765,9 +766,11 @@ const FolderCell = ({
   onStopEditing,
   onRename,
 }: FolderCellProps) => {
+  const t = useTranslations("workspaces.table");
   const name = getEntityName(entity);
   const isEditing = editingEntityId === entity.entityId;
   const [editValue, setEditValue] = useState(name);
+  const rowToggleLabel = isExpanded ? t("collapseRow") : t("expandRow");
 
   const commitRename = () => {
     onStopEditing();
@@ -785,9 +788,9 @@ const FolderCell = ({
       }}
     >
       <button
-        aria-label={isExpanded ? "Collapse row" : "Expand row"}
+        aria-label={rowToggleLabel}
         className="flex shrink-0 items-center"
-        title={isExpanded ? "Collapse row" : "Expand row"}
+        title={rowToggleLabel}
         type="button"
       >
         <DirectionalIcon

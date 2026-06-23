@@ -2853,6 +2853,8 @@ type Messages = {
     };
     "table": {
       "clearFlags": "Clear flags";
+      "collapseRow": "Collapse row";
+      "expandRow": "Expand row";
       "flagCell": "Flag cell";
       "flags": {
         "contradiction": "Contradiction";

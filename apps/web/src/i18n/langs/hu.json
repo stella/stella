@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Jelölések törlése",
+      "collapseRow": "Sor összecsukása",
+      "expandRow": "Sor kibontása",
       "flagCell": "Cella megjelölése",
       "flags": {
         "contradiction": "Ellentmondás",

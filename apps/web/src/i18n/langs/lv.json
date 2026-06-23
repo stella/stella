@@ -2850,6 +2850,8 @@
     },
     "table": {
       "clearFlags": "Notīrīt atzīmes",
+      "collapseRow": "Sakļaut rindu",
+      "expandRow": "Izvērst rindu",
       "flagCell": "Atzīmēt šūnu",
       "flags": {
         "contradiction": "Pretruna",
