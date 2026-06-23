@@ -873,6 +873,92 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: bun test packages/scripts/src/dev-runner.test.ts
 
+  # Clippy for the Tauri desktop crate. ci-checks only runs
+  # `cargo fmt --check` (a parse-only pass that needs no compile);
+  # the clippy lints declared in apps/desktop/src-tauri/Cargo.toml
+  # (unsafe_code = forbid, dbg_macro = deny, print_stdout/stderr,
+  # clippy::all) were otherwise unenforced. clippy compiles, so it
+  # must run where the desktop crate actually builds.
+  #
+  # The matrix mirrors the release matrix (macos-14 + windows-latest)
+  # rather than Linux: the desktop app ships only those two targets,
+  # and clippy analyzes the active `cfg` for its host — so these two
+  # runners cover the `#[cfg(target_os = "macos")]` / `"windows"`
+  # code that ships, with no need for the Linux webkit2gtk system
+  # libraries a Linux clippy run would require. Both are standard
+  # GitHub-hosted runners, free for public repositories.
+  desktop-clippy:
+    needs: trust-check
+    if: >-
+      needs.trust-check.outputs.trusted == 'true'
+      || github.event_name == 'workflow_dispatch'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos
+            runner: macos-14
+            target: aarch64-apple-darwin
+          - os: windows
+            runner: windows-latest
+            target: x86_64-pc-windows-msvc
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Check whether desktop-affecting paths changed
+        id: changed
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref || 'main' }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          base_ref="origin/$BASE_REF"
+          # No `mapfile`: the macOS runner's default bash is 3.2, which
+          # lacks it. A while-read over process substitution keeps the
+          # loop in the current shell so `run`/`break` persist.
+          run=false
+          while IFS= read -r file; do
+            case "$file" in
+              apps/desktop/*|.github/workflows/ci.yml)
+                run=true
+                break
+                ;;
+            esac
+          done < <(git diff --name-only "$base_ref"...HEAD)
+          echo "run=$run" >> "$GITHUB_OUTPUT"
+          if [[ "$run" != "true" ]]; then
+            echo "::notice::No desktop-affecting paths changed; skipping desktop clippy."
+          fi
+
+      - name: Setup Rust
+        if: steps.changed.outputs.run == 'true'
+        uses: dtolnay/rust-toolchain@3c5f7ea28cd621ae0bf5283f0e981fb97b8a7af9 # stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+          components: clippy
+
+      # No cargo cache action here: the job is path-filtered to desktop
+      # changes, so it runs rarely and a cold compile (well under the
+      # timeout) is acceptable. It also keeps the LGPL-3.0 rust-cache
+      # action out of the dependency-review-enforced diff.
+      - name: Clippy
+        if: steps.changed.outputs.run == 'true'
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets --target ${{ matrix.target }} -- -D warnings
+
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
@@ -895,6 +981,7 @@ jobs:
         e2e,
         api-image-deps,
         windows-scripts,
+        desktop-clippy,
       ]
     runs-on: ubuntu-latest
     permissions:
@@ -904,6 +991,7 @@ jobs:
         env:
           API_IMAGE_DEPS_RESULT: ${{ needs.api-image-deps.result }}
           CI_RESULT: ${{ needs.ci-checks.result }}
+          DESKTOP_CLIPPY_RESULT: ${{ needs.desktop-clippy.result }}
           E2E_RESULT: ${{ needs.e2e.result }}
           EVENT: ${{ github.event_name }}
           LANDING_RESULT: ${{ needs.landing-build.result }}
@@ -926,7 +1014,8 @@ jobs:
                   || "$LANDING_RESULT" == "failure" || "$LANDING_RESULT" == "cancelled" \
                   || "$E2E_RESULT" == "failure" || "$E2E_RESULT" == "cancelled" \
                   || "$API_IMAGE_DEPS_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "cancelled" \
-                  || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" ]]; then
+                  || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" \
+                  || "$DESKTOP_CLIPPY_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
               echo "::error::CI checks failed."
               exit 1
             fi
@@ -940,12 +1029,12 @@ jobs:
 
           # "cancelled" means cancel-in-progress replaced this
           # run with a newer one; the newer run is authoritative.
-          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" ]]; then
+          if [[ "$CI_RESULT" == "cancelled" || "$WEB_RESULT" == "cancelled" || "$LANDING_RESULT" == "cancelled" || "$E2E_RESULT" == "cancelled" || "$API_IMAGE_DEPS_RESULT" == "cancelled" || "$WINDOWS_SCRIPTS_RESULT" == "cancelled" || "$DESKTOP_CLIPPY_RESULT" == "cancelled" ]]; then
             echo "CI run was superseded by a newer run (cancel-in-progress). Passing."
             exit 0
           fi
 
-          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" ]]; then
+          if [[ "$CI_RESULT" == "failure" || "$WEB_RESULT" == "failure" || "$LANDING_RESULT" == "failure" || "$E2E_RESULT" == "failure" || "$API_IMAGE_DEPS_RESULT" == "failure" || "$WINDOWS_SCRIPTS_RESULT" == "failure" || "$DESKTOP_CLIPPY_RESULT" == "failure" ]]; then
             echo "::error::CI checks failed."
             exit 1
           fi
