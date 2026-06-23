@@ -19,11 +19,14 @@ type RuleContext = {
 
 const INTERACTIVE_ELEMENTS = new Set([
   "AlertDialogClose",
+  "AlertDialogTrigger",
   "Button",
   "DialogClose",
+  "DialogTrigger",
   "MenuTrigger",
   "PopoverTrigger",
   "SheetClose",
+  "SheetTrigger",
   "button",
 ]);
 
