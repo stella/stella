@@ -21,6 +21,10 @@ import type { TripwireResult } from "../core/docx/selectiveSaveTripwire";
 import type { SelectionState, TableContextInfo } from "../core/prosemirror";
 import type { AnonymizationMatch } from "../core/prosemirror/plugins/anonymizationDecorations";
 import type {
+  TemplateSlashMenuKeyAction,
+  TemplateSlashMenuState,
+} from "../core/prosemirror/plugins/templateSlashMenu";
+import type {
   Document,
   SdtProperties,
   Theme,
@@ -196,6 +200,22 @@ export type DocxEditorProps = {
    * text. Off for ordinary documents; on for the template editor.
    */
   showTemplateDirectives?: boolean | undefined;
+  /**
+   * Fires when the template editor's `/` slash-command trigger opens, its
+   * typed query changes, or it closes. Only active alongside
+   * `showTemplateDirectives`. The host renders the floating menu and inserts
+   * the chosen marker; the plugin owns only the trigger state.
+   */
+  onSlashMenuChange?: ((state: TemplateSlashMenuState) => void) | undefined;
+  /**
+   * Resolves a navigation/commit key (Up / Down / Enter) while the slash menu
+   * is open. Return `true` to let the editor swallow the key (the host moved
+   * the highlight or performed the insertion). Escape is handled inside the
+   * plugin and never reaches this callback.
+   */
+  onSlashMenuKeyAction?:
+    | ((action: TemplateSlashMenuKeyAction) => boolean)
+    | undefined;
   /**
    * Host-provided text context-menu entries, appended after the built-ins.
    * `requiresSelection` items only render when text is selected. Selecting one

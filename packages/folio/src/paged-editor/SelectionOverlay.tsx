@@ -39,6 +39,14 @@ export type SelectionOverlayProps = {
   caretWidth?: number;
   /** Blink interval in milliseconds (0 to disable). */
   blinkInterval?: number;
+  /**
+   * Stamp the painted caret with `data-folio-caret-rect` so hosts can anchor
+   * floating UI (the template slash menu) to it. Only the local editing caret
+   * should opt in: remote collaborators render this same overlay, and an
+   * unscoped marker lets `getFolioCaretViewportRect` latch onto another user's
+   * cursor while the local caret is briefly cleared during typing.
+   */
+  markCaretRect?: boolean;
 };
 
 // =============================================================================
@@ -120,10 +128,12 @@ const Caret: React.FC<{
   width: number;
   blinkInterval: number;
   isFocused: boolean;
-}> = ({ position, color, width, blinkInterval, isFocused }) => (
+  markCaretRect: boolean;
+}> = ({ position, color, width, blinkInterval, isFocused, markCaretRect }) => (
   <div
     style={caretStyles(position, color, width, isFocused, blinkInterval)}
     data-testid="caret"
+    data-folio-caret-rect={markCaretRect ? "" : undefined}
   />
 );
 
@@ -157,6 +167,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
   selectionColor = DEFAULT_SELECTION_COLOR,
   caretWidth = DEFAULT_CARET_WIDTH,
   blinkInterval = DEFAULT_BLINK_INTERVAL,
+  markCaretRect = false,
 }) => {
   // Determine if we have a range selection or collapsed selection
   const hasRangeSelection = selectionRects.length > 0;
@@ -185,6 +196,7 @@ export const SelectionOverlay: React.FC<SelectionOverlayProps> = ({
           width={caretWidth}
           blinkInterval={blinkInterval}
           isFocused={isFocused}
+          markCaretRect={markCaretRect}
         />
       )}
     </div>

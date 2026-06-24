@@ -2289,6 +2289,11 @@
       "showOnlyIf": "Kuva ainult siis, kui…",
       "showOnlyIfHelp": "Lase sellel väljal dokumendis kuvada ainult siis, kui tingimus kehtib.",
       "showOnlyWhen": "See väli kuvatakse ainult siis, kui:",
+      "slashEmpty": "Vasteid pole",
+      "slashFooter": "Esc sulgeb",
+      "slashGroupInsert": "Lisa",
+      "slashGroupReuse": "Taaskasuta",
+      "slashHint": "Tipi väljade filtreerimiseks või uue nimetamiseks",
       "textPlusAi": "Isik + TI",
       "useExisting": "Kasuta olemasolevat välja {name}",
       "whoFills": "Kes selle välja hiljem täidab?"

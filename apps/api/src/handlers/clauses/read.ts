@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, lt, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, ilike, lt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { SafeDb } from "@/api/db";
@@ -7,6 +7,7 @@ import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
 
@@ -52,6 +53,21 @@ type ListClausesProps = {
   };
 };
 
+/** Build a prefix `tsquery` (`term:* & term:* …`) from raw user input so
+ *  search-as-you-type matches partial words: typing "gov" must hit "Governing".
+ *  `websearch_to_tsquery` only matches whole stemmed words, so a partial query
+ *  returns nothing until a word is complete. Split on every non-alphanumeric run
+ *  (not just whitespace) so a separator like `-` or `/` yields separate prefix
+ *  terms — `non-compete` → `non:* & compete:*`, matching the FTS lexemes — rather
+ *  than one mashed-together token; the separators are also `tsquery` operators
+ *  that would otherwise throw. */
+export const toClausePrefixTsQuery = (raw: string): string =>
+  raw
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((term) => term.length > 0)
+    .map((term) => `${term}:*`)
+    .join(" & ");
+
 export const listClausesHandler = async function* ({
   safeDb,
   organizationId,
@@ -65,16 +81,26 @@ export const listClausesHandler = async function* ({
     conditions.push(eq(clauses.categoryId, query.categoryId));
   }
 
+  // Search-as-you-type: match the title directly (substring, so a typed prefix
+  // filters immediately and it works even when `search_vector` is not populated)
+  // OR the full-text vector with a prefix query (content matches). Stays
+  // server-side with a LIMIT, so it scales with the library.
+  const tsQuery = query.q ? toClausePrefixTsQuery(query.q) : "";
   const isSearching = !!query.q;
 
-  if (query.q) {
+  if (isSearching && query.q) {
+    const titleMatch = ilike(clauses.title, `%${escapeLike(query.q)}%`);
+    const ftsMatch =
+      tsQuery.length > 0
+        ? sql`${clauses.searchVector} @@ to_tsquery('english', ${tsQuery})`
+        : null;
     conditions.push(
-      sql`${clauses.searchVector} @@ websearch_to_tsquery('english', ${query.q})`,
+      ftsMatch ? (or(titleMatch, ftsMatch) ?? titleMatch) : titleMatch,
     );
   }
 
   // Cursor pagination only applies to date-ordered
-  // browsing; rank-ordered search ignores the cursor.
+  // browsing; search results ignore the cursor.
   if (query.cursor && !isSearching) {
     const parsed = decodeCursor(query.cursor);
     if (parsed) {
@@ -93,10 +119,6 @@ export const listClausesHandler = async function* ({
     }
   }
 
-  const rankExpr = isSearching
-    ? sql<number>`ts_rank(${clauses.searchVector}, websearch_to_tsquery('english', ${query.q}))`
-    : undefined;
-
   const selectColumns = {
     id: clauses.id,
     title: clauses.title,
@@ -111,21 +133,19 @@ export const listClausesHandler = async function* ({
   const rows = yield* Result.await(
     safeDb((tx) =>
       tx
-        .select(rankExpr ? { ...selectColumns, rank: rankExpr } : selectColumns)
+        .select(selectColumns)
         .from(clauses)
         .where(and(...conditions))
         .orderBy(
           ...(isSearching
-            ? [
-                sql`ts_rank(${clauses.searchVector}, websearch_to_tsquery('english', ${query.q})) DESC`,
-              ]
+            ? [asc(clauses.title)]
             : [desc(clauses.createdAt), desc(clauses.id)]),
         )
         .limit(limit + 1),
     ),
   );
 
-  // Cursor pagination is incompatible with rank-based
+  // Cursor pagination is incompatible with search
   // ordering; disable it when searching.
   const page = createCursorPage({
     rows,

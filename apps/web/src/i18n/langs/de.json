@@ -2289,6 +2289,11 @@
       "showOnlyIf": "Nur anzeigen, wenn…",
       "showOnlyIfHelp": "Dieses Feld erscheint im Dokument nur, wenn eine Bedingung erfüllt ist.",
       "showOnlyWhen": "Dieses Feld erscheint nur, wenn:",
+      "slashEmpty": "Keine Treffer",
+      "slashFooter": "Esc zum Schließen",
+      "slashGroupInsert": "Einfügen",
+      "slashGroupReuse": "Wiederverwenden",
+      "slashHint": "Tippen, um Felder zu filtern oder ein neues zu benennen",
       "textPlusAi": "Person + KI",
       "useExisting": "Vorhandenes Feld {name} verwenden",
       "whoFills": "Wer füllt dieses Feld später aus?"

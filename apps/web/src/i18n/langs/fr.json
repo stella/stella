@@ -2289,6 +2289,11 @@
       "showOnlyIf": "Afficher seulement si…",
       "showOnlyIfHelp": "Faites apparaître ce champ dans le document uniquement lorsqu’une condition est remplie.",
       "showOnlyWhen": "Ce champ s’affiche uniquement lorsque :",
+      "slashEmpty": "Aucun résultat",
+      "slashFooter": "Échap pour fermer",
+      "slashGroupInsert": "Insérer",
+      "slashGroupReuse": "Réutiliser",
+      "slashHint": "Saisissez pour filtrer les champs ou en nommer un nouveau",
       "textPlusAi": "Personne + IA",
       "useExisting": "Utiliser le champ existant {name}",
       "whoFills": "Qui remplira ce champ par la suite ?"

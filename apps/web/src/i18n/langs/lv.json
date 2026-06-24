@@ -2289,6 +2289,11 @@
       "showOnlyIf": "Rādīt tikai tad, ja…",
       "showOnlyIfHelp": "Šis lauks dokumentā parādās tikai tad, kad ir izpildīts nosacījums.",
       "showOnlyWhen": "Šis lauks parādās tikai tad, kad:",
+      "slashEmpty": "Nav atbilstību",
+      "slashFooter": "Esc aizver",
+      "slashGroupInsert": "Ievietot",
+      "slashGroupReuse": "Izmantot atkārtoti",
+      "slashHint": "Rakstiet, lai filtrētu laukus vai nosauktu jaunu",
       "textPlusAi": "Persona + MI",
       "useExisting": "Izmantot esošo lauku {name}",
       "whoFills": "Kas vēlāk aizpildīs šo lauku?"

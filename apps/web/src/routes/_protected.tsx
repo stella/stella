@@ -76,12 +76,6 @@ import { aiAvailabilityOptions } from "@/routes/_protected.organization/-ai-conf
 import { CreateMatterDialog } from "@/routes/_protected.workspaces/-components/create-matter-dialog";
 import { workspaceOptions } from "@/routes/_protected.workspaces/-queries";
 
-// Upper bound on how long the protected shell waits for the role cache to warm
-// before rendering. Long enough to win the common fast-network race (so the
-// role cache is hot before chrome mounts and no mid-mount state update warning
-// fires), short enough that a slow or hung role fetch cannot block navigation.
-const ROLE_PREFETCH_WAIT_MS = 2000;
-
 const LazyInspectorPanel = lazy(
   async () =>
     await import("@/components/inspector/inspector-panel").then((m) => ({
@@ -163,15 +157,14 @@ export const Route = createFileRoute("/_protected")({
     const activeOrganizationId = authContext.session.activeOrganizationId;
 
     // These shell queries only gate optional affordances. AI config stays
-    // non-blocking. The role cache should be hot before chrome that reads it
-    // via a non-suspense useQuery mounts (app-sidebar, inspector): otherwise a
-    // cold-cache role fetch resolving mid-mount triggers React's "state update
-    // on a not-yet-mounted component" warning, which the route-smoke e2e treats
-    // as a failure. So we wait for the role prefetch, but only briefly: a slow
-    // or never-settling role fetch must not block every protected route from
-    // rendering. The prefetch (non-throwing, so a role fetch failure cannot take
-    // down the shell) keeps running past the wait and still populates the cache
-    // when it resolves.
+    // non-blocking. The role cache MUST be settled before chrome that reads it
+    // via a non-suspense useQuery mounts (app-sidebar, inspector): a cold-cache
+    // role fetch resolving mid-mount triggers React's "state update on a
+    // not-yet-mounted component" warning, which the route-smoke e2e treats as a
+    // failure. So we AWAIT the role prefetch fully — no time-boxed race that
+    // could let chrome render while the fetch is still in flight. The prefetch is
+    // non-throwing, so a role-fetch failure resolves it rather than stalling or
+    // taking down the shell.
     const onPrefetchError = (error: unknown) => {
       getAnalytics().captureError(error);
     };
@@ -180,17 +173,7 @@ export const Route = createFileRoute("/_protected")({
       aiAvailabilityOptions({ organizationId: activeOrganizationId }),
       onPrefetchError,
     );
-    const rolePrefetch = prefetchRouteQuery(
-      context.queryClient,
-      roleOptions,
-      onPrefetchError,
-    );
-    await Promise.race([
-      rolePrefetch,
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, ROLE_PREFETCH_WAIT_MS);
-      }),
-    ]);
+    await prefetchRouteQuery(context.queryClient, roleOptions, onPrefetchError);
 
     // Seed the pinned-matters store from localStorage before the
     // sidebar renders. The store's `init` is idempotent (skips when

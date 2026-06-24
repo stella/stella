@@ -2289,6 +2289,11 @@
       "showOnlyIf": "Csak akkor jelenjen meg, ha…",
       "showOnlyIfHelp": "A mező csak akkor jelenik meg a dokumentumban, ha egy feltétel teljesül.",
       "showOnlyWhen": "Ez a mező csak akkor jelenik meg, ha:",
+      "slashEmpty": "Nincs találat",
+      "slashFooter": "Esc a bezáráshoz",
+      "slashGroupInsert": "Beszúrás",
+      "slashGroupReuse": "Újrahasználat",
+      "slashHint": "Gépeljen a mezők szűréséhez vagy új elnevezéséhez",
       "textPlusAi": "Személy + MI",
       "useExisting": "A meglévő {name} mező használata",
       "whoFills": "Ki tölti ki később ezt a mezőt?"

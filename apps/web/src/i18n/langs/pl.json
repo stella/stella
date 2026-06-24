@@ -2289,6 +2289,11 @@
       "showOnlyIf": "Pokaż tylko, jeśli…",
       "showOnlyIfHelp": "Spraw, by to pole pojawiało się w dokumencie tylko wtedy, gdy spełniony jest warunek.",
       "showOnlyWhen": "To pole pojawia się tylko wtedy, gdy:",
+      "slashEmpty": "Brak dopasowań",
+      "slashFooter": "Esc zamyka",
+      "slashGroupInsert": "Wstaw",
+      "slashGroupReuse": "Użyj ponownie",
+      "slashHint": "Wpisz, aby filtrować pola lub nazwać nowe",
       "textPlusAi": "Osoba + AI",
       "useExisting": "Użyj istniejącego pola {name}",
       "whoFills": "Kto później wypełni to pole?"

@@ -2289,6 +2289,11 @@
       "showOnlyIf": "أظهِر فقط إذا…",
       "showOnlyIfHelp": "اجعل هذا الحقل يظهر في المستند فقط عند تحقّق شرط.",
       "showOnlyWhen": "يظهر هذا الحقل فقط عندما:",
+      "slashEmpty": "لا توجد نتائج",
+      "slashFooter": "Esc للإغلاق",
+      "slashGroupInsert": "إدراج",
+      "slashGroupReuse": "إعادة الاستخدام",
+      "slashHint": "اكتب لتصفية الحقول أو لتسمية حقل جديد",
       "textPlusAi": "شخص + الذكاء الاصطناعي",
       "useExisting": "استخدام {name} الموجود",
       "whoFills": "مَن يعبّئ هذا الحقل لاحقًا؟"

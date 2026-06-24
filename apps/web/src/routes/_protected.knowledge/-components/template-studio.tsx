@@ -7,7 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
-import type { ReactNode } from "react";
+import type { MouseEvent as ReactMouseEvent, ReactNode } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
@@ -47,14 +47,19 @@ import type { Node as PMNode, NodeType, ResolvedPos } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
-import { useDebouncedCallback } from "use-debounce";
+import { useDebounce, useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
 import {
   buildPositionalText,
+  clearTemplateSlashMenu,
+  consumeTemplateSlashQuery,
+  getFolioCaretViewportRect,
   getFolioSelectionViewportRect,
   getTemplateDirectives,
+  getTemplateSlashMenu,
+  resetTemplateSlashQuery,
   setTemplatePreviewValues,
 } from "@stll/folio";
 import type {
@@ -63,6 +68,8 @@ import type {
   DocxEditorRef,
   TemplatePreviewSpan,
   TemplatePreviewValue,
+  TemplateSlashMenuKeyAction,
+  TemplateSlashMenuState,
 } from "@stll/folio";
 import { displayLanguageName } from "@stll/locales";
 import {
@@ -112,6 +119,7 @@ import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { Separator } from "@stll/ui/components/separator";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
 import "@stll/folio/editor.css";
 
@@ -177,6 +185,7 @@ import {
   isLookupRegistry,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 import {
+  clausesOptions as clauseLibraryOptions,
   knowledgeKeys,
   templateClausesOptions,
   templateClausePreviewOptions,
@@ -278,6 +287,182 @@ type SelectionGesture = GestureSelection & {
   left: number;
   top: number;
   placement: "above" | "below";
+};
+
+// ── Slash-command menu ───────────────────────────────────
+
+/** Gap (px) between the caret and the menu's top-left corner. Kept tiny so the
+ *  menu hugs the cursor. */
+const SLASH_MENU_OFFSET_PX = 2;
+/** Rough rendered height of the menu, for the above/below flip and the
+ *  off-screen clamp. */
+const SLASH_MENU_EST_HEIGHT_PX = 280;
+/** Full rendered menu width, for the off-screen right-edge clamp. The list
+ *  column is `w-56` (224px); on `sm`+ screens `MenuPreviewLayout` renders a
+ *  `PreviewPane` (`w-64`, 256px) beside it across a 9px gap+border, so the menu
+ *  is ~489px wide. Clamp against the whole width so the preview pane never
+ *  spills off-screen. */
+const SLASH_MENU_LIST_WIDTH_PX = 224;
+const SLASH_MENU_PREVIEW_WIDTH_PX = 256 + 9;
+const SLASH_MENU_WIDTH_PX =
+  SLASH_MENU_LIST_WIDTH_PX + SLASH_MENU_PREVIEW_WIDTH_PX;
+/** Tailwind `sm`: below it `MenuPreviewLayout` hides the preview pane, so only
+ *  the list column renders and the right-edge clamp must use the list width. */
+const SLASH_MENU_PREVIEW_BREAKPOINT_PX = 640;
+/** Cap on existing fields offered for reuse so a large template's field list
+ *  never turns the menu into an unbounded scroll. */
+const SLASH_MENU_MAX_FIELDS = 50;
+/** Cap on clause-library rows fetched for the clause submenu. */
+const SLASH_MENU_CLAUSE_LIMIT = 50;
+
+/** The open slash menu, positioned at the caret. `left`/`top` are relative to
+ *  the overlay host (the menu's offset parent), like the gesture popover. */
+type SlashMenu = {
+  from: number;
+  query: string;
+  left: number;
+  top: number;
+  placement: "above" | "below";
+};
+
+/** Which level of the menu is showing. The root lists the creators and the two
+ *  submenu openers; `fields` and `clauses` are the reuse submenus. */
+type SlashView = "root" | "fields" | "clauses";
+
+/** A top-level row: two direct creators and two submenu openers. */
+type SlashRootItem =
+  | { kind: "create-field"; path: string }
+  | { kind: "create-condition" }
+  | { kind: "field"; path: string; label: string }
+  | { kind: "open-fields" }
+  | { kind: "open-clauses" };
+
+/** A clause-library row in the slash menu's clause submenu. */
+type SlashClause = {
+  id: string;
+  title: string;
+  currentVersion: number;
+  description: string | null;
+};
+
+/** The rows for the active view, tagged so render and the key handler narrow
+ *  on `view` without unsafe casts. */
+type SlashRows =
+  | { view: "root"; items: SlashRootItem[] }
+  | { view: "fields"; items: StudioField[] }
+  | { view: "clauses"; items: SlashClause[] };
+
+/** The new field's path for a "New field" row. The slash query grammar already
+ *  mirrors the field-path grammar, so a typed `party.name` / `line-item` is a
+ *  valid path and is kept verbatim; only a query that is not itself a valid
+ *  path falls back to the sanitizer (`slugify` would strip the `.`/`-` and
+ *  mangle the name the user typed). */
+const createFieldPathFromQuery = (trimmed: string): string => {
+  if (trimmed === "") {
+    return "field";
+  }
+  return isFieldPath(trimmed) ? trimmed : sanitizeFieldPath(trimmed);
+};
+
+/** The first field path not already taken: `field`, then `field_2`, `field_3`…
+ *  Shared by the blank `/` create row and the insert-field action so a generic
+ *  field can always be added even when `field` already exists. */
+const uniqueFieldPath = (base: string, fields: StudioField[]): string => {
+  let path = base;
+  for (let n = 2; fields.some((field) => field.path === path); n++) {
+    path = `${base}_${n}`;
+  }
+  return path;
+};
+
+/** Build the root rows for the current query. The typed text both filters the
+ *  rows and (for "New field") becomes the new field's name. */
+const buildSlashRootItems = (
+  query: string,
+  fields: StudioField[],
+): SlashRootItem[] => {
+  const trimmed = query.trim();
+  const needle = trimmed.toLowerCase();
+  const matches = (...keywords: string[]): boolean =>
+    keywords.some((kw) => kw.includes(needle));
+
+  // Empty query: browse the grouped entry points (create a field/condition, or
+  // open the existing-field / clause submenus). A blank create row offers a
+  // fresh unique path (field_2, …) so a generic field can always be added.
+  if (trimmed === "") {
+    const items: SlashRootItem[] = [
+      { kind: "create-field", path: uniqueFieldPath("field", fields) },
+      { kind: "create-condition" },
+    ];
+    if (fields.length > 0) {
+      items.push({ kind: "open-fields" });
+    }
+    items.push({ kind: "open-clauses" });
+    return items;
+  }
+
+  // Typed query: matching existing fields first (one keystroke/click to reuse),
+  // then keyword-matched commands (clause search, condition), then the generic
+  // create-new-field fallback last. Order matters: the highlight resets to row 0
+  // on each keystroke, so "/if" or "/clause" + Enter must run the command rather
+  // than create a field literally named "if"/"clause".
+  const createPath = createFieldPathFromQuery(trimmed);
+  const reuseExact = fields.some((field) => field.path === createPath);
+  const items: SlashRootItem[] = matchingSlashFields(query, fields).map(
+    (field) => ({
+      kind: "field" as const,
+      path: field.path,
+      label: field.label === "" ? field.path : field.label,
+    }),
+  );
+  if (matches("clause")) {
+    items.push({ kind: "open-clauses" });
+  }
+  if (matches("condition", "if")) {
+    items.push({ kind: "create-condition" });
+  }
+  if (!reuseExact) {
+    items.push({ kind: "create-field", path: createPath });
+  }
+  return items;
+};
+
+/** Fields offered in the "Existing field" submenu, filtered by the submenu
+ *  query (the same typed `/` text). */
+const matchingSlashFields = (
+  query: string,
+  fields: StudioField[],
+): StudioField[] => {
+  const needle = query.trim().toLowerCase();
+  const matches = (field: StudioField): boolean => {
+    if (needle === "") {
+      return true;
+    }
+    const label = field.label === "" ? field.path : field.label;
+    return (
+      field.path.toLowerCase().includes(needle) ||
+      label.toLowerCase().includes(needle)
+    );
+  };
+  return fields.filter(matches).slice(0, SLASH_MENU_MAX_FIELDS);
+};
+
+/** Row count for the active view, so the key handler can wrap/clamp the
+ *  highlight without rebuilding the clause list (clauses come from a query
+ *  whose length the caller passes in). */
+const slashRowCount = (
+  view: SlashView,
+  query: string,
+  fields: StudioField[],
+  clauseCount: number,
+): number => {
+  if (view === "fields") {
+    return matchingSlashFields(query, fields).length;
+  }
+  if (view === "clauses") {
+    return clauseCount;
+  }
+  return buildSlashRootItems(query, fields).length;
 };
 
 /** Session-lived answers for the selection popover, keyed by exact selection
@@ -903,11 +1088,10 @@ export const TemplateStudioPage = ({
   // Insert a fresh, uniquely-named field at the cursor and register it so it
   // shows in the Fields list right away (rename it there).
   const insertField = () => {
-    const existing = useTemplateStudioStore.getState().fields;
-    let path = "field";
-    for (let n = 2; existing.some((f) => f.path === path); n++) {
-      path = `field_${n}`;
-    }
+    const path = uniqueFieldPath(
+      "field",
+      useTemplateStudioStore.getState().fields,
+    );
     insertInline(`{{${path}}}`);
     upsertField(path, {});
   };
@@ -917,6 +1101,50 @@ export const TemplateStudioPage = ({
   const insertLoop = (range?: { from: number; to: number }) =>
     insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range, true);
   const insertClause = () => insertInline("{{@clause:Clause}}");
+
+  // A clause-slot name not already taken by another `{{@clause:...}}` marker in
+  // the document, so inserting two clauses never collides their slots.
+  const uniqueClauseSlotName = (base: string): string => {
+    const view = editorViewRef.current;
+    const seed = base === "" ? "clause" : base;
+    const taken = new Set(
+      view
+        ? getTemplateDirectives(view.state)
+            .filter((d) => d.kind === "clause")
+            .map((d) => d.expr)
+        : [],
+    );
+    let candidate = seed;
+    for (let n = 2; taken.has(candidate); n++) {
+      candidate = `${seed}_${n}`;
+    }
+    return candidate;
+  };
+
+  // Link a chosen library clause to the slot just inserted, reusing the same
+  // template-clause link endpoint the clause inspector + link dialog use.
+  const linkClauseToSlot = async (clauseId: string, slotName: string) => {
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .clauses.put({ clauseId: toSafeId<"clause">(clauseId), slotName });
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.linkFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+    void queryClient.invalidateQueries({
+      queryKey: knowledgeKeys.templates.clauses(
+        activeOrganizationId,
+        templateId,
+      ),
+    });
+  };
 
   /** Explicit-click block mirror: wrap the parallel cell's paragraphs in
    *  the same block. The opener's live expression is read at click time via
@@ -1307,6 +1535,450 @@ export const TemplateStudioPage = ({
     },
     [showGesture, enrichGesture],
   );
+
+  // ── Slash-command menu ───────────────────────────────────
+  // Typing `/` at a marker boundary opens a keyboard-first, command-palette-style
+  // menu at the caret. The root lists two direct creators (New field, Condition)
+  // and two submenu openers (Existing field, Clause); the typed text filters the
+  // rows and doubles as a new field's name. Folio's plugin owns the trigger and
+  // forwards navigation keys; this host renders the menu, tracks the highlighted
+  // row + active submenu, and performs the insertion.
+  const [slash, setSlashState] = useState<SlashMenu | null>(null);
+  const [slashView, setSlashViewState] = useState<SlashView>("root");
+  const [slashHighlight, setSlashHighlightState] = useState(0);
+  // Mirrors for the plugin's synchronous key handler, which fires outside the
+  // React render cycle and needs the freshest view + highlight + row count.
+  const slashViewRef = useRef<SlashView>("root");
+  const slashHighlightRef = useRef(0);
+  // The `/` anchor the menu is currently positioned for; a change means a fresh
+  // trigger that needs (re)positioning, vs. the same trigger's query growing.
+  const slashFromRef = useRef<number | null>(null);
+  const setSlashView = (view: SlashView) => {
+    slashViewRef.current = view;
+    setSlashViewState(view);
+  };
+  const setSlashHighlight = (index: number) => {
+    slashHighlightRef.current = index;
+    setSlashHighlightState(index);
+  };
+  const studioFields = useTemplateStudioStore((s) => s.fields);
+
+  // Clause library for the clause submenu, searched by the live `/` query.
+  // Enabled only while that submenu is open so the root menu costs nothing.
+  const slashClausesEnabled = slash !== null && slashView === "clauses";
+  // Debounced so search-as-you-type filters server-side without a query per
+  // keystroke. The server does prefix full-text matching (scales with the
+  // library); the client never holds the whole library.
+  const [debouncedClauseSearch] = useDebounce(
+    slashView === "clauses" ? (slash?.query ?? "") : "",
+    120,
+  );
+  const { data: slashClauseData } = useQuery({
+    ...clauseLibraryOptions(activeOrganizationId, {
+      search: debouncedClauseSearch,
+      limit: SLASH_MENU_CLAUSE_LIMIT,
+    }),
+    enabled: slashClausesEnabled,
+  });
+  const slashClauses: SlashClause[] = useMemo(
+    () =>
+      slashClauseData && "items" in slashClauseData
+        ? slashClauseData.items
+        : [],
+    [slashClauseData],
+  );
+  // Effect-synced (not render-mirrored) so the synchronous key handler reads the
+  // freshest clause list — and the search it was fetched for — without assigning
+  // a ref during render.
+  const slashClausesRef = useRef<SlashClause[]>(slashClauses);
+  const debouncedClauseSearchRef = useRef(debouncedClauseSearch);
+  useExternalSyncEffect(() => {
+    slashClausesRef.current = slashClauses;
+    debouncedClauseSearchRef.current = debouncedClauseSearch;
+  }, [slashClauses, debouncedClauseSearch]);
+
+  // The rows visible for the current view + query, as a discriminated union so
+  // render and the key handler narrow without unsafe casts.
+  const slashRows = useMemo((): SlashRows => {
+    if (slash === null) {
+      return { view: "root", items: [] };
+    }
+    if (slashView === "fields") {
+      return {
+        view: "fields",
+        items: matchingSlashFields(slash.query, studioFields),
+      };
+    }
+    if (slashView === "clauses") {
+      return { view: "clauses", items: slashClauses };
+    }
+    return {
+      view: "root",
+      items: buildSlashRootItems(slash.query, studioFields),
+    };
+  }, [slash, slashView, studioFields, slashClauses]);
+
+  // Re-anchor the menu at the caret. Geometry only: the query is updated
+  // synchronously in `onSlashMenuChange`, decoupled from the caret rect, so
+  // filtering never waits on (or is dropped by) the paged editor's async caret
+  // repaint. Folio paints the caret a frame or two after the selection change,
+  // so retry briefly until it exists, then merge left/top/placement into the
+  // already-rendered menu without disturbing the live query.
+  const positionSlashMenu = useCallback((from: number) => {
+    const host = overlayHostRef.current;
+    if (!host) {
+      return;
+    }
+    let attempts = 0;
+    const read = () => {
+      const liveView = editorViewRef.current;
+      const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
+      // Bail if the trigger is gone or has been replaced by a newer one (a
+      // later keystroke re-anchored at a different `/`); the matching call will
+      // position that one.
+      if (
+        liveView === null ||
+        live === null ||
+        !live.active ||
+        live.from !== from
+      ) {
+        return;
+      }
+      const rect = getFolioCaretViewportRect(liveView);
+      if (!rect) {
+        attempts++;
+        if (attempts < 10) {
+          requestAnimationFrame(read);
+        }
+        return;
+      }
+      const hostRect = host.getBoundingClientRect();
+      const caretLeft = rect.left - hostRect.left;
+      const caretTop = rect.top - hostRect.top;
+      const caretBottom = rect.bottom - hostRect.top;
+      // Prefer opening ABOVE the caret (below-placement collides with the
+      // suggested-action chips and the floating AI bar pinned at the bottom),
+      // but only when there is actually room above — otherwise the menu would
+      // render off the top of the editor. Near the top, fall back to below.
+      const fitsAbove =
+        caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
+      const placement = fitsAbove ? "above" : "below";
+      // Anchor the menu's start edge at the caret, clamping against the ACTUAL
+      // rendered width so it never spills off the inline-end edge. Below the `sm`
+      // breakpoint `MenuPreviewLayout` hides the preview pane, so the menu is just
+      // the list column — clamping against the full desktop width there would
+      // shove a near-caret menu needlessly to the left.
+      const renderedWidth =
+        window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
+          ? SLASH_MENU_WIDTH_PX
+          : SLASH_MENU_LIST_WIDTH_PX;
+      const left = Math.max(
+        0,
+        Math.min(caretLeft, host.clientWidth - renderedWidth),
+      );
+      setSlashState((prev) =>
+        prev === null
+          ? prev
+          : {
+              ...prev,
+              left,
+              top: placement === "below" ? caretBottom : caretTop,
+              placement,
+            },
+      );
+    };
+    requestAnimationFrame(read);
+  }, []);
+
+  const onSlashMenuChange = (state: TemplateSlashMenuState) => {
+    if (!state.active) {
+      setSlashState(null);
+      setSlashView("root");
+      slashFromRef.current = null;
+      return;
+    }
+    // Update the query SYNCHRONOUSLY so the visible rows filter on every
+    // keystroke. The menu is anchored at the `/` and does NOT follow the caret
+    // as the query grows, so geometry is computed once on open; default
+    // placement is "below" so a not-yet-positioned menu shows on-screen below
+    // the caret rather than translating its height off the top of the editor.
+    const isNewTrigger = slashFromRef.current !== state.from;
+    slashFromRef.current = state.from;
+    setSlashState((prev) => ({
+      from: state.from,
+      query: state.query,
+      left: prev?.left ?? 0,
+      top: prev?.top ?? 0,
+      placement: prev?.placement ?? "below",
+    }));
+    // Reset the highlight to the top row whenever the query changes; the row
+    // list is rebuilt and the previous index may point at a gone row.
+    setSlashHighlight(0);
+    // Position only when the trigger first anchors at a new `/`: the menu stays
+    // pinned to the `/` as the query grows, and re-reading the caret rect per
+    // keystroke both churns and races the paged-editor relayout.
+    if (isNewTrigger) {
+      positionSlashMenu(state.from);
+    }
+  };
+
+  const dismissSlash = useCallback(() => {
+    const view = editorViewRef.current;
+    if (view && getTemplateSlashMenu(view.state).active) {
+      view.dispatch(clearTemplateSlashMenu(view.state.tr));
+    }
+    setSlashState(null);
+    setSlashView("root");
+    slashFromRef.current = null;
+  }, []);
+
+  // Insert a fresh field marker, selecting the name so syncSelection opens the
+  // field face. Reuses `from` from the consumed `/query` range.
+  const slashInsertNewField = (
+    view: EditorView,
+    consumed: { tr: Transaction; from: number },
+    path: string,
+  ) => {
+    const tr = consumed.tr.insertText(`{{${path}}}`, consumed.from);
+    const namePos = consumed.from + 2;
+    tr.setSelection(
+      TextSelection.create(tr.doc, namePos, namePos + path.length),
+    ).scrollIntoView();
+    view.dispatch(tr);
+    view.focus();
+    upsertField(path, {});
+    markDirty();
+  };
+
+  // Switch menu level. Reset the typed `/` query to blank so each level filters
+  // from scratch (the submenu's search is its own; the root's is its own).
+  const enterSlashSubmenu = (next: SlashView) => {
+    const editor = editorViewRef.current;
+    if (editor) {
+      const tr = resetTemplateSlashQuery(editor.state);
+      if (tr !== null) {
+        editor.dispatch(tr);
+      }
+    }
+    setSlashView(next);
+    setSlashHighlight(0);
+  };
+
+  // Activate a root row: direct creators insert immediately; submenu openers
+  // switch the view instead.
+  const activateSlashRoot = (item: SlashRootItem) => {
+    if (item.kind === "open-fields") {
+      enterSlashSubmenu("fields");
+      return;
+    }
+    if (item.kind === "open-clauses") {
+      enterSlashSubmenu("clauses");
+      return;
+    }
+    const view = editorViewRef.current;
+    if (!view) {
+      return;
+    }
+    const consumed = consumeTemplateSlashQuery(view.state);
+    if (consumed === null) {
+      return;
+    }
+    if (item.kind === "create-field") {
+      slashInsertNewField(view, consumed, item.path);
+      dismissSlash();
+      return;
+    }
+    if (item.kind === "field") {
+      // Reuse an existing field picked inline from the filtered root list.
+      view.dispatch(
+        consumed.tr
+          .insertText(`{{${item.path}}}`, consumed.from)
+          .scrollIntoView(),
+      );
+      view.focus();
+      markDirty();
+      dismissSlash();
+      return;
+    }
+    // create-condition: drop the query, then insert the block at the collapsed
+    // caret via the shared block helper.
+    view.dispatch(consumed.tr.scrollIntoView());
+    insertCondition();
+    dismissSlash();
+  };
+
+  // Reuse a registered field at the caret without forcing focus there.
+  const activateSlashField = (path: string) => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return;
+    }
+    const consumed = consumeTemplateSlashQuery(view.state);
+    if (consumed === null) {
+      return;
+    }
+    view.dispatch(
+      consumed.tr.insertText(`{{${path}}}`, consumed.from).scrollIntoView(),
+    );
+    view.focus();
+    markDirty();
+    dismissSlash();
+  };
+
+  // Insert a clause slot named after the chosen clause and link that slot to it,
+  // reusing the same slot + link mechanism as the clause inspector.
+  const activateSlashClause = (clause: { id: string; title: string }) => {
+    const view = editorViewRef.current;
+    if (!view) {
+      return;
+    }
+    // Both the Enter and click paths land here. Don't insert a stale clause: if
+    // the 120ms-debounced clause search has not caught up to the live query, the
+    // visible rows are from the previous query — bail until they refresh.
+    const live = getTemplateSlashMenu(view.state);
+    if (live.active && debouncedClauseSearchRef.current !== live.query) {
+      return;
+    }
+    const consumed = consumeTemplateSlashQuery(view.state);
+    if (consumed === null) {
+      return;
+    }
+    const slotName = uniqueClauseSlotName(slugify(clause.title));
+    view.dispatch(
+      consumed.tr
+        .insertText(`{{@clause:${slotName}}}`, consumed.from)
+        .scrollIntoView(),
+    );
+    view.focus();
+    markDirty();
+    dismissSlash();
+    void linkClauseToSlot(clause.id, slotName);
+  };
+
+  const onSlashMenuKeyAction = (
+    action: TemplateSlashMenuKeyAction,
+  ): boolean => {
+    // Derive everything fresh from the live trigger + current view so the
+    // synchronous key handler never acts on a stale render.
+    const view = editorViewRef.current;
+    const live = view ? getTemplateSlashMenu(view.state) : null;
+    if (live === null || !live.active) {
+      return false;
+    }
+    const currentView = slashViewRef.current;
+    if (action === "back") {
+      if (currentView === "root") {
+        return false;
+      }
+      enterSlashSubmenu("root");
+      return true;
+    }
+    if (action === "dismiss") {
+      if (currentView === "root") {
+        return false;
+      }
+      enterSlashSubmenu("root");
+      return true;
+    }
+    const rowCount = slashRowCount(
+      currentView,
+      live.query,
+      useTemplateStudioStore.getState().fields,
+      slashClausesRef.current.length,
+    );
+    if (rowCount === 0) {
+      // Keep arrows/enter swallowed so a momentarily empty submenu does not move
+      // the document caret out from under the open menu.
+      return action === "up" || action === "down" || action === "commit";
+    }
+    if (action === "up") {
+      setSlashHighlight((slashHighlightRef.current - 1 + rowCount) % rowCount);
+      return true;
+    }
+    if (action === "down") {
+      setSlashHighlight((slashHighlightRef.current + 1) % rowCount);
+      return true;
+    }
+    const index = Math.min(slashHighlightRef.current, rowCount - 1);
+    if (currentView === "root") {
+      const items = buildSlashRootItems(
+        live.query,
+        useTemplateStudioStore.getState().fields,
+      );
+      const item = items.at(index);
+      if (item === undefined) {
+        return false;
+      }
+      // ArrowRight only enters submenu openers; on a creator row it is a no-op.
+      if (action === "forward") {
+        if (item.kind === "open-fields" || item.kind === "open-clauses") {
+          activateSlashRoot(item);
+          return true;
+        }
+        return false;
+      }
+      activateSlashRoot(item);
+      return true;
+    }
+    // forward inside a submenu has no deeper level.
+    if (action === "forward") {
+      return false;
+    }
+    if (currentView === "fields") {
+      const field = matchingSlashFields(
+        live.query,
+        useTemplateStudioStore.getState().fields,
+      ).at(index);
+      if (field === undefined) {
+        return false;
+      }
+      activateSlashField(field.path);
+      return true;
+    }
+    // Enter on a clause: `activateSlashClause` bails if the debounced search is
+    // stale, so a too-fast Enter waits for refreshed rows instead of inserting
+    // the wrong clause. Swallow the key either way so it never adds a newline.
+    const clause = slashClausesRef.current.at(index);
+    if (clause === undefined) {
+      return false;
+    }
+    activateSlashClause(clause);
+    return true;
+  };
+
+  // A USER scroll of the document (wheel/touch) — or a context action — tears the
+  // menu down, since it is anchored to the `/` and would otherwise float. We
+  // listen for wheel/touchmove, NOT the generic `scroll` event: typing near the
+  // bottom programmatically scrolls the editor to keep the caret in view, and
+  // that must not close the menu mid-filter. Scrolling within the menu's own list
+  // is excluded so the user can scroll a long result set.
+  const slashShown = slash !== null;
+  useExternalSyncEffect(() => {
+    if (!slashShown) {
+      return undefined;
+    }
+    const host = overlayHostRef.current;
+    const dismiss = (event: Event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="listbox"]')
+      ) {
+        return;
+      }
+      dismissSlash();
+    };
+    host?.addEventListener("wheel", dismiss, { capture: true, passive: true });
+    host?.addEventListener("touchmove", dismiss, {
+      capture: true,
+      passive: true,
+    });
+    host?.addEventListener("contextmenu", dismiss, { capture: true });
+    return () => {
+      host?.removeEventListener("wheel", dismiss, { capture: true });
+      host?.removeEventListener("touchmove", dismiss, { capture: true });
+      host?.removeEventListener("contextmenu", dismiss, { capture: true });
+    };
+  }, [slashShown, dismissSlash]);
 
   // Loop recipes mirror insertOrWrapBlock's caret branch: the opener, one
   // marker paragraph per field, and the closer land after the current
@@ -1997,10 +2669,25 @@ export const TemplateStudioPage = ({
                 syncSelection();
               }}
               onSelectionTextChange={onGestureSelectionChange}
+              onSlashMenuChange={onSlashMenuChange}
+              onSlashMenuKeyAction={onSlashMenuKeyAction}
               showTemplateDirectives={showDirectives}
             />
           </Suspense>
         </div>
+        {slash !== null && (
+          <SlashMenuPopover
+            slash={slash}
+            rows={slashRows}
+            highlight={slashHighlight}
+            fields={studioFields}
+            onHighlight={setSlashHighlight}
+            onActivateRoot={activateSlashRoot}
+            onActivateField={activateSlashField}
+            onActivateClause={activateSlashClause}
+            onBack={() => enterSlashSubmenu("root")}
+          />
+        )}
         {gesture !== null && (
           <SelectionGesturePopover
             enrichment={enrichment}
@@ -2186,6 +2873,519 @@ const SelectionGesturePopover = ({
       </MenuPreviewLayout>
     </div>
   );
+};
+
+/** A row's icon + translated label + optional right-aligned marker hint. */
+type SlashRowFace = {
+  icon: LucideIcon;
+  label: string;
+  /** Right-aligned hint: the marker the row inserts, or a field's path. */
+  hint: string | undefined;
+};
+
+/** Root rows tagged with a section so the menu can render Notion-style grouped
+ *  dividers while keeping one flat, query-filtered, keyboard-navigable order. */
+const SLASH_ROOT_GROUP = {
+  "create-field": "primary",
+  "create-condition": "primary",
+  field: "reuse",
+  "open-fields": "reuse",
+  "open-clauses": "reuse",
+} as const satisfies Record<SlashRootItem["kind"], "primary" | "reuse">;
+
+const SLASH_GROUP_LABEL = {
+  primary: "templates.studio.slashGroupInsert",
+  reuse: "templates.studio.slashGroupReuse",
+} as const satisfies Record<"primary" | "reuse", TranslationKey>;
+
+/** Keyboard-first, command-palette-style menu anchored at the caret, opened by
+ *  typing `/` in template prose. The highlighted row tracks the slash plugin's
+ *  Up/Down/Left/Right/Enter; clicks use `keepEditorFocus` so the painted caret
+ *  stays put while inserting. Three views: a grouped root of creators + submenu
+ *  openers, an existing-field reuse list, and a searchable clause library. The
+ *  highlighted row's description flies out beside the menu via the shared
+ *  preview-pane layout. A pinned footer carries the Escape hint. */
+const SlashMenuPopover = ({
+  slash,
+  rows,
+  highlight,
+  fields,
+  onHighlight,
+  onActivateRoot,
+  onActivateField,
+  onActivateClause,
+  onBack,
+}: {
+  slash: SlashMenu;
+  rows: SlashRows;
+  highlight: number;
+  fields: StudioField[];
+  onHighlight: (index: number) => void;
+  onActivateRoot: (item: SlashRootItem) => void;
+  onActivateField: (path: string) => void;
+  onActivateClause: (clause: SlashClause) => void;
+  onBack: () => void;
+}) => {
+  const t = useTranslations();
+  const empty =
+    rows.view === "clauses"
+      ? t("clauses.noResults")
+      : t("templates.studio.slashEmpty");
+  return (
+    <div
+      className="bg-popover text-popover-foreground absolute z-50 flex flex-col rounded-md border text-sm shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      role="listbox"
+      style={{
+        left: slash.left,
+        top: slash.top,
+        transform:
+          slash.placement === "above"
+            ? `translate(0, calc(-100% - ${SLASH_MENU_OFFSET_PX}px))`
+            : `translate(0, ${SLASH_MENU_OFFSET_PX}px)`,
+      }}
+    >
+      <SlashMenuHeader query={slash.query} view={rows.view} onBack={onBack} />
+      <MenuPreviewLayout
+        className="min-h-0"
+        preview={
+          <PreviewPane>
+            <SlashPreview fields={fields} highlight={highlight} rows={rows} />
+          </PreviewPane>
+        }
+      >
+        <div className="max-h-[min(18rem,60vh)] min-h-0 w-56 overflow-y-auto p-1">
+          {rows.items.length === 0 && (
+            <p className="text-muted-foreground px-2 py-1.5 text-xs">{empty}</p>
+          )}
+          <SlashMenuRows
+            fields={fields}
+            highlight={highlight}
+            rows={rows}
+            onActivateClause={onActivateClause}
+            onActivateField={onActivateField}
+            onActivateRoot={onActivateRoot}
+            onHighlight={onHighlight}
+          />
+        </div>
+      </MenuPreviewLayout>
+      <div className="text-muted-foreground border-t px-3 py-1 text-[11px] leading-snug">
+        {t("templates.studio.slashFooter")}
+      </div>
+    </div>
+  );
+};
+
+/** Compact header: the breadcrumb/back affordance for a submenu, or the typed
+ *  query / typing hint at the root. */
+const SlashMenuHeader = ({
+  view,
+  query,
+  onBack,
+}: {
+  view: SlashView;
+  query: string;
+  onBack: () => void;
+}) => {
+  const t = useTranslations();
+  if (view === "root") {
+    return (
+      <p className="text-muted-foreground truncate border-b px-3 py-1.5 text-[11px] leading-snug">
+        {query === "" ? t("templates.studio.slashHint") : `/${query}`}
+      </p>
+    );
+  }
+  const label =
+    view === "fields"
+      ? t("templates.studio.existingField")
+      : t("common.clauses");
+  return (
+    <button
+      className="text-muted-foreground hover:text-foreground flex items-center gap-1 border-b px-3 py-1.5 text-start text-[11px] leading-snug"
+      onClick={onBack}
+      onMouseDown={keepEditorFocus}
+      type="button"
+    >
+      <DirectionalIcon className="size-3 shrink-0" icon={ChevronLeftIcon} />
+      <span className="truncate">
+        {label}
+        {query === "" ? "" : ` · ${query}`}
+      </span>
+    </button>
+  );
+};
+
+const SlashMenuRows = ({
+  rows,
+  highlight,
+  fields,
+  onHighlight,
+  onActivateRoot,
+  onActivateField,
+  onActivateClause,
+}: {
+  rows: SlashRows;
+  highlight: number;
+  fields: StudioField[];
+  onHighlight: (index: number) => void;
+  onActivateRoot: (item: SlashRootItem) => void;
+  onActivateField: (path: string) => void;
+  onActivateClause: (clause: SlashClause) => void;
+}) => {
+  if (rows.view === "root") {
+    return (
+      <SlashRootRows
+        highlight={highlight}
+        rows={rows.items}
+        onActivateRoot={onActivateRoot}
+        onHighlight={onHighlight}
+      />
+    );
+  }
+  if (rows.view === "fields") {
+    return (
+      <>
+        {rows.items.map((field, index) => (
+          <SlashMenuRow
+            key={field.path}
+            face={slashFieldFace(field, fields)}
+            selected={index === highlight}
+            onHighlight={() => onHighlight(index)}
+            onSelect={() => onActivateField(field.path)}
+          />
+        ))}
+      </>
+    );
+  }
+  return (
+    <>
+      {rows.items.map((clause, index) => (
+        <SlashMenuRow
+          key={clause.id}
+          face={{ icon: TextQuoteIcon, label: clause.title, hint: undefined }}
+          selected={index === highlight}
+          onHighlight={() => onHighlight(index)}
+          onSelect={() => onActivateClause(clause)}
+        />
+      ))}
+    </>
+  );
+};
+
+/** Root rows, split into Notion-style grouped sections with quiet labels while
+ *  keeping the flat highlight index aligned with the key handler's order. */
+const SlashRootRows = ({
+  rows,
+  highlight,
+  onHighlight,
+  onActivateRoot,
+}: {
+  rows: SlashRootItem[];
+  highlight: number;
+  onHighlight: (index: number) => void;
+  onActivateRoot: (item: SlashRootItem) => void;
+}) => {
+  const t = useTranslations();
+  return (
+    <>
+      {rows.map((item, index) => {
+        const prev = rows.at(index - 1);
+        const group = SLASH_ROOT_GROUP[item.kind];
+        const showLabel =
+          index === 0 ||
+          prev === undefined ||
+          SLASH_ROOT_GROUP[prev.kind] !== group;
+        // Field rows carry a dynamic label (the field name), so resolve their
+        // face inline; the fixed entry rows resolve a translation key.
+        let face: SlashRowFace;
+        if (item.kind === "field") {
+          face = {
+            icon: BracesIcon,
+            label: item.label,
+            hint: item.label === item.path ? undefined : item.path,
+          };
+        } else {
+          const rootFace = slashRootFace(item);
+          face = {
+            icon: rootFace.icon,
+            label: t(rootFace.labelKey),
+            hint: rootFace.hint,
+          };
+        }
+        return (
+          <div key={slashRootKey(item)}>
+            {showLabel && (
+              <p className="text-muted-foreground px-2 pt-1.5 pb-0.5 text-[10px] font-medium tracking-wide uppercase">
+                {t(SLASH_GROUP_LABEL[group])}
+              </p>
+            )}
+            <SlashMenuRow
+              chevron={
+                item.kind === "open-fields" || item.kind === "open-clauses"
+              }
+              face={face}
+              selected={index === highlight}
+              onHighlight={() => onHighlight(index)}
+              onSelect={() => onActivateRoot(item)}
+            />
+          </div>
+        );
+      })}
+    </>
+  );
+};
+
+const SlashMenuRow = ({
+  face,
+  selected,
+  chevron = false,
+  onHighlight,
+  onSelect,
+}: {
+  face: SlashRowFace;
+  selected: boolean;
+  chevron?: boolean;
+  onHighlight: () => void;
+  onSelect: () => void;
+}) => {
+  const { icon: Icon, label, hint } = face;
+  const rowRef = useRef<HTMLButtonElement | null>(null);
+  // Keep the keyboard-highlighted row in view when the list overflows.
+  useExternalSyncEffect(() => {
+    if (selected) {
+      rowRef.current?.scrollIntoView({ block: "nearest" });
+    }
+  }, [selected]);
+  return (
+    <button
+      aria-selected={selected}
+      className={cn(
+        "flex w-full items-center gap-2 rounded-sm px-2 py-1 text-start",
+        selected ? "bg-accent text-accent-foreground" : "text-foreground",
+      )}
+      onClick={containedHandler(rowRef, onSelect)}
+      onMouseDown={containedHandler(rowRef, (event: ReactMouseEvent) =>
+        event.preventDefault(),
+      )}
+      onMouseEnter={onHighlight}
+      ref={rowRef}
+      role="option"
+      tabIndex={-1}
+      type="button"
+    >
+      <Icon className="text-muted-foreground size-3.5 shrink-0" />
+      <span className="flex-1 truncate" dir="auto">
+        {label}
+      </span>
+      {hint !== undefined && (
+        <span className="text-muted-foreground shrink-0 truncate font-mono text-[10px]">
+          {hint}
+        </span>
+      )}
+      {chevron && (
+        <DirectionalIcon
+          className="text-muted-foreground size-3.5 shrink-0"
+          icon={ChevronRightIcon}
+        />
+      )}
+    </button>
+  );
+};
+
+/** The flyout description for the highlighted row, shown in the preview pane. */
+const SlashPreview = ({
+  rows,
+  highlight,
+  fields,
+}: {
+  rows: SlashRows;
+  highlight: number;
+  fields: StudioField[];
+}) => {
+  const t = useTranslations();
+  if (rows.view === "clauses") {
+    const clause = rows.items.at(highlight);
+    if (clause === undefined) {
+      return <SlashPreviewEmpty />;
+    }
+    return <SlashClausePreview clause={clause} />;
+  }
+  if (rows.view === "fields") {
+    const field = rows.items.at(highlight);
+    if (field === undefined) {
+      return <SlashPreviewEmpty />;
+    }
+    return (
+      <SlashTextPreview
+        marker={`{{${field.path}}}`}
+        title={slashFieldFace(field, fields).label}
+        body={t("templates.studio.conceptField")}
+      />
+    );
+  }
+  const item = rows.items.at(highlight);
+  if (item === undefined) {
+    return <SlashPreviewEmpty />;
+  }
+  return <SlashRootPreview item={item} />;
+};
+
+const SlashPreviewEmpty = () => {
+  const t = useTranslations();
+  return (
+    <div className="text-muted-foreground flex h-full items-center justify-center text-center text-xs text-balance">
+      {t("templates.studio.previewHint")}
+    </div>
+  );
+};
+
+const SlashRootPreview = ({ item }: { item: SlashRootItem }) => {
+  const t = useTranslations();
+  if (item.kind === "create-field") {
+    return (
+      <SlashTextPreview
+        marker={`{{${item.path}}}`}
+        title={t("templates.studio.makeField")}
+        body={t("templates.studio.conceptField")}
+      />
+    );
+  }
+  if (item.kind === "create-condition") {
+    return (
+      <SlashTextPreview
+        marker="{{#if …}} … {{/if}}"
+        title={t("templates.studio.showOnlyIf")}
+        body={t("templates.studio.conceptCondition")}
+      />
+    );
+  }
+  if (item.kind === "open-fields") {
+    return (
+      <SlashTextPreview
+        marker="{{ … }}"
+        title={t("templates.studio.existingField")}
+        body={t("templates.studio.conceptField")}
+      />
+    );
+  }
+  return (
+    <SlashTextPreview
+      marker="{{@clause: … }}"
+      title={t("common.clauses")}
+      body={t("templates.studio.conceptClause")}
+    />
+  );
+};
+
+const SlashTextPreview = ({
+  marker,
+  title,
+  body,
+}: {
+  marker: string;
+  title: string;
+  body: string;
+}) => (
+  <div className="flex h-full flex-col gap-1.5 overflow-hidden text-xs">
+    <code className="bg-primary/10 text-primary w-fit rounded px-1 py-0.5 text-[10px]">
+      {marker}
+    </code>
+    <p className="text-foreground font-medium">{title}</p>
+    <p className="text-muted-foreground leading-snug">{body}</p>
+  </div>
+);
+
+const SlashClausePreview = ({ clause }: { clause: SlashClause }) => {
+  const t = useTranslations();
+  const description = clause.description?.trim();
+  return (
+    <div className="flex h-full flex-col gap-1.5 overflow-hidden text-xs">
+      <p className="text-foreground font-medium" dir="auto">
+        {clause.title}
+      </p>
+      <p className="text-muted-foreground">
+        {t("clauses.version", { version: String(clause.currentVersion) })}
+      </p>
+      <p className="text-muted-foreground leading-snug" dir="auto">
+        {description && description.length > 0
+          ? description
+          : t("templates.studio.conceptClause")}
+      </p>
+    </div>
+  );
+};
+
+/** Stable React key for a root row. */
+const slashRootKey = (item: SlashRootItem): string => {
+  if (item.kind === "create-field") {
+    return `create-field:${item.path}`;
+  }
+  if (item.kind === "field") {
+    return `field:${item.path}`;
+  }
+  return item.kind;
+};
+
+/** The four root-row labels, none of which take ICU arguments, so the caller's
+ *  `t(labelKey)` needs no values arg (typing this as the broad `TranslationKey`
+ *  would force one). */
+type SlashRootLabelKey =
+  | "templates.studio.makeField"
+  | "templates.studio.showOnlyIf"
+  | "templates.studio.existingField"
+  | "common.clauses";
+
+type SlashRootFace = {
+  icon: LucideIcon;
+  labelKey: SlashRootLabelKey;
+  hint: string | undefined;
+};
+
+/** Icon + label-key + marker hint for a root row, mirroring the gesture-menu
+ *  vocabulary. Returns the key (not the resolved string) so the caller's `t`
+ *  does the lookup; passing `t` itself around explodes the message-key union. */
+const slashRootFace = (item: SlashRootItem): SlashRootFace => {
+  if (item.kind === "create-field") {
+    return {
+      icon: BracesIcon,
+      labelKey: "templates.studio.makeField",
+      hint: "{{ }}",
+    };
+  }
+  if (item.kind === "create-condition") {
+    return {
+      icon: SplitIcon,
+      labelKey: "templates.studio.showOnlyIf",
+      hint: "{{#if}}",
+    };
+  }
+  if (item.kind === "open-fields") {
+    return {
+      icon: BracesIcon,
+      labelKey: "templates.studio.existingField",
+      hint: undefined,
+    };
+  }
+  return {
+    icon: TextQuoteIcon,
+    labelKey: "common.clauses",
+    hint: undefined,
+  };
+};
+
+const slashFieldFace = (
+  field: StudioField,
+  fields: StudioField[],
+): SlashRowFace => {
+  const match = fields.find((f) => f.path === field.path);
+  const icon = match
+    ? VALUE_TYPE_META[inputTypeValueKind(match.inputType)].icon
+    : BracesIcon;
+  const label = field.label === "" ? field.path : field.label;
+  return {
+    icon,
+    label,
+    hint: label === field.path ? undefined : field.path,
+  };
 };
 
 /** What each gesture-menu insert produces, shown in the preview pane while a

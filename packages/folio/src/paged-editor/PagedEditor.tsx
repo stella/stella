@@ -160,6 +160,7 @@ import type {
   TemplatePreviewEntry,
   TemplatePreviewValues,
 } from "../core/prosemirror/plugins/templatePreviewValues";
+import { getTemplateSlashMenu } from "../core/prosemirror/plugins/templateSlashMenu";
 import type { ImagePositionAttrs } from "../core/prosemirror/schema/nodes";
 import type { Footnote } from "../core/types/content";
 // Types
@@ -1840,6 +1841,22 @@ export function PagedEditor(
 
   // Visual line navigation (ArrowUp/ArrowDown with sticky X)
   const { handlePMKeyDown } = useVisualLineNavigation({ pagesContainerRef });
+
+  // While the template slash menu is open it captures the navigation keys
+  // (arrows/Enter/Escape) to drive its own highlight + submenu. Visual-line
+  // navigation runs as the hidden view's base `handleKeyDown`, which PM checks
+  // before plugin handlers, so it would otherwise move the caret out of the
+  // trigger and dismiss the menu before the slash plugin ever sees the key.
+  // Defer to the plugin chain (return false) whenever the menu is active.
+  const handleHiddenEditorKeyDown = useCallback(
+    (view: EditorView, event: KeyboardEvent): boolean => {
+      if (getTemplateSlashMenu(view.state).active) {
+        return false;
+      }
+      return handlePMKeyDown(view, event);
+    },
+    [handlePMKeyDown],
+  );
 
   // Stable ref for drag-extend callback (avoids circular deps with getPositionFromMouse)
   // oxlint-disable-next-line eslint/no-empty-function -- no-op placeholder until the real callback is assigned
@@ -7051,7 +7068,7 @@ export function PagedEditor(
         onRemoteSelectionsChange={setRemoteSelections}
         onEditorViewReady={handleEditorViewReady}
         onEditorViewDestroy={handleEditorViewDestroy}
-        onKeyDown={handlePMKeyDown}
+        onKeyDown={handleHiddenEditorKeyDown}
         {...(styles !== undefined ? { styles } : {})}
         externalPlugins={externalPlugins}
         {...(collaboration !== undefined ? { collaboration } : {})}
@@ -7131,6 +7148,7 @@ export function PagedEditor(
             caretPosition={caretPosition}
             isFocused={isFocused}
             pageGap={pageGap}
+            markCaretRect
           />
           {/* HF caret overlay — draws the caret + selection rects for the
               focused persistent hidden HF EditorView. Painted DOM is the
