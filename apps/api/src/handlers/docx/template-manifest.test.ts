@@ -362,7 +362,7 @@ describe("writeManifest", () => {
     expect(ct).toContain("customXmlProperties");
   });
 
-  test("throws when overwriting non-stella custom XML", async () => {
+  test("preserves non-stella custom XML by writing to a free slot", async () => {
     const zip = new JSZip();
     zip.file(
       "word/document.xml",
@@ -372,15 +372,18 @@ describe("writeManifest", () => {
       "[Content_Types].xml",
       '<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"></Types>',
     );
-    zip.file(
-      "customXml/item1.xml",
-      '<foo xmlns="urn:other:namespace"><bar/></foo>',
-    );
+    const foreign = '<foo xmlns="urn:other:namespace"><bar/></foo>';
+    zip.file("customXml/item1.xml", foreign);
     const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
 
-    expect(writeManifest(buf, sampleManifest)).rejects.toThrow(
-      "non-stella custom XML",
+    const withManifest = await writeManifest(buf, sampleManifest);
+
+    // Foreign part untouched, manifest still readable.
+    const out = await JSZip.loadAsync(withManifest);
+    expect(await out.file("customXml/item1.xml")?.async("string")).toBe(
+      foreign,
     );
+    expect(await readManifest(withManifest)).toEqual(sampleManifest);
   });
 
   test("replaces existing manifest", async () => {

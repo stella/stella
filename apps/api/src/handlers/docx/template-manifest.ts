@@ -15,8 +15,6 @@ import * as slimdom from "slimdom";
 
 import { isFieldPath } from "@stll/template-conditions";
 
-import { WorkflowValidationError } from "@/api/lib/errors/tagged-errors";
-
 import { isElement } from "./ooxml";
 import type {
   DiscoveredField,
@@ -45,9 +43,30 @@ import {
 
 export const MANIFEST_NS = "urn:stella:template:v1";
 
-const CUSTOM_XML_ITEM_PATH = "customXml/item1.xml";
-const CUSTOM_XML_PROPS_PATH = "customXml/itemProps1.xml";
-const CUSTOM_XML_RELS_PATH = "customXml/_rels/item1.xml.rels";
+// Custom XML parts live in numbered slots (`customXml/item{N}.xml`). The slot
+// is NOT fixed at 1: real Word documents commonly ship their own custom XML at
+// item1 (bibliography sources, custom doc properties, content-control bindings,
+// SharePoint metadata). The manifest is located by namespace and written to a
+// free slot, never assuming item1 is ours.
+const customXmlItemPath = (slot: number): string =>
+  `customXml/item${String(slot)}.xml`;
+const customXmlPropsPath = (slot: number): string =>
+  `customXml/itemProps${String(slot)}.xml`;
+const customXmlRelsPath = (slot: number): string =>
+  `customXml/_rels/item${String(slot)}.xml.rels`;
+
+/** Matches any custom XML data or props part to read its slot index
+ *  (used to find the next free slot). */
+const CUSTOM_XML_INDEX_RE =
+  /^customXml\/(?:item|itemProps)(?<index>\d+)\.xml$/u;
+
+/** Matches only data parts (`item{N}.xml`), where a manifest can live. */
+const CUSTOM_XML_DATA_RE = /^customXml\/item(?<index>\d+)\.xml$/u;
+
+/** Escape every regex meta-character (including `\`) for literal matching. */
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 
 const CUSTOM_XML_CONTENT_TYPE =
@@ -247,14 +266,14 @@ const buildItemPropsXml = (): string =>
     "</ds:datastoreItem>",
   ].join("");
 
-const buildItemRelsXml = (): string =>
+const buildItemRelsXml = (slot: number): string =>
   [
     '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>',
     '<Relationships xmlns="http://schemas.openxmlformats.org',
     '/package/2006/relationships">',
     `<Relationship Id="rId1"`,
     ` Type="${CUSTOM_XML_PROPS_REL_TYPE}"`,
-    ` Target="itemProps1.xml"/>`,
+    ` Target="itemProps${String(slot)}.xml"/>`,
     "</Relationships>",
   ].join("");
 
@@ -523,13 +542,15 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
   }
 
   const root = doc.documentElement;
-  if (!root || root.localName !== "template") {
-    return null;
-  }
-
-  // Check namespace (attribute or default)
-  const ns = root.namespaceURI ?? root.getAttribute("xmlns:st");
-  if (ns !== MANIFEST_NS) {
+  // Require the root element to actually be `template` *in* our namespace.
+  // Checking namespaceURI (not a declared-but-unused `xmlns:st` attribute)
+  // ensures a foreign `<template xmlns:st="...">` whose element is not in the
+  // namespace is never mistaken for a manifest.
+  if (
+    !root ||
+    root.localName !== "template" ||
+    root.namespaceURI !== MANIFEST_NS
+  ) {
     return null;
   }
 
@@ -582,6 +603,55 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
 
 // ── Public API ───────────────────────────────────────────
 
+/** The Stella manifest part: its slot index plus the parsed manifest. */
+type ManifestSlot = { index: number; manifest: TemplateManifest };
+
+/**
+ * Locate the Stella manifest among the DOCX's custom XML parts.
+ *
+ * A part is "ours" only when it parses to a valid manifest whose root is
+ * `<template>` in `MANIFEST_NS` (a URN we own) — not a loose substring match,
+ * so a foreign part that merely mentions the URI is never selected. When more
+ * than one qualifies (should not happen for documents we write), the lowest
+ * slot index wins, so the choice is deterministic regardless of zip order.
+ */
+const findManifestSlot = async (zip: JSZip): Promise<ManifestSlot | null> => {
+  const candidates = Object.entries(zip.files).flatMap(([path, entry]) => {
+    const index = CUSTOM_XML_DATA_RE.exec(path)?.groups?.["index"];
+    return index === undefined ? [] : [{ index: Number(index), entry }];
+  });
+
+  const slots = await Promise.all(
+    candidates.map(async (c) => ({
+      index: c.index,
+      manifest: parseManifestXml(await c.entry.async("string")),
+    })),
+  );
+
+  return (
+    slots
+      .filter((slot): slot is ManifestSlot => slot.manifest !== null)
+      .toSorted((a, b) => a.index - b.index)
+      .at(0) ?? null
+  );
+};
+
+/**
+ * Pick the next free custom XML slot: one past the highest existing
+ * `item{N}` / `itemProps{N}` index. Using max+1 (not first-gap) keeps the
+ * data and props parts paired and never reuses a foreign slot.
+ */
+const nextFreeSlot = (zip: JSZip): number => {
+  let max = 0;
+  for (const path of Object.keys(zip.files)) {
+    const index = CUSTOM_XML_INDEX_RE.exec(path)?.groups?.["index"];
+    if (index !== undefined) {
+      max = Math.max(max, Number(index));
+    }
+  }
+  return max + 1;
+};
+
 /**
  * Read the Stella template manifest from an already-opened
  * JSZip instance. Use this when the caller already has the
@@ -590,13 +660,8 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
 export const readManifestFromZip = async (
   zip: JSZip,
 ): Promise<TemplateManifest | null> => {
-  const entry = zip.file(CUSTOM_XML_ITEM_PATH);
-  if (!entry) {
-    return null;
-  }
-
-  const xml = await entry.async("string");
-  return parseManifestXml(xml);
+  const found = await findManifestSlot(zip);
+  return found?.manifest ?? null;
 };
 
 /**
@@ -620,41 +685,42 @@ export const writeManifest = async (
 ): Promise<Buffer> => {
   const zip = await JSZip.loadAsync(docxBuffer);
 
-  // Guard: refuse to overwrite non-Stella custom XML
-  const existing = zip.file(CUSTOM_XML_ITEM_PATH);
-  if (existing) {
-    const xml = await existing.async("string");
-    if (!xml.includes(MANIFEST_NS)) {
-      throw new WorkflowValidationError({
-        message:
-          "Cannot write manifest: " +
-          `${CUSTOM_XML_ITEM_PATH} contains ` +
-          "non-stella custom XML",
-      });
-    }
-  }
+  // Reuse our own slot when re-saving a template that already carries a
+  // manifest; otherwise claim a fresh slot so a foreign custom XML part
+  // (Word bibliography, content-control bindings, SharePoint metadata) is
+  // never overwritten.
+  const existing = await findManifestSlot(zip);
+  const slot = existing?.index ?? nextFreeSlot(zip);
 
-  // Write the manifest XML
-  zip.file(CUSTOM_XML_ITEM_PATH, buildManifestXml(manifest));
+  const propsPath = customXmlPropsPath(slot);
 
-  // Write item properties
-  zip.file(CUSTOM_XML_PROPS_PATH, buildItemPropsXml());
+  zip.file(customXmlItemPath(slot), buildManifestXml(manifest));
+  zip.file(propsPath, buildItemPropsXml());
+  zip.file(customXmlRelsPath(slot), buildItemRelsXml(slot));
 
-  // Write relationships for the custom XML part
-  zip.file(CUSTOM_XML_RELS_PATH, buildItemRelsXml());
-
-  // Ensure [Content_Types].xml includes the custom XML part
+  // Add the per-part Override for our props part. Checking the specific
+  // PartName (not a generic "customXmlProperties" substring) is required:
+  // a foreign custom XML part already contributes its own props override.
   const ctEntry = zip.file(CONTENT_TYPES_PATH);
   if (ctEntry) {
-    let ctXml = await ctEntry.async("string");
-    if (!ctXml.includes("customXmlProperties")) {
-      ctXml = ctXml.replace(
-        "</Types>",
-        `<Override PartName="/${CUSTOM_XML_PROPS_PATH}"` +
-          ` ContentType="${CUSTOM_XML_CONTENT_TYPE}"/>` +
+    const ctXml = await ctEntry.async("string");
+    // Tolerate quote style and attribute spacing/ordering so we never append a
+    // duplicate Override (which would violate the OPC spec and corrupt the
+    // package).
+    const hasOverride = new RegExp(
+      `<Override[^>]*PartName=["']/${escapeRegExp(propsPath)}["']`,
+      "u",
+    ).test(ctXml);
+    if (!hasOverride) {
+      zip.file(
+        CONTENT_TYPES_PATH,
+        ctXml.replace(
           "</Types>",
+          `<Override PartName="/${propsPath}"` +
+            ` ContentType="${CUSTOM_XML_CONTENT_TYPE}"/>` +
+            "</Types>",
+        ),
       );
-      zip.file(CONTENT_TYPES_PATH, ctXml);
     }
   }
 
@@ -671,21 +737,17 @@ export const writeManifest = async (
 export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
   const zip = await JSZip.loadAsync(docxBuffer);
 
-  const hasManifest = zip.file(CUSTOM_XML_ITEM_PATH);
-  if (!hasManifest) {
+  const found = await findManifestSlot(zip);
+  if (!found) {
     return docxBuffer;
   }
 
-  // Check that this is actually a Stella manifest
-  const xml = await hasManifest.async("string");
-  if (!xml.includes(MANIFEST_NS)) {
-    return docxBuffer;
-  }
+  const propsPath = customXmlPropsPath(found.index);
 
-  // Remove the custom XML part files
-  zip.remove(CUSTOM_XML_ITEM_PATH);
-  zip.remove(CUSTOM_XML_PROPS_PATH);
-  zip.remove(CUSTOM_XML_RELS_PATH);
+  // Remove only our slot's part files; foreign custom XML parts stay intact.
+  zip.remove(customXmlItemPath(found.index));
+  zip.remove(propsPath);
+  zip.remove(customXmlRelsPath(found.index));
 
   // Clean up empty customXml directory entries
   const customXmlDir = "customXml/";
@@ -699,10 +761,14 @@ export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
   const ctEntry = zip.file(CONTENT_TYPES_PATH);
   if (ctEntry) {
     let ctXml = await ctEntry.async("string");
-    // Remove the Override for itemProps1.xml
+    // Remove the Override for our props part. Fully escape the path so every
+    // regex meta-character (including `\`) is matched literally, and tolerate
+    // either quote style to mirror the quote-tolerant check on the write side
+    // (otherwise a single-quoted override would be skipped on write yet left
+    // dangling here, pointing at a part we just deleted).
     ctXml = ctXml.replace(
       new RegExp(
-        `<Override[^>]*PartName="/${CUSTOM_XML_PROPS_PATH}"[^>]*/>`,
+        `<Override[^>]*PartName=["']/${escapeRegExp(propsPath)}["'][^>]*/>`,
         "u",
       ),
       "",
