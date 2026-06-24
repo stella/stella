@@ -83,4 +83,45 @@ describe("writeManifest with a foreign custom XML slot", () => {
     expect(zip.file("customXml/item3.xml")).toBeNull();
     expect(await readManifest(twice)).toEqual(sampleManifest);
   });
+
+  // A part that merely mentions the namespace URI (e.g. as text) is NOT a
+  // manifest: detection parses the root element, it is not a substring match.
+  test("ignores a foreign part that only mentions the namespace string", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+    );
+    // Foreign part: contains the URN as text but the root is not <template>.
+    const decoy = `<note>see ${MANIFEST_NS} for details</note>`;
+    zip.file("customXml/item1.xml", decoy);
+    const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+
+    expect(await readManifest(buf)).toBeNull();
+
+    const withManifest = await writeManifest(buf, sampleManifest);
+    const out = await JSZip.loadAsync(withManifest);
+    // The decoy is preserved; the real manifest landed in a fresh slot.
+    expect(await out.file("customXml/item1.xml")?.async("string")).toBe(decoy);
+    expect(await readManifest(withManifest)).toEqual(sampleManifest);
+  });
+
+  // When a valid manifest sits in a higher slot than a foreign part, it is
+  // still found, and re-save reuses that slot rather than item1.
+  test("finds a manifest in a non-first slot deterministically", async () => {
+    const base = await createDocxWithForeignCustomXml();
+    const withManifest = await writeManifest(base, sampleManifest); // → item2
+    expect(await readManifest(withManifest)).toEqual(sampleManifest);
+
+    const resaved = await writeManifest(withManifest, sampleManifest);
+    const zip = await JSZip.loadAsync(resaved);
+    expect(zip.file("customXml/item3.xml")).toBeNull();
+    expect(await zip.file("customXml/item2.xml")?.async("string")).toContain(
+      MANIFEST_NS,
+    );
+  });
 });

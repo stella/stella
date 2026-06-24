@@ -55,9 +55,13 @@ const customXmlPropsPath = (slot: number): string =>
 const customXmlRelsPath = (slot: number): string =>
   `customXml/_rels/item${String(slot)}.xml.rels`;
 
-/** Matches any custom XML data or props part to read its slot index. */
+/** Matches any custom XML data or props part to read its slot index
+ *  (used to find the next free slot). */
 const CUSTOM_XML_INDEX_RE =
   /^customXml\/(?:item|itemProps)(?<index>\d+)\.xml$/u;
+
+/** Matches only data parts (`item{N}.xml`), where a manifest can live. */
+const CUSTOM_XML_DATA_RE = /^customXml\/item(?<index>\d+)\.xml$/u;
 
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 
@@ -593,32 +597,37 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
 
 // ── Public API ───────────────────────────────────────────
 
-/** The Stella manifest part located by namespace, plus its slot index. */
-type ManifestSlot = { index: number; xml: string };
+/** The Stella manifest part: its slot index plus the parsed manifest. */
+type ManifestSlot = { index: number; manifest: TemplateManifest };
 
 /**
- * Locate the Stella manifest among the DOCX's custom XML parts by scanning
- * for `MANIFEST_NS`, rather than assuming a fixed slot. Returns the slot
- * index and its raw XML, or `null` when no Stella manifest is present.
+ * Locate the Stella manifest among the DOCX's custom XML parts.
+ *
+ * A part is "ours" only when it parses to a valid manifest whose root is
+ * `<template>` in `MANIFEST_NS` (a URN we own) — not a loose substring match,
+ * so a foreign part that merely mentions the URI is never selected. When more
+ * than one qualifies (should not happen for documents we write), the lowest
+ * slot index wins, so the choice is deterministic regardless of zip order.
  */
 const findManifestSlot = async (zip: JSZip): Promise<ManifestSlot | null> => {
   const candidates = Object.entries(zip.files).flatMap(([path, entry]) => {
-    const index = CUSTOM_XML_INDEX_RE.exec(path)?.groups?.["index"];
-    // Only data parts (`item{N}.xml`) carry the manifest; skip props parts.
-    if (index === undefined || !path.startsWith(`customXml/item${index}.xml`)) {
-      return [];
-    }
-    return [{ index: Number(index), entry }];
+    const index = CUSTOM_XML_DATA_RE.exec(path)?.groups?.["index"];
+    return index === undefined ? [] : [{ index: Number(index), entry }];
   });
 
   const slots = await Promise.all(
     candidates.map(async (c) => ({
       index: c.index,
-      xml: await c.entry.async("string"),
+      manifest: parseManifestXml(await c.entry.async("string")),
     })),
   );
 
-  return slots.find((slot) => slot.xml.includes(MANIFEST_NS)) ?? null;
+  return (
+    slots
+      .filter((slot): slot is ManifestSlot => slot.manifest !== null)
+      .toSorted((a, b) => a.index - b.index)
+      .at(0) ?? null
+  );
 };
 
 /**
@@ -646,10 +655,7 @@ export const readManifestFromZip = async (
   zip: JSZip,
 ): Promise<TemplateManifest | null> => {
   const found = await findManifestSlot(zip);
-  if (!found) {
-    return null;
-  }
-  return parseManifestXml(found.xml);
+  return found?.manifest ?? null;
 };
 
 /**
