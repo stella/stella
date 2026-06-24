@@ -5320,7 +5320,6 @@ const FormulaEditor = ({
   onChange,
 }: FormulaEditorProps) => {
   const t = useTranslations();
-  const format = useFormatter();
   const inputRef = useRef<HTMLInputElement>(null);
   const currentIndex = fields.findIndex((f) => f.path === currentPath);
   // Operands the evaluator can resolve to a number here: number fields (any
@@ -5518,13 +5517,16 @@ const FormulaEditor = ({
             return (
               <span key={entry.path}>
                 {index > 0 && ", "}
-                {label} = {format.number(entry.value)}
+                {label} = {String(entry.value)}
               </span>
             );
           })}
           {exampleFields.length > 0 && " → "}
+          {/* Mirror the document exactly: the fill writes String(result), so
+              the preview shows the same raw value (no locale rounding) — the
+              author controls decimals with round(x, n). */}
           <span className="text-foreground font-medium">
-            {format.number(finiteExampleResult)}
+            {String(finiteExampleResult)}
           </span>
         </p>
       )}
