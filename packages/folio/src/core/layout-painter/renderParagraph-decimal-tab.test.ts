@@ -69,7 +69,6 @@ class FakeElement {
       font: "",
       measureText(text: string): { width: number } {
         // Parse "<weight?> <px>px <family>" — grab the numeric pixel size.
-        // oxlint-disable-next-line sonarjs/slow-regex -- fixed font string from the test, linear backtracking only
         const match = /(?<size>\d+(?:\.\d+)?)px/u.exec(ctx.font);
         const fontSizePx = match
           ? Number(match.groups?.["size"])

@@ -183,7 +183,6 @@ const DIRECTIVE_NAMES = new Set([
   "recitals",
 ]);
 const DIRECTIVE_NAME_CHAR_RE = /[a-z_]/iu;
-// oxlint-disable-next-line sonarjs/slow-regex -- input is single-line paragraph text; linear backtracking only
 const PLACEHOLDER_RE = /\[\[(?<inner>[^\]]+?)\]\]/gu;
 const CLAUSE_HEADING_RE = /^@clause +\d+ *"(?<title>[^"]*)" *$/iu;
 const stripDirectivePrefix = (line: string): string => {

@@ -69,10 +69,8 @@ const FIRST_YEAR = 1993;
 const toYearSuffix = (year: number): string =>
   String(year % 100).padStart(2, "0");
 
-// oxlint-disable-next-line sonarjs/slow-regex -- registry sign is a short label extracted from NALUS metadata
 const REGISTRY_SIGN_PATTERN = /^(?<caseNumber>.+?)\s+ze\s+dne\s+(?<date>.+)$/u;
 const DOC_CONTENT_PATTERN = /class="DocContent">(?<body>[\s\S]*?)<\/table>/u;
-// oxlint-disable-next-line sonarjs/slow-regex -- judge extraction scans one decision signature block
 const JUDGE_PATTERN = /(?<judge>\S+(?:\s+\S+){0,2})\s+\(soudce\s+zpravodaj\)/iu;
 
 /** Extract text from a labeled span. */

@@ -238,7 +238,6 @@ const isTriviallyIdentical = (value: string): boolean => {
   const trimmed = value.trim();
   // Ignore ICU placeholders so "{n}" / "{value}%" count as letter-free.
   // Pattern is linear: [^}] cannot match the closing }, so no backtracking.
-  // oxlint-disable-next-line sonarjs/slow-regex -- linear: [^}] excludes the closing }, no backtracking
   const literal = trimmed.replace(/\{[^}]*\}/gu, "");
   // Exempt only language-neutral content: no letters (numbers, punctuation,
   // placeholder-only) or an explicit allowed token. Do NOT blanket-exempt by

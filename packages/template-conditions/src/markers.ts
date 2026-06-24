@@ -110,7 +110,6 @@ export const hasBlockDirectivePattern = (): RegExp => /\{\{\s*[#/]/u;
 
 /** A whole line that is a single block directive — `tag` and `expr` groups. */
 export const blockDirectiveLinePattern = (): RegExp =>
-  // oxlint-disable-next-line sonarjs/slow-regex -- runs on one OOXML paragraph at a time
   /^\s*\{\{\s*(?<tag>#if|#elseif|#else|#each|\/if|\/each)\s*(?<expr>.*?)\}\}\s*$/u;
 
 // ── Classifier ───────────────────────────────────────────

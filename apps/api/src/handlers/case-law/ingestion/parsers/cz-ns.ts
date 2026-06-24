@@ -457,7 +457,6 @@ export const blocksToPlainText = (blocks: readonly Block[]): string =>
 
 // ── Pattern constants ─────────────────────────────────────
 
-// oxlint-disable-next-line sonarjs/slow-regex -- title detection runs on one paragraph line
 const DECISION_TITLE_RE = /^[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]+$/u;
 
 const DECISION_TYPE_WORDS = new Set([
@@ -605,11 +604,9 @@ const mergeBlocks = (
       const text = firstPara.plainText;
       // Check for embedded title
       const titleMatch =
-        // oxlint-disable-next-line sonarjs/slow-regex -- first paragraph text is bounded by parser block splitting
         /(?<title>[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ]\s+[A-ZÁČĎÉĚÍŇÓŘŠŤÚŮÝŽ\s]{5,})\s*$/u.exec(
           text,
         );
-      // oxlint-disable-next-line sonarjs/slow-regex -- first paragraph text is bounded by parser block splitting
       const caseMatch = /(?<caseNumber>\d+\s+\w+\s+\d+\/\d{4}[^\s]*)/u.exec(
         text,
       );
@@ -654,7 +651,6 @@ const mergeBlocks = (
   // have their own type; plain paragraphs in this zone
   // get role "holding".
   // Match "takto:", "takto :", "t a k t o :", etc.
-  // oxlint-disable-next-line sonarjs/slow-regex -- matched against individual block plainText
   const TAKTO_RE = /t\s*a\s*k\s*t\s*o\s*:?\s*$/iu;
   let inHolding = false;
 

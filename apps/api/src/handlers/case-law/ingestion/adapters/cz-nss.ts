@@ -228,7 +228,6 @@ const parseResultRows = (html: string): ParsedRow[] => {
     // č may appear as literal or HTML entity (&#x10D; &#x10d; &#269;)
     // Stop at comma to exclude publication reference (e.g. ", č. 421/2004 Sb. NSS")
     const citMatch =
-      // oxlint-disable-next-line sonarjs/slow-regex -- tbody blocks are bounded search-result rows from NSS
       /title="Citace:[^"]*?(?:čj\.|č\.\s*j\.|&#x10[dD];j\.|&#26[89];j\.)[\s]*(?<caseNumber>[^",]+?)(?:-\d+)?[",]/iu.exec(
         block,
       );
@@ -808,11 +807,8 @@ export const czNssAdapter: SourceAdapter = {
       const html = await response.text();
 
       const countPatterns = [
-        // oxlint-disable-next-line sonarjs/slow-regex -- count labels are matched once against one NSS result page
         /Nalezeno\s+(?<count>\d[\d\s]*)\s+záznam/iu,
-        // oxlint-disable-next-line sonarjs/slow-regex -- count labels are matched once against one NSS result page
         /Celkem\s+(?<count>\d[\d\s]*)\s+záznam/iu,
-        // oxlint-disable-next-line sonarjs/slow-regex -- count labels are matched once against one NSS result page
         /(?<count>\d[\d\s]*)\s+výsledk/iu,
         /resCount[^>]*>(?<count>\d[\d\s]*)</iu,
         /myResCount[^>]*>(?<count>\d[\d\s]*)</iu,
