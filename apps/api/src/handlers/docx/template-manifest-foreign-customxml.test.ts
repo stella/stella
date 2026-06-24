@@ -115,6 +115,31 @@ describe("writeManifest with a foreign custom XML slot", () => {
     expect(await readManifest(withManifest)).toEqual(sampleManifest);
   });
 
+  // A `<template>` element that merely *declares* our namespace prefix but is
+  // not itself in the namespace is not a manifest (the root's namespaceURI,
+  // not a stray xmlns:st attribute, decides).
+  test("ignores a foreign <template> not actually in the namespace", async () => {
+    const zip = new JSZip();
+    zip.file(
+      "word/document.xml",
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+    );
+    const decoy = `<template xmlns:st="${MANIFEST_NS}"><fields/></template>`;
+    zip.file("customXml/item1.xml", decoy);
+    const buf = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+
+    expect(await readManifest(buf)).toBeNull();
+
+    const withManifest = await writeManifest(buf, sampleManifest);
+    const out = await JSZip.loadAsync(withManifest);
+    expect(await out.file("customXml/item1.xml")?.async("string")).toBe(decoy);
+    expect(await readManifest(withManifest)).toEqual(sampleManifest);
+  });
+
   // When a valid manifest sits in a higher slot than a foreign part, it is
   // still found, and re-save reuses that slot rather than item1.
   test("finds a manifest in a non-first slot deterministically", async () => {

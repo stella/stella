@@ -63,6 +63,10 @@ const CUSTOM_XML_INDEX_RE =
 /** Matches only data parts (`item{N}.xml`), where a manifest can live. */
 const CUSTOM_XML_DATA_RE = /^customXml\/item(?<index>\d+)\.xml$/u;
 
+/** Escape every regex meta-character (including `\`) for literal matching. */
+const escapeRegExp = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
 const CONTENT_TYPES_PATH = "[Content_Types].xml";
 
 const CUSTOM_XML_CONTENT_TYPE =
@@ -538,13 +542,15 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
   }
 
   const root = doc.documentElement;
-  if (!root || root.localName !== "template") {
-    return null;
-  }
-
-  // Check namespace (attribute or default)
-  const ns = root.namespaceURI ?? root.getAttribute("xmlns:st");
-  if (ns !== MANIFEST_NS) {
+  // Require the root element to actually be `template` *in* our namespace.
+  // Checking namespaceURI (not a declared-but-unused `xmlns:st` attribute)
+  // ensures a foreign `<template xmlns:st="...">` whose element is not in the
+  // namespace is never mistaken for a manifest.
+  if (
+    !root ||
+    root.localName !== "template" ||
+    root.namespaceURI !== MANIFEST_NS
+  ) {
     return null;
   }
 
@@ -698,7 +704,14 @@ export const writeManifest = async (
   const ctEntry = zip.file(CONTENT_TYPES_PATH);
   if (ctEntry) {
     const ctXml = await ctEntry.async("string");
-    if (!ctXml.includes(`PartName="/${propsPath}"`)) {
+    // Tolerate quote style and attribute spacing/ordering so we never append a
+    // duplicate Override (which would violate the OPC spec and corrupt the
+    // package).
+    const hasOverride = new RegExp(
+      `<Override[^>]*PartName=["']/${escapeRegExp(propsPath)}["']`,
+      "u",
+    ).test(ctXml);
+    if (!hasOverride) {
       zip.file(
         CONTENT_TYPES_PATH,
         ctXml.replace(
@@ -748,11 +761,12 @@ export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
   const ctEntry = zip.file(CONTENT_TYPES_PATH);
   if (ctEntry) {
     let ctXml = await ctEntry.async("string");
-    // Remove the Override for our props part (escape the `.` in the path so
-    // the regex matches it literally, not as a wildcard).
+    // Remove the Override for our props part. Fully escape the path before
+    // embedding it in the pattern so every regex meta-character (including
+    // `\`) is matched literally.
     ctXml = ctXml.replace(
       new RegExp(
-        `<Override[^>]*PartName="/${propsPath.replace(/\./gu, "\\.")}"[^>]*/>`,
+        `<Override[^>]*PartName="/${escapeRegExp(propsPath)}"[^>]*/>`,
         "u",
       ),
       "",
