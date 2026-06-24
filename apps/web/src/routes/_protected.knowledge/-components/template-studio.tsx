@@ -4398,23 +4398,52 @@ const ConditionBuilder = ({
   fields: StudioField[];
   fromKey: string;
   onRewrite: (next: string) => boolean;
-}) => (
-  <>
-    <ConditionReusePicker
-      currentRef={expr}
-      fields={fields}
-      onRewrite={onRewrite}
-    />
-    <ConditionQuestionBuilder
-      expr={expr}
-      fields={fields}
-      key={fromKey}
-      onRewrite={onRewrite}
-    />
-    <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />
-    <ConditionAdvanced expr={expr} fromKey={fromKey} onRewrite={onRewrite} />
-  </>
-);
+}) => {
+  const t = useTranslations();
+  // One choice, not a stack of forms: pick how this block's visibility is
+  // decided and show only that mode (mirrors the per-field condition picker).
+  const [mode, setMode] = useState<"ask" | "rule">("ask");
+  return (
+    <div className="flex flex-col gap-4">
+      <ConditionReusePicker
+        currentRef={expr}
+        fields={fields}
+        onRewrite={onRewrite}
+      />
+      <div className="flex items-center gap-1">
+        <Button
+          className="flex-1"
+          onClick={() => setMode("ask")}
+          size="sm"
+          variant={mode === "ask" ? "secondary" : "ghost"}
+        >
+          <MessageCircleQuestionIcon className="size-3.5" />
+          {t("templates.studio.conditionSourceAsked")}
+        </Button>
+        <Button
+          className="flex-1"
+          onClick={() => setMode("rule")}
+          size="sm"
+          variant={mode === "rule" ? "secondary" : "ghost"}
+        >
+          <ListFilterIcon className="size-3.5" />
+          {t("templates.studio.conditionSourceRule")}
+        </Button>
+      </div>
+      {mode === "ask" ? (
+        <ConditionQuestionBuilder
+          expr={expr}
+          fields={fields}
+          key={fromKey}
+          onRewrite={onRewrite}
+        />
+      ) : (
+        <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />
+      )}
+      <ConditionAdvanced expr={expr} fromKey={fromKey} onRewrite={onRewrite} />
+    </div>
+  );
+};
 
 /** "Reuse a condition" affordance: every existing reusable condition (boolean
  *  fields), in plain language. Picking one points this block at it by reference
@@ -4539,10 +4568,6 @@ const ConditionQuestionBuilder = ({
 
   return (
     <section className="flex flex-col gap-2">
-      <h4 className="flex items-center gap-1.5 text-sm font-medium">
-        <MessageCircleQuestionIcon className="text-muted-foreground size-4 shrink-0" />
-        {t("templates.studio.conditionAskQuestion")}
-      </h4>
       <p className="text-muted-foreground text-xs leading-relaxed">
         {t("templates.studio.conditionAskQuestionHelp")}
       </p>
@@ -4615,10 +4640,6 @@ const ConditionRuleBuilder = ({
   if (!open) {
     return (
       <section className="flex flex-col gap-2">
-        <h4 className="flex items-center gap-1.5 text-sm font-medium">
-          <ListFilterIcon className="text-muted-foreground size-4 shrink-0" />
-          {t("templates.studio.conditionMatchField")}
-        </h4>
         <p className="text-muted-foreground text-xs leading-relaxed">
           {t("templates.studio.conditionMatchFieldHelp")}
         </p>
@@ -4636,10 +4657,6 @@ const ConditionRuleBuilder = ({
   }
   return (
     <section className="flex flex-col gap-2">
-      <h4 className="flex items-center gap-1.5 text-sm font-medium">
-        <ListFilterIcon className="text-muted-foreground size-4 shrink-0" />
-        {t("templates.studio.conditionMatchField")}
-      </h4>
       <ConditionGroupEditor
         fields={ruleFields}
         group={group}
@@ -5398,7 +5415,7 @@ const FormulaEditor = ({
   let cursor = 0;
   for (const match of value.matchAll(FORMULA_IDENT_RE)) {
     const id = match[0];
-    const at = match.index ?? cursor;
+    const at = match.index;
     if (at > cursor) {
       previewTokens.push({ text: value.slice(cursor, at), isField: false });
     }
