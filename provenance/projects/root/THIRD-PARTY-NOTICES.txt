@@ -21,10 +21,9 @@ Project: root
 - @ai-sdk/valibot 2.0.30 — Apache-2.0
 - @astrojs/react 5.0.7 — MIT
 - @astrojs/sitemap 3.7.3 — MIT
-- @atlaskit/pragmatic-drag-and-drop 1.7.9 — Apache-2.0
-- @atlaskit/pragmatic-drag-and-drop 1.8.1 — Apache-2.0
-- @atlaskit/pragmatic-drag-and-drop-auto-scroll 2.1.5 — Apache-2.0
-- @atlaskit/pragmatic-drag-and-drop-hitbox 1.2.0 — Apache-2.0
+- @atlaskit/pragmatic-drag-and-drop 2.0.1 — Apache-2.0
+- @atlaskit/pragmatic-drag-and-drop-auto-scroll 3.0.0 — Apache-2.0
+- @atlaskit/pragmatic-drag-and-drop-hitbox 2.0.0 — Apache-2.0
 - @aws-sdk/client-s3 3.1068.0 — Apache-2.0
 - @aws-sdk/client-sesv2 3.1068.0 — Apache-2.0
 - @aws-sdk/client-sts 3.1068.0 — Apache-2.0
@@ -32,6 +31,7 @@ Project: root
 - @babel/core  — MIT
 - @babel/core 7.29.0 — MIT
 - @babel/core 7.29.7 — MIT
+- @babel/core 8.0.1 — MIT
 - @base-ui/react 1.5.0 — MIT
 - @better-auth/oauth-provider 1.6.12 — MIT
 - @elysiajs/cors 1.4.2 — MIT
@@ -45,7 +45,7 @@ Project: root
 - @modelcontextprotocol/sdk 1.29.0 — MIT
 - @openrouter/ai-sdk-provider 2.9.1 — Apache-2.0
 - @opentelemetry/api-logs 0.219.0 — Apache-2.0
-- @playwright/test 1.60.0 — Apache-2.0
+- @playwright/test 1.61.0 — Apache-2.0
 - @posthog/react 1.10.1 — MIT
 - @pydantic/genai-prices 0.0.66 — MIT
 - @react-email/components 1.0.12 — MIT
@@ -62,15 +62,15 @@ Project: root
 - @tanstack/react-hotkeys 0.10.0 — MIT
 - @tanstack/react-query 5.101.0 — MIT
 - @tanstack/react-query-devtools 5.101.0 — MIT
-- @tanstack/react-router 1.170.15 — MIT
+- @tanstack/react-router 1.170.16 — MIT
 - @tanstack/react-router-devtools 1.167.0 — MIT
 - @tanstack/react-router-ssr-query 1.167.1 — MIT
-- @tanstack/react-start 1.168.25 — MIT
+- @tanstack/react-start 1.168.26 — MIT
 - @tanstack/react-store 0.11.0 — MIT
 - @tanstack/react-store 0.9.3 — MIT
-- @tanstack/react-table 9.0.0-beta.16 — MIT
-- @tanstack/react-table-devtools 9.0.0-beta.16 — MIT
-- @tanstack/react-virtual 3.14.2 — MIT
+- @tanstack/react-table 9.0.0-beta.17 — MIT
+- @tanstack/react-table-devtools 9.0.0-beta.17 — MIT
+- @tanstack/react-virtual 3.14.3 — MIT
 - @tauri-apps/api 2.11.0 — Apache-2.0 OR MIT
 - @tiptap/core 3.26.1 — MIT
 - @tiptap/extension-bold 3.26.1 — MIT
@@ -131,7 +131,7 @@ Project: root
 - prosemirror-gapcursor 1.4.1 — MIT
 - prosemirror-history 1.5.0 — MIT
 - prosemirror-keymap 1.2.3 — MIT
-- prosemirror-model 1.25.8 — MIT
+- prosemirror-model 1.25.9 — MIT
 - prosemirror-state 1.4.4 — MIT
 - prosemirror-tables 1.8.5 — MIT
 - prosemirror-transform 1.12.0 — MIT

@@ -1,9 +1,9 @@
 use axum::{
+  Json, Router,
   extract::State,
   http::{HeaderMap, HeaderValue, Method, StatusCode},
   response::IntoResponse,
   routing::{get, post},
-  Json, Router,
 };
 use std::collections::HashSet;
 use std::sync::Arc;
@@ -12,7 +12,7 @@ use tokio::sync::Mutex;
 
 use crate::session_manager::SessionManager;
 use crate::types::{
-  is_safe_session_id, OpenDocxRequest, BRIDGE_CAPABILITIES, BRIDGE_VERSION,
+  BRIDGE_CAPABILITIES, BRIDGE_VERSION, OpenDocxRequest, is_safe_session_id,
 };
 
 const BIND_RETRY_INITIAL_BACKOFF: Duration = Duration::from_secs(1);
@@ -35,26 +35,25 @@ fn cors_headers(origin: Option<&str>, allowed: bool) -> HeaderMap {
   let mut headers = HeaderMap::new();
   headers.insert("Content-Type", HeaderValue::from_static("application/json"));
 
-  if allowed {
-    if let Some(o) = origin {
-      if let Ok(val) = HeaderValue::from_str(o) {
-        headers.insert("Access-Control-Allow-Origin", val);
-        headers.insert(
-          "Access-Control-Allow-Headers",
-          HeaderValue::from_static("content-type"),
-        );
-        headers.insert(
-          "Access-Control-Allow-Methods",
-          HeaderValue::from_static("GET, POST, OPTIONS"),
-        );
-        // Chrome Private Network Access: required for localhost <-> 127.0.0.1
-        headers.insert(
-          "Access-Control-Allow-Private-Network",
-          HeaderValue::from_static("true"),
-        );
-        headers.insert("Vary", HeaderValue::from_static("Origin"));
-      }
-    }
+  if allowed
+    && let Some(o) = origin
+    && let Ok(val) = HeaderValue::from_str(o)
+  {
+    headers.insert("Access-Control-Allow-Origin", val);
+    headers.insert(
+      "Access-Control-Allow-Headers",
+      HeaderValue::from_static("content-type"),
+    );
+    headers.insert(
+      "Access-Control-Allow-Methods",
+      HeaderValue::from_static("GET, POST, OPTIONS"),
+    );
+    // Chrome Private Network Access: required for localhost <-> 127.0.0.1
+    headers.insert(
+      "Access-Control-Allow-Private-Network",
+      HeaderValue::from_static("true"),
+    );
+    headers.insert("Vary", HeaderValue::from_static("Origin"));
   }
 
   headers
@@ -294,7 +293,7 @@ pub async fn start_bridge(
 #[cfg(test)]
 mod tests {
   use super::*;
-  use axum::body::{to_bytes, Body};
+  use axum::body::{Body, to_bytes};
   use axum::http::Request;
   use tower::ServiceExt;
 
