@@ -853,10 +853,15 @@ const CompositePartsEditor = ({
               </Button>
             </div>
             {part.inputType === "select" && (
-              <OptionsTagInput
-                onChange={(opts) => updatePart(index, { options: opts })}
-                options={part.options}
-              />
+              <div className="border-input ms-1.5 flex flex-col gap-1 border-s ps-3">
+                <span className="text-muted-foreground text-xs">
+                  {t("common.options")}
+                </span>
+                <OptionsTagInput
+                  onChange={(opts) => updatePart(index, { options: opts })}
+                  options={part.options}
+                />
+              </div>
             )}
           </div>
         ))}

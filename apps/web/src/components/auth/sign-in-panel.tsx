@@ -11,6 +11,7 @@ import { Button } from "@stll/ui/components/button";
 import { Field, FieldError } from "@stll/ui/components/field";
 import { Form } from "@stll/ui/components/form";
 import { Input } from "@stll/ui/components/input";
+import { TextSeparator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
@@ -188,13 +189,7 @@ export function SignInPanel({
       )}
 
       {hasSocialProviders && (
-        <div className="flex items-center gap-3">
-          <div className="bg-border h-px flex-1" />
-          <span className="text-muted-foreground text-xs">
-            {t("auth.orSignInWithEmail")}
-          </span>
-          <div className="bg-border h-px flex-1" />
-        </div>
+        <TextSeparator>{t("auth.orSignInWithEmail")}</TextSeparator>
       )}
 
       <Form

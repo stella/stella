@@ -3,6 +3,8 @@ import { getRouteApi } from "@tanstack/react-router";
 import { AlertTriangleIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import { TextSeparator } from "@stll/ui/components/separator";
+
 import {
   CONDITIONAL_KINDS,
   DirectiveLabel,
@@ -261,13 +263,12 @@ const ErrorIndicator = ({ error }: { error: StructureError }) => (
 
 /** Subtle divider between header/body/footer sections. */
 const SectionDivider = ({ label }: { label: string }) => (
-  <div className="flex items-center gap-2 pt-2 pb-1">
-    <div className="bg-border h-px flex-1" />
-    <span className="text-muted-foreground text-[10px] tracking-wider uppercase">
-      {label}
-    </span>
-    <div className="bg-border h-px flex-1" />
-  </div>
+  <TextSeparator
+    className="gap-2 pt-2 pb-1"
+    labelClassName="text-[10px] tracking-wider uppercase"
+  >
+    {label}
+  </TextSeparator>
 );
 
 // ── Main component ───────────────────────────────────────
