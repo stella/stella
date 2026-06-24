@@ -166,6 +166,7 @@ import {
   type EditableField,
   type FieldValidation,
   FieldConfigEditor,
+  isLookupRegistry,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 import {
   knowledgeKeys,
@@ -5317,18 +5318,22 @@ const FormulaEditor = ({
   const format = useFormatter();
   const inputRef = useRef<HTMLInputElement>(null);
   const currentIndex = fields.findIndex((f) => f.path === currentPath);
-  // Suggest the other NUMBER fields, minus formula fields defined at/after this
-  // one: formulas resolve in manifest order, so a forward reference would leave
-  // this field unfilled even though the name is "known". The evaluator is
-  // numeric-only, so non-number fields can never participate.
+  // Operands the evaluator can resolve to a number here: number fields (any
+  // order) and EARLIER formula fields, whose numeric result is computed before
+  // this one in manifest order. Formula fields defined at/after this one are
+  // excluded (still unfilled at this point), as are non-numeric text/date
+  // fields — the evaluator coerces those to NaN and the whole formula fails.
   const numberFields = fields.filter(
     (f, index) =>
       f.path !== currentPath &&
-      f.inputType === "number" &&
+      (f.inputType === "number" || f.formula !== undefined) &&
       !(f.formula !== undefined && index >= currentIndex),
   );
   const hasNonNumberFields = fields.some(
-    (f) => f.path !== currentPath && f.inputType !== "number",
+    (f) =>
+      f.path !== currentPath &&
+      f.inputType !== "number" &&
+      f.formula === undefined,
   );
   const fieldsByPath = new Map(fields.map((f) => [f.path, f]));
   const knownPaths = new Set(fields.map((f) => f.path));
@@ -6470,10 +6475,11 @@ const parseFields = (manifest: unknown): StudioField[] => {
       if (typeof raw["optionsFrom"] === "string") {
         field.optionsFrom = raw["optionsFrom"];
       }
-      if (isRecord(raw["lookup"]) && raw["lookup"]["registry"] === "krs") {
-        const formats = parseEditableLookupFormats(raw["lookup"]["formats"]);
+      const rawLookup = raw["lookup"];
+      if (isRecord(rawLookup) && isLookupRegistry(rawLookup["registry"])) {
+        const formats = parseEditableLookupFormats(rawLookup["formats"]);
         if (formats.length > 0) {
-          field.lookup = { registry: "krs", formats };
+          field.lookup = { registry: rawLookup["registry"], formats };
         }
       }
       if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {

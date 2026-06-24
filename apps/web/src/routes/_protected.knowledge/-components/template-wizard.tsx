@@ -121,6 +121,12 @@ const LOOKUP_REGISTRIES = [
 
 type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
 
+/** Narrows a manifest's raw lookup registry to a supported slug, so the Studio
+ *  restores lookups for every offered registry — not just KRS — on reopen. */
+export const isLookupRegistry = (value: unknown): value is LookupRegistry =>
+  typeof value === "string" &&
+  LOOKUP_REGISTRIES.some((registry) => registry === value);
+
 /** One output format for a lookup field: the author enters the registry
  *  number once and addresses this rendering of the resolved hit by a marker.
  *  The first format is the default (`{{path}}`); the rest are keyed
