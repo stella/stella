@@ -297,8 +297,15 @@ const SLASH_MENU_OFFSET_PX = 2;
 /** Rough rendered height of the menu, for the above/below flip and the
  *  off-screen clamp. */
 const SLASH_MENU_EST_HEIGHT_PX = 280;
-/** Rendered menu width, for the off-screen right-edge clamp. */
-const SLASH_MENU_WIDTH_PX = 224;
+/** Full rendered menu width, for the off-screen right-edge clamp. The list
+ *  column is `w-56` (224px); on `sm`+ screens `MenuPreviewLayout` renders a
+ *  `PreviewPane` (`w-64`, 256px) beside it across a 9px gap+border, so the menu
+ *  is ~489px wide. Clamp against the whole width so the preview pane never
+ *  spills off-screen. */
+const SLASH_MENU_LIST_WIDTH_PX = 224;
+const SLASH_MENU_PREVIEW_WIDTH_PX = 256 + 9;
+const SLASH_MENU_WIDTH_PX =
+  SLASH_MENU_LIST_WIDTH_PX + SLASH_MENU_PREVIEW_WIDTH_PX;
 /** Cap on existing fields offered for reuse so a large template's field list
  *  never turns the menu into an unbounded scroll. */
 const SLASH_MENU_MAX_FIELDS = 50;
@@ -336,6 +343,18 @@ type SlashRows =
   | { view: "fields"; items: StudioField[] }
   | { view: "clauses"; items: SlashClause[] };
 
+/** The new field's path for a "New field" row. The slash query grammar already
+ *  mirrors the field-path grammar, so a typed `party.name` / `line-item` is a
+ *  valid path and is kept verbatim; only a query that is not itself a valid
+ *  path falls back to the sanitizer (`slugify` would strip the `.`/`-` and
+ *  mangle the name the user typed). */
+const createFieldPathFromQuery = (trimmed: string): string => {
+  if (trimmed === "") {
+    return "field";
+  }
+  return isFieldPath(trimmed) ? trimmed : sanitizeFieldPath(trimmed);
+};
+
 /** Build the root rows for the current query. The typed text both filters the
  *  rows and (for "New field") becomes the new field's name. */
 const buildSlashRootItems = (
@@ -344,7 +363,7 @@ const buildSlashRootItems = (
 ): SlashRootItem[] => {
   const trimmed = query.trim();
   const needle = trimmed.toLowerCase();
-  const createPath = trimmed === "" ? "field" : slugify(trimmed);
+  const createPath = createFieldPathFromQuery(trimmed);
   const reuseExact = fields.some((field) => field.path === createPath);
   // Match each row's label keyword so a query like "if"/"clause"/"pole"
   // surfaces the relevant row; an empty query shows them all.
@@ -1547,22 +1566,30 @@ export const TemplateStudioPage = ({
     };
   }, [slash, slashView, studioFields, slashClauses]);
 
-  const positionSlashMenu = useCallback((query: string, from: number) => {
-    const view = editorViewRef.current;
+  // Re-anchor the menu at the caret. Geometry only: the query is updated
+  // synchronously in `onSlashMenuChange`, decoupled from the caret rect, so
+  // filtering never waits on (or is dropped by) the paged editor's async caret
+  // repaint. Folio paints the caret a frame or two after the selection change,
+  // so retry briefly until it exists, then merge left/top/placement into the
+  // already-rendered menu without disturbing the live query.
+  const positionSlashMenu = useCallback((from: number) => {
     const host = overlayHostRef.current;
-    if (!view || !host) {
+    if (!host) {
       return;
     }
-    // Folio paints the caret asynchronously after the selection change; retry
-    // across a few frames until it exists, then anchor the menu at it.
     let attempts = 0;
     const read = () => {
       const liveView = editorViewRef.current;
-      if (!liveView) {
-        return;
-      }
-      const live = getTemplateSlashMenu(liveView.state);
-      if (!live.active || live.from !== from) {
+      const live = liveView ? getTemplateSlashMenu(liveView.state) : null;
+      // Bail if the trigger is gone or has been replaced by a newer one (a
+      // later keystroke re-anchored at a different `/`); the matching call will
+      // position that one.
+      if (
+        liveView === null ||
+        live === null ||
+        !live.active ||
+        live.from !== from
+      ) {
         return;
       }
       const rect = getFolioCaretViewportRect(liveView);
@@ -1577,23 +1604,29 @@ export const TemplateStudioPage = ({
       const caretLeft = rect.left - hostRect.left;
       const caretTop = rect.top - hostRect.top;
       const caretBottom = rect.bottom - hostRect.top;
-      const fitsBelow =
-        caretBottom + SLASH_MENU_OFFSET_PX + SLASH_MENU_EST_HEIGHT_PX <
-        host.clientHeight;
-      const placement = fitsBelow ? "below" : "above";
-      // Anchor the menu's top-left at the caret; only clamp when it would spill
-      // off the right edge so the default position hugs the cursor.
+      // Prefer opening ABOVE the caret: below-placement collides with the
+      // suggested-action chips and the floating AI bar pinned at the bottom of
+      // the editor. Only fall back to below when there is no room above.
+      const fitsAbove =
+        caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
+      const placement = fitsAbove ? "above" : "below";
+      // Anchor the menu's start edge at the caret, clamping only against the
+      // full rendered width (menu column + preview pane on sm+) so it never
+      // spills off the inline-end edge and hides the preview.
       const left = Math.max(
         0,
         Math.min(caretLeft, host.clientWidth - SLASH_MENU_WIDTH_PX),
       );
-      setSlashState({
-        from,
-        query,
-        left,
-        top: placement === "below" ? caretBottom : caretTop,
-        placement,
-      });
+      setSlashState((prev) =>
+        prev === null
+          ? prev
+          : {
+              ...prev,
+              left,
+              top: placement === "below" ? caretBottom : caretTop,
+              placement,
+            },
+      );
     };
     requestAnimationFrame(read);
   }, []);
@@ -1604,10 +1637,20 @@ export const TemplateStudioPage = ({
       setSlashView("root");
       return;
     }
+    // Update the query SYNCHRONOUSLY so the visible rows filter on every
+    // keystroke; geometry is refined separately (and may lag a frame while the
+    // caret repaints) without ever gating the query update.
+    setSlashState((prev) => ({
+      from: state.from,
+      query: state.query,
+      left: prev?.left ?? 0,
+      top: prev?.top ?? 0,
+      placement: prev?.placement ?? "above",
+    }));
     // Reset the highlight to the top row whenever the query changes; the row
     // list is rebuilt and the previous index may point at a gone row.
     setSlashHighlight(0);
-    positionSlashMenu(state.query, state.from);
+    positionSlashMenu(state.from);
   };
 
   const dismissSlash = useCallback(() => {

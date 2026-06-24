@@ -21,6 +21,8 @@
 import type { EditorState, PluginSpec, Transaction } from "prosemirror-state";
 import { Plugin, PluginKey } from "prosemirror-state";
 
+import { getTemplateDirectives } from "./templateDirectives";
+
 export type TemplateSlashMenuState =
   | { active: false; from: null; query: "" }
   | { active: true; from: number; query: string };
@@ -92,6 +94,17 @@ const atTriggerBoundary = (state: EditorState, pos: number): boolean => {
   return before === "" || /\s/u.test(before);
 };
 
+/** Whether `pos` falls strictly inside an existing template directive. The
+ *  slash activations insert markers as raw text rather than going through
+ *  `insertInline`'s overlap guard, so opening here would nest markers — e.g. a
+ *  `/` typed after `#if ` inside `{{#if condition}}` could produce
+ *  `{{#if {{field}}}}`, which the scanner/fill grammar cannot interpret.
+ *  Boundaries are exclusive: a caret right before `{{` or after `}}` is fine. */
+const insideDirective = (state: EditorState, pos: number): boolean =>
+  getTemplateDirectives(state).some(
+    (range) => pos > range.from && pos < range.to,
+  );
+
 /** Whether the `/` that opened the trigger is still present at `from`. */
 const slashStillAt = (state: EditorState, from: number): boolean => {
   if (from < 0 || from > state.doc.content.size) {
@@ -147,9 +160,12 @@ const caretInTrigger = (
   return sel.empty && sel.from >= from && sel.from <= from + 1 + queryLength;
 };
 
-/** Whether the char right after the `/query` run is whitespace — the user typed
- *  a space to break out of the command. */
-const charAfterIsSpace = (
+/** Whether a non-query char sits right after the `/query` run — the user typed
+ *  something that breaks out of the command (a space, but also punctuation like
+ *  `,` or `;`). `readQueryRun` already stops at the first non-query char, so any
+ *  non-empty char at this offset is a terminator: dismiss rather than keep
+ *  capturing arrows/Enter while the caret is back in ordinary prose. */
+const queryEnded = (
   state: EditorState,
   from: number,
   queryLength: number,
@@ -160,7 +176,7 @@ const charAfterIsSpace = (
     return false;
   }
   const char = $from.parent.textBetween(offset, offset + 1, "\n", "\n");
-  return char !== "" && /\s/u.test(char);
+  return char !== "" && !QUERY_CHAR.test(char);
 };
 
 const sameState = (
@@ -199,10 +215,10 @@ export const templateSlashMenuPlugin = (
         // (doc-changing) never closes on caret grounds, since the caret rides at
         // the end of the query.
         const query = readQueryRun(newState, from);
-        // A space typed right after the `/query` ends the command (matches the
-        // "space dismisses" rule); the char after the run is whitespace only
-        // when the user deliberately broke out of the query.
-        if (charAfterIsSpace(newState, from, query.length)) {
+        // Any non-query char right after the `/query` ends the command — a
+        // space, but also punctuation such as `,` — so the menu does not keep
+        // capturing keys once the caret is back in ordinary prose.
+        if (queryEnded(newState, from, query.length)) {
           return IDLE;
         }
         // Only a genuine caret move OUT of the trigger on a selection-only
@@ -237,6 +253,9 @@ export const templateSlashMenuPlugin = (
           return false;
         }
         if (!atTriggerBoundary(view.state, from)) {
+          return false;
+        }
+        if (insideDirective(view.state, from)) {
           return false;
         }
         // Let PM insert the `/` itself, then open anchored at it on the next
@@ -344,10 +363,11 @@ export const consumeTemplateSlashQuery = (
     return null;
   }
   const from = current.from;
-  const to = state.selection.from;
-  if (to < from) {
-    return null;
-  }
+  // Consume the whole `/query` span — `/` plus every query char — not just up
+  // to the caret. The caret may sit inside the query (the user clicked after
+  // `/cli` in `/client`); deleting to the caret would strip `/cli` and orphan
+  // the `ent` suffix in the document.
+  const to = from + 1 + current.query.length;
   const tr = state.tr.delete(from, to);
   clearTemplateSlashMenu(tr);
   return { tr, from, to };

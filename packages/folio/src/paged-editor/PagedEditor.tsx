@@ -7148,6 +7148,7 @@ export function PagedEditor(
             caretPosition={caretPosition}
             isFocused={isFocused}
             pageGap={pageGap}
+            markCaretRect
           />
           {/* HF caret overlay — draws the caret + selection rects for the
               focused persistent hidden HF EditorView. Painted DOM is the

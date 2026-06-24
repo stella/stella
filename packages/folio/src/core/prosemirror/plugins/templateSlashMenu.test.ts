@@ -6,6 +6,7 @@ import type {
 } from "prosemirror-state";
 
 import { schema } from "../schema";
+import { createTemplateDirectivesPlugin } from "./templateDirectives";
 import {
   clearTemplateSlashMenu,
   consumeTemplateSlashQuery,
@@ -40,6 +41,16 @@ const openAt = (state: PMEditorState, slashOffset: number): PMEditorState => {
   return state.apply(tr);
 };
 
+/** Force the plugin to re-derive its query from the current document, the way a
+ *  real keystroke transaction would. `openAt` seeds query="" (the `/` moment);
+ *  tests that pre-populate the doc with a typed query use this to sync state. */
+const rederive = (state: PMEditorState): PMEditorState =>
+  state.apply(
+    state.tr.setSelection(
+      TextSelection.create(state.doc, state.selection.from),
+    ),
+  );
+
 describe("templateSlashMenu state machine", () => {
   test("typing field-name chars after the slash extends the query", () => {
     // "/" already typed at offset 0, caret after it.
@@ -61,6 +72,16 @@ describe("templateSlashMenu state machine", () => {
     let state = stateWith("/", 1);
     state = openAt(state, 0);
     state = state.apply(state.tr.insertText(" ", state.selection.from));
+    expect(getTemplateSlashMenu(state).active).toBe(false);
+  });
+
+  test("punctuation right after the query closes the menu", () => {
+    // `/field,` — the comma ends the command just like a space, so the menu
+    // stops capturing arrows/Enter once the caret is back in prose.
+    let state = stateWith("/field", 6);
+    state = openAt(state, 0);
+    expect(getTemplateSlashMenu(state).active).toBe(true);
+    state = state.apply(state.tr.insertText(",", state.selection.from));
     expect(getTemplateSlashMenu(state).active).toBe(false);
   });
 
@@ -95,6 +116,12 @@ describe("consumeTemplateSlashQuery", () => {
   test("deletes the /query range and reports it for marker insertion", () => {
     let state = stateWith("Fee /field", 10);
     state = openAt(state, 4);
+    // `openAt` seeds query="" (mirrors the moment `/` is typed); re-derive from
+    // the document so the active query reflects the typed "field".
+    state = rederive(state);
+    expect(
+      getTemplateSlashMenu(state).active && getTemplateSlashMenu(state).query,
+    ).toBe("field");
     const result = consumeTemplateSlashQuery(state);
     expect(result).not.toBeNull();
     if (result === null) {
@@ -105,6 +132,29 @@ describe("consumeTemplateSlashQuery", () => {
     const after = state.apply(result.tr);
     expect(after.doc.textContent).toBe("Fee ");
     expect(getTemplateSlashMenu(after).active).toBe(false);
+  });
+
+  test("consumes the whole /query even when the caret sits inside it", () => {
+    // Click back inside the active query (between "/fi" and "eld"): the whole
+    // `/field` must be removed, not just up to the caret, or the trailing
+    // "eld" is orphaned next to the inserted marker.
+    let state = stateWith("Fee /field", 10);
+    state = openAt(state, 4);
+    state = rederive(state);
+    // Move the caret back inside the active query ("/fi|eld").
+    state = state.apply(
+      state.tr.setSelection(TextSelection.create(state.doc, 8)),
+    );
+    expect(getTemplateSlashMenu(state).active).toBe(true);
+    const result = consumeTemplateSlashQuery(state);
+    expect(result).not.toBeNull();
+    if (result === null) {
+      return;
+    }
+    expect(result.from).toBe(5);
+    expect(result.to).toBe(11);
+    const after = state.apply(result.tr);
+    expect(after.doc.textContent).toBe("Fee ");
   });
 
   test("returns null when no trigger is active", () => {
@@ -221,16 +271,57 @@ describe("templateSlashMenu handleTextInput", () => {
     expect(getTemplateSlashMenu(view.state).active).toBe(false);
   });
 
-  test("a non-slash char falls through so PM inserts and the query extends", () => {
+  test('"/" inside an existing directive does not open the menu', () => {
+    // `{{#if cond}}` with the caret after "#if " (a whitespace boundary, so the
+    // generic guard would open). Opening here would nest markers
+    // (`{{#if {{field}}}}`), which the fill grammar cannot parse, so the
+    // directive-range guard must reject it.
+    const text = "{{#if cond}}";
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", null, [schema.text(text)]),
+    ]);
+    const caretAfterIf = text.indexOf("#if ") + "#if ".length; // parent offset
+    const slash = templateSlashMenuPlugin();
+    const view: FakeView = {
+      state: EditorState.create({
+        doc,
+        plugins: [slash, createTemplateDirectivesPlugin()],
+        selection: TextSelection.create(doc, caretAfterIf + 1),
+      }),
+      dispatch: (tr) => {
+        view.state = view.state.apply(tr);
+      },
+    };
+    const handleTextInput = (
+      slash.props as {
+        handleTextInput: (
+          v: FakeView,
+          from: number,
+          to: number,
+          text: string,
+        ) => boolean;
+      }
+    ).handleTextInput;
+    const at = view.state.selection.from;
+    expect(handleTextInput(view, at, at, "/")).toBe(false);
+    expect(getTemplateSlashMenu(view.state).active).toBe(false);
+  });
+
+  test("driving chars through handleTextInput extends the live query", () => {
+    // The live filter bug: each typed char must grow the active query (which the
+    // host reads to filter the visible rows). Drive the chars exactly as the
+    // paged editor does — handleTextInput returns false for non-slash chars, PM
+    // inserts via its default transaction, and the plugin re-derives the query.
     const { view, props } = makePluginHarness("/", 1);
     view.state = openAt(view.state, 0);
-    // A regular char must NOT be consumed here; PM inserts it, and the state
-    // machine extends the query on the resulting transaction.
-    expect(props.handleTextInput(view, 2, 2, "f")).toBe(false);
-    view.state = view.state.apply(view.state.tr.insertText("f", 2));
+    for (const char of "name") {
+      const at = view.state.selection.from;
+      expect(props.handleTextInput(view, at, at, char)).toBe(false);
+      view.state = view.state.apply(view.state.tr.insertText(char, at));
+    }
     const open = getTemplateSlashMenu(view.state);
     expect(open.active).toBe(true);
-    expect(open.active && open.query).toBe("f");
+    expect(open.active && open.query).toBe("name");
   });
 });
 
