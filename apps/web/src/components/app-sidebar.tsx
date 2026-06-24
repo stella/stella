@@ -11,7 +11,6 @@ import {
   useHotkey,
   useKeyHold,
 } from "@tanstack/react-hotkeys";
-import { useQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
   EllipsisVerticalIcon,
@@ -65,6 +64,7 @@ import {
   getWorkspacePrimaryNavItems,
   type WorkspacePrimaryNavId,
 } from "@/components/workspace-primary-nav";
+import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -108,7 +108,7 @@ export function AppSidebar(props: AppSidebarProps) {
       reorderPinned: s.reorder,
     })),
   );
-  const { data: workspacesData } = useQuery(
+  const { data: workspacesData } = useChromeQuery(
     workspacesNavigationOptions(user.activeOrganizationId),
   );
   const workspaces = workspacesData?.workspaces;
