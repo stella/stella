@@ -268,7 +268,10 @@ const lookupTemplateTokens = (
     }
     case "recherche-entreprises": {
       const { company } = details;
-      tokens["registry number"] = company.siren;
+      // Keep the baseline `hit.id` for "registry number": the dispatch already
+      // sets it to the matched establishment's SIRET (14 digits) for a branch
+      // lookup, falling back to the SIREN — overriding with `company.siren`
+      // would drop the SIRET that selected the address.
       tokens["registered on"] = company.registeredAt;
       break;
     }

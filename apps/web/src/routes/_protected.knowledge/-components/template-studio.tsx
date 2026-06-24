@@ -3199,9 +3199,13 @@ const pushFillPreview = (
 // substitutes into the preview map when the response lands, parsed into
 // formatted preview spans so the document preview shows the formatting.
 
-/** Mirrors the KRS shape check in template-form.tsx (and `validateKrsNumber`
- *  server-side): exactly 10 digits, whitespace-tolerant. */
-const LOOKUP_PREVIEW_NUMBER_RE = /^\d{10}$/u;
+/** A plausibly-complete registry identifier for ANY supported registry:
+ *  alphanumeric, hyphen-tolerant, 5–20 chars after whitespace is stripped.
+ *  Deliberately broader than one registry's exact format so non-KRS IDs (Czech
+ *  IČO, Companies House CRN, VAT, CIK, SIRET, Finnish business id, …) also queue
+ *  the debounced preview; the settled value is queued once, and one that no
+ *  registry resolves simply renders as the raw number (a graceful miss). */
+const LOOKUP_PREVIEW_NUMBER_RE = /^[A-Za-z0-9-]{5,20}$/u;
 
 const normalizeLookupNumber = (value: string): string =>
   value.replaceAll(/\s/gu, "");
