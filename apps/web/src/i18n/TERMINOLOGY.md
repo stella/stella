@@ -322,6 +322,7 @@ Slavic, Baltic, Germanic, Finno-Ugric:
 | Concept      | Czech      | Slovak      | Polish         | German         | Estonian      | Hungarian            | Lithuanian      | Latvian      |
 | ------------ | ---------- | ----------- | -------------- | -------------- | ------------- | -------------------- | --------------- | ------------ |
 | **Matter**   | Spis       | Spis        | Sprawa         | Akte           | Toimik        | Ügy                  | Byla            | Lieta        |
+| **Team**     | Tým        | Tím         | Zespół         | Team           | Meeskond      | Csapat               | Komanda         | Komanda      |
 | **Case law** | Judikatura | Judikatúra  | Orzecznictwo   | Rechtsprechung | Kohtupraktika | Ítélkezési gyakorlat | Teismų praktika | Tiesu prakse |
 | **Court**    | Soud       | Súd         | Sąd            | Gericht        | Kohus         | Bíróság              | Teismas         | Tiesa        |
 | **Party**    | Strana     | Strana      | Strona         | Partei         | Osapool       | Fél                  | Šalis           | Puse         |
@@ -341,6 +342,7 @@ Romance:
 | Concept      | Spanish        | French        | Brazilian Portuguese |
 | ------------ | -------------- | ------------- | -------------------- |
 | **Matter**   | Asunto         | Dossier       | Caso                 |
+| **Team**     | Equipo         | Équipe        | Equipe               |
 | **Case law** | Jurisprudencia | Jurisprudence | Jurisprudência       |
 | **Court**    | Tribunal       | Juridiction   | Tribunal             |
 | **Party**    | Parte          | Partie        | Parte                |
@@ -360,6 +362,7 @@ Arabic:
 | Concept      | Arabic           |
 | ------------ | ---------------- |
 | **Matter**   | ملف              |
+| **Team**     | فريق             |
 | **Case law** | الاجتهاد القضائي |
 | **Court**    | محكمة            |
 | **Party**    | طرف              |
@@ -387,6 +390,20 @@ Notes:
   not be used.
 - **lv Case law** = "Tiesu prakse" for a broad decisions database;
   reserve "Judikatūra" for binding Supreme-Court precedent only.
+- **Team** is the org/firm scope that content is shared with (members,
+  team skills, the anonymization deny list). The canonical label is
+  **Team**; the internal `organization` data-model alias and the
+  "firm" / "firm-wide" / "org-wide" renderings must not surface as
+  user-facing labels (cs "firemní", sk "firemný", pl "firmowy" /
+  "kancelaria", de "kanzleiweit" / "Kanzlei", fr "cabinet", and the
+  office-noun variants are all forbidden — see `glossary.json`). This
+  is distinct from the client **company** sense (cs "firma" in the
+  ARES company lookup, "Klient je firma"), which is a different concept
+  and stays.
+- **Visibility** pairs as **Personal** vs **Shared**: a matter is
+  either private to one person or shared with the team. Czech renders
+  this as "Osobní" / "Sdílené v rámci týmu". Do not introduce a third
+  visibility label.
 
 ### Brazilian Portuguese
 

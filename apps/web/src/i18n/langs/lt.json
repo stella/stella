@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# išteklius} few {# ištekliai} other {# išteklių}}",
       "scope": "Matomumas",
       "scopePrivate": "Tik man",
-      "scopeTeam": "Visiems organizacijoje",
+      "scopeTeam": "Visiems komandoje",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Pasirinkta: {name}",
       "sourceUpload": "Įkelta",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Instrukcijos, įterpiamos į pokalbio redaktorių naudojant šį įgūdį",
         "scope": "Matomumas",
         "scopePrivate": "Tik aš",
-        "scopeTeam": "Visi organizacijoje"
+        "scopeTeam": "Visi komandoje"
       },
       "privateSection": "Jūsų įgūdžiai",
       "shadowed": "Uždengta komandos įgūdžio",
@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Ieškoti įgūdžių ir įrankių",
     "catalogueSubtitle": "stella gali naudoti šiuos įrankius atsakydama. Pasirinkite tuos, kurie atitinka jūsų praktiką; tai bet kada galite pakeisti nustatymuose.",
     "catalogueThirdPartyConfirm": "Vis tiek pridėti",
-    "catalogueThirdPartyDisclaimer": "Tai trečiosios šalies kodas, kurį pateikė {author}. stella jo neperžiūrėjo, nerekomenduoja ir neprižiūri. Jūs atsakote už patikrinimą, ar jis tinka jūsų praktikai ir atitinka jūsų įmonės taisykles. Pridėdami sutinkate naudoti jį savo rizika.",
+    "catalogueThirdPartyDisclaimer": "Tai trečiosios šalies kodas, kurį pateikė {author}. stella jo neperžiūrėjo, nerekomenduoja ir neprižiūri. Jūs atsakote už patikrinimą, ar jis tinka jūsų praktikai ir atitinka jūsų komandos taisykles. Pridėdami sutinkate naudoti jį savo rizika.",
     "catalogueTitle": "Pritaikykite savo DI",
     "continue": "Tęsti",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "AI konfigūracija",
       "aiDescription": "Naudokite savo API raktą arba sukonfigūruokite duomenų suverenumo regioną",
       "anonymization": {
-        "addPlaceholder": "Visada maskuotinas terminas (pvz., kontoros pavadinimas)",
+        "addPlaceholder": "Visada maskuotinas terminas (pvz., komandos pavadinimas)",
         "deleteAction": "Pašalinti terminą",
-        "description": "Tvarkykite visos kontoros mastu galiojantį draudžiamų terminų sąrašą, kurį anonimizavimo procesas visada užmaskuos, ir importuokite pradinį sąrašą iš CSV, TXT arba JSON failo.",
-        "emptyState": "Kontoros lygmens terminų dar nėra. Pridėkite virš arba importuokite sąrašą.",
-        "entriesHeading": "Kontoros terminai ({count})",
+        "description": "Tvarkykite visos komandos mastu galiojantį draudžiamų terminų sąrašą, kurį anonimizavimo procesas visada užmaskuos, ir importuokite pradinį sąrašą iš CSV, TXT arba JSON failo.",
+        "emptyState": "Komandos lygmens terminų dar nėra. Pridėkite aukščiau arba importuokite sąrašą.",
+        "entriesHeading": "Komandos terminai ({count})",
         "importAction": "Importuoti",
         "importHint": "CSV (canonical,label,variants), TXT (po vieną eilutėje) arba JSON",
         "importParseError": "Nepavyko perskaityti failo. Naudokite CSV, TXT arba JSON.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Esybės tipas",
         "labelPickerEmpty": "Tinkamo tipo nėra.",
         "labelPickerPlaceholder": "Tipas",
-        "termAddedToast": "„{value}“ pridėtas į kontoros sąrašą.",
+        "termAddedToast": "„{value}“ pridėtas į komandos sąrašą.",
         "title": "Anonimizavimas"
       },
       "matterNumbering": "Bylų numeravimas",
@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# byla} few {# bylos} many {# bylos} other {# bylų}}",
     "members": {
       "addMember": "Pridėti narį",
-      "addMemberDescription": "Pridėti organizacijos narį prie šios bylos",
+      "addMemberDescription": "Pridėti komandos narį prie šios bylos",
       "alreadyMember": "Naudotojas jau yra narys",
       "cannotRemoveLast": "Negalima pašalinti paskutinio nario",
       "noMembersFound": "Narių nerasta",

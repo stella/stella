@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# ressource} other {# ressources}}",
       "scope": "Visibilité",
       "scopePrivate": "Moi uniquement",
-      "scopeTeam": "Toute l’organisation",
+      "scopeTeam": "Toute l’équipe",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Sélectionné : {name}",
       "sourceUpload": "Importé",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Instructions insérées dans le compositeur du chat lorsque cette compétence est utilisée",
         "scope": "Visibilité",
         "scopePrivate": "Moi uniquement",
-        "scopeTeam": "Tout le monde dans l’organisation"
+        "scopeTeam": "Tout le monde dans l’équipe"
       },
       "privateSection": "Vos compétences",
       "shadowed": "Masquée par la compétence d’équipe",
@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Rechercher des skills et outils",
     "catalogueSubtitle": "stella peut faire appel à ces outils dans ses réponses. Choisissez ceux qui correspondent à votre pratique ; vous pouvez modifier ce choix à tout moment dans les paramètres.",
     "catalogueThirdPartyConfirm": "Ajouter quand même",
-    "catalogueThirdPartyDisclaimer": "Ce code tiers a été contribué par {author}. stella ne l’a pas examiné, approuvé ni maintenu. Vous êtes seul responsable de vérifier qu’il convient à votre pratique et respecte les politiques de votre cabinet. En l’ajoutant, vous acceptez de l’utiliser à vos propres risques.",
+    "catalogueThirdPartyDisclaimer": "Ce code tiers a été contribué par {author}. stella ne l’a pas examiné, approuvé ni maintenu. Vous êtes seul responsable de vérifier qu’il convient à votre pratique et respecte les politiques de votre équipe. En l’ajoutant, vous acceptez de l’utiliser à vos propres risques.",
     "catalogueTitle": "Personnalisez votre IA",
     "continue": "Continuer",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "Configuration de l’IA",
       "aiDescription": "Utilisez votre propre clé API ou configurez la région de souveraineté des données",
       "anonymization": {
-        "addPlaceholder": "Terme à toujours masquer (ex. nom du cabinet)",
+        "addPlaceholder": "Terme à toujours masquer (ex. nom de l’équipe)",
         "deleteAction": "Supprimer le terme",
-        "description": "Gérez la liste de blocage à l’échelle du cabinet : les termes que le pipeline d’anonymisation masque toujours. Importez une liste de départ depuis un fichier CSV, TXT ou JSON.",
-        "emptyState": "Aucun terme global pour le cabinet. Ajoutez-en un ci-dessus ou importez une liste.",
-        "entriesHeading": "Termes du cabinet ({count})",
+        "description": "Gérez la liste de blocage de l’équipe : les termes que le pipeline d’anonymisation masque toujours. Importez une liste de départ depuis un fichier CSV, TXT ou JSON.",
+        "emptyState": "Aucun terme pour l’équipe. Ajoutez-en un ci-dessus ou importez une liste.",
+        "entriesHeading": "Termes de l’équipe ({count})",
         "importAction": "Importer",
         "importHint": "CSV (canonical,label,variants), TXT (un par ligne) ou JSON",
         "importParseError": "Impossible de lire ce fichier. Utilisez CSV, TXT ou JSON.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Type d’entité",
         "labelPickerEmpty": "Aucun type correspondant.",
         "labelPickerPlaceholder": "Type",
-        "termAddedToast": "« {value} » a été ajouté à la liste de blocage du cabinet.",
+        "termAddedToast": "« {value} » a été ajouté à la liste de blocage de l’équipe.",
         "title": "Anonymisation"
       },
       "matterNumbering": "Numérotation des dossiers",
@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# dossier} other {# dossiers}}",
     "members": {
       "addMember": "Ajouter un membre",
-      "addMemberDescription": "Ajouter un membre de l'organisation à ce dossier",
+      "addMemberDescription": "Ajouter un membre de l'équipe à ce dossier",
       "alreadyMember": "L'utilisateur est déjà membre",
       "cannotRemoveLast": "Impossible de retirer le dernier membre",
       "noMembersFound": "Aucun membre trouvé",

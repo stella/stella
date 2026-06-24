@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# zasób} few {# zasoby} many {# zasobów} other {# zasobu}}",
       "scope": "Widoczność",
       "scopePrivate": "Tylko ja",
-      "scopeTeam": "Wszyscy w organizacji",
+      "scopeTeam": "Wszyscy w zespole",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Wybrano: {name}",
       "sourceUpload": "Przesłano",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Instrukcje wstawiane do pola czatu po użyciu tej umiejętności",
         "scope": "Widoczność",
         "scopePrivate": "Tylko ja",
-        "scopeTeam": "Wszyscy w organizacji"
+        "scopeTeam": "Wszyscy w zespole"
       },
       "privateSection": "Twoje umiejętności",
       "shadowed": "Przesłonięte przez umiejętność zespołu",
@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Szukaj umiejętności i narzędzi",
     "catalogueSubtitle": "stella może korzystać z tych narzędzi podczas odpowiadania. Wybierz te, które pasują do Twojej praktyki; możesz to zmienić w dowolnym momencie w ustawieniach.",
     "catalogueThirdPartyConfirm": "Dodaj mimo to",
-    "catalogueThirdPartyDisclaimer": "To kod strony trzeciej dodany przez {author}. stella go nie sprawdzała, nie rekomenduje i nie utrzymuje. Odpowiadasz za sprawdzenie, czy nadaje się do Twojej praktyki i jest zgodny z zasadami kancelarii. Dodając go, akceptujesz użycie na własne ryzyko.",
+    "catalogueThirdPartyDisclaimer": "To kod strony trzeciej dodany przez {author}. stella go nie sprawdzała, nie rekomenduje i nie utrzymuje. Odpowiadasz za sprawdzenie, czy nadaje się do Twojej praktyki i jest zgodny z zasadami zespołu. Dodając go, akceptujesz użycie na własne ryzyko.",
     "catalogueTitle": "Dostosuj AI",
     "continue": "Kontynuuj",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "Konfiguracja AI",
       "aiDescription": "Użyj własnego klucza API lub skonfiguruj region suwerenności danych",
       "anonymization": {
-        "addPlaceholder": "Termin, który ma być zawsze maskowany (np. nazwa kancelarii)",
+        "addPlaceholder": "Termin, który ma być zawsze maskowany (np. nazwa zespołu)",
         "deleteAction": "Usuń termin",
-        "description": "Zarządzaj firmową listą terminów, które potok anonimizacji zawsze maskuje. Zaimportuj listę startową z pliku CSV, TXT lub JSON.",
-        "emptyState": "Brak terminów firmowych. Dodaj je powyżej lub zaimportuj listę.",
-        "entriesHeading": "Terminy firmowe ({count})",
+        "description": "Zarządzaj zespołową listą terminów, które potok anonimizacji zawsze maskuje. Zaimportuj listę startową z pliku CSV, TXT lub JSON.",
+        "emptyState": "Brak terminów zespołowych. Dodaj je powyżej lub zaimportuj listę.",
+        "entriesHeading": "Terminy zespołowe ({count})",
         "importAction": "Importuj",
         "importHint": "CSV (canonical,label,variants), TXT (jeden w wierszu) lub JSON",
         "importParseError": "Nie udało się odczytać pliku. Użyj CSV, TXT lub JSON.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Typ encji",
         "labelPickerEmpty": "Brak pasującego typu.",
         "labelPickerPlaceholder": "Typ",
-        "termAddedToast": "Dodano „{value}” do firmowej listy.",
+        "termAddedToast": "Dodano „{value}” do listy zespołu.",
         "title": "Anonimizacja"
       },
       "matterNumbering": "Numeracja spraw",
@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# sprawa} few {# sprawy} many {# spraw} other {# sprawy}}",
     "members": {
       "addMember": "Dodaj członka",
-      "addMemberDescription": "Dodaj członka organizacji do tej sprawy",
+      "addMemberDescription": "Dodaj członka zespołu do tej sprawy",
       "alreadyMember": "Użytkownik jest już członkiem",
       "cannotRemoveLast": "Nie można usunąć ostatniego członka",
       "noMembersFound": "Nie znaleziono członków",

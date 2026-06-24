@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# zdroj} few {# zdroje} other {# zdrojů}}",
       "scope": "Viditelnost",
       "scopePrivate": "Jen já",
-      "scopeTeam": "Všichni v organizaci",
+      "scopeTeam": "Všichni v týmu",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Vybráno: {name}",
       "sourceUpload": "Nahráno",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Pokyny vložené do kompozéru chatu při použití této dovednosti",
         "scope": "Viditelnost",
         "scopePrivate": "Pouze já",
-        "scopeTeam": "Všichni v organizaci"
+        "scopeTeam": "Všichni v týmu"
       },
       "privateSection": "Vaše dovednosti",
       "shadowed": "Překryto týmovou dovedností",
@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Hledat dovednosti a nástroje",
     "catalogueSubtitle": "stella tyto nástroje může používat při odpovídání. Vyberte ty, které odpovídají vaší praxi; změnit je můžete kdykoli v nastavení.",
     "catalogueThirdPartyConfirm": "Přesto přidat",
-    "catalogueThirdPartyDisclaimer": "Toto je kód třetí strany od {author}. stella jej nereviduje, neschvaluje ani neudržuje. Sami odpovídáte za ověření, že je vhodný pro vaši praxi a v souladu s pravidly vaší kanceláře. Přidáním přijímáte použití na vlastní riziko.",
+    "catalogueThirdPartyDisclaimer": "Toto je kód třetí strany od {author}. stella jej nereviduje, neschvaluje ani neudržuje. Sami odpovídáte za ověření, že je vhodný pro vaši praxi a v souladu s pravidly vašeho týmu. Přidáním přijímáte použití na vlastní riziko.",
     "catalogueTitle": "Přizpůsobte si AI",
     "continue": "Pokračovat",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "Nastavení AI",
       "aiDescription": "Připojte vlastní API klíč nebo zvolte region pro suverenitu dat",
       "anonymization": {
-        "addPlaceholder": "Pojem, který se má vždy maskovat (např. název firmy)",
+        "addPlaceholder": "Pojem, který se má vždy maskovat (např. název týmu)",
         "deleteAction": "Smazat pojem",
-        "description": "Spravujte firemní seznam pojmů, které anonymizační kanál vždy zamaskuje, a importujte výchozí seznam z CSV, TXT nebo JSON",
-        "emptyState": "Žádné firemní pojmy. Přidejte je výše nebo importujte seznam.",
-        "entriesHeading": "Firemní pojmy ({count})",
+        "description": "Spravujte týmový seznam pojmů, které anonymizační kanál vždy zamaskuje, a importujte výchozí seznam z CSV, TXT nebo JSON",
+        "emptyState": "Žádné týmové pojmy. Přidejte je výše nebo importujte seznam.",
+        "entriesHeading": "Týmové pojmy ({count})",
         "importAction": "Importovat",
         "importHint": "CSV (canonical,label,variants), TXT (jeden na řádek) nebo JSON",
         "importParseError": "Soubor nelze přečíst. Použijte CSV, TXT nebo JSON.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Typ entity",
         "labelPickerEmpty": "Žádný odpovídající typ.",
         "labelPickerPlaceholder": "Typ",
-        "termAddedToast": "Pojem „{value}“ byl přidán do firemního seznamu.",
+        "termAddedToast": "Pojem „{value}“ byl přidán do týmového seznamu.",
         "title": "Anonymizace"
       },
       "matterNumbering": "Číslování spisů",

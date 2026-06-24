@@ -1429,7 +1429,7 @@ type Messages = {
       "resources": "{count, plural, one {# resource} other {# resources}}";
       "scope": "Visibility";
       "scopePrivate": "Only me";
-      "scopeTeam": "Everyone in the organisation";
+      "scopeTeam": "Everyone in the team";
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.";
       "selectedFile": "Selected: {name}";
       "sourceUpload": "Uploaded";
@@ -1571,7 +1571,7 @@ type Messages = {
         "promptPlaceholder": "Instructions inserted into the chat composer when this skill is used";
         "scope": "Visibility";
         "scopePrivate": "Only me";
-        "scopeTeam": "Everyone in the organisation";
+        "scopeTeam": "Everyone in the team";
       };
       "privateSection": "Your skills";
       "shadowed": "Shadowed by team skill";
@@ -1626,7 +1626,7 @@ type Messages = {
     "catalogueSearchPlaceholder": "Search skills and tools";
     "catalogueSubtitle": "stella can call these tools when answering. Pick the ones that match your practice; you can change this anytime in settings.";
     "catalogueThirdPartyConfirm": "Add anyway";
-    "catalogueThirdPartyDisclaimer": "This is third-party code contributed by {author}. stella has not reviewed, endorsed, or maintained it. You are solely responsible for verifying it is suitable for your practice and compliant with your firm's policies. By adding it, you accept that you use it at your own risk.";
+    "catalogueThirdPartyDisclaimer": "This is third-party code contributed by {author}. stella has not reviewed, endorsed, or maintained it. You are solely responsible for verifying it is suitable for your practice and compliant with your team's policies. By adding it, you accept that you use it at your own risk.";
     "catalogueTitle": "Customize your AI";
     "continue": "Continue";
     "creating": {
@@ -1902,11 +1902,11 @@ type Messages = {
       "ai": "AI configuration";
       "aiDescription": "Bring your own API key or configure data sovereignty region";
       "anonymization": {
-        "addPlaceholder": "Term to always mask (e.g. firm name)";
+        "addPlaceholder": "Term to always mask (e.g. team name)";
         "deleteAction": "Delete term";
-        "description": "Curate the firm-wide deny list of terms the anonymization pipeline always masks, and import a starter list from CSV, TXT, or JSON";
-        "emptyState": "No firm-wide terms yet. Add one above or import a list.";
-        "entriesHeading": "Org-wide terms ({count})";
+        "description": "Curate the team-wide deny list of terms the anonymization pipeline always masks, and import a starter list from CSV, TXT, or JSON";
+        "emptyState": "No team-wide terms yet. Add one above or import a list.";
+        "entriesHeading": "Team-wide terms ({count})";
         "importAction": "Import";
         "importHint": "CSV (canonical,label,variants), TXT (one per line), or JSON";
         "importParseError": "Couldn't read that file. Use CSV, TXT, or JSON.";
@@ -1914,7 +1914,7 @@ type Messages = {
         "labelPickerAriaLabel": "Entity label";
         "labelPickerEmpty": "No matching label.";
         "labelPickerPlaceholder": "Label";
-        "termAddedToast": "Added \"{value}\" to the firm-wide deny list.";
+        "termAddedToast": "Added \"{value}\" to the team-wide deny list.";
         "title": "Anonymization";
       };
       "matterNumbering": "Matter numbering";

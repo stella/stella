@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# recurso} other {# recursos}}",
       "scope": "Visibilidad",
       "scopePrivate": "Solo yo",
-      "scopeTeam": "Todos en la organización",
+      "scopeTeam": "Todos en el equipo",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Seleccionado: {name}",
       "sourceUpload": "Subido",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Instrucciones insertadas en el redactor del chat al usar esta habilidad",
         "scope": "Visibilidad",
         "scopePrivate": "Solo yo",
-        "scopeTeam": "Todos en la organización"
+        "scopeTeam": "Todos en el equipo"
       },
       "privateSection": "Sus habilidades",
       "shadowed": "Oculta por la habilidad del equipo",
@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Buscar skills y herramientas",
     "catalogueSubtitle": "stella puede usar estas herramientas al responder. Seleccione las que se ajustan a su práctica; podrá cambiarlo en cualquier momento en los ajustes.",
     "catalogueThirdPartyConfirm": "Añadir de todos modos",
-    "catalogueThirdPartyDisclaimer": "Este es código de terceros aportado por {author}. stella no lo ha revisado, respaldado ni mantenido. Usted es responsable de comprobar que sea adecuado para su práctica y cumpla las políticas de su firma. Al añadirlo, acepta usarlo bajo su propia responsabilidad.",
+    "catalogueThirdPartyDisclaimer": "Este es código de terceros aportado por {author}. stella no lo ha revisado, respaldado ni mantenido. Usted es responsable de comprobar que sea adecuado para su práctica y cumpla las políticas de su equipo. Al añadirlo, acepta usarlo bajo su propia responsabilidad.",
     "catalogueTitle": "Personalice su IA",
     "continue": "Continuar",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "Configuración de IA",
       "aiDescription": "Usa tu propia clave de API o configura la región de soberanía de datos",
       "anonymization": {
-        "addPlaceholder": "Término que siempre se enmascarará (p. ej. nombre de la firma)",
+        "addPlaceholder": "Término que siempre se enmascarará (p. ej. nombre del equipo)",
         "deleteAction": "Eliminar término",
-        "description": "Gestione la lista global de la firma con los términos que el flujo de anonimización siempre enmascara, e importe una lista inicial desde CSV, TXT o JSON.",
-        "emptyState": "Aún no hay términos globales. Añada uno arriba o importe una lista.",
-        "entriesHeading": "Términos de la firma ({count})",
+        "description": "Gestione la lista global del equipo con los términos que el flujo de anonimización siempre enmascara, e importe una lista inicial desde CSV, TXT o JSON.",
+        "emptyState": "Aún no hay términos del equipo. Añada uno arriba o importe una lista.",
+        "entriesHeading": "Términos del equipo ({count})",
         "importAction": "Importar",
         "importHint": "CSV (canonical,label,variants), TXT (uno por línea) o JSON",
         "importParseError": "No se pudo leer ese archivo. Utilice CSV, TXT o JSON.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Tipo de entidad",
         "labelPickerEmpty": "Sin tipos coincidentes.",
         "labelPickerPlaceholder": "Tipo",
-        "termAddedToast": "«{value}» se añadió a la lista de la firma.",
+        "termAddedToast": "«{value}» se añadió a la lista del equipo.",
         "title": "Anonimización"
       },
       "matterNumbering": "Numeración de asuntos",
@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# asunto} other {# asuntos}}",
     "members": {
       "addMember": "Añadir miembro",
-      "addMemberDescription": "Añadir un miembro de la organización a este asunto",
+      "addMemberDescription": "Añadir un miembro del equipo a este asunto",
       "alreadyMember": "El usuario ya es miembro",
       "cannotRemoveLast": "No se puede eliminar al último miembro",
       "noMembersFound": "No se encontraron miembros",

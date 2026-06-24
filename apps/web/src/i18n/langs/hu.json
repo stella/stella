@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# erőforrás} other {# erőforrás}}",
       "scope": "Láthatóság",
       "scopePrivate": "Csak én",
-      "scopeTeam": "Mindenki a szervezetben",
+      "scopeTeam": "Mindenki a csapatban",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Kiválasztva: {name}",
       "sourceUpload": "Feltöltve",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "A chat szerkesztőjébe beszúrt utasítások a készség használatakor",
         "scope": "Láthatóság",
         "scopePrivate": "Csak én",
-        "scopeTeam": "A szervezet minden tagja"
+        "scopeTeam": "A csapat minden tagja"
       },
       "privateSection": "Saját készségek",
       "shadowed": "A csapat készsége felülírja",
@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Skillek és eszközök keresése",
     "catalogueSubtitle": "A stella ezeket az eszközöket felhasználhatja a válaszadáshoz. Válassza ki azokat, amelyek illenek a praxisához; bármikor módosíthatja a beállításokban.",
     "catalogueThirdPartyConfirm": "Hozzáadás így is",
-    "catalogueThirdPartyDisclaimer": "Ez harmadik féltől származó kód, amelyet {author} adott hozzá. A stella nem vizsgálta át, nem ajánlja és nem tartja karban. Ön felel azért, hogy ellenőrizze: megfelel-e a praxisának és az irodai szabályzatoknak. Hozzáadásával elfogadja, hogy saját felelősségére használja.",
+    "catalogueThirdPartyDisclaimer": "Ez harmadik féltől származó kód, amelyet {author} adott hozzá. A stella nem vizsgálta át, nem ajánlja és nem tartja karban. Ön felel azért, hogy ellenőrizze: megfelel-e a praxisának és a csapat szabályzatainak. Hozzáadásával elfogadja, hogy saját felelősségére használja.",
     "catalogueTitle": "Szabja testre az AI-t",
     "continue": "Folytatás",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "AI-konfiguráció",
       "aiDescription": "Használja saját API-kulcsát, vagy állítsa be az adatszuverenitási régiót",
       "anonymization": {
-        "addPlaceholder": "Mindig maszkolandó kifejezés (pl. iroda neve)",
+        "addPlaceholder": "Mindig maszkolandó kifejezés (pl. csapat neve)",
         "deleteAction": "Kifejezés törlése",
-        "description": "Kezelje az iroda-szintű tiltólistát: kifejezések, amelyeket az anonimizáló folyamat mindig maszkol. Importálja a kezdő listát CSV, TXT vagy JSON fájlból.",
-        "emptyState": "Még nincsenek iroda-szintű kifejezések. Adjon hozzá fent egyet, vagy importáljon listát.",
-        "entriesHeading": "Iroda-szintű kifejezések ({count})",
+        "description": "Kezelje a csapatszintű tiltólistát: kifejezések, amelyeket az anonimizáló folyamat mindig maszkol. Importálja a kezdő listát CSV, TXT vagy JSON fájlból.",
+        "emptyState": "Még nincsenek csapatszintű kifejezések. Adjon hozzá fent egyet, vagy importáljon listát.",
+        "entriesHeading": "Csapatszintű kifejezések ({count})",
         "importAction": "Importálás",
         "importHint": "CSV (canonical,label,variants), TXT (soronként egy) vagy JSON",
         "importParseError": "Nem sikerült olvasni a fájlt. Használjon CSV-t, TXT-t vagy JSON-t.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Entitás típusa",
         "labelPickerEmpty": "Nincs egyező típus.",
         "labelPickerPlaceholder": "Típus",
-        "termAddedToast": "„{value}” hozzáadva az iroda tiltólistájához.",
+        "termAddedToast": "„{value}” hozzáadva a csapat tiltólistájához.",
         "title": "Anonimizálás"
       },
       "matterNumbering": "Ügyszámozás",
@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# ügy} other {# ügy}}",
     "members": {
       "addMember": "Tag hozzáadása",
-      "addMemberDescription": "Szervezeti tag hozzáadása ehhez az ügyhöz",
+      "addMemberDescription": "Csapattag hozzáadása ehhez az ügyhöz",
       "alreadyMember": "A felhasználó már tag",
       "cannotRemoveLast": "Az utolsó tag nem távolítható el",
       "noMembersFound": "Nem található tag",

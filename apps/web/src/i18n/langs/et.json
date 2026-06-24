@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# ressurss} other {# ressurssi}}",
       "scope": "Nähtavus",
       "scopePrivate": "Ainult mina",
-      "scopeTeam": "Kõik organisatsioonis",
+      "scopeTeam": "Kõik meeskonnas",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Valitud: {name}",
       "sourceUpload": "Üles laaditud",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Juhised, mis lisatakse vestluse koostajasse selle oskuse kasutamisel",
         "scope": "Nähtavus",
         "scopePrivate": "Ainult mina",
-        "scopeTeam": "Kõik organisatsioonis"
+        "scopeTeam": "Kõik meeskonnas"
       },
       "privateSection": "Teie oskused",
       "shadowed": "Meeskonna oskus varjutab",
@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Otsi oskusi ja tööriistu",
     "catalogueSubtitle": "stella saab neid tööriistu vastamisel kasutada. Valige need, mis sobivad teie praktikaga; saate seda alati seadetes muuta.",
     "catalogueThirdPartyConfirm": "Lisa ikkagi",
-    "catalogueThirdPartyDisclaimer": "See on kolmanda osapoole kood, mille on lisanud {author}. stella ei ole seda üle vaadanud, heaks kiitnud ega hoolda. Teie vastutate selle eest, et see sobiks teie praktikaga ja vastaks teie büroo reeglitele. Lisamisel nõustute kasutama seda omal vastutusel.",
+    "catalogueThirdPartyDisclaimer": "See on kolmanda osapoole kood, mille on lisanud {author}. stella ei ole seda üle vaadanud, heaks kiitnud ega hoolda. Teie vastutate selle eest, et see sobiks teie praktikaga ja vastaks teie meeskonna reeglitele. Lisamisel nõustute kasutama seda omal vastutusel.",
     "catalogueTitle": "Kohandage oma tehisintellekti",
     "continue": "Jätka",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "AI seadistus",
       "aiDescription": "Kasutage oma API võtit või seadistage andmesuveräänsuse piirkond",
       "anonymization": {
-        "addPlaceholder": "Termin, mida alati maskeerida (nt büroo nimi)",
+        "addPlaceholder": "Termin, mida alati maskeerida (nt meeskonna nimi)",
         "deleteAction": "Kustuta termin",
-        "description": "Hallake büroo-ülest keelduloendit, mida anonüümimise konveier alati maskeerib, ja importige algusloend CSV-, TXT- või JSON-failist.",
-        "emptyState": "Büroo-üleseid termineid pole veel. Lisage üks ülal või importige loend.",
-        "entriesHeading": "Büroo terminid ({count})",
+        "description": "Hallake meeskonnaülest keelduloendit, mida anonüümimise konveier alati maskeerib, ja importige algusloend CSV-, TXT- või JSON-failist.",
+        "emptyState": "Meeskonnaüleseid termineid pole veel. Lisage üks ülal või importige loend.",
+        "entriesHeading": "Meeskonnaülesed terminid ({count})",
         "importAction": "Impordi",
         "importHint": "CSV (canonical,label,variants), TXT (üks rea kohta) või JSON",
         "importParseError": "Faili ei õnnestunud lugeda. Kasutage CSV-, TXT- või JSON-vormingut.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Olemi tüüp",
         "labelPickerEmpty": "Sobivat tüüpi pole.",
         "labelPickerPlaceholder": "Tüüp",
-        "termAddedToast": "„{value}“ lisati büroo keelduloendisse.",
+        "termAddedToast": "„{value}“ lisati meeskonna keelduloendisse.",
         "title": "Anonüümistamine"
       },
       "matterNumbering": "Toimikute nummerdamine",
@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# toimik} other {# toimikut}}",
     "members": {
       "addMember": "Lisa liige",
-      "addMemberDescription": "Lisa organisatsiooni liige sellesse toimikusse",
+      "addMemberDescription": "Lisa tiimiliige sellesse toimikusse",
       "alreadyMember": "Kasutaja on juba liige",
       "cannotRemoveLast": "Viimast liiget ei saa eemaldada",
       "noMembersFound": "Liikmeid ei leitud",
