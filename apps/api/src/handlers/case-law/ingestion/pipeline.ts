@@ -37,6 +37,7 @@ import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 import { getS3 } from "@/api/lib/s3";
@@ -453,7 +454,7 @@ export const processDecision = async (
     const existingSlugRows = await tx
       .select({ slug: caseLawDecisions.slug })
       .from(caseLawDecisions)
-      .where(like(caseLawDecisions.slug, `${slugScanPrefix}%`))
+      .where(like(caseLawDecisions.slug, `${escapeLike(slugScanPrefix)}%`))
       .limit(LIMITS.caseLawSlugCollisionScanLimit);
     const slug = createAvailableCaseLawDecisionSlug(
       baseSlug,
