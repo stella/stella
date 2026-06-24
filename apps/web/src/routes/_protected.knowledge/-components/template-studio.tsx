@@ -363,6 +363,17 @@ const createFieldPathFromQuery = (trimmed: string): string => {
   return isFieldPath(trimmed) ? trimmed : sanitizeFieldPath(trimmed);
 };
 
+/** The first field path not already taken: `field`, then `field_2`, `field_3`…
+ *  Shared by the blank `/` create row and the insert-field action so a generic
+ *  field can always be added even when `field` already exists. */
+const uniqueFieldPath = (base: string, fields: StudioField[]): string => {
+  let path = base;
+  for (let n = 2; fields.some((field) => field.path === path); n++) {
+    path = `${base}_${n}`;
+  }
+  return path;
+};
+
 /** Build the root rows for the current query. The typed text both filters the
  *  rows and (for "New field") becomes the new field's name. */
 const buildSlashRootItems = (
@@ -371,8 +382,15 @@ const buildSlashRootItems = (
 ): SlashRootItem[] => {
   const trimmed = query.trim();
   const needle = trimmed.toLowerCase();
-  const createPath = createFieldPathFromQuery(trimmed);
-  const reuseExact = fields.some((field) => field.path === createPath);
+  // A blank query offers a fresh unique field (field_2, …) rather than being
+  // suppressed when `field` is taken; a typed name that matches an existing
+  // field suppresses create (the user reuses it via the existing-field row).
+  const createPath =
+    trimmed === ""
+      ? uniqueFieldPath("field", fields)
+      : createFieldPathFromQuery(trimmed);
+  const reuseExact =
+    trimmed !== "" && fields.some((field) => field.path === createPath);
   // Match each row's label keyword so a query like "if"/"clause"/"pole"
   // surfaces the relevant row; an empty query shows them all.
   const matches = (...keywords: string[]): boolean =>
@@ -1063,11 +1081,10 @@ export const TemplateStudioPage = ({
   // Insert a fresh, uniquely-named field at the cursor and register it so it
   // shows in the Fields list right away (rename it there).
   const insertField = () => {
-    const existing = useTemplateStudioStore.getState().fields;
-    let path = "field";
-    for (let n = 2; existing.some((f) => f.path === path); n++) {
-      path = `field_${n}`;
-    }
+    const path = uniqueFieldPath(
+      "field",
+      useTemplateStudioStore.getState().fields,
+    );
     insertInline(`{{${path}}}`);
     upsertField(path, {});
   };

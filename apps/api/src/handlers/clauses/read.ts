@@ -57,6 +57,11 @@ type ListClausesProps = {
  *  `websearch_to_tsquery` only matches whole stemmed words, so a partial query
  *  returns nothing until a word is complete. Non-alphanumerics are stripped per
  *  token (they are `tsquery` operators and would otherwise throw). */
+/** Escape LIKE metacharacters so user input matches literally: a typed `%` or
+ *  `_` must not act as a wildcard (default ILIKE escape char is backslash). */
+const escapeLikePattern = (value: string): string =>
+  value.replace(/[\\%_]/gu, (char) => `\\${char}`);
+
 export const toClausePrefixTsQuery = (raw: string): string =>
   raw
     .trim()
@@ -87,7 +92,7 @@ export const listClausesHandler = async function* ({
   const isSearching = !!query.q;
 
   if (isSearching && query.q) {
-    const titleMatch = ilike(clauses.title, `%${query.q}%`);
+    const titleMatch = ilike(clauses.title, `%${escapeLikePattern(query.q)}%`);
     const ftsMatch =
       tsQuery.length > 0
         ? sql`${clauses.searchVector} @@ to_tsquery('english', ${tsQuery})`
