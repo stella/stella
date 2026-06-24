@@ -1,6 +1,6 @@
 import { useRef, useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQueryClient } from "@tanstack/react-query";
 import { getRouteApi, useNavigate } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
@@ -39,6 +39,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { ContactPicker } from "@/components/contact-picker";
 import { UserIdentity } from "@/components/user-avatar";
+import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateContact } from "@/routes/_protected.contacts/-mutations";
 import { contactsKeys } from "@/routes/_protected.contacts/-queries";
@@ -212,10 +213,10 @@ const CreateMatterDialogBody = ({
   const [submitAttempted, setSubmitAttempted] = useState(false);
   const clientInputRef = useRef<HTMLInputElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
-  const { data: organization } = useQuery({
+  const { data: organization } = useChromeQuery({
     ...organizationOptions(currentUser.activeOrganizationId),
   });
-  const { data: workspacesData } = useQuery({
+  const { data: workspacesData } = useChromeQuery({
     ...workspacesOptions(currentUser.activeOrganizationId),
   });
 

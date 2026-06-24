@@ -1,11 +1,11 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { RefreshCwIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { env } from "@/env";
+import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { compareSemver } from "@/lib/semver-compare";
 
 const FIVE_MIN_MS = 5 * 60 * 1000;
@@ -25,7 +25,7 @@ export const ApiVersionMismatchBanner = () => {
   const enabled = !env.VITE_SELFHOST;
   const installedVersion = __APP_VERSION__;
 
-  const { data: serverVersion } = useQuery({
+  const { data: serverVersion } = useChromeQuery({
     queryKey: ["api-version-check"],
     enabled,
     staleTime: FIVE_MIN_MS,

@@ -2,12 +2,27 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import type {
+  DefaultError,
   QueryKey,
   UseQueryOptions,
   UseQueryResult,
 } from "@tanstack/react-query";
 
 import { useMountEffect } from "@/hooks/use-effect";
+
+/**
+ * Returns `false` on the first render and flips to `true` after mount. The
+ * single mounted-gate primitive shared by `useChromeQuery` and by chrome hooks
+ * that aren't `useQuery` (e.g. `useInfiniteQuery`, `useQueries`), which compose
+ * `enabled: useHasMounted() && ...` manually.
+ */
+export const useHasMounted = (): boolean => {
+  const [m, setM] = useState(false);
+  useMountEffect(() => {
+    setM(true);
+  });
+  return m;
+};
 
 /**
  * `useQuery` for persistent chrome (the layout shell, sidebar, inspector) that
@@ -29,22 +44,26 @@ import { useMountEffect } from "@/hooks/use-effect";
  * `no-bare-chrome-query` lint rule). Route/page content keeps using `useQuery`
  * with loader-backed cache guarantees.
  *
- * `enabled` is composed: a `false` from the caller still disables the query;
- * the boolean form is the only one chrome uses, so the function form is treated
- * as enabled and simply gated on mount.
+ * `enabled` is composed: a `false` from the caller still disables the query. In
+ * TanStack Query v5 `enabled` is boolean-only (the function form was removed),
+ * so the caller's boolean is simply ANDed with the mount gate.
+ *
+ * Hydration-safe under TanStack Start SSR: `useMountEffect` never runs on the
+ * server, so `mounted` is `false` on both the server render and the first
+ * client render. Those two renders see identical query state, so there is no
+ * hydration mismatch. Where a loader dehydrates query data the cache is already
+ * warm and renders server-side normally; only the post-hydration *fetch* is
+ * deferred past mount.
  */
 export const useChromeQuery = <
-  TQueryFnData,
-  TError,
-  TData,
-  TQueryKey extends QueryKey,
+  TQueryFnData = unknown,
+  TError = DefaultError,
+  TData = TQueryFnData,
+  TQueryKey extends QueryKey = QueryKey,
 >(
   options: UseQueryOptions<TQueryFnData, TError, TData, TQueryKey>,
 ): UseQueryResult<TData, TError> => {
-  const [mounted, setMounted] = useState(false);
-  useMountEffect(() => {
-    setMounted(true);
-  });
+  const mounted = useHasMounted();
 
   return useQuery({
     ...options,

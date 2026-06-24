@@ -10,11 +10,7 @@ import {
 } from "react";
 import type React from "react";
 
-import {
-  useInfiniteQuery,
-  useQuery,
-  useQueryClient,
-} from "@tanstack/react-query";
+import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryKey } from "@tanstack/react-query";
 import HardBreak from "@tiptap/extension-hard-break";
 import History from "@tiptap/extension-history";
@@ -51,6 +47,7 @@ import {
   type SlashItem,
 } from "@/components/chat/prompt-slash-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor";
+import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -749,15 +746,22 @@ export const useChatEditor = ({
   // they live in `agent_skills` and the dedicated commands endpoint
   // returns only the command-bearing subset, so the slash menu
   // doesn't pay for resource-heavy fields it doesn't render.
-  const { data: commandSkills = [] } = useQuery(
+  const { data: commandSkills = [] } = useChromeQuery(
     skillCommandsOptions(activeOrganizationId),
   );
+  // useInfiniteQuery has no chrome wrapper; gate its cold-cache fetch on mount
+  // by hand so it can't resolve on a not-yet-mounted fiber (same rationale as
+  // useChromeQuery).
+  const hasMounted = useHasMounted();
   const {
     data: skillPages,
     fetchNextPage: fetchNextSkillPage,
     hasNextPage: hasNextSkillPage,
     isFetchingNextPage: isFetchingNextSkillPage,
-  } = useInfiniteQuery(skillsOptions(activeOrganizationId));
+  } = useInfiniteQuery({
+    ...skillsOptions(activeOrganizationId),
+    enabled: hasMounted,
+  });
 
   // Drain every skill page into the slash menu: drive the infinite query
   // forward whenever another page becomes available and we're not already

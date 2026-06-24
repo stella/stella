@@ -1,11 +1,11 @@
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
 import { ExternalLinkIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
 import { env } from "@/env";
+import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { logDevError } from "@/lib/errors/utils";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { compareSemver } from "@/lib/semver-compare";
@@ -34,7 +34,7 @@ export const SelfhostUpdateBanner = () => {
   const enabled = env.VITE_SELFHOST;
   const installedVersion = __APP_VERSION__;
 
-  const { data: release } = useQuery({
+  const { data: release } = useChromeQuery({
     queryKey: ["selfhost-update-check"],
     enabled,
     staleTime: ONE_DAY_MS,

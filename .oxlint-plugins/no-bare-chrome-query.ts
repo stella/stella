@@ -21,7 +21,7 @@ const filenameForContext = (context) =>
   context.filename ?? context.getFilename?.() ?? "";
 
 const isAllowedFile = (context, allowedFiles) => {
-  const filename = filenameForContext(context);
+  const filename = filenameForContext(context).replace(/\\/g, "/");
   return allowedFiles.some((allowedFile) => filename.endsWith(allowedFile));
 };
 
