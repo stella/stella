@@ -121,10 +121,11 @@ describe("templateSlashMenu state machine", () => {
     expect(getTemplateSlashMenu(state).active).toBe(false);
   });
 
-  test("a collapsed caret jump does NOT close the menu (relayout-churn safe)", () => {
-    // The live filter bug: the paged editor re-asserts a collapsed caret a frame
-    // after input and it can land off the trigger. The query is tracked by a
-    // mapped range, not the caret, so such a churn move must keep the menu open.
+  test("a collapsed caret move does NOT close the menu", () => {
+    // Closing is gated on explicit signals (range select, `/` deleted,
+    // terminator typed), never the collapsed caret position — so any caret move
+    // (a click, or a selection-only transaction) leaves the menu open. The host
+    // popover owns click-away dismissal.
     let state = stateWith("/", 1);
     state = openAt(state, 0);
     state = typeChars(state, "fi");

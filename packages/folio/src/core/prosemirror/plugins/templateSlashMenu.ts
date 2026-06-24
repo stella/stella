@@ -227,10 +227,10 @@ export const templateSlashMenuPlugin = (
           return value;
         }
         // Carry the trigger range through the transaction by POSITION MAPPING,
-        // not the caret: `from` stays at the `/` (assoc -1) and `to` grows with
-        // inserts at the query end (assoc +1). This is what makes the query
-        // survive the paged editor's relayout caret churn — the caret can land
-        // anywhere without affecting the range.
+        // not the live caret: `from` stays at the `/` (assoc -1) and `to` grows
+        // with inserts at the query end (assoc +1). The caret is never the source
+        // of truth for the query span (the standard suggestion-plugin model), so
+        // the query stays correct regardless of where the selection sits.
         // ProseMirror `Mapping.map(pos, assoc)`: the second arg is the map bias
         // (which side of an insertion the position sticks to), not an Array
         // `thisArg` — the unicorn rule mis-detects the shape.
@@ -242,10 +242,10 @@ export const templateSlashMenuPlugin = (
         if (!slashStillAt(newState, from)) {
           return IDLE;
         }
-        // A deliberate range selection closes the menu; a collapsed caret move
-        // (including the relayout churn) is ignored so it can never tear the menu
-        // down mid-type. Click-away dismissal is the host popover's job, not
-        // something inferred from the unreliable caret position.
+        // Close on a deliberate range selection only. A collapsed caret move
+        // never closes the menu: closing is gated on explicit signals (`/`
+        // deleted, terminator typed, range select), not the caret position.
+        // Click-away dismissal is the host popover's responsibility.
         if (tr.selectionSet && !newState.selection.empty) {
           return IDLE;
         }
