@@ -116,7 +116,7 @@ import {
   PreviewPane,
 } from "@stll/ui/components/preview-pane";
 import { ScrollArea } from "@stll/ui/components/scroll-area";
-import { Separator } from "@stll/ui/components/separator";
+import { Separator, TextSeparator } from "@stll/ui/components/separator";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
@@ -2630,10 +2630,7 @@ export const TemplateStudioPage = ({
       {/* `relative` so the floating AI bar, stepper, and selection-gesture
           popover anchor over the doc. */}
       <div className="relative min-h-0 flex-1" ref={overlayHostRef}>
-        <div
-          className="h-full [scrollbar-gutter:stable] overflow-auto"
-          ref={containerRef}
-        >
+        <div className="h-full overflow-auto" ref={containerRef}>
           <Suspense fallback={null}>
             <DocxEditor
               ref={editorRef}
@@ -5487,7 +5484,9 @@ const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
       writeBounds({ maxItems });
       return;
     }
-    const max = maxItems !== undefined && value > maxItems ? value : maxItems;
+    // Max stays at least one above min, so the range is never empty or fixed.
+    const max =
+      maxItems !== undefined && maxItems <= value ? value + 1 : maxItems;
     writeBounds({ minItems: value, maxItems: max });
   };
 
@@ -5497,7 +5496,11 @@ const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
       writeBounds({ minItems });
       return;
     }
-    const min = minItems !== undefined && value < minItems ? value : minItems;
+    // Min stays at least one below max (floored at zero).
+    const min =
+      minItems !== undefined && minItems >= value
+        ? Math.max(0, value - 1)
+        : minItems;
     writeBounds({ minItems: min, maxItems: value });
   };
 
@@ -5526,7 +5529,7 @@ const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
           className="h-8"
           id="loop-max-repeats"
           inputMode="numeric"
-          min={0}
+          min={(minItems ?? 0) + 1}
           onChange={(e) => onMax(e.target.value)}
           placeholder={t("templates.studio.repeatsUnlimited")}
           type="number"
@@ -5729,13 +5732,27 @@ const ConditionBuilder = ({
   // One choice, not a stack of forms: pick how this block's visibility is
   // decided and show only that mode (mirrors the per-field condition picker).
   const [mode, setMode] = useState<"ask" | "rule">("ask");
+  // Two ways to set this block's visibility: reuse an existing condition, or
+  // build a fresh one. Reuse leads (option A) only when something exists to
+  // reuse; an "or" divider then frames the builder below as the alternative,
+  // mirroring the sign-in panel's "social / or / email" split.
+  const hasReuse = reusableConditions(fields, (key) => t(key)).some(
+    (c) => c.ref !== expr.trim(),
+  );
   return (
     <div className="flex flex-col gap-4">
-      <ConditionReusePicker
-        currentRef={expr}
-        fields={fields}
-        onRewrite={onRewrite}
-      />
+      {hasReuse ? (
+        <>
+          <ConditionReusePicker
+            currentRef={expr}
+            fields={fields}
+            onRewrite={onRewrite}
+          />
+          <TextSeparator>
+            {t("templates.studio.conditionOrBuildNew")}
+          </TextSeparator>
+        </>
+      ) : null}
       <div className="flex items-center gap-1">
         <Button
           className="flex-1"
@@ -6756,6 +6773,29 @@ type FormulaEditorProps = {
   onChange: (formula: string) => void;
 };
 
+/** Same-scope fields a formula at `currentPath` may use as operands: number
+ *  inputs (any order) and EARLIER formula fields (computed before this one in
+ *  manifest order). Later formula fields and non-numeric text/date fields are
+ *  excluded — the evaluator NaNs on those. An empty result means a formula
+ *  here would have nothing to reference, so the source is not offered. */
+const formulaOperandFields = (
+  fields: readonly StudioField[],
+  outline: OutlineNode[],
+  currentPath: string,
+): StudioField[] => {
+  const currentIndex = fields.findIndex((f) => f.path === currentPath);
+  const scopeOf = (path: string): string | null =>
+    findEnclosingEachGroup(outline, path, null)?.expr.trim() || null;
+  const currentScope = scopeOf(currentPath);
+  return fields.filter(
+    (f, index) =>
+      f.path !== currentPath &&
+      scopeOf(f.path) === currentScope &&
+      (f.inputType === "number" || f.formula !== undefined) &&
+      !(f.formula !== undefined && index >= currentIndex),
+  );
+};
+
 // Math tokens the toolbar can insert. The glyph is what the author sees; the
 // token is the canonical operator the evaluator understands (so the stored
 // formula stays in `* / -` form, never the human × ÷ − glyphs).
@@ -6790,7 +6830,6 @@ const FormulaEditor = ({
 }: FormulaEditorProps) => {
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement>(null);
-  const currentIndex = fields.findIndex((f) => f.path === currentPath);
   // A field's enclosing `{{#each}}` container path, or null at top level.
   const scopeOf = (path: string): string | null =>
     findEnclosingEachGroup(outline, path, null)?.expr.trim() || null;
@@ -6806,16 +6845,7 @@ const FormulaEditor = ({
   // Only same-scope fields are resolvable here: a loop formula sees only its
   // own row, a top-level formula only top-level values.
   const inScope = (path: string): boolean => scopeOf(path) === currentScope;
-  // Operands: same-scope number fields (any order) and EARLIER formula fields
-  // (computed before this one in manifest order). Later formula fields and
-  // non-numeric text/date fields are excluded — the evaluator NaNs on those.
-  const numberFields = fields.filter(
-    (f, index) =>
-      f.path !== currentPath &&
-      inScope(f.path) &&
-      (f.inputType === "number" || f.formula !== undefined) &&
-      !(f.formula !== undefined && index >= currentIndex),
-  );
+  const numberFields = formulaOperandFields(fields, outline, currentPath);
   const hasNonNumberFields = fields.some(
     (f) =>
       f.path !== currentPath &&
@@ -6932,7 +6962,7 @@ const FormulaEditor = ({
         ref={inputRef}
         value={value}
       />
-      <div className="flex flex-wrap gap-1">
+      <div className="flex gap-1 overflow-x-auto pb-1">
         {FORMULA_OPERATOR_TOKENS.map((op) => (
           <Button
             className="shrink-0 font-mono"
@@ -7377,6 +7407,14 @@ const FieldFace = ({
     valueSource = "ai";
   }
 
+  // A formula needs at least one same-scope number (or earlier formula) field
+  // to reference; with none, the source is offered nothing to compute over, so
+  // the picker stays disabled. An already-formula field keeps it enabled so the
+  // author is never trapped on a value source they cannot leave.
+  const canUseFormula =
+    valueSource === "formula" ||
+    formulaOperandFields(fields, outline, field.path).length > 0;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <ScrollArea className="min-h-0 flex-1" viewportRef={setViewport}>
@@ -7494,6 +7532,7 @@ const FieldFace = ({
             </Button>
             <Button
               className="justify-start"
+              disabled={!canUseFormula}
               onClick={() =>
                 onUpdate({
                   formula: field.formula ?? "",
@@ -7504,6 +7543,11 @@ const FieldFace = ({
                 })
               }
               size="sm"
+              title={
+                canUseFormula
+                  ? undefined
+                  : t("templates.studio.formulaNoFields")
+              }
               variant={valueSource === "formula" ? "default" : "outline"}
             >
               <SigmaIcon className="size-3.5" />

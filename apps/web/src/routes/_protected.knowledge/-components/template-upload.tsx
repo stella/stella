@@ -5,6 +5,7 @@ import { SparklesIcon, UploadIcon, WandSparklesIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { TextSeparator } from "@stll/ui/components/separator";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { api } from "@/lib/api";
@@ -188,13 +189,9 @@ export const TemplateUpload = ({
         </div>
 
         {/* Secondary: import an existing document (upload or AI markup). */}
-        <div className="flex w-full items-center gap-2">
-          <span className="bg-border h-px flex-1" />
-          <span className="text-muted-foreground text-xs">
-            {t("templates.orImportFromDocument")}
-          </span>
-          <span className="bg-border h-px flex-1" />
-        </div>
+        <TextSeparator className="w-full gap-2">
+          {t("templates.orImportFromDocument")}
+        </TextSeparator>
 
         <div className="flex flex-col items-center gap-2">
           <div className="flex items-center gap-2">

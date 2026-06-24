@@ -28,6 +28,7 @@ import {
   PopoverPopup,
   PopoverTrigger,
 } from "@stll/ui/components/popover";
+import { TextSeparator } from "@stll/ui/components/separator";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
@@ -418,13 +419,12 @@ export const CatalogueStep = ({
               filteredEntries.some((entry) =>
                 recommendedSet.has(entry.slug),
               ) && (
-                <div className="my-2 flex items-center gap-3">
-                  <div className="bg-border h-px flex-1" />
-                  <span className="text-muted-foreground text-[10px] font-medium tracking-wider uppercase">
-                    {t("onboarding.catalogueCommunityHeading")}
-                  </span>
-                  <div className="bg-border h-px flex-1" />
-                </div>
+                <TextSeparator
+                  className="my-2"
+                  labelClassName="text-[10px] font-medium tracking-wider uppercase"
+                >
+                  {t("onboarding.catalogueCommunityHeading")}
+                </TextSeparator>
               )}
             {filteredEntries
               .filter((entry) => !recommendedSet.has(entry.slug))

@@ -2224,6 +2224,7 @@ type Messages = {
       "conditionLabelPlaceholder": "Client is a company";
       "conditionMatchField": "Only when a field matches";
       "conditionMatchFieldHelp": "Show this block based on what someone enters in another field.";
+      "conditionOrBuildNew": "or build a new one";
       "conditionReuse": "Reuse a condition";
       "conditionReusePick": "Pick an existing condition…";
       "conditionSource": "How it is decided";
@@ -2242,6 +2243,7 @@ type Messages = {
       "filledByPerson": "Person";
       "formula": "Formula";
       "formulaExampleLabel": "Example";
+      "formulaNoFields": "Add a number field first to compute a formula.";
       "formulaNonNumberFields": "Not a number: {fields}";
       "formulaNumbersOnlyHelp": "Calculations use number fields only — dates and text can't be used.";
       "formulaUnknownFields": "Not a field: {fields}";
