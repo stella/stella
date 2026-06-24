@@ -116,9 +116,13 @@ export default defineConfig(({ mode }) => {
       // Vite's dep optimizer handles them during the cold pass, before any
       // navigation. Two graphs trip this:
       //
-      //   1. better-auth: src/lib/auth.ts statically imports the public
-      //      entrypoints, but better-auth reaches these deep subpaths only at
-      //      runtime, so the crawler misses them until a protected route runs.
+      //   1. better-auth: src/lib/auth.ts statically imports the client
+      //      entrypoints (better-auth/react + /client + /client/plugins,
+      //      @better-auth/oauth-provider/client), but their runtime-only deep
+      //      subpaths (e.g. the multi-tab session `broadcast-channel`) are not
+      //      statically reachable, so the cold crawl misses them until a
+      //      protected route actually runs the auth client. Listing the
+      //      entrypoints makes the optimizer bundle their full graph up front.
       //   2. @stll/folio: the document route lazy-loads it via
       //      `await import("@stll/folio")` ($viewId.document.tsx), dragging in
       //      the prosemirror family + jszip + fast-xml-parser, none of which
@@ -146,6 +150,10 @@ export default defineConfig(({ mode }) => {
         "@better-auth/core/error",
         "@better-auth/core/utils/error-codes",
         "@better-auth/core/utils/string",
+        "better-auth/react",
+        "better-auth/client",
+        "better-auth/client/plugins",
+        "@better-auth/oauth-provider/client",
         "@better-fetch/fetch",
         "defu",
         "nanostores",
