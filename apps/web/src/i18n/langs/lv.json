@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, zero {# lietu} one {# lieta} other {# lietas}}",
     "members": {
       "addMember": "Pievienot dalībnieku",
-      "addMemberDescription": "Pievienot organizācijas dalībnieku šai lietai",
+      "addMemberDescription": "Pievienot komandas dalībnieku šai lietai",
       "alreadyMember": "Lietotājs jau ir dalībnieks",
       "cannotRemoveLast": "Nevar noņemt pēdējo dalībnieku",
       "noMembersFound": "Dalībnieki nav atrasti",

@@ -73,10 +73,17 @@ export type Term = {
   // Renderings banned wherever the concept is mentioned (English source
   // contains the trigger word, or a key matches `keyTriggers`).
   forbidden?: Record<string, string[]>;
-  // Renderings banned only on `keyTriggers`-matched keys, never via the English
-  // word trigger. Use for forms too ambiguous to ban broadly (e.g. Slavic
-  // "organizace"/"organizáciu", which also mean the act of organizing).
+  // Renderings banned on `keyTriggers`-matched keys, and on the English word
+  // trigger unless the source matches `sourceExempt`. Use for forms too
+  // ambiguous to ban unconditionally (e.g. Slavic "organizace"/"organizáciu",
+  // which also mean the act of organizing).
   forbiddenOnKey?: Record<string, string[]>;
+  // Lowercased substrings; when the English source contains one, the word
+  // trigger does NOT enforce `forbiddenOnKey` (the banned form legitimately
+  // renders a different English word in the same string, e.g. "organize…team"
+  // → a Slavic "organiz-" form translates "organize", not "team"). Key-trigger
+  // hits ignore this guard and always enforce.
+  sourceExempt?: string[];
   // Substrings matched against the flattened translation key. When a key
   // matches, the terminology lint enforces this concept's bans on that key
   // regardless of whether the English source contains the trigger word, so
@@ -180,19 +187,40 @@ const parseTerm = (value: unknown, where: string): Term => {
   if (forbiddenOnKey) {
     term.forbiddenOnKey = forbiddenOnKey;
   }
-  const rawKeyTriggers = value["keyTriggers"];
-  if (rawKeyTriggers !== undefined) {
-    if (
-      !Array.isArray(rawKeyTriggers) ||
-      rawKeyTriggers.some((t) => typeof t !== "string")
-    ) {
-      return panic(
-        `${where} (${id}): \`keyTriggers\` must be an array of strings`,
-      );
-    }
-    term.keyTriggers = rawKeyTriggers;
+  const keyTriggers = parseStringArray(
+    value["keyTriggers"],
+    "keyTriggers",
+    where,
+    id,
+  );
+  if (keyTriggers) {
+    term.keyTriggers = keyTriggers;
+  }
+  const sourceExempt = parseStringArray(
+    value["sourceExempt"],
+    "sourceExempt",
+    where,
+    id,
+  );
+  if (sourceExempt) {
+    term.sourceExempt = sourceExempt;
   }
   return term;
+};
+
+const parseStringArray = (
+  raw: unknown,
+  field: string,
+  where: string,
+  id: string,
+): string[] | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (!Array.isArray(raw) || raw.some((t) => typeof t !== "string")) {
+    return panic(`${where} (${id}): \`${field}\` must be an array of strings`);
+  }
+  return raw;
 };
 
 const parsePtBrTerm = (value: unknown): PtBrTerm => {

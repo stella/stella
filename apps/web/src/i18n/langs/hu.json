@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# ügy} other {# ügy}}",
     "members": {
       "addMember": "Tag hozzáadása",
-      "addMemberDescription": "Szervezeti tag hozzáadása ehhez az ügyhöz",
+      "addMemberDescription": "Csapattag hozzáadása ehhez az ügyhöz",
       "alreadyMember": "A felhasználó már tag",
       "cannotRemoveLast": "Az utolsó tag nem távolítható el",
       "noMembersFound": "Nem található tag",

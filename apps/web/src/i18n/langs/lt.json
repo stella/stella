@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# byla} few {# bylos} many {# bylos} other {# bylų}}",
     "members": {
       "addMember": "Pridėti narį",
-      "addMemberDescription": "Pridėti organizacijos narį prie šios bylos",
+      "addMemberDescription": "Pridėti komandos narį prie šios bylos",
       "alreadyMember": "Naudotojas jau yra narys",
       "cannotRemoveLast": "Negalima pašalinti paskutinio nario",
       "noMembersFound": "Narių nerasta",

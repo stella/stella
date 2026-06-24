@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# Akte} other {# Akten}}",
     "members": {
       "addMember": "Mitglied hinzufügen",
-      "addMemberDescription": "Ein Organisationsmitglied zu dieser Akte hinzufügen",
+      "addMemberDescription": "Ein Teammitglied zu dieser Akte hinzufügen",
       "alreadyMember": "Benutzer ist bereits Mitglied",
       "cannotRemoveLast": "Das letzte Mitglied kann nicht entfernt werden",
       "noMembersFound": "Keine Mitglieder gefunden",

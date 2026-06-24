@@ -306,10 +306,12 @@ describe("terminology: key triggers and forbiddenOnKey", () => {
           {
             id: "team",
             en: "Team",
-            // firm: broad (word + key trigger); org: key-trigger only.
+            // firm: broad (unconditional). org: key-trigger always, word-trigger
+            // unless the source is about "organiz-ing".
             forbidden: { de: ["Kanzlei"], en: ["firm"] },
             forbiddenOnKey: { de: ["Organisation"], en: ["organisation"] },
             keyTriggers: ["scopeTeam"],
+            sourceExempt: ["organiz", "organis"],
             translations: fill("x"),
           },
         ],
@@ -330,9 +332,23 @@ describe("terminology: key triggers and forbiddenOnKey", () => {
     ).toEqual(["Organisation"]);
   });
 
-  test("forbiddenOnKey is NOT enforced via the English word trigger", () => {
-    // Source says "team", target uses the ambiguous org word, but the key is
-    // not a scope key: org wording (which also means "organize") is allowed.
+  test("forbiddenOnKey fires on the word trigger when the source is not exempt", () => {
+    // Source says "team member" (no "organiz-"); a target rendering it as an
+    // organization member is caught even on a non-scope key.
+    expect(
+      findForbiddenTerms(
+        "Choose an existing team member",
+        "Ein Organisation hinzufügen",
+        "de",
+        rules,
+        "workspaces.members.addMemberDescription",
+      ),
+    ).toEqual(["Organisation"]);
+  });
+
+  test("sourceExempt suppresses word-trigger enforcement of forbiddenOnKey", () => {
+    // Source also says "organize", so a Slavic/German org form renders that
+    // word, not the team concept: not flagged on a non-scope key.
     expect(
       findForbiddenTerms(
         "Organize team activity",
@@ -342,6 +358,18 @@ describe("terminology: key triggers and forbiddenOnKey", () => {
         "workspaces.emptyMatters.description",
       ),
     ).toEqual([]);
+  });
+
+  test("key trigger ignores sourceExempt (scope labels are always strict)", () => {
+    expect(
+      findForbiddenTerms(
+        "Organize the team",
+        "Alle in der Organisation",
+        "de",
+        rules,
+        "knowledge.agentSkills.scopeTeam",
+      ),
+    ).toEqual(["Organisation"]);
   });
 
   test("forbidden (firm) words are enforced broadly via the word trigger", () => {

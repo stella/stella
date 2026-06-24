@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# dossier} other {# dossiers}}",
     "members": {
       "addMember": "Ajouter un membre",
-      "addMemberDescription": "Ajouter un membre de l'organisation à ce dossier",
+      "addMemberDescription": "Ajouter un membre de l'équipe à ce dossier",
       "alreadyMember": "L'utilisateur est déjà membre",
       "cannotRemoveLast": "Impossible de retirer le dernier membre",
       "noMembersFound": "Aucun membre trouvé",

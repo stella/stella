@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# toimik} other {# toimikut}}",
     "members": {
       "addMember": "Lisa liige",
-      "addMemberDescription": "Lisa organisatsiooni liige sellesse toimikusse",
+      "addMemberDescription": "Lisa tiimiliige sellesse toimikusse",
       "alreadyMember": "Kasutaja on juba liige",
       "cannotRemoveLast": "Viimast liiget ei saa eemaldada",
       "noMembersFound": "Liikmeid ei leitud",

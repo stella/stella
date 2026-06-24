@@ -441,7 +441,13 @@
           "organizacjami",
           "organizacjach"
         ],
-        "de": ["Organisation", "Organisationen"],
+        "de": [
+          "Organisation",
+          "Organisationen",
+          "Organisationsmitglied",
+          "Organisationsmitglieder",
+          "Organisationsmitgliedern"
+        ],
         "es": ["organización", "organizaciones"],
         "fr": ["organisation", "organisations"],
         "hu": [
@@ -482,6 +488,7 @@
         "pt-BR": ["organização", "organizações"]
       },
       "keyTriggers": ["scopeTeam", "scope.team"],
+      "sourceExempt": ["organiz", "organis"],
       "translations": {
         "ar": "فريق",
         "cs": "Tým",

@@ -426,8 +426,12 @@ export type ForbiddenRule = {
   triggers: string[];
   keyTriggers: string[];
   byLocale: Record<string, string[]>;
-  // Forms banned only on key-trigger hits, never via the English word trigger.
+  // Forms enforced on key-trigger hits, and on the word trigger unless the
+  // source matches `sourceExempt`.
   byLocaleOnKey: Record<string, string[]>;
+  // Lowercased substrings that suppress word-trigger enforcement of
+  // `byLocaleOnKey` (see glossary `sourceExempt`).
+  sourceExempt: string[];
 };
 
 /**
@@ -449,6 +453,7 @@ export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
       keyTriggers: term.keyTriggers ?? [],
       byLocale: { ...term.forbidden },
       byLocaleOnKey: { ...term.forbiddenOnKey },
+      sourceExempt: (term.sourceExempt ?? []).map((s) => s.toLowerCase()),
     });
   }
   return rules;
@@ -479,11 +484,17 @@ export const findForbiddenTerms = (
     if (!wordFires && !keyFires) {
       continue;
     }
-    // `byLocale` bans apply under either trigger; `byLocaleOnKey` bans (forms
-    // too ambiguous to flag broadly) apply only on a key-trigger hit.
+    // `byLocale` bans apply under either trigger. `byLocaleOnKey` bans (forms
+    // too ambiguous to flag unconditionally) apply on a key-trigger hit, or on
+    // the word trigger unless the source is exempt (e.g. it also talks about
+    // "organizing", so the banned form renders that word, not the concept).
+    const lowerSource = source.toLowerCase();
+    const onKeyApplies =
+      keyFires ||
+      !rule.sourceExempt.some((exempt) => lowerSource.includes(exempt));
     const forbidden = [
       ...(rule.byLocale[locale] ?? []),
-      ...(keyFires ? (rule.byLocaleOnKey[locale] ?? []) : []),
+      ...(onKeyApplies ? (rule.byLocaleOnKey[locale] ?? []) : []),
     ];
     for (const term of forbidden) {
       if (containsWord(target, term, locale)) {
