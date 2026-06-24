@@ -608,6 +608,7 @@
     "linkedClauses": "Verknüpfte Klauseln",
     "loadFailed": "Klauseln konnten nicht geladen werden",
     "loading": "Klauseln werden geladen …",
+    "needUpdate": "{count, plural, one {# benötigt eine Aktualisierung} other {# benötigen eine Aktualisierung}}",
     "noChanges": "Keine Änderungen",
     "noLinkedClauses": "Keine verknüpften Klauseln",
     "noResults": "Keine Klauseln gefunden",

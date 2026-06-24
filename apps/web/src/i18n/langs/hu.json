@@ -608,6 +608,7 @@
     "linkedClauses": "Csatolt záradékok",
     "loadFailed": "A záradékok betöltése nem sikerült",
     "loading": "Záradékok betöltése…",
+    "needUpdate": "{count, plural, one {# frissítendő} other {# frissítendő}}",
     "noChanges": "Nincs változás",
     "noLinkedClauses": "Nincs csatolt záradék",
     "noResults": "Még nincsenek záradékok",

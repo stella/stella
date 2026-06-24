@@ -608,6 +608,7 @@
     "linkedClauses": "Propojená vzorová ustanovení",
     "loadFailed": "Načtení vzorových ustanovení se nezdařilo",
     "loading": "Načítám vzorová ustanovení…",
+    "needUpdate": "{count, plural, one {# vyžaduje aktualizaci} few {# vyžadují aktualizaci} other {# vyžaduje aktualizaci}}",
     "noChanges": "Žádné změny",
     "noLinkedClauses": "Žádná propojená vzorová ustanovení",
     "noResults": "Zatím žádná vzorová ustanovení",

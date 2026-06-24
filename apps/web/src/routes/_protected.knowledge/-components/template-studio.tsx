@@ -14,6 +14,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   TextQuoteIcon,
+  AlertTriangleIcon,
   ArrowLeftIcon,
   BookmarkIcon,
   BookmarkPlusIcon,
@@ -32,6 +33,7 @@ import {
   MessageCircleQuestionIcon,
   PencilIcon,
   PlusIcon,
+  RefreshCwIcon,
   RepeatIcon,
   SaveIcon,
   SigmaIcon,
@@ -141,6 +143,11 @@ import {
   toRuleFields,
 } from "@/routes/_protected.knowledge/-components/condition-builder";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
+import {
+  OutdatedChanges,
+  UnlinkButton,
+} from "@/routes/_protected.knowledge/-components/template-clauses-tab";
+import type { LinkedClause } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
 import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention";
 import {
@@ -3017,6 +3024,10 @@ const TemplateFillFacet = ({
   const { data: detailData } = useQuery(detailOptions);
   const fillIsDirty = useTemplateStudioStore((s) => s.isDirty);
   const fillActions = useTemplateStudioStore((s) => s.actions);
+  // Persisted so the entered values survive a facet switch (edit a field and
+  // come back) instead of remounting away with the fill form.
+  const fillValues = useTemplateStudioStore((s) => s.fillValues);
+  const setFillValues = useTemplateStudioStore((s) => s.setFillValues);
   const detail =
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
@@ -3094,12 +3105,14 @@ const TemplateFillFacet = ({
         conditions={discovered.conditions}
         fields={discovered.fields}
         fileName={detail.fileName}
+        initialValues={fillValues ?? undefined}
         onBack={() => undefined}
         onDone={() => undefined}
         onEditField={onEditField}
-        onValuesChange={(values) =>
-          pushFillPreview(values, discovered.fields, clausePreview?.slotTexts)
-        }
+        onValuesChange={(values) => {
+          setFillValues(values);
+          pushFillPreview(values, discovered.fields, clausePreview?.slotTexts);
+        }}
         saveTarget={fillSaveTarget}
         structureErrors={discovered.structureErrors}
         templateId={templateId}
@@ -3734,21 +3747,118 @@ const StudioOverviewSummary = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: clausesData } = useQuery(
-    templateClausesOptions(activeOrganizationId, templateId),
+  const clausesOptions = templateClausesOptions(
+    activeOrganizationId,
+    templateId,
   );
-  const clauseCount =
-    clausesData && "links" in clausesData ? clausesData.links.length : 0;
+  const { data: clausesData } = useQuery(clausesOptions);
+  const links: LinkedClause[] =
+    clausesData && "links" in clausesData ? clausesData.links : [];
+  const outdated = links.filter((link) => link.isOutdated);
   const conditionCount = fields.filter((f) => f.inputType === "boolean").length;
   const summary = [
     t("templates.fieldCount", { count: fields.length }),
     t("templates.conditionCount", { count: conditionCount }),
-    t("clauses.clauseCount", { count: clauseCount }),
+    t("clauses.clauseCount", { count: links.length }),
   ].join(" · ");
   return (
-    <p className="text-muted-foreground shrink-0 px-4 py-2 text-xs tabular-nums">
-      {summary}
-    </p>
+    <div className="flex shrink-0 items-center gap-2 px-4 py-2">
+      <p className="text-muted-foreground text-xs tabular-nums">{summary}</p>
+      {outdated.length > 0 && (
+        <ClauseDriftPopover
+          outdated={outdated}
+          queryKey={clausesOptions.queryKey}
+          templateId={templateId}
+        />
+      )}
+    </div>
+  );
+};
+
+/** Quiet footer affordance surfacing linked clauses whose pinned version drifted
+ *  behind their clause; lists them and offers a sync-all without restoring the
+ *  removed standalone clauses tab. */
+const ClauseDriftPopover = ({
+  outdated,
+  templateId,
+  queryKey,
+}: {
+  outdated: LinkedClause[];
+  templateId: string;
+  queryKey: readonly unknown[];
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const [syncingAll, setSyncingAll] = useState(false);
+
+  const handleSyncAll = async () => {
+    setSyncingAll(true);
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .clauses.sync.post();
+    setSyncingAll(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.syncFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    if ("syncedCount" in response.data) {
+      stellaToast.add({
+        type: "success",
+        title: t("clauses.syncedAllResult", {
+          count: response.data.syncedCount,
+        }),
+      });
+    }
+    void queryClient.invalidateQueries({ queryKey });
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            className="text-warning-foreground h-auto gap-1 px-1.5 py-0.5 text-xs font-normal"
+            size="xs"
+            variant="ghost"
+          >
+            <AlertTriangleIcon className="size-3" />
+            {t("clauses.needUpdate", { count: outdated.length })}
+          </Button>
+        }
+      />
+      <PopoverPopup className="w-72 p-3">
+        <ul className="mb-2 flex flex-col gap-1">
+          {outdated.map((link) => (
+            <li className="truncate text-sm" dir="auto" key={link.id}>
+              {link.clause?.title ?? t("clauses.clauseDeleted")}
+            </li>
+          ))}
+        </ul>
+        <Button
+          className="w-full"
+          disabled={syncingAll}
+          onClick={() => {
+            void handleSyncAll();
+          }}
+          size="sm"
+          variant="outline"
+        >
+          <RefreshCwIcon
+            className={cn("size-3.5", syncingAll && "animate-spin")}
+          />
+          {t("clauses.syncAllOutdated")}
+        </Button>
+      </PopoverPopup>
+    </Popover>
   );
 };
 
@@ -4815,6 +4925,12 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
       ? linksData.links.find((l) => l.slotName === selected.expr)
       : undefined;
 
+  const invalidateLinks = () => {
+    void queryClient.invalidateQueries({
+      queryKey: clausesOptions.queryKey,
+    });
+  };
+
   return (
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
@@ -4831,15 +4947,13 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
             {t("clauses.noLinkedClauses")}
           </p>
         ) : (
-          <div className="rounded-md border p-2.5 text-sm" dir="auto">
-            {link.clause === null ? (
-              <span className="text-destructive">
-                {t("clauses.clauseDeleted")}
-              </span>
-            ) : (
-              link.clause.title
-            )}
-          </div>
+          templateId !== null && (
+            <LinkedClauseCard
+              link={link}
+              onChanged={invalidateLinks}
+              templateId={templateId}
+            />
+          )
         )}
         <Button onClick={() => setLinkOpen(true)} size="sm" variant="outline">
           {t("clauses.linkClause")}
@@ -4848,17 +4962,155 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
       {templateId === null ? null : (
         <LinkClauseDialog
           defaultSlotName={selected.expr}
-          onLinked={() => {
-            void queryClient.invalidateQueries({
-              queryKey: clausesOptions.queryKey,
-            });
-          }}
+          onLinked={invalidateLinks}
           onOpenChange={setLinkOpen}
           open={linkOpen}
           templateId={templateId}
         />
       )}
     </ScrollArea>
+  );
+};
+
+/** Per-slot clause management inside the Studio inspector: the linked clause's
+ *  pinned version, variant, outdated/sync affordance, change disclosure, and
+ *  unlink. Reuses {@link OutdatedChanges} and {@link UnlinkButton} from the
+ *  (now non-tab) clauses management surface. */
+const LinkedClauseCard = ({
+  link,
+  templateId,
+  onChanged,
+}: {
+  link: LinkedClause;
+  templateId: string;
+  onChanged: () => void;
+}) => {
+  const t = useTranslations();
+
+  if (link.clause === null) {
+    return (
+      <div className="bg-destructive/5 flex items-start gap-2.5 rounded-md border p-2.5">
+        <Trash2Icon className="text-destructive mt-0.5 size-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-destructive text-sm font-medium">
+            {t("clauses.clauseDeletedTombstone")}
+          </p>
+          <UnlinkButton
+            destructive
+            linkId={link.id}
+            onChanged={onChanged}
+            templateId={templateId}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border p-2.5">
+      <p className="text-sm font-medium" dir="auto">
+        {link.clause.title}
+      </p>
+      <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+        {link.clauseVariant && <span>{link.clauseVariant.label}</span>}
+        {link.variantDeleted && (
+          <span className="text-warning-foreground flex items-center gap-1">
+            <AlertTriangleIcon className="size-3" />
+            {t("clauses.variantDeletedWithLabel", {
+              label: link.clauseVariantLabel ?? "",
+            })}
+          </span>
+        )}
+        {link.clauseVersion && (
+          <span>
+            {t("clauses.version", {
+              version: String(link.clauseVersion.version),
+            })}
+          </span>
+        )}
+        {link.isOutdated && (
+          <span className="text-warning-foreground flex items-center gap-1">
+            <AlertTriangleIcon className="size-3" />
+            {t("clauses.outdatedVersion")}
+          </span>
+        )}
+      </div>
+
+      {link.isOutdated && link.clauseId && link.clauseVersion && (
+        <OutdatedChanges
+          clauseId={link.clauseId}
+          versionId={link.clauseVersion.id}
+        />
+      )}
+
+      <div className="flex items-center gap-1">
+        {link.isOutdated && (
+          <SlotSyncButton
+            linkId={link.id}
+            onChanged={onChanged}
+            templateId={templateId}
+          />
+        )}
+        <UnlinkButton
+          linkId={link.id}
+          onChanged={onChanged}
+          templateId={templateId}
+        />
+      </div>
+    </div>
+  );
+};
+
+/** Syncs a single slot's link to its clause's latest version. The sync-all
+ *  variant lives in {@link StudioOverviewSummary}'s drift popover. */
+const SlotSyncButton = ({
+  linkId,
+  templateId,
+  onChanged,
+}: {
+  linkId: string;
+  templateId: string;
+  onChanged: () => void;
+}) => {
+  const t = useTranslations();
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .clauses({ linkId: toSafeId<"templateClause">(linkId) })
+      .sync.post();
+    setSyncing(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.syncFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    stellaToast.add({ type: "success", title: t("clauses.synced") });
+    onChanged();
+  };
+
+  return (
+    <Button
+      disabled={syncing}
+      onClick={() => {
+        void handleSync();
+      }}
+      size="sm"
+      variant="ghost"
+    >
+      <RefreshCwIcon className={cn("size-3.5", syncing && "animate-spin")} />
+      {t("clauses.syncVersion")}
+    </Button>
   );
 };
 

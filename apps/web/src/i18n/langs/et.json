@@ -608,6 +608,7 @@
     "linkedClauses": "Seotud klauslid",
     "loadFailed": "Klauslite laadimine ebaõnnestus",
     "loading": "Klauslite laadimine…",
+    "needUpdate": "{count, plural, one {# vajab värskendamist} other {# vajavad värskendamist}}",
     "noChanges": "Muudatusi pole",
     "noLinkedClauses": "Seotud klausleid pole",
     "noResults": "Klausleid pole veel",

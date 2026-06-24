@@ -608,6 +608,7 @@
     "linkedClauses": "Saistītās klauzulas",
     "loadFailed": "Neizdevās ielādēt klauzulas",
     "loading": "Ielādē klauzulas…",
+    "needUpdate": "{count, plural, zero {# jāatjaunina} one {# jāatjaunina} other {# jāatjaunina}}",
     "noChanges": "Nav izmaiņu",
     "noLinkedClauses": "Nav saistītu klauzulu",
     "noResults": "Klauzulu vēl nav",

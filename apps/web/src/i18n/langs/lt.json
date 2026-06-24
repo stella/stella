@@ -608,6 +608,7 @@
     "linkedClauses": "Susiesytos sąlygos",
     "loadFailed": "Nepavyko įkelti sąlygų",
     "loading": "Įkraunamos sąlygos…",
+    "needUpdate": "{count, plural, one {# reikia atnaujinti} few {# reikia atnaujinti} other {# reikia atnaujinti}}",
     "noChanges": "Nėra pakeitimų",
     "noLinkedClauses": "Nėra susietų sąlygų",
     "noResults": "Sąlygų dar nėra",

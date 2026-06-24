@@ -608,6 +608,7 @@
     "linkedClauses": "Clauses liées",
     "loadFailed": "Impossible de charger les clauses",
     "loading": "Chargement des clauses…",
+    "needUpdate": "{count, plural, one {# à mettre à jour} other {# à mettre à jour}}",
     "noChanges": "Aucune modification",
     "noLinkedClauses": "Aucune clause liée",
     "noResults": "Aucune clause",

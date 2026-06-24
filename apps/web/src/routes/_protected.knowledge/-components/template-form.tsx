@@ -279,6 +279,10 @@ type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
    *  pencil that jumps to that field's configuration. Absent in the real
    *  fill flow so its layout stays unchanged. */
   onEditField?: (path: string) => void;
+  /** Seed the form with previously-entered values (e.g. the Studio fill facet
+   *  restoring values after the author edited a field and came back). Merged
+   *  over the field defaults so newly added fields still get theirs. */
+  initialValues?: FormValues | undefined;
   /** Persist the filled DOCX as a matter document (server-side fill only). */
   saveTarget?: SaveTarget | undefined;
   /** Show the AI "prefill from documents" panel (server-side fill only);
@@ -1473,6 +1477,7 @@ export const TemplateForm = ({
   onEditField,
   saveTarget,
   prefill,
+  initialValues,
 }: TemplateFormProps) => {
   const t = useTranslations();
   // Formula fields are derived server-side at fill time, never user-entered:
@@ -1510,9 +1515,10 @@ export const TemplateForm = ({
       f.condition === undefined &&
       (f.count > 0 || f.inputType === "boolean" || referencedPaths.has(f.path)),
   );
-  const [values, setValues] = useState<FormValues>(() =>
-    buildInitialValues(fields),
-  );
+  const [values, setValues] = useState<FormValues>(() => ({
+    ...buildInitialValues(fields),
+    ...initialValues,
+  }));
   // Per-fill clause edits (AI tweaks made in the fill form), keyed by slot
   // patch key; sent as `clauseOverrides` and applied only to this fill.
   const [clauseOverrides, setClauseOverrides] = useState<

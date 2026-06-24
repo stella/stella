@@ -611,6 +611,7 @@ type Messages = {
     "linkedClauses": "Linked clauses";
     "loadFailed": "Failed to load clauses";
     "loading": "Loading clauses…";
+    "needUpdate": "{count, plural, one {# needs update} other {# need update}}";
     "noChanges": "No changes";
     "noLinkedClauses": "No linked clauses";
     "noResults": "No clauses yet";

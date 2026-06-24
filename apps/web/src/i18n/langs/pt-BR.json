@@ -608,6 +608,7 @@
     "linkedClauses": "Cláusulas vinculadas",
     "loadFailed": "Falha ao carregar cláusulas",
     "loading": "Carregando cláusulas…",
+    "needUpdate": "{count, plural, one {# precisa de atualização} other {# precisam de atualização}}",
     "noChanges": "Sem alterações",
     "noLinkedClauses": "Nenhuma cláusula vinculada",
     "noResults": "Ainda não há cláusulas",

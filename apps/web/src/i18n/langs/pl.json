@@ -608,6 +608,7 @@
     "linkedClauses": "Powiązane klauzule",
     "loadFailed": "Nie udało się załadować klauzul",
     "loading": "Ładowanie klauzul…",
+    "needUpdate": "{count, plural, one {# wymaga aktualizacji} few {# wymagają aktualizacji} many {# wymaga aktualizacji} other {# wymaga aktualizacji}}",
     "noChanges": "Brak zmian",
     "noLinkedClauses": "Brak powiązanych klauzul",
     "noResults": "Brak klauzul",

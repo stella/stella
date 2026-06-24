@@ -151,6 +151,11 @@ type TemplateStudioState = {
   selected: DirectiveRange | null;
   /** Unsaved manifest or document edits since the last load/save. */
   isDirty: boolean;
+  /** Fill-facet ("Vyplnit") values, kept here so they survive a facet switch
+   *  (e.g. editing a field and returning) instead of remounting away. Cleared
+   *  when the session is (re)initialised or reset for another template. */
+  fillValues: Record<string, unknown> | null;
+  setFillValues: (values: Record<string, unknown> | null) => void;
   actions: StudioActions | null;
   ui: StudioUiState;
   setActions: (actions: StudioActions | null) => void;
@@ -180,6 +185,8 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
   setOutline: (outline) => set({ outline }),
   selected: null,
   isDirty: false,
+  fillValues: null,
+  setFillValues: (fillValues) => set({ fillValues }),
   actions: null,
   ui: DEFAULT_UI,
   setActions: (actions) => set({ actions }),
@@ -190,6 +197,7 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
       fields: session.fields,
       selected: null,
       isDirty: false,
+      fillValues: null,
       pendingMirrorRequests: [],
     }),
   reset: (templateId) =>
@@ -203,6 +211,7 @@ export const useTemplateStudioStore = create<TemplateStudioState>((set) => ({
             fields: [],
             selected: null,
             isDirty: false,
+            fillValues: null,
             actions: null,
             ui: DEFAULT_UI,
             pendingMirrorRequests: [],

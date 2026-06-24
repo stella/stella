@@ -608,6 +608,7 @@
     "linkedClauses": "Prepojené ustanovenia",
     "loadFailed": "Načítanie ustanovení sa nepodarilo",
     "loading": "Načítavam ustanovenia…",
+    "needUpdate": "{count, plural, one {# vyžaduje aktualizáciu} few {# vyžadujú aktualizáciu} many {# vyžaduje aktualizáciu} other {# vyžaduje aktualizáciu}}",
     "noChanges": "Žiadne zmeny",
     "noLinkedClauses": "Žiadne prepojené ustanovenia",
     "noResults": "Zatiaľ žiadne ustanovenia",
