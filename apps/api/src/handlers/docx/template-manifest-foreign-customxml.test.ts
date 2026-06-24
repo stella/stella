@@ -177,4 +177,33 @@ describe("writeManifest with a foreign custom XML slot", () => {
       FOREIGN_ITEM1,
     );
   });
+
+  // A producer may serialize the Content_Types override with single quotes.
+  // stripManifest must still remove it; otherwise it deletes the props part
+  // but leaves a dangling override pointing at a now-missing part.
+  test("stripManifest removes a single-quoted Content_Types override", async () => {
+    const base = await createDocxWithForeignCustomXml();
+    const written = await writeManifest(base, sampleManifest); // → item2
+
+    // Rewrite our override to single quotes, as a single-quote producer would.
+    const inZip = await JSZip.loadAsync(written);
+    const ct = await inZip.file("[Content_Types].xml")!.async("string");
+    inZip.file(
+      "[Content_Types].xml",
+      ct.replace(
+        /<Override PartName="\/customXml\/itemProps2\.xml"(?<rest>[^>]*)\/>/u,
+        "<Override PartName='/customXml/itemProps2.xml'$<rest>/>",
+      ),
+    );
+    const singleQuoted = Buffer.from(
+      await inZip.generateAsync({ type: "nodebuffer" }),
+    );
+
+    const stripped = await stripManifest(singleQuoted);
+    const out = await JSZip.loadAsync(stripped);
+    expect(out.file("customXml/itemProps2.xml")).toBeNull();
+    const contentTypes = await out.file("[Content_Types].xml")?.async("string");
+    // No dangling override to the deleted part remains.
+    expect(contentTypes).not.toContain("itemProps2.xml");
+  });
 });

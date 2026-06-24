@@ -761,12 +761,14 @@ export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
   const ctEntry = zip.file(CONTENT_TYPES_PATH);
   if (ctEntry) {
     let ctXml = await ctEntry.async("string");
-    // Remove the Override for our props part. Fully escape the path before
-    // embedding it in the pattern so every regex meta-character (including
-    // `\`) is matched literally.
+    // Remove the Override for our props part. Fully escape the path so every
+    // regex meta-character (including `\`) is matched literally, and tolerate
+    // either quote style to mirror the quote-tolerant check on the write side
+    // (otherwise a single-quoted override would be skipped on write yet left
+    // dangling here, pointing at a part we just deleted).
     ctXml = ctXml.replace(
       new RegExp(
-        `<Override[^>]*PartName="/${escapeRegExp(propsPath)}"[^>]*/>`,
+        `<Override[^>]*PartName=["']/${escapeRegExp(propsPath)}["'][^>]*/>`,
         "u",
       ),
       "",
