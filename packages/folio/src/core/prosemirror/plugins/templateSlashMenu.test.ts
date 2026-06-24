@@ -15,12 +15,17 @@ import {
   templateSlashMenuKey,
   templateSlashMenuPlugin,
 } from "./templateSlashMenu";
+import type { TemplateSlashMenuKeyAction } from "./templateSlashMenu";
 
 /** A single-paragraph doc with `text`, caret parked at `caret` (a parent
  *  offset, converted to the absolute PM position by the leading "+1"). */
 const stateWith = (text: string, caret: number): PMEditorState => {
   const doc = schema.node("doc", null, [
-    schema.node("paragraph", null, text === "" ? null : [schema.text(text)]),
+    schema.node(
+      "paragraph",
+      null,
+      text === "" ? undefined : [schema.text(text)],
+    ),
   ]);
   return EditorState.create({
     doc,
@@ -204,7 +209,11 @@ const makePluginHarness = (
     ? templateSlashMenuPlugin({ onKeyAction })
     : templateSlashMenuPlugin();
   const doc = schema.node("doc", null, [
-    schema.node("paragraph", null, text === "" ? null : [schema.text(text)]),
+    schema.node(
+      "paragraph",
+      null,
+      text === "" ? undefined : [schema.text(text)],
+    ),
   ]);
   const view: FakeView = {
     state: EditorState.create({
@@ -216,7 +225,7 @@ const makePluginHarness = (
       view.state = view.state.apply(tr);
     },
   };
-  const props = plugin.props as {
+  const props = plugin.props as unknown as {
     handleKeyDown: (view: FakeView, event: KeyEventLike) => boolean;
     handleTextInput: (
       view: FakeView,
