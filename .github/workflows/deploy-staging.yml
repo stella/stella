@@ -191,7 +191,6 @@ jobs:
                 fi
 
                 echo "::error::Infra run completed with conclusion '${conclusion}': ${url}" >&2
-                gh run view "$run_id" --repo "$INFRA_REPO" --log-failed || true
                 return 1
               fi
 
