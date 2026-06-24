@@ -70,7 +70,7 @@ const sampleManifest: TemplateManifest = {
     {
       path: "description",
       label: "Description",
-      inputType: "textarea",
+      inputType: "text",
       validation: {
         minLength: 10,
         maxLength: 500,

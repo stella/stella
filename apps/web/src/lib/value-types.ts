@@ -17,7 +17,6 @@ import {
   HashIcon,
   LandmarkIcon,
   TagsIcon,
-  TextIcon,
   ToggleLeftIcon,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -26,7 +25,6 @@ import type { TranslationKey } from "@/i18n/types";
 
 export type ValueTypeKind =
   | "text"
-  | "textarea"
   | "number"
   | "boolean"
   | "date"
@@ -45,7 +43,6 @@ export type ValueTypeMeta = {
 // template-only ones.
 export const VALUE_TYPE_META = {
   text: { icon: AlignLeftIcon, labelKey: "workspaces.properties.chipText" },
-  textarea: { icon: TextIcon, labelKey: "templates.inputTypes.textarea" },
   number: { icon: HashIcon, labelKey: "workspaces.properties.chipNumber" },
   boolean: { icon: ToggleLeftIcon, labelKey: "templates.inputTypes.boolean" },
   date: { icon: CalendarIcon, labelKey: "common.date" },
@@ -63,14 +60,7 @@ export const isValueTypeKind = (value: string): value is ValueTypeKind =>
  *  UI-level type (a registry-lookup text field), not a manifest input type;
  *  see FIELD_TYPE_CHOICES in the template wizard. */
 export const inputTypeValueKind = (
-  inputType:
-    | "text"
-    | "textarea"
-    | "number"
-    | "boolean"
-    | "date"
-    | "select"
-    | "company",
+  inputType: "text" | "number" | "boolean" | "date" | "select" | "company",
 ): ValueTypeKind => inputType;
 
 /** Matter-property content types → value kinds. */

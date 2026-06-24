@@ -33,7 +33,7 @@ export const fieldSuggestionsSchema = v.strictObject({
       literalText: v.string(),
       fieldPath: v.string(),
       inputType: v.nullable(
-        v.picklist(["text", "textarea", "number", "boolean", "date", "select"]),
+        v.picklist(["text", "number", "boolean", "date", "select"]),
       ),
       label: v.nullable(v.string()),
       hint: v.nullable(v.string()),
@@ -53,7 +53,7 @@ const FIELD_SUGGESTION_SPEC = `Identify the values in this document that should 
 For each, return:
 - literalText: the EXACT text in the document to replace, copied verbatim
 - fieldPath: a dot-separated name, e.g. company.name, company.krs, signatory.name, signatory.role, signing_date, scope. Only letters, digits, underscores, dashes and dots — for list positions use dots (attorneys.0.name), NEVER brackets
-- inputType: one of text, textarea, number, boolean, date, select
+- inputType: one of text, number, boolean, date, select
 - label: a short user-facing question or name for the fill form, in the document's language (e.g. "Company name")
 - hint: a short hint for the person filling the field — the expected format or where to find the value (e.g. "10-digit KRS number from the company register"), in the document's language, under 200 characters. Use null when the label is self-explanatory
 - exampleValue: a realistic example of the value, copied or derived from the document

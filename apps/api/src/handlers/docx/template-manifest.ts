@@ -64,7 +64,6 @@ const CURRENT_VERSION = 1;
 
 const INPUT_TYPES: ReadonlySet<string> = new Set([
   "text",
-  "textarea",
   "number",
   "boolean",
   "date",
@@ -907,7 +906,6 @@ const inputTypeToFieldKind = (
     case "date":
     case "select":
     case "text":
-    case "textarea":
       return "string";
     default:
       return "string";

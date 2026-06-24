@@ -64,6 +64,7 @@ import type {
 } from "@stll/folio";
 import { displayLanguageName } from "@stll/locales";
 import {
+  evaluateNumericExpression,
   isFieldPath,
   renderDeterministicFieldValue,
   serializeCondition,
@@ -139,7 +140,6 @@ import {
   toRuleFields,
 } from "@/routes/_protected.knowledge/-components/condition-builder";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
-import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
 import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention";
 import {
@@ -2773,12 +2773,11 @@ const outlineFieldPaths = (nodes: OutlineNode[]): Set<string> => {
   return paths;
 };
 
-type StudioFacet = "fields" | "guidance" | "clauses" | "history" | "fill";
+type StudioFacet = "fields" | "guidance" | "history" | "fill";
 
 const STUDIO_FACETS: readonly StudioFacet[] = [
   "fields",
   "guidance",
-  "clauses",
   "history",
   "fill",
 ];
@@ -2853,7 +2852,6 @@ function TemplateStudioInspectorView({
   const facetLabels: Record<StudioFacet, string> = {
     fields: t("templates.fields"),
     guidance: t("templates.whenToUse"),
-    clauses: t("common.clauses"),
     history: t("common.history"),
     fill: t("templates.testFill"),
   };
@@ -2934,11 +2932,6 @@ function TemplateStudioInspectorView({
       {ready && facet === "guidance" && (
         <div className="min-h-0 flex-1 overflow-auto">
           <TemplateGuidanceFacet templateId={templateId} />
-        </div>
-      )}
-      {ready && facet === "clauses" && (
-        <div className="min-h-0 flex-1 overflow-auto">
-          <TemplateClausesTab templateId={templateId} />
         </div>
       )}
       {ready && facet === "history" && (
@@ -3449,7 +3442,11 @@ const StudioInsertRow = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const fields = useTemplateStudioStore((s) => s.fields);
+  const selected = useTemplateStudioStore((s) => s.selected);
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
+  // When a field is open in detail view, the primary action becomes inserting
+  // that field's marker at the caret instead of creating a new field.
+  const openFieldPath = selected?.kind === "placeholder" ? selected.expr : null;
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -3467,6 +3464,10 @@ const StudioInsertRow = () => {
   // an `{{#each}}` body. `isCaretInLoop` reads the live caret imperatively, so
   // recompute it each time the menu opens rather than reactively.
   const [caretInLoop, setCaretInLoop] = useState(false);
+  // Clause linking lives inline here (the standalone clauses tab was removed):
+  // link a clause, then drop its slot at the caret from the same menu.
+  const [linkClauseOpen, setLinkClauseOpen] = useState(false);
+  const queryClient = useQueryClient();
   const recipes =
     recipesData && "recipes" in recipesData ? recipesData.recipes : [];
   const linkedClauses =
@@ -3498,15 +3499,27 @@ const StudioInsertRow = () => {
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <Button
-        className="flex-1 justify-start"
-        onClick={actions.insertField}
-        size="sm"
-        variant="ghost"
-      >
-        <PlusIcon />
-        {t("templates.studio.newField")}
-      </Button>
+      {openFieldPath === null ? (
+        <Button
+          className="flex-1 justify-start"
+          onClick={actions.insertField}
+          size="sm"
+          variant="ghost"
+        >
+          <PlusIcon />
+          {t("templates.studio.newField")}
+        </Button>
+      ) : (
+        <Button
+          className="flex-1 justify-start"
+          onClick={() => actions.insertExistingField(openFieldPath)}
+          size="sm"
+          variant="ghost"
+        >
+          <BracesIcon />
+          {t("templates.studio.insertIntoTemplate")}
+        </Button>
+      )}
       <Menu
         onOpenChange={(open) => {
           if (open) {
@@ -3605,10 +3618,38 @@ const StudioInsertRow = () => {
               <MenuItem onClick={actions.insertClause}>
                 {t("templates.studio.emptyClauseSlot")}
               </MenuItem>
+              {sessionTemplateId !== null && (
+                <>
+                  <MenuSeparator />
+                  <MenuItem onClick={() => setLinkClauseOpen(true)}>
+                    <PlusIcon />
+                    {t("clauses.linkClause")}
+                  </MenuItem>
+                </>
+              )}
             </MenuSubPopup>
           </MenuSub>
         </MenuPopup>
       </Menu>
+      {sessionTemplateId !== null && (
+        <LinkClauseDialog
+          onLinked={() => {
+            queryClient
+              .invalidateQueries({
+                queryKey: knowledgeKeys.templates.clauses(
+                  activeOrganizationId,
+                  sessionTemplateId,
+                ),
+              })
+              .catch(() => {
+                /* fire-and-forget */
+              });
+          }}
+          onOpenChange={setLinkClauseOpen}
+          open={linkClauseOpen}
+          templateId={sessionTemplateId}
+        />
+      )}
     </div>
   );
 };
@@ -4312,16 +4353,29 @@ const ConditionFieldEditor = ({
         </div>
       ) : null}
       {sourceKind === "ai" ? (
-        <AIPromptInput
-          mentionExtension={fieldMention}
-          onChange={(value) =>
-            upsertField(field.path, { aiPrompt: value, condition: undefined })
-          }
-          placeholder={t("templates.studio.conditionAiPlaceholder")}
-          value={field.aiPrompt ?? ""}
-          valueFormat="text"
-          variant="minimal"
-        />
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-sm">
+            {t("templates.studio.conditionAiInstructionsLabel")}
+          </Label>
+          <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 transition-shadow focus-within:ring-[3px]">
+            <AIPromptInput
+              mentionExtension={fieldMention}
+              onChange={(value) =>
+                upsertField(field.path, {
+                  aiPrompt: value,
+                  condition: undefined,
+                })
+              }
+              placeholder={t("templates.studio.conditionAiPlaceholder")}
+              value={field.aiPrompt ?? ""}
+              valueFormat="text"
+              variant="minimal"
+            />
+          </div>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {t("templates.studio.conditionAiInstructionsHelp")}
+          </p>
+        </div>
       ) : null}
     </div>
   );
@@ -5211,9 +5265,31 @@ type FormulaEditorProps = {
   onChange: (formula: string) => void;
 };
 
-/** Formula value-source editor: the expression input plus clickable chips of
- *  the other fields you can reference, and a live warning when the expression
- *  names something that is not a field. */
+// Math tokens the toolbar can insert. The glyph is what the author sees; the
+// token is the canonical operator the evaluator understands (so the stored
+// formula stays in `* / -` form, never the human × ÷ − glyphs).
+const FORMULA_OPERATOR_TOKENS: readonly { glyph: string; token: string }[] = [
+  { glyph: "+", token: "+" },
+  { glyph: "−", token: "-" },
+  { glyph: "×", token: "*" },
+  { glyph: "÷", token: "/" },
+  { glyph: "%", token: "%" },
+  { glyph: "(", token: "(" },
+  { glyph: ")", token: ")" },
+];
+const FORMULA_FUNCTION_TOKENS: readonly string[] = [
+  "min(",
+  "max(",
+  "round(",
+  "abs(",
+  "floor(",
+  "ceil(",
+];
+
+/** Formula value-source editor: the expression input, clickable chips of the
+ *  number fields you can reference, a math-symbol toolbar, a live worked
+ *  example with made-up values, a read-only chip preview of the expression,
+ *  and warnings for names that are not fields or not numbers. */
 const FormulaEditor = ({
   currentPath,
   fields,
@@ -5221,16 +5297,25 @@ const FormulaEditor = ({
   onChange,
 }: FormulaEditorProps) => {
   const t = useTranslations();
+  const format = useFormatter();
+  const inputRef = useRef<HTMLInputElement>(null);
   const currentIndex = fields.findIndex((f) => f.path === currentPath);
-  // Suggest the other fields, minus formula fields defined at/after this one:
-  // formulas resolve in manifest order, so a forward reference would leave this
-  // field unfilled even though the name is "known".
-  const others = fields.filter(
+  // Suggest the other NUMBER fields, minus formula fields defined at/after this
+  // one: formulas resolve in manifest order, so a forward reference would leave
+  // this field unfilled even though the name is "known". The evaluator is
+  // numeric-only, so non-number fields can never participate.
+  const numberFields = fields.filter(
     (f, index) =>
       f.path !== currentPath &&
+      f.inputType === "number" &&
       !(f.formula !== undefined && index >= currentIndex),
   );
+  const hasNonNumberFields = fields.some(
+    (f) => f.path !== currentPath && f.inputType !== "number",
+  );
+  const fieldsByPath = new Map(fields.map((f) => [f.path, f]));
   const knownPaths = new Set(fields.map((f) => f.path));
+  const numberPaths = new Set(numberFields.map((f) => f.path));
   const referenced = [
     ...new Set(
       [...value.matchAll(FORMULA_IDENT_RE)]
@@ -5239,28 +5324,133 @@ const FormulaEditor = ({
     ),
   ];
   const unknown = referenced.filter((path) => !knownPaths.has(path));
+  // Known fields that are referenced but are not numbers: they parse as an
+  // identifier the evaluator will coerce to NaN, so the whole formula fails.
+  const nonNumber = referenced.filter(
+    (path) => knownPaths.has(path) && !numberPaths.has(path),
+  );
+
+  const insertAtCaret = (token: string) => {
+    const input = inputRef.current;
+    // Append when the input is not focused/measurable; otherwise splice the
+    // token at the current selection so the caret position is respected.
+    if (input === null) {
+      onChange(`${value}${token}`);
+      return;
+    }
+    const start = input.selectionStart ?? value.length;
+    const end = input.selectionEnd ?? value.length;
+    onChange(`${value.slice(0, start)}${token}${value.slice(end)}`);
+  };
 
   const appendField = (path: string) => {
-    // No separator right after an opening operator/paren or on an empty
-    // expression; otherwise a space so adjacent names do not merge.
-    const needsSpace = value !== "" && !/[\s(+\-*/%,]$/u.test(value);
-    onChange(`${value}${needsSpace ? " " : ""}${path}`);
+    const input = inputRef.current;
+    if (input === null) {
+      // No separator right after an opening operator/paren or on an empty
+      // expression; otherwise a space so adjacent names do not merge.
+      const needsSpace = value !== "" && !/[\s(+\-*/%,]$/u.test(value);
+      onChange(`${value}${needsSpace ? " " : ""}${path}`);
+      return;
+    }
+    const start = input.selectionStart ?? value.length;
+    const end = input.selectionEnd ?? value.length;
+    const before = value.slice(0, start);
+    const needsSpace = before !== "" && !/[\s(+\-*/%,]$/u.test(before);
+    onChange(`${before}${needsSpace ? " " : ""}${path}${value.slice(end)}`);
   };
+
+  // Accept human multiplication/division glyphs as shorthand. `×`/`÷` are
+  // unambiguous (never part of an identifier), so map them directly. A bare
+  // `x` only becomes `*` when it sits between operand-ish characters (space,
+  // digit, closing paren on the left; space, digit, opening paren on the
+  // right) — single-char bounds keep this linear (no backtracking) and never
+  // rewrite the `x` inside an identifier like `taxRate` or `maxFee`.
+  const handleInputChange = (raw: string) => {
+    const canonical = raw
+      .replace(/×/gu, "*")
+      .replace(/÷/gu, "/")
+      .replace(/(?<lead>[\s\d)])x(?=[\s\d(])/gu, "$<lead>*");
+    onChange(canonical);
+  };
+
+  // Worked example: assign each referenced number field a distinct made-up
+  // integer (100, 200, 300…) keyed by full path, then evaluate the expression
+  // against that flat data object. The evaluator resolves exact dotted keys.
+  const exampleFields = referenced
+    .filter((path) => numberPaths.has(path))
+    .map((path, index) => ({ path, value: (index + 1) * 100 }));
+  const exampleData: Record<string, number> = {};
+  for (const entry of exampleFields) {
+    exampleData[entry.path] = entry.value;
+  }
+  const exampleResult =
+    value.trim() === ""
+      ? undefined
+      : evaluateNumericExpression(value, exampleData);
+  const finiteExampleResult =
+    exampleResult !== undefined && Number.isFinite(exampleResult)
+      ? exampleResult
+      : undefined;
+
+  // Light tokenization for the read-only chip strip: identifier spans become
+  // chips, everything between them renders as muted inline mono text.
+  const previewTokens: { text: string; isField: boolean }[] = [];
+  let cursor = 0;
+  for (const match of value.matchAll(FORMULA_IDENT_RE)) {
+    const id = match[0];
+    const at = match.index ?? cursor;
+    if (at > cursor) {
+      previewTokens.push({ text: value.slice(cursor, at), isField: false });
+    }
+    previewTokens.push({ text: id, isField: knownPaths.has(id) });
+    cursor = at + id.length;
+  }
+  if (cursor < value.length) {
+    previewTokens.push({ text: value.slice(cursor), isField: false });
+  }
 
   return (
     <>
       <Input
         className="h-8 font-mono text-xs"
         dir="ltr"
-        onChange={(e) => onChange(e.target.value)}
+        onChange={(e) => handleInputChange(e.target.value)}
         placeholder={t("templates.fieldFormulaExpression")}
+        ref={inputRef}
         value={value}
       />
-      {others.length > 0 && (
-        <div className="flex flex-wrap gap-1">
-          {others.map((f) => (
+      <div className="flex flex-wrap gap-1">
+        {FORMULA_OPERATOR_TOKENS.map((op) => (
+          <Button
+            className="shrink-0 font-mono"
+            key={op.token}
+            onClick={() => insertAtCaret(op.token)}
+            size="xs"
+            type="button"
+            variant="outline"
+          >
+            {op.glyph}
+          </Button>
+        ))}
+        <span className="w-1 shrink-0" />
+        {FORMULA_FUNCTION_TOKENS.map((fn) => (
+          <Button
+            className="shrink-0 font-mono"
+            key={fn}
+            onClick={() => insertAtCaret(fn)}
+            size="xs"
+            type="button"
+            variant="outline"
+          >
+            {fn}
+          </Button>
+        ))}
+      </div>
+      {numberFields.length > 0 && (
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          {numberFields.map((f) => (
             <Button
-              className="font-mono"
+              className="shrink-0 font-mono"
               key={f.path}
               onClick={() => appendField(f.path)}
               size="xs"
@@ -5268,10 +5458,48 @@ const FormulaEditor = ({
               type="button"
               variant="outline"
             >
+              <HashIcon className="size-3 shrink-0" />
               {f.path}
             </Button>
           ))}
         </div>
+      )}
+      {hasNonNumberFields && (
+        <p className="text-muted-foreground text-xs">
+          {t("templates.studio.formulaNumbersOnlyHelp")}
+        </p>
+      )}
+      {previewTokens.length > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-0.5 font-mono text-xs"
+          dir="ltr"
+        >
+          {previewTokens.map((tok, index) => (
+            <FormulaPreviewToken
+              isField={tok.isField}
+              key={index}
+              text={tok.text}
+            />
+          ))}
+        </div>
+      )}
+      {finiteExampleResult !== undefined && (
+        <p className="text-muted-foreground text-xs">
+          {t("templates.studio.formulaExampleLabel")}:{" "}
+          {exampleFields.map((entry, index) => {
+            const label = fieldsByPath.get(entry.path)?.label || entry.path;
+            return (
+              <span key={entry.path}>
+                {index > 0 && ", "}
+                {label} = {format.number(entry.value)}
+              </span>
+            );
+          })}
+          {exampleFields.length > 0 && " → "}
+          <span className="text-foreground font-medium">
+            {format.number(finiteExampleResult)}
+          </span>
+        </p>
       )}
       {unknown.length > 0 && (
         <p className="text-warning-foreground text-xs">
@@ -5280,11 +5508,38 @@ const FormulaEditor = ({
           })}
         </p>
       )}
+      {nonNumber.length > 0 && (
+        <p className="text-warning-foreground text-xs">
+          {t("templates.studio.formulaNonNumberFields", {
+            fields: nonNumber.join(", "),
+          })}
+        </p>
+      )}
       <p className="text-muted-foreground text-xs leading-relaxed">
         {t("templates.fieldFormulaExpressionHint")}
       </p>
     </>
   );
+};
+
+/** One token in the read-only formula preview strip: a known field path becomes
+ *  an accent chip; everything else (operators, numbers, function names) renders
+ *  as muted inline mono text. */
+const FormulaPreviewToken = ({
+  isField,
+  text,
+}: {
+  isField: boolean;
+  text: string;
+}) => {
+  if (isField) {
+    return (
+      <span className="bg-accent text-accent-foreground rounded px-1 py-0.5 font-mono text-xs">
+        {text}
+      </span>
+    );
+  }
+  return <span className="text-muted-foreground">{text}</span>;
 };
 
 /** Mini-icons marking what a field can do: registry lookup, AI involvement,
@@ -6077,7 +6332,6 @@ const useFitToWidth = () => {
 
 const INPUT_TYPE_VALUES = [
   "text",
-  "textarea",
   "number",
   "boolean",
   "date",

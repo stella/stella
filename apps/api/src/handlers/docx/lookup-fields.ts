@@ -18,8 +18,17 @@
  * into the document would be worse than an actionable error.
  */
 
+import { validateIco as validateAresIco } from "@stll/business-registries/ares";
+import { validateOrgnr } from "@stll/business-registries/brreg";
+import { validateCompanyNumber } from "@stll/business-registries/companies-house";
+import { validateCik } from "@stll/business-registries/edgar";
+import { validateTaxId } from "@stll/business-registries/gcis";
 import { validateKrsNumber } from "@stll/business-registries/krs";
-import { resolvePath } from "@stll/template-conditions";
+import { validateIco as validateOrsrIco } from "@stll/business-registries/orsr";
+import { validateBusinessId } from "@stll/business-registries/prh";
+import { hasCanonicalShape as hasRechercheEntreprisesShape } from "@stll/business-registries/recherche-entreprises";
+import { validateVatFormat } from "@stll/business-registries/vies";
+import { assertNever, resolvePath } from "@stll/template-conditions";
 
 import type {
   BusinessRegistryHit,
@@ -46,18 +55,37 @@ import type {
 
 // ── Registry-number plausibility ─────────────────────────
 
-/** Per-registry number validation, reusing the package validators (KRS is a
- *  pure shape check: 10 digits, no checksum). */
+/** Per-registry number validation, reusing the package validators. Each is a
+ *  cheap structural/checksum check on the submitted identifier; semantic
+ *  existence is settled by the lookup itself. */
 const LOOKUP_VALUE_VALIDATORS: Record<
   LookupRegistry,
   (input: string) => boolean
 > = {
+  ares: validateAresIco,
+  brreg: validateOrgnr,
+  "companies-house": validateCompanyNumber,
+  edgar: validateCik,
+  gcis: validateTaxId,
   krs: validateKrsNumber,
+  orsr: validateOrsrIco,
+  prh: validateBusinessId,
+  "recherche-entreprises": hasRechercheEntreprisesShape,
+  vies: validateVatFormat,
 };
 
 /** Human-readable registry names for error messages. */
 export const LOOKUP_REGISTRY_NAMES: Record<LookupRegistry, string> = {
+  ares: "ARES",
+  brreg: "BRREG",
+  "companies-house": "Companies House",
+  edgar: "SEC EDGAR",
+  gcis: "GCIS",
   krs: "KRS",
+  orsr: "ORSR",
+  prh: "PRH",
+  "recherche-entreprises": "RNE",
+  vies: "VIES",
 };
 
 /** True when the submitted value has the shape of the registry's canonical
@@ -115,9 +143,18 @@ export const renderLookupHit = (hit: BusinessRegistryHit): string => {
   return [hit.name, seat].filter((part) => part !== null).join(", ");
 };
 
+/** "court, section insert" court-file reference, or null when the registry
+ *  filed none. Shared by the ARES (insert) and ORSR (insertNumber) variants. */
+const formatCourtFile = (
+  parts: { court: string; section: string; insert: string } | null,
+): string | null =>
+  parts === null ? null : `${parts.court}, ${parts.section} ${parts.insert}`;
+
 /** The [token] names the config UI offers, mapped onto hit fields. The
- *  baseline tokens come from the cross-registry hit; the rest narrow on the
- *  per-registry details payload. */
+ *  baseline tokens come from the cross-registry hit (every registry); the
+ *  switch adds and overrides per-registry tokens from the typed `details`
+ *  payload. Exhaustive over the discriminated union so a new registry forces
+ *  a branch here. */
 const lookupTemplateTokens = (
   hit: BusinessRegistryHit,
 ): Record<string, string | null | undefined> => {
@@ -126,17 +163,98 @@ const lookupTemplateTokens = (
     "legal form": hit.legalForm,
     seat: hit.address?.city ?? null,
     address: hit.address?.textAddress ?? null,
+    "registry number": hit.id,
+    "postal code": hit.address?.postalCode ?? null,
+    country: hit.address?.country ?? null,
   };
   const details = hit.details;
-  if (details !== undefined && details.registry === "krs") {
-    const { entity } = details;
-    tokens["registry number"] = entity.krsNumber;
-    tokens["NIP"] = entity.identifiers.nip;
-    tokens["REGON"] = entity.identifiers.regon;
-    tokens["share capital"] =
-      entity.shareCapital === null
-        ? null
-        : `${entity.shareCapital.amount} ${entity.shareCapital.currency}`;
+  if (details === undefined) {
+    return tokens;
+  }
+  switch (details.registry) {
+    case "ares": {
+      const { company } = details;
+      tokens["share capital"] = company.shareCapital;
+      tokens["court file"] = formatCourtFile(company.courtFile);
+      tokens["registered on"] = company.dateRegistered;
+      tokens["acting clause"] = company.actingClause;
+      break;
+    }
+    case "orsr": {
+      const { company } = details;
+      tokens["share capital"] = company.shareCapital;
+      tokens["share capital paid"] = company.shareCapitalPaid;
+      tokens["court file"] = company.courtFile
+        ? formatCourtFile({
+            court: company.courtFile.court,
+            section: company.courtFile.section,
+            insert: company.courtFile.insertNumber,
+          })
+        : null;
+      tokens["registered on"] = company.establishedAt;
+      tokens["acting clause"] = company.actingClause;
+      break;
+    }
+    case "krs": {
+      const { entity } = details;
+      tokens["registry number"] = entity.krsNumber;
+      tokens["NIP"] = entity.identifiers.nip;
+      tokens["REGON"] = entity.identifiers.regon;
+      tokens["share capital"] =
+        entity.shareCapital === null
+          ? null
+          : `${entity.shareCapital.amount} ${entity.shareCapital.currency}`;
+      tokens["registered on"] = entity.registeredAt;
+      break;
+    }
+    case "companies-house": {
+      const { company } = details;
+      tokens["registry number"] = company.companyNumber;
+      tokens["registered on"] = company.dateOfCreation;
+      tokens["jurisdiction"] = company.jurisdiction;
+      break;
+    }
+    case "brreg": {
+      const { entity } = details;
+      tokens["registry number"] = entity.orgnr;
+      tokens["registered on"] = entity.registeredAt;
+      break;
+    }
+    case "prh": {
+      const { company } = details;
+      tokens["registry number"] = company.businessId;
+      tokens["registered on"] = company.registeredAt;
+      break;
+    }
+    case "recherche-entreprises": {
+      const { company } = details;
+      tokens["registry number"] = company.siren;
+      tokens["registered on"] = company.registeredAt;
+      break;
+    }
+    case "edgar": {
+      const { company } = details;
+      tokens["registry number"] = company.cik;
+      tokens["EIN"] = company.ein;
+      break;
+    }
+    case "gcis": {
+      const { company } = details;
+      tokens["registry number"] = company.taxId;
+      tokens["registered on"] = company.setupDate;
+      break;
+    }
+    case "vies": {
+      const { validation } = details;
+      tokens["VAT number"] =
+        `${validation.vatNumber.country}${validation.vatNumber.vat}`;
+      break;
+    }
+    default: {
+      // Exhaustive over `BusinessRegistryHitDetails`: a new registry adds a
+      // branch to the union and the compiler flags this `never` assignment.
+      return assertNever(details);
+    }
   }
   return tokens;
 };

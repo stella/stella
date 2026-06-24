@@ -12,6 +12,14 @@ import { useLocale, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import {
+  Combobox,
+  ComboboxEmpty,
+  ComboboxInput,
+  ComboboxItem,
+  ComboboxList,
+  ComboboxPopup,
+} from "@stll/ui/components/combobox";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
@@ -55,7 +63,6 @@ const REQUIRED_MARKER = "*";
 
 export const INPUT_TYPES = [
   "text",
-  "textarea",
   "number",
   "boolean",
   "date",
@@ -76,9 +83,10 @@ type InputType = (typeof INPUT_TYPES)[number];
  *   and the UI derives the "company" choice back from lookup presence, so the
  *   manifest schema and the fill engine stay unchanged.
  */
+// "textarea" is intentionally absent: authors pick a single "text" type that
+// fills as an auto-growing input handling short and long values alike.
 export const FIELD_TYPE_CHOICES = [
   "text",
-  "textarea",
   "number",
   "date",
   "select",
@@ -94,9 +102,22 @@ export const PART_INPUT_TYPES = ["text", "select"] as const;
 
 type PartInputType = (typeof PART_INPUT_TYPES)[number];
 
-/** Registries the lookup affordance offers; mirrors the manifest's
- *  supported set (only KRS for now). */
-const LOOKUP_REGISTRIES = ["krs"] as const;
+/** Registries the lookup affordance offers; mirrors the manifest's supported
+ *  set (`LOOKUP_REGISTRIES` in apps/api/src/handlers/docx/types.ts, itself the
+ *  full `BUSINESS_REGISTRY_SLUGS`). Eden exposes types only, so the slugs are
+ *  mirrored here — extend together with the API. */
+const LOOKUP_REGISTRIES = [
+  "ares",
+  "brreg",
+  "companies-house",
+  "edgar",
+  "gcis",
+  "krs",
+  "orsr",
+  "prh",
+  "recherche-entreprises",
+  "vies",
+] as const;
 
 type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
 
@@ -958,46 +979,147 @@ const OptionsFromFieldControl = ({
   );
 };
 
-/** Registries offered for the "Company ID" field type, rendered as a
- *  structured list so new registries slot in as one entry. Mirrors
- *  `LOOKUP_REGISTRIES` in apps/api/src/handlers/docx/types.ts (itself a
- *  subset of the API's `BUSINESS_REGISTRY_SLUGS`); Eden exposes types only,
- *  so the slugs are mirrored here — extend together with the API. Labels are
+/** One registry option for the "Company ID" field type. `country` is the
+ *  registry's jurisdiction (ISO 3166-1 alpha-2, or "EU" for the EU-wide VIES
+ *  pseudo-jurisdiction), used to order options jurisdiction-first. Labels are
  *  registry proper names, not translatable UI copy. */
-const LOOKUP_REGISTRY_OPTIONS = [
-  { slug: "krs", label: "Poland — KRS" },
+type LookupRegistryOption = {
+  slug: LookupRegistry;
+  label: string;
+  country: string;
+};
+
+/** Registries offered for the "Company ID" field type, one entry each. Mirrors
+ *  `LOOKUP_REGISTRIES` (the full `BUSINESS_REGISTRY_SLUGS`); Eden exposes types
+ *  only, so the slugs are mirrored here — extend together with the API. */
+const LOOKUP_REGISTRY_OPTIONS: readonly LookupRegistryOption[] = [
+  { slug: "ares", label: "Czechia — ARES", country: "CZ" },
+  { slug: "orsr", label: "Slovakia — ORSR", country: "SK" },
+  { slug: "krs", label: "Poland — KRS", country: "PL" },
+  {
+    slug: "companies-house",
+    label: "United Kingdom — Companies House",
+    country: "GB",
+  },
+  { slug: "brreg", label: "Norway — Brønnøysund (BRREG)", country: "NO" },
+  { slug: "prh", label: "Finland — PRH", country: "FI" },
+  { slug: "recherche-entreprises", label: "France — RNE", country: "FR" },
+  { slug: "edgar", label: "United States — SEC EDGAR", country: "US" },
+  { slug: "gcis", label: "Taiwan — GCIS", country: "TW" },
+  { slug: "vies", label: "European Union — VIES (VAT)", country: "EU" },
+];
+
+/** The app locale's region (ISO 3166-1 alpha-2), or null when the locale has
+ *  no resolvable region. `maximize()` adds the likely region for
+ *  language-only locales (e.g. "en" → "US", "cs" → "CZ"). */
+const localeRegion = (locale: string): string | null => {
+  const region = new Intl.Locale(locale).maximize().region;
+  return region ?? null;
+};
+
+/** Registry options ordered jurisdiction-first for the app locale: options
+ *  whose `country` matches the locale's region come first (in declared order),
+ *  then the rest (in declared order). */
+const orderedRegistryOptions = (
+  locale: string,
+): readonly LookupRegistryOption[] => {
+  const region = localeRegion(locale);
+  if (region === null) {
+    return LOOKUP_REGISTRY_OPTIONS;
+  }
+  const local = LOOKUP_REGISTRY_OPTIONS.filter(
+    (option) => option.country === region,
+  );
+  const rest = LOOKUP_REGISTRY_OPTIONS.filter(
+    (option) => option.country !== region,
+  );
+  return [...local, ...rest];
+};
+
+/** The registry preselected for a new "Company ID" field: the first
+ *  jurisdiction-first option for the app locale. The ordered list is a
+ *  permutation of the non-empty `LOOKUP_REGISTRY_OPTIONS`, so `.at(0)` always
+ *  resolves; the `?? "krs"` only satisfies the type checker. */
+const preferredRegistry = (locale: string): LookupRegistry =>
+  orderedRegistryOptions(locale).at(0)?.slug ?? "krs";
+
+/** The cross-registry baseline tokens every registry hit exposes, mapped onto
+ *  the backend's baseline token names (see `lookupTemplateTokens` in
+ *  apps/api/src/handlers/docx/lookup-fields.ts). */
+const REGISTRY_BASE_RETURN_FIELDS = [
+  "company name",
+  "legal form",
+  "seat",
+  "address",
+  "registry number",
+  "postal code",
+  "country",
 ] as const;
 
 /** Detail names a registry hit returns, offered as clickable [placeholder]
- *  chips for the AI format instruction. The names follow the canonical
- *  fields of the API's `BusinessRegistryHitDetails` entry for the registry
- *  (`KrsEntity` for "krs": name, legalForm, registeredSeat, address,
- *  krsNumber, NIP/REGON identifiers, shareCapital). */
+ *  chips for the AI format instruction. Each registry's set is the shared
+ *  baseline plus its per-registry extras; the names match the backend tokens
+ *  in `lookupTemplateTokens` character-for-character. */
 const REGISTRY_RETURN_FIELDS: Record<LookupRegistry, readonly string[]> = {
+  ares: [
+    ...REGISTRY_BASE_RETURN_FIELDS,
+    "share capital",
+    "court file",
+    "registered on",
+    "acting clause",
+  ],
+  orsr: [
+    ...REGISTRY_BASE_RETURN_FIELDS,
+    "share capital",
+    "share capital paid",
+    "court file",
+    "registered on",
+    "acting clause",
+  ],
   krs: [
-    "company name",
-    "legal form",
-    "seat",
-    "address",
-    "registry number",
+    ...REGISTRY_BASE_RETURN_FIELDS,
     "NIP",
     "REGON",
     "share capital",
+    "registered on",
   ],
+  "companies-house": [
+    ...REGISTRY_BASE_RETURN_FIELDS,
+    "registered on",
+    "jurisdiction",
+  ],
+  brreg: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
+  prh: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
+  "recherche-entreprises": [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
+  edgar: [...REGISTRY_BASE_RETURN_FIELDS, "EIN"],
+  gcis: [...REGISTRY_BASE_RETURN_FIELDS, "registered on"],
+  vies: [...REGISTRY_BASE_RETURN_FIELDS, "VAT number"],
+};
+
+/** Pre-seeded format per registry. KRS keeps the standard Polish company
+ *  recital; the other jurisdictions use a neutral "name, address" rendering
+ *  (no invented notarial recital text). The author can edit or clear it. */
+const GENERIC_DEFAULT_FORMAT = "[company name], [address]";
+
+const REGISTRY_DEFAULT_FORMAT: Record<LookupRegistry, string> = {
+  krs: "[company name] with its registered office at [address], entered in the Register of Entrepreneurs under KRS no. [registry number], kept by Krajowy Rejestr Sądowy, share capital of [share capital], Tax Identification Number (NIP) [NIP], Statistical Identification Number (REGON) [REGON]",
+  ares: GENERIC_DEFAULT_FORMAT,
+  orsr: GENERIC_DEFAULT_FORMAT,
+  "companies-house": GENERIC_DEFAULT_FORMAT,
+  brreg: GENERIC_DEFAULT_FORMAT,
+  prh: GENERIC_DEFAULT_FORMAT,
+  "recherche-entreprises": GENERIC_DEFAULT_FORMAT,
+  edgar: GENERIC_DEFAULT_FORMAT,
+  gcis: GENERIC_DEFAULT_FORMAT,
+  vies: GENERIC_DEFAULT_FORMAT,
 };
 
 /** Hover examples per return field, from a well-known public registry entry
  *  (CD PROJEKT S.A., KRS 0000006865 — public KRS data), so authors see what
- *  a token resolves to before writing it into the format. */
-/** Pre-seeded format per registry — the standard notarial company recital;
- *  the author can edit or clear it freely. */
-const REGISTRY_DEFAULT_FORMAT: Record<LookupRegistry, string> = {
-  krs: "[company name] with its registered office at [address], entered in the Register of Entrepreneurs under KRS no. [registry number], kept by Krajowy Rejestr Sądowy, share capital of [share capital], Tax Identification Number (NIP) [NIP], Statistical Identification Number (REGON) [REGON]",
-};
-
-const REGISTRY_FIELD_EXAMPLES: Record<
-  LookupRegistry,
-  Record<string, string>
+ *  a token resolves to before writing it into the format. Only registries with
+ *  curated examples appear; tokens without an example render without a tooltip. */
+const REGISTRY_FIELD_EXAMPLES: Partial<
+  Record<LookupRegistry, Record<string, string>>
 > = {
   krs: {
     "company name": "CD PROJEKT S.A.",
@@ -1052,8 +1174,12 @@ const CompanyLookupConfig = ({
   onUpdate: (patch: Partial<EditableField>) => void;
 }) => {
   const t = useTranslations();
-  const registry = field.lookup?.registry ?? "krs";
+  const locale = useLocale();
+  const registry = field.lookup?.registry ?? preferredRegistry(locale);
   const formats = field.lookup?.formats ?? [];
+  const options = orderedRegistryOptions(locale);
+  const selectedOption =
+    options.find((option) => option.slug === registry) ?? null;
 
   const setLookup = (patch: Partial<EditableLookup>) =>
     onUpdate({ lookup: { registry, formats, ...patch } });
@@ -1069,30 +1195,59 @@ const CompanyLookupConfig = ({
   const removeFormat = (index: number) =>
     setLookup({ formats: formats.filter((_, i) => i !== index) });
 
+  // On a registry switch, reseed the first (default) format row with the new
+  // registry's recital ONLY when the author has not written their own: the
+  // first row is empty, or it still equals the previous registry's default.
+  // Otherwise the author's edits are left untouched.
+  const changeRegistry = (next: LookupRegistry) => {
+    if (next === registry) {
+      return;
+    }
+    const first = formats.at(0);
+    const firstTemplate = first?.template.trim() ?? "";
+    const isUntouched =
+      firstTemplate === "" ||
+      firstTemplate === REGISTRY_DEFAULT_FORMAT[registry];
+    if (first === undefined || !isUntouched) {
+      setLookup({ registry: next });
+      return;
+    }
+    const reseeded = [
+      { ...first, template: REGISTRY_DEFAULT_FORMAT[next] },
+      ...formats.slice(1),
+    ];
+    setLookup({ registry: next, formats: reseeded });
+  };
+
   return (
     <>
       <Field>
         <FieldLabel>{t("templates.fieldLookupRegistry")}</FieldLabel>
-        <Select
-          onValueChange={(val) => {
-            const option = LOOKUP_REGISTRY_OPTIONS.find((o) => o.slug === val);
+        <Combobox<LookupRegistryOption>
+          autoHighlight
+          items={options}
+          itemToStringLabel={(option) => option.label}
+          onValueChange={(option) => {
             if (option) {
-              setLookup({ registry: option.slug });
+              changeRegistry(option.slug);
             }
           }}
-          value={registry}
+          value={selectedOption}
         >
-          <SelectTrigger>
-            <SelectValue />
-          </SelectTrigger>
-          <SelectPopup>
-            {LOOKUP_REGISTRY_OPTIONS.map((option) => (
-              <SelectItem key={option.slug} value={option.slug}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectPopup>
-        </Select>
+          <ComboboxInput
+            placeholder={t("templates.fieldLookupRegistrySearch")}
+          />
+          <ComboboxPopup>
+            <ComboboxList>
+              {(option: LookupRegistryOption) => (
+                <ComboboxItem key={option.slug} value={option}>
+                  {option.label}
+                </ComboboxItem>
+              )}
+            </ComboboxList>
+            <ComboboxEmpty>{t("common.noResults")}</ComboboxEmpty>
+          </ComboboxPopup>
+        </Combobox>
       </Field>
 
       <Field>
@@ -1149,22 +1304,41 @@ const LookupTokenChips = ({
         {t("templates.fieldLookupInsertDetail")}
       </span>
       {REGISTRY_RETURN_FIELDS[registry].map((name) => (
-        <Tooltip
-          content={REGISTRY_FIELD_EXAMPLES[registry][name]}
+        <LookupTokenChip
+          example={REGISTRY_FIELD_EXAMPLES[registry]?.[name]}
           key={name}
-          render={
-            <button
-              className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
-              onClick={() => onInsert(name)}
-              type="button"
-            >
-              [{name}]
-            </button>
-          }
+          name={name}
+          onInsert={onInsert}
         />
       ))}
     </div>
   );
+};
+
+/** One token chip: a tooltip-wrapped button when the registry has a curated
+ *  example for the token, the bare button otherwise. */
+const LookupTokenChip = ({
+  name,
+  example,
+  onInsert,
+}: {
+  name: string;
+  example: string | undefined;
+  onInsert: (name: string) => void;
+}) => {
+  const button = (
+    <button
+      className="bg-accent text-accent-foreground hover:bg-accent/80 cursor-pointer rounded-md px-1.5 py-0.5 text-xs font-medium"
+      onClick={() => onInsert(name)}
+      type="button"
+    >
+      [{name}]
+    </button>
+  );
+  if (example === undefined) {
+    return button;
+  }
+  return <Tooltip content={example} render={button} />;
 };
 
 /** One output-format row: a key input, the template Textarea with the
@@ -1527,14 +1701,15 @@ export const FieldConfigEditor = ({
               if (val === "company") {
                 // "company" maps to inputType "text" + lookup (see
                 // FIELD_TYPE_CHOICES); keep an existing lookup config.
+                const seedRegistry = preferredRegistry(appLocale);
                 onUpdate({
                   inputType: "text",
                   lookup: field.lookup ?? {
-                    registry: "krs",
+                    registry: seedRegistry,
                     formats: [
                       {
                         key: LOOKUP_DEFAULT_FORMAT_KEY,
-                        template: REGISTRY_DEFAULT_FORMAT.krs,
+                        template: REGISTRY_DEFAULT_FORMAT[seedRegistry],
                       },
                     ],
                   },

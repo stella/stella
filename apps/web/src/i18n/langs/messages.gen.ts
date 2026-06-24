@@ -2128,6 +2128,7 @@ type Messages = {
     "fieldLookupFormatsHint": "One company, several renderings of the same lookup. The first format is the default for the bare marker; each later format adds a marker (the field path, a dot, then the name) the document can use alongside it.";
     "fieldLookupInsertDetail": "Insert a company detail";
     "fieldLookupRegistry": "Company register";
+    "fieldLookupRegistrySearch": "Search registries…";
     "fieldMultipleParts": "Multiple parts";
     "fieldOptions": "Options";
     "fieldOptionsFrom": "Options from field";
@@ -2155,8 +2156,8 @@ type Messages = {
     "loadFailed": "Failed to load templates";
     "lookupFieldHint": "Enter a KRS number; the company details are filled from the register.";
     "moveToCategory": "Move to category";
-    "moveToMatter": "Move to matter";
-    "moveToMatterAnyway": "Move anyway";
+    "moveToMatter": "Save to matter";
+    "moveToMatterAnyway": "Save anyway";
     "newFromTemplate": "New document from template";
     "newFromTemplateFillHint": "Fill in the fields; the document is created in this matter.";
     "newTemplate": "New template";
@@ -2211,6 +2212,8 @@ type Messages = {
       "conceptField": "A value you fill in at use time.";
       "conceptLoop": "Repeats this text for each item in a list.";
       "conditionAdvanced": "Advanced";
+      "conditionAiInstructionsHelp": "Tell the AI how to decide whether this block applies. It reads the document text and the other field values.";
+      "conditionAiInstructionsLabel": "Instructions for the AI";
       "conditionAiPlaceholder": "Describe when this is true, e.g. the contract is governed by Czech law";
       "conditionAskQuestion": "Ask a yes/no question";
       "conditionAskQuestionHelp": "The person filling the template answers Yes or No. This block appears when they answer Yes.";
@@ -2237,10 +2240,14 @@ type Messages = {
       "fillStale": "Unsaved changes — save to fill with the latest fields.";
       "filledByPerson": "Person";
       "formula": "Formula";
+      "formulaExampleLabel": "Example";
+      "formulaNonNumberFields": "Not a number: {fields}";
+      "formulaNumbersOnlyHelp": "Calculations use number fields only — dates and text can't be used.";
       "formulaUnknownFields": "Not a field: {fields}";
       "insert": "Insert";
       "insertAtCaret": "Insert at cursor";
       "insertFormatDefault": "Default";
+      "insertIntoTemplate": "Insert into template";
       "insertItemNumber": "Item number";
       "insertItemTotal": "Total items";
       "insertOutput": "Insert in document";
