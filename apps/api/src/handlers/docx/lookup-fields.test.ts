@@ -567,9 +567,12 @@ describe("engine substitution of formatted lookup values", () => {
 });
 
 describe("createDispatchLookupResolver — mocked dispatch", () => {
+  // The resolver's dispatch is now keyed by every supported registry; spread
+  // the real table and override only the krs handler these tests exercise.
   const stubDispatch = (
     override: Partial<RegistryHandler>,
-  ): Record<"krs", RegistryHandler> => ({
+  ): typeof BUSINESS_REGISTRY_DISPATCH => ({
+    ...BUSINESS_REGISTRY_DISPATCH,
     krs: { ...BUSINESS_REGISTRY_DISPATCH.krs, ...override },
   });
 
@@ -613,6 +616,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       { fields: [krsField] },
       {
         resolve: createDispatchLookupResolver({
+          ...BUSINESS_REGISTRY_DISPATCH,
           krs: {
             ...BUSINESS_REGISTRY_DISPATCH.krs,
             lookup: async () => KRS_HIT,
@@ -633,6 +637,7 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       { fields: [krsField] },
       {
         resolve: createDispatchLookupResolver({
+          ...BUSINESS_REGISTRY_DISPATCH,
           krs: { ...BUSINESS_REGISTRY_DISPATCH.krs, lookup: async () => null },
         }),
       },
