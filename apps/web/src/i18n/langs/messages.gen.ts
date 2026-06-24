@@ -674,6 +674,7 @@ type Messages = {
       "bankAccountNumber": "Bank account number";
       "birthNumber": "Birth number";
       "creditCardNumber": "Credit card number";
+      "crypto": "Crypto wallet";
       "date": "Date";
       "dateOfBirth": "Date of birth";
       "emailAddress": "Email address";

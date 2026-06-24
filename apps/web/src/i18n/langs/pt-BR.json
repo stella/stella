@@ -671,6 +671,7 @@
       "bankAccountNumber": "Número da conta bancária",
       "birthNumber": "Número de nascimento",
       "creditCardNumber": "Número do cartão de crédito",
+      "crypto": "Carteira de criptomoedas",
       "date": "Data",
       "dateOfBirth": "Data de nascimento",
       "emailAddress": "E-mail",

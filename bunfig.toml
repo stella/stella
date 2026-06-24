@@ -34,7 +34,4 @@ minimumReleaseAgeExcludes = [
   "@typescript/native-preview-win32-x64",
   "drizzle-kit",
   "drizzle-orm",
-  # Temporary: security bump to 9.0.1 (GHSA-p6gq-j5cr-w38f) is mid-quarantine.
-  # Remove once 9.0.1 clears the 5-day window on 2026-06-22.
-  "nodemailer",
 ]

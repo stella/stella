@@ -671,6 +671,7 @@
       "bankAccountNumber": "Bankszámlaszám",
       "birthNumber": "Születési szám",
       "creditCardNumber": "Bankkártyaszám",
+      "crypto": "Kriptotárca",
       "date": "Dátum",
       "dateOfBirth": "Születési dátum",
       "emailAddress": "E-mail-cím",

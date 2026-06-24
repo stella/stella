@@ -671,6 +671,7 @@
       "bankAccountNumber": "Bankas konta numurs",
       "birthNumber": "Dzimšanas numurs",
       "creditCardNumber": "Kredītkartes numurs",
+      "crypto": "Kriptomaks",
       "date": "Datums",
       "dateOfBirth": "Dzimšanas datums",
       "emailAddress": "E-pasta adrese",

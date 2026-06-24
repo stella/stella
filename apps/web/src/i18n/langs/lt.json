@@ -671,6 +671,7 @@
       "bankAccountNumber": "Banko sąskaitos numeris",
       "birthNumber": "Gimimo numeris",
       "creditCardNumber": "Kredito kortelės numeris",
+      "crypto": "Kriptopiniginė",
       "date": "Data",
       "dateOfBirth": "Gimimo data",
       "emailAddress": "El. pašto adresas",
