@@ -47,7 +47,7 @@ import type { Node as PMNode, NodeType, ResolvedPos } from "prosemirror-model";
 import { TextSelection } from "prosemirror-state";
 import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
-import { useDebouncedCallback } from "use-debounce";
+import { useDebounce, useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
@@ -334,7 +334,12 @@ type SlashRootItem =
   | { kind: "open-clauses" };
 
 /** A clause-library row in the slash menu's clause submenu. */
-type SlashClause = { id: string; title: string; currentVersion: number };
+type SlashClause = {
+  id: string;
+  title: string;
+  currentVersion: number;
+  description: string | null;
+};
 
 /** The rows for the active view, tagged so render and the key handler narrow
  *  on `view` without unsafe casts. */
@@ -1527,9 +1532,16 @@ export const TemplateStudioPage = ({
   // Clause library for the clause submenu, searched by the live `/` query.
   // Enabled only while that submenu is open so the root menu costs nothing.
   const slashClausesEnabled = slash !== null && slashView === "clauses";
+  // Debounced so search-as-you-type filters server-side without a query per
+  // keystroke. The server does prefix full-text matching (scales with the
+  // library); the client never holds the whole library.
+  const [debouncedClauseSearch] = useDebounce(
+    slashView === "clauses" ? (slash?.query ?? "") : "",
+    120,
+  );
   const { data: slashClauseData } = useQuery({
     ...clauseLibraryOptions(activeOrganizationId, {
-      search: slash?.query ?? "",
+      search: debouncedClauseSearch,
       limit: SLASH_MENU_CLAUSE_LIMIT,
     }),
     enabled: slashClausesEnabled,
@@ -1869,19 +1881,36 @@ export const TemplateStudioPage = ({
     return true;
   };
 
-  // Scroll inside the document (or any pointer/context action that moves the
-  // caret away) tears the menu down.
+  // A USER scroll of the document (wheel/touch) — or a context action — tears the
+  // menu down, since it is anchored to the `/` and would otherwise float. We
+  // listen for wheel/touchmove, NOT the generic `scroll` event: typing near the
+  // bottom programmatically scrolls the editor to keep the caret in view, and
+  // that must not close the menu mid-filter. Scrolling within the menu's own list
+  // is excluded so the user can scroll a long result set.
   const slashShown = slash !== null;
   useExternalSyncEffect(() => {
     if (!slashShown) {
       return undefined;
     }
     const host = overlayHostRef.current;
-    const dismiss = () => dismissSlash();
-    host?.addEventListener("scroll", dismiss, { capture: true });
+    const dismiss = (event: Event) => {
+      if (
+        event.target instanceof Element &&
+        event.target.closest('[role="listbox"]')
+      ) {
+        return;
+      }
+      dismissSlash();
+    };
+    host?.addEventListener("wheel", dismiss, { capture: true, passive: true });
+    host?.addEventListener("touchmove", dismiss, {
+      capture: true,
+      passive: true,
+    });
     host?.addEventListener("contextmenu", dismiss, { capture: true });
     return () => {
-      host?.removeEventListener("scroll", dismiss, { capture: true });
+      host?.removeEventListener("wheel", dismiss, { capture: true });
+      host?.removeEventListener("touchmove", dismiss, { capture: true });
       host?.removeEventListener("contextmenu", dismiss, { capture: true });
     };
   }, [slashShown, dismissSlash]);
@@ -3185,6 +3214,7 @@ const SlashTextPreview = ({
 
 const SlashClausePreview = ({ clause }: { clause: SlashClause }) => {
   const t = useTranslations();
+  const description = clause.description?.trim();
   return (
     <div className="flex h-full flex-col gap-1.5 overflow-hidden text-xs">
       <p className="text-foreground font-medium" dir="auto">
@@ -3193,8 +3223,10 @@ const SlashClausePreview = ({ clause }: { clause: SlashClause }) => {
       <p className="text-muted-foreground">
         {t("clauses.version", { version: String(clause.currentVersion) })}
       </p>
-      <p className="text-muted-foreground leading-snug">
-        {t("templates.studio.conceptClause")}
+      <p className="text-muted-foreground leading-snug" dir="auto">
+        {description && description.length > 0
+          ? description
+          : t("templates.studio.conceptClause")}
       </p>
     </div>
   );
