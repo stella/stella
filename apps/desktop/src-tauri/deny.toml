@@ -1,5 +1,30 @@
 [advisories]
-ignore = []
+ignore = [
+  # Tauri 2.11 pulls urlpattern 0.3 through tauri-utils. These advisories track
+  # the unmaintained rust-unic crates under urlpattern; cargo-deny reports no
+  # safe upgrade in the current Tauri graph.
+  "RUSTSEC-2025-0075",
+  "RUSTSEC-2025-0080",
+  "RUSTSEC-2025-0081",
+  "RUSTSEC-2025-0098",
+  "RUSTSEC-2025-0100",
+  # Tauri/Wry currently pull the archived GTK3 Rust bindings on Linux. The
+  # advisory database reports no safe upgrade in this Tauri graph, so keep the
+  # known IDs explicit and let new GTK advisories fail the audit.
+  "RUSTSEC-2024-0411",
+  "RUSTSEC-2024-0412",
+  "RUSTSEC-2024-0413",
+  "RUSTSEC-2024-0414",
+  "RUSTSEC-2024-0415",
+  "RUSTSEC-2024-0416",
+  "RUSTSEC-2024-0417",
+  "RUSTSEC-2024-0418",
+  "RUSTSEC-2024-0419",
+  "RUSTSEC-2024-0420",
+  # Pulled through the same GTK3 macro stack; no safe upgrade is available in
+  # the current Tauri graph.
+  "RUSTSEC-2024-0370",
+]
 
 [licenses]
 allow = [
@@ -8,12 +33,12 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "BSL-1.0",
+  "CDLA-Permissive-2.0",
   "CC0-1.0",
   "ISC",
   "MIT",
   "MPL-2.0",
   "Unicode-3.0",
-  "Unicode-DFS-2016",
   "Zlib",
 ]
 confidence-threshold = 0.8

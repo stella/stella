@@ -6,9 +6,9 @@ use tokio::sync::Mutex;
 
 use crate::config;
 use crate::session_manager::{
-  download_docx_standalone, normalize_api_base_url, SessionManager,
+  SessionManager, download_docx_standalone, normalize_api_base_url,
 };
-use crate::types::{is_safe_session_id, ErrorResponse, OpenDocxRequest};
+use crate::types::{ErrorResponse, OpenDocxRequest, is_safe_session_id};
 use crate::updater;
 
 const REDEEM_TIMEOUT: Duration = Duration::from_secs(20);
@@ -254,8 +254,8 @@ async fn redeem_and_open_desktop_edit(
 
   SessionManager::attach_watcher(&manager, &result.session_id).await;
 
-  if let Some(handoff_id) = handoff_id {
-    if let Err(error) = acknowledge_desktop_edit_handoff_opened(
+  if let Some(handoff_id) = handoff_id
+    && let Err(error) = acknowledge_desktop_edit_handoff_opened(
       &http_client,
       &api_base_url,
       &handoff_id,
@@ -263,13 +263,12 @@ async fn redeem_and_open_desktop_edit(
       &result.session_id,
     )
     .await
-    {
-      tracing::warn!(
-        error = %error,
-        session_id = %result.session_id,
-        "desktop edit handoff acknowledgement failed",
-      );
-    }
+  {
+    tracing::warn!(
+      error = %error,
+      session_id = %result.session_id,
+      "desktop edit handoff acknowledgement failed",
+    );
   }
 
   {

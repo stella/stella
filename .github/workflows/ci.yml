@@ -873,21 +873,23 @@ jobs:
         if: steps.changed.outputs.run == 'true'
         run: bun test packages/scripts/src/dev-runner.test.ts
 
-  # Clippy for the Tauri desktop crate. ci-checks only runs
+  # Rust checks for the Tauri desktop crate. ci-checks only runs
   # `cargo fmt --check` (a parse-only pass that needs no compile);
-  # the clippy lints declared in apps/desktop/src-tauri/Cargo.toml
-  # (unsafe_code = forbid, dbg_macro = deny, print_stdout/stderr,
-  # clippy::all) were otherwise unenforced. clippy compiles, so it
-  # must run where the desktop crate actually builds.
+  # check/clippy/doc must run where the desktop crate actually builds
+  # so platform-gated macOS and Windows code is covered.
   #
   # The matrix mirrors the release matrix (macos-14 + windows-latest)
   # rather than Linux: the desktop app ships only those two targets,
   # and clippy analyzes the active `cfg` for its host — so these two
   # runners cover the `#[cfg(target_os = "macos")]` / `"windows"`
   # code that ships, with no need for the Linux webkit2gtk system
-  # libraries a Linux clippy run would require. Both are standard
-  # GitHub-hosted runners, free for public repositories.
+  # libraries a Linux clippy run would require. Windows builds the
+  # test binaries but does not execute them: hosted Windows currently
+  # exits before the Rust test harness starts with a native entrypoint
+  # error in the Tauri-linked binary. macOS executes the test suite.
+  # Both are standard GitHub-hosted runners, free for public repositories.
   desktop-clippy:
+    name: Desktop Rust (${{ matrix.os }})
     needs: trust-check
     if: >-
       needs.trust-check.outputs.trusted == 'true'
@@ -903,7 +905,7 @@ jobs:
             runner: windows-latest
             target: x86_64-pc-windows-msvc
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 35
     permissions:
       contents: read
 
@@ -955,9 +957,35 @@ jobs:
       # changes, so it runs rarely and a cold compile (well under the
       # timeout) is acceptable. It also keeps the LGPL-3.0 rust-cache
       # action out of the dependency-review-enforced diff.
+      - name: Check
+        if: steps.changed.outputs.run == 'true'
+        run: cargo check --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
+
       - name: Clippy
         if: steps.changed.outputs.run == 'true'
-        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --all-targets --target ${{ matrix.target }} -- -D warnings
+        run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
+
+      - name: Test
+        if: steps.changed.outputs.run == 'true' && matrix.os == 'macos'
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
+
+      - name: Build test binaries
+        if: steps.changed.outputs.run == 'true' && matrix.os == 'windows'
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
+
+      - name: Install cargo-deny
+        if: steps.changed.outputs.run == 'true' && matrix.os == 'macos'
+        run: cargo install cargo-deny --version 0.19.0 --locked
+
+      - name: License audit
+        if: steps.changed.outputs.run == 'true' && matrix.os == 'macos'
+        run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph
+
+      - name: Docs
+        if: steps.changed.outputs.run == 'true'
+        run: cargo doc --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --no-deps --target ${{ matrix.target }} --locked
+        env:
+          RUSTDOCFLAGS: -D warnings
 
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be

@@ -1,2 +1,10 @@
+[alias]
+check-strict = "check --workspace --all-targets --locked"
+clippy-strict = "clippy --workspace --all-targets --locked -- -D warnings"
+deny-strict = "deny check --hide-inclusion-graph"
+doc-strict = "doc --workspace --no-deps --locked"
+fmt-strict = "fmt --all -- --check"
+test-strict = "test --workspace --all-targets --locked"
+
 [registries.crates-io]
 protocol = "sparse"

@@ -39,16 +39,22 @@ pub fn run() {
 
   tauri::Builder::default()
     .plugin(tauri_plugin_single_instance::init(
-      move |_app, _args, _cwd| {
+      move |app, args, _cwd| {
         #[cfg(target_os = "macos")]
-        for arg in _args {
-          if arg.starts_with("stella://") {
-            deep_link::handle_url(
-              &arg,
-              Arc::clone(&manager_for_single_instance),
-              _app.clone(),
-            );
+        {
+          for arg in args {
+            if arg.starts_with("stella://") {
+              deep_link::handle_url(
+                &arg,
+                Arc::clone(&manager_for_single_instance),
+                app.clone(),
+              );
+            }
           }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+          let _ = (app, args);
         }
       },
     ))
@@ -102,10 +108,10 @@ pub fn run() {
           }
 
           let snapshot = mgr.get_snapshot();
-          if let Ok(menu) = tray::build_tray_menu(&handle, &snapshot) {
-            if let Some(tray) = handle.tray_by_id("main") {
-              let _ = tray.set_menu(Some(menu));
-            }
+          if let Ok(menu) = tray::build_tray_menu(&handle, &snapshot)
+            && let Some(tray) = handle.tray_by_id("main")
+          {
+            let _ = tray.set_menu(Some(menu));
           }
         });
       }
@@ -167,8 +173,7 @@ pub fn run() {
                 mgr.copy_diagnostics();
               }
               tray::MenuAction::EmailSupport => {
-                let mgr = manager.lock().await;
-                mgr.email_support();
+                SessionManager::email_support();
               }
               tray::MenuAction::RevealSupportRoot => {
                 let mgr = manager.lock().await;

@@ -144,16 +144,15 @@ pub fn spawn_sse_listener(
           let frame_bytes = byte_buf[..pos].to_vec();
           byte_buf = byte_buf[pos + 2..].to_vec();
 
-          let frame = match String::from_utf8(frame_bytes) {
-            Ok(s) => s,
-            Err(_) => continue,
+          let Ok(frame) = String::from_utf8(frame_bytes) else {
+            continue;
           };
 
           for line in frame.lines() {
-            if let Some(json_str) = line.strip_prefix("data: ") {
-              if let Ok(event) = serde_json::from_str::<SseEvent>(json_str) {
-                handle_sse_event(&manager, &session_id, &event).await;
-              }
+            if let Some(json_str) = line.strip_prefix("data: ")
+              && let Ok(event) = serde_json::from_str::<SseEvent>(json_str)
+            {
+              handle_sse_event(&manager, &session_id, &event).await;
             }
           }
         }

@@ -1,6 +1,6 @@
 use tauri::{
-  menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
   AppHandle, Wry,
+  menu::{Menu, MenuBuilder, MenuItemBuilder, SubmenuBuilder},
 };
 
 use crate::i18n::{t, t_plural};

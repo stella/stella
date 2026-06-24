@@ -1,7 +1,7 @@
 [package]
 name = "stella-desktop"
 version = "0.0.1"
-edition = "2021"
+edition = "2024"
 description = "stella desktop — managed Word editing for stella"
 license = "Apache-2.0"
 
@@ -15,16 +15,37 @@ path = "src/main.rs"
 
 [lints.clippy]
 all = { level = "warn", priority = -1 }
+cast_lossless = "warn"
 dbg_macro = "deny"
+doc_link_with_quotes = "warn"
+filter_map_next = "warn"
+flat_map_option = "warn"
+implicit_clone = "warn"
+inefficient_to_string = "warn"
+manual_is_variant_and = "warn"
+manual_let_else = "warn"
+match_wildcard_for_single_variants = "warn"
+needless_continue = "warn"
+needless_pass_by_ref_mut = "warn"
 needless_raw_string_hashes = "deny"
+ptr_as_ptr = "warn"
 print_stdout = "warn"
 print_stderr = "warn"
+uninlined_format_args = "warn"
+unnecessary_wraps = "warn"
+unused_async = "warn"
+unused_self = "warn"
+used_underscore_binding = "warn"
 
 [lints.rust]
 unsafe_code = "forbid"
 
+[lints.rustdoc]
+bare_urls = "deny"
+broken_intra_doc_links = "deny"
+
 [profile.release]
-panic = "abort"
+panic = "unwind"
 lto = true
 codegen-units = 1
 opt-level = "s"
