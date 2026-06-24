@@ -625,6 +625,20 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN_DEPLOY }}
           aws-region: ${{ vars.AWS_REGION }}
 
+      # Register the bucket and distribution id (and the account id the
+      # bucket name embeds) as masked values so they render as *** in the
+      # public job log instead of plaintext. These are repo variables, which
+      # GitHub does not mask automatically the way it does secrets.
+      - name: Mask downloads CDN identifiers in logs
+        env:
+          BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
+          DIST_ID: ${{ vars.DOWNLOADS_DIST_ID }}
+        run: |
+          echo "::add-mask::$BUCKET"
+          echo "::add-mask::$DIST_ID"
+          account_id="$(printf '%s' "$BUCKET" | grep -oE '[0-9]{12}' | head -n1 || true)"
+          [ -n "$account_id" ] && echo "::add-mask::$account_id"
+
       - name: Mirror latest.json to downloads CDN
         env:
           BUCKET: ${{ vars.DOWNLOADS_BUCKET }}
