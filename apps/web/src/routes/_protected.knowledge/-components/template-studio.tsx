@@ -1832,6 +1832,13 @@ export const TemplateStudioPage = ({
     if (!view) {
       return;
     }
+    // Both the Enter and click paths land here. Don't insert a stale clause: if
+    // the 120ms-debounced clause search has not caught up to the live query, the
+    // visible rows are from the previous query — bail until they refresh.
+    const live = getTemplateSlashMenu(view.state);
+    if (live.active && debouncedClauseSearchRef.current !== live.query) {
+      return;
+    }
     const consumed = consumeTemplateSlashQuery(view.state);
     if (consumed === null) {
       return;
@@ -1928,12 +1935,9 @@ export const TemplateStudioPage = ({
       activateSlashField(field.path);
       return true;
     }
-    // The clause rows are server-fetched on the debounced query. If it has not
-    // caught up to the live query, the visible rows are stale — swallow Enter
-    // and wait for the refreshed results rather than insert the wrong clause.
-    if (debouncedClauseSearchRef.current !== live.query) {
-      return true;
-    }
+    // Enter on a clause: `activateSlashClause` bails if the debounced search is
+    // stale, so a too-fast Enter waits for refreshed rows instead of inserting
+    // the wrong clause. Swallow the key either way so it never adds a newline.
     const clause = slashClausesRef.current.at(index);
     if (clause === undefined) {
       return false;
