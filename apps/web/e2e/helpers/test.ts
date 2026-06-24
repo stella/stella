@@ -33,9 +33,9 @@ const STATIC_ASSET_URL =
 // after mount) and never reflects an app bug here. Persistent chrome defers these
 // fetches past mount via useChromeQuery, but route content reaches the same
 // pattern through dozens of components, so gating route-smoke on this specific
-// warning would be unbounded whack-a-mole. Tolerate exactly this message; every
-// other console.error (including any genuinely different render-time bug) still
-// fails the run.
+// warning would be unbounded whack-a-mole. route-smoke opts in to tolerate
+// exactly this message (see tolerateColdMountWarning); other specs keep it
+// fatal, and every other console.error always fails the run.
 const REACT_QUERY_COLD_MOUNT_WARNING =
   /Can't perform a React state update on a component that hasn't mounted yet/u;
 
@@ -43,7 +43,17 @@ const isToleratedResourceNotFound = (message: ConsoleMessage): boolean =>
   RESOURCE_NOT_FOUND_CONSOLE_ERROR.test(message.text()) &&
   !STATIC_ASSET_URL.test(message.location().url);
 
-export const createBrowserErrorCollector = (): BrowserErrorCollector & {
+type BrowserErrorCollectorOptions = {
+  // Only route-smoke opts in: it walks every authenticated route and so hits
+  // the unbounded route-content tail of the cold-mount warning. Other specs
+  // (e.g. upload-docx) keep the warning fatal, preserving a runtime guard
+  // against a useChromeQuery regression or a new bare-useQuery chrome path.
+  tolerateColdMountWarning?: boolean;
+};
+
+export const createBrowserErrorCollector = (
+  options: BrowserErrorCollectorOptions = {},
+): BrowserErrorCollector & {
   add: (message: string) => void;
 } => {
   const errors: string[] = [];
@@ -72,7 +82,10 @@ export const createBrowserErrorCollector = (): BrowserErrorCollector & {
           return;
         }
 
-        if (REACT_QUERY_COLD_MOUNT_WARNING.test(text)) {
+        if (
+          options.tolerateColdMountWarning &&
+          REACT_QUERY_COLD_MOUNT_WARNING.test(text)
+        ) {
           return;
         }
 
