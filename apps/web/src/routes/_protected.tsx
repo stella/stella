@@ -2,7 +2,6 @@ import { lazy, Suspense, useCallback, useRef, useState } from "react";
 import type { MouseEvent, PointerEvent } from "react";
 
 import { useHotkey } from "@tanstack/react-hotkeys";
-import { useQuery } from "@tanstack/react-query";
 import {
   createFileRoute,
   Outlet,
@@ -56,6 +55,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/sidebar";
+import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -421,7 +421,7 @@ function ProtectedContent() {
     setChatMenuOpen(false);
   };
 
-  const { data: workspace } = useQuery({
+  const { data: workspace } = useChromeQuery({
     ...workspaceOptions(workspaceId ?? ""),
     enabled: !!workspaceId,
   });

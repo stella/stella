@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -44,6 +44,7 @@ import type {
   RoleModelSelections,
   RoleValue,
 } from "@/components/ai-config-role-models.logic";
+import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -72,7 +73,7 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
     () => aiAvailabilityOptions({ organizationId: activeOrganizationId }),
     [activeOrganizationId],
   );
-  const { data, isFetching } = useQuery(availabilityOptions);
+  const { data, isFetching } = useChromeQuery(availabilityOptions);
 
   const openAIKeyDialog = useCallback(() => {
     setOpen(true);
@@ -137,7 +138,7 @@ export const useAIKeyGate = () => {
  */
 export function useAIAvailable(): boolean {
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data, isError } = useQuery(
+  const { data, isError } = useChromeQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
   if (isError || data === undefined) {
@@ -154,7 +155,7 @@ export function useAIAvailable(): boolean {
 export function RequireAIKey({ children }: PropsWithChildren) {
   const t = useTranslations();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data, isFetching, isPending, isError } = useQuery(
+  const { data, isFetching, isPending, isError } = useChromeQuery(
     aiAvailabilityOptions({ organizationId: activeOrganizationId }),
   );
   const { openAIKeyDialog, openIfAIUnavailable } = useAIKeyGate();
@@ -214,7 +215,7 @@ export function AIKeyRequiredDialog({
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
-  const { data: config } = useQuery({
+  const { data: config } = useChromeQuery({
     ...aiConfigOptions({ organizationId: activeOrganizationId }),
     enabled: open,
   });

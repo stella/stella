@@ -319,6 +319,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-use-effect.ts",
     "./.oxlint-plugins/no-ref-mirror.ts",
     "./.oxlint-plugins/no-shared-suspense-query.ts",
+    "./.oxlint-plugins/no-bare-chrome-query.ts",
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
@@ -447,6 +448,12 @@ export default defineConfig({
       ],
       rules: {
         "no-shared-suspense-query/no-shared-suspense-query": "error",
+      },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-bare-chrome-query.fixture.tsx"],
+      rules: {
+        "no-bare-chrome-query/no-bare-chrome-query": "error",
       },
     },
     {
@@ -1093,6 +1100,19 @@ export default defineConfig({
       ],
       rules: {
         "no-shared-suspense-query/no-shared-suspense-query": "error",
+      },
+    },
+    {
+      // Persistent chrome that mounts on every route: defer cold-cache fetches
+      // past mount via useChromeQuery so they cannot warn on a not-yet-mounted
+      // fiber. See apps/web/src/hooks/use-chrome-query.ts.
+      files: [
+        "apps/web/src/routes/_protected.tsx",
+        "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/require-ai-key.tsx",
+      ],
+      rules: {
+        "no-bare-chrome-query/no-bare-chrome-query": "error",
       },
     },
     {
