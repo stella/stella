@@ -18,7 +18,7 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tauri::{async_runtime, AppHandle};
+use tauri::{AppHandle, async_runtime};
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_updater::UpdaterExt;
 use tokio::sync::Mutex;

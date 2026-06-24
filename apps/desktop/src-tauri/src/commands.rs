@@ -96,9 +96,8 @@ pub async fn copy_diagnostics(state: State<'_, AppState>) -> Result<bool, String
 }
 
 #[tauri::command]
-pub async fn email_support(state: State<'_, AppState>) -> Result<bool, String> {
-  let mgr = state.lock().await;
-  Ok(mgr.email_support())
+pub async fn email_support() -> Result<bool, String> {
+  Ok(SessionManager::email_support())
 }
 
 #[tauri::command]
