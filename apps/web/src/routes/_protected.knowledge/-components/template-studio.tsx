@@ -4191,6 +4191,7 @@ const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
           inputMode="numeric"
           min={0}
           onChange={(e) => onMin(e.target.value)}
+          placeholder="0"
           type="number"
           value={minItems === undefined ? "" : String(minItems)}
         />
@@ -4205,6 +4206,7 @@ const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
           inputMode="numeric"
           min={0}
           onChange={(e) => onMax(e.target.value)}
+          placeholder={t("templates.studio.repeatsUnlimited")}
           type="number"
           value={maxItems === undefined ? "" : String(maxItems)}
         />
@@ -5803,6 +5805,11 @@ const FieldConditionSection = ({
  * form), lets the model propose a configuration, and previews the actual fill
  * control so every setting shows its consequence.
  */
+// Survives the FieldFace remount the repeatable toggle triggers (the field
+// re-paths, so its key changes): captured before the toggle and restored onto
+// the fresh ScrollArea viewport so the panel stays scrolled where it was.
+let pendingFieldFaceScrollTop: number | null = null;
+
 const FieldFace = ({
   field,
   onUpdate,
@@ -5831,6 +5838,15 @@ const FieldFace = ({
     [fields, field.path],
   );
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  // Restore the captured scroll position when the remounted viewport mounts.
+  const setViewport = useCallback((el: HTMLDivElement | null) => {
+    viewportRef.current = el;
+    if (el !== null && pendingFieldFaceScrollTop !== null) {
+      el.scrollTop = pendingFieldFaceScrollTop;
+      pendingFieldFaceScrollTop = null;
+    }
+  }, []);
 
   // Clear the in-document preview when the face leaves or switches fields
   // (cancelling any pending lookup preview so it cannot re-set it).
@@ -5852,8 +5868,11 @@ const FieldFace = ({
   const condition = fieldConditionState(field, outline);
   const fieldIsPlaced = outlineFieldPaths(outline).has(field.path);
   const toggleRepeatable = (next: boolean) => {
+    // Keep the panel scrolled where it is across the re-path remount.
+    pendingFieldFaceScrollTop = viewportRef.current?.scrollTop ?? null;
     const applied = actions?.setFieldRepeatable(field.path, next) ?? false;
     if (!applied) {
+      pendingFieldFaceScrollTop = null;
       stellaToast.add({ type: "error", title: t("errors.actionFailed") });
     }
   };
@@ -5871,7 +5890,7 @@ const FieldFace = ({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1" viewportRef={setViewport}>
         <ScopeHeader
           action={
             <div className="flex items-center gap-0.5">

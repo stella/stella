@@ -2211,7 +2211,7 @@ type Messages = {
       "conceptCondition": "Shows this text only when a condition holds.";
       "conceptField": "A value you fill in at use time.";
       "conceptLoop": "Repeats this text for each item in a list.";
-      "conditionAdvanced": "Advanced";
+      "conditionAdvanced": "Edit as expression";
       "conditionAiInstructionsHelp": "Tell the AI how to decide whether this block applies. It reads the document text and the other field values.";
       "conditionAiInstructionsLabel": "Instructions for the AI";
       "conditionAiPlaceholder": "Describe when this is true, e.g. the contract is governed by Czech law";
@@ -2276,11 +2276,12 @@ type Messages = {
       "renameField": "Rename field";
       "renameFieldInvalid": "That name is invalid or already taken";
       "repeatForEach": "Repeat for each…";
-      "repeatable": "Repeatable";
+      "repeatable": "Allow multiple";
       "repeatableHelp": "Let the filler add this field more than once — for example, a list of parties or items.";
       "repeatableLoopHasOtherContent": "The repeating block around this field contains other content; remove it in the document.";
       "repeatableNested": "This field already sits inside a repeating block.";
       "repeats": "Repeats: {item}";
+      "repeatsUnlimited": "Unlimited";
       "saveAsRecipe": "Save as recipe";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
