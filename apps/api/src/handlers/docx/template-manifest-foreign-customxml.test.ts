@@ -1,7 +1,12 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { MANIFEST_NS, readManifest, writeManifest } from "./template-manifest";
+import {
+  MANIFEST_NS,
+  readManifest,
+  stripManifest,
+  writeManifest,
+} from "./template-manifest";
 import type { TemplateManifest } from "./types";
 
 /**
@@ -122,6 +127,29 @@ describe("writeManifest with a foreign custom XML slot", () => {
     expect(zip.file("customXml/item3.xml")).toBeNull();
     expect(await zip.file("customXml/item2.xml")?.async("string")).toContain(
       MANIFEST_NS,
+    );
+  });
+
+  // The manifest (field schema, AI prompts) must never ride along in a filled
+  // document. stripManifest has to remove it from whatever slot it occupies,
+  // not just item1 — otherwise a relocated manifest would leak on fill.
+  test("stripManifest removes the manifest from a non-first slot", async () => {
+    const base = await createDocxWithForeignCustomXml();
+    const withManifest = await writeManifest(base, sampleManifest); // → item2
+
+    const stripped = await stripManifest(withManifest);
+
+    // No custom XML part carries the Stella namespace anymore.
+    expect(await readManifest(stripped)).toBeNull();
+    const zip = await JSZip.loadAsync(stripped);
+    expect(zip.file("customXml/item2.xml")).toBeNull();
+    expect(zip.file("customXml/itemProps2.xml")).toBeNull();
+    const contentTypes = await zip.file("[Content_Types].xml")?.async("string");
+    expect(contentTypes).not.toContain("itemProps2.xml");
+
+    // The foreign part is left untouched.
+    expect(await zip.file("customXml/item1.xml")?.async("string")).toBe(
+      FOREIGN_ITEM1,
     );
   });
 });
