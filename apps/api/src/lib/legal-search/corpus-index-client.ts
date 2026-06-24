@@ -68,7 +68,6 @@ const baseUrl = (): string => {
       "CORPUS_INDEX_ENDPOINT is required when the corpus index search provider is selected",
     );
   }
-  // eslint-disable-next-line sonarjs/slow-regex -- trims trailing slashes on a trusted config URL, not user input
   return value.replace(/\/+$/u, "");
 };
 

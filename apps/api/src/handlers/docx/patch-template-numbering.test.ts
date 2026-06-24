@@ -43,7 +43,6 @@ const docTextOf = async (buffer: Buffer): Promise<string> => {
   let previous = "";
   while (text !== previous) {
     previous = text;
-    // oxlint-disable-next-line sonarjs/slow-regex -- test helper on small, controlled document XML
     text = text.replace(/<[^>]+>/gu, "");
   }
   return text;
