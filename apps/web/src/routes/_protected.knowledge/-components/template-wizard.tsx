@@ -1042,29 +1042,17 @@ const orderedRegistryOptions = (
   return [...local, ...rest];
 };
 
-/** Registries gated behind deployment credentials — the fill resolver rejects
- *  them when unconfigured (mirrors the backend's non-always-available
- *  handlers). They are still offered in the picker, but a new field never
- *  DEFAULTS to one: a self-hosted/test deployment lacking the credentials would
- *  otherwise get a Company ID template that fails at fill time. */
-const DEPLOY_GATED_REGISTRIES: ReadonlySet<LookupRegistry> = new Set([
-  "companies-house",
-  "edgar",
-]);
-
-/** The registry preselected for a new "Company ID" field: the first
- *  jurisdiction-first option for the app locale that is not deploy-gated, so
- *  the default always resolves at fill time. The ordered list is a non-empty
- *  permutation of `LOOKUP_REGISTRY_OPTIONS`; the trailing fallbacks only
- *  satisfy the type checker. */
-const preferredRegistry = (locale: string): LookupRegistry => {
-  const ordered = orderedRegistryOptions(locale);
-  return (
-    ordered.find((option) => !DEPLOY_GATED_REGISTRIES.has(option.slug))?.slug ??
-    ordered.at(0)?.slug ??
-    "krs"
-  );
-};
+/** The registry preselected for a new "Company ID" field: the jurisdiction's
+ *  own registry (the first option for the app locale). It may be deploy-gated
+ *  or org-disabled in a given environment — the frontend can't know — but
+ *  fill-time resolution gates on both and surfaces a clear, actionable error
+ *  ("not available in this deployment" / "disabled for this organization") so
+ *  the author switches registry. That beats defaulting to an unrelated
+ *  jurisdiction's registry, which can be just as unavailable and is wrong by
+ *  default. The ordered list is a non-empty permutation of
+ *  `LOOKUP_REGISTRY_OPTIONS`; the `?? "krs"` only satisfies the type checker. */
+const preferredRegistry = (locale: string): LookupRegistry =>
+  orderedRegistryOptions(locale).at(0)?.slug ?? "krs";
 
 /** The cross-registry baseline tokens every registry hit exposes, mapped onto
  *  the backend's baseline token names (see `lookupTemplateTokens` in
