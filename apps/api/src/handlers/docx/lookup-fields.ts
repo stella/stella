@@ -108,18 +108,40 @@ export type LookupResolver = (input: {
 }) => Promise<LookupOutcome>;
 
 /**
+ * Predicate gating a registry against the org's native-tool settings, by the
+ * handler's `nativeToolSlug`. Mirrors the org-enabled check the contacts
+ * lookup route enforces, threaded into the fill resolver so a template cannot
+ * invoke a registry the organization has disabled. Async so the handler
+ * boundary can construct it from a one-shot org-settings read.
+ *
+ * Omitting it (the default) skips org gating: tests and any internal/system
+ * caller without an org context resolve as before. The gate is additive — a
+ * caller WITH an org context passes this in to deny disabled registries.
+ */
+export type IsRegistryEnabledForOrg = (
+  registry: LookupRegistry,
+) => boolean | Promise<boolean>;
+
+type CreateDispatchLookupResolverOptions = {
+  dispatch?: Record<LookupRegistry, RegistryHandler>;
+  isRegistryEnabledForOrg?: IsRegistryEnabledForOrg;
+};
+
+/**
  * The real resolver over the shared registry dispatch. The per-registry
  * adapters own timeouts (`AbortSignal.timeout`) on their upstream calls.
  * The dispatch table is injectable for tests (mirroring how dispatch.test.ts
  * stubs handlers); production callers use the default.
+ *
+ * `isRegistryEnabledForOrg`, when supplied, gates each lookup on the org's
+ * native-tool settings before any upstream call. Constructed at the handler
+ * boundary where org context exists; omitted on internal/test paths.
  */
 export const createDispatchLookupResolver =
-  (
-    dispatch: Record<
-      LookupRegistry,
-      RegistryHandler
-    > = BUSINESS_REGISTRY_DISPATCH,
-  ): LookupResolver =>
+  ({
+    dispatch = BUSINESS_REGISTRY_DISPATCH,
+    isRegistryEnabledForOrg,
+  }: CreateDispatchLookupResolverOptions = {}): LookupResolver =>
   async ({ registry, query }) => {
     const handler = dispatch[registry];
     // Mirror the contacts lookup route: never call a registry whose deployment
@@ -131,6 +153,15 @@ export const createDispatchLookupResolver =
       return {
         type: "error",
         message: `The ${registry} registry is not available in this deployment.`,
+      };
+    }
+    // Gate on the org's native-tool settings (when an org context was threaded
+    // in), exactly like the contacts lookup route: a deployed-but-disabled
+    // registry is refused here, before any upstream call.
+    if (isRegistryEnabledForOrg && !(await isRegistryEnabledForOrg(registry))) {
+      return {
+        type: "error",
+        message: `The ${registry} registry is disabled for this organization.`,
       };
     }
     const response = await executeRegistryLookup({ handler, query });

@@ -25,6 +25,7 @@ import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields"
 import { manifestNamedConditions } from "@/api/handlers/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import { buildIsRegistryEnabledForOrg } from "@/api/handlers/docx/registry-org-gate";
 import {
   type AiConditionDecider,
   resolveAiConditions,
@@ -298,7 +299,12 @@ export const fillStoredTemplateDocx = async <TRejection = never>({
     const stepError = await applyManifestFillSteps({
       values: record,
       manifest,
-      resolveLookup: createDispatchLookupResolver(),
+      resolveLookup: createDispatchLookupResolver({
+        isRegistryEnabledForOrg: await buildIsRegistryEnabledForOrg({
+          organizationId,
+          scopedDb,
+        }),
+      }),
     });
     if (stepError !== null) {
       return { error: stepError };

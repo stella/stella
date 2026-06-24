@@ -577,34 +577,82 @@ describe("createDispatchLookupResolver — mocked dispatch", () => {
   });
 
   test("returns the hit from the registry handler's lookup", async () => {
-    const resolver = createDispatchLookupResolver(
-      stubDispatch({ lookup: async () => KRS_HIT }),
-    );
+    const resolver = createDispatchLookupResolver({
+      dispatch: stubDispatch({ lookup: async () => KRS_HIT }),
+    });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({ type: "hit", hit: KRS_HIT });
   });
 
   test("maps a null hit to not-found", async () => {
-    const resolver = createDispatchLookupResolver(
-      stubDispatch({ lookup: async () => null }),
-    );
+    const resolver = createDispatchLookupResolver({
+      dispatch: stubDispatch({ lookup: async () => null }),
+    });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({ type: "not-found" });
   });
 
   test("maps adapter validation errors to an error outcome", async () => {
-    const resolver = createDispatchLookupResolver(
-      stubDispatch({
+    const resolver = createDispatchLookupResolver({
+      dispatch: stubDispatch({
         lookup: () => {
           throw new KrsValidationError("KRS number must be 10 digits");
         },
       }),
-    );
+    });
     const outcome = await resolver({ registry: "krs", query: "0000592109" });
     expect(outcome).toEqual({
       type: "error",
       message: "KRS number must be 10 digits",
     });
+  });
+
+  test("refuses a registry the org has disabled without calling it", async () => {
+    let lookupCalls = 0;
+    const resolver = createDispatchLookupResolver({
+      dispatch: stubDispatch({
+        lookup: async () => {
+          lookupCalls += 1;
+          return KRS_HIT;
+        },
+      }),
+      isRegistryEnabledForOrg: (registry) => registry !== "krs",
+    });
+    const outcome = await resolver({ registry: "krs", query: "0000592109" });
+    expect(outcome).toEqual({
+      type: "error",
+      message: "The krs registry is disabled for this organization.",
+    });
+    // The disabled registry is refused before any upstream call.
+    expect(lookupCalls).toBe(0);
+  });
+
+  test("resolves a registry the org has enabled", async () => {
+    const resolver = createDispatchLookupResolver({
+      dispatch: stubDispatch({ lookup: async () => KRS_HIT }),
+      isRegistryEnabledForOrg: () => true,
+    });
+    const outcome = await resolver({ registry: "krs", query: "0000592109" });
+    expect(outcome).toEqual({ type: "hit", hit: KRS_HIT });
+  });
+
+  test("awaits an async org-enabled predicate", async () => {
+    let lookupCalls = 0;
+    const resolver = createDispatchLookupResolver({
+      dispatch: stubDispatch({
+        lookup: async () => {
+          lookupCalls += 1;
+          return KRS_HIT;
+        },
+      }),
+      isRegistryEnabledForOrg: async () => false,
+    });
+    const outcome = await resolver({ registry: "krs", query: "0000592109" });
+    expect(outcome).toEqual({
+      type: "error",
+      message: "The krs registry is disabled for this organization.",
+    });
+    expect(lookupCalls).toBe(0);
   });
 });
 
@@ -616,10 +664,12 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       { fields: [krsField] },
       {
         resolve: createDispatchLookupResolver({
-          ...BUSINESS_REGISTRY_DISPATCH,
-          krs: {
-            ...BUSINESS_REGISTRY_DISPATCH.krs,
-            lookup: async () => KRS_HIT,
+          dispatch: {
+            ...BUSINESS_REGISTRY_DISPATCH,
+            krs: {
+              ...BUSINESS_REGISTRY_DISPATCH.krs,
+              lookup: async () => KRS_HIT,
+            },
           },
         }),
       },
@@ -637,8 +687,13 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
       { fields: [krsField] },
       {
         resolve: createDispatchLookupResolver({
-          ...BUSINESS_REGISTRY_DISPATCH,
-          krs: { ...BUSINESS_REGISTRY_DISPATCH.krs, lookup: async () => null },
+          dispatch: {
+            ...BUSINESS_REGISTRY_DISPATCH,
+            krs: {
+              ...BUSINESS_REGISTRY_DISPATCH.krs,
+              lookup: async () => null,
+            },
+          },
         }),
       },
     );
@@ -655,6 +710,61 @@ describe("applyLookupFields — fill flow over a mocked dispatch", () => {
     });
     expect(error).toBeNull();
     expect(values["buyer_krs"]).toBe("0000592109");
+  });
+
+  test("refuses a deployed-but-disabled registry without calling it", async () => {
+    let lookupCalls = 0;
+    const values: Record<string, unknown> = { buyer_krs: "0000592109" };
+    const error = await applyLookupFields(
+      values,
+      { fields: [krsField] },
+      {
+        resolve: createDispatchLookupResolver({
+          dispatch: {
+            ...BUSINESS_REGISTRY_DISPATCH,
+            krs: {
+              ...BUSINESS_REGISTRY_DISPATCH.krs,
+              lookup: async () => {
+                lookupCalls += 1;
+                return KRS_HIT;
+              },
+            },
+          },
+          // krs is deployed (isDeployAvailable: always) but disabled for the org.
+          isRegistryEnabledForOrg: () => false,
+        }),
+      },
+    );
+    expect(error).toBe(
+      'Field "buyer_krs": KRS lookup failed: The krs registry is disabled for this organization.',
+    );
+    // The registry was never called; the submitted number is left untouched.
+    expect(lookupCalls).toBe(0);
+    expect(values["buyer_krs"]).toBe("0000592109");
+  });
+
+  test("resolves a deployed + enabled registry through the fill flow", async () => {
+    const values: Record<string, unknown> = { buyer_krs: "0000592109" };
+    const error = await applyLookupFields(
+      values,
+      { fields: [krsField] },
+      {
+        resolve: createDispatchLookupResolver({
+          dispatch: {
+            ...BUSINESS_REGISTRY_DISPATCH,
+            krs: {
+              ...BUSINESS_REGISTRY_DISPATCH.krs,
+              lookup: async () => KRS_HIT,
+            },
+          },
+          isRegistryEnabledForOrg: () => true,
+        }),
+      },
+    );
+    expect(error).toBeNull();
+    expect(values["buyer_krs"]).toBe(
+      "Żabka Polska sp. z o.o., ul. Stanisława Matyi 8, 61-586 Poznań",
+    );
   });
 });
 
