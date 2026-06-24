@@ -337,6 +337,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
     "./.oxlint-plugins/require-fetch-timeout.ts",
+    "./.oxlint-plugins/require-escape-like.ts",
     "./.oxlint-plugins/no-bare-error.ts",
     "./.oxlint-plugins/ai-output-strict-schema.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
@@ -412,6 +413,10 @@ export default defineConfig({
     {
       files: [".oxlint-plugins/__fixtures__/no-ref-mirror.fixture.tsx"],
       rules: { "no-ref-mirror/no-ref-mirror": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/require-escape-like.fixture.ts"],
+      rules: { "require-escape-like/require-escape-like": "error" },
     },
     {
       files: [
@@ -1133,6 +1138,7 @@ export default defineConfig({
         "sonarjs/no-ignored-return": "error",
         "sonarjs/no-use-of-empty-return-value": "error",
         "require-fetch-timeout/require-fetch-timeout": "error",
+        "require-escape-like/require-escape-like": "error",
       },
     },
     {
