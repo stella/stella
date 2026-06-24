@@ -401,9 +401,11 @@ const buildSlashRootItems = (
     return items;
   }
 
-  // Typed query: surface matching existing fields inline (one keystroke/click to
-  // reuse), then the create-new-field row (unless the name is already taken) and
-  // keyword-matched condition; the clause library stays a submenu (server search).
+  // Typed query: matching existing fields first (one keystroke/click to reuse),
+  // then keyword-matched commands (clause search, condition), then the generic
+  // create-new-field fallback last. Order matters: the highlight resets to row 0
+  // on each keystroke, so "/if" or "/clause" + Enter must run the command rather
+  // than create a field literally named "if"/"clause".
   const createPath = createFieldPathFromQuery(trimmed);
   const reuseExact = fields.some((field) => field.path === createPath);
   const items: SlashRootItem[] = matchingSlashFields(query, fields).map(
@@ -416,11 +418,11 @@ const buildSlashRootItems = (
   if (matches("clause")) {
     items.push({ kind: "open-clauses" });
   }
-  if (!reuseExact) {
-    items.push({ kind: "create-field", path: createPath });
-  }
   if (matches("condition", "if")) {
     items.push({ kind: "create-condition" });
+  }
+  if (!reuseExact) {
+    items.push({ kind: "create-field", path: createPath });
   }
   return items;
 };
