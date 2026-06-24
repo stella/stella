@@ -24,10 +24,15 @@ import { Plugin, PluginKey } from "prosemirror-state";
 import { getTemplateDirectives } from "./templateDirectives";
 
 export type TemplateSlashMenuState =
-  | { active: false; from: null; query: "" }
-  | { active: true; from: number; query: string };
+  | { active: false; from: null; to: null; query: "" }
+  | { active: true; from: number; to: number; query: string };
 
-const IDLE: TemplateSlashMenuState = { active: false, from: null, query: "" };
+const IDLE: TemplateSlashMenuState = {
+  active: false,
+  from: null,
+  to: null,
+  query: "",
+};
 
 /**
  * Keyboard intents the plugin forwards to the host while the menu is open. The
@@ -125,50 +130,32 @@ const slashStillAt = (state: EditorState, from: number): boolean => {
 };
 
 /**
- * The query the user has typed: the text between the `/` (at `from`) and the
- * caret. CARET-bounded, not document-run-bounded — so it does NOT swallow text
- * that already followed the caret when `/` was typed (e.g. typing `/` before
- * "lord" must not make the query "lord"), and a terminator the user types (a
- * space or punctuation) inside that span ends the command.
+ * The query the author has typed, read from the tracked trigger RANGE
+ * `[from, to]` rather than the caret. `to` is carried through every transaction
+ * by position mapping (it grows as the author types at the query end), so the
+ * query is immune to the paged editor's relayout selection churn — the caret can
+ * momentarily land anywhere without affecting it. Because the range only ever
+ * grows with typed input, it never swallows prose that already followed the `/`.
  *
- * Returns:
- *  - `{ query }`  the typed query is all query-grammar chars (menu stays open).
- *  - `"broken"`   the span contains a terminator (typed space/punctuation), or
- *                 the caret is not a collapsed cursor after the `/` in the same
- *                 block — the command is over.
+ * Returns the query string, or `null` when the span contains a terminator (a
+ * typed space or punctuation) — the command is over.
  */
-type TypedQuery = { query: string } | "broken";
-
-const readTypedQuery = (state: EditorState, from: number): TypedQuery => {
-  const sel = state.selection;
-  if (!sel.empty || sel.from <= from) {
-    return "broken";
+const readRangeQuery = (
+  state: EditorState,
+  from: number,
+  to: number,
+): string | null => {
+  const start = from + 1;
+  if (to <= start) {
+    return "";
   }
-  const $from = state.doc.resolve(from);
-  const $caret = state.doc.resolve(sel.from);
-  if (!$from.sameParent($caret)) {
-    return "broken";
-  }
-  const typed = $from.parent.textBetween(
-    $from.parentOffset + 1,
-    $caret.parentOffset,
-    "\n",
-    "\n",
-  );
-  for (const char of typed) {
+  const text = state.doc.textBetween(start, to, "\n", "\n");
+  for (const char of text) {
     if (!QUERY_CHAR.test(char)) {
-      return "broken";
+      return null;
     }
   }
-  return { query: typed };
-};
-
-/** Whether a selection change is a clear "clicked away" signal that should
- *  close the menu: the user selected a range, or dropped the caret before the
- *  `/` that anchors the trigger. */
-const clickedAway = (state: EditorState, from: number): boolean => {
-  const sel = state.selection;
-  return !sel.empty || sel.from < from;
+  return text;
 };
 
 const sameState = (
@@ -227,37 +214,47 @@ export const templateSlashMenuPlugin = (
           return IDLE;
         }
         if (meta?.type === "open") {
-          return { active: true, from: meta.from, query: meta.query };
+          // The query span starts empty: `to` sits just after the `/` and grows
+          // as the author types (carried by the position mapping below).
+          return {
+            active: true,
+            from: meta.from,
+            to: meta.from + 1,
+            query: meta.query,
+          };
         }
         if (!value.active) {
           return value;
         }
-        // Keep the trigger pinned to its `/` across edits before it.
-        const from = tr.mapping.map(value.from);
-        // The `/` itself being deleted always closes the menu.
+        // Carry the trigger range through the transaction by POSITION MAPPING,
+        // not the caret: `from` stays at the `/` (assoc -1) and `to` grows with
+        // inserts at the query end (assoc +1). This is what makes the query
+        // survive the paged editor's relayout caret churn — the caret can land
+        // anywhere without affecting the range.
+        // ProseMirror `Mapping.map(pos, assoc)`: the second arg is the map bias
+        // (which side of an insertion the position sticks to), not an Array
+        // `thisArg` — the unicorn rule mis-detects the shape.
+        // eslint-disable-next-line unicorn/no-array-method-this-argument -- PM Mapping.map bias arg, not Array thisArg
+        const from = tr.mapping.map(value.from, -1);
+        // eslint-disable-next-line unicorn/no-array-method-this-argument -- PM Mapping.map bias arg, not Array thisArg
+        const to = tr.mapping.map(value.to, 1);
+        // The `/` itself being deleted closes the menu.
         if (!slashStillAt(newState, from)) {
           return IDLE;
         }
-        if (tr.docChanged) {
-          // Typing / deleting: the caret is authoritative, so read the typed
-          // query (the text from `/` to the caret). A terminator typed into that
-          // span (space, punctuation) ends the command; otherwise the menu stays
-          // open with the new query.
-          const typed = readTypedQuery(newState, from);
-          if (typed === "broken") {
-            return IDLE;
-          }
-          return { active: true, from, query: typed.query };
-        }
-        // Selection-only transaction. The paged editor re-asserts the caret a
-        // frame after input (relayout churn) and that caret can momentarily land
-        // off the trigger, so DON'T recompute the query from it — keep the prior
-        // query. Only a clear click-away (range select, or caret before the `/`)
-        // closes the menu.
-        if (tr.selectionSet && clickedAway(newState, from)) {
+        // A deliberate range selection closes the menu; a collapsed caret move
+        // (including the relayout churn) is ignored so it can never tear the menu
+        // down mid-type. Click-away dismissal is the host popover's job, not
+        // something inferred from the unreliable caret position.
+        if (tr.selectionSet && !newState.selection.empty) {
           return IDLE;
         }
-        return { active: true, from, query: value.query };
+        // A terminator (space/punctuation) typed inside the range ends it.
+        const query = readRangeQuery(newState, from, to);
+        if (query === null) {
+          return IDLE;
+        }
+        return { active: true, from, to, query };
       },
     },
     view: () => ({
@@ -376,11 +373,11 @@ export const resetTemplateSlashQuery = (
     return null;
   }
   const queryStart = current.from + 1;
-  const caret = state.selection.from;
-  if (caret <= queryStart) {
+  const queryEnd = current.to;
+  if (queryEnd <= queryStart) {
     return null;
   }
-  return state.tr.delete(queryStart, caret);
+  return state.tr.delete(queryStart, queryEnd);
 };
 
 /** Delete the `/query` the author typed, returning the PM range it occupied so
@@ -394,11 +391,10 @@ export const consumeTemplateSlashQuery = (
     return null;
   }
   const from = current.from;
-  // Consume the whole `/query` span — `/` plus every query char — not just up
-  // to the caret. The caret may sit inside the query (the user clicked after
-  // `/cli` in `/client`); deleting to the caret would strip `/cli` and orphan
-  // the `ent` suffix in the document.
-  const to = from + 1 + current.query.length;
+  // The tracked range end IS the end of the `/query` span (mapped through every
+  // edit), so deleting [from, to] removes the `/` and the whole typed query even
+  // when the caret sits inside it (e.g. clicking after `/cli` in `/client`).
+  const to = current.to;
   const tr = state.tr.delete(from, to);
   clearTemplateSlashMenu(tr);
   return { tr, from, to };

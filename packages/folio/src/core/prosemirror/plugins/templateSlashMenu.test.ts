@@ -103,10 +103,11 @@ describe("templateSlashMenu state machine", () => {
   });
 
   test("punctuation right after the query closes the menu", () => {
-    // `/field,` — the comma ends the command just like a space, so the menu
-    // stops capturing arrows/Enter once the caret is back in prose.
-    let state = stateWith("/field", 6);
+    // `/field,` — the comma typed into the range ends the command just like a
+    // space, so the menu stops capturing arrows/Enter once back in prose.
+    let state = stateWith("/", 1);
     state = openAt(state, 0);
+    state = typeChars(state, "field");
     expect(getTemplateSlashMenu(state).active).toBe(true);
     state = state.apply(state.tr.insertText(",", state.selection.from));
     expect(getTemplateSlashMenu(state).active).toBe(false);
@@ -120,12 +121,27 @@ describe("templateSlashMenu state machine", () => {
     expect(getTemplateSlashMenu(state).active).toBe(false);
   });
 
-  test("moving the caret before the slash closes the menu", () => {
-    let state = stateWith("a/", 2);
-    state = openAt(state, 1);
-    // Caret jumps to the very start, before the "/".
+  test("a collapsed caret jump does NOT close the menu (relayout-churn safe)", () => {
+    // The live filter bug: the paged editor re-asserts a collapsed caret a frame
+    // after input and it can land off the trigger. The query is tracked by a
+    // mapped range, not the caret, so such a churn move must keep the menu open.
+    let state = stateWith("/", 1);
+    state = openAt(state, 0);
+    state = typeChars(state, "fi");
     state = state.apply(
       state.tr.setSelection(TextSelection.create(state.doc, 1)),
+    );
+    const open = getTemplateSlashMenu(state);
+    expect(open.active).toBe(true);
+    expect(open.active && open.query).toBe("fi");
+  });
+
+  test("a deliberate range selection closes the menu", () => {
+    let state = stateWith("/", 1);
+    state = openAt(state, 0);
+    state = typeChars(state, "fi");
+    state = state.apply(
+      state.tr.setSelection(TextSelection.create(state.doc, 1, 3)),
     );
     expect(getTemplateSlashMenu(state).active).toBe(false);
   });
@@ -199,8 +215,9 @@ describe("consumeTemplateSlashQuery", () => {
 
 describe("resetTemplateSlashQuery", () => {
   test("clears the typed query but keeps the slash and the trigger active", () => {
-    let state = stateWith("/clause", 7);
+    let state = stateWith("/", 1);
     state = openAt(state, 0);
+    state = typeChars(state, "clause");
     const tr = resetTemplateSlashQuery(state);
     expect(tr).not.toBeNull();
     if (tr === null) {
