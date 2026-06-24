@@ -1,4 +1,3 @@
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 import {
   ChevronsUpDownIcon,
@@ -37,6 +36,7 @@ import { DevSidebarGroup } from "@/components/dev-sidebar-group";
 import { SidebarMenuItem, useSidebar } from "@/components/sidebar";
 import { PALETTES, THEMES, useTheme } from "@/components/theme-provider";
 import Tooltip from "@/components/tooltip";
+import { useChromeQuery } from "@/hooks/use-chrome-query";
 import { useSignOut } from "@/hooks/use-sign-out";
 import {
   LANG_ENDONYMS,
@@ -70,7 +70,7 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
   const { theme, setTheme, palette, setPalette } = useTheme();
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
-  const { data: organization } = useQuery(
+  const { data: organization } = useChromeQuery(
     organizationOptions(user.activeOrganizationId),
   );
 

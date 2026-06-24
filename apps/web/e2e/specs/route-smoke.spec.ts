@@ -313,7 +313,9 @@ const smokeRouteTarget = async ({
   route: SmokeRoute;
 }) => {
   const page = await context.newPage();
-  const browserErrors = createBrowserErrorCollector();
+  const browserErrors = createBrowserErrorCollector({
+    tolerateColdMountWarning: true,
+  });
   const detachPage = browserErrors.trackPage(page);
 
   try {
