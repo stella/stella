@@ -48,7 +48,7 @@ import {
 
 // ── Types ────────────────────────────────────────────
 
-type LinkedClause = {
+export type LinkedClause = {
   id: string;
   clauseId: string | null;
   clauseVariantId: string | null;
@@ -372,7 +372,7 @@ const LinkedClauseRow = ({
 // Expands the "update available" state into a line diff between the
 // pinned version and the clause's current one, plus an on-demand AI
 // summary; rendering reuses the shared version-history blocks.
-const OutdatedChanges = ({
+export const OutdatedChanges = ({
   clauseId,
   versionId,
 }: {
@@ -495,7 +495,7 @@ type UnlinkButtonProps = {
   destructive?: boolean;
 };
 
-const UnlinkButton = ({
+export const UnlinkButton = ({
   linkId,
   templateId,
   onChanged,

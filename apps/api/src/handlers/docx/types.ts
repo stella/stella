@@ -2,6 +2,8 @@
 
 import { isFieldPath } from "@stll/template-conditions";
 
+import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
+
 // ── Common ────────────────────────────────────────────────
 
 export type RevisionAuthor = {
@@ -227,7 +229,6 @@ export type DiscoveredTemplate = {
 
 export const INPUT_TYPES = [
   "text",
-  "textarea",
   "number",
   "boolean",
   "date",
@@ -250,10 +251,10 @@ export type FieldPart = {
   pattern?: string | undefined;
 };
 
-/** Registries a lookup field can resolve against. Mirrors the slugs of
- *  `BUSINESS_REGISTRY_DISPATCH`; extend as more registries gain fill-time
- *  lookup support. */
-export const LOOKUP_REGISTRIES = ["krs"] as const;
+/** Registries a lookup field can resolve against. Single-sourced from the
+ *  dispatch table's slug set, so every registry the fill boundary can resolve
+ *  (`BUSINESS_REGISTRY_DISPATCH`) is offered as a lookup target. */
+export const LOOKUP_REGISTRIES = BUSINESS_REGISTRY_SLUGS;
 
 export type LookupRegistry = (typeof LOOKUP_REGISTRIES)[number];
 

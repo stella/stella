@@ -5,6 +5,7 @@ import { useNavigate } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   AlertTriangleIcon,
+  ChevronDownIcon,
   LandmarkIcon,
   PencilIcon,
   PlusIcon,
@@ -26,6 +27,12 @@ import {
 } from "@stll/ui/components/dialog";
 import { Field, FieldControl, FieldLabel } from "@stll/ui/components/field";
 import { Input } from "@stll/ui/components/input";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@stll/ui/components/menu";
 import {
   Select,
   SelectItem,
@@ -272,6 +279,10 @@ type TemplateFormProps = (TransientFillProps | ServerFillProps) & {
    *  pencil that jumps to that field's configuration. Absent in the real
    *  fill flow so its layout stays unchanged. */
   onEditField?: (path: string) => void;
+  /** Seed the form with previously-entered values (e.g. the Studio fill facet
+   *  restoring values after the author edited a field and came back). Merged
+   *  over the field defaults so newly added fields still get theirs. */
+  initialValues?: FormValues | undefined;
   /** Persist the filled DOCX as a matter document (server-side fill only). */
   saveTarget?: SaveTarget | undefined;
   /** Show the AI "prefill from documents" panel (server-side fill only);
@@ -866,32 +877,6 @@ const FieldRenderer = ({
     );
   }
 
-  if (inputType === "textarea") {
-    return (
-      <Field>
-        <FieldLabelRow
-          label={label}
-          onEdit={onEdit}
-          prefillSnippet={prefillSnippet}
-          required={required}
-        />
-        <FieldControl
-          render={
-            <Textarea
-              name={field.path}
-              onBlur={handleBlur}
-              onChange={(e) => onChange(field.path, e.target.value)}
-              placeholder={field.hint}
-              value={typeof value === "string" ? value : ""}
-            />
-          }
-        />
-        <AiAdaptHint show={field.aiAdapt === true} />
-        <FieldError message={error} />
-      </Field>
-    );
-  }
-
   if (inputType === "number") {
     return (
       <Field>
@@ -954,14 +939,26 @@ const FieldRenderer = ({
       />
       <FieldControl
         render={
-          <Input
-            name={field.path}
-            onBlur={handleBlur}
-            onChange={(e) => onChange(field.path, e.target.value)}
-            placeholder={field.hint}
-            type="text"
-            value={typeof value === "string" ? value : ""}
-          />
+          // Lookup fields take a short registry number — keep them single-line;
+          // a plain text field auto-grows so one "text" type fits any length.
+          field.lookup !== undefined ? (
+            <Input
+              name={field.path}
+              onBlur={handleBlur}
+              onChange={(e) => onChange(field.path, e.target.value)}
+              placeholder={field.hint}
+              type="text"
+              value={typeof value === "string" ? value : ""}
+            />
+          ) : (
+            <Textarea
+              name={field.path}
+              onBlur={handleBlur}
+              onChange={(e) => onChange(field.path, e.target.value)}
+              placeholder={field.hint}
+              value={typeof value === "string" ? value : ""}
+            />
+          )
         }
       />
       <AiAdaptHint show={field.aiAdapt === true} />
@@ -1480,6 +1477,7 @@ export const TemplateForm = ({
   onEditField,
   saveTarget,
   prefill,
+  initialValues,
 }: TemplateFormProps) => {
   const t = useTranslations();
   // Formula fields are derived server-side at fill time, never user-entered:
@@ -1517,9 +1515,10 @@ export const TemplateForm = ({
       f.condition === undefined &&
       (f.count > 0 || f.inputType === "boolean" || referencedPaths.has(f.path)),
   );
-  const [values, setValues] = useState<FormValues>(() =>
-    buildInitialValues(fields),
-  );
+  const [values, setValues] = useState<FormValues>(() => ({
+    ...buildInitialValues(fields),
+    ...initialValues,
+  }));
   // Per-fill clause edits (AI tweaks made in the fill form), keyed by slot
   // patch key; sent as `clauseOverrides` and applied only to this fill.
   const [clauseOverrides, setClauseOverrides] = useState<
@@ -2270,38 +2269,63 @@ export const TemplateForm = ({
         </div>
       )}
 
-      {/* Pinned action row, styled like the Studio's other chrome rows. */}
+      {/* Pinned action row, styled like the Studio's other chrome rows.
+          Destination is the axis: download (format is a sub-choice in the
+          menu) vs. file the document in a matter (the primary when a matter
+          path exists). */}
       <div
         className={cn(
           "flex shrink-0 items-center justify-end gap-2 border-t px-2",
           TOOLBAR_ROW_HEIGHT,
         )}
       >
-        {saveTarget?.kind !== "matter" && (
-          <Button
-            disabled={loading || hasErrors}
-            onClick={() => {
-              void handleDownload("pdf").catch(() => undefined);
-            }}
-            type="button"
-            variant="outline"
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                disabled={loading || hasErrors}
+                type="button"
+                variant={saveTarget === undefined ? "default" : "outline"}
+              />
+            }
           >
-            {actionButtonLabel("downloadPdf")}
-          </Button>
-        )}
+            {t("common.download")}
+            <ChevronDownIcon className="size-3.5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent>
+            <DropdownMenuItem
+              disabled={loading || hasErrors}
+              onClick={() => {
+                void handleDownload("docx").catch(() => undefined);
+              }}
+            >
+              {t("templates.downloadDocx")}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              disabled={loading || hasErrors}
+              onClick={() => {
+                void handleDownload("pdf").catch(() => undefined);
+              }}
+            >
+              {t("templates.downloadPdf")}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+
         {saveTarget?.kind === "chooseMatter" && (
           <Button
             disabled={loading || hasErrors}
             onClick={handleChooseMatter}
             type="button"
-            variant="outline"
           >
             {actionButtonLabel("moveToMatter")}
           </Button>
         )}
-        <Button disabled={loading || hasErrors} type="submit">
-          {actionButtonLabel(submitAction)}
-        </Button>
+        {saveTarget?.kind === "matter" && (
+          <Button disabled={loading || hasErrors} type="submit">
+            {actionButtonLabel(submitAction)}
+          </Button>
+        )}
       </div>
 
       {/* "Move to matter" target picker; the popup portals out of the form,

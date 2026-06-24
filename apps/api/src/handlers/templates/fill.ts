@@ -13,6 +13,7 @@ import { documentTextForAiFields } from "@/api/handlers/docx/extract-text";
 import { createDispatchLookupResolver } from "@/api/handlers/docx/lookup-fields";
 import { applyManifestFillSteps } from "@/api/handlers/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
+import { buildIsRegistryEnabledForOrg } from "@/api/handlers/docx/registry-org-gate";
 import { resolveAiConditions } from "@/api/handlers/docx/resolve-ai-conditions";
 import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
@@ -228,7 +229,12 @@ export const fillHandler = async ({
   const stepError = await applyManifestFillSteps({
     values: fillData,
     manifest,
-    resolveLookup: createDispatchLookupResolver(),
+    resolveLookup: createDispatchLookupResolver({
+      isRegistryEnabledForOrg: await buildIsRegistryEnabledForOrg({
+        organizationId,
+        scopedDb,
+      }),
+    }),
   });
   if (stepError !== null) {
     return new Response(JSON.stringify({ error: stepError }), {

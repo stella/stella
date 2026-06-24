@@ -8,6 +8,7 @@ import {
   LOOKUP_REGISTRY_NAMES,
   renderLookupOutput,
 } from "@/api/handlers/docx/lookup-fields";
+import { buildIsRegistryEnabledForOrg } from "@/api/handlers/docx/registry-org-gate";
 import { LOOKUP_REGISTRIES } from "@/api/handlers/docx/types";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -57,56 +58,86 @@ const resolveLookup = createDispatchLookupResolver();
  * docx/lookup-fields.ts); the client decides presentation — the studio
  * parses them into formatted preview runs. No AI is involved on this path.
  */
-const lookupPreview = createSafeRootHandler(config, async function* ({ body }) {
-  const { registry, format } = body;
-  const number = body.number.trim();
-  const registryName = LOOKUP_REGISTRY_NAMES[registry];
+const lookupPreview = createSafeRootHandler(
+  config,
+  async function* ({ body, scopedDb, session }) {
+    const { registry, format } = body;
+    const number = body.number.trim();
+    const registryName = LOOKUP_REGISTRY_NAMES[registry];
 
-  if (!isPlausibleLookupValue(registry, number)) {
-    return Result.err(
-      new HandlerError({
-        status: 400,
-        message: `"${number}" is not a valid ${registryName} number.`,
-      }),
-    );
-  }
+    if (!isPlausibleLookupValue(registry, number)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `"${number}" is not a valid ${registryName} number.`,
+        }),
+      );
+    }
 
-  const cacheKey = `${registry}:${number.replaceAll(/\s/gu, "")}`;
-  let outcome = outcomeCache.get(cacheKey);
-  if (outcome === undefined) {
-    // The per-registry adapters own timeouts on their upstream calls.
-    outcome = yield* Result.await(
+    // Gate on the org's native-tool settings before consulting the
+    // org-agnostic outcome cache, so a disabled org never reads a cached hit
+    // and never reaches the registry (mirrors the contacts lookup route).
+    const isRegistryEnabledForOrg = yield* Result.await(
       Result.tryPromise({
-        try: async () => await resolveLookup({ registry, query: number }),
+        try: async () =>
+          await buildIsRegistryEnabledForOrg({
+            organizationId: session.activeOrganizationId,
+            scopedDb,
+          }),
         catch: (cause) =>
           new HandlerError({
-            status: 502,
-            message: `${registryName} lookup failed`,
+            status: 500,
+            message: "Failed to read organization settings",
             cause,
           }),
       }),
     );
-    rememberOutcome(cacheKey, outcome);
-  }
+    if (!isRegistryEnabledForOrg(registry)) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message: `The ${registryName} registry is disabled for this organization.`,
+        }),
+      );
+    }
 
-  if (outcome.type === "not-found") {
-    return Result.err(
-      new HandlerError({
-        status: 404,
-        message: `No company found in ${registryName} for "${number}".`,
-      }),
-    );
-  }
-  if (outcome.type === "error") {
-    return Result.err(
-      new HandlerError({
-        status: 502,
-        message: `${registryName} lookup failed: ${outcome.message}`,
-      }),
-    );
-  }
+    const cacheKey = `${registry}:${number.replaceAll(/\s/gu, "")}`;
+    let outcome = outcomeCache.get(cacheKey);
+    if (outcome === undefined) {
+      // The per-registry adapters own timeouts on their upstream calls.
+      outcome = yield* Result.await(
+        Result.tryPromise({
+          try: async () => await resolveLookup({ registry, query: number }),
+          catch: (cause) =>
+            new HandlerError({
+              status: 502,
+              message: `${registryName} lookup failed`,
+              cause,
+            }),
+        }),
+      );
+      rememberOutcome(cacheKey, outcome);
+    }
 
-  return Result.ok({ rendered: renderLookupOutput(format, outcome.hit) });
-});
+    if (outcome.type === "not-found") {
+      return Result.err(
+        new HandlerError({
+          status: 404,
+          message: `No company found in ${registryName} for "${number}".`,
+        }),
+      );
+    }
+    if (outcome.type === "error") {
+      return Result.err(
+        new HandlerError({
+          status: 502,
+          message: `${registryName} lookup failed: ${outcome.message}`,
+        }),
+      );
+    }
+
+    return Result.ok({ rendered: renderLookupOutput(format, outcome.hit) });
+  },
+);
 
 export default lookupPreview;

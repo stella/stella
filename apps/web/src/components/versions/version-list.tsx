@@ -264,7 +264,7 @@ export const VersionRow = ({
             </Button>
           )}
           {actions !== undefined && (
-            <span className="ms-auto flex items-center gap-0.5">{actions}</span>
+            <span className="flex items-center gap-0.5">{actions}</span>
           )}
         </div>
       )}

@@ -26,6 +26,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { formatDateInTimeZone } from "@/api/lib/date-format";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
@@ -53,6 +54,9 @@ const prefillBodySchema = t.Object({
    *  used as sources (documents picked from a matter). String-encoded
    *  because the body is multipart when a file is attached. */
   entityIds: t.Optional(t.String({ maxLength: 2000 })),
+  /** Caller's IANA time zone, used to anchor "today" in the prompt to the
+   *  user's calendar day rather than the server's UTC day. */
+  timezone: t.Optional(t.String({ maxLength: 64 })),
 });
 
 // strictObject + nullable-required members: OpenAI strict structured output
@@ -119,12 +123,14 @@ const extractFieldValues = async ({
   orgAIConfig,
   organizationId,
   aiAnalytics,
+  timezone,
 }: {
   targets: readonly PrefillTarget[];
   sources: readonly PrefillSource[];
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
   aiAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
+  timezone: string;
 }): Promise<PrefillSuggestion[]> => {
   const result = streamText({
     abortSignal: AbortSignal.timeout(PREFILL_TIMEOUT_MS),
@@ -136,7 +142,10 @@ const extractFieldValues = async ({
       serviceTier: "standard",
     }),
     output: Output.object({ schema: strictOutputSchema(prefillOutputSchema) }),
-    system: SYSTEM_PROMPT,
+    // Anchor relative dates in the sources ("as of today", deadlines) to the
+    // user's calendar day (not UTC), so "today" near midnight resolves to the
+    // date the user is actually on.
+    system: `${SYSTEM_PROMPT}\nToday is ${formatDateInTimeZone({ timezone })}.`,
     ...aiAnalytics.stepCallbacks,
   });
   const { fields } = await result.output;
@@ -357,6 +366,7 @@ const prefillTemplate = createSafeRootHandler(
             orgAIConfig,
             organizationId,
             aiAnalytics,
+            timezone: body.timezone ?? "UTC",
           }),
         catch: (cause) => {
           aiAnalytics.captureError(cause);

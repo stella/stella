@@ -14,6 +14,7 @@ import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import {
   TextQuoteIcon,
+  AlertTriangleIcon,
   ArrowLeftIcon,
   BookmarkIcon,
   BookmarkPlusIcon,
@@ -26,11 +27,13 @@ import {
   CopyIcon,
   HashIcon,
   LandmarkIcon,
+  LayoutTemplateIcon,
   ListFilterIcon,
   Loader2Icon,
   MessageCircleQuestionIcon,
   PencilIcon,
   PlusIcon,
+  RefreshCwIcon,
   RepeatIcon,
   SaveIcon,
   SigmaIcon,
@@ -63,6 +66,7 @@ import type {
 } from "@stll/folio";
 import { displayLanguageName } from "@stll/locales";
 import {
+  evaluateNumericExpression,
   isFieldPath,
   renderDeterministicFieldValue,
   serializeCondition,
@@ -120,6 +124,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
@@ -138,7 +143,11 @@ import {
   toRuleFields,
 } from "@/routes/_protected.knowledge/-components/condition-builder";
 import { LinkClauseDialog } from "@/routes/_protected.knowledge/-components/link-clause-dialog";
-import { TemplateClausesTab } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
+import {
+  OutdatedChanges,
+  UnlinkButton,
+} from "@/routes/_protected.knowledge/-components/template-clauses-tab";
+import type { LinkedClause } from "@/routes/_protected.knowledge/-components/template-clauses-tab";
 import { DATE_FORMAT_STYLES } from "@/routes/_protected.knowledge/-components/template-date-format";
 import { createTemplateFieldMention } from "@/routes/_protected.knowledge/-components/template-field-mention";
 import {
@@ -165,6 +174,7 @@ import {
   type EditableField,
   type FieldValidation,
   FieldConfigEditor,
+  isLookupRegistry,
 } from "@/routes/_protected.knowledge/-components/template-wizard";
 import {
   knowledgeKeys,
@@ -238,9 +248,10 @@ const GESTURE_SHOW_DELAY_MS = 150;
  *  Make-field row. The instant buttons never wait for this. */
 const GESTURE_ENRICH_DELAY_MS = 500;
 const GESTURE_POPOVER_OFFSET_PX = 8;
-/** Half the popover's widest layout (menu column + preview pane ≈ 440px), for
- *  clamping its centered position inside the host so it never spills out. */
-const GESTURE_POPOVER_HALF_WIDTH_PX = 220;
+/** Half the popover's widest layout (menu column + 256px preview pane, capped
+ *  at the 30rem/480px max-width), for clamping its centered position inside the
+ *  host so it never spills out. */
+const GESTURE_POPOVER_HALF_WIDTH_PX = 240;
 /** Rough rendered height of the menu + preview, for the above/below flip. */
 const GESTURE_POPOVER_EST_HEIGHT_PX = 280;
 /** At most this many existing field paths ride along in the enrichment
@@ -360,6 +371,7 @@ export const TemplateStudioPage = ({
   const markSaved = useTemplateStudioStore((s) => s.markSaved);
   const openView = useInspectorStore((s) => s.openView);
   const closeTab = useInspectorStore((s) => s.closeTab);
+  const flashTab = useInspectorStore((s) => s.flashTab);
 
   const [hasSelection, setHasSelection] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -589,6 +601,11 @@ export const TemplateStudioPage = ({
     // marker switches; the face's back chevron leaves deliberately.
     if (covering !== undefined) {
       setSelected(covering);
+      // Landing in a field marker flashes the studio's rail tab so the
+      // user's eye is drawn to where its settings appear.
+      if (covering.kind === "placeholder") {
+        flashTab(templateStudioTabId(templateId));
+      }
     } else {
       // Refresh a stale range for the still-shown directive (its position
       // may have shifted with edits) without dropping the face.
@@ -601,7 +618,7 @@ export const TemplateStudioPage = ({
       }
     }
     setOutline(buildOutline(directives));
-  }, [setSelected, setOutline]);
+  }, [setSelected, setOutline, flashTab, templateId]);
 
   // ── Bilingual mirroring ──────────────────────────────────
   // A structural gesture inside a table cell with exactly one text-bearing
@@ -1043,14 +1060,18 @@ export const TemplateStudioPage = ({
         host.clientHeight;
       const placement = fitsBelow ? "below" : "above";
       const center = rect.left + rect.width / 2 - hostRect.left;
+      // The popover is also capped at the host width (max-w: …,100%), so in a
+      // pane narrower than its natural width the real half-width is host/2 —
+      // clamp with that to keep it from spilling past the edge.
+      const halfWidth = Math.min(
+        GESTURE_POPOVER_HALF_WIDTH_PX,
+        host.clientWidth / 2,
+      );
       setGesture({
         ...sel,
         left: Math.min(
-          Math.max(center, GESTURE_POPOVER_HALF_WIDTH_PX),
-          Math.max(
-            GESTURE_POPOVER_HALF_WIDTH_PX,
-            host.clientWidth - GESTURE_POPOVER_HALF_WIDTH_PX,
-          ),
+          Math.max(center, halfWidth),
+          Math.max(halfWidth, host.clientWidth - halfWidth),
         ),
         top:
           placement === "below"
@@ -2075,7 +2096,7 @@ const SelectionGesturePopover = ({
   const [preview, setPreview] = useState<GestureInsertKind | null>(null);
   return (
     <div
-      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80vh)] max-w-[min(92vw,30rem)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
+      className="bg-popover text-popover-foreground absolute z-50 flex max-h-[min(26rem,80vh)] max-w-[min(92vw,30rem,100%)] flex-col overflow-y-auto rounded-lg border p-1 shadow-lg/5 transition-opacity duration-100 starting:opacity-0"
       role="group"
       style={{
         left: gesture.left,
@@ -2761,12 +2782,11 @@ const outlineFieldPaths = (nodes: OutlineNode[]): Set<string> => {
   return paths;
 };
 
-type StudioFacet = "fields" | "guidance" | "clauses" | "history" | "fill";
+type StudioFacet = "fields" | "guidance" | "history" | "fill";
 
 const STUDIO_FACETS: readonly StudioFacet[] = [
   "fields",
   "guidance",
-  "clauses",
   "history",
   "fill",
 ];
@@ -2841,7 +2861,6 @@ function TemplateStudioInspectorView({
   const facetLabels: Record<StudioFacet, string> = {
     fields: t("templates.fields"),
     guidance: t("templates.whenToUse"),
-    clauses: t("common.clauses"),
     history: t("common.history"),
     fill: t("templates.testFill"),
   };
@@ -2922,11 +2941,6 @@ function TemplateStudioInspectorView({
       {ready && facet === "guidance" && (
         <div className="min-h-0 flex-1 overflow-auto">
           <TemplateGuidanceFacet templateId={templateId} />
-        </div>
-      )}
-      {ready && facet === "clauses" && (
-        <div className="min-h-0 flex-1 overflow-auto">
-          <TemplateClausesTab templateId={templateId} />
         </div>
       )}
       {ready && facet === "history" && (
@@ -3010,6 +3024,10 @@ const TemplateFillFacet = ({
   const { data: detailData } = useQuery(detailOptions);
   const fillIsDirty = useTemplateStudioStore((s) => s.isDirty);
   const fillActions = useTemplateStudioStore((s) => s.actions);
+  // Persisted so the entered values survive a facet switch (edit a field and
+  // come back) instead of remounting away with the fill form.
+  const fillValues = useTemplateStudioStore((s) => s.fillValues);
+  const setFillValues = useTemplateStudioStore((s) => s.setFillValues);
   const detail =
     detailData && !(detailData instanceof Response) && "manifest" in detailData
       ? detailData
@@ -3087,12 +3105,14 @@ const TemplateFillFacet = ({
         conditions={discovered.conditions}
         fields={discovered.fields}
         fileName={detail.fileName}
+        initialValues={fillValues ?? undefined}
         onBack={() => undefined}
         onDone={() => undefined}
         onEditField={onEditField}
-        onValuesChange={(values) =>
-          pushFillPreview(values, discovered.fields, clausePreview?.slotTexts)
-        }
+        onValuesChange={(values) => {
+          setFillValues(values);
+          pushFillPreview(values, discovered.fields, clausePreview?.slotTexts);
+        }}
         saveTarget={fillSaveTarget}
         structureErrors={discovered.structureErrors}
         templateId={templateId}
@@ -3179,9 +3199,13 @@ const pushFillPreview = (
 // substitutes into the preview map when the response lands, parsed into
 // formatted preview spans so the document preview shows the formatting.
 
-/** Mirrors the KRS shape check in template-form.tsx (and `validateKrsNumber`
- *  server-side): exactly 10 digits, whitespace-tolerant. */
-const LOOKUP_PREVIEW_NUMBER_RE = /^\d{10}$/u;
+/** A plausibly-complete registry identifier for ANY supported registry:
+ *  alphanumeric, hyphen-tolerant, 5–20 chars after whitespace is stripped.
+ *  Deliberately broader than one registry's exact format so non-KRS IDs (Czech
+ *  IČO, Companies House CRN, VAT, CIK, SIRET, Finnish business id, …) also queue
+ *  the debounced preview; the settled value is queued once, and one that no
+ *  registry resolves simply renders as the raw number (a graceful miss). */
+const LOOKUP_PREVIEW_NUMBER_RE = /^[A-Za-z0-9-]{5,20}$/u;
 
 const normalizeLookupNumber = (value: string): string =>
   value.replaceAll(/\s/gu, "");
@@ -3437,7 +3461,11 @@ const StudioInsertRow = () => {
   const t = useTranslations();
   const actions = useTemplateStudioStore((s) => s.actions);
   const fields = useTemplateStudioStore((s) => s.fields);
+  const selected = useTemplateStudioStore((s) => s.selected);
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
+  // When a field is open in detail view, the primary action becomes inserting
+  // that field's marker at the caret instead of creating a new field.
+  const openFieldPath = selected?.kind === "placeholder" ? selected.expr : null;
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -3455,6 +3483,10 @@ const StudioInsertRow = () => {
   // an `{{#each}}` body. `isCaretInLoop` reads the live caret imperatively, so
   // recompute it each time the menu opens rather than reactively.
   const [caretInLoop, setCaretInLoop] = useState(false);
+  // Clause linking lives inline here (the standalone clauses tab was removed):
+  // link a clause, then drop its slot at the caret from the same menu.
+  const [linkClauseOpen, setLinkClauseOpen] = useState(false);
+  const queryClient = useQueryClient();
   const recipes =
     recipesData && "recipes" in recipesData ? recipesData.recipes : [];
   const linkedClauses =
@@ -3486,15 +3518,27 @@ const StudioInsertRow = () => {
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      <Button
-        className="flex-1 justify-start"
-        onClick={actions.insertField}
-        size="sm"
-        variant="ghost"
-      >
-        <PlusIcon />
-        {t("templates.studio.newField")}
-      </Button>
+      {openFieldPath === null ? (
+        <Button
+          className="flex-1 justify-start"
+          onClick={actions.insertField}
+          size="sm"
+          variant="ghost"
+        >
+          <PlusIcon />
+          {t("templates.studio.newField")}
+        </Button>
+      ) : (
+        <Button
+          className="flex-1 justify-start"
+          onClick={() => actions.insertExistingField(openFieldPath)}
+          size="sm"
+          variant="ghost"
+        >
+          <BracesIcon />
+          {t("templates.studio.insertIntoTemplate")}
+        </Button>
+      )}
       <Menu
         onOpenChange={(open) => {
           if (open) {
@@ -3576,34 +3620,70 @@ const StudioInsertRow = () => {
               {t("templates.studio.scopeClause")}
             </MenuSubTrigger>
             <MenuSubPopup>
-              {linkedClauses.map((link) => (
-                <MenuItem
-                  dir="auto"
-                  key={link.id}
-                  onClick={() =>
-                    actions.insertClauseSlot(
-                      link.slotName ?? slugify(link.title),
-                    )
-                  }
-                >
-                  {link.title}
-                </MenuItem>
-              ))}
-              {linkedClauses.length > 0 && <MenuSeparator />}
+              {linkedClauses.map((link) => {
+                // Only links bound to a concrete slot are insertable here: fill
+                // resolution matches links by their persisted slotName, so a
+                // slugified-title fallback for a null-slot link would leave its
+                // {{@clause:...}} marker unresolved in the generated document.
+                const slotName = link.slotName;
+                if (slotName === null) {
+                  return null;
+                }
+                return (
+                  <MenuItem
+                    dir="auto"
+                    key={link.id}
+                    onClick={() => actions.insertClauseSlot(slotName)}
+                  >
+                    {link.title}
+                  </MenuItem>
+                );
+              })}
+              {linkedClauses.some((link) => link.slotName !== null) && (
+                <MenuSeparator />
+              )}
               <MenuItem onClick={actions.insertClause}>
                 {t("templates.studio.emptyClauseSlot")}
               </MenuItem>
+              {sessionTemplateId !== null && (
+                <>
+                  <MenuSeparator />
+                  <MenuItem onClick={() => setLinkClauseOpen(true)}>
+                    <PlusIcon />
+                    {t("clauses.linkClause")}
+                  </MenuItem>
+                </>
+              )}
             </MenuSubPopup>
           </MenuSub>
         </MenuPopup>
       </Menu>
+      {sessionTemplateId !== null && (
+        <LinkClauseDialog
+          onLinked={() => {
+            queryClient
+              .invalidateQueries({
+                queryKey: knowledgeKeys.templates.clauses(
+                  activeOrganizationId,
+                  sessionTemplateId,
+                ),
+              })
+              .catch(() => {
+                /* fire-and-forget */
+              });
+          }}
+          onOpenChange={setLinkClauseOpen}
+          open={linkClauseOpen}
+          templateId={sessionTemplateId}
+        />
+      )}
     </div>
   );
 };
 
 const TemplateStudioRailIcon = (
   _props: InspectorRailIconProps<TemplateStudioPayload>,
-) => <BracesIcon size={SIDE_RAIL_TAB_ICON_SIZE_PX} />;
+) => <LayoutTemplateIcon size={SIDE_RAIL_TAB_ICON_SIZE_PX} />;
 
 registerInspectorView<TemplateStudioPayload>({
   navigationPolicy: "close-on-route-leave",
@@ -3679,21 +3759,118 @@ const StudioOverviewSummary = ({
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
-  const { data: clausesData } = useQuery(
-    templateClausesOptions(activeOrganizationId, templateId),
+  const clausesOptions = templateClausesOptions(
+    activeOrganizationId,
+    templateId,
   );
-  const clauseCount =
-    clausesData && "links" in clausesData ? clausesData.links.length : 0;
+  const { data: clausesData } = useQuery(clausesOptions);
+  const links: LinkedClause[] =
+    clausesData && "links" in clausesData ? clausesData.links : [];
+  const outdated = links.filter((link) => link.isOutdated);
   const conditionCount = fields.filter((f) => f.inputType === "boolean").length;
   const summary = [
     t("templates.fieldCount", { count: fields.length }),
     t("templates.conditionCount", { count: conditionCount }),
-    t("clauses.clauseCount", { count: clauseCount }),
+    t("clauses.clauseCount", { count: links.length }),
   ].join(" · ");
   return (
-    <p className="text-muted-foreground shrink-0 px-4 py-2 text-xs tabular-nums">
-      {summary}
-    </p>
+    <div className="flex shrink-0 items-center gap-2 px-4 py-2">
+      <p className="text-muted-foreground text-xs tabular-nums">{summary}</p>
+      {outdated.length > 0 && (
+        <ClauseDriftPopover
+          outdated={outdated}
+          queryKey={clausesOptions.queryKey}
+          templateId={templateId}
+        />
+      )}
+    </div>
+  );
+};
+
+/** Quiet footer affordance surfacing linked clauses whose pinned version drifted
+ *  behind their clause; lists them and offers a sync-all without restoring the
+ *  removed standalone clauses tab. */
+const ClauseDriftPopover = ({
+  outdated,
+  templateId,
+  queryKey,
+}: {
+  outdated: LinkedClause[];
+  templateId: string;
+  queryKey: readonly unknown[];
+}) => {
+  const t = useTranslations();
+  const queryClient = useQueryClient();
+  const [syncingAll, setSyncingAll] = useState(false);
+
+  const handleSyncAll = async () => {
+    setSyncingAll(true);
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .clauses.sync.post();
+    setSyncingAll(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.syncFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    if ("syncedCount" in response.data) {
+      stellaToast.add({
+        type: "success",
+        title: t("clauses.syncedAllResult", {
+          count: response.data.syncedCount,
+        }),
+      });
+    }
+    void queryClient.invalidateQueries({ queryKey });
+  };
+
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            className="text-warning-foreground h-auto gap-1 px-1.5 py-0.5 text-xs font-normal"
+            size="xs"
+            variant="ghost"
+          >
+            <AlertTriangleIcon className="size-3" />
+            {t("clauses.needUpdate", { count: outdated.length })}
+          </Button>
+        }
+      />
+      <PopoverPopup className="w-72 p-3">
+        <ul className="mb-2 flex flex-col gap-1">
+          {outdated.map((link) => (
+            <li className="truncate text-sm" dir="auto" key={link.id}>
+              {link.clause?.title ?? t("clauses.clauseDeleted")}
+            </li>
+          ))}
+        </ul>
+        <Button
+          className="w-full"
+          disabled={syncingAll}
+          onClick={() => {
+            void handleSyncAll();
+          }}
+          size="sm"
+          variant="outline"
+        >
+          <RefreshCwIcon
+            className={cn("size-3.5", syncingAll && "animate-spin")}
+          />
+          {t("clauses.syncAllOutdated")}
+        </Button>
+      </PopoverPopup>
+    </Popover>
   );
 };
 
@@ -4136,6 +4313,7 @@ const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
           inputMode="numeric"
           min={0}
           onChange={(e) => onMin(e.target.value)}
+          placeholder="0"
           type="number"
           value={minItems === undefined ? "" : String(minItems)}
         />
@@ -4150,6 +4328,7 @@ const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
           inputMode="numeric"
           min={0}
           onChange={(e) => onMax(e.target.value)}
+          placeholder={t("templates.studio.repeatsUnlimited")}
           type="number"
           value={maxItems === undefined ? "" : String(maxItems)}
         />
@@ -4300,16 +4479,29 @@ const ConditionFieldEditor = ({
         </div>
       ) : null}
       {sourceKind === "ai" ? (
-        <AIPromptInput
-          mentionExtension={fieldMention}
-          onChange={(value) =>
-            upsertField(field.path, { aiPrompt: value, condition: undefined })
-          }
-          placeholder={t("templates.studio.conditionAiPlaceholder")}
-          value={field.aiPrompt ?? ""}
-          valueFormat="text"
-          variant="minimal"
-        />
+        <div className="flex flex-col gap-1.5">
+          <Label className="text-sm">
+            {t("templates.studio.conditionAiInstructionsLabel")}
+          </Label>
+          <div className="border-input bg-background focus-within:border-ring focus-within:ring-ring/24 rounded-lg border px-2.5 py-2 transition-shadow focus-within:ring-[3px]">
+            <AIPromptInput
+              mentionExtension={fieldMention}
+              onChange={(value) =>
+                upsertField(field.path, {
+                  aiPrompt: value,
+                  condition: undefined,
+                })
+              }
+              placeholder={t("templates.studio.conditionAiPlaceholder")}
+              value={field.aiPrompt ?? ""}
+              valueFormat="text"
+              variant="minimal"
+            />
+          </div>
+          <p className="text-muted-foreground text-xs leading-relaxed">
+            {t("templates.studio.conditionAiInstructionsHelp")}
+          </p>
+        </div>
       ) : null}
     </div>
   );
@@ -4332,23 +4524,52 @@ const ConditionBuilder = ({
   fields: StudioField[];
   fromKey: string;
   onRewrite: (next: string) => boolean;
-}) => (
-  <>
-    <ConditionReusePicker
-      currentRef={expr}
-      fields={fields}
-      onRewrite={onRewrite}
-    />
-    <ConditionQuestionBuilder
-      expr={expr}
-      fields={fields}
-      key={fromKey}
-      onRewrite={onRewrite}
-    />
-    <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />
-    <ConditionAdvanced expr={expr} fromKey={fromKey} onRewrite={onRewrite} />
-  </>
-);
+}) => {
+  const t = useTranslations();
+  // One choice, not a stack of forms: pick how this block's visibility is
+  // decided and show only that mode (mirrors the per-field condition picker).
+  const [mode, setMode] = useState<"ask" | "rule">("ask");
+  return (
+    <div className="flex flex-col gap-4">
+      <ConditionReusePicker
+        currentRef={expr}
+        fields={fields}
+        onRewrite={onRewrite}
+      />
+      <div className="flex items-center gap-1">
+        <Button
+          className="flex-1"
+          onClick={() => setMode("ask")}
+          size="sm"
+          variant={mode === "ask" ? "secondary" : "ghost"}
+        >
+          <MessageCircleQuestionIcon className="size-3.5" />
+          {t("templates.studio.conditionSourceAsked")}
+        </Button>
+        <Button
+          className="flex-1"
+          onClick={() => setMode("rule")}
+          size="sm"
+          variant={mode === "rule" ? "secondary" : "ghost"}
+        >
+          <ListFilterIcon className="size-3.5" />
+          {t("templates.studio.conditionSourceRule")}
+        </Button>
+      </div>
+      {mode === "ask" ? (
+        <ConditionQuestionBuilder
+          expr={expr}
+          fields={fields}
+          key={fromKey}
+          onRewrite={onRewrite}
+        />
+      ) : (
+        <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />
+      )}
+      <ConditionAdvanced expr={expr} fromKey={fromKey} onRewrite={onRewrite} />
+    </div>
+  );
+};
 
 /** "Reuse a condition" affordance: every existing reusable condition (boolean
  *  fields), in plain language. Picking one points this block at it by reference
@@ -4473,10 +4694,6 @@ const ConditionQuestionBuilder = ({
 
   return (
     <section className="flex flex-col gap-2">
-      <h4 className="flex items-center gap-1.5 text-sm font-medium">
-        <MessageCircleQuestionIcon className="text-muted-foreground size-4 shrink-0" />
-        {t("templates.studio.conditionAskQuestion")}
-      </h4>
       <p className="text-muted-foreground text-xs leading-relaxed">
         {t("templates.studio.conditionAskQuestionHelp")}
       </p>
@@ -4549,10 +4766,6 @@ const ConditionRuleBuilder = ({
   if (!open) {
     return (
       <section className="flex flex-col gap-2">
-        <h4 className="flex items-center gap-1.5 text-sm font-medium">
-          <ListFilterIcon className="text-muted-foreground size-4 shrink-0" />
-          {t("templates.studio.conditionMatchField")}
-        </h4>
         <p className="text-muted-foreground text-xs leading-relaxed">
           {t("templates.studio.conditionMatchFieldHelp")}
         </p>
@@ -4570,10 +4783,6 @@ const ConditionRuleBuilder = ({
   }
   return (
     <section className="flex flex-col gap-2">
-      <h4 className="flex items-center gap-1.5 text-sm font-medium">
-        <ListFilterIcon className="text-muted-foreground size-4 shrink-0" />
-        {t("templates.studio.conditionMatchField")}
-      </h4>
       <ConditionGroupEditor
         fields={ruleFields}
         group={group}
@@ -4728,6 +4937,12 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
       ? linksData.links.find((l) => l.slotName === selected.expr)
       : undefined;
 
+  const invalidateLinks = () => {
+    void queryClient.invalidateQueries({
+      queryKey: clausesOptions.queryKey,
+    });
+  };
+
   return (
     <ScrollArea className="min-h-0 flex-1">
       <ScopeHeader
@@ -4744,15 +4959,13 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
             {t("clauses.noLinkedClauses")}
           </p>
         ) : (
-          <div className="rounded-md border p-2.5 text-sm" dir="auto">
-            {link.clause === null ? (
-              <span className="text-destructive">
-                {t("clauses.clauseDeleted")}
-              </span>
-            ) : (
-              link.clause.title
-            )}
-          </div>
+          templateId !== null && (
+            <LinkedClauseCard
+              link={link}
+              onChanged={invalidateLinks}
+              templateId={templateId}
+            />
+          )
         )}
         <Button onClick={() => setLinkOpen(true)} size="sm" variant="outline">
           {t("clauses.linkClause")}
@@ -4761,17 +4974,155 @@ const ClauseFace = ({ selected }: { selected: DirectiveRange }) => {
       {templateId === null ? null : (
         <LinkClauseDialog
           defaultSlotName={selected.expr}
-          onLinked={() => {
-            void queryClient.invalidateQueries({
-              queryKey: clausesOptions.queryKey,
-            });
-          }}
+          onLinked={invalidateLinks}
           onOpenChange={setLinkOpen}
           open={linkOpen}
           templateId={templateId}
         />
       )}
     </ScrollArea>
+  );
+};
+
+/** Per-slot clause management inside the Studio inspector: the linked clause's
+ *  pinned version, variant, outdated/sync affordance, change disclosure, and
+ *  unlink. Reuses {@link OutdatedChanges} and {@link UnlinkButton} from the
+ *  (now non-tab) clauses management surface. */
+const LinkedClauseCard = ({
+  link,
+  templateId,
+  onChanged,
+}: {
+  link: LinkedClause;
+  templateId: string;
+  onChanged: () => void;
+}) => {
+  const t = useTranslations();
+
+  if (link.clause === null) {
+    return (
+      <div className="bg-destructive/5 flex items-start gap-2.5 rounded-md border p-2.5">
+        <Trash2Icon className="text-destructive mt-0.5 size-4 shrink-0" />
+        <div className="min-w-0 flex-1">
+          <p className="text-destructive text-sm font-medium">
+            {t("clauses.clauseDeletedTombstone")}
+          </p>
+          <UnlinkButton
+            destructive
+            linkId={link.id}
+            onChanged={onChanged}
+            templateId={templateId}
+          />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-md border p-2.5">
+      <p className="text-sm font-medium" dir="auto">
+        {link.clause.title}
+      </p>
+      <div className="text-muted-foreground flex flex-wrap items-center gap-2 text-xs">
+        {link.clauseVariant && <span>{link.clauseVariant.label}</span>}
+        {link.variantDeleted && (
+          <span className="text-warning-foreground flex items-center gap-1">
+            <AlertTriangleIcon className="size-3" />
+            {t("clauses.variantDeletedWithLabel", {
+              label: link.clauseVariantLabel ?? "",
+            })}
+          </span>
+        )}
+        {link.clauseVersion && (
+          <span>
+            {t("clauses.version", {
+              version: String(link.clauseVersion.version),
+            })}
+          </span>
+        )}
+        {link.isOutdated && (
+          <span className="text-warning-foreground flex items-center gap-1">
+            <AlertTriangleIcon className="size-3" />
+            {t("clauses.outdatedVersion")}
+          </span>
+        )}
+      </div>
+
+      {link.isOutdated && link.clauseId && link.clauseVersion && (
+        <OutdatedChanges
+          clauseId={link.clauseId}
+          versionId={link.clauseVersion.id}
+        />
+      )}
+
+      <div className="flex items-center gap-1">
+        {link.isOutdated && (
+          <SlotSyncButton
+            linkId={link.id}
+            onChanged={onChanged}
+            templateId={templateId}
+          />
+        )}
+        <UnlinkButton
+          linkId={link.id}
+          onChanged={onChanged}
+          templateId={templateId}
+        />
+      </div>
+    </div>
+  );
+};
+
+/** Syncs a single slot's link to its clause's latest version. The sync-all
+ *  variant lives in {@link StudioOverviewSummary}'s drift popover. */
+const SlotSyncButton = ({
+  linkId,
+  templateId,
+  onChanged,
+}: {
+  linkId: string;
+  templateId: string;
+  onChanged: () => void;
+}) => {
+  const t = useTranslations();
+  const [syncing, setSyncing] = useState(false);
+
+  const handleSync = async () => {
+    setSyncing(true);
+    const response = await api
+      .templates({ templateId: toSafeId<"template">(templateId) })
+      .clauses({ linkId: toSafeId<"templateClause">(linkId) })
+      .sync.post();
+    setSyncing(false);
+
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("clauses.syncFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    stellaToast.add({ type: "success", title: t("clauses.synced") });
+    onChanged();
+  };
+
+  return (
+    <Button
+      disabled={syncing}
+      onClick={() => {
+        void handleSync();
+      }}
+      size="sm"
+      variant="ghost"
+    >
+      <RefreshCwIcon className={cn("size-3.5", syncing && "animate-spin")} />
+      {t("clauses.syncVersion")}
+    </Button>
   );
 };
 
@@ -5168,34 +5519,378 @@ const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
   }
   return (
     <>
-      <span className="truncate">{label}</span>
-      <code className="text-muted-foreground min-w-0 truncate text-[10px] opacity-0 transition-opacity group-hover:opacity-100">
+      <span className="text-foreground min-w-0 truncate font-medium">
+        {label}
+      </span>
+      {/* The field code only enters the layout on hover, so the label gets
+          the full width and truncates solely when the code is actually
+          shown — not pre-shrunk to reserve space for a hidden element. */}
+      <code className="text-muted-foreground hidden min-w-0 truncate text-[10px] group-hover:block">
         {path}
       </code>
     </>
   );
 };
 
+// Built-in formula functions are not field references; mirror the evaluator's
+// identifier grammar (compute.ts) so the "not a field" check matches what the
+// engine will actually resolve.
+const FORMULA_FUNCTIONS = new Set([
+  "min",
+  "max",
+  "round",
+  "abs",
+  "floor",
+  "ceil",
+]);
+const FORMULA_IDENT_RE = /[\p{L}_][\p{L}\p{N}_.]*(?:-[\p{L}\p{N}_.]+)*/gu;
+
+type FormulaEditorProps = {
+  currentPath: string;
+  fields: readonly StudioField[];
+  /** Document outline, to resolve each field's `{{#each}}` scope: a loop
+   *  formula is evaluated against the row, so same-row fields are referenced
+   *  by their row-relative path, not the full manifest path. */
+  outline: OutlineNode[];
+  value: string;
+  onChange: (formula: string) => void;
+};
+
+// Math tokens the toolbar can insert. The glyph is what the author sees; the
+// token is the canonical operator the evaluator understands (so the stored
+// formula stays in `* / -` form, never the human × ÷ − glyphs).
+const FORMULA_OPERATOR_TOKENS: readonly { glyph: string; token: string }[] = [
+  { glyph: "+", token: "+" },
+  { glyph: "−", token: "-" },
+  { glyph: "×", token: "*" },
+  { glyph: "÷", token: "/" },
+  { glyph: "%", token: "%" },
+  { glyph: "(", token: "(" },
+  { glyph: ")", token: ")" },
+];
+const FORMULA_FUNCTION_TOKENS: readonly string[] = [
+  "min(",
+  "max(",
+  "round(",
+  "abs(",
+  "floor(",
+  "ceil(",
+];
+
+/** Formula value-source editor: the expression input, clickable chips of the
+ *  number fields you can reference, a math-symbol toolbar, a live worked
+ *  example with made-up values, a read-only chip preview of the expression,
+ *  and warnings for names that are not fields or not numbers. */
+const FormulaEditor = ({
+  currentPath,
+  fields,
+  outline,
+  value,
+  onChange,
+}: FormulaEditorProps) => {
+  const t = useTranslations();
+  const inputRef = useRef<HTMLInputElement>(null);
+  const currentIndex = fields.findIndex((f) => f.path === currentPath);
+  // A field's enclosing `{{#each}}` container path, or null at top level.
+  const scopeOf = (path: string): string | null =>
+    findEnclosingEachGroup(outline, path, null)?.expr.trim() || null;
+  const currentScope = scopeOf(currentPath);
+  // The name a field is referenced by in the expression: inside a loop the fill
+  // engine evaluates against the row object, so same-row fields are named by
+  // their row-relative path (the loop-container prefix stripped); at top level
+  // the full manifest path is used.
+  const refName = (path: string): string =>
+    currentScope !== null && path.startsWith(`${currentScope}.`)
+      ? path.slice(currentScope.length + 1)
+      : path;
+  // Only same-scope fields are resolvable here: a loop formula sees only its
+  // own row, a top-level formula only top-level values.
+  const inScope = (path: string): boolean => scopeOf(path) === currentScope;
+  // Operands: same-scope number fields (any order) and EARLIER formula fields
+  // (computed before this one in manifest order). Later formula fields and
+  // non-numeric text/date fields are excluded — the evaluator NaNs on those.
+  const numberFields = fields.filter(
+    (f, index) =>
+      f.path !== currentPath &&
+      inScope(f.path) &&
+      (f.inputType === "number" || f.formula !== undefined) &&
+      !(f.formula !== undefined && index >= currentIndex),
+  );
+  const hasNonNumberFields = fields.some(
+    (f) =>
+      f.path !== currentPath &&
+      inScope(f.path) &&
+      f.inputType !== "number" &&
+      f.formula === undefined,
+  );
+  // Keyed by REFERENCE name (row-relative inside a loop) — what the expression
+  // and the evaluator actually use.
+  const fieldsByRef = new Map(
+    fields.filter((f) => inScope(f.path)).map((f) => [refName(f.path), f]),
+  );
+  const knownRefs = new Set(fieldsByRef.keys());
+  const numberRefs = new Set(numberFields.map((f) => refName(f.path)));
+  const referenced = [
+    ...new Set(
+      [...value.matchAll(FORMULA_IDENT_RE)]
+        .map((match) => match[0])
+        .filter((id) => !FORMULA_FUNCTIONS.has(id)),
+    ),
+  ];
+  const unknown = referenced.filter((name) => !knownRefs.has(name));
+  // Known fields referenced but not numbers: the evaluator coerces them to NaN.
+  const nonNumber = referenced.filter(
+    (name) => knownRefs.has(name) && !numberRefs.has(name),
+  );
+
+  const insertAtCaret = (token: string) => {
+    const input = inputRef.current;
+    // Append when the input is not focused/measurable; otherwise splice the
+    // token at the current selection so the caret position is respected.
+    if (input === null) {
+      onChange(`${value}${token}`);
+      return;
+    }
+    const start = input.selectionStart ?? value.length;
+    const end = input.selectionEnd ?? value.length;
+    onChange(`${value.slice(0, start)}${token}${value.slice(end)}`);
+  };
+
+  const appendField = (path: string) => {
+    const input = inputRef.current;
+    if (input === null) {
+      // No separator right after an opening operator/paren or on an empty
+      // expression; otherwise a space so adjacent names do not merge.
+      const needsSpace = value !== "" && !/[\s(+\-*/%,]$/u.test(value);
+      onChange(`${value}${needsSpace ? " " : ""}${path}`);
+      return;
+    }
+    const start = input.selectionStart ?? value.length;
+    const end = input.selectionEnd ?? value.length;
+    const before = value.slice(0, start);
+    const needsSpace = before !== "" && !/[\s(+\-*/%,]$/u.test(before);
+    onChange(`${before}${needsSpace ? " " : ""}${path}${value.slice(end)}`);
+  };
+
+  // Accept human multiplication/division glyphs as shorthand. `×`/`÷` are
+  // unambiguous (never part of an identifier), so map them directly. A bare
+  // `x` only becomes `*` when it sits between operand-ish characters (space,
+  // digit, closing paren on the left; space, digit, opening paren on the
+  // right) — single-char bounds keep this linear (no backtracking) and never
+  // rewrite the `x` inside an identifier like `taxRate` or `maxFee`.
+  const handleInputChange = (raw: string) => {
+    const canonical = raw
+      .replace(/×/gu, "*")
+      .replace(/÷/gu, "/")
+      .replace(/(?<lead>[\s\d)])x(?=[\s\d(])/gu, "$<lead>*");
+    onChange(canonical);
+  };
+
+  // Worked example: assign each referenced number field a distinct made-up
+  // integer (100, 200, 300…) keyed by its reference name, then evaluate the
+  // expression against that flat data object. The evaluator resolves exact keys.
+  const exampleFields = referenced
+    .filter((name) => numberRefs.has(name))
+    .map((name, index) => ({ path: name, value: (index + 1) * 100 }));
+  const exampleData: Record<string, number> = {};
+  for (const entry of exampleFields) {
+    exampleData[entry.path] = entry.value;
+  }
+  const exampleResult =
+    value.trim() === ""
+      ? undefined
+      : evaluateNumericExpression(value, exampleData);
+  const finiteExampleResult =
+    exampleResult !== undefined && Number.isFinite(exampleResult)
+      ? exampleResult
+      : undefined;
+
+  // Light tokenization for the read-only chip strip: identifier spans become
+  // chips, everything between them renders as muted inline mono text.
+  const previewTokens: { text: string; isField: boolean }[] = [];
+  let cursor = 0;
+  for (const match of value.matchAll(FORMULA_IDENT_RE)) {
+    const id = match[0];
+    const at = match.index;
+    if (at > cursor) {
+      previewTokens.push({ text: value.slice(cursor, at), isField: false });
+    }
+    previewTokens.push({ text: id, isField: knownRefs.has(id) });
+    cursor = at + id.length;
+  }
+  if (cursor < value.length) {
+    previewTokens.push({ text: value.slice(cursor), isField: false });
+  }
+
+  return (
+    <>
+      <Input
+        className="h-8 font-mono text-xs"
+        dir="ltr"
+        onChange={(e) => handleInputChange(e.target.value)}
+        placeholder={t("templates.fieldFormulaExpression")}
+        ref={inputRef}
+        value={value}
+      />
+      <div className="flex flex-wrap gap-1">
+        {FORMULA_OPERATOR_TOKENS.map((op) => (
+          <Button
+            className="shrink-0 font-mono"
+            key={op.token}
+            onClick={() => insertAtCaret(op.token)}
+            size="xs"
+            type="button"
+            variant="outline"
+          >
+            {op.glyph}
+          </Button>
+        ))}
+        <span className="w-1 shrink-0" />
+        {FORMULA_FUNCTION_TOKENS.map((fn) => (
+          <Button
+            className="shrink-0 font-mono"
+            key={fn}
+            onClick={() => insertAtCaret(fn)}
+            size="xs"
+            type="button"
+            variant="outline"
+          >
+            {fn}
+          </Button>
+        ))}
+      </div>
+      {numberFields.length > 0 && (
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          {numberFields.map((f) => (
+            <Button
+              className="shrink-0 font-mono"
+              key={f.path}
+              onClick={() => appendField(refName(f.path))}
+              size="xs"
+              title={f.label || refName(f.path)}
+              type="button"
+              variant="outline"
+            >
+              <HashIcon className="size-3 shrink-0" />
+              {refName(f.path)}
+            </Button>
+          ))}
+        </div>
+      )}
+      {hasNonNumberFields && (
+        <p className="text-muted-foreground text-xs">
+          {t("templates.studio.formulaNumbersOnlyHelp")}
+        </p>
+      )}
+      {previewTokens.length > 0 && (
+        <div
+          className="flex flex-wrap items-center gap-0.5 font-mono text-xs"
+          dir="ltr"
+        >
+          {previewTokens.map((tok, index) => (
+            <FormulaPreviewToken
+              isField={tok.isField}
+              key={index}
+              text={tok.text}
+            />
+          ))}
+        </div>
+      )}
+      {finiteExampleResult !== undefined && (
+        <p className="text-muted-foreground text-xs">
+          {t("templates.studio.formulaExampleLabel")}:{" "}
+          {exampleFields.map((entry, index) => {
+            const label = fieldsByRef.get(entry.path)?.label || entry.path;
+            return (
+              <span key={entry.path}>
+                {index > 0 && ", "}
+                {label} = {String(entry.value)}
+              </span>
+            );
+          })}
+          {exampleFields.length > 0 && " → "}
+          {/* Mirror the document exactly: the fill writes String(result), so
+              the preview shows the same raw value (no locale rounding) — the
+              author controls decimals with round(x, n). */}
+          <span className="text-foreground font-medium">
+            {String(finiteExampleResult)}
+          </span>
+        </p>
+      )}
+      {unknown.length > 0 && (
+        <p className="text-warning-foreground text-xs">
+          {t("templates.studio.formulaUnknownFields", {
+            fields: unknown.join(", "),
+          })}
+        </p>
+      )}
+      {nonNumber.length > 0 && (
+        <p className="text-warning-foreground text-xs">
+          {t("templates.studio.formulaNonNumberFields", {
+            fields: nonNumber.join(", "),
+          })}
+        </p>
+      )}
+      <p className="text-muted-foreground text-xs leading-relaxed">
+        {t("templates.fieldFormulaExpressionHint")}
+      </p>
+    </>
+  );
+};
+
+/** One token in the read-only formula preview strip: a known field path becomes
+ *  an accent chip; everything else (operators, numbers, function names) renders
+ *  as muted inline mono text. */
+const FormulaPreviewToken = ({
+  isField,
+  text,
+}: {
+  isField: boolean;
+  text: string;
+}) => {
+  if (isField) {
+    return (
+      <span className="bg-accent text-accent-foreground rounded px-1 py-0.5 font-mono text-xs">
+        {text}
+      </span>
+    );
+  }
+  return <span className="text-muted-foreground">{text}</span>;
+};
+
 /** Mini-icons marking what a field can do: registry lookup, AI involvement,
  *  formula derivation, and a quiet dot for required. */
-const FieldCapabilityIcons = ({ field }: { field: StudioField }) => (
-  <>
-    {field.lookup === undefined ? null : <LandmarkIcon className="size-3" />}
-    {field.aiAdapt ? (
-      <span className="flex items-center gap-0.5">
-        <UserIcon className="size-3" />
+const FieldCapabilityIcons = ({ field }: { field: StudioField }) => {
+  const t = useTranslations();
+  return (
+    <>
+      {field.lookup === undefined ? null : <LandmarkIcon className="size-3" />}
+      {field.aiAdapt ? (
+        <span className="flex items-center gap-0.5">
+          <UserIcon className="size-3" />
+          <WandSparklesIcon className="size-3" />
+        </span>
+      ) : null}
+      {!field.aiAdapt && field.aiPrompt !== undefined ? (
         <WandSparklesIcon className="size-3" />
-      </span>
-    ) : null}
-    {!field.aiAdapt && field.aiPrompt !== undefined ? (
-      <WandSparklesIcon className="size-3" />
-    ) : null}
-    {field.formula === undefined ? null : <SigmaIcon className="size-3" />}
-    {field.required ? (
-      <span aria-hidden="true" className="size-1 rounded-full bg-current" />
-    ) : null}
-  </>
-);
+      ) : null}
+      {field.formula === undefined ? null : <SigmaIcon className="size-3" />}
+      {field.required ? (
+        <Tooltip
+          content={t("common.required")}
+          render={
+            <span
+              aria-label={t("common.required")}
+              className="flex size-3.5 items-center justify-center"
+            />
+          }
+        >
+          <span aria-hidden="true" className="size-1 rounded-full bg-current" />
+        </Tooltip>
+      ) : null}
+    </>
+  );
+};
 
 const ScopeHeader = ({
   title,
@@ -5344,7 +6039,7 @@ const FieldConditionSection = ({
             }
           }}
           size="sm"
-          variant="ghost"
+          variant="outline"
         >
           <SplitIcon className="size-3.5" />
           {t("templates.studio.showOnlyIf")}
@@ -5399,6 +6094,11 @@ const FieldConditionSection = ({
  * form), lets the model propose a configuration, and previews the actual fill
  * control so every setting shows its consequence.
  */
+// Survives the FieldFace remount the repeatable toggle triggers (the field
+// re-paths, so its key changes): captured before the toggle and restored onto
+// the fresh ScrollArea viewport so the panel stays scrolled where it was.
+let pendingFieldFaceScrollTop: number | null = null;
+
 const FieldFace = ({
   field,
   onUpdate,
@@ -5427,6 +6127,15 @@ const FieldFace = ({
     [fields, field.path],
   );
   const [recipeDialogOpen, setRecipeDialogOpen] = useState(false);
+  const viewportRef = useRef<HTMLDivElement | null>(null);
+  // Restore the captured scroll position when the remounted viewport mounts.
+  const setViewport = useCallback((el: HTMLDivElement | null) => {
+    viewportRef.current = el;
+    if (el !== null && pendingFieldFaceScrollTop !== null) {
+      el.scrollTop = pendingFieldFaceScrollTop;
+      pendingFieldFaceScrollTop = null;
+    }
+  }, []);
 
   // Clear the in-document preview when the face leaves or switches fields
   // (cancelling any pending lookup preview so it cannot re-set it).
@@ -5448,8 +6157,11 @@ const FieldFace = ({
   const condition = fieldConditionState(field, outline);
   const fieldIsPlaced = outlineFieldPaths(outline).has(field.path);
   const toggleRepeatable = (next: boolean) => {
+    // Keep the panel scrolled where it is across the re-path remount.
+    pendingFieldFaceScrollTop = viewportRef.current?.scrollTop ?? null;
     const applied = actions?.setFieldRepeatable(field.path, next) ?? false;
     if (!applied) {
+      pendingFieldFaceScrollTop = null;
       stellaToast.add({ type: "error", title: t("errors.actionFailed") });
     }
   };
@@ -5467,7 +6179,7 @@ const FieldFace = ({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1" viewportRef={setViewport}>
         <ScopeHeader
           action={
             <div className="flex items-center gap-0.5">
@@ -5642,18 +6354,13 @@ const FieldFace = ({
             </>
           ) : null}
           {valueSource === "formula" ? (
-            <>
-              <Input
-                className="h-8 font-mono text-xs"
-                dir="ltr"
-                onChange={(e) => onUpdate({ formula: e.target.value })}
-                placeholder={t("templates.fieldFormulaExpression")}
-                value={field.formula}
-              />
-              <p className="text-muted-foreground text-xs leading-relaxed">
-                {t("templates.fieldFormulaExpressionHint")}
-              </p>
-            </>
+            <FormulaEditor
+              currentPath={field.path}
+              fields={fields}
+              onChange={(formula) => onUpdate({ formula })}
+              outline={outline}
+              value={field.formula ?? ""}
+            />
           ) : null}
           {valueSource === "person" || valueSource === "textAi" ? (
             <label className="text-muted-foreground flex w-fit cursor-pointer items-center gap-1.5 text-xs">
@@ -5720,7 +6427,7 @@ const FieldFace = ({
               title={
                 repeat.disabledKey === null ? undefined : t(repeat.disabledKey)
               }
-              variant={repeat.kind === "on" ? "secondary" : "ghost"}
+              variant={repeat.kind === "on" ? "secondary" : "outline"}
             >
               <RepeatIcon className="size-3.5" />
               {t("templates.studio.repeatable")}
@@ -5972,7 +6679,6 @@ const useFitToWidth = () => {
 
 const INPUT_TYPE_VALUES = [
   "text",
-  "textarea",
   "number",
   "boolean",
   "date",
@@ -6094,10 +6800,11 @@ const parseFields = (manifest: unknown): StudioField[] => {
       if (typeof raw["optionsFrom"] === "string") {
         field.optionsFrom = raw["optionsFrom"];
       }
-      if (isRecord(raw["lookup"]) && raw["lookup"]["registry"] === "krs") {
-        const formats = parseEditableLookupFormats(raw["lookup"]["formats"]);
+      const rawLookup = raw["lookup"];
+      if (isRecord(rawLookup) && isLookupRegistry(rawLookup["registry"])) {
+        const formats = parseEditableLookupFormats(rawLookup["formats"]);
         if (formats.length > 0) {
-          field.lookup = { registry: "krs", formats };
+          field.lookup = { registry: rawLookup["registry"], formats };
         }
       }
       if (Array.isArray(raw["parts"]) && typeof raw["format"] === "string") {

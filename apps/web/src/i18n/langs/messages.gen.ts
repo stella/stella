@@ -611,6 +611,7 @@ type Messages = {
     "linkedClauses": "Linked clauses";
     "loadFailed": "Failed to load clauses";
     "loading": "Loading clauses…";
+    "needUpdate": "{count, plural, one {# needs update} other {# need update}}";
     "noChanges": "No changes";
     "noLinkedClauses": "No linked clauses";
     "noResults": "No clauses yet";
@@ -2128,6 +2129,7 @@ type Messages = {
     "fieldLookupFormatsHint": "One company, several renderings of the same lookup. The first format is the default for the bare marker; each later format adds a marker (the field path, a dot, then the name) the document can use alongside it.";
     "fieldLookupInsertDetail": "Insert a company detail";
     "fieldLookupRegistry": "Company register";
+    "fieldLookupRegistrySearch": "Search registries…";
     "fieldMultipleParts": "Multiple parts";
     "fieldOptions": "Options";
     "fieldOptionsFrom": "Options from field";
@@ -2155,8 +2157,8 @@ type Messages = {
     "loadFailed": "Failed to load templates";
     "lookupFieldHint": "Enter a KRS number; the company details are filled from the register.";
     "moveToCategory": "Move to category";
-    "moveToMatter": "Move to matter";
-    "moveToMatterAnyway": "Move anyway";
+    "moveToMatter": "Save to matter";
+    "moveToMatterAnyway": "Save anyway";
     "newFromTemplate": "New document from template";
     "newFromTemplateFillHint": "Fill in the fields; the document is created in this matter.";
     "newTemplate": "New template";
@@ -2210,7 +2212,9 @@ type Messages = {
       "conceptCondition": "Shows this text only when a condition holds.";
       "conceptField": "A value you fill in at use time.";
       "conceptLoop": "Repeats this text for each item in a list.";
-      "conditionAdvanced": "Advanced";
+      "conditionAdvanced": "Edit as expression";
+      "conditionAiInstructionsHelp": "Tell the AI how to decide whether this block applies. It reads the document text and the other field values.";
+      "conditionAiInstructionsLabel": "Instructions for the AI";
       "conditionAiPlaceholder": "Describe when this is true, e.g. the contract is governed by Czech law";
       "conditionAskQuestion": "Ask a yes/no question";
       "conditionAskQuestionHelp": "The person filling the template answers Yes or No. This block appears when they answer Yes.";
@@ -2237,9 +2241,14 @@ type Messages = {
       "fillStale": "Unsaved changes — save to fill with the latest fields.";
       "filledByPerson": "Person";
       "formula": "Formula";
+      "formulaExampleLabel": "Example";
+      "formulaNonNumberFields": "Not a number: {fields}";
+      "formulaNumbersOnlyHelp": "Calculations use number fields only — dates and text can't be used.";
+      "formulaUnknownFields": "Not a field: {fields}";
       "insert": "Insert";
       "insertAtCaret": "Insert at cursor";
       "insertFormatDefault": "Default";
+      "insertIntoTemplate": "Insert into template";
       "insertItemNumber": "Item number";
       "insertItemTotal": "Total items";
       "insertOutput": "Insert in document";
@@ -2268,11 +2277,12 @@ type Messages = {
       "renameField": "Rename field";
       "renameFieldInvalid": "That name is invalid or already taken";
       "repeatForEach": "Repeat for each…";
-      "repeatable": "Repeatable";
+      "repeatable": "Allow multiple";
       "repeatableHelp": "Let the filler add this field more than once — for example, a list of parties or items.";
       "repeatableLoopHasOtherContent": "The repeating block around this field contains other content; remove it in the document.";
       "repeatableNested": "This field already sits inside a repeating block.";
       "repeats": "Repeats: {item}";
+      "repeatsUnlimited": "Unlimited";
       "saveAsRecipe": "Save as recipe";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
@@ -2284,7 +2294,7 @@ type Messages = {
       "showOnlyWhen": "This field shows only when:";
       "textPlusAi": "Person + AI";
       "useExisting": "Use existing {name}";
-      "whoFills": "Who fills this?";
+      "whoFills": "Who fills this field later?";
     };
     "tagPlaceholder": "Type a tag and press Enter";
     "tags": "Tags";

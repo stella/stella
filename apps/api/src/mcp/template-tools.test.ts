@@ -259,7 +259,7 @@ describe("MCP template tools", () => {
         {
           path: "scope",
           label: "Scope",
-          inputType: "textarea",
+          inputType: "text",
           required: false,
           hint: null,
           options: null,

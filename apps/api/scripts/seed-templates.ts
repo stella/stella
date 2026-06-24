@@ -1394,7 +1394,7 @@ const TEMPLATES: TemplateSeed[] = [
         label: "Seller Jurisdiction",
         inputType: "text",
       },
-      { path: "sellerAddress", label: "Seller Address", inputType: "textarea" },
+      { path: "sellerAddress", label: "Seller Address", inputType: "text" },
       {
         path: "buyerName",
         label: "Buyer Name",
@@ -1406,7 +1406,7 @@ const TEMPLATES: TemplateSeed[] = [
         label: "Buyer Jurisdiction",
         inputType: "text",
       },
-      { path: "buyerAddress", label: "Buyer Address", inputType: "textarea" },
+      { path: "buyerAddress", label: "Buyer Address", inputType: "text" },
       {
         path: "shareCount",
         label: "Number of Shares",
@@ -1497,7 +1497,7 @@ const TEMPLATES: TemplateSeed[] = [
       {
         path: "resolutionText",
         label: "Resolution Text",
-        inputType: "textarea",
+        inputType: "text",
         required: true,
       },
       {
@@ -1668,7 +1668,7 @@ const TEMPLATES: TemplateSeed[] = [
       {
         path: "employerAddress",
         label: "Employer Address",
-        inputType: "textarea",
+        inputType: "text",
       },
       {
         path: "employeeName",
@@ -1679,7 +1679,7 @@ const TEMPLATES: TemplateSeed[] = [
       {
         path: "employeeAddress",
         label: "Employee Address",
-        inputType: "textarea",
+        inputType: "text",
       },
       {
         path: "jobTitle",
@@ -1776,7 +1776,7 @@ const TEMPLATES: TemplateSeed[] = [
       {
         path: "disclosingPartyAddress",
         label: "Disclosing Party Address",
-        inputType: "textarea",
+        inputType: "text",
       },
       {
         path: "receivingPartyName",
@@ -1787,12 +1787,12 @@ const TEMPLATES: TemplateSeed[] = [
       {
         path: "receivingPartyAddress",
         label: "Receiving Party Address",
-        inputType: "textarea",
+        inputType: "text",
       },
       {
         path: "purpose",
         label: "Purpose",
-        inputType: "textarea",
+        inputType: "text",
         required: true,
       },
       {
@@ -1873,7 +1873,7 @@ const TEMPLATES: TemplateSeed[] = [
       {
         path: "providerAddress",
         label: "Provider Address",
-        inputType: "textarea",
+        inputType: "text",
       },
       {
         path: "clientName",
@@ -1886,7 +1886,7 @@ const TEMPLATES: TemplateSeed[] = [
         label: "Client Jurisdiction",
         inputType: "text",
       },
-      { path: "clientAddress", label: "Client Address", inputType: "textarea" },
+      { path: "clientAddress", label: "Client Address", inputType: "text" },
       { path: "services", label: "Services", inputType: "text" },
       {
         path: "startDate",
@@ -2040,7 +2040,7 @@ const TEMPLATES: TemplateSeed[] = [
       {
         path: "landlordAddress",
         label: "Landlord Address",
-        inputType: "textarea",
+        inputType: "text",
       },
       {
         path: "tenantName",
@@ -2048,11 +2048,11 @@ const TEMPLATES: TemplateSeed[] = [
         inputType: "text",
         required: true,
       },
-      { path: "tenantAddress", label: "Tenant Address", inputType: "textarea" },
+      { path: "tenantAddress", label: "Tenant Address", inputType: "text" },
       {
         path: "premisesDescription",
         label: "Premises Description",
-        inputType: "textarea",
+        inputType: "text",
         required: true,
       },
       { path: "areaSize", label: "Area (sq m)", inputType: "number" },
