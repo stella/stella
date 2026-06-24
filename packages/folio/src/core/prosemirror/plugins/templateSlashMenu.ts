@@ -125,64 +125,94 @@ const slashStillAt = (state: EditorState, from: number): boolean => {
 };
 
 /**
- * The query is the contiguous run of query-grammar chars right after the `/`,
- * read from the DOCUMENT (not the caret). Anchoring the query to the text — not
- * the selection — keeps it stable across the paged editor's relayout selection
- * churn, which would otherwise momentarily report a caret outside the trigger
- * and tear the menu down mid-type. A non-query char (space, etc.) ends the run.
+ * The query the user has typed: the text between the `/` (at `from`) and the
+ * caret. CARET-bounded, not document-run-bounded — so it does NOT swallow text
+ * that already followed the caret when `/` was typed (e.g. typing `/` before
+ * "lord" must not make the query "lord"), and a terminator the user types (a
+ * space or punctuation) inside that span ends the command.
+ *
+ * Returns:
+ *  - `{ query }`  the typed query is all query-grammar chars (menu stays open).
+ *  - `"broken"`   the span contains a terminator (typed space/punctuation), or
+ *                 the caret is not a collapsed cursor after the `/` in the same
+ *                 block — the command is over.
  */
-const readQueryRun = (state: EditorState, from: number): string => {
+type TypedQuery = { query: string } | "broken";
+
+const readTypedQuery = (state: EditorState, from: number): TypedQuery => {
+  const sel = state.selection;
+  if (!sel.empty || sel.from <= from) {
+    return "broken";
+  }
   const $from = state.doc.resolve(from);
-  const rest = $from.parent.textBetween(
+  const $caret = state.doc.resolve(sel.from);
+  if (!$from.sameParent($caret)) {
+    return "broken";
+  }
+  const typed = $from.parent.textBetween(
     $from.parentOffset + 1,
-    $from.parent.content.size,
+    $caret.parentOffset,
     "\n",
     "\n",
   );
-  let query = "";
-  for (const char of rest) {
+  for (const char of typed) {
     if (!QUERY_CHAR.test(char)) {
-      break;
+      return "broken";
     }
-    query += char;
   }
-  return query;
+  return { query: typed };
 };
 
-/** Whether the caret sits within the trigger span `[from, from + 1 + query]`,
- *  i.e. the user is still editing the trigger rather than having clicked away. */
-const caretInTrigger = (
-  state: EditorState,
-  from: number,
-  queryLength: number,
-): boolean => {
+/** Whether a selection change is a clear "clicked away" signal that should
+ *  close the menu: the user selected a range, or dropped the caret before the
+ *  `/` that anchors the trigger. */
+const clickedAway = (state: EditorState, from: number): boolean => {
   const sel = state.selection;
-  return sel.empty && sel.from >= from && sel.from <= from + 1 + queryLength;
-};
-
-/** Whether a non-query char sits right after the `/query` run — the user typed
- *  something that breaks out of the command (a space, but also punctuation like
- *  `,` or `;`). `readQueryRun` already stops at the first non-query char, so any
- *  non-empty char at this offset is a terminator: dismiss rather than keep
- *  capturing arrows/Enter while the caret is back in ordinary prose. */
-const queryEnded = (
-  state: EditorState,
-  from: number,
-  queryLength: number,
-): boolean => {
-  const $from = state.doc.resolve(from);
-  const offset = $from.parentOffset + 1 + queryLength;
-  if (offset >= $from.parent.content.size) {
-    return false;
-  }
-  const char = $from.parent.textBetween(offset, offset + 1, "\n", "\n");
-  return char !== "" && !QUERY_CHAR.test(char);
+  return !sel.empty || sel.from < from;
 };
 
 const sameState = (
   a: TemplateSlashMenuState,
   b: TemplateSlashMenuState,
 ): boolean => a.active === b.active && a.from === b.from && a.query === b.query;
+
+/**
+ * Open the trigger at the collapsed caret if the guards pass: insert the `/`
+ * and dispatch the open meta in one transaction (so the slash and the anchor
+ * share one undo step), and return `true`. Shared by the keydown opener (the
+ * path that fires in folio's paged hidden-view input pipeline) and the
+ * `handleTextInput` opener (plain ProseMirror views / playground). Both guard
+ * on the menu not already being active, so they never double-open or double
+ * insert the `/`.
+ */
+const tryOpenTrigger = (view: SlashEditorView): boolean => {
+  if (getTemplateSlashMenu(view.state).active) {
+    return false;
+  }
+  const { from } = view.state.selection;
+  if (
+    !view.state.selection.empty ||
+    !atTriggerBoundary(view.state, from) ||
+    insideDirective(view.state, from)
+  ) {
+    return false;
+  }
+  const tr = view.state.tr.insertText("/", from);
+  tr.setMeta(templateSlashMenuKey, {
+    type: "open",
+    from,
+    query: "",
+  } satisfies OpenMeta);
+  view.dispatch(tr);
+  return true;
+};
+
+/** The slice of EditorView the open helper needs (state + dispatch), so it can
+ *  be unit-tested with a fake view. */
+type SlashEditorView = {
+  state: EditorState;
+  dispatch: (tr: Transaction) => void;
+};
 
 export const templateSlashMenuPlugin = (
   options: TemplateSlashMenuPluginOptions = {},
@@ -208,30 +238,26 @@ export const templateSlashMenuPlugin = (
         if (!slashStillAt(newState, from)) {
           return IDLE;
         }
-        // The query is derived from the document text after the `/`, so it stays
-        // correct through the paged editor's relayout selection churn (which can
-        // momentarily move the caret). Only a genuine caret move OUT of the
-        // trigger on a selection-only transaction closes the menu — typing
-        // (doc-changing) never closes on caret grounds, since the caret rides at
-        // the end of the query.
-        const query = readQueryRun(newState, from);
-        // Any non-query char right after the `/query` ends the command — a
-        // space, but also punctuation such as `,` — so the menu does not keep
-        // capturing keys once the caret is back in ordinary prose.
-        if (queryEnded(newState, from, query.length)) {
+        if (tr.docChanged) {
+          // Typing / deleting: the caret is authoritative, so read the typed
+          // query (the text from `/` to the caret). A terminator typed into that
+          // span (space, punctuation) ends the command; otherwise the menu stays
+          // open with the new query.
+          const typed = readTypedQuery(newState, from);
+          if (typed === "broken") {
+            return IDLE;
+          }
+          return { active: true, from, query: typed.query };
+        }
+        // Selection-only transaction. The paged editor re-asserts the caret a
+        // frame after input (relayout churn) and that caret can momentarily land
+        // off the trigger, so DON'T recompute the query from it — keep the prior
+        // query. Only a clear click-away (range select, or caret before the `/`)
+        // closes the menu.
+        if (tr.selectionSet && clickedAway(newState, from)) {
           return IDLE;
         }
-        // Only a genuine caret move OUT of the trigger on a selection-only
-        // transaction closes the menu — typing (doc-changing) never closes on
-        // caret grounds, since the caret rides at the end of the query.
-        if (
-          !tr.docChanged &&
-          tr.selectionSet &&
-          !caretInTrigger(newState, from, query.length)
-        ) {
-          return IDLE;
-        }
-        return { active: true, from, query };
+        return { active: true, from, query: value.query };
       },
     },
     view: () => ({
@@ -244,34 +270,39 @@ export const templateSlashMenuPlugin = (
       },
     }),
     props: {
+      // Fallback opener for plain ProseMirror views (playground) where native
+      // text input flows through `handleTextInput`. In folio's paged editor the
+      // hidden view does NOT route typed chars here, so the keydown opener below
+      // is what actually fires; both share `tryOpenTrigger` and guard on
+      // not-already-active so they never double-insert the `/`.
       handleTextInput: (view, _from, _to, text) => {
         if (text !== "/") {
           return false;
         }
-        const { from } = view.state.selection;
-        if (!view.state.selection.empty) {
-          return false;
-        }
-        if (!atTriggerBoundary(view.state, from)) {
-          return false;
-        }
-        if (insideDirective(view.state, from)) {
-          return false;
-        }
-        // Let PM insert the `/` itself, then open anchored at it on the next
-        // tick. Dispatching the open meta on the already-applied insert keeps
-        // the anchor and the typed `/` in one undo step.
-        const tr = view.state.tr.insertText("/", from);
-        tr.setMeta(templateSlashMenuKey, {
-          type: "open",
-          from,
-          query: "",
-        } satisfies OpenMeta);
-        view.dispatch(tr);
-        return true;
+        return tryOpenTrigger(view);
       },
       handleKeyDown: (view, event) => {
         const current = templateSlashMenuKey.getState(view.state) ?? IDLE;
+        // OPEN PATH (folio paged editor). Typed chars are not routed through
+        // `props.handleTextInput` in the hidden-view pipeline, but keydown IS
+        // bridged to the plugin chain (see PagedEditor's hidden-view key
+        // handler). `event.key` is the resolved char, so this is layout-safe
+        // (e.g. Shift+7 → "/"); only command modifiers block it. `tryOpenTrigger`
+        // inserts the `/` and opens, and we consume the event so the native
+        // insert cannot also add a second `/`.
+        if (
+          !current.active &&
+          event.key === "/" &&
+          !event.metaKey &&
+          !event.ctrlKey &&
+          !event.altKey
+        ) {
+          if (tryOpenTrigger(view)) {
+            event.preventDefault();
+            return true;
+          }
+          return false;
+        }
         if (!current.active) {
           return false;
         }

@@ -46,15 +46,17 @@ const openAt = (state: PMEditorState, slashOffset: number): PMEditorState => {
   return state.apply(tr);
 };
 
-/** Force the plugin to re-derive its query from the current document, the way a
- *  real keystroke transaction would. `openAt` seeds query="" (the `/` moment);
- *  tests that pre-populate the doc with a typed query use this to sync state. */
-const rederive = (state: PMEditorState): PMEditorState =>
-  state.apply(
-    state.tr.setSelection(
-      TextSelection.create(state.doc, state.selection.from),
-    ),
-  );
+/** Type `text` one character at a time at the caret (doc-changing transactions),
+ *  the way real keystrokes drive the plugin. The query is caret-bounded and only
+ *  updates on doc changes, so building it up via real inserts is how a query
+ *  becomes active. */
+const typeChars = (state: PMEditorState, text: string): PMEditorState => {
+  let next = state;
+  for (const char of text) {
+    next = next.apply(next.tr.insertText(char, next.selection.from));
+  }
+  return next;
+};
 
 describe("templateSlashMenu state machine", () => {
   test("typing field-name chars after the slash extends the query", () => {
@@ -71,6 +73,26 @@ describe("templateSlashMenu state machine", () => {
     const open = getTemplateSlashMenu(state);
     expect(open.active).toBe(true);
     expect(open.active && open.query).toBe("fee");
+  });
+
+  test("typing a query stays open when prose follows the caret (bug: live filter)", () => {
+    // Regression for the live bug where typing to filter dismissed the menu: the
+    // query is caret-bounded, so existing prose AFTER the caret must NOT be
+    // swallowed into the query nor trip the terminator check. Open before "lord"
+    // (as if `/` was typed inside "Landlord") and type "field".
+    let state = stateWith("Fee lord", 4); // caret after "Fee "
+    state = state.apply(
+      state.tr
+        .insertText("/", 5)
+        .setMeta(templateSlashMenuKey, { type: "open", from: 5, query: "" }),
+    );
+    // Doc is now "Fee /lord" with the caret right after the `/` (before "lord").
+    state = typeChars(state, "field");
+    const open = getTemplateSlashMenu(state);
+    expect(open.active).toBe(true);
+    // Query is exactly what was typed — the trailing "lord" is not part of it.
+    expect(open.active && open.query).toBe("field");
+    expect(state.doc.textContent).toBe("Fee /fieldlord");
   });
 
   test("a space after the slash closes the menu (ends the query)", () => {
@@ -119,11 +141,15 @@ describe("templateSlashMenu state machine", () => {
 
 describe("consumeTemplateSlashQuery", () => {
   test("deletes the /query range and reports it for marker insertion", () => {
-    let state = stateWith("Fee /field", 10);
-    state = openAt(state, 4);
-    // `openAt` seeds query="" (mirrors the moment `/` is typed); re-derive from
-    // the document so the active query reflects the typed "field".
-    state = rederive(state);
+    // Start with "Fee " (caret at end), insert the `/` + open meta the way the
+    // keydown opener does, then type the query so it becomes active.
+    let state = stateWith("Fee ", 4);
+    state = state.apply(
+      state.tr
+        .insertText("/", 5)
+        .setMeta(templateSlashMenuKey, { type: "open", from: 5, query: "" }),
+    );
+    state = typeChars(state, "field");
     expect(
       getTemplateSlashMenu(state).active && getTemplateSlashMenu(state).query,
     ).toBe("field");
@@ -140,13 +166,16 @@ describe("consumeTemplateSlashQuery", () => {
   });
 
   test("consumes the whole /query even when the caret sits inside it", () => {
-    // Click back inside the active query (between "/fi" and "eld"): the whole
-    // `/field` must be removed, not just up to the caret, or the trailing
-    // "eld" is orphaned next to the inserted marker.
-    let state = stateWith("Fee /field", 10);
-    state = openAt(state, 4);
-    state = rederive(state);
-    // Move the caret back inside the active query ("/fi|eld").
+    // Build an active `/field`, then move the caret back inside it (between
+    // "/fi" and "eld"): the whole `/field` must still be removed, not just up to
+    // the caret, or the trailing "eld" is orphaned next to the inserted marker.
+    let state = stateWith("Fee ", 4);
+    state = state.apply(
+      state.tr
+        .insertText("/", 5)
+        .setMeta(templateSlashMenuKey, { type: "open", from: 5, query: "" }),
+    );
+    state = typeChars(state, "field");
     state = state.apply(
       state.tr.setSelection(TextSelection.create(state.doc, 8)),
     );
@@ -335,6 +364,37 @@ describe("templateSlashMenu handleTextInput", () => {
 });
 
 describe("templateSlashMenu handleKeyDown", () => {
+  test('typing "/" via keydown opens the menu (folio paged-editor path)', () => {
+    // Folio's hidden view does not route typed chars through handleTextInput,
+    // so the `/` that opens the menu must be detected in keydown. This drives
+    // the key the way the paged editor's bridged hidden-view key handler does.
+    const { view, props } = makePluginHarness("", 0);
+    const event = keyEvent("/");
+    expect(props.handleKeyDown(view, event)).toBe(true);
+    expect(event.defaultPrevented).toBe(true);
+    expect(view.state.doc.textContent).toBe("/");
+    expect(getTemplateSlashMenu(view.state).active).toBe(true);
+  });
+
+  test('keydown "/" mid-word does not open the menu', () => {
+    const { view, props } = makePluginHarness("a", 1);
+    const event = keyEvent("/");
+    expect(props.handleKeyDown(view, event)).toBe(false);
+    expect(event.defaultPrevented).toBe(false);
+    expect(getTemplateSlashMenu(view.state).active).toBe(false);
+  });
+
+  test('keydown "/" does not double-open when already active', () => {
+    const { view, props } = makePluginHarness("/", 1);
+    view.state = openAt(view.state, 0);
+    const event = keyEvent("/");
+    // Already active → the open branch is skipped; "/" is not a nav action, so
+    // keyToAction returns null and the key falls through (returns true only for
+    // recognized nav keys). Either way the menu stays singular/active.
+    props.handleKeyDown(view, event);
+    expect(getTemplateSlashMenu(view.state).active).toBe(true);
+  });
+
   test("consumes ArrowDown/ArrowUp while open and drives onKeyAction", () => {
     const actions: TemplateSlashMenuKeyAction[] = [];
     const { view, props } = makePluginHarness("/", 1, (action) => {

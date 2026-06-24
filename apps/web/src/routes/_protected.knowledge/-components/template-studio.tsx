@@ -1511,6 +1511,9 @@ export const TemplateStudioPage = ({
   // React render cycle and needs the freshest view + highlight + row count.
   const slashViewRef = useRef<SlashView>("root");
   const slashHighlightRef = useRef(0);
+  // The `/` anchor the menu is currently positioned for; a change means a fresh
+  // trigger that needs (re)positioning, vs. the same trigger's query growing.
+  const slashFromRef = useRef<number | null>(null);
   const setSlashView = (view: SlashView) => {
     slashViewRef.current = view;
     setSlashViewState(view);
@@ -1604,9 +1607,10 @@ export const TemplateStudioPage = ({
       const caretLeft = rect.left - hostRect.left;
       const caretTop = rect.top - hostRect.top;
       const caretBottom = rect.bottom - hostRect.top;
-      // Prefer opening ABOVE the caret: below-placement collides with the
-      // suggested-action chips and the floating AI bar pinned at the bottom of
-      // the editor. Only fall back to below when there is no room above.
+      // Prefer opening ABOVE the caret (below-placement collides with the
+      // suggested-action chips and the floating AI bar pinned at the bottom),
+      // but only when there is actually room above — otherwise the menu would
+      // render off the top of the editor. Near the top, fall back to below.
       const fitsAbove =
         caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
       const placement = fitsAbove ? "above" : "below";
@@ -1635,22 +1639,32 @@ export const TemplateStudioPage = ({
     if (!state.active) {
       setSlashState(null);
       setSlashView("root");
+      slashFromRef.current = null;
       return;
     }
     // Update the query SYNCHRONOUSLY so the visible rows filter on every
-    // keystroke; geometry is refined separately (and may lag a frame while the
-    // caret repaints) without ever gating the query update.
+    // keystroke. The menu is anchored at the `/` and does NOT follow the caret
+    // as the query grows, so geometry is computed once on open; default
+    // placement is "below" so a not-yet-positioned menu shows on-screen below
+    // the caret rather than translating its height off the top of the editor.
+    const isNewTrigger = slashFromRef.current !== state.from;
+    slashFromRef.current = state.from;
     setSlashState((prev) => ({
       from: state.from,
       query: state.query,
       left: prev?.left ?? 0,
       top: prev?.top ?? 0,
-      placement: prev?.placement ?? "above",
+      placement: prev?.placement ?? "below",
     }));
     // Reset the highlight to the top row whenever the query changes; the row
     // list is rebuilt and the previous index may point at a gone row.
     setSlashHighlight(0);
-    positionSlashMenu(state.from);
+    // Position only when the trigger first anchors at a new `/`: the menu stays
+    // pinned to the `/` as the query grows, and re-reading the caret rect per
+    // keystroke both churns and races the paged-editor relayout.
+    if (isNewTrigger) {
+      positionSlashMenu(state.from);
+    }
   };
 
   const dismissSlash = useCallback(() => {
@@ -1660,6 +1674,7 @@ export const TemplateStudioPage = ({
     }
     setSlashState(null);
     setSlashView("root");
+    slashFromRef.current = null;
   }, []);
 
   // Insert a fresh field marker, selecting the name so syncSelection opens the
