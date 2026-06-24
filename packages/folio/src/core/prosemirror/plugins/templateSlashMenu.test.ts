@@ -121,20 +121,31 @@ describe("templateSlashMenu state machine", () => {
     expect(getTemplateSlashMenu(state).active).toBe(false);
   });
 
-  test("a collapsed caret move does NOT close the menu", () => {
-    // Closing is gated on explicit signals (range select, `/` deleted,
-    // terminator typed), never the collapsed caret position — so any caret move
-    // (a click, or a selection-only transaction) leaves the menu open. The host
-    // popover owns click-away dismissal.
+  test("a caret move within the /query span keeps the menu open", () => {
+    // A collapsed caret landing inside the span (e.g. a relayout re-assertion at
+    // the query end) must not close the menu.
     let state = stateWith("/", 1);
     state = openAt(state, 0);
-    state = typeChars(state, "fi");
+    state = typeChars(state, "fi"); // "/fi", span [1, 4]
     state = state.apply(
-      state.tr.setSelection(TextSelection.create(state.doc, 1)),
+      state.tr.setSelection(TextSelection.create(state.doc, 3)),
     );
     const open = getTemplateSlashMenu(state);
     expect(open.active).toBe(true);
     expect(open.active && open.query).toBe("fi");
+  });
+
+  test("a collapsed caret moved outside the /query span closes the menu", () => {
+    // Clicking past the command into following prose makes the trigger stale, so
+    // arrows/Enter return to normal editing instead of committing the old query.
+    let state = stateWith("/ more", 1);
+    state = openAt(state, 0);
+    state = typeChars(state, "fi"); // "/fi more", span [1, 4]
+    expect(getTemplateSlashMenu(state).active).toBe(true);
+    state = state.apply(
+      state.tr.setSelection(TextSelection.create(state.doc, 7)),
+    );
+    expect(getTemplateSlashMenu(state).active).toBe(false);
   });
 
   test("a deliberate range selection closes the menu", () => {

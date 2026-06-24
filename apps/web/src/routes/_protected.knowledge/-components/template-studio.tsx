@@ -306,6 +306,9 @@ const SLASH_MENU_LIST_WIDTH_PX = 224;
 const SLASH_MENU_PREVIEW_WIDTH_PX = 256 + 9;
 const SLASH_MENU_WIDTH_PX =
   SLASH_MENU_LIST_WIDTH_PX + SLASH_MENU_PREVIEW_WIDTH_PX;
+/** Tailwind `sm`: below it `MenuPreviewLayout` hides the preview pane, so only
+ *  the list column renders and the right-edge clamp must use the list width. */
+const SLASH_MENU_PREVIEW_BREAKPOINT_PX = 640;
 /** Cap on existing fields offered for reuse so a large template's field list
  *  never turns the menu into an unbounded scroll. */
 const SLASH_MENU_MAX_FIELDS = 50;
@@ -383,7 +386,14 @@ const buildSlashRootItems = (
   if (matches("condition", "if")) {
     items.push({ kind: "create-condition" });
   }
-  if (fields.length > 0 && matches("field", "existing")) {
+  // Offer the existing-field submenu when the query keyword-matches it OR names
+  // an existing field (e.g. "/client"): otherwise a query that is a field name
+  // suppresses the create-field row yet exposes no way to reuse that field.
+  if (
+    fields.length > 0 &&
+    (matches("field", "existing") ||
+      matchingSlashFields(query, fields).length > 0)
+  ) {
     items.push({ kind: "open-fields" });
   }
   if (matches("clause")) {
@@ -1626,12 +1636,18 @@ export const TemplateStudioPage = ({
       const fitsAbove =
         caretTop - SLASH_MENU_OFFSET_PX - SLASH_MENU_EST_HEIGHT_PX >= 0;
       const placement = fitsAbove ? "above" : "below";
-      // Anchor the menu's start edge at the caret, clamping only against the
-      // full rendered width (menu column + preview pane on sm+) so it never
-      // spills off the inline-end edge and hides the preview.
+      // Anchor the menu's start edge at the caret, clamping against the ACTUAL
+      // rendered width so it never spills off the inline-end edge. Below the `sm`
+      // breakpoint `MenuPreviewLayout` hides the preview pane, so the menu is just
+      // the list column — clamping against the full desktop width there would
+      // shove a near-caret menu needlessly to the left.
+      const renderedWidth =
+        window.innerWidth >= SLASH_MENU_PREVIEW_BREAKPOINT_PX
+          ? SLASH_MENU_WIDTH_PX
+          : SLASH_MENU_LIST_WIDTH_PX;
       const left = Math.max(
         0,
-        Math.min(caretLeft, host.clientWidth - SLASH_MENU_WIDTH_PX),
+        Math.min(caretLeft, host.clientWidth - renderedWidth),
       );
       setSlashState((prev) =>
         prev === null

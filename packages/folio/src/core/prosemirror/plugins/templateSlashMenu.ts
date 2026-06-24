@@ -242,12 +242,21 @@ export const templateSlashMenuPlugin = (
         if (!slashStillAt(newState, from)) {
           return IDLE;
         }
-        // Close on a deliberate range selection only. A collapsed caret move
-        // never closes the menu: closing is gated on explicit signals (`/`
-        // deleted, terminator typed, range select), not the caret position.
-        // Click-away dismissal is the host popover's responsibility.
-        if (tr.selectionSet && !newState.selection.empty) {
-          return IDLE;
+        // A selection change that leaves the trigger closes the menu: a range
+        // selection, or a collapsed caret moved outside the `/query` span (a
+        // click elsewhere in the block). Typing is a docChanged transaction
+        // handled above, so this never fires mid-type; and the span is the
+        // mapped `[from, to]`, not the live caret, so a momentary relayout
+        // re-assertion at the query end stays inside it.
+        if (tr.selectionSet) {
+          const { selection } = newState;
+          if (
+            !selection.empty ||
+            selection.from < from ||
+            selection.from > to
+          ) {
+            return IDLE;
+          }
         }
         // A terminator (space/punctuation) typed inside the range ends it.
         const query = readRangeQuery(newState, from, to);
