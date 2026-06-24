@@ -122,6 +122,7 @@ import type {
   InspectorViewRenderProps,
 } from "@/components/inspector/view-registry";
 import { registerInspectorView } from "@/components/inspector/view-registry";
+import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useI18nStore } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
@@ -5252,7 +5253,9 @@ const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
   }
   return (
     <>
-      <span className="min-w-0 truncate">{label}</span>
+      <span className="text-foreground min-w-0 truncate font-medium">
+        {label}
+      </span>
       {/* The field code only enters the layout on hover, so the label gets
           the full width and truncates solely when the code is actually
           shown — not pre-shrunk to reserve space for a hidden element. */}
@@ -5566,24 +5569,37 @@ const FormulaPreviewToken = ({
 
 /** Mini-icons marking what a field can do: registry lookup, AI involvement,
  *  formula derivation, and a quiet dot for required. */
-const FieldCapabilityIcons = ({ field }: { field: StudioField }) => (
-  <>
-    {field.lookup === undefined ? null : <LandmarkIcon className="size-3" />}
-    {field.aiAdapt ? (
-      <span className="flex items-center gap-0.5">
-        <UserIcon className="size-3" />
+const FieldCapabilityIcons = ({ field }: { field: StudioField }) => {
+  const t = useTranslations();
+  return (
+    <>
+      {field.lookup === undefined ? null : <LandmarkIcon className="size-3" />}
+      {field.aiAdapt ? (
+        <span className="flex items-center gap-0.5">
+          <UserIcon className="size-3" />
+          <WandSparklesIcon className="size-3" />
+        </span>
+      ) : null}
+      {!field.aiAdapt && field.aiPrompt !== undefined ? (
         <WandSparklesIcon className="size-3" />
-      </span>
-    ) : null}
-    {!field.aiAdapt && field.aiPrompt !== undefined ? (
-      <WandSparklesIcon className="size-3" />
-    ) : null}
-    {field.formula === undefined ? null : <SigmaIcon className="size-3" />}
-    {field.required ? (
-      <span aria-hidden="true" className="size-1 rounded-full bg-current" />
-    ) : null}
-  </>
-);
+      ) : null}
+      {field.formula === undefined ? null : <SigmaIcon className="size-3" />}
+      {field.required ? (
+        <Tooltip
+          content={t("common.required")}
+          render={
+            <span
+              aria-label={t("common.required")}
+              className="flex size-3.5 items-center justify-center"
+            />
+          }
+        >
+          <span aria-hidden="true" className="size-1 rounded-full bg-current" />
+        </Tooltip>
+      ) : null}
+    </>
+  );
+};
 
 const ScopeHeader = ({
   title,
