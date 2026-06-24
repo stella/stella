@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Skills und Tools suchen",
     "catalogueSubtitle": "stella kann diese Tools beim Antworten nutzen. Wählen Sie die für Ihre Praxis passenden aus; Sie können dies jederzeit in den Einstellungen ändern.",
     "catalogueThirdPartyConfirm": "Trotzdem hinzufügen",
-    "catalogueThirdPartyDisclaimer": "Dies ist Drittanbieter-Code von {author}. stella hat ihn nicht geprüft, empfohlen oder gewartet. Sie sind selbst dafür verantwortlich zu prüfen, ob er für Ihre Praxis geeignet ist und den Richtlinien Ihrer Kanzlei entspricht. Mit dem Hinzufügen akzeptieren Sie die Nutzung auf eigenes Risiko.",
+    "catalogueThirdPartyDisclaimer": "Dies ist Drittanbieter-Code von {author}. stella hat ihn nicht geprüft, empfohlen oder gewartet. Sie sind selbst dafür verantwortlich zu prüfen, ob er für Ihre Praxis geeignet ist und den Richtlinien Ihres Teams entspricht. Mit dem Hinzufügen akzeptieren Sie die Nutzung auf eigenes Risiko.",
     "catalogueTitle": "KI anpassen",
     "continue": "Fortfahren",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "KI-Konfiguration",
       "aiDescription": "Verwenden Sie Ihren eigenen API-Schlüssel oder konfigurieren Sie eine Region zur Datensouveränität",
       "anonymization": {
-        "addPlaceholder": "Immer zu maskierender Begriff (z. B. Kanzleiname)",
+        "addPlaceholder": "Immer zu maskierender Begriff (z. B. Teamname)",
         "deleteAction": "Begriff löschen",
-        "description": "Verwalten Sie die kanzleiweite Sperrliste der Begriffe, die das Anonymisierungs-Pipeline immer maskiert, und importieren Sie eine Startliste aus CSV, TXT oder JSON.",
-        "emptyState": "Noch keine kanzleiweiten Begriffe. Fügen Sie oben einen hinzu oder importieren Sie eine Liste.",
-        "entriesHeading": "Kanzleiweite Begriffe ({count})",
+        "description": "Verwalten Sie die teamweite Sperrliste der Begriffe, die die Anonymisierungs-Pipeline immer maskiert, und importieren Sie eine Startliste aus CSV, TXT oder JSON.",
+        "emptyState": "Noch keine teamweiten Begriffe. Fügen Sie oben einen hinzu oder importieren Sie eine Liste.",
+        "entriesHeading": "Teamweite Begriffe ({count})",
         "importAction": "Importieren",
         "importHint": "CSV (canonical,label,variants), TXT (eine pro Zeile) oder JSON",
         "importParseError": "Diese Datei konnte nicht gelesen werden. Verwenden Sie CSV, TXT oder JSON.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Entitätstyp",
         "labelPickerEmpty": "Kein passender Typ.",
         "labelPickerPlaceholder": "Typ",
-        "termAddedToast": "„{value}“ wurde zur kanzleiweiten Sperrliste hinzugefügt.",
+        "termAddedToast": "„{value}“ wurde zur teamweiten Sperrliste hinzugefügt.",
         "title": "Anonymisierung"
       },
       "matterNumbering": "Aktennummerierung",

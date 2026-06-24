@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Meklēt prasmes un rīkus",
     "catalogueSubtitle": "stella var izmantot šos rīkus, atbildot uz jautājumiem. Izvēlieties tos, kas atbilst jūsu praksei; to vienmēr varat mainīt iestatījumos.",
     "catalogueThirdPartyConfirm": "Tomēr pievienot",
-    "catalogueThirdPartyDisclaimer": "Šis ir trešās puses kods, ko pievienoja {author}. stella to nav pārskatījusi, apstiprinājusi vai uzturējusi. Jūs esat atbildīgs par pārbaudi, vai tas ir piemērots jūsu praksei un atbilst jūsu biroja politikām. Pievienojot to, jūs piekrītat lietot to uz savu risku.",
+    "catalogueThirdPartyDisclaimer": "Šis ir trešās puses kods, ko pievienoja {author}. stella to nav pārskatījusi, apstiprinājusi vai uzturējusi. Jūs esat atbildīgs par pārbaudi, vai tas ir piemērots jūsu praksei un atbilst jūsu komandas politikām. Pievienojot to, jūs piekrītat lietot to uz savu risku.",
     "catalogueTitle": "Pielāgojiet savu MI",
     "continue": "Turpināt",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "AI konfigurācija",
       "aiDescription": "Izmantojiet savu API atslēgu vai konfigurējiet datu suverenitātes reģionu",
       "anonymization": {
-        "addPlaceholder": "Termins, kas vienmēr jāmaskē (piem., biroja nosaukums)",
+        "addPlaceholder": "Termins, kas vienmēr jāmaskē (piem., komandas nosaukums)",
         "deleteAction": "Dzēst terminu",
-        "description": "Pārvaldiet biroja mēroga aizlieguma sarakstu ar terminiem, kurus anonimizācijas process vienmēr maskē, un importējiet sākotnējo sarakstu no CSV, TXT vai JSON.",
-        "emptyState": "Biroja terminu vēl nav. Pievienojiet vienu augstāk vai importējiet sarakstu.",
-        "entriesHeading": "Biroja termini ({count})",
+        "description": "Pārvaldiet komandas mēroga aizlieguma sarakstu ar terminiem, kurus anonimizācijas process vienmēr maskē, un importējiet sākotnējo sarakstu no CSV, TXT vai JSON.",
+        "emptyState": "Komandas terminu vēl nav. Pievienojiet vienu augstāk vai importējiet sarakstu.",
+        "entriesHeading": "Komandas termini ({count})",
         "importAction": "Importēt",
         "importHint": "CSV (canonical,label,variants), TXT (viens rindiņā) vai JSON",
         "importParseError": "Failu nevarēja nolasīt. Izmantojiet CSV, TXT vai JSON.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Entītijas veids",
         "labelPickerEmpty": "Nav atbilstoša veida.",
         "labelPickerPlaceholder": "Veids",
-        "termAddedToast": "„{value}” pievienots biroja sarakstam.",
+        "termAddedToast": "„{value}” pievienots komandas sarakstam.",
         "title": "Anonimizācija"
       },
       "matterNumbering": "Lietu numerācija",

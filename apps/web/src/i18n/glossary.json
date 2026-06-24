@@ -309,6 +309,123 @@
       }
     },
     {
+      "id": "team",
+      "en": "Team",
+      "note": "The firm/organization scope that content is shared with (members, team skills, the anonymization deny list). Canonical user-facing label is \"Team\"; the internal \"organization\" data-model alias and the \"firm\" / \"firm-wide\" / \"org-wide\" renderings must not surface as labels. Distinct from the client \"company\" sense (cs firma in the ARES company lookup, \"Klient je firma\"), which is a different concept and stays. Visibility pairs as Personal vs Shared (cs \"Osobní\" / \"Sdílené v rámci týmu\"). es \"firma\" also means signature and pt-BR \"firma\" also means a company; both are trigger-scoped to English \"team\" strings, so the firm-sense entries here do not false-fire on those.",
+      "forbidden": {
+        "ar": ["مكتب", "المكتب", "مكاتب", "مؤسسة", "المؤسسة", "مؤسسات"],
+        "cs": ["firemní", "firemního", "firemnímu", "firemním", "firemními"],
+        "sk": [
+          "firemný",
+          "firemného",
+          "firemnému",
+          "firemnom",
+          "firemným",
+          "firemná",
+          "firemnej",
+          "firemnú",
+          "firemnou",
+          "firemné",
+          "firemných",
+          "firemnými"
+        ],
+        "pl": [
+          "firmowy",
+          "firmowa",
+          "firmowe",
+          "firmowego",
+          "firmowej",
+          "firmowemu",
+          "firmowym",
+          "firmową",
+          "firmowych",
+          "firmowymi",
+          "kancelaria",
+          "kancelarii",
+          "kancelarię",
+          "kancelarią",
+          "kancelarie",
+          "kancelariom",
+          "kancelariami",
+          "kancelariach"
+        ],
+        "de": [
+          "kanzleiweit",
+          "kanzleiweite",
+          "kanzleiweiten",
+          "kanzleiweiter",
+          "kanzleiweites",
+          "kanzleiweitem",
+          "Kanzlei",
+          "Kanzleien"
+        ],
+        "et": [
+          "büroo",
+          "bürood",
+          "büroost",
+          "büroos",
+          "büroole",
+          "büroo-ülene",
+          "büroo-ülest",
+          "büroo-ülese",
+          "büroo-ülesed",
+          "büroo-üleseid",
+          "kontor",
+          "kontori"
+        ],
+        "hu": [
+          "iroda",
+          "irodai",
+          "irodát",
+          "irodának",
+          "irodák",
+          "iroda-szintű",
+          "irodaszintű"
+        ],
+        "lt": [
+          "kontora",
+          "kontoros",
+          "kontorą",
+          "kontorai",
+          "kontorų",
+          "kontorose"
+        ],
+        "lv": [
+          "birojs",
+          "biroja",
+          "biroju",
+          "birojam",
+          "birojā",
+          "biroji",
+          "birojiem"
+        ],
+        "es": ["firma", "firmas", "despacho", "despachos", "bufete", "bufetes"],
+        "fr": ["cabinet", "cabinets"],
+        "pt-BR": [
+          "escritório",
+          "escritórios",
+          "firma",
+          "firmas",
+          "banca",
+          "bancas"
+        ]
+      },
+      "translations": {
+        "ar": "فريق",
+        "cs": "Tým",
+        "sk": "Tím",
+        "pl": "Zespół",
+        "de": "Team",
+        "et": "Meeskond",
+        "hu": "Csapat",
+        "lt": "Komanda",
+        "lv": "Komanda",
+        "es": "Equipo",
+        "fr": "Équipe",
+        "pt-BR": "Equipe"
+      }
+    },
+    {
       "id": "case-law",
       "en": "Case law",
       "note": "lv \"Tiesu prakse\" for a broad decisions database; reserve \"Judikatūra\" for binding Supreme-Court precedent only. ar uses الاجتهاد القضائي (civil-law jurisprudence); السوابق القضائية reads as common-law precedent.",

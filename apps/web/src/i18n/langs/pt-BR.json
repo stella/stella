@@ -1623,7 +1623,7 @@
     "catalogueSearchPlaceholder": "Buscar skills e ferramentas",
     "catalogueSubtitle": "stella pode usar essas ferramentas ao responder. Escolha as que se encaixam na sua prática; você pode mudar isso a qualquer momento nas configurações.",
     "catalogueThirdPartyConfirm": "Adicionar mesmo assim",
-    "catalogueThirdPartyDisclaimer": "Este é código de terceiros contribuído por {author}. stella não o revisou, endossou nem mantém. Você é responsável por verificar se ele é adequado à sua prática e compatível com as políticas da sua firma. Ao adicioná-lo, você aceita usá-lo por sua conta e risco.",
+    "catalogueThirdPartyDisclaimer": "Este é código de terceiros contribuído por {author}. stella não o revisou, endossou nem mantém. Você é responsável por verificar se ele é adequado à sua prática e compatível com as políticas da sua equipe. Ao adicioná-lo, você aceita usá-lo por sua conta e risco.",
     "catalogueTitle": "Personalize sua IA",
     "continue": "Continuar",
     "creating": {
@@ -1899,11 +1899,11 @@
       "ai": "Configuração de IA",
       "aiDescription": "Traga sua própria chave de API ou configure a região de soberania de dados",
       "anonymization": {
-        "addPlaceholder": "Termo a ser sempre mascarado (ex.: nome do escritório)",
+        "addPlaceholder": "Termo a ser sempre mascarado (ex.: nome da equipe)",
         "deleteAction": "Excluir termo",
-        "description": "Gerencie a lista global do escritório com os termos que o pipeline de anonimização sempre mascara e importe uma lista inicial em CSV, TXT ou JSON.",
-        "emptyState": "Ainda não há termos globais. Adicione um acima ou importe uma lista.",
-        "entriesHeading": "Termos do escritório ({count})",
+        "description": "Gerencie a lista global da equipe com os termos que o pipeline de anonimização sempre mascara e importe uma lista inicial em CSV, TXT ou JSON.",
+        "emptyState": "Ainda não há termos da equipe. Adicione um acima ou importe uma lista.",
+        "entriesHeading": "Termos da equipe ({count})",
         "importAction": "Importar",
         "importHint": "CSV (canonical,label,variants), TXT (um por linha) ou JSON",
         "importParseError": "Não foi possível ler o arquivo. Use CSV, TXT ou JSON.",
@@ -1911,7 +1911,7 @@
         "labelPickerAriaLabel": "Tipo de entidade",
         "labelPickerEmpty": "Nenhum tipo correspondente.",
         "labelPickerPlaceholder": "Tipo",
-        "termAddedToast": "“{value}” foi adicionado à lista do escritório.",
+        "termAddedToast": "“{value}” foi adicionado à lista da equipe.",
         "title": "Anonimização"
       },
       "matterNumbering": "Numeração de casos",
