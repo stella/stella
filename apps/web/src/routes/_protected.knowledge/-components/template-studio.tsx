@@ -5496,12 +5496,13 @@ const LoopBoundsInputs = ({ containerPath }: { containerPath: string }) => {
       writeBounds({ minItems });
       return;
     }
-    // Min stays at least one below max (floored at zero).
-    const min =
-      minItems !== undefined && minItems >= value
-        ? Math.max(0, value - 1)
-        : minItems;
-    writeBounds({ minItems: min, maxItems: value });
+    // Max stays at least one above min; min is at least zero (a blank min field
+    // is an implicit zero), so the smallest valid max is one. Clamp here, since
+    // the `min` input attribute does not stop a typed/pasted 0.
+    const max = Math.max(1, value);
+    // Min stays at least one below max.
+    const min = minItems !== undefined && minItems >= max ? max - 1 : minItems;
+    writeBounds({ minItems: min, maxItems: max });
   };
 
   return (
