@@ -979,7 +979,7 @@ jobs:
 
       - name: License audit
         if: steps.changed.outputs.run == 'true' && matrix.os == 'macos'
-        run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml check --hide-inclusion-graph
+        run: cargo deny --manifest-path apps/desktop/src-tauri/Cargo.toml check --config apps/desktop/src-tauri/deny.toml --hide-inclusion-graph
 
       - name: Docs
         if: steps.changed.outputs.run == 'true'
