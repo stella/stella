@@ -38,7 +38,7 @@
     "@stll/template-conditions": "workspace:*",
     "@stll/ui": "workspace:*",
     "better-result": "catalog:",
-    "fast-xml-parser": "^5.9.0",
+    "fast-xml-parser": "^5.9.3",
     "jszip": "catalog:",
     "lucide-react": "catalog:",
     "marked": "^18.0.5",
