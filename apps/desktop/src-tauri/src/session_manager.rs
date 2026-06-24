@@ -8,8 +8,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
 use tauri::{AppHandle, Emitter};
-// Only `lsof_reports_open` (macOS/Linux) uses this; on Windows that fn
-// compiles to a stub, so the ungated import would be unused.
 #[cfg(any(target_os = "macos", target_os = "linux"))]
 use tokio::process::Command;
 use tokio::sync::Mutex;
@@ -314,11 +312,6 @@ async fn lsof_reports_open(file_path: &Path) -> bool {
   }
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "linux")))]
-async fn lsof_reports_open(_: &Path) -> bool {
-  false
-}
-
 async fn local_file_appears_open(file_path: &Path, file_name: &str) -> bool {
   let dir = file_path.parent().unwrap_or(Path::new("."));
 
@@ -330,7 +323,15 @@ async fn local_file_appears_open(file_path: &Path, file_name: &str) -> bool {
     return true;
   }
 
-  lsof_reports_open(file_path).await
+  #[cfg(any(target_os = "macos", target_os = "linux"))]
+  {
+    lsof_reports_open(file_path).await
+  }
+
+  #[cfg(not(any(target_os = "macos", target_os = "linux")))]
+  {
+    false
+  }
 }
 
 impl SessionManager {
