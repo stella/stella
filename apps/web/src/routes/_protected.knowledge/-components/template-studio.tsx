@@ -333,6 +333,7 @@ type SlashView = "root" | "fields" | "clauses";
 type SlashRootItem =
   | { kind: "create-field"; path: string }
   | { kind: "create-condition" }
+  | { kind: "field"; path: string; label: string }
   | { kind: "open-fields" }
   | { kind: "open-clauses" };
 
@@ -382,40 +383,44 @@ const buildSlashRootItems = (
 ): SlashRootItem[] => {
   const trimmed = query.trim();
   const needle = trimmed.toLowerCase();
-  // A blank query offers a fresh unique field (field_2, …) rather than being
-  // suppressed when `field` is taken; a typed name that matches an existing
-  // field suppresses create (the user reuses it via the existing-field row).
-  const createPath =
-    trimmed === ""
-      ? uniqueFieldPath("field", fields)
-      : createFieldPathFromQuery(trimmed);
-  const reuseExact =
-    trimmed !== "" && fields.some((field) => field.path === createPath);
-  // Match each row's label keyword so a query like "if"/"clause"/"pole"
-  // surfaces the relevant row; an empty query shows them all.
   const matches = (...keywords: string[]): boolean =>
-    needle === "" || keywords.some((kw) => kw.includes(needle));
-  const items: SlashRootItem[] = [];
-  // "New field" stays available whenever the typed name is not already taken,
-  // even if the query does not keyword-match (the query IS the field name).
+    keywords.some((kw) => kw.includes(needle));
+
+  // Empty query: browse the grouped entry points (create a field/condition, or
+  // open the existing-field / clause submenus). A blank create row offers a
+  // fresh unique path (field_2, …) so a generic field can always be added.
+  if (trimmed === "") {
+    const items: SlashRootItem[] = [
+      { kind: "create-field", path: uniqueFieldPath("field", fields) },
+      { kind: "create-condition" },
+    ];
+    if (fields.length > 0) {
+      items.push({ kind: "open-fields" });
+    }
+    items.push({ kind: "open-clauses" });
+    return items;
+  }
+
+  // Typed query: surface matching existing fields inline (one keystroke/click to
+  // reuse), then the create-new-field row (unless the name is already taken) and
+  // keyword-matched condition; the clause library stays a submenu (server search).
+  const createPath = createFieldPathFromQuery(trimmed);
+  const reuseExact = fields.some((field) => field.path === createPath);
+  const items: SlashRootItem[] = matchingSlashFields(query, fields).map(
+    (field) => ({
+      kind: "field" as const,
+      path: field.path,
+      label: field.label === "" ? field.path : field.label,
+    }),
+  );
+  if (matches("clause")) {
+    items.push({ kind: "open-clauses" });
+  }
   if (!reuseExact) {
     items.push({ kind: "create-field", path: createPath });
   }
   if (matches("condition", "if")) {
     items.push({ kind: "create-condition" });
-  }
-  // Offer the existing-field submenu when the query keyword-matches it OR names
-  // an existing field (e.g. "/client"): otherwise a query that is a field name
-  // suppresses the create-field row yet exposes no way to reuse that field.
-  if (
-    fields.length > 0 &&
-    (matches("field", "existing") ||
-      matchingSlashFields(query, fields).length > 0)
-  ) {
-    items.push({ kind: "open-fields" });
-  }
-  if (matches("clause")) {
-    items.push({ kind: "open-clauses" });
   }
   return items;
 };
@@ -1581,11 +1586,14 @@ export const TemplateStudioPage = ({
     [slashClauseData],
   );
   // Effect-synced (not render-mirrored) so the synchronous key handler reads the
-  // freshest clause list without assigning a ref during render.
+  // freshest clause list — and the search it was fetched for — without assigning
+  // a ref during render.
   const slashClausesRef = useRef<SlashClause[]>(slashClauses);
+  const debouncedClauseSearchRef = useRef(debouncedClauseSearch);
   useExternalSyncEffect(() => {
     slashClausesRef.current = slashClauses;
-  }, [slashClauses]);
+    debouncedClauseSearchRef.current = debouncedClauseSearch;
+  }, [slashClauses, debouncedClauseSearch]);
 
   // The rows visible for the current view + query, as a discriminated union so
   // render and the key handler narrow without unsafe casts.
@@ -1778,6 +1786,18 @@ export const TemplateStudioPage = ({
       dismissSlash();
       return;
     }
+    if (item.kind === "field") {
+      // Reuse an existing field picked inline from the filtered root list.
+      view.dispatch(
+        consumed.tr
+          .insertText(`{{${item.path}}}`, consumed.from)
+          .scrollIntoView(),
+      );
+      view.focus();
+      markDirty();
+      dismissSlash();
+      return;
+    }
     // create-condition: drop the query, then insert the block at the collapsed
     // caret via the shared block helper.
     view.dispatch(consumed.tr.scrollIntoView());
@@ -1904,6 +1924,12 @@ export const TemplateStudioPage = ({
         return false;
       }
       activateSlashField(field.path);
+      return true;
+    }
+    // The clause rows are server-fetched on the debounced query. If it has not
+    // caught up to the live query, the visible rows are stale — swallow Enter
+    // and wait for the refreshed results rather than insert the wrong clause.
+    if (debouncedClauseSearchRef.current !== live.query) {
       return true;
     }
     const clause = slashClausesRef.current.at(index);
@@ -2856,6 +2882,7 @@ type SlashRowFace = {
 const SLASH_ROOT_GROUP = {
   "create-field": "primary",
   "create-condition": "primary",
+  field: "reuse",
   "open-fields": "reuse",
   "open-clauses": "reuse",
 } as const satisfies Record<SlashRootItem["kind"], "primary" | "reuse">;
@@ -3061,7 +3088,23 @@ const SlashRootRows = ({
           index === 0 ||
           prev === undefined ||
           SLASH_ROOT_GROUP[prev.kind] !== group;
-        const { icon, labelKey, hint } = slashRootFace(item);
+        // Field rows carry a dynamic label (the field name), so resolve their
+        // face inline; the fixed entry rows resolve a translation key.
+        let face: SlashRowFace;
+        if (item.kind === "field") {
+          face = {
+            icon: BracesIcon,
+            label: item.label,
+            hint: item.label === item.path ? undefined : item.path,
+          };
+        } else {
+          const rootFace = slashRootFace(item);
+          face = {
+            icon: rootFace.icon,
+            label: t(rootFace.labelKey),
+            hint: rootFace.hint,
+          };
+        }
         return (
           <div key={slashRootKey(item)}>
             {showLabel && (
@@ -3073,7 +3116,7 @@ const SlashRootRows = ({
               chevron={
                 item.kind === "open-fields" || item.kind === "open-clauses"
               }
-              face={{ icon, label: t(labelKey), hint }}
+              face={face}
               selected={index === highlight}
               onHighlight={() => onHighlight(index)}
               onSelect={() => onActivateRoot(item)}
@@ -3266,8 +3309,15 @@ const SlashClausePreview = ({ clause }: { clause: SlashClause }) => {
 };
 
 /** Stable React key for a root row. */
-const slashRootKey = (item: SlashRootItem): string =>
-  item.kind === "create-field" ? `create-field:${item.path}` : item.kind;
+const slashRootKey = (item: SlashRootItem): string => {
+  if (item.kind === "create-field") {
+    return `create-field:${item.path}`;
+  }
+  if (item.kind === "field") {
+    return `field:${item.path}`;
+  }
+  return item.kind;
+};
 
 /** The four root-row labels, none of which take ICU arguments, so the caller's
  *  `t(labelKey)` needs no values arg (typing this as the broad `TranslationKey`
