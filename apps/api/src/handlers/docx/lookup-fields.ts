@@ -121,10 +121,19 @@ export const createDispatchLookupResolver =
     > = BUSINESS_REGISTRY_DISPATCH,
   ): LookupResolver =>
   async ({ registry, query }) => {
-    const response = await executeRegistryLookup({
-      handler: dispatch[registry],
-      query,
-    });
+    const handler = dispatch[registry];
+    // Mirror the contacts lookup route: never call a registry whose deployment
+    // credentials are not configured (e.g. Companies House / EDGAR in a
+    // self-hosted or test env). A template may offer every registry, but at
+    // fill time an unavailable one fails clearly instead of surfacing an
+    // upstream configuration error.
+    if (!handler.isDeployAvailable()) {
+      return {
+        type: "error",
+        message: `The ${registry} registry is not available in this deployment.`,
+      };
+    }
+    const response = await executeRegistryLookup({ handler, query });
     if (response instanceof Error) {
       return { type: "error", message: response.message };
     }
