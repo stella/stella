@@ -6787,12 +6787,14 @@ const formulaOperandFields = (
   const scopeOf = (path: string): string | null =>
     findEnclosingEachGroup(outline, path, null)?.expr.trim() || null;
   const currentScope = scopeOf(currentPath);
+  // Cheap predicates first; `scopeOf` walks the outline tree, so only run it
+  // for fields that are already candidate operands.
   return fields.filter(
     (f, index) =>
       f.path !== currentPath &&
-      scopeOf(f.path) === currentScope &&
       (f.inputType === "number" || f.formula !== undefined) &&
-      !(f.formula !== undefined && index >= currentIndex),
+      !(f.formula !== undefined && index >= currentIndex) &&
+      scopeOf(f.path) === currentScope,
   );
 };
 
@@ -7530,29 +7532,35 @@ const FieldFace = ({
               <WandSparklesIcon className="size-3.5" />
               {t("templates.studio.draftedByAi")}
             </Button>
-            <Button
-              className="justify-start"
-              disabled={!canUseFormula}
-              onClick={() =>
-                onUpdate({
-                  formula: field.formula ?? "",
-                  aiPrompt: undefined,
-                  aiAdapt: false,
-                  aiSeesDocument: false,
-                  lookup: undefined,
-                })
-              }
-              size="sm"
+            {/* A disabled button gets `pointer-events-none`, which suppresses
+                its native title tooltip; the wrapper keeps pointer events so
+                the "why disabled" hint still shows. */}
+            <span
               title={
                 canUseFormula
                   ? undefined
                   : t("templates.studio.formulaNoFields")
               }
-              variant={valueSource === "formula" ? "default" : "outline"}
             >
-              <SigmaIcon className="size-3.5" />
-              {t("templates.studio.formula")}
-            </Button>
+              <Button
+                className="w-full justify-start"
+                disabled={!canUseFormula}
+                onClick={() =>
+                  onUpdate({
+                    formula: field.formula ?? "",
+                    aiPrompt: undefined,
+                    aiAdapt: false,
+                    aiSeesDocument: false,
+                    lookup: undefined,
+                  })
+                }
+                size="sm"
+                variant={valueSource === "formula" ? "default" : "outline"}
+              >
+                <SigmaIcon className="size-3.5" />
+                {t("templates.studio.formula")}
+              </Button>
+            </span>
           </div>
           {valueSource === "textAi" ? (
             <>
