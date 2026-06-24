@@ -671,6 +671,7 @@
       "bankAccountNumber": "Číslo bankovního účtu",
       "birthNumber": "Rodné číslo",
       "creditCardNumber": "Číslo platební karty",
+      "crypto": "Krypto peněženka",
       "date": "Datum",
       "dateOfBirth": "Datum narození",
       "emailAddress": "E-mailová adresa",

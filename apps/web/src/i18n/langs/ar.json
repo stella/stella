@@ -671,6 +671,7 @@
       "bankAccountNumber": "رقم الحساب المصرفي",
       "birthNumber": "رقم الميلاد",
       "creditCardNumber": "رقم بطاقة الائتمان",
+      "crypto": "محفظة عملات مشفّرة",
       "date": "التاريخ",
       "dateOfBirth": "تاريخ الميلاد",
       "emailAddress": "عنوان البريد الإلكتروني",

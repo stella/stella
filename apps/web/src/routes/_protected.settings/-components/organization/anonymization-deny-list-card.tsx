@@ -84,6 +84,7 @@ const LABEL_TRANSLATION_KEY = {
   "registration number": "common.anonymizationLabels.registrationNumber",
   "credit card number": "common.anonymizationLabels.creditCardNumber",
   "passport number": "common.anonymizationLabels.passportNumber",
+  crypto: "common.anonymizationLabels.crypto",
   "monetary amount": "common.anonymizationLabels.monetaryAmount",
   "land parcel": "common.anonymizationLabels.landParcel",
   misc: "common.anonymizationLabels.miscellaneous",

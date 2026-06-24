@@ -671,6 +671,7 @@
       "bankAccountNumber": "Pangakonto number",
       "birthNumber": "Sünninumber",
       "creditCardNumber": "Krediitkaardi number",
+      "crypto": "Krüptorahakott",
       "date": "Kuupäev",
       "dateOfBirth": "Sünnikuupäev",
       "emailAddress": "E-posti aadress",
