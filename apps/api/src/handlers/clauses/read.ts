@@ -56,13 +56,14 @@ type ListClausesProps = {
 /** Build a prefix `tsquery` (`term:* & term:* …`) from raw user input so
  *  search-as-you-type matches partial words: typing "gov" must hit "Governing".
  *  `websearch_to_tsquery` only matches whole stemmed words, so a partial query
- *  returns nothing until a word is complete. Non-alphanumerics are stripped per
- *  token (they are `tsquery` operators and would otherwise throw). */
+ *  returns nothing until a word is complete. Split on every non-alphanumeric run
+ *  (not just whitespace) so a separator like `-` or `/` yields separate prefix
+ *  terms — `non-compete` → `non:* & compete:*`, matching the FTS lexemes — rather
+ *  than one mashed-together token; the separators are also `tsquery` operators
+ *  that would otherwise throw. */
 export const toClausePrefixTsQuery = (raw: string): string =>
   raw
-    .trim()
-    .split(/\s+/u)
-    .map((term) => term.replace(/[^\p{L}\p{N}]+/gu, ""))
+    .split(/[^\p{L}\p{N}]+/u)
     .filter((term) => term.length > 0)
     .map((term) => `${term}:*`)
     .join(" & ");
