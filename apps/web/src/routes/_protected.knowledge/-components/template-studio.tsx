@@ -3620,20 +3620,28 @@ const StudioInsertRow = () => {
               {t("templates.studio.scopeClause")}
             </MenuSubTrigger>
             <MenuSubPopup>
-              {linkedClauses.map((link) => (
-                <MenuItem
-                  dir="auto"
-                  key={link.id}
-                  onClick={() =>
-                    actions.insertClauseSlot(
-                      link.slotName ?? slugify(link.title),
-                    )
-                  }
-                >
-                  {link.title}
-                </MenuItem>
-              ))}
-              {linkedClauses.length > 0 && <MenuSeparator />}
+              {linkedClauses.map((link) => {
+                // Only links bound to a concrete slot are insertable here: fill
+                // resolution matches links by their persisted slotName, so a
+                // slugified-title fallback for a null-slot link would leave its
+                // {{@clause:...}} marker unresolved in the generated document.
+                const slotName = link.slotName;
+                if (slotName === null) {
+                  return null;
+                }
+                return (
+                  <MenuItem
+                    dir="auto"
+                    key={link.id}
+                    onClick={() => actions.insertClauseSlot(slotName)}
+                  >
+                    {link.title}
+                  </MenuItem>
+                );
+              })}
+              {linkedClauses.some((link) => link.slotName !== null) && (
+                <MenuSeparator />
+              )}
               <MenuItem onClick={actions.insertClause}>
                 {t("templates.studio.emptyClauseSlot")}
               </MenuItem>
