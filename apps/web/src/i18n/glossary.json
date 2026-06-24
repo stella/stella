@@ -311,9 +311,9 @@
     {
       "id": "team",
       "en": "Team",
-      "note": "The firm/organization scope that content is shared with (members, team skills, the anonymization deny list). Canonical user-facing label is \"Team\"; the internal \"organization\" data-model alias and the \"firm\" / \"firm-wide\" / \"org-wide\" renderings must not surface as labels. Distinct from the client \"company\" sense (cs firma in the ARES company lookup, \"Klient je firma\"), which is a different concept and stays. Visibility pairs as Personal vs Shared (cs \"Osobní\" / \"Sdílené v rámci týmu\"). es \"firma\" also means signature and pt-BR \"firma\" also means a company; both are trigger-scoped to English \"team\" strings, so the firm-sense entries here do not false-fire on those.",
+      "note": "The firm/organization scope that content is shared with (members, team skills, the anonymization deny list). Canonical user-facing label is \"Team\"; the internal \"organization\" data-model alias and the \"firm\" / \"firm-wide\" / \"org-wide\" renderings must not surface as labels. Distinct from the client \"company\" sense (cs firma in the ARES company lookup, \"Klient je firma\"), which is a different concept and stays. Visibility pairs as Personal vs Shared (cs \"Osobní\" / \"Sdílené v rámci týmu\"). es \"firma\" also means signature and pt-BR \"firma\" also means a company; both are trigger-scoped to English \"team\" strings, so the firm-sense entries here do not false-fire on those. On keys whose flattened path matches `keyTriggers` (the *.scopeTeam / scope.team visibility labels), the org-wording forms above are also banned in every language including English, since those labels never contain the word \"team\" to trigger the source check.",
       "forbidden": {
-        "ar": ["مكتب", "المكتب", "مكاتب", "مؤسسة", "المؤسسة", "مؤسسات"],
+        "ar": ["مكتب", "المكتب", "مكاتب"],
         "cs": ["firemní", "firemního", "firemnímu", "firemním", "firemními"],
         "sk": [
           "firemný",
@@ -410,6 +410,78 @@
           "bancas"
         ]
       },
+      "forbiddenOnKey": {
+        "en": ["organisation", "organization"],
+        "cs": [
+          "organizace",
+          "organizaci",
+          "organizací",
+          "organizacím",
+          "organizacích",
+          "organizacemi"
+        ],
+        "sk": [
+          "organizácia",
+          "organizácie",
+          "organizácii",
+          "organizáciu",
+          "organizáciou",
+          "organizáciám",
+          "organizáciách",
+          "organizáciami"
+        ],
+        "pl": [
+          "organizacja",
+          "organizacji",
+          "organizację",
+          "organizacją",
+          "organizacjo",
+          "organizacje",
+          "organizacjom",
+          "organizacjami",
+          "organizacjach"
+        ],
+        "de": ["Organisation", "Organisationen"],
+        "es": ["organización", "organizaciones"],
+        "fr": ["organisation", "organisations"],
+        "hu": [
+          "szervezet",
+          "szervezetben",
+          "szervezetnek",
+          "szervezetet",
+          "szervezete",
+          "szervezetek",
+          "szervezeti",
+          "szervezethez"
+        ],
+        "lt": [
+          "organizacija",
+          "organizacijoje",
+          "organizaciją",
+          "organizacijos",
+          "organizacijai",
+          "organizacijų",
+          "organizacijoms"
+        ],
+        "lv": [
+          "organizācija",
+          "organizācijā",
+          "organizāciju",
+          "organizācijas",
+          "organizācijai",
+          "organizācijām"
+        ],
+        "et": [
+          "organisatsioon",
+          "organisatsioonis",
+          "organisatsiooni",
+          "organisatsioonid",
+          "organisatsioonile"
+        ],
+        "ar": ["مؤسسة", "المؤسسة", "مؤسسات", "منظمة", "المنظمة"],
+        "pt-BR": ["organização", "organizações"]
+      },
+      "keyTriggers": ["scopeTeam", "scope.team"],
       "translations": {
         "ar": "فريق",
         "cs": "Tým",

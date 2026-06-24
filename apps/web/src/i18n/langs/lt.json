@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# išteklius} few {# ištekliai} other {# išteklių}}",
       "scope": "Matomumas",
       "scopePrivate": "Tik man",
-      "scopeTeam": "Visiems organizacijoje",
+      "scopeTeam": "Visiems komandoje",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Pasirinkta: {name}",
       "sourceUpload": "Įkelta",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Instrukcijos, įterpiamos į pokalbio redaktorių naudojant šį įgūdį",
         "scope": "Matomumas",
         "scopePrivate": "Tik aš",
-        "scopeTeam": "Visi organizacijoje"
+        "scopeTeam": "Visi komandoje"
       },
       "privateSection": "Jūsų įgūdžiai",
       "shadowed": "Uždengta komandos įgūdžio",
@@ -1902,7 +1902,7 @@
         "addPlaceholder": "Visada maskuotinas terminas (pvz., komandos pavadinimas)",
         "deleteAction": "Pašalinti terminą",
         "description": "Tvarkykite visos komandos mastu galiojantį draudžiamų terminų sąrašą, kurį anonimizavimo procesas visada užmaskuos, ir importuokite pradinį sąrašą iš CSV, TXT arba JSON failo.",
-        "emptyState": "Komandos lygmens terminų dar nėra. Pridėkite virš arba importuokite sąrašą.",
+        "emptyState": "Komandos lygmens terminų dar nėra. Pridėkite aukščiau arba importuokite sąrašą.",
         "entriesHeading": "Komandos terminai ({count})",
         "importAction": "Importuoti",
         "importHint": "CSV (canonical,label,variants), TXT (po vieną eilutėje) arba JSON",

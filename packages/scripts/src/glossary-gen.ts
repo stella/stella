@@ -70,7 +70,19 @@ export type Term = {
   id: string;
   en: string;
   note?: string;
+  // Renderings banned wherever the concept is mentioned (English source
+  // contains the trigger word, or a key matches `keyTriggers`).
   forbidden?: Record<string, string[]>;
+  // Renderings banned only on `keyTriggers`-matched keys, never via the English
+  // word trigger. Use for forms too ambiguous to ban broadly (e.g. Slavic
+  // "organizace"/"organizáciu", which also mean the act of organizing).
+  forbiddenOnKey?: Record<string, string[]>;
+  // Substrings matched against the flattened translation key. When a key
+  // matches, the terminology lint enforces this concept's bans on that key
+  // regardless of whether the English source contains the trigger word, so
+  // banned wording is caught even where English never names the concept (e.g.
+  // a `*.scopeTeam` label written as "...organisation").
+  keyTriggers?: string[];
   translations: Record<Locale, string>;
 };
 
@@ -88,6 +100,40 @@ export type Glossary = {
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+// Shared parser for `forbidden` and `forbiddenOnKey`. "en" is accepted as a
+// key (but never in `translations`): it lets a concept ban wording in the
+// English source itself. Returns undefined when the field is absent.
+const parseForbidden = (
+  raw: unknown,
+  field: string,
+  where: string,
+  id: string,
+): Record<string, string[]> | undefined => {
+  if (raw === undefined) {
+    return undefined;
+  }
+  if (!isRecord(raw)) {
+    return panic(
+      `${where} (${id}): \`${field}\` must be an object keyed by locale`,
+    );
+  }
+  const result: Record<string, string[]> = {};
+  for (const [locale, words] of Object.entries(raw)) {
+    if (locale !== "en" && !LOCALE_SET.has(locale)) {
+      return panic(
+        `${where} (${id}): unknown locale "${locale}" in \`${field}\``,
+      );
+    }
+    if (!Array.isArray(words) || words.some((w) => typeof w !== "string")) {
+      return panic(
+        `${where} (${id}): \`${field}.${locale}\` must be an array of strings`,
+      );
+    }
+    result[locale] = words;
+  }
+  return result;
+};
 
 const parseTerm = (value: unknown, where: string): Term => {
   if (!isRecord(value) || typeof value["id"] !== "string") {
@@ -121,35 +167,30 @@ const parseTerm = (value: unknown, where: string): Term => {
   if (typeof note === "string") {
     term.note = note;
   }
-  const rawForbidden = value["forbidden"];
-  if (rawForbidden !== undefined && !isRecord(rawForbidden)) {
-    return panic(
-      `${where} (${id}): \`forbidden\` must be an object keyed by locale`,
-    );
-  }
-  if (isRecord(rawForbidden)) {
-    const forbidden: Record<string, string[]> = {};
-    for (const [locale, words] of Object.entries(rawForbidden)) {
-      if (!LOCALE_SET.has(locale)) {
-        return panic(
-          `${where} (${id}): unknown locale "${locale}" in \`forbidden\``,
-        );
-      }
-      if (!Array.isArray(words)) {
-        return panic(
-          `${where} (${id}): \`forbidden.${locale}\` must be an array of strings`,
-        );
-      }
-      for (const word of words) {
-        if (typeof word !== "string") {
-          return panic(
-            `${where} (${id}): \`forbidden.${locale}\` must contain only strings`,
-          );
-        }
-      }
-      forbidden[locale] = words;
-    }
+  const forbidden = parseForbidden(value["forbidden"], "forbidden", where, id);
+  if (forbidden) {
     term.forbidden = forbidden;
+  }
+  const forbiddenOnKey = parseForbidden(
+    value["forbiddenOnKey"],
+    "forbiddenOnKey",
+    where,
+    id,
+  );
+  if (forbiddenOnKey) {
+    term.forbiddenOnKey = forbiddenOnKey;
+  }
+  const rawKeyTriggers = value["keyTriggers"];
+  if (rawKeyTriggers !== undefined) {
+    if (
+      !Array.isArray(rawKeyTriggers) ||
+      rawKeyTriggers.some((t) => typeof t !== "string")
+    ) {
+      return panic(
+        `${where} (${id}): \`keyTriggers\` must be an array of strings`,
+      );
+    }
+    term.keyTriggers = rawKeyTriggers;
   }
   return term;
 };

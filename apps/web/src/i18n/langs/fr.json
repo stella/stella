@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# ressource} other {# ressources}}",
       "scope": "Visibilité",
       "scopePrivate": "Moi uniquement",
-      "scopeTeam": "Toute l’organisation",
+      "scopeTeam": "Toute l’équipe",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Sélectionné : {name}",
       "sourceUpload": "Importé",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Instructions insérées dans le compositeur du chat lorsque cette compétence est utilisée",
         "scope": "Visibilité",
         "scopePrivate": "Moi uniquement",
-        "scopeTeam": "Tout le monde dans l’organisation"
+        "scopeTeam": "Tout le monde dans l’équipe"
       },
       "privateSection": "Vos compétences",
       "shadowed": "Masquée par la compétence d’équipe",

@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# zdroj} few {# zdroje} other {# zdrojů}}",
       "scope": "Viditelnost",
       "scopePrivate": "Jen já",
-      "scopeTeam": "Všichni v organizaci",
+      "scopeTeam": "Všichni v týmu",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Vybráno: {name}",
       "sourceUpload": "Nahráno",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Pokyny vložené do kompozéru chatu při použití této dovednosti",
         "scope": "Viditelnost",
         "scopePrivate": "Pouze já",
-        "scopeTeam": "Všichni v organizaci"
+        "scopeTeam": "Všichni v týmu"
       },
       "privateSection": "Vaše dovednosti",
       "shadowed": "Překryto týmovou dovedností",

@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# Ressource} other {# Ressourcen}}",
       "scope": "Sichtbarkeit",
       "scopePrivate": "Nur ich",
-      "scopeTeam": "Alle in der Organisation",
+      "scopeTeam": "Alle im Team",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Ausgewählt: {name}",
       "sourceUpload": "Hochgeladen",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Anweisungen, die bei Verwendung dieses Skills in den Chat-Composer eingefügt werden",
         "scope": "Sichtbarkeit",
         "scopePrivate": "Nur ich",
-        "scopeTeam": "Alle in der Organisation"
+        "scopeTeam": "Alle im Team"
       },
       "privateSection": "Ihre Skills",
       "shadowed": "Durch Team-Skill verdeckt",

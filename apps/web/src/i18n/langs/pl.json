@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# zasób} few {# zasoby} many {# zasobów} other {# zasobu}}",
       "scope": "Widoczność",
       "scopePrivate": "Tylko ja",
-      "scopeTeam": "Wszyscy w organizacji",
+      "scopeTeam": "Wszyscy w zespole",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Wybrano: {name}",
       "sourceUpload": "Przesłano",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Instrukcje wstawiane do pola czatu po użyciu tej umiejętności",
         "scope": "Widoczność",
         "scopePrivate": "Tylko ja",
-        "scopeTeam": "Wszyscy w organizacji"
+        "scopeTeam": "Wszyscy w zespole"
       },
       "privateSection": "Twoje umiejętności",
       "shadowed": "Przesłonięte przez umiejętność zespołu",
@@ -2635,7 +2635,7 @@
     "mattersCount": "{count, plural, one {# sprawa} few {# sprawy} many {# spraw} other {# sprawy}}",
     "members": {
       "addMember": "Dodaj członka",
-      "addMemberDescription": "Dodaj członka organizacji do tej sprawy",
+      "addMemberDescription": "Dodaj członka zespołu do tej sprawy",
       "alreadyMember": "Użytkownik jest już członkiem",
       "cannotRemoveLast": "Nie można usunąć ostatniego członka",
       "noMembersFound": "Nie znaleziono członków",

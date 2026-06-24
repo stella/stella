@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# ressurss} other {# ressurssi}}",
       "scope": "Nähtavus",
       "scopePrivate": "Ainult mina",
-      "scopeTeam": "Kõik organisatsioonis",
+      "scopeTeam": "Kõik meeskonnas",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Valitud: {name}",
       "sourceUpload": "Üles laaditud",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Juhised, mis lisatakse vestluse koostajasse selle oskuse kasutamisel",
         "scope": "Nähtavus",
         "scopePrivate": "Ainult mina",
-        "scopeTeam": "Kõik organisatsioonis"
+        "scopeTeam": "Kõik meeskonnas"
       },
       "privateSection": "Teie oskused",
       "shadowed": "Meeskonna oskus varjutab",

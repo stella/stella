@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, zero {لا موارد} one {مورد واحد} two {موردان} few {# موارد} many {# مورداً} other {# مورد}}",
       "scope": "مدى الظهور",
       "scopePrivate": "أنا فقط",
-      "scopeTeam": "الجميع في المؤسسة",
+      "scopeTeam": "الجميع في الفريق",
       "selectFileHint": "اختر ملفاً من القائمة لفتحه في لوحة المحرر على اليمين.",
       "selectedFile": "المُختار: {name}",
       "sourceUpload": "مرفوع",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "تعليمات تُدرَج في مُحرّر المحادثة عند استخدام هذه المهارة",
         "scope": "مدى الظهور",
         "scopePrivate": "أنا فقط",
-        "scopeTeam": "الجميع في المؤسسة"
+        "scopeTeam": "الجميع في الفريق"
       },
       "privateSection": "مهاراتك",
       "shadowed": "محجوبة بمهارة الفريق",

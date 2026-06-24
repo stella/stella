@@ -1429,7 +1429,7 @@ type Messages = {
       "resources": "{count, plural, one {# resource} other {# resources}}";
       "scope": "Visibility";
       "scopePrivate": "Only me";
-      "scopeTeam": "Everyone in the organisation";
+      "scopeTeam": "Everyone in the team";
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.";
       "selectedFile": "Selected: {name}";
       "sourceUpload": "Uploaded";
@@ -1571,7 +1571,7 @@ type Messages = {
         "promptPlaceholder": "Instructions inserted into the chat composer when this skill is used";
         "scope": "Visibility";
         "scopePrivate": "Only me";
-        "scopeTeam": "Everyone in the organisation";
+        "scopeTeam": "Everyone in the team";
       };
       "privateSection": "Your skills";
       "shadowed": "Shadowed by team skill";

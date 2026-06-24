@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroja} other {# zdrojov}}",
       "scope": "Viditeľnosť",
       "scopePrivate": "Iba ja",
-      "scopeTeam": "Všetci v organizácii",
+      "scopeTeam": "Všetci v tíme",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Vybraté: {name}",
       "sourceUpload": "Nahraté",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "Pokyny vložené do editora chatu pri použití tejto zručnosti",
         "scope": "Viditeľnosť",
         "scopePrivate": "Iba ja",
-        "scopeTeam": "Všetci v organizácii"
+        "scopeTeam": "Všetci v tíme"
       },
       "privateSection": "Vaše zručnosti",
       "shadowed": "Prekryté tímovou zručnosťou",

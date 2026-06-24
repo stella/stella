@@ -424,46 +424,67 @@ const containsWord = (
 export type ForbiddenRule = {
   concept: string;
   triggers: string[];
+  keyTriggers: string[];
   byLocale: Record<string, string[]>;
+  // Forms banned only on key-trigger hits, never via the English word trigger.
+  byLocaleOnKey: Record<string, string[]>;
 };
 
 /**
  * Terminology rules from glossary `forbidden`, each scoped to its concept's
- * English trigger word(s). A forbidden rendering is only flagged when the
- * source string is actually about that concept; otherwise a common word (e.g.
- * Estonian "asi") would false-fire on unrelated strings.
+ * English trigger word(s) and/or `keyTriggers`. A forbidden rendering is only
+ * flagged when the source string is actually about that concept (or the key
+ * path declares it); otherwise a common word (e.g. Estonian "asi") would
+ * false-fire on unrelated strings.
  */
 export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
   const rules: ForbiddenRule[] = [];
   for (const term of [...glossary.verbs, ...glossary.legalConcepts]) {
-    if (!term.forbidden) {
+    if (!term.forbidden && !term.forbiddenOnKey) {
       continue;
     }
-    const byLocale: Record<string, string[]> = {};
-    for (const [locale, words] of Object.entries(term.forbidden)) {
-      byLocale[locale] = words;
-    }
-    rules.push({ concept: term.id, triggers: [term.en], byLocale });
+    rules.push({
+      concept: term.id,
+      triggers: [term.en],
+      keyTriggers: term.keyTriggers ?? [],
+      byLocale: { ...term.forbidden },
+      byLocaleOnKey: { ...term.forbiddenOnKey },
+    });
   }
   return rules;
 };
 
-/** Forbidden renderings present in the target for concepts the source mentions. */
+/**
+ * Forbidden renderings present in the target for concepts the source mentions.
+ * A rule fires when the English source contains its trigger word, or when the
+ * flattened key path contains one of its `keyTriggers` (the latter catches
+ * keys whose English wording never names the concept). Pass `key` to enable
+ * key-path triggering; omit it for source-only checks.
+ */
 export const findForbiddenTerms = (
   source: string,
   target: string,
   locale: string,
   rules: ForbiddenRule[],
+  key?: string,
 ): string[] => {
   const hits: string[] = [];
   for (const rule of rules) {
-    const forbidden = rule.byLocale[locale];
-    if (
-      !forbidden ||
-      !rule.triggers.some((trigger) => containsWord(source, trigger, "en"))
-    ) {
+    const wordFires = rule.triggers.some((trigger) =>
+      containsWord(source, trigger, "en"),
+    );
+    const keyFires =
+      key !== undefined &&
+      rule.keyTriggers.some((trigger) => key.includes(trigger));
+    if (!wordFires && !keyFires) {
       continue;
     }
+    // `byLocale` bans apply under either trigger; `byLocaleOnKey` bans (forms
+    // too ambiguous to flag broadly) apply only on a key-trigger hit.
+    const forbidden = [
+      ...(rule.byLocale[locale] ?? []),
+      ...(keyFires ? (rule.byLocaleOnKey[locale] ?? []) : []),
+    ];
     for (const term of forbidden) {
       if (containsWord(target, term, locale)) {
         hits.push(term);
@@ -521,9 +542,21 @@ const findViolations = (
 
   for (const [key, sourceValue] of Object.entries(source)) {
     const targetValue = target[key];
-    // Skip missing keys (i18n-check covers those) and untranslated values
-    // (tracked as untranslated debt; their checks would be noise).
-    if (targetValue === undefined || targetValue === sourceValue) {
+    if (targetValue === undefined) {
+      continue;
+    }
+    // For `en`, source and target are the same file: run only the terminology
+    // check so banned wording in the English source itself is caught (the other
+    // checks are vacuous against one's own source). For other locales, an equal
+    // value means untranslated debt (tracked elsewhere); skip it.
+    if (targetValue === sourceValue) {
+      if (
+        locale === "en" &&
+        findForbiddenTerms(sourceValue, targetValue, "en", rules, key).length >
+          0
+      ) {
+        result.terminology.push(key);
+      }
       continue;
     }
 
@@ -541,7 +574,8 @@ const findViolations = (
       result.plural.push(key);
     }
     if (
-      findForbiddenTerms(sourceValue, targetValue, locale, rules).length > 0
+      findForbiddenTerms(sourceValue, targetValue, locale, rules, key).length >
+      0
     ) {
       result.terminology.push(key);
     }
@@ -604,17 +638,25 @@ if (import.meta.main) {
     };
     const baseline = await readBaseline();
 
-    const localeFiles = [...new Bun.Glob("*.json").scanSync(langsDir)]
-      .filter((file) => file !== "en.json")
-      .toSorted();
+    // `en` is processed first so its source-side terminology violations report
+    // before the translated locales; findViolations special-cases it.
+    const localeFiles = [
+      "en.json",
+      ...[...new Bun.Glob("*.json").scanSync(langsDir)]
+        .filter((file) => file !== "en.json")
+        .toSorted(),
+    ];
 
     const next = emptyBaseline();
     let hasIssues = false;
 
     for (const file of localeFiles) {
       const locale = file.replace(/\.json$/u, "");
-      // oxlint-disable-next-line no-await-in-loop -- locales reported in sorted order
-      const target = flatten(await readJson(path.resolve(langsDir, file)));
+      const target =
+        locale === "en"
+          ? source
+          : // oxlint-disable-next-line no-await-in-loop -- locales reported in sorted order
+            flatten(await readJson(path.resolve(langsDir, file)));
       const violations = findViolations(source, target, locale, rules);
 
       const reported: string[] = [];

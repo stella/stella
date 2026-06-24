@@ -294,3 +294,89 @@ describe("terminology", () => {
     ).toEqual(["قضية"]);
   });
 });
+
+describe("terminology: key triggers and forbiddenOnKey", () => {
+  const fill = (value: string): Record<string, string> =>
+    Object.fromEntries(LOCALES.map((locale) => [locale, value]));
+  const rules = buildForbiddenRules(
+    parseGlossary(
+      JSON.stringify({
+        verbs: [],
+        legalConcepts: [
+          {
+            id: "team",
+            en: "Team",
+            // firm: broad (word + key trigger); org: key-trigger only.
+            forbidden: { de: ["Kanzlei"], en: ["firm"] },
+            forbiddenOnKey: { de: ["Organisation"], en: ["organisation"] },
+            keyTriggers: ["scopeTeam"],
+            translations: fill("x"),
+          },
+        ],
+        ptBR: [],
+      }),
+    ),
+  );
+
+  test("key trigger fires the rule even when English lacks the trigger word", () => {
+    expect(
+      findForbiddenTerms(
+        "Everyone in the organisation",
+        "Alle in der Organisation",
+        "de",
+        rules,
+        "knowledge.skills.form.scopeTeam",
+      ),
+    ).toEqual(["Organisation"]);
+  });
+
+  test("forbiddenOnKey is NOT enforced via the English word trigger", () => {
+    // Source says "team", target uses the ambiguous org word, but the key is
+    // not a scope key: org wording (which also means "organize") is allowed.
+    expect(
+      findForbiddenTerms(
+        "Organize team activity",
+        "Alle in der Organisation",
+        "de",
+        rules,
+        "workspaces.emptyMatters.description",
+      ),
+    ).toEqual([]);
+  });
+
+  test("forbidden (firm) words are enforced broadly via the word trigger", () => {
+    expect(
+      findForbiddenTerms(
+        "team-wide list",
+        "kanzleiweite Kanzlei",
+        "de",
+        rules,
+        "settings.anonymization.description",
+      ),
+    ).toEqual(["Kanzlei"]);
+  });
+
+  test("English self-check flags banned source wording on a key-trigger key", () => {
+    expect(
+      findForbiddenTerms(
+        "Everyone in the organisation",
+        "Everyone in the organisation",
+        "en",
+        rules,
+        "knowledge.agentSkills.scopeTeam",
+      ),
+    ).toEqual(["organisation"]);
+  });
+
+  test("no key and no word trigger means no enforcement", () => {
+    expect(
+      findForbiddenTerms(
+        "Configure your organisation",
+        "Alle in der Organisation",
+        "de",
+        rules,
+        "consent.scopeOnboarding",
+      ),
+    ).toEqual([]);
+  });
+});

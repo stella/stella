@@ -1426,7 +1426,7 @@
       "resources": "{count, plural, one {# erőforrás} other {# erőforrás}}",
       "scope": "Láthatóság",
       "scopePrivate": "Csak én",
-      "scopeTeam": "Mindenki a szervezetben",
+      "scopeTeam": "Mindenki a csapatban",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Kiválasztva: {name}",
       "sourceUpload": "Feltöltve",
@@ -1568,7 +1568,7 @@
         "promptPlaceholder": "A chat szerkesztőjébe beszúrt utasítások a készség használatakor",
         "scope": "Láthatóság",
         "scopePrivate": "Csak én",
-        "scopeTeam": "A szervezet minden tagja"
+        "scopeTeam": "A csapat minden tagja"
       },
       "privateSection": "Saját készségek",
       "shadowed": "A csapat készsége felülírja",
