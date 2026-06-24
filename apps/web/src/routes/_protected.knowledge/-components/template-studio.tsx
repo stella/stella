@@ -5536,6 +5536,10 @@ const FORMULA_IDENT_RE = /[\p{L}_][\p{L}\p{N}_.]*(?:-[\p{L}\p{N}_.]+)*/gu;
 type FormulaEditorProps = {
   currentPath: string;
   fields: readonly StudioField[];
+  /** Document outline, to resolve each field's `{{#each}}` scope: a loop
+   *  formula is evaluated against the row, so same-row fields are referenced
+   *  by their row-relative path, not the full manifest path. */
+  outline: OutlineNode[];
   value: string;
   onChange: (formula: string) => void;
 };
@@ -5568,32 +5572,52 @@ const FORMULA_FUNCTION_TOKENS: readonly string[] = [
 const FormulaEditor = ({
   currentPath,
   fields,
+  outline,
   value,
   onChange,
 }: FormulaEditorProps) => {
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement>(null);
   const currentIndex = fields.findIndex((f) => f.path === currentPath);
-  // Operands the evaluator can resolve to a number here: number fields (any
-  // order) and EARLIER formula fields, whose numeric result is computed before
-  // this one in manifest order. Formula fields defined at/after this one are
-  // excluded (still unfilled at this point), as are non-numeric text/date
-  // fields — the evaluator coerces those to NaN and the whole formula fails.
+  // A field's enclosing `{{#each}}` container path, or null at top level.
+  const scopeOf = (path: string): string | null =>
+    findEnclosingEachGroup(outline, path, null)?.expr.trim() || null;
+  const currentScope = scopeOf(currentPath);
+  // The name a field is referenced by in the expression: inside a loop the fill
+  // engine evaluates against the row object, so same-row fields are named by
+  // their row-relative path (the loop-container prefix stripped); at top level
+  // the full manifest path is used.
+  const refName = (path: string): string =>
+    currentScope !== null && path.startsWith(`${currentScope}.`)
+      ? path.slice(currentScope.length + 1)
+      : path;
+  // Only same-scope fields are resolvable here: a loop formula sees only its
+  // own row, a top-level formula only top-level values.
+  const inScope = (path: string): boolean => scopeOf(path) === currentScope;
+  // Operands: same-scope number fields (any order) and EARLIER formula fields
+  // (computed before this one in manifest order). Later formula fields and
+  // non-numeric text/date fields are excluded — the evaluator NaNs on those.
   const numberFields = fields.filter(
     (f, index) =>
       f.path !== currentPath &&
+      inScope(f.path) &&
       (f.inputType === "number" || f.formula !== undefined) &&
       !(f.formula !== undefined && index >= currentIndex),
   );
   const hasNonNumberFields = fields.some(
     (f) =>
       f.path !== currentPath &&
+      inScope(f.path) &&
       f.inputType !== "number" &&
       f.formula === undefined,
   );
-  const fieldsByPath = new Map(fields.map((f) => [f.path, f]));
-  const knownPaths = new Set(fields.map((f) => f.path));
-  const numberPaths = new Set(numberFields.map((f) => f.path));
+  // Keyed by REFERENCE name (row-relative inside a loop) — what the expression
+  // and the evaluator actually use.
+  const fieldsByRef = new Map(
+    fields.filter((f) => inScope(f.path)).map((f) => [refName(f.path), f]),
+  );
+  const knownRefs = new Set(fieldsByRef.keys());
+  const numberRefs = new Set(numberFields.map((f) => refName(f.path)));
   const referenced = [
     ...new Set(
       [...value.matchAll(FORMULA_IDENT_RE)]
@@ -5601,11 +5625,10 @@ const FormulaEditor = ({
         .filter((id) => !FORMULA_FUNCTIONS.has(id)),
     ),
   ];
-  const unknown = referenced.filter((path) => !knownPaths.has(path));
-  // Known fields that are referenced but are not numbers: they parse as an
-  // identifier the evaluator will coerce to NaN, so the whole formula fails.
+  const unknown = referenced.filter((name) => !knownRefs.has(name));
+  // Known fields referenced but not numbers: the evaluator coerces them to NaN.
   const nonNumber = referenced.filter(
-    (path) => knownPaths.has(path) && !numberPaths.has(path),
+    (name) => knownRefs.has(name) && !numberRefs.has(name),
   );
 
   const insertAtCaret = (token: string) => {
@@ -5652,11 +5675,11 @@ const FormulaEditor = ({
   };
 
   // Worked example: assign each referenced number field a distinct made-up
-  // integer (100, 200, 300…) keyed by full path, then evaluate the expression
-  // against that flat data object. The evaluator resolves exact dotted keys.
+  // integer (100, 200, 300…) keyed by its reference name, then evaluate the
+  // expression against that flat data object. The evaluator resolves exact keys.
   const exampleFields = referenced
-    .filter((path) => numberPaths.has(path))
-    .map((path, index) => ({ path, value: (index + 1) * 100 }));
+    .filter((name) => numberRefs.has(name))
+    .map((name, index) => ({ path: name, value: (index + 1) * 100 }));
   const exampleData: Record<string, number> = {};
   for (const entry of exampleFields) {
     exampleData[entry.path] = entry.value;
@@ -5680,7 +5703,7 @@ const FormulaEditor = ({
     if (at > cursor) {
       previewTokens.push({ text: value.slice(cursor, at), isField: false });
     }
-    previewTokens.push({ text: id, isField: knownPaths.has(id) });
+    previewTokens.push({ text: id, isField: knownRefs.has(id) });
     cursor = at + id.length;
   }
   if (cursor < value.length) {
@@ -5730,14 +5753,14 @@ const FormulaEditor = ({
             <Button
               className="shrink-0 font-mono"
               key={f.path}
-              onClick={() => appendField(f.path)}
+              onClick={() => appendField(refName(f.path))}
               size="xs"
-              title={f.label || f.path}
+              title={f.label || refName(f.path)}
               type="button"
               variant="outline"
             >
               <HashIcon className="size-3 shrink-0" />
-              {f.path}
+              {refName(f.path)}
             </Button>
           ))}
         </div>
@@ -5765,7 +5788,7 @@ const FormulaEditor = ({
         <p className="text-muted-foreground text-xs">
           {t("templates.studio.formulaExampleLabel")}:{" "}
           {exampleFields.map((entry, index) => {
-            const label = fieldsByPath.get(entry.path)?.label || entry.path;
+            const label = fieldsByRef.get(entry.path)?.label || entry.path;
             return (
               <span key={entry.path}>
                 {index > 0 && ", "}
@@ -6323,6 +6346,7 @@ const FieldFace = ({
               currentPath={field.path}
               fields={fields}
               onChange={(formula) => onUpdate({ formula })}
+              outline={outline}
               value={field.formula ?? ""}
             />
           ) : null}
