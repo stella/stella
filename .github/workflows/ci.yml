@@ -875,16 +875,19 @@ jobs:
 
   # Rust checks for the Tauri desktop crate. ci-checks only runs
   # `cargo fmt --check` (a parse-only pass that needs no compile);
-  # check/clippy/test/doc must run where the desktop crate actually
-  # builds so platform-gated macOS and Windows code is covered.
+  # check/clippy/doc must run where the desktop crate actually builds
+  # so platform-gated macOS and Windows code is covered.
   #
   # The matrix mirrors the release matrix (macos-14 + windows-latest)
   # rather than Linux: the desktop app ships only those two targets,
   # and clippy analyzes the active `cfg` for its host — so these two
   # runners cover the `#[cfg(target_os = "macos")]` / `"windows"`
   # code that ships, with no need for the Linux webkit2gtk system
-  # libraries a Linux clippy run would require. Both are standard
-  # GitHub-hosted runners, free for public repositories.
+  # libraries a Linux clippy run would require. Windows builds the
+  # test binaries but does not execute them: hosted Windows currently
+  # exits before the Rust test harness starts with a native entrypoint
+  # error in the Tauri-linked binary. macOS executes the test suite.
+  # Both are standard GitHub-hosted runners, free for public repositories.
   desktop-clippy:
     name: Desktop Rust (${{ matrix.os }})
     needs: trust-check
@@ -963,8 +966,12 @@ jobs:
         run: cargo clippy --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked -- -D warnings
 
       - name: Test
-        if: steps.changed.outputs.run == 'true'
+        if: steps.changed.outputs.run == 'true' && matrix.os == 'macos'
         run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked
+
+      - name: Build test binaries
+        if: steps.changed.outputs.run == 'true' && matrix.os == 'windows'
+        run: cargo test --manifest-path apps/desktop/src-tauri/Cargo.toml --workspace --all-targets --target ${{ matrix.target }} --locked --no-run
 
       - name: Install cargo-deny
         if: steps.changed.outputs.run == 'true' && matrix.os == 'macos'
