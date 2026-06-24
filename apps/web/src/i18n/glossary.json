@@ -311,7 +311,7 @@
     {
       "id": "team",
       "en": "Team",
-      "note": "The firm/organization scope that content is shared with (members, team skills, the anonymization deny list). Canonical user-facing label is \"Team\"; the internal \"organization\" data-model alias and the \"firm\" / \"firm-wide\" / \"org-wide\" renderings must not surface as labels. Distinct from the client \"company\" sense (cs firma in the ARES company lookup, \"Klient je firma\"), which is a different concept and stays. Visibility pairs as Personal vs Shared (cs \"Osobní\" / \"Sdílené v rámci týmu\"). es \"firma\" also means signature and pt-BR \"firma\" also means a company; both are trigger-scoped to English \"team\" strings, so the firm-sense entries here do not false-fire on those. On keys whose flattened path matches `keyTriggers` (the *.scopeTeam / scope.team visibility labels), the org-wording forms above are also banned in every language including English, since those labels never contain the word \"team\" to trigger the source check.",
+      "note": "The firm/organization scope that content is shared with (members, team skills, the anonymization deny list). Canonical user-facing label is \"Team\"; the internal \"organization\" data-model alias and the \"firm\" / \"firm-wide\" / \"org-wide\" renderings must not surface as labels. Distinct from the client \"company\" sense (cs firma in the ARES company lookup, \"Klient je firma\"), which is a different concept and stays. Visibility pairs as Personal vs Shared (cs \"Osobní\" / \"Sdílené v rámci týmu\"). es \"firma\" also means signature and pt-BR \"firma\" also means a company; both are trigger-scoped to English \"team\" strings, so the firm-sense entries here do not false-fire on those. On keys whose flattened path matches `keyTriggers` (the *.scopeTeam / scope.team visibility labels plus the Team-scope copy whose English could regress and drop the word \"team\": the anonymization deny-list description/entriesHeading, the third-party-skill disclaimer, and the add-member description), the org-wording forms above are also banned in every language including English, since a regressed source might no longer contain the word \"team\" to trigger the source check.",
       "forbidden": {
         "ar": ["مكتب", "المكتب", "مكاتب"],
         "cs": ["firemní", "firemního", "firemnímu", "firemním", "firemními"],
@@ -411,7 +411,7 @@
         ]
       },
       "forbiddenOnKey": {
-        "en": ["organisation", "organization"],
+        "en": ["organisation", "organization", "firm", "org-wide", "firm-wide"],
         "cs": [
           "organizace",
           "organizaci",
@@ -487,7 +487,14 @@
         "ar": ["مؤسسة", "المؤسسة", "مؤسسات", "منظمة", "المنظمة"],
         "pt-BR": ["organização", "organizações"]
       },
-      "keyTriggers": ["scopeTeam", "scope.team"],
+      "keyTriggers": [
+        "scopeTeam",
+        "scope.team",
+        "anonymization.description",
+        "anonymization.entriesHeading",
+        "catalogueThirdPartyDisclaimer",
+        "addMemberDescription"
+      ],
       "sourceExempt": ["organiz", "organis"],
       "translations": {
         "ar": "فريق",

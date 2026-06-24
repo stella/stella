@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
 
 import { LOCALES, parseGlossary } from "./glossary-gen";
 import {
@@ -404,6 +405,83 @@ describe("terminology: key triggers and forbiddenOnKey", () => {
         "de",
         rules,
         "consent.scopeOnboarding",
+      ),
+    ).toEqual([]);
+  });
+});
+
+// Guards the real glossary's Team-scope keyTriggers: every key this PR migrated
+// to Team wording must stay covered by a source-side trigger, so an English
+// regression that drops the word "team" (and thus the word trigger) is still
+// caught via the key path. Loads the shipped glossary, not a synthetic stub, so
+// the test breaks if a future edit removes one of these keyTriggers.
+const realGlossaryPath = path.resolve(
+  import.meta.dir,
+  "../../../apps/web/src/i18n/glossary.json",
+);
+const realRules = buildForbiddenRules(
+  parseGlossary(await Bun.file(realGlossaryPath).text()),
+);
+
+describe("terminology: real glossary covers migrated Team-scope keys", () => {
+  // Each migrated key, with its English source as shipped and a regression that
+  // reintroduces org/firm wording while dropping the word "team" (so only the
+  // key path, not the source word, can trigger the rule).
+  const migrated = [
+    {
+      key: "settings.organization.anonymization.description",
+      regressed:
+        "Curate the firm-wide deny list of terms the anonymization pipeline always masks",
+    },
+    {
+      key: "settings.organization.anonymization.entriesHeading",
+      regressed: "Firm-wide terms ({count})",
+    },
+    {
+      key: "onboarding.catalogueThirdPartyDisclaimer",
+      regressed: "verifying it is compliant with your firm's policies",
+    },
+    {
+      key: "knowledge.skills.form.scopeTeam",
+      regressed: "Everyone in the organisation",
+    },
+    {
+      key: "knowledge.agentSkills.scopeTeam",
+      regressed: "Everyone in the organisation",
+    },
+  ];
+
+  for (const { key, regressed } of migrated) {
+    test(`English regression to org/firm wording is caught on ${key}`, () => {
+      expect(
+        findForbiddenTerms(regressed, regressed, "en", realRules, key),
+      ).not.toEqual([]);
+    });
+  }
+
+  test("a target-locale org regression is caught on the member key", () => {
+    // de "Organisationsmitglied" reintroduced where Team wording is required.
+    expect(
+      findForbiddenTerms(
+        "Choose an existing team member to add to this matter",
+        "Ein bestehendes Organisationsmitglied zu dieser Akte hinzufügen",
+        "de",
+        realRules,
+        "workspaces.members.addMemberDescription",
+      ),
+    ).not.toEqual([]);
+  });
+
+  test("genuinely org-scoped keys are not flagged (no over-broadening)", () => {
+    // settings.organization.renameTitle is legitimately about the org entity;
+    // its source has no "team" word and its path is not a Team-scope trigger.
+    expect(
+      findForbiddenTerms(
+        "Rename organization",
+        "Rename organization",
+        "en",
+        realRules,
+        "settings.organization.renameTitle",
       ),
     ).toEqual([]);
   });
