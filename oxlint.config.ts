@@ -1109,6 +1109,7 @@ export default defineConfig({
       files: [
         "apps/web/src/routes/_protected.tsx",
         "apps/web/src/components/app-sidebar.tsx",
+        "apps/web/src/components/sidebar-user-menu.tsx",
         "apps/web/src/components/require-ai-key.tsx",
         "apps/web/src/components/chat-mention-providers.tsx",
         "apps/web/src/components/chat-editor-provider.tsx",
