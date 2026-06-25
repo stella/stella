@@ -146,8 +146,13 @@ export const WorkspaceBreadcrumb = ({
         <Link
           className="hover:text-foreground min-w-0 truncate transition-colors"
           onClick={() => {
-            updateMattersConfig({ clientFilter: client.id });
+            // Clear active filters and group by client so the full grouped
+            // list is shown; the route then scrolls to and flashes this
+            // company's group on arrival. `filters` is the applied state
+            // (clientFilter has no readers).
+            updateMattersConfig({ groupBy: "client", filters: {} });
           }}
+          search={{ focusClient: client.id }}
           title={client.displayName}
           to="/workspaces"
         >

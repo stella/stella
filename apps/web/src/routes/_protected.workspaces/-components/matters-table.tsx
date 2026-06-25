@@ -463,6 +463,7 @@ const MattersTableGroup = ({
     <>
       <TableRow
         className="bg-muted/40 hover:bg-muted/60 cursor-pointer"
+        data-group-id={group.groupId}
         onClick={onToggle}
       >
         <TableCell
