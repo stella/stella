@@ -65,6 +65,7 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
 import {
+  buildSelectionParentLookup,
   resolveAncestorIds,
   type CopyToMatterEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
@@ -108,6 +109,10 @@ type RowActionsProps = {
   anchor?: VirtualAnchor | null | undefined;
   /** Extra entities included in bulk actions. */
   selectedEntities?: WorkspaceEntity[] | undefined;
+  /** Resolves an entity's full ancestor chain, spanning the ancestor folders a
+   *  filter/search hid. Supplied by the filesystem tree so cross-matter copy/
+   *  move dedupe stays correct across hidden intermediate folders. */
+  getAncestorIds?: ((entityId: string) => string[]) | undefined;
   cellMetadataTarget?:
     | { propertyId: string; metadata: WorkspaceCellMetadata | undefined }
     | null
@@ -126,6 +131,7 @@ export const RowActions = ({
   triggerTabIndex,
   anchor,
   selectedEntities,
+  getAncestorIds,
   cellMetadataTarget,
 }: RowActionsProps) => {
   const t = useTranslations();
@@ -156,7 +162,9 @@ export const RowActions = ({
   // Show "Edit in Desktop" when: DOCX + (not locked OR locked by me)
   const canOpenInDesktop = isDocx && !isLockedByOther;
   const openCopyToMatterDialog = () => {
-    setCopyToMatterEntities(toCopyToMatterEntities(bulkTargets));
+    setCopyToMatterEntities(
+      toCopyToMatterEntities(bulkTargets, getAncestorIds),
+    );
     setCopyToMatterOpen(true);
   };
   const handleCopyToMatterOpenChange = (nextOpen: boolean) => {
@@ -856,35 +864,23 @@ const CreateSubfolderMenuItem = ({
 
 const toCopyToMatterEntities = (
   targets: readonly (WorkspaceEntity | TableTreeNode)[],
+  getAncestorIds?: (entityId: string) => string[],
 ): CopyToMatterEntity[] => {
-  // Seed each target's own immediate parent so flat WorkspaceEntity selections
-  // (table toolbar / row context menu) still dedupe a selected direct parent,
-  // then overlay every parent->child link reachable from the selected subtrees
-  // so the chain stays unbroken across unselected intermediate folders.
-  const parentById = new Map<string, string | null>();
-  for (const target of targets) {
-    parentById.set(target.entityId, target.parentId ?? null);
+  // Filesystem callers pass `getAncestorIds`, a resolver spanning the full
+  // entity set (including the ancestor folders a filter/search hid), so the
+  // chain stays unbroken across hidden intermediate folders. Other callers fall
+  // back to a lookup built from the selection's own parent/child links.
+  let resolve = getAncestorIds;
+  if (!resolve) {
+    const parentById = buildSelectionParentLookup(targets);
+    resolve = (entityId: string) => resolveAncestorIds(entityId, parentById);
   }
-  const indexChildren = (
-    nodes: readonly (WorkspaceEntity | TableTreeNode)[],
-  ) => {
-    for (const node of nodes) {
-      if (!("children" in node)) {
-        continue;
-      }
-      for (const child of node.children) {
-        parentById.set(child.entityId, node.entityId);
-      }
-      indexChildren(node.children);
-    }
-  };
-  indexChildren(targets);
 
   return targets.map((entity) => ({
     entityId: entity.entityId,
     entityName: getEntityName(entity),
     kind: entity.kind,
-    ancestorIds: resolveAncestorIds(entity.entityId, parentById),
+    ancestorIds: resolve(entity.entityId),
   }));
 };
 

@@ -32,6 +32,41 @@ export const resolveAncestorIds = (
   return ancestorIds;
 };
 
+export type AncestorLinkSource = {
+  entityId: string;
+  parentId: string | null;
+  children?: readonly AncestorLinkSource[];
+};
+
+// Build a parent lookup from a selection alone: seed each target's own parent,
+// then overlay every parent->child link inside the selected subtrees. This only
+// spans entities present in the selection and the visible tree, so a chain that
+// passes through a folder hidden by a filter/search is incomplete. Filesystem
+// callers pass a resolver spanning the backfilled ancestor links instead, so
+// the chain stays unbroken across hidden intermediate folders.
+export const buildSelectionParentLookup = (
+  targets: readonly AncestorLinkSource[],
+): Map<string, string | null> => {
+  const parentById = new Map<string, string | null>();
+  for (const target of targets) {
+    parentById.set(target.entityId, target.parentId);
+  }
+  const indexChildren = (nodes: readonly AncestorLinkSource[]) => {
+    for (const node of nodes) {
+      if (!node.children) {
+        continue;
+      }
+      for (const child of node.children) {
+        parentById.set(child.entityId, node.entityId);
+      }
+      indexChildren(node.children);
+    }
+  };
+  indexChildren(targets);
+
+  return parentById;
+};
+
 export const getCopyToMatterRootEntities = (
   entities: readonly CopyToMatterEntity[],
 ): CopyToMatterEntity[] => {

@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  buildSelectionParentLookup,
   getCopyToMatterRootEntities,
   resolveAncestorIds,
   type CopyToMatterEntity,
@@ -56,6 +57,50 @@ describe("resolveAncestorIds", () => {
     ]);
 
     expect(resolveAncestorIds("a", parentById)).toEqual(["b"]);
+  });
+});
+
+describe("buildSelectionParentLookup", () => {
+  test("seeds each target's own parent and overlays subtree child links", () => {
+    const parentById = buildSelectionParentLookup([
+      {
+        entityId: "root-folder",
+        parentId: null,
+        children: [{ entityId: "child", parentId: "root-folder" }],
+      },
+    ]);
+
+    expect(resolveAncestorIds("child", parentById)).toEqual(["root-folder"]);
+  });
+
+  test("cannot span a folder hidden from the selection and tree", () => {
+    // A flat selection (table toolbar / row context menu) carries no children,
+    // so the link from the hidden intermediate folder up to the selected root
+    // is absent and the chain breaks. This is why filesystem callers must pass
+    // the backfill-aware resolver instead of relying on this lookup.
+    const parentById = buildSelectionParentLookup([
+      { entityId: "root-folder", parentId: null },
+      { entityId: "grandchild", parentId: "hidden-child" },
+    ]);
+
+    expect(resolveAncestorIds("grandchild", parentById)).toEqual([
+      "hidden-child",
+    ]);
+  });
+
+  test("spans hidden folders once the backfilled link is overlaid", () => {
+    // The filesystem query backfills `hidden-child -> root-folder`; with it the
+    // chain reaches the selected root so the descendant dedupes correctly.
+    const parentById = buildSelectionParentLookup([
+      { entityId: "root-folder", parentId: null },
+      { entityId: "hidden-child", parentId: "root-folder" },
+      { entityId: "grandchild", parentId: "hidden-child" },
+    ]);
+
+    expect(resolveAncestorIds("grandchild", parentById)).toEqual([
+      "hidden-child",
+      "root-folder",
+    ]);
   });
 });
 

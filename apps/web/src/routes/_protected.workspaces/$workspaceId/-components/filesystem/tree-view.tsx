@@ -1550,6 +1550,7 @@ const FilesystemRow = ({
       <RowActions
         anchor={contextAnchor}
         entity={node}
+        getAncestorIds={getAncestorIds}
         onOpen={openInInspector}
         onOpenChange={(o) => {
           if (!o) {
