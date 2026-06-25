@@ -6,16 +6,28 @@ import { join } from "node:path";
 type Statement = {
   line: number;
   text: string;
+  // Surfaced from a stored-routine (CREATE FUNCTION/PROCEDURE) body: the body is
+  // stored, not executed during the migration, so backfill rules that judge
+  // runtime row effects must not fire on it. DO blocks execute immediately and
+  // are not deferred.
+  deferred?: boolean;
 };
+
+type AcknowledgementCategory = (typeof ACKNOWLEDGEMENT_CATEGORIES)[number];
 
 type GuardedRule = {
   id: string;
   description: string;
+  category: AcknowledgementCategory;
   pattern?: RegExp;
   matches?: (statement: string) => boolean;
 };
 
-type InvariantRule = GuardedRule & {
+type InvariantRule = {
+  id: string;
+  description: string;
+  pattern?: RegExp;
+  matches?: (statement: string) => boolean;
   guidance: string;
 };
 
@@ -35,8 +47,20 @@ type SingleQuoteScanResult = {
   singleQuoteAllowsBackslashEscapes: boolean;
 };
 
+const ACKNOWLEDGEMENT_CATEGORIES = [
+  "destructive-change",
+  "bulk-backfill",
+] as const;
+
 const ACKNOWLEDGEMENT_PREFIX_PATTERN =
-  /^\s*--\s*stella-migration-safety:\s*reviewed\s+destructive-change\s*-\s*/i;
+  /^\s*--\s*stella-migration-safety:\s*reviewed\s+(?<category>destructive-change|bulk-backfill)\s*-\s*/iu;
+
+const parseAcknowledgementCategory = (
+  value: string,
+): AcknowledgementCategory | null =>
+  ACKNOWLEDGEMENT_CATEGORIES.find(
+    (category) => category === value.toLowerCase(),
+  ) ?? null;
 
 const MIN_ACKNOWLEDGEMENT_REASON_LENGTH = 12;
 const DEFAULT_MIGRATIONS_DIR = "apps/api/drizzle";
@@ -47,32 +71,173 @@ const DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN = /\bDO(?:\s+LANGUAGE\s+\S+)?\s*$/i;
 const ROUTINE_DOLLAR_QUOTE_PREFIX_PATTERN =
   /\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b[\s\S]*\b(?:AS|IS)\s*$/i;
 
+const IDENTIFIER_CHARACTER_PATTERN = /[A-Za-z0-9_]/u;
+const IDENTIFIER_WORD_PATTERN = /^[A-Za-z0-9_]+/u;
+const UPDATE_KEYWORD = "UPDATE";
+const SET_KEYWORD = "SET";
+const WHERE_KEYWORD = "WHERE";
+const RETURNING_KEYWORD = "RETURNING";
+
+// Keywords whose immediately following UPDATE is a clause, not an executable
+// statement: row locks (`FOR UPDATE`), trigger timing (`BEFORE`/`AFTER`/
+// `INSTEAD OF UPDATE`), FK actions (`ON UPDATE`), and upsert actions (`DO
+// UPDATE`). None rewrite table data, so the UPDATE token after them is skipped.
+const UPDATE_CLAUSE_PREFIXES = new Set([
+  "FOR",
+  "BEFORE",
+  "AFTER",
+  "OF",
+  "ON",
+  "DO",
+]);
+
+// Scan an executable UPDATE found at `updateIndex` (parenthesis depth
+// `baseDepth`) for a WHERE bounding it at that same depth. The update's clause
+// runs until its enclosing parenthesis closes, a top-level `;`, `RETURNING`, or
+// end of text. A WHERE living only inside a SET subquery sits one level deeper,
+// so it does not bound the update and the row set stays the whole table. Returns
+// true only when the statement is a real `UPDATE ... SET` with no bounding
+// WHERE.
+const isUnboundedUpdateAt = (
+  statement: string,
+  updateIndex: number,
+  baseDepth: number,
+): boolean => {
+  let depth = baseDepth;
+  let sawSet = false;
+
+  for (
+    let index = updateIndex + UPDATE_KEYWORD.length;
+    index < statement.length;
+    index++
+  ) {
+    const char = statement[index] ?? "";
+
+    if (char === "(") {
+      depth++;
+      continue;
+    }
+
+    if (char === ")") {
+      depth--;
+      // Left the parenthesised context holding this UPDATE (e.g. a CTE body).
+      if (depth < baseDepth) {
+        break;
+      }
+      continue;
+    }
+
+    if (char === ";" && depth === baseDepth) {
+      break;
+    }
+
+    const isWordStart =
+      depth === baseDepth &&
+      IDENTIFIER_CHARACTER_PATTERN.test(char) &&
+      !IDENTIFIER_CHARACTER_PATTERN.test(statement[index - 1] ?? "");
+    if (!isWordStart) {
+      continue;
+    }
+
+    const word = (
+      IDENTIFIER_WORD_PATTERN.exec(statement.slice(index))?.[0] ?? ""
+    ).toUpperCase();
+
+    if (word === SET_KEYWORD) {
+      sawSet = true;
+      continue;
+    }
+    if (word === RETURNING_KEYWORD) {
+      break;
+    }
+    if (word === WHERE_KEYWORD && sawSet) {
+      return false;
+    }
+  }
+
+  return sawSet;
+};
+
+// True when the statement executes an UPDATE that rewrites every row. Catches
+// top-level backfills, data-modifying CTEs (`WITH u AS (UPDATE ... RETURNING
+// ...) ...`), and DO/function bodies (parseStatements surfaces their inner
+// statements). `FOR`/`BEFORE`/`AFTER`/`OF`/`ON`/`DO UPDATE` clauses and `INSERT
+// ... ON CONFLICT DO UPDATE` upserts are not executable updates and are skipped.
+// The text is already string/comment-masked by parseStatements, so paren and
+// keyword scanning cannot be fooled by literals.
+const isUnboundedUpdate = (statement: string): boolean => {
+  let depth = 0;
+  let previousWord = "";
+
+  for (let index = 0; index < statement.length; index++) {
+    const char = statement[index] ?? "";
+
+    if (char === "(") {
+      depth++;
+      continue;
+    }
+
+    if (char === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    const isWordStart =
+      IDENTIFIER_CHARACTER_PATTERN.test(char) &&
+      !IDENTIFIER_CHARACTER_PATTERN.test(statement[index - 1] ?? "");
+    if (!isWordStart) {
+      continue;
+    }
+
+    const word = (
+      IDENTIFIER_WORD_PATTERN.exec(statement.slice(index))?.[0] ?? ""
+    ).toUpperCase();
+
+    if (
+      word === UPDATE_KEYWORD &&
+      !UPDATE_CLAUSE_PREFIXES.has(previousWord) &&
+      isUnboundedUpdateAt(statement, index, depth)
+    ) {
+      return true;
+    }
+
+    previousWord = word;
+  }
+
+  return false;
+};
+
 const GUARDED_RULES: GuardedRule[] = [
   {
     id: "drop-object",
     description: "drops a database object",
+    category: "destructive-change",
     pattern:
       /\bDROP\s+(?:DATABASE|EXTENSION|FUNCTION|INDEX|MATERIALIZED\s+VIEW|POLICY|SCHEMA|SEQUENCE|TABLE|TRIGGER|TYPE|VIEW)\b/i,
   },
   {
     id: "drop-column",
     description: "drops a table column",
+    category: "destructive-change",
     pattern:
       /\bALTER\s+TABLE\b[\s\S]*\bDROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(?!(?:CONSTRAINT|DEFAULT|NOT\s+NULL)\b)\S+/i,
   },
   {
     id: "drop-constraint",
     description: "drops a table constraint",
+    category: "destructive-change",
     pattern: /\bALTER\s+TABLE\b[\s\S]*\bDROP\s+CONSTRAINT\b/i,
   },
   {
     id: "rename-table-or-column",
     description: "renames a table or column",
+    category: "destructive-change",
     pattern: /\bALTER\s+TABLE\b[\s\S]*\bRENAME\b/i,
   },
   {
     id: "alter-column-type",
     description: "changes a column type",
+    category: "destructive-change",
     matches: (statement) =>
       ALTER_TABLE_PATTERN.test(statement) &&
       ALTER_COLUMN_TYPE_PATTERN.test(statement),
@@ -80,17 +245,32 @@ const GUARDED_RULES: GuardedRule[] = [
   {
     id: "truncate-table",
     description: "truncates table data",
+    category: "destructive-change",
     pattern: /\bTRUNCATE\b/i,
   },
   {
     id: "delete-data",
     description: "deletes table data",
+    category: "destructive-change",
     pattern: /\bDELETE\s+FROM\b/i,
   },
   {
     id: "disable-row-level-security",
     description: "disables row-level security",
+    category: "destructive-change",
     pattern: /\bALTER\s+TABLE\b[\s\S]*\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i,
+  },
+  {
+    id: "unbounded-update",
+    description: "runs a full-table UPDATE with no WHERE clause",
+    category: "bulk-backfill",
+    matches: isUnboundedUpdate,
+  },
+  {
+    id: "recursive-cte",
+    description: "uses a recursive CTE (WITH RECURSIVE)",
+    category: "bulk-backfill",
+    pattern: /\bWITH\s+RECURSIVE\b/iu,
   },
 ];
 
@@ -104,13 +284,38 @@ const INVARIANT_RULES: InvariantRule[] = [
   },
 ];
 
+// Migrations applied before this guard existed carry backfills that are now
+// immutable: editing an applied migration breaks its journal hash. They are
+// grandfathered by (migration directory, rule id) so the full-tree / no-arg scan
+// stays usable, while any new migration, or a new rule firing on these files,
+// still fails. CI lints only changed files, so it never reaches these.
+const GRANDFATHERED_VIOLATIONS: ReadonlyMap<
+  string,
+  ReadonlySet<string>
+> = new Map([
+  ["20260429220500_global-search-unaccent", new Set(["unbounded-update"])],
+  ["20260522100000_entity_hot_path_indexes", new Set(["unbounded-update"])],
+  ["20260603120000_case_law_public_slugs", new Set(["recursive-cte"])],
+]);
+
+const getMigrationName = (file: string): string | undefined =>
+  file.split(/[/\\]/u).at(-2);
+
+const isGrandfatheredViolation = (file: string, ruleId: string): boolean =>
+  GRANDFATHERED_VIOLATIONS.get(getMigrationName(file) ?? "")?.has(ruleId) ??
+  false;
+
 const usage = () => {
   console.error(
     "Usage: bun scripts/check-migration-safety.ts [apps/api/drizzle/<migration>/migration.sql ...]",
   );
 };
 
-const hasAcknowledgement = (source: string): boolean => {
+const getAcknowledgedCategories = (
+  source: string,
+): Set<AcknowledgementCategory> => {
+  const categories = new Set<AcknowledgementCategory>();
+
   for (const line of source.split("\n")) {
     const match = ACKNOWLEDGEMENT_PREFIX_PATTERN.exec(line);
 
@@ -120,12 +325,20 @@ const hasAcknowledgement = (source: string): boolean => {
 
     const reason = line.slice(match[0].length).trim();
 
-    if (reason.length >= MIN_ACKNOWLEDGEMENT_REASON_LENGTH) {
-      return true;
+    if (reason.length < MIN_ACKNOWLEDGEMENT_REASON_LENGTH) {
+      continue;
+    }
+
+    const category = parseAcknowledgementCategory(
+      match.groups?.["category"] ?? "",
+    );
+
+    if (category) {
+      categories.add(category);
     }
   }
 
-  return false;
+  return categories;
 };
 
 const isWhitespaceOnly = (value: string): boolean => value.trim().length === 0;
@@ -400,11 +613,16 @@ const parseStatements = (source: string): Statement[] => {
       if (shouldScanDollarQuoteBody(current)) {
         const body = source.slice(bodyStartIndex, closingIndex);
         const bodyStartLine = line + countNewlines(dollarTag);
+        // A DO block runs at migration time; a routine body is only stored, so
+        // its statements (and anything nested in them) are deferred.
+        const bodyIsDeferred =
+          !DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN.test(current);
 
         for (const statement of parseStatements(body)) {
           statements.push({
             line: bodyStartLine + statement.line - 1,
             text: statement.text,
+            deferred: bodyIsDeferred || statement.deferred,
           });
         }
       }
@@ -494,10 +712,12 @@ const main = () => {
     const source = readFileSync(file, "utf-8");
     const statements = parseStatements(source);
     const invariantFindings = statements.flatMap((statement) =>
-      INVARIANT_RULES.filter((rule) =>
-        rule.matches
-          ? rule.matches(statement.text)
-          : (rule.pattern?.test(statement.text) ?? false),
+      INVARIANT_RULES.filter(
+        (rule) =>
+          (rule.matches
+            ? rule.matches(statement.text)
+            : (rule.pattern?.test(statement.text) ?? false)) &&
+          !isGrandfatheredViolation(file, rule.id),
       ).map((rule) => ({
         file,
         line: statement.line,
@@ -519,23 +739,29 @@ const main = () => {
       }
     }
 
+    const acknowledgedCategories = getAcknowledgedCategories(source);
+
     const guardedFindings = statements.flatMap((statement) =>
       GUARDED_RULES.filter((rule) =>
         rule.matches
           ? rule.matches(statement.text)
           : (rule.pattern?.test(statement.text) ?? false),
-      ).map((rule) => ({
-        file,
-        line: statement.line,
-        rule,
-      })),
+      )
+        .filter((rule) => !acknowledgedCategories.has(rule.category))
+        .filter((rule) => !isGrandfatheredViolation(file, rule.id))
+        // A deferred (stored-routine) statement rewrites no rows at migration
+        // time, so backfill rules do not apply to it.
+        .filter(
+          (rule) => !(statement.deferred && rule.category === "bulk-backfill"),
+        )
+        .map((rule) => ({
+          file,
+          line: statement.line,
+          rule,
+        })),
     );
 
     if (guardedFindings.length === 0) {
-      continue;
-    }
-
-    if (hasAcknowledgement(source)) {
       continue;
     }
 
@@ -550,12 +776,34 @@ const main = () => {
       );
     }
 
-    console.error(
-      "Add a file-level SQL comment after confirming the operation is safe:",
+    const findingCategories = new Set(
+      guardedFindings.map((finding) => finding.rule.category),
     );
-    console.error(
-      "  -- stella-migration-safety: reviewed destructive-change - <why this is safe and how rollback is handled>",
-    );
+
+    if (findingCategories.has("destructive-change")) {
+      console.error(
+        "Add a file-level SQL comment after confirming the operation is safe:",
+      );
+      console.error(
+        "  -- stella-migration-safety: reviewed destructive-change - <why this is safe and how rollback is handled>",
+      );
+    }
+
+    if (findingCategories.has("bulk-backfill")) {
+      console.error(
+        "Migrations should be fast, additive DDL. Move bulk or idempotent backfills",
+      );
+      console.error("to an out-of-band batched script (see the pattern in");
+      console.error(
+        "apps/api/src/scripts/backfill-case-law-slugs.ts), or add a bounded WHERE clause.",
+      );
+      console.error(
+        "If the backfill is genuinely small and safe at scale, acknowledge it:",
+      );
+      console.error(
+        "  -- stella-migration-safety: reviewed bulk-backfill - <why this is safe at scale>",
+      );
+    }
   }
 
   if (violations > 0 || process.exitCode) {

@@ -34,7 +34,38 @@ const runChecker = (sql: string): CheckerResult => {
   }
 };
 
+const runCheckerOn = (...args: string[]): CheckerResult => {
+  const result = Bun.spawnSync([
+    "bun",
+    "scripts/check-migration-safety.ts",
+    ...args,
+  ]);
+
+  return {
+    exitCode: result.exitCode,
+    stderr: decoder.decode(result.stderr),
+    stdout: decoder.decode(result.stdout),
+  };
+};
+
 describe("check-migration-safety", () => {
+  it("passes the full no-argument scan of the migration tree", () => {
+    // The default scan walks every applied migration; pre-existing backfills are
+    // grandfathered, so the standalone checker stays usable for developers.
+    const result = runCheckerOn();
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("grandfathers a pre-existing applied migration's backfill", () => {
+    const result = runCheckerOn(
+      "apps/api/drizzle/20260429220500_global-search-unaccent/migration.sql",
+    );
+
+    expect(result.exitCode).toBe(0);
+  });
+
   it("rejects column-target ON CONFLICT clauses", () => {
     const result = runChecker(`
       INSERT INTO "mcp_connectors" ("slug")
@@ -77,6 +108,207 @@ describe("check-migration-safety", () => {
   it("ignores unsafe-looking SQL inside string literals", () => {
     const result = runChecker(`
       SELECT 'ON CONFLICT ("slug") DO NOTHING';
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("flags a full-table UPDATE with no WHERE clause", () => {
+    const result = runChecker(`
+      UPDATE "documents" SET "status" = 'archived';
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("allows an UPDATE bounded by a WHERE clause", () => {
+    const result = runChecker(`
+      UPDATE "documents" SET "status" = 'archived' WHERE "id" = 2;
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("allows an INSERT ... ON CONFLICT DO UPDATE SET upsert", () => {
+    // Named-constraint arbiter so this exercises only the unbounded-update
+    // exclusion, not the separate on-conflict-column-target invariant.
+    const result = runChecker(`
+      INSERT INTO "documents" ("id", "status") VALUES (1, 'archived')
+      ON CONFLICT ON CONSTRAINT "documents_pkey" DO UPDATE SET "status" = EXCLUDED."status";
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("flags a CTE upsert wrapping an unbounded outer UPDATE", () => {
+    // The inner INSERT ... ON CONFLICT lives at paren depth > 0, so the outer
+    // command is the full-table UPDATE: the upsert must not exempt it.
+    const result = runChecker(`
+      WITH "seed" AS (
+        INSERT INTO "documents" ("id", "status") VALUES (1, 'archived')
+        ON CONFLICT ON CONSTRAINT "documents_pkey" DO NOTHING RETURNING "id"
+      )
+      UPDATE "documents" SET "status" = 'archived';
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("flags an unbounded UPDATE inside a data-modifying CTE", () => {
+    // The UPDATE executes during migration even though the outer command is a
+    // SELECT, so a full-table rewrite wrapped this way must not slip through.
+    const result = runChecker(`
+      WITH "u" AS (
+        UPDATE "documents" SET "status" = 'archived' RETURNING "id"
+      )
+      SELECT count(*) FROM "u";
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("allows a WHERE-bounded UPDATE inside a data-modifying CTE", () => {
+    const result = runChecker(`
+      WITH "u" AS (
+        UPDATE "documents" SET "status" = 'archived' WHERE "id" = 2 RETURNING "id"
+      )
+      SELECT count(*) FROM "u";
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("flags an unbounded UPDATE inside a DO block", () => {
+    const result = runChecker(`
+      DO $$
+      BEGIN
+        UPDATE "documents" SET "status" = 'archived';
+      END
+      $$;
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("allows an unbounded UPDATE inside a stored routine body", () => {
+    // CREATE FUNCTION only stores the body; the UPDATE runs when the routine is
+    // called, not during the migration, so it is not a migration-time backfill.
+    const result = runChecker(`
+      CREATE OR REPLACE FUNCTION "archive_all"() RETURNS void AS $$
+      BEGIN
+        UPDATE "documents" SET "status" = 'archived';
+      END
+      $$ LANGUAGE plpgsql;
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("allows a CREATE POLICY ... FOR UPDATE clause", () => {
+    // The outer command is CREATE, not UPDATE: `FOR UPDATE` is a policy clause
+    // and rewrites no table data, so it must not trip the unbounded-update rule.
+    const result = runChecker(`
+      CREATE POLICY "documents_update" ON "documents"
+      FOR UPDATE USING ("organization_id" = current_setting('app.org')::uuid);
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("allows a CREATE TRIGGER ... BEFORE UPDATE definition", () => {
+    const result = runChecker(`
+      CREATE TRIGGER "documents_touch" BEFORE UPDATE ON "documents"
+      FOR EACH ROW EXECUTE FUNCTION "touch_updated_at"();
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("flags a full-table UPDATE whose only WHERE is in a SET subquery", () => {
+    const result = runChecker(`
+      UPDATE "documents"
+      SET "workspace_id" = (
+        SELECT "id" FROM "workspaces" WHERE "workspaces"."slug" = 'x'
+      );
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("allows a FROM-join UPDATE bounded by a top-level WHERE", () => {
+    const result = runChecker(`
+      UPDATE "documents" AS d
+      SET "workspace_id" = w."id"
+      FROM "workspaces" AS w
+      WHERE d."workspace_slug" = w."slug";
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("clears an unbounded UPDATE with a bulk-backfill acknowledgement", () => {
+    const result = runChecker(`
+      -- stella-migration-safety: reviewed bulk-backfill - table has under ten rows
+      UPDATE "documents" SET "status" = 'archived';
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("does not clear an unbounded UPDATE with a destructive-change acknowledgement", () => {
+    const result = runChecker(`
+      -- stella-migration-safety: reviewed destructive-change - rollback handled separately
+      UPDATE "documents" SET "status" = 'archived';
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("flags a recursive CTE", () => {
+    const result = runChecker(`
+      WITH RECURSIVE "ancestors" AS (
+        SELECT "id", "parent_id" FROM "matters" WHERE "id" = 1
+        UNION ALL
+        SELECT "m"."id", "m"."parent_id"
+        FROM "matters" "m"
+        JOIN "ancestors" "a" ON "m"."id" = "a"."parent_id"
+      )
+      UPDATE "matters" SET "depth" = 0 WHERE "id" IN (SELECT "id" FROM "ancestors");
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("recursive-cte");
+  });
+
+  it("does not clear a destructive change with a bulk-backfill acknowledgement", () => {
+    const result = runChecker(`
+      -- stella-migration-safety: reviewed bulk-backfill - small table backfill
+      DROP TABLE "documents";
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("drop-object");
+  });
+
+  it("clears a destructive change with a destructive-change acknowledgement", () => {
+    const result = runChecker(`
+      -- stella-migration-safety: reviewed destructive-change - replaced by documents_v2, rollback restores from backup
+      DROP TABLE "documents";
     `);
 
     expect(result.exitCode).toBe(0);
