@@ -12,9 +12,18 @@
 -- batched maintenance script src/scripts/backfill-case-law-slugs.ts. The
 -- partial predicate keeps the index valid while legacy rows still carry a
 -- NULL slug.
+--
+-- A CONCURRENTLY build that is interrupted (timeout, cancel, dropped
+-- connection) leaves an INVALID index behind under the same name. A plain
+-- `CREATE ... IF NOT EXISTS` retry would skip that invalid index and let the
+-- migration record as applied, so `slug` would silently not be unique. Drop
+-- any leftover index first (no-op on a clean run) and build without
+-- IF NOT EXISTS so a retry always rebuilds a valid index.
 COMMIT;
 --> statement-breakpoint
-CREATE UNIQUE INDEX CONCURRENTLY IF NOT EXISTS "case_law_decisions_slug_uidx"
+DROP INDEX CONCURRENTLY IF EXISTS "case_law_decisions_slug_uidx";
+--> statement-breakpoint
+CREATE UNIQUE INDEX CONCURRENTLY "case_law_decisions_slug_uidx"
   ON "case_law_decisions" ("slug")
   WHERE "slug" IS NOT NULL;
 --> statement-breakpoint
