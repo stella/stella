@@ -71,9 +71,16 @@ export const TOOLBAR_ROW_HEIGHT_PX = 48 as const;
 export const SIDE_RAIL_WIDTH = "w-12" as const;
 /** Outer container classes for the inspector icon rail. The lazy-load
  * fallback rail must stay pixel-identical to the real rail, so both
- * read this single source instead of repeating the string. */
+ * read this single source instead of repeating the string.
+ *
+ * The divider lives on the rail's content-facing side (`border-s`) and
+ * is included in its `w-12` box, mirroring the collapsed left sidebar
+ * (whose 48px box already includes its own `border-e`). Drawing it here
+ * instead of on an outer wrapper keeps the rail's full footprint at
+ * exactly 48px; an extra wrapper border would push the box to 49px and
+ * overflow the slot by a pixel. */
 export const SIDE_RAIL_CONTAINER_CLASS =
-  `bg-sidebar flex shrink-0 flex-col border-e ${SIDE_RAIL_WIDTH}` as const;
+  `bg-sidebar flex shrink-0 flex-col border-s ${SIDE_RAIL_WIDTH}` as const;
 export const SIDE_RAIL_ICON_BUTTON_SIZE = "size-8" as const;
 /** Glyph size inside a rail tab button — matches the `size-3.5`
  * class every built-in rail icon uses. Numeric form is for
