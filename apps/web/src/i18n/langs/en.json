@@ -2570,6 +2570,7 @@
       "expandFolder": "Expand folder",
       "failed": "Organization failed",
       "folderPlaceholder": "e.g. Compliance/2025",
+      "generateAi": "Generate AI suggestions",
       "generating": "Generating AI suggestions...",
       "instructionsEmpty": "No custom instructions",
       "instructionsHelp": "Saved per matter. Used in addition to the system prompt.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Save as template…",
+      "saveAsTemplate": "Save as preset…",
       "selectProperty": "Select property",
       "templates": {
-        "created": "Template saved",
-        "delete": "Delete template",
-        "deleteConfirmDescription": "Delete template “{name}”? This cannot be undone.",
-        "deleted": "Template deleted",
-        "description": "Save the current view’s layout as a template you can reuse.",
-        "empty": "No templates yet. Save the current view to create one.",
-        "nameLabel": "Template name",
+        "created": "Preset saved",
+        "delete": "Delete preset",
+        "deleteConfirmDescription": "Delete preset “{name}”? This cannot be undone.",
+        "deleted": "Preset deleted",
+        "description": "Save the current view’s layout as a preset you can reuse.",
+        "empty": "No presets yet. Save the current view to create one.",
+        "nameLabel": "Preset name",
         "namePlaceholder": "e.g. Active matters",
-        "save": "Save template",
-        "title": "View templates",
-        "use": "Use template"
+        "save": "Save preset",
+        "title": "View presets",
+        "use": "Use preset"
       },
       "timeline": {
         "day": "Day",
@@ -2977,7 +2978,7 @@
         "startDate": "Start date",
         "week": "Week"
       },
-      "useTemplate": "Use template…"
+      "useTemplate": "Use preset…"
     },
     "workflow": {
       "allManualInputsDescription": "Please add at least one AI property to start the workflow",

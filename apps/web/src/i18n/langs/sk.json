@@ -2570,6 +2570,7 @@
       "expandFolder": "Rozbaliť priečinok",
       "failed": "Usporiadanie zlyhalo",
       "folderPlaceholder": "napr. Compliance/2025",
+      "generateAi": "Generovať návrhy pomocou AI",
       "generating": "Generujem návrhy pomocou AI...",
       "instructionsEmpty": "Žiadne vlastné pokyny",
       "instructionsHelp": "Ukladá sa na úrovni spisu. Použije sa navyše k systémovému promptu.",
@@ -2925,7 +2926,7 @@
       "cannotDeleteRequired": "Je vyžadované aspoň jedno zobrazenie tohto typu",
       "clearFilters": "Clear filters",
       "copySuffix": "{name} (kópia)",
-      "deleteView": "Vymazať pohľad",
+      "deleteView": "Vymazať zobrazenie",
       "exportCsv": "Exportovať CSV",
       "exportFailed": "Export zlyhal",
       "exportTable": "Exportovať tabuľku",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Uložiť ako vzor…",
+      "saveAsTemplate": "Uložiť ako predvoľbu…",
       "selectProperty": "Vybrať vlastnosť",
       "templates": {
-        "created": "Vzor uložený",
-        "delete": "Vymazať vzor",
-        "deleteConfirmDescription": "Vymazať vzor „{name}“? Túto akciu nemožno vrátiť späť.",
-        "deleted": "Vzor vymazaný",
-        "description": "Uložte rozloženie aktuálneho pohľadu ako vzor, ktorý môžete znovu použiť.",
-        "empty": "Zatiaľ žiadne vzory. Vytvorte ho uložením aktuálneho pohľadu.",
-        "nameLabel": "Názov vzoru",
+        "created": "Predvoľba uložená",
+        "delete": "Vymazať predvoľbu",
+        "deleteConfirmDescription": "Vymazať predvoľbu „{name}“? Túto akciu nemožno vrátiť späť.",
+        "deleted": "Predvoľba vymazaná",
+        "description": "Uložte rozloženie aktuálneho zobrazenia ako predvoľbu, ktorú môžete znovu použiť.",
+        "empty": "Zatiaľ žiadne predvoľby. Vytvorte ju uložením aktuálneho zobrazenia.",
+        "nameLabel": "Názov predvoľby",
         "namePlaceholder": "napr. Aktívne spisy",
-        "save": "Uložiť vzor",
-        "title": "Vzory pohľadov",
-        "use": "Použiť vzor"
+        "save": "Uložiť predvoľbu",
+        "title": "Predvoľby zobrazenia",
+        "use": "Použiť predvoľbu"
       },
       "timeline": {
         "day": "Deň",
@@ -2977,7 +2978,7 @@
         "startDate": "Dátum začiatku",
         "week": "Týždeň"
       },
-      "useTemplate": "Použiť vzor…"
+      "useTemplate": "Použiť predvoľbu…"
     },
     "workflow": {
       "allManualInputsDescription": "Na spustenie pracovného postupu pridajte aspoň jednu AI vlastnosť",

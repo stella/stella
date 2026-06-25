@@ -2570,6 +2570,7 @@
       "expandFolder": "Expandir carpeta",
       "failed": "Error al organizar",
       "folderPlaceholder": "p. ej. Compliance/2025",
+      "generateAi": "Generar sugerencias de IA",
       "generating": "Generando sugerencias de IA...",
       "instructionsEmpty": "Sin instrucciones personalizadas",
       "instructionsHelp": "Se guardan por asunto. Se usan además del prompt del sistema.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Guardar como plantilla…",
+      "saveAsTemplate": "Guardar como preajuste…",
       "selectProperty": "Seleccionar propiedad",
       "templates": {
-        "created": "Plantilla guardada",
-        "delete": "Eliminar plantilla",
-        "deleteConfirmDescription": "¿Eliminar la plantilla «{name}»? Esta acción no se puede deshacer.",
-        "deleted": "Plantilla eliminada",
-        "description": "Guarde el diseño de la vista actual como una plantilla que podrá reutilizar.",
-        "empty": "Todavía no hay plantillas. Guarde la vista actual para crear una.",
-        "nameLabel": "Nombre de la plantilla",
+        "created": "Preajuste guardado",
+        "delete": "Eliminar preajuste",
+        "deleteConfirmDescription": "¿Eliminar el preajuste «{name}»? Esta acción no se puede deshacer.",
+        "deleted": "Preajuste eliminado",
+        "description": "Guarde el diseño de la vista actual como un preajuste que podrá reutilizar.",
+        "empty": "Todavía no hay preajustes. Guarde la vista actual para crear uno.",
+        "nameLabel": "Nombre del preajuste",
         "namePlaceholder": "p. ej. Asuntos activos",
-        "save": "Guardar plantilla",
-        "title": "Plantillas de vista",
-        "use": "Usar plantilla"
+        "save": "Guardar preajuste",
+        "title": "Preajustes de vista",
+        "use": "Usar preajuste"
       },
       "timeline": {
         "day": "Día",
@@ -2977,7 +2978,7 @@
         "startDate": "Fecha de inicio",
         "week": "Semana"
       },
-      "useTemplate": "Usar plantilla…"
+      "useTemplate": "Usar preajuste…"
     },
     "workflow": {
       "allManualInputsDescription": "Añada al menos una propiedad de IA para iniciar el flujo de trabajo",

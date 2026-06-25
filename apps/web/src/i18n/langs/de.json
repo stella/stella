@@ -2570,6 +2570,7 @@
       "expandFolder": "Ordner ausklappen",
       "failed": "Organisieren fehlgeschlagen",
       "folderPlaceholder": "z. B. Compliance/2025",
+      "generateAi": "KI-Vorschläge generieren",
       "generating": "KI-Vorschläge werden generiert...",
       "instructionsEmpty": "Keine eigenen Hinweise",
       "instructionsHelp": "Pro Akte gespeichert. Wird zusätzlich zum System-Prompt verwendet.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Als Vorlage speichern…",
+      "saveAsTemplate": "Als Voreinstellung speichern…",
       "selectProperty": "Eigenschaft auswählen",
       "templates": {
-        "created": "Vorlage gespeichert",
-        "delete": "Vorlage löschen",
-        "deleteConfirmDescription": "Vorlage „{name}“ löschen? Dies kann nicht rückgängig gemacht werden.",
-        "deleted": "Vorlage gelöscht",
-        "description": "Speichern Sie das Layout der aktuellen Ansicht als wiederverwendbare Vorlage.",
-        "empty": "Noch keine Vorlagen. Speichern Sie die aktuelle Ansicht, um eine zu erstellen.",
-        "nameLabel": "Vorlagenname",
+        "created": "Voreinstellung gespeichert",
+        "delete": "Voreinstellung löschen",
+        "deleteConfirmDescription": "Voreinstellung „{name}“ löschen? Dies kann nicht rückgängig gemacht werden.",
+        "deleted": "Voreinstellung gelöscht",
+        "description": "Speichern Sie das Layout der aktuellen Ansicht als wiederverwendbare Voreinstellung.",
+        "empty": "Noch keine Voreinstellungen. Speichern Sie die aktuelle Ansicht, um eine zu erstellen.",
+        "nameLabel": "Name der Voreinstellung",
         "namePlaceholder": "z. B. Aktive Akten",
-        "save": "Vorlage speichern",
-        "title": "Ansichtsvorlagen",
-        "use": "Vorlage verwenden"
+        "save": "Voreinstellung speichern",
+        "title": "Ansichtsvoreinstellungen",
+        "use": "Voreinstellung verwenden"
       },
       "timeline": {
         "day": "Tag",
@@ -2977,7 +2978,7 @@
         "startDate": "Startdatum",
         "week": "Woche"
       },
-      "useTemplate": "Vorlage verwenden…"
+      "useTemplate": "Voreinstellung verwenden…"
     },
     "workflow": {
       "allManualInputsDescription": "Fügen Sie mindestens eine KI-Eigenschaft hinzu, um den Arbeitsablauf zu starten",

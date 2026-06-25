@@ -656,6 +656,65 @@
       }
     },
     {
+      "id": "view",
+      "en": "View",
+      "note": "The configurable display of a matter's items (table, list, kanban, calendar). cs uses \"Zobrazení\" / sk \"Zobrazenie\"; the literal \"pohled\" / \"pohľad\" and their inflected forms are a mechanical rendering of \"view\" and must not be used.",
+      "forbidden": {
+        "cs": [
+          "pohled",
+          "pohledu",
+          "pohledem",
+          "pohledy",
+          "pohledů",
+          "pohledům",
+          "pohledech"
+        ],
+        "sk": [
+          "pohľad",
+          "pohľadu",
+          "pohľade",
+          "pohľadom",
+          "pohľady",
+          "pohľadov",
+          "pohľadoch",
+          "pohľadmi"
+        ]
+      },
+      "translations": {
+        "ar": "عرض",
+        "cs": "Zobrazení",
+        "sk": "Zobrazenie",
+        "pl": "Widok",
+        "de": "Ansicht",
+        "et": "Vaade",
+        "hu": "Nézet",
+        "lt": "Rodinys",
+        "lv": "Skats",
+        "es": "Vista",
+        "fr": "Vue",
+        "pt-BR": "Visualização"
+      }
+    },
+    {
+      "id": "view-preset",
+      "en": "Preset",
+      "note": "A saved, reusable view configuration (columns, filters, sort, grouping) the user re-applies. This is NOT the document/clause Template concept: the saved-view feature renders with the Preset term below, never the Template term (cs \"Vzor\", etc.).",
+      "translations": {
+        "ar": "إعداد مسبق",
+        "cs": "Předvolba",
+        "sk": "Predvoľba",
+        "pl": "Ustawienie wstępne",
+        "de": "Voreinstellung",
+        "et": "Eelseade",
+        "hu": "Előbeállítás",
+        "lt": "Išankstinis nustatymas",
+        "lv": "Iepriekšiestatījums",
+        "es": "Preajuste",
+        "fr": "Préréglage",
+        "pt-BR": "Predefinição"
+      }
+    },
+    {
       "id": "folder",
       "en": "Folder",
       "note": "fr \"Dossier\" serves both Matter and Folder; the collision is idiomatic and unavoidable, context disambiguates.",

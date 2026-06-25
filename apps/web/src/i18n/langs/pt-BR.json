@@ -2570,6 +2570,7 @@
       "expandFolder": "Expandir pasta",
       "failed": "Falha na organização",
       "folderPlaceholder": "ex.: Compliance/2025",
+      "generateAi": "Gerar sugestões de IA",
       "generating": "Gerando sugestões de IA...",
       "instructionsEmpty": "Sem instruções personalizadas",
       "instructionsHelp": "Salvo por caso. Usado além do prompt do sistema.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Salvar como modelo…",
+      "saveAsTemplate": "Salvar como predefinição…",
       "selectProperty": "Selecione a propriedade",
       "templates": {
-        "created": "Modelo salvo",
-        "delete": "Excluir modelo",
-        "deleteConfirmDescription": "Excluir o modelo “{name}”? Esta ação não pode ser desfeita.",
-        "deleted": "Modelo excluído",
-        "description": "Salve o layout da visualização atual como um modelo reutilizável.",
-        "empty": "Ainda não há modelos. Salve a visualização atual para criar um.",
-        "nameLabel": "Nome do modelo",
+        "created": "Predefinição salva",
+        "delete": "Excluir predefinição",
+        "deleteConfirmDescription": "Excluir a predefinição “{name}”? Esta ação não pode ser desfeita.",
+        "deleted": "Predefinição excluída",
+        "description": "Salve o layout da visualização atual como uma predefinição reutilizável.",
+        "empty": "Ainda não há predefinições. Salve a visualização atual para criar uma.",
+        "nameLabel": "Nome da predefinição",
         "namePlaceholder": "ex.: Casos ativos",
-        "save": "Salvar modelo",
-        "title": "Modelos de visualização",
-        "use": "Usar modelo"
+        "save": "Salvar predefinição",
+        "title": "Predefinições de visualização",
+        "use": "Usar predefinição"
       },
       "timeline": {
         "day": "Dia",
@@ -2977,7 +2978,7 @@
         "startDate": "Data de início",
         "week": "Semana"
       },
-      "useTemplate": "Usar modelo…"
+      "useTemplate": "Usar predefinição…"
     },
     "workflow": {
       "allManualInputsDescription": "Adicione pelo menos uma propriedade de IA para iniciar o fluxo de trabalho",

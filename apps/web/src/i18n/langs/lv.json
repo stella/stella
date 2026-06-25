@@ -2570,6 +2570,7 @@
       "expandFolder": "Izvērst mapi",
       "failed": "Sakārtošana neizdevās",
       "folderPlaceholder": "piem., Compliance/2025",
+      "generateAi": "Ģenerēt MI ieteikumus",
       "generating": "Ģenerē MI ieteikumus...",
       "instructionsEmpty": "Nav pielāgotu norādījumu",
       "instructionsHelp": "Saglabājas lietas līmenī. Tiek izmantots papildus sistēmas uzvednei.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Saglabāt kā veidni…",
+      "saveAsTemplate": "Saglabāt kā iepriekšiestatījumu…",
       "selectProperty": "Izvēlieties rekvizītu",
       "templates": {
-        "created": "Veidne saglabāta",
-        "delete": "Dzēst veidni",
-        "deleteConfirmDescription": "Dzēst veidni „{name}”? Šo darbību nevar atsaukt.",
-        "deleted": "Veidne dzēsta",
-        "description": "Saglabājiet pašreizējā skata izkārtojumu kā veidni atkārtotai izmantošanai.",
-        "empty": "Veidņu pagaidām nav. Saglabājiet pašreizējo skatu, lai izveidotu veidni.",
-        "nameLabel": "Veidnes nosaukums",
+        "created": "Iepriekšiestatījums saglabāts",
+        "delete": "Dzēst iepriekšiestatījumu",
+        "deleteConfirmDescription": "Dzēst iepriekšiestatījumu „{name}”? Šo darbību nevar atsaukt.",
+        "deleted": "Iepriekšiestatījums dzēsts",
+        "description": "Saglabājiet pašreizējā skata izkārtojumu kā iepriekšiestatījumu atkārtotai izmantošanai.",
+        "empty": "Iepriekšiestatījumu pagaidām nav. Saglabājiet pašreizējo skatu, lai izveidotu iepriekšiestatījumu.",
+        "nameLabel": "Iepriekšiestatījuma nosaukums",
         "namePlaceholder": "piem., Aktīvās lietas",
-        "save": "Saglabāt veidni",
-        "title": "Skata veidnes",
-        "use": "Izmantot veidni"
+        "save": "Saglabāt iepriekšiestatījumu",
+        "title": "Skata iepriekšiestatījumi",
+        "use": "Lietot iepriekšiestatījumu"
       },
       "timeline": {
         "day": "Diena",
@@ -2977,7 +2978,7 @@
         "startDate": "Sākuma datums",
         "week": "Nedēļa"
       },
-      "useTemplate": "Lietot veidni…"
+      "useTemplate": "Lietot iepriekšiestatījumu…"
     },
     "workflow": {
       "allManualInputsDescription": "Lai palaistu darbplūsmu, pievienojiet vismaz vienu AI rekvizītu",

@@ -2570,6 +2570,7 @@
       "expandFolder": "Laienda kaust",
       "failed": "Korraldamine nurjus",
       "folderPlaceholder": "nt Compliance/2025",
+      "generateAi": "Loo AI soovitused",
       "generating": "AI soovituste loomine...",
       "instructionsEmpty": "Kohandatud juhiseid pole",
       "instructionsHelp": "Salvestatakse asjakohase juhtumi tasemel. Kasutatakse lisaks süsteemiviipale.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Salvesta mallina…",
+      "saveAsTemplate": "Salvesta eelseadena…",
       "selectProperty": "Valige omadus",
       "templates": {
-        "created": "Mall salvestatud",
-        "delete": "Kustuta mall",
-        "deleteConfirmDescription": "Kas kustutada mall „{name}“? Seda ei saa tagasi võtta.",
-        "deleted": "Mall kustutatud",
-        "description": "Salvesta praeguse vaate paigutus korduvkasutatava mallina.",
-        "empty": "Malle pole veel. Salvesta praegune vaade, et üks luua.",
-        "nameLabel": "Malli nimi",
+        "created": "Eelseade salvestatud",
+        "delete": "Kustuta eelseade",
+        "deleteConfirmDescription": "Kas kustutada eelseade „{name}“? Seda ei saa tagasi võtta.",
+        "deleted": "Eelseade kustutatud",
+        "description": "Salvesta praeguse vaate paigutus korduvkasutatava eelseadena.",
+        "empty": "Eelseadeid pole veel. Salvesta praegune vaade, et üks luua.",
+        "nameLabel": "Eelseade nimi",
         "namePlaceholder": "nt Aktiivsed toimikud",
-        "save": "Salvesta mall",
-        "title": "Vaatemallid",
-        "use": "Kasuta malli"
+        "save": "Salvesta eelseade",
+        "title": "Vaate eelseaded",
+        "use": "Kasuta eelseadet"
       },
       "timeline": {
         "day": "Päev",
@@ -2977,7 +2978,7 @@
         "startDate": "Alguskuupäev",
         "week": "Nädal"
       },
-      "useTemplate": "Kasuta malli…"
+      "useTemplate": "Kasuta eelseadet…"
     },
     "workflow": {
       "allManualInputsDescription": "Töövoo käivitamiseks lisage vähemalt üks tehisintellekti omadus",

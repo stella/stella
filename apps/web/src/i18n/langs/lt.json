@@ -2570,6 +2570,7 @@
       "expandFolder": "Išskleisti aplanką",
       "failed": "Sutvarkyti nepavyko",
       "folderPlaceholder": "pvz. Compliance/2025",
+      "generateAi": "Generuoti DI pasiūlymus",
       "generating": "Generuojami DI pasiūlymai...",
       "instructionsEmpty": "Nėra individualių nurodymų",
       "instructionsHelp": "Išsaugoma byloje. Naudojama papildomai prie sisteminio raginimo.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Išsaugoti kaip šabloną…",
+      "saveAsTemplate": "Išsaugoti kaip išankstinį nustatymą…",
       "selectProperty": "Pasirinkti savybę",
       "templates": {
-        "created": "Šablonas išsaugotas",
-        "delete": "Ištrinti šabloną",
-        "deleteConfirmDescription": "Ištrinti šabloną „{name}“? Šio veiksmo atšaukti negalima.",
-        "deleted": "Šablonas ištrintas",
-        "description": "Išsaugokite dabartinio rodinio išdėstymą kaip šabloną, kurį galėsite naudoti pakartotinai.",
-        "empty": "Šablonų dar nėra. Išsaugokite dabartinį rodinį, kad sukurtumėte šabloną.",
-        "nameLabel": "Šablono pavadinimas",
+        "created": "Išankstinis nustatymas išsaugotas",
+        "delete": "Ištrinti išankstinį nustatymą",
+        "deleteConfirmDescription": "Ištrinti išankstinį nustatymą „{name}“? Šio veiksmo atšaukti negalima.",
+        "deleted": "Išankstinis nustatymas ištrintas",
+        "description": "Išsaugokite dabartinio rodinio išdėstymą kaip išankstinį nustatymą, kurį galėsite naudoti pakartotinai.",
+        "empty": "Išankstinių nustatymų dar nėra. Išsaugokite dabartinį rodinį, kad sukurtumėte išankstinį nustatymą.",
+        "nameLabel": "Išankstinio nustatymo pavadinimas",
         "namePlaceholder": "pvz., Aktyvios bylos",
-        "save": "Išsaugoti šabloną",
-        "title": "Rodinių šablonai",
-        "use": "Naudoti šabloną"
+        "save": "Išsaugoti išankstinį nustatymą",
+        "title": "Rodinių išankstiniai nustatymai",
+        "use": "Naudoti išankstinį nustatymą"
       },
       "timeline": {
         "day": "Diena",
@@ -2977,7 +2978,7 @@
         "startDate": "Pradžios data",
         "week": "Savaitė"
       },
-      "useTemplate": "Naudoti šabloną…"
+      "useTemplate": "Naudoti išankstinį nustatymą…"
     },
     "workflow": {
       "allManualInputsDescription": "Norėdami paleisti darbo eigą, pridėkite bent vieną AI savybę",

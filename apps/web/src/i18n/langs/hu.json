@@ -2570,6 +2570,7 @@
       "expandFolder": "Mappa kibontása",
       "failed": "A rendezés sikertelen",
       "folderPlaceholder": "pl. Compliance/2025",
+      "generateAi": "AI-javaslatok generálása",
       "generating": "AI-javaslatok generálása...",
       "instructionsEmpty": "Nincs egyedi utasítás",
       "instructionsHelp": "Ügyenként mentve. A rendszerprompton felül használjuk.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Mentés sablonként…",
+      "saveAsTemplate": "Mentés előbeállításként…",
       "selectProperty": "Tulajdonság kiválasztása",
       "templates": {
-        "created": "Sablon mentve",
-        "delete": "Sablon törlése",
-        "deleteConfirmDescription": "Törli a(z) „{name}” sablont? Ez nem vonható vissza.",
-        "deleted": "Sablon törölve",
-        "description": "Mentse el az aktuális nézet elrendezését újrahasználható sablonként.",
-        "empty": "Még nincsenek sablonok. Mentse el az aktuális nézetet egy létrehozásához.",
-        "nameLabel": "Sablon neve",
+        "created": "Előbeállítás mentve",
+        "delete": "Előbeállítás törlése",
+        "deleteConfirmDescription": "Törli a(z) „{name}” előbeállítást? Ez nem vonható vissza.",
+        "deleted": "Előbeállítás törölve",
+        "description": "Mentse el az aktuális nézet elrendezését újrahasználható előbeállításként.",
+        "empty": "Még nincsenek előbeállítások. Mentse el az aktuális nézetet egy létrehozásához.",
+        "nameLabel": "Előbeállítás neve",
         "namePlaceholder": "pl. Aktív ügyek",
-        "save": "Sablon mentése",
-        "title": "Nézetsablonok",
-        "use": "Sablon használata"
+        "save": "Előbeállítás mentése",
+        "title": "Nézet-előbeállítások",
+        "use": "Előbeállítás használata"
       },
       "timeline": {
         "day": "Nap",
@@ -2977,7 +2978,7 @@
         "startDate": "Kezdő dátum",
         "week": "Hét"
       },
-      "useTemplate": "Sablon használata…"
+      "useTemplate": "Előbeállítás használata…"
     },
     "workflow": {
       "allManualInputsDescription": "A munkafolyamat indításához adjon hozzá legalább egy AI tulajdonságot",

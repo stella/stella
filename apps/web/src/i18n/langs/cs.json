@@ -334,7 +334,7 @@
     "acceptAllCount": "Přijmout vše ({count})",
     "actionExpand": {
       "toastDescription": "Celostránkový chat bude k dispozici s perzistentními vlákny.",
-      "toastTitle": "Celý pohled zatím není dostupný"
+      "toastTitle": "Celé zobrazení zatím není dostupné"
     },
     "aiPrompt": "Pole pro zprávu AI",
     "aiThread": "Konverzace s AI",
@@ -2570,6 +2570,7 @@
       "expandFolder": "Rozbalit složku",
       "failed": "Uspořádání se nezdařilo",
       "folderPlaceholder": "např. Compliance/2025",
+      "generateAi": "Generovat návrhy pomocí AI",
       "generating": "Generuji návrhy pomocí AI...",
       "instructionsEmpty": "Žádné vlastní pokyny",
       "instructionsHelp": "Ukládá se na úrovni spisu. Použije se navíc k systémovému promptu.",
@@ -2925,7 +2926,7 @@
       "cannotDeleteRequired": "Je vyžadováno alespoň jedno zobrazení tohoto typu",
       "clearFilters": "Clear filters",
       "copySuffix": "{name} (kopie)",
-      "deleteView": "Smazat pohled",
+      "deleteView": "Smazat zobrazení",
       "exportCsv": "Exportovat CSV",
       "exportFailed": "Export selhal",
       "exportTable": "Exportovat tabulku",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Uložit jako vzor…",
+      "saveAsTemplate": "Uložit jako předvolbu…",
       "selectProperty": "Vybrat vlastnost",
       "templates": {
-        "created": "Vzor uložen",
-        "delete": "Smazat vzor",
-        "deleteConfirmDescription": "Smazat vzor „{name}“? Tuto akci nelze vrátit zpět.",
-        "deleted": "Vzor smazán",
-        "description": "Uložte si rozložení aktuálního pohledu jako vzor pro opakované použití.",
-        "empty": "Žádné vzory. Uložte aktuální pohled jako první vzor.",
-        "nameLabel": "Název vzoru",
+        "created": "Předvolba uložena",
+        "delete": "Smazat předvolbu",
+        "deleteConfirmDescription": "Smazat předvolbu „{name}“? Tuto akci nelze vrátit zpět.",
+        "deleted": "Předvolba smazána",
+        "description": "Uložte si rozložení aktuálního zobrazení jako předvolbu pro opakované použití.",
+        "empty": "Žádné předvolby. Uložte aktuální zobrazení jako první předvolbu.",
+        "nameLabel": "Název předvolby",
         "namePlaceholder": "např. Aktivní spisy",
-        "save": "Uložit vzor",
-        "title": "Vzory pohledů",
-        "use": "Použít vzor"
+        "save": "Uložit předvolbu",
+        "title": "Předvolby zobrazení",
+        "use": "Použít předvolbu"
       },
       "timeline": {
         "day": "Den",
@@ -2977,7 +2978,7 @@
         "startDate": "Datum zahájení",
         "week": "Týden"
       },
-      "useTemplate": "Použít vzor…"
+      "useTemplate": "Použít předvolbu…"
     },
     "workflow": {
       "allManualInputsDescription": "Pro spuštění pracovního postupu přidejte alespoň jednu AI vlastnost",
