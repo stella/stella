@@ -2570,6 +2570,7 @@
       "expandFolder": "Rozwiń folder",
       "failed": "Porządkowanie nie powiodło się",
       "folderPlaceholder": "np. Compliance/2025",
+      "generateAi": "Generuj sugestie AI",
       "generating": "Generowanie sugestii AI...",
       "instructionsEmpty": "Brak niestandardowych instrukcji",
       "instructionsHelp": "Zapisywane na poziomie sprawy. Używane jako uzupełnienie podpowiedzi systemowej.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Zapisz jako szablon…",
+      "saveAsTemplate": "Zapisz jako ustawienie wstępne…",
       "selectProperty": "Wybierz właściwość",
       "templates": {
-        "created": "Szablon zapisany",
-        "delete": "Usuń szablon",
-        "deleteConfirmDescription": "Usunąć szablon „{name}”? Tej operacji nie można cofnąć.",
-        "deleted": "Szablon usunięty",
-        "description": "Zapisz układ bieżącego widoku jako szablon do wielokrotnego użytku.",
-        "empty": "Brak szablonów. Zapisz bieżący widok, aby utworzyć pierwszy.",
-        "nameLabel": "Nazwa szablonu",
+        "created": "Ustawienie wstępne zapisane",
+        "delete": "Usuń ustawienie wstępne",
+        "deleteConfirmDescription": "Usunąć ustawienie wstępne „{name}”? Tej operacji nie można cofnąć.",
+        "deleted": "Ustawienie wstępne usunięte",
+        "description": "Zapisz układ bieżącego widoku jako ustawienie wstępne do wielokrotnego użytku.",
+        "empty": "Brak ustawień wstępnych. Zapisz bieżący widok, aby utworzyć pierwsze.",
+        "nameLabel": "Nazwa ustawienia wstępnego",
         "namePlaceholder": "np. Aktywne sprawy",
-        "save": "Zapisz szablon",
-        "title": "Szablony widoków",
-        "use": "Użyj szablonu"
+        "save": "Zapisz ustawienie wstępne",
+        "title": "Ustawienia wstępne widoków",
+        "use": "Użyj ustawienia wstępnego"
       },
       "timeline": {
         "day": "Dzień",
@@ -2977,7 +2978,7 @@
         "startDate": "Data rozpoczęcia",
         "week": "Tydzień"
       },
-      "useTemplate": "Użyj szablonu…"
+      "useTemplate": "Użyj ustawienia wstępnego…"
     },
     "workflow": {
       "allManualInputsDescription": "Dodaj co najmniej jedną właściwość AI, aby uruchomić proces",

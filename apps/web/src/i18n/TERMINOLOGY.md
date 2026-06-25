@@ -319,19 +319,21 @@ Slavic, Baltic, Germanic, Finno-Ugric:
 
 <!-- glossary-gen:legal-slavic-baltic start -->
 
-| Concept      | Czech      | Slovak      | Polish         | German         | Estonian      | Hungarian            | Lithuanian      | Latvian      |
-| ------------ | ---------- | ----------- | -------------- | -------------- | ------------- | -------------------- | --------------- | ------------ |
-| **Matter**   | Spis       | Spis        | Sprawa         | Akte           | Toimik        | Ügy                  | Byla            | Lieta        |
-| **Team**     | Tým        | Tím         | Zespół         | Team           | Meeskond      | Csapat               | Komanda         | Komanda      |
-| **Case law** | Judikatura | Judikatúra  | Orzecznictwo   | Rechtsprechung | Kohtupraktika | Ítélkezési gyakorlat | Teismų praktika | Tiesu prakse |
-| **Court**    | Soud       | Súd         | Sąd            | Gericht        | Kohus         | Bíróság              | Teismas         | Tiesa        |
-| **Party**    | Strana     | Strana      | Strona         | Partei         | Osapool       | Fél                  | Šalis           | Puse         |
-| **Clause**   | Ustanovení | Ustanovenie | Klauzula       | Klausel        | Klausel       | Kikötés              | Sąlyga          | Klauzula     |
-| **Template** | Vzor       | Vzor        | Szablon        | Vorlage        | Mall          | Sablon               | Šablonas        | Veidne       |
-| **Folder**   | Složka     | Priečinok   | Folder         | Ordner         | Kaust         | Mappa                | Aplankas        | Mape         |
-| **Tag**      | Štítek     | Štítok      | Tag            | Schlagwort     | Silt          | Címke                | Žyma            | Birka        |
-| **Draft**    | Koncept    | Koncept     | Wersja robocza | Entwurf        | Mustand       | Piszkozat            | Juodraštis      | Melnraksts   |
-| **Contact**  | Kontakt    | Kontakt     | Kontakt        | Kontakt        | Kontakt       | Kapcsolat            | Kontaktas       | Kontakts     |
+| Concept      | Czech      | Slovak      | Polish             | German         | Estonian      | Hungarian            | Lithuanian             | Latvian             |
+| ------------ | ---------- | ----------- | ------------------ | -------------- | ------------- | -------------------- | ---------------------- | ------------------- |
+| **Matter**   | Spis       | Spis        | Sprawa             | Akte           | Toimik        | Ügy                  | Byla                   | Lieta               |
+| **Team**     | Tým        | Tím         | Zespół             | Team           | Meeskond      | Csapat               | Komanda                | Komanda             |
+| **Case law** | Judikatura | Judikatúra  | Orzecznictwo       | Rechtsprechung | Kohtupraktika | Ítélkezési gyakorlat | Teismų praktika        | Tiesu prakse        |
+| **Court**    | Soud       | Súd         | Sąd                | Gericht        | Kohus         | Bíróság              | Teismas                | Tiesa               |
+| **Party**    | Strana     | Strana      | Strona             | Partei         | Osapool       | Fél                  | Šalis                  | Puse                |
+| **Clause**   | Ustanovení | Ustanovenie | Klauzula           | Klausel        | Klausel       | Kikötés              | Sąlyga                 | Klauzula            |
+| **Template** | Vzor       | Vzor        | Szablon            | Vorlage        | Mall          | Sablon               | Šablonas               | Veidne              |
+| **View**     | Zobrazení  | Zobrazenie  | Widok              | Ansicht        | Vaade         | Nézet                | Rodinys                | Skats               |
+| **Preset**   | Předvolba  | Predvoľba   | Ustawienie wstępne | Voreinstellung | Eelseade      | Előbeállítás         | Išankstinis nustatymas | Iepriekšiestatījums |
+| **Folder**   | Složka     | Priečinok   | Folder             | Ordner         | Kaust         | Mappa                | Aplankas               | Mape                |
+| **Tag**      | Štítek     | Štítok      | Tag                | Schlagwort     | Silt          | Címke                | Žyma                   | Birka               |
+| **Draft**    | Koncept    | Koncept     | Wersja robocza     | Entwurf        | Mustand       | Piszkozat            | Juodraštis             | Melnraksts          |
+| **Contact**  | Kontakt    | Kontakt     | Kontakt            | Kontakt        | Kontakt       | Kapcsolat            | Kontaktas              | Kontakts            |
 
 <!-- glossary-gen:legal-slavic-baltic end -->
 
@@ -348,6 +350,8 @@ Romance:
 | **Party**    | Parte          | Partie        | Parte                |
 | **Clause**   | Cláusula       | Clause        | Cláusula             |
 | **Template** | Plantilla      | Modèle        | Modelo               |
+| **View**     | Vista          | Vue           | Visualização         |
+| **Preset**   | Preajuste      | Préréglage    | Predefinição         |
 | **Folder**   | Carpeta        | Dossier       | Pasta                |
 | **Tag**      | Etiqueta       | Étiquette     | Etiqueta             |
 | **Draft**    | Borrador       | Brouillon     | Rascunho             |
@@ -368,6 +372,8 @@ Arabic:
 | **Party**    | طرف              |
 | **Clause**   | بند              |
 | **Template** | قالب             |
+| **View**     | عرض              |
+| **Preset**   | إعداد مسبق       |
 | **Folder**   | مجلد             |
 | **Tag**      | وسم              |
 | **Draft**    | مسودة            |

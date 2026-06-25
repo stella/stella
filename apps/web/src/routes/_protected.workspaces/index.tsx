@@ -1,8 +1,8 @@
-import { Fragment, useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useEffectEvent, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import {
   ArrowDownIcon,
   ArrowUpIcon,
@@ -12,6 +12,7 @@ import {
   SlidersHorizontalIcon,
 } from "lucide-react";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 import { useShallow } from "zustand/shallow";
 
 import { Button } from "@stll/ui/components/button";
@@ -70,13 +71,22 @@ import {
 } from "@/routes/_protected.workspaces/-utils";
 import { useConfigStore } from "@/stores/config-store";
 
+const searchSchema = v.object({
+  // Client id to scroll into view and flash on arrival (set by the matter
+  // breadcrumb's company link). Cleared by the route once consumed.
+  focusClient: v.optional(v.string()),
+});
+
 export const Route = createFileRoute("/_protected/workspaces/")({
+  validateSearch: searchSchema,
   head: () => ({
     meta: [{ title: pageTitle("common.matters") }],
   }),
   component: RouteComponent,
   pendingComponent: MattersPending,
 });
+
+const FOCUS_FLASH_MS = 1500;
 
 function RouteComponent() {
   const t = useTranslations();
@@ -90,6 +100,9 @@ function RouteComponent() {
   const canCreateMatter = usePermissions({ workspace: ["create"] });
   const openCreateMatter = useCreateMatterStore((s) => s.openDialog);
   const resetMatterVisibilityState = useConfigStore((s) => s.updateMatters);
+  const toggleGroupCollapsed = useConfigStore((s) => s.toggleGroupCollapsed);
+  const navigate = useNavigate();
+  const focusClient = Route.useSearch({ select: (s) => s.focusClient });
 
   const { sortKey, sortDesc, groupBy, collapsedGroups, filters } =
     useConfigStore(
@@ -185,6 +198,40 @@ function RouteComponent() {
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [displayed]);
+
+  const focusOnClient = useEffectEvent((clientId: string) => {
+    if (collapsedSet.has(clientId)) {
+      toggleGroupCollapsed(clientId);
+    }
+
+    // Defer the DOM read to the next frame so an expanded group has been
+    // committed before we scroll to and flash it.
+    requestAnimationFrame(() => {
+      const target = scrollRef.current?.querySelector<HTMLElement>(
+        `[data-group-id="${CSS.escape(clientId)}"]`,
+      );
+      if (target) {
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        target.classList.add("ring-2", "ring-primary", "rounded-md");
+        setTimeout(() => {
+          target.classList.remove("ring-2", "ring-primary", "rounded-md");
+        }, FOCUS_FLASH_MS);
+      }
+    });
+
+    void navigate({ to: "/workspaces", search: {}, replace: true });
+  });
+
+  // Scroll the company group into view and flash it when arriving from the
+  // matter breadcrumb's company link, then clear the one-shot search param so a
+  // refresh or back-navigation does not re-trigger it. The flash is a
+  // self-contained DOM tween (not React-owned) so clearing the param right away
+  // cannot cut it short.
+  useExternalSyncEffect(() => {
+    if (focusClient) {
+      focusOnClient(focusClient);
+    }
+  }, [focusClient]);
 
   return (
     <MattersPageContextMenu canCreateMatter={canOpenCreateMatter}>

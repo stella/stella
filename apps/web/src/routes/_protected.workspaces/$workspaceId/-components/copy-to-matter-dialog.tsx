@@ -1,9 +1,7 @@
 import { useState } from "react";
 
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
+import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
-import { ChevronRightIcon, FolderIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -16,32 +14,30 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
-import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import { Label } from "@stll/ui/components/label";
-import { ScrollArea } from "@stll/ui/components/scroll-area";
 import { stellaToast } from "@stll/ui/components/toast";
-import { cn } from "@stll/ui/lib/utils";
 
+import {
+  MatterTargetPicker,
+  type MatterTarget,
+} from "@/components/matter-target-picker";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { toSafeId } from "@/lib/safe-id";
 import {
   getCopyToMatterRootEntities,
   type CopyToMatterEntity,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
-import {
-  entitiesKeys,
-  workspaceFoldersOptions,
-} from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import type { WorkspaceFolder } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { workspacesOptions } from "@/routes/_protected.workspaces/-queries";
-
-const routeApi = getRouteApi("/_protected");
+import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 
 type CopyToMatterDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   sourceWorkspaceId: string;
   entities: CopyToMatterEntity[];
+  /** Preselects a target matter (e.g. when opened from a drag-onto-matter
+   *  drop in the sidebar). The user can still change it inside the dialog. */
+  initialTargetWorkspaceId?: string | null;
 };
 
 type MoveMode = "copy" | "move";
@@ -51,32 +47,39 @@ export const CopyToMatterDialog = ({
   onOpenChange,
   sourceWorkspaceId,
   entities,
+  initialTargetWorkspaceId,
 }: CopyToMatterDialogProps) => {
   const t = useTranslations();
   const queryClient = useQueryClient();
-  const activeOrganizationId = routeApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
   const [mode, setMode] = useState<MoveMode>("copy");
-  const [targetWorkspaceId, setTargetWorkspaceId] = useState<string | null>(
-    null,
+  const [target, setTarget] = useState<MatterTarget | null>(
+    initialTargetWorkspaceId
+      ? { workspaceId: initialTargetWorkspaceId, parentId: null }
+      : null,
   );
-  const [targetParentId, setTargetParentId] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const { data } = useQuery(workspacesOptions(activeOrganizationId));
+  // The dialog is mounted once and reused across drops, so re-seed the target
+  // matter each time it opens with a fresh preset (drag-onto-matter path).
+  useExternalSyncEffect(() => {
+    if (open) {
+      setTarget(
+        initialTargetWorkspaceId
+          ? { workspaceId: initialTargetWorkspaceId, parentId: null }
+          : null,
+      );
+    }
+  }, [open, initialTargetWorkspaceId]);
 
-  // Exclude current workspace from target options
-  const targetWorkspaces =
-    data?.workspaces.filter((w) => w.id !== sourceWorkspaceId) ?? [];
   const transferEntities = getCopyToMatterRootEntities(entities);
   const singleEntity =
     transferEntities.length === 1 ? transferEntities.at(0) : undefined;
 
   const handleSubmit = async () => {
-    if (!targetWorkspaceId) {
+    if (!target) {
       return;
     }
+    const { workspaceId: targetWorkspaceId, parentId: targetParentId } = target;
 
     setIsSubmitting(true);
 
@@ -156,8 +159,7 @@ export const CopyToMatterDialog = ({
   };
 
   const handleClose = () => {
-    setTargetWorkspaceId(null);
-    setTargetParentId(null);
+    setTarget(null);
     setMode("copy");
     onOpenChange(false);
   };
@@ -200,49 +202,11 @@ export const CopyToMatterDialog = ({
             </div>
           </div>
 
-          {/* Target workspace selection */}
-          <div className="space-y-2">
-            <Label>{t("workspaces.copyToMatter.targetMatter")}</Label>
-            <ScrollArea className="border-border h-48 rounded-md border">
-              <div className="p-1">
-                {targetWorkspaces.length === 0 ? (
-                  <p className="text-muted-foreground p-2 text-sm">
-                    {t("workspaces.copyToMatter.noOtherMatters")}
-                  </p>
-                ) : (
-                  targetWorkspaces.map((workspace) => (
-                    <button
-                      className={cn(
-                        "hover:bg-accent w-full rounded px-2 py-1.5 text-start text-sm",
-                        targetWorkspaceId === workspace.id && "bg-accent",
-                      )}
-                      dir="auto"
-                      key={workspace.id}
-                      onClick={() => {
-                        setTargetWorkspaceId(workspace.id);
-                        setTargetParentId(null);
-                      }}
-                      type="button"
-                    >
-                      {workspace.name}
-                    </button>
-                  ))
-                )}
-              </div>
-            </ScrollArea>
-          </div>
-
-          {/* Target folder selection (optional) */}
-          {targetWorkspaceId && (
-            <div className="space-y-2">
-              <Label>{t("workspaces.copyToMatter.targetFolder")}</Label>
-              <FolderPicker
-                onSelect={setTargetParentId}
-                selectedFolderId={targetParentId}
-                workspaceId={targetWorkspaceId}
-              />
-            </div>
-          )}
+          <MatterTargetPicker
+            excludeWorkspaceId={sourceWorkspaceId}
+            onChange={setTarget}
+            value={target}
+          />
         </DialogPanel>
 
         <DialogFooter>
@@ -250,7 +214,7 @@ export const CopyToMatterDialog = ({
             {t("common.cancel")}
           </Button>
           <Button
-            disabled={!targetWorkspaceId || isSubmitting}
+            disabled={!target || isSubmitting}
             onClick={() => {
               void handleSubmit();
             }}
@@ -268,135 +232,5 @@ export const CopyToMatterDialog = ({
         </DialogFooter>
       </DialogPopup>
     </Dialog>
-  );
-};
-
-type FolderPickerProps = {
-  workspaceId: string;
-  selectedFolderId: string | null;
-  onSelect: (folderId: string | null) => void;
-};
-
-const FolderPicker = ({
-  workspaceId,
-  selectedFolderId,
-  onSelect,
-}: FolderPickerProps) => {
-  const t = useTranslations();
-  const {
-    data: folders,
-    isLoading,
-    isError,
-  } = useQuery(workspaceFoldersOptions(workspaceId));
-
-  const [expandedFolders, setExpandedFolders] = useState<Set<string>>(
-    new Set(),
-  );
-
-  if (isLoading) {
-    return (
-      <div className="border-border h-32 rounded-md border p-2">
-        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
-      </div>
-    );
-  }
-
-  if (isError) {
-    return (
-      <div className="border-border h-32 rounded-md border p-2">
-        <p className="text-destructive text-sm">{t("errors.actionFailed")}</p>
-      </div>
-    );
-  }
-
-  const rootFolders = folders?.filter((f) => f.parentId === null) ?? [];
-
-  const toggleExpand = (folderId: string) => {
-    setExpandedFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderId)) {
-        next.delete(folderId);
-      } else {
-        next.add(folderId);
-      }
-      return next;
-    });
-  };
-
-  const renderFolder = (folder: WorkspaceFolder, depth: number) => {
-    const children = folders?.filter((f) => f.parentId === folder.entityId);
-    const hasChildren = children && children.length > 0;
-    const isExpanded = expandedFolders.has(folder.entityId);
-    const isSelected = selectedFolderId === folder.entityId;
-
-    return (
-      <div key={folder.entityId}>
-        <div
-          className="flex items-center gap-1"
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        >
-          {hasChildren ? (
-            <button
-              className="hover:bg-muted rounded p-0.5"
-              aria-expanded={isExpanded}
-              aria-label={folder.name}
-              title={folder.name}
-              onClick={(e) => {
-                e.stopPropagation();
-                toggleExpand(folder.entityId);
-              }}
-              type="button"
-            >
-              <DirectionalIcon
-                className={cn(
-                  "size-3 transition-transform",
-                  isExpanded && "rotate-90",
-                )}
-                flip={!isExpanded}
-                icon={ChevronRightIcon}
-              />
-            </button>
-          ) : (
-            <span className="w-4" />
-          )}
-          <button
-            className={cn(
-              "hover:bg-accent flex min-w-0 flex-1 items-center gap-1 rounded px-2 py-1 text-start text-sm",
-              isSelected && "bg-accent",
-            )}
-            onClick={() => onSelect(folder.entityId)}
-            type="button"
-          >
-            <FolderIcon className="size-4 shrink-0" />
-            <span className="truncate" dir="auto">
-              {folder.name}
-            </span>
-          </button>
-        </div>
-        {hasChildren && isExpanded && (
-          <div>{children.map((child) => renderFolder(child, depth + 1))}</div>
-        )}
-      </div>
-    );
-  };
-
-  return (
-    <ScrollArea className="border-border h-32 rounded-md border">
-      <div className="p-1">
-        <button
-          className={cn(
-            "hover:bg-accent flex w-full items-center gap-1 rounded px-2 py-1 text-start text-sm",
-            selectedFolderId === null && "bg-accent",
-          )}
-          onClick={() => onSelect(null)}
-          type="button"
-        >
-          <span className="text-muted-foreground">
-            {t("workspaces.copyToMatter.rootFolder")}
-          </span>
-        </button>
-        {rootFolders.map((folder) => renderFolder(folder, 0))}
-      </div>
-    </ScrollArea>
   );
 };

@@ -2570,6 +2570,7 @@
       "expandFolder": "Développer le dossier",
       "failed": "Échec de l’organisation",
       "folderPlaceholder": "ex. Compliance/2025",
+      "generateAi": "Générer des suggestions IA",
       "generating": "Génération des suggestions IA...",
       "instructionsEmpty": "Aucune instruction personnalisée",
       "instructionsHelp": "Enregistrées par dossier. Utilisées en complément du prompt système.",
@@ -2952,20 +2953,20 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
-      "saveAsTemplate": "Enregistrer comme modèle…",
+      "saveAsTemplate": "Enregistrer comme préréglage…",
       "selectProperty": "Sélectionner une propriété",
       "templates": {
-        "created": "Modèle enregistré",
-        "delete": "Supprimer le modèle",
-        "deleteConfirmDescription": "Supprimer le modèle « {name} » ? Cette action est irréversible.",
-        "deleted": "Modèle supprimé",
-        "description": "Enregistrez la disposition de la vue actuelle comme modèle réutilisable.",
-        "empty": "Aucun modèle pour le moment. Enregistrez la vue actuelle pour en créer un.",
-        "nameLabel": "Nom du modèle",
+        "created": "Préréglage enregistré",
+        "delete": "Supprimer le préréglage",
+        "deleteConfirmDescription": "Supprimer le préréglage « {name} » ? Cette action est irréversible.",
+        "deleted": "Préréglage supprimé",
+        "description": "Enregistrez la disposition de la vue actuelle comme préréglage réutilisable.",
+        "empty": "Aucun préréglage pour le moment. Enregistrez la vue actuelle pour en créer un.",
+        "nameLabel": "Nom du préréglage",
         "namePlaceholder": "ex. Dossiers actifs",
-        "save": "Enregistrer le modèle",
-        "title": "Modèles de vue",
-        "use": "Utiliser le modèle"
+        "save": "Enregistrer le préréglage",
+        "title": "Préréglages de vue",
+        "use": "Utiliser le préréglage"
       },
       "timeline": {
         "day": "Jour",
@@ -2977,7 +2978,7 @@
         "startDate": "Date de début",
         "week": "Semaine"
       },
-      "useTemplate": "Utiliser le modèle…"
+      "useTemplate": "Utiliser le préréglage…"
     },
     "workflow": {
       "allManualInputsDescription": "Veuillez ajouter au moins une propriété IA pour démarrer le flux de travail",
