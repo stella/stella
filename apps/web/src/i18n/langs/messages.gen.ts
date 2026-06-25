@@ -2059,13 +2059,14 @@ type Messages = {
     "checkNoIssues": "No issues found. The template is ready to use.";
     "checkTemplate": "Check template";
     "checkWarnings": "{count, plural, one {# warning} other {# warnings}}";
+    "conditionAddGroup": "Add group";
     "conditionAddRule": "Add rule";
+    "conditionAnd": "And";
     "conditionCount": "{count, plural, one {# condition} other {# conditions}}";
     "conditionField": "Field";
+    "conditionFormulaPlaceholder": "Enter a formula…";
+    "conditionFormulaTitle": "Formula";
     "conditionMatch": "Match";
-    "conditionMatchAll": "All";
-    "conditionMatchAny": "Any";
-    "conditionMatchSuffix": "of the following are true";
     "conditionNamePlaceholder": "Condition name (e.g. NPF)";
     "conditionOpAfter": "after";
     "conditionOpAtLeast": "at least";
@@ -2082,7 +2083,11 @@ type Messages = {
     "conditionOpOnOrAfter": "on or after";
     "conditionOpOnOrBefore": "on or before";
     "conditionOperator": "Operator";
+    "conditionOr": "Or";
+    "conditionUseFieldInstead": "Use a field instead";
+    "conditionUseFormula": "ƒ Calculated value…";
     "conditionValue": "Value";
+    "conditionWhen": "When";
     "conditionsTitle": "Conditions";
     "configureFields": "Configure fields";
     "confirmDelete": "This will permanently delete the template.";
@@ -2219,7 +2224,6 @@ type Messages = {
       "conceptCondition": "Shows this text only when a condition holds.";
       "conceptField": "A value you fill in at use time.";
       "conceptLoop": "Repeats this text for each item in a list.";
-      "conditionAdvanced": "Edit as expression";
       "conditionAiInstructionsHelp": "Tell the AI how to decide whether this block applies. It reads the document text and the other field values.";
       "conditionAiInstructionsLabel": "Instructions for the AI";
       "conditionAiPlaceholder": "Describe when this is true, e.g. the contract is governed by Czech law";
@@ -2234,6 +2238,7 @@ type Messages = {
       "conditionOrBuildNew": "or build a new one";
       "conditionReuse": "Reuse a condition";
       "conditionReusePick": "Pick an existing condition…";
+      "conditionRuleFallbackLabel": "Calculated condition";
       "conditionSource": "How it is decided";
       "conditionSourceAi": "AI decides";
       "conditionSourceAsked": "Asked";
@@ -2256,6 +2261,7 @@ type Messages = {
       "formulaUnknownFields": "Not a field: {fields}";
       "insert": "Insert";
       "insertAtCaret": "Insert at cursor";
+      "insertConditionIntoTemplate": "Insert condition";
       "insertFormatDefault": "Default";
       "insertIntoTemplate": "Insert into template";
       "insertItemNumber": "Item number";

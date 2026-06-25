@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
+import type { ConditionNode } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -201,6 +202,11 @@ export type EditableField = {
    *  formula/lookup/parts/aiPrompt/aiAdapt (backend-validated). A boolean
    *  field with `condition` set is a "condition-field". */
   condition?: string | undefined;
+  /** Condition rule persisted as the canonical AST instead of the `condition`
+   *  string. Authoritative when set; required when the rule contains a formula
+   *  operand (which has no `{{#if}}` string form). Mutually exclusive with the
+   *  other value sources, same as `condition`. */
+  conditionAst?: ConditionNode | undefined;
   /** Locale-aware rendering of a "date" field's submitted ISO value at fill
    *  time; absent = the ISO value is substituted as typed. */
   dateFormat?: TemplateDateFormat | undefined;

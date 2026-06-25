@@ -26,7 +26,8 @@
     "tasks.status",
     "tasks.statusValues.done",
     "tasks.statusValues.open",
-    "templates.conditionMatchAll",
+    "templates.conditionAnd",
+    "templates.conditionOr",
     "templates.fieldOptions",
     "templates.studio.filledByPerson",
     "translate.settings.remove",
@@ -361,7 +362,6 @@
       "fr"
     ],
     "filters.contains_all": [
-      "cs",
       "de",
       "es",
       "et",
@@ -374,7 +374,6 @@
       "sk"
     ],
     "filters.dateAfter": [
-      "cs",
       "de",
       "es",
       "et",
@@ -387,7 +386,6 @@
       "sk"
     ],
     "filters.dateBefore": [
-      "cs",
       "de",
       "es",
       "et",
@@ -400,7 +398,6 @@
       "sk"
     ],
     "filters.dateOnOrAfter": [
-      "cs",
       "de",
       "es",
       "et",
@@ -413,7 +410,6 @@
       "sk"
     ],
     "filters.dateOnOrBefore": [
-      "cs",
       "de",
       "es",
       "et",
@@ -426,7 +422,6 @@
       "sk"
     ],
     "filters.ends_with": [
-      "cs",
       "de",
       "es",
       "et",
@@ -439,7 +434,6 @@
       "sk"
     ],
     "filters.gt": [
-      "cs",
       "de",
       "es",
       "et",
@@ -452,7 +446,6 @@
       "sk"
     ],
     "filters.gte": [
-      "cs",
       "de",
       "es",
       "et",
@@ -465,7 +458,6 @@
       "sk"
     ],
     "filters.in": [
-      "cs",
       "de",
       "es",
       "et",
@@ -478,7 +470,6 @@
       "sk"
     ],
     "filters.is_not_empty": [
-      "cs",
       "de",
       "es",
       "et",
@@ -491,7 +482,6 @@
       "sk"
     ],
     "filters.lt": [
-      "cs",
       "de",
       "es",
       "et",
@@ -504,7 +494,6 @@
       "sk"
     ],
     "filters.lte": [
-      "cs",
       "de",
       "es",
       "et",
@@ -517,7 +506,6 @@
       "sk"
     ],
     "filters.not_contains": [
-      "cs",
       "de",
       "es",
       "et",
@@ -530,7 +518,6 @@
       "sk"
     ],
     "filters.starts_with": [
-      "cs",
       "de",
       "es",
       "et",
@@ -1015,21 +1002,138 @@
       "pl",
       "pt-BR"
     ],
+    "templates.conditionAddGroup": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "templates.conditionAnd": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "templates.conditionCount": [
       "fr"
+    ],
+    "templates.conditionFormulaPlaceholder": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "templates.conditionFormulaTitle": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "templates.conditionOperator": [
       "de",
       "pl"
     ],
+    "templates.conditionOr": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "templates.conditionsTitle": [
       "fr"
+    ],
+    "templates.conditionUseFieldInstead": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "templates.conditionUseFormula": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "templates.conditionWhen": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "templates.fieldFormulaExpression": [
       "fr"
     ],
     "templates.fieldOptions": [
       "fr"
+    ],
+    "templates.studio.conditionRuleFallbackLabel": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "templates.studio.expressionPlaceholder": [
       "fr"
@@ -1039,6 +1143,19 @@
     ],
     "templates.studio.formula": [
       "lv"
+    ],
+    "templates.studio.insertConditionIntoTemplate": [
+      "ar",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "templates.studio.questions": [
       "fr"
@@ -1576,7 +1693,6 @@
       "sk"
     ],
     "workspaces.views.advancedFilter": [
-      "cs",
       "de",
       "es",
       "et",
@@ -1589,7 +1705,6 @@
       "sk"
     ],
     "workspaces.views.advancedFilterCount": [
-      "cs",
       "de",
       "es",
       "et",
@@ -1713,7 +1828,6 @@
       "sk"
     ],
     "workspaces.views.removeAdvancedFilter": [
-      "cs",
       "de",
       "es",
       "et",

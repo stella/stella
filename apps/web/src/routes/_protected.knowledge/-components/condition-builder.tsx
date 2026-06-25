@@ -1,15 +1,15 @@
-import { PlusIcon, TrashIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import type { GroupNode } from "@stll/template-conditions";
 
+import {
+  ConditionBuilder,
+  type ConditionCapabilities,
+} from "@/components/conditions/condition-builder";
 import type {
-  CompareOp,
-  ConditionNode,
-  GroupNode,
-} from "@stll/template-conditions";
-import { Button } from "@stll/ui/components/button";
-import { Input } from "@stll/ui/components/input";
-
-import { DatePickerPopover } from "@/components/date-picker-popover";
+  ConditionOperator,
+  FieldOption,
+  FieldValueType,
+  ValueEditorKind,
+} from "@/components/conditions/condition-builder-logic";
 import type { TranslationKey } from "@/i18n/types";
 
 /** The subset of a template field the rule builder needs to render a typed
@@ -51,181 +51,160 @@ export const toRuleFields = (
     options: f.options,
   }));
 
-// ── Local rule model ⇄ @stll/conditions AST ───────────────
-// The editor edits flat all/any rows in a friendly { field, operator, value }
-// shape, but reads and emits the canonical @stll/conditions ConditionNode tree
-// (one CompareNode per row, or a `contains` PredicateNode), so there is a
-// single stored condition AST. `serializeCondition` renders that tree to the
-// `{{#if}}` expression.
-
-type LocalOperator = "==" | "!=" | ">" | "<" | ">=" | "<=" | "contains";
-
-type LocalRule = {
-  variable: string;
-  operator: LocalOperator;
-  value: string | number | boolean;
-};
-
-const OPERATOR_TO_COMPARE: Record<
-  Exclude<LocalOperator, "contains">,
-  CompareOp
-> = { "==": "eq", "!=": "neq", ">": "gt", "<": "lt", ">=": "gte", "<=": "lte" };
-
-const COMPARE_TO_OPERATOR: Record<CompareOp, LocalOperator> = {
-  eq: "==",
-  neq: "!=",
-  gt: ">",
-  lt: "<",
-  gte: ">=",
-  lte: "<=",
-};
-
-/** Operator-label keys, narrowed against the catalogue. All are plain (no ICU
- *  arguments), so `t(labelKey)` is callable with a single argument. */
-type OperatorLabelKey = TranslationKey &
-  (
-    | "templates.conditionOpAfter"
-    | "templates.conditionOpAtLeast"
-    | "templates.conditionOpAtMost"
-    | "templates.conditionOpBefore"
-    | "templates.conditionOpContains"
-    | "templates.conditionOpEquals"
-    | "templates.conditionOpGreaterThan"
-    | "templates.conditionOpIs"
-    | "templates.conditionOpIsNot"
-    | "templates.conditionOpLessThan"
-    | "templates.conditionOpNotEquals"
-    | "templates.conditionOpOn"
-    | "templates.conditionOpOnOrAfter"
-    | "templates.conditionOpOnOrBefore"
-  );
-
-/** A friendly operator label mapped to the editor's row operator. */
-type OperatorChoice = {
-  operator: LocalOperator;
-  labelKey: OperatorLabelKey;
-};
-
-// Per-type operator menus. The canonical operator strings are unchanged; only
-// the labels and the offered set adapt to the field's type. The first entry is
-// the default operator for that type.
-const TEXT_OPERATORS: readonly OperatorChoice[] = [
-  { operator: "==", labelKey: "templates.conditionOpIs" },
-  { operator: "!=", labelKey: "templates.conditionOpIsNot" },
-  { operator: "contains", labelKey: "templates.conditionOpContains" },
-];
-
-const NUMBER_OPERATORS: readonly OperatorChoice[] = [
-  { operator: "==", labelKey: "templates.conditionOpEquals" },
-  { operator: "!=", labelKey: "templates.conditionOpNotEquals" },
-  { operator: ">", labelKey: "templates.conditionOpGreaterThan" },
-  { operator: "<", labelKey: "templates.conditionOpLessThan" },
-  { operator: ">=", labelKey: "templates.conditionOpAtLeast" },
-  { operator: "<=", labelKey: "templates.conditionOpAtMost" },
-];
-
-const DATE_OPERATORS: readonly OperatorChoice[] = [
-  { operator: "<", labelKey: "templates.conditionOpBefore" },
-  { operator: "<=", labelKey: "templates.conditionOpOnOrBefore" },
-  { operator: "==", labelKey: "templates.conditionOpOn" },
-  { operator: ">=", labelKey: "templates.conditionOpOnOrAfter" },
-  { operator: ">", labelKey: "templates.conditionOpAfter" },
-];
-
-const SELECT_OPERATORS: readonly OperatorChoice[] = [
-  { operator: "==", labelKey: "templates.conditionOpIs" },
-  { operator: "!=", labelKey: "templates.conditionOpIsNot" },
-  { operator: "contains", labelKey: "templates.conditionOpContains" },
-];
-
-const operatorsForType = (
-  inputType: RuleInputType,
-): readonly OperatorChoice[] => {
-  switch (inputType) {
-    case "number":
-      return NUMBER_OPERATORS;
-    case "date":
-      return DATE_OPERATORS;
-    case "select":
-      return SELECT_OPERATORS;
-    default:
-      return TEXT_OPERATORS;
-  }
-};
-
-/** Default operator when no field is chosen. */
-const DEFAULT_OPERATOR: LocalOperator = "==";
-
-const defaultOperatorForType = (inputType: RuleInputType): LocalOperator => {
-  const first = operatorsForType(inputType).at(0);
-  return first ? first.operator : DEFAULT_OPERATOR;
-};
-
-const emptyRule = (): LocalRule => ({
-  variable: "",
-  operator: DEFAULT_OPERATOR,
-  value: "",
-});
-
-/** A row only edits scalar values; collapse an (unexpected) array literal. */
-const scalarLiteral = (
-  value: string | number | boolean | string[],
-): string | number | boolean =>
-  Array.isArray(value) ? value.join(",") : value;
-
-const ruleToNode = (rule: LocalRule): ConditionNode =>
-  rule.operator === "contains"
-    ? {
-        type: "predicate",
-        operand: { type: "path", path: rule.variable },
-        op: "contains",
-        value: String(rule.value),
-      }
-    : {
-        type: "compare",
-        left: { type: "path", path: rule.variable },
-        op: OPERATOR_TO_COMPARE[rule.operator],
-        right: { type: "literal", value: rule.value },
-      };
-
-const nodeToRule = (node: ConditionNode): LocalRule => {
-  if (node.type === "compare") {
-    return {
-      variable: node.left.type === "path" ? node.left.path : "",
-      operator: COMPARE_TO_OPERATOR[node.op],
-      value:
-        node.right.type === "literal" ? scalarLiteral(node.right.value) : "",
-    };
-  }
-  if (node.type === "predicate" && node.op === "contains") {
-    return {
-      variable: node.operand.type === "path" ? node.operand.path : "",
-      operator: "contains",
-      value: typeof node.value === "string" ? node.value : "",
-    };
-  }
-  return emptyRule();
-};
-
-// Flat editor: every child is a leaf row (compare / contains), never a subgroup.
-const groupToRules = (group: GroupNode): LocalRule[] =>
-  group.children.filter((child) => child.type !== "group").map(nodeToRule);
-
-const rulesToGroup = (
-  rules: readonly LocalRule[],
-  combinator: GroupNode["combinator"],
-): GroupNode => ({
+/** A fresh, empty rule group. The shared builder seeds its own first row, so an
+ *  empty `children` list is the canonical starting point. */
+export const emptyGroup = (): GroupNode => ({
   type: "group",
-  combinator,
-  children: rules.map(ruleToNode),
+  combinator: "and",
+  children: [],
 });
 
-export const emptyGroup = (): GroupNode => rulesToGroup([emptyRule()], "and");
+// ── RuleField → shared FieldOption mapping ────────────────
+// The template surface targets `path` operands. `inputType` maps to the shared
+// builder's `valueType`, which drives the (restricted) operator set and value
+// editor below.
 
-const inputClass =
-  "flex h-9 rounded-md border bg-transparent px-3 py-1 text-sm";
+/** The four value types a template input can take. Narrower than the shared
+ *  `FieldValueType` so the `type` (content-type) mapping stays exhaustive
+ *  without a cast. */
+type TemplateValueType = "text" | "int" | "date" | "single-select";
 
-// ── Flat all/any rule editor ─────────────────────────────
+const VALUE_TYPE_BY_INPUT: Record<RuleInputType, TemplateValueType> = {
+  text: "text",
+  textarea: "text",
+  number: "int",
+  date: "date",
+  select: "single-select",
+};
+
+const CONTENT_TYPE_BY_VALUE_TYPE: Record<
+  TemplateValueType,
+  FieldOption["type"]
+> = {
+  text: "text",
+  int: "int",
+  date: "date",
+  "single-select": "single-select",
+};
+
+const toFieldOption = (field: RuleField): FieldOption => {
+  const valueType = VALUE_TYPE_BY_INPUT[field.inputType];
+  const base: FieldOption = {
+    operand: { type: "path", path: field.path },
+    label: field.label || field.path,
+    valueType,
+    type: CONTENT_TYPE_BY_VALUE_TYPE[valueType],
+  };
+  if (field.inputType !== "select") {
+    return base;
+  }
+  return {
+    ...base,
+    options: field.options.map((value) => ({ value, label: value })),
+  };
+};
+
+// ── Restricted operator profile ──────────────────────────
+// `serializeCondition` only renders ==,!=,>,<,>=,<=,contains, so the template
+// surface exposes exactly the operators those map to (eq/neq/gt/lt/gte/lte and
+// contains), per value type, with friendly wording. The shared formula leaf
+// runs through the "int" value type, so the int branch also covers formulas.
+
+const TEMPLATE_OPERATORS = {
+  text: ["eq", "neq", "contains"],
+  "single-select": ["eq", "neq", "contains"],
+  int: ["eq", "neq", "gt", "lt", "gte", "lte"],
+  // Preserve the template's date ordering: before, on-or-before, on,
+  // on-or-after, after.
+  date: ["lt", "lte", "eq", "gte", "gt"],
+  // The remaining value types never reach the template surface; fall back to
+  // the safe serializable set.
+  "multi-select": ["eq", "neq", "contains"],
+  kind: ["eq", "neq", "contains"],
+  status: ["eq", "neq", "contains"],
+  priority: ["eq", "neq", "contains"],
+} as const satisfies Record<FieldValueType, readonly ConditionOperator[]>;
+
+const templateOperatorsFor = (
+  valueType: FieldValueType,
+): readonly ConditionOperator[] => TEMPLATE_OPERATORS[valueType];
+
+// Friendly per-type operator labels, reproducing the template's prior wording.
+// All are parameter-less keys so `t(key)` stays callable with one argument.
+type TemplateOperatorLabelKey = Extract<
+  TranslationKey,
+  | "templates.conditionOpIs"
+  | "templates.conditionOpIsNot"
+  | "templates.conditionOpContains"
+  | "templates.conditionOpEquals"
+  | "templates.conditionOpNotEquals"
+  | "templates.conditionOpGreaterThan"
+  | "templates.conditionOpLessThan"
+  | "templates.conditionOpAtLeast"
+  | "templates.conditionOpAtMost"
+  | "templates.conditionOpBefore"
+  | "templates.conditionOpOnOrBefore"
+  | "templates.conditionOpOn"
+  | "templates.conditionOpOnOrAfter"
+  | "templates.conditionOpAfter"
+>;
+
+type OperatorLabelMap = Partial<
+  Record<ConditionOperator, TemplateOperatorLabelKey>
+>;
+
+const TEXT_OPERATOR_LABELS: OperatorLabelMap = {
+  eq: "templates.conditionOpIs",
+  neq: "templates.conditionOpIsNot",
+  contains: "templates.conditionOpContains",
+};
+
+const NUMBER_OPERATOR_LABELS: OperatorLabelMap = {
+  eq: "templates.conditionOpEquals",
+  neq: "templates.conditionOpNotEquals",
+  gt: "templates.conditionOpGreaterThan",
+  lt: "templates.conditionOpLessThan",
+  gte: "templates.conditionOpAtLeast",
+  lte: "templates.conditionOpAtMost",
+};
+
+const DATE_OPERATOR_LABELS: OperatorLabelMap = {
+  lt: "templates.conditionOpBefore",
+  lte: "templates.conditionOpOnOrBefore",
+  eq: "templates.conditionOpOn",
+  gte: "templates.conditionOpOnOrAfter",
+  gt: "templates.conditionOpAfter",
+};
+
+const templateOperatorLabelKey = (
+  valueType: FieldValueType,
+  op: ConditionOperator,
+): TemplateOperatorLabelKey => {
+  if (valueType === "int") {
+    return NUMBER_OPERATOR_LABELS[op] ?? "templates.conditionOpEquals";
+  }
+  if (valueType === "date") {
+    return DATE_OPERATOR_LABELS[op] ?? "templates.conditionOpOn";
+  }
+  return TEXT_OPERATOR_LABELS[op] ?? "templates.conditionOpIs";
+};
+
+// The template surface never uses the multi-value select editors, so each value
+// type maps to the matching scalar editor the shared builder already provides.
+const templateValueEditorFor = (valueType: FieldValueType): ValueEditorKind => {
+  if (valueType === "int") {
+    return "int";
+  }
+  if (valueType === "date") {
+    return "date";
+  }
+  if (valueType === "single-select") {
+    return "select";
+  }
+  return "text";
+};
+
+// ── Thin adapter over the shared ConditionBuilder ─────────
 
 export const ConditionGroupEditor = ({
   fields,
@@ -236,220 +215,27 @@ export const ConditionGroupEditor = ({
   group: GroupNode;
   onChange: (group: GroupNode) => void;
 }) => {
-  const t = useTranslations();
-  const rules = groupToRules(group);
-  const { combinator } = group;
+  const fieldOptions = fields.map(toFieldOption);
+  const formulaNumberFields = fields
+    .filter((f) => f.inputType === "number")
+    .map((f) => ({ path: f.path, label: f.label || f.path }));
 
-  const emit = (nextRules: readonly LocalRule[]) =>
-    onChange(rulesToGroup(nextRules, combinator));
-
-  const setRule = (index: number, patch: Partial<LocalRule>) => {
-    emit(rules.map((rule, i) => (i === index ? { ...rule, ...patch } : rule)));
-  };
-
-  // Changing the field can change its type, which changes the valid operator
-  // set and value control. Reset the operator to the new type's default and
-  // clear a value that no longer fits the new control.
-  const setField = (index: number, path: string) => {
-    const nextType = fields.find((f) => f.path === path)?.inputType;
-    const prevType = fields.find(
-      (f) => f.path === rules[index]?.variable,
-    )?.inputType;
-    if (nextType === undefined || nextType === prevType) {
-      setRule(index, { variable: path });
-      return;
-    }
-    setRule(index, {
-      variable: path,
-      operator: defaultOperatorForType(nextType),
-      value: "",
-    });
+  const capabilities: ConditionCapabilities = {
+    fields: fieldOptions,
+    allowNesting: true,
+    allowFormula: true,
+    formulaNumberFields,
+    addConditionLabel: "templates.conditionAddRule",
+    operatorsFor: templateOperatorsFor,
+    operatorLabelKey: templateOperatorLabelKey,
+    valueEditorFor: templateValueEditorFor,
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2 text-sm">
-        <select
-          aria-label={t("templates.conditionMatch")}
-          className={inputClass}
-          onChange={(e) =>
-            onChange(
-              rulesToGroup(rules, e.target.value === "any" ? "or" : "and"),
-            )
-          }
-          value={combinator === "or" ? "any" : "all"}
-        >
-          <option value="all">{t("templates.conditionMatchAll")}</option>
-          <option value="any">{t("templates.conditionMatchAny")}</option>
-        </select>
-        <span className="text-muted-foreground">
-          {t("templates.conditionMatchSuffix")}
-        </span>
-      </div>
-
-      {rules.map((rule, index) => (
-        // Rules have no stable id; index key is fine for this small, local list.
-        <RuleRow
-          fields={fields}
-          key={index}
-          onRemove={() => emit(rules.filter((_, i) => i !== index))}
-          onSetField={(path) => setField(index, path)}
-          onSetRule={(patch) => setRule(index, patch)}
-          removable={rules.length > 1}
-          rule={rule}
-        />
-      ))}
-
-      <Button
-        className="self-start"
-        onClick={() => emit([...rules, emptyRule()])}
-        size="sm"
-        type="button"
-        variant="outline"
-      >
-        <PlusIcon />
-        {t("templates.conditionAddRule")}
-      </Button>
-    </div>
-  );
-};
-
-// ── One field | operator | value row ─────────────────────
-
-const RuleRow = ({
-  fields,
-  rule,
-  removable,
-  onSetField,
-  onSetRule,
-  onRemove,
-}: {
-  fields: readonly RuleField[];
-  rule: LocalRule;
-  removable: boolean;
-  onSetField: (path: string) => void;
-  onSetRule: (patch: Partial<LocalRule>) => void;
-  onRemove: () => void;
-}) => {
-  const t = useTranslations();
-  const selected = fields.find((f) => f.path === rule.variable);
-  const inputType = selected?.inputType ?? "text";
-  const operators = operatorsForType(inputType);
-
-  return (
-    <div className="flex items-center gap-2">
-      <select
-        aria-label={t("templates.conditionField")}
-        className={`${inputClass} min-w-32 flex-1`}
-        onChange={(e) => onSetField(e.target.value)}
-        value={rule.variable}
-      >
-        <option value="">{t("templates.conditionField")}</option>
-        {fields.map((field) => (
-          <option key={field.path} value={field.path}>
-            {field.label || field.path}
-          </option>
-        ))}
-      </select>
-      <select
-        aria-label={t("templates.conditionOperator")}
-        className={inputClass}
-        onChange={(e) => {
-          const choice = operators.find((o) => o.operator === e.target.value);
-          if (choice) {
-            onSetRule({ operator: choice.operator });
-          }
-        }}
-        value={rule.operator}
-      >
-        {operators.map((choice) => (
-          <option key={choice.operator} value={choice.operator}>
-            {t(choice.labelKey)}
-          </option>
-        ))}
-      </select>
-      <RuleValueInput
-        field={selected}
-        onChange={(value) => onSetRule({ value })}
-        value={rule.value}
-      />
-      <Button
-        aria-label={t("common.delete")}
-        disabled={!removable}
-        onClick={onRemove}
-        size="icon-xs"
-        type="button"
-        variant="ghost"
-      >
-        <TrashIcon />
-      </Button>
-    </div>
-  );
-};
-
-// ── Value control, typed to the selected field ───────────
-
-const RuleValueInput = ({
-  field,
-  value,
-  onChange,
-}: {
-  field: RuleField | undefined;
-  value: string | number | boolean;
-  onChange: (value: string | number) => void;
-}) => {
-  const t = useTranslations();
-  const stringValue = String(value);
-
-  if (field?.inputType === "select") {
-    return (
-      <select
-        aria-label={t("templates.conditionValue")}
-        className={`${inputClass} w-28`}
-        onChange={(e) => onChange(e.target.value)}
-        value={stringValue}
-      >
-        <option value="">{t("templates.conditionValue")}</option>
-        {field.options.map((option) => (
-          <option key={option} value={option}>
-            {option}
-          </option>
-        ))}
-      </select>
-    );
-  }
-
-  if (field?.inputType === "date") {
-    return (
-      <DatePickerPopover
-        onChange={(v) => onChange(v ?? "")}
-        value={stringValue}
-      />
-    );
-  }
-
-  if (field?.inputType === "number") {
-    return (
-      <Input
-        aria-label={t("templates.conditionValue")}
-        className="w-28"
-        onChange={(e) =>
-          onChange(e.target.value === "" ? "" : Number(e.target.value))
-        }
-        placeholder={t("templates.conditionValue")}
-        type="number"
-        value={stringValue}
-      />
-    );
-  }
-
-  return (
-    <Input
-      aria-label={t("templates.conditionValue")}
-      className="w-28"
-      onChange={(e) => onChange(e.target.value)}
-      placeholder={t("templates.conditionValue")}
-      value={stringValue}
+    <ConditionBuilder
+      capabilities={capabilities}
+      onChange={onChange}
+      value={group}
     />
   );
 };

@@ -230,8 +230,15 @@ export const operandsEqual = (a: RefOperand, b: RefOperand): boolean => {
   if (a.type === "builtin" && b.type === "builtin") {
     return a.field === b.field;
   }
-  // `kind` and `path` carry no further identity for `path`, but two
-  // distinct path operands never coexist in a single builder context.
+  if (a.type === "path" && b.type === "path") {
+    // Distinct template fields must not collapse to one row, so two
+    // path operands match only when they name the same field.
+    return a.path === b.path;
+  }
+  if (a.type === "formula" && b.type === "formula") {
+    return a.expr === b.expr;
+  }
+  // `kind` carries no further identity.
   return true;
 };
 

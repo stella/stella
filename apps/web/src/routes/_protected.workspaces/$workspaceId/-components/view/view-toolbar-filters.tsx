@@ -40,14 +40,11 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
-import type { TranslationKey } from "@/i18n/types";
-import type { WorkspaceProperty } from "@/lib/types";
-import { ConditionBuilder } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder";
+import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type {
   ConditionOperator,
   FieldOption,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
+} from "@/components/conditions/condition-builder-logic";
 import {
   buildLeaf,
   fieldForNode,
@@ -59,12 +56,16 @@ import {
   operatorLabelKey,
   operatorsFor,
   valueEditorFor,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
+} from "@/components/conditions/condition-builder-logic";
+import { DatePickerPopover } from "@/components/date-picker-popover";
+import type { TranslationKey } from "@/i18n/types";
+import type { WorkspaceProperty } from "@/lib/types";
 import type { FacetContext } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
 import {
   MultiSelectValue,
   SingleSelectValue,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
+import { filterCapabilities } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/filter-capabilities";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 
@@ -107,7 +108,7 @@ export const FilterChips = ({
     return (
       <AddFilterPicker
         fields={pickerFields}
-        onAddAdvanced={() => append(emptyAdvancedGroup())}
+        onAddAdvanced={() => append(seededAdvancedGroup(pickerFields))}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
           <Button
@@ -155,7 +156,7 @@ export const FilterChips = ({
       })}
       <AddFilterPicker
         fields={pickerFields}
-        onAddAdvanced={() => append(emptyAdvancedGroup())}
+        onAddAdvanced={() => append(seededAdvancedGroup(pickerFields))}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
           <Button
@@ -466,9 +467,11 @@ const AdvancedFilterChip = ({
       </PopoverTrigger>
       <PopoverPopup align="start" className="w-[34rem] max-w-[90vw] p-3">
         <ConditionBuilder
-          allowGroups
-          facetContext={facetContext}
-          fields={fields}
+          capabilities={filterCapabilities({
+            fields,
+            facetContext,
+            allowNesting: true,
+          })}
           onChange={onChange}
           value={node}
         />
@@ -642,11 +645,18 @@ const chipSummary = ({
 
 // ── Field catalogue ───────────────────────────────────────
 
-const emptyAdvancedGroup = (): GroupNode => ({
-  type: "group",
-  combinator: "and",
-  children: [],
-});
+// An advanced group seeds with one real condition row: an empty group is
+// pruned on save (`pruneStaleNode`), so it would never persist or render a
+// chip. Seeding the first available field mirrors Notion's "add a group, get a
+// first row" and gives the user something to edit immediately.
+const seededAdvancedGroup = (fields: FieldOption[]): GroupNode => {
+  const first = fields.at(0);
+  return {
+    type: "group",
+    combinator: "and",
+    children: first ? [leafFromField(first)] : [],
+  };
+};
 
 const fieldKey = (field: FieldOption): string => {
   if (field.operand.type === "property") {
