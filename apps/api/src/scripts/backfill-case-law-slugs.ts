@@ -42,11 +42,14 @@ const ingestionDb = createIngestionDb(rlsDb);
 
 // Postgres unique_violation: a concurrent ingest grabbed our scanned slug
 // between the prefix scan and the update; re-scan and try a higher suffix.
+// Bun's SQL client exposes the Postgres SQLSTATE on `errno` (`code` carries
+// the Bun error class, e.g. ERR_POSTGRES_SERVER_ERROR); node-postgres uses
+// `code`. Accept either so the retry path works under both drivers.
 const isUniqueViolation = (error: unknown): boolean =>
   typeof error === "object" &&
   error !== null &&
-  "code" in error &&
-  error.code === "23505";
+  (("errno" in error && error.errno === "23505") ||
+    ("code" in error && error.code === "23505"));
 
 console.log("=== BACKFILL CASE-LAW SLUGS ===");
 
