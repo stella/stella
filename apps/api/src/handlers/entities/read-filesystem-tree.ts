@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { entities } from "@/api/db/schema";
@@ -68,7 +68,7 @@ export const createReadFilesystemTreeHandler = (
       // An unfiltered query already returns the whole subtree, so ancestor
       // backfill only matters when a filter or search can hide intermediates.
       if (!isFiltered || result.entities.length === 0) {
-        return Result.ok({ entities: result.entities, ancestorEntities: [] });
+        return Result.ok({ entities: result.entities, ancestorLinks: [] });
       }
 
       const folderSkeleton = yield* Result.await(
@@ -90,41 +90,16 @@ export const createReadFilesystemTreeHandler = (
       const missingIds = new Set(
         collectMissingAncestorIds(result.entities, parentById),
       );
-      // Source the branded ids straight from the skeleton column so no `id`
-      // cast is needed for the `inArray` filter below.
-      const missingAncestorIds = folderSkeleton
-        .filter((folder) => missingIds.has(folder.entityId))
-        .map((folder) => folder.entityId);
 
-      if (missingAncestorIds.length === 0) {
-        return Result.ok({ entities: result.entities, ancestorEntities: [] });
-      }
-
-      const ancestors = yield* Result.await(
-        queryEntitiesImpl({
-          safeDb,
-          workspaceId,
-          currentUserId: currentUser.id,
-          currentOrganizationId: session.activeOrganizationId,
-          filters: [],
-          sorts: [],
-          limit: LIMITS.entitiesCount,
-          fieldMode: body.fieldMode ?? "full",
-          fieldIds: body.fieldIds ?? [],
-          excludedKinds: ["task"],
-          previewableForAi: false,
-          extraConditions: [inArray(entities.id, missingAncestorIds)],
-          includeTotalCount: false,
-        }),
+      // Just the parent links of the folders the filter/search hid, so the
+      // client can resolve a matched row's full ancestor chain (for
+      // cross-matter copy/move dedup) without these folders ever entering the
+      // rendered or selectable tree.
+      const ancestorLinks = folderSkeleton.filter((folder) =>
+        missingIds.has(folder.entityId),
       );
 
-      // Returned separately so the client renders these as non-selectable tree
-      // scaffolding (folder path only); destructive/transfer actions must never
-      // target a structural ancestor, whose subtree includes filtered-out rows.
-      return Result.ok({
-        entities: result.entities,
-        ancestorEntities: ancestors.entities,
-      });
+      return Result.ok({ entities: result.entities, ancestorLinks });
     },
   );
 

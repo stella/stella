@@ -215,12 +215,13 @@ export const filesystemEntitiesOptions = (
 
       const entities: WorkspaceEntity[] =
         response.data.entities.map(toWorkspaceEntity);
-      // Structural ancestor folders backfilled to keep a filtered tree
-      // navigable; rendered as non-selectable scaffolding only.
-      const ancestorEntities: WorkspaceEntity[] =
-        response.data.ancestorEntities.map(toWorkspaceEntity);
 
-      return { entities, ancestorEntities };
+      // Parent links of ancestor folders a filter/search hid. Used only to
+      // complete the ancestor chain for cross-matter copy/move dedup; never
+      // rendered, so they stay out of selection and bulk actions.
+      const ancestorLinks = response.data.ancestorLinks;
+
+      return { entities, ancestorLinks };
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });
