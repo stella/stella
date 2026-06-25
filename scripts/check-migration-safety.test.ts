@@ -128,6 +128,45 @@ describe("check-migration-safety", () => {
     expect(result.stderr).toContain("unbounded-update");
   });
 
+  it("flags an unbounded UPDATE inside a data-modifying CTE", () => {
+    // The UPDATE executes during migration even though the outer command is a
+    // SELECT, so a full-table rewrite wrapped this way must not slip through.
+    const result = runChecker(`
+      WITH "u" AS (
+        UPDATE "documents" SET "status" = 'archived' RETURNING "id"
+      )
+      SELECT count(*) FROM "u";
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("allows a WHERE-bounded UPDATE inside a data-modifying CTE", () => {
+    const result = runChecker(`
+      WITH "u" AS (
+        UPDATE "documents" SET "status" = 'archived' WHERE "id" = 2 RETURNING "id"
+      )
+      SELECT count(*) FROM "u";
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("flags an unbounded UPDATE inside a DO block", () => {
+    const result = runChecker(`
+      DO $$
+      BEGIN
+        UPDATE "documents" SET "status" = 'archived';
+      END
+      $$;
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
   it("allows a CREATE POLICY ... FOR UPDATE clause", () => {
     // The outer command is CREATE, not UPDATE: `FOR UPDATE` is a policy clause
     // and rewrites no table data, so it must not trip the unbounded-update rule.

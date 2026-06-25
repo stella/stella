@@ -66,21 +66,46 @@ const DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN = /\bDO(?:\s+LANGUAGE\s+\S+)?\s*$/i;
 const ROUTINE_DOLLAR_QUOTE_PREFIX_PATTERN =
   /\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b[\s\S]*\b(?:AS|IS)\s*$/i;
 
-const WHERE_KEYWORD_PATTERN = /^WHERE\b/iu;
 const IDENTIFIER_CHARACTER_PATTERN = /[A-Za-z0-9_]/u;
 const IDENTIFIER_WORD_PATTERN = /^[A-Za-z0-9_]+/u;
-const TOP_LEVEL_COMMAND_PATTERN = /^(?:INSERT|UPDATE|DELETE|MERGE|SELECT)\b/iu;
-const CTE_PREFIX_KEYWORD = "WITH";
+const UPDATE_KEYWORD = "UPDATE";
+const SET_KEYWORD = "SET";
+const WHERE_KEYWORD = "WHERE";
+const RETURNING_KEYWORD = "RETURNING";
 
-// A WHERE that bounds the outer UPDATE sits at parenthesis depth 0. A WHERE
-// only inside a parenthesised subquery (e.g. `SET col = (SELECT ... WHERE ...)`)
-// does not bound the update, so the statement is still a full-table write. The
-// statement text is already string/comment-masked by parseStatements, so paren
-// and keyword scanning here cannot be fooled by literals.
-const hasTopLevelWhere = (statement: string): boolean => {
-  let depth = 0;
+// Keywords whose immediately following UPDATE is a clause, not an executable
+// statement: row locks (`FOR UPDATE`), trigger timing (`BEFORE`/`AFTER`/
+// `INSTEAD OF UPDATE`), FK actions (`ON UPDATE`), and upsert actions (`DO
+// UPDATE`). None rewrite table data, so the UPDATE token after them is skipped.
+const UPDATE_CLAUSE_PREFIXES = new Set([
+  "FOR",
+  "BEFORE",
+  "AFTER",
+  "OF",
+  "ON",
+  "DO",
+]);
 
-  for (let index = 0; index < statement.length; index++) {
+// Scan an executable UPDATE found at `updateIndex` (parenthesis depth
+// `baseDepth`) for a WHERE bounding it at that same depth. The update's clause
+// runs until its enclosing parenthesis closes, a top-level `;`, `RETURNING`, or
+// end of text. A WHERE living only inside a SET subquery sits one level deeper,
+// so it does not bound the update and the row set stays the whole table. Returns
+// true only when the statement is a real `UPDATE ... SET` with no bounding
+// WHERE.
+const isUnboundedUpdateAt = (
+  statement: string,
+  updateIndex: number,
+  baseDepth: number,
+): boolean => {
+  let depth = baseDepth;
+  let sawSet = false;
+
+  for (
+    let index = updateIndex + UPDATE_KEYWORD.length;
+    index < statement.length;
+    index++
+  ) {
     const char = statement[index] ?? "";
 
     if (char === "(") {
@@ -89,34 +114,55 @@ const hasTopLevelWhere = (statement: string): boolean => {
     }
 
     if (char === ")") {
-      depth = Math.max(0, depth - 1);
+      depth--;
+      // Left the parenthesised context holding this UPDATE (e.g. a CTE body).
+      if (depth < baseDepth) {
+        break;
+      }
       continue;
     }
 
-    if (
-      depth === 0 &&
-      (char === "W" || char === "w") &&
-      WHERE_KEYWORD_PATTERN.test(statement.slice(index)) &&
-      !IDENTIFIER_CHARACTER_PATTERN.test(statement[index - 1] ?? "")
-    ) {
-      return true;
+    if (char === ";" && depth === baseDepth) {
+      break;
+    }
+
+    const isWordStart =
+      depth === baseDepth &&
+      IDENTIFIER_CHARACTER_PATTERN.test(char) &&
+      !IDENTIFIER_CHARACTER_PATTERN.test(statement[index - 1] ?? "");
+    if (!isWordStart) {
+      continue;
+    }
+
+    const word = (
+      IDENTIFIER_WORD_PATTERN.exec(statement.slice(index))?.[0] ?? ""
+    ).toUpperCase();
+
+    if (word === SET_KEYWORD) {
+      sawSet = true;
+      continue;
+    }
+    if (word === RETURNING_KEYWORD) {
+      break;
+    }
+    if (word === WHERE_KEYWORD && sawSet) {
+      return false;
     }
   }
 
-  return false;
+  return sawSet;
 };
 
-// The statement's true outer command is the first SQL keyword at parenthesis
-// depth 0. A leading `WITH` only introduces CTEs whose bodies live inside
-// parens, so the real command is the first depth-0 DML keyword after it; any
-// other leading keyword (INSERT/UPDATE/CREATE/ALTER/...) is itself the command.
-// Scanning at depth 0 keeps an inner clause keyword (`CREATE POLICY ... FOR
-// UPDATE`, `CREATE TRIGGER ... BEFORE UPDATE`, `WITH x AS (INSERT ...)`) from
-// being mistaken for the outer command. The text is already string/comment-
-// masked by parseStatements.
-const getTopLevelCommand = (statement: string): string | null => {
+// True when the statement executes an UPDATE that rewrites every row. Catches
+// top-level backfills, data-modifying CTEs (`WITH u AS (UPDATE ... RETURNING
+// ...) ...`), and DO/function bodies (parseStatements surfaces their inner
+// statements). `FOR`/`BEFORE`/`AFTER`/`OF`/`ON`/`DO UPDATE` clauses and `INSERT
+// ... ON CONFLICT DO UPDATE` upserts are not executable updates and are skipped.
+// The text is already string/comment-masked by parseStatements, so paren and
+// keyword scanning cannot be fooled by literals.
+const isUnboundedUpdate = (statement: string): boolean => {
   let depth = 0;
-  let afterCtePrefix = false;
+  let previousWord = "";
 
   for (let index = 0; index < statement.length; index++) {
     const char = statement[index] ?? "";
@@ -132,7 +178,6 @@ const getTopLevelCommand = (statement: string): string | null => {
     }
 
     const isWordStart =
-      depth === 0 &&
       IDENTIFIER_CHARACTER_PATTERN.test(char) &&
       !IDENTIFIER_CHARACTER_PATTERN.test(statement[index - 1] ?? "");
     if (!isWordStart) {
@@ -143,37 +188,18 @@ const getTopLevelCommand = (statement: string): string | null => {
       IDENTIFIER_WORD_PATTERN.exec(statement.slice(index))?.[0] ?? ""
     ).toUpperCase();
 
-    if (!afterCtePrefix) {
-      // The first depth-0 keyword is the command, unless it opens a CTE list.
-      if (word === CTE_PREFIX_KEYWORD) {
-        afterCtePrefix = true;
-        continue;
-      }
-      return word;
+    if (
+      word === UPDATE_KEYWORD &&
+      !UPDATE_CLAUSE_PREFIXES.has(previousWord) &&
+      isUnboundedUpdateAt(statement, index, depth)
+    ) {
+      return true;
     }
 
-    // Past `WITH`: the command is the first DML keyword after the CTE list.
-    if (TOP_LEVEL_COMMAND_PATTERN.test(word)) {
-      return word;
-    }
+    previousWord = word;
   }
 
-  return null;
-};
-
-const isUnboundedUpdate = (statement: string): boolean => {
-  // Only a statement whose top-level command is UPDATE can be a full-table
-  // backfill. INSERT ... ON CONFLICT DO UPDATE (an upsert) and data-modifying
-  // CTEs wrapping an inner upsert have a non-UPDATE outer command, so they are
-  // not unbounded even though they contain UPDATE/SET and no top-level WHERE.
-  if (getTopLevelCommand(statement) !== "UPDATE") {
-    return false;
-  }
-
-  // A full-table UPDATE has no WHERE bounding the outer statement. A WHERE that
-  // lives only inside a SET subquery (the common "populate from related table"
-  // backfill) still rewrites every row, so require a top-level WHERE to clear.
-  return !hasTopLevelWhere(statement);
+  return false;
 };
 
 const GUARDED_RULES: GuardedRule[] = [
