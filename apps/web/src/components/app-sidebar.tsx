@@ -95,6 +95,12 @@ import { useUpdateWorkspace } from "@/routes/_protected.workspaces/-mutations";
 import { workspacesNavigationOptions } from "@/routes/_protected.workspaces/-queries";
 import { useCreateMatterStore } from "@/routes/_protected.workspaces/-store/create-matter-store";
 
+// Scrollable group body. Hide the scrollbar in the collapsed icon rail (matches
+// SidebarContent); a thin track over the narrow icon strip reads as a bright
+// artifact rather than chrome.
+const SCROLLABLE_GROUP_CONTENT =
+  "overflow-x-hidden overflow-y-auto group-data-[collapsible=icon]:[scrollbar-width:none] group-data-[collapsible=icon]:[&::-webkit-scrollbar]:hidden";
+
 export function AppSidebar(props: AppSidebarProps) {
   const t = useTranslations();
   const navigate = routeApi.useNavigate();
@@ -511,7 +517,7 @@ export function AppSidebar(props: AppSidebarProps) {
           {pinned.length > 0 && (
             <SidebarGroup className="min-h-0 flex-1">
               <SidebarGroupLabel>{t("navigation.pinned")}</SidebarGroupLabel>
-              <SidebarGroupContent className="overflow-x-hidden overflow-y-auto">
+              <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
                 <SidebarMenu>
                   {pinned.map((ws, i) => (
                     <MatterItem
@@ -538,7 +544,7 @@ export function AppSidebar(props: AppSidebarProps) {
           {recents.length > 0 && (
             <SidebarGroup className="min-h-0 flex-1">
               <SidebarGroupLabel>{t("navigation.recents")}</SidebarGroupLabel>
-              <SidebarGroupContent className="overflow-x-hidden overflow-y-auto">
+              <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
                 <SidebarMenu>
                   {recents.map((ws) => (
                     <MatterItem
@@ -648,7 +654,7 @@ const RecentChatsGroup = ({
   return (
     <SidebarGroup className="min-h-0 flex-1">
       <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
-      <SidebarGroupContent className="overflow-x-hidden overflow-y-auto">
+      <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
         <SidebarMenu>
           {threads.map((thread) => {
             const title = isPlaceholderThreadTitle(thread.title)
