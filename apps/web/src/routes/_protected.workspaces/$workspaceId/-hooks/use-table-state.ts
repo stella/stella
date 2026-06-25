@@ -133,7 +133,11 @@ export const useTableState = ({ workspaceId, view }: UseTableStateProps) => {
   const storeSetRowSelection = useTableStore((s) => s.setRowSelection);
 
   const onRowSelectionChange: OnChangeFn<RowSelectionState> = (updater) => {
-    storeSetRowSelection(viewId, updater);
+    // The table prunes selections for rows that drop out of the filtered data
+    // during render; writing to the (subscribed) store synchronously would
+    // update this component mid-render. Defer past the render so the prune
+    // lands as its own update — harmless for real clicks (already post-event).
+    queueMicrotask(() => storeSetRowSelection(viewId, updater));
   };
 
   return {
