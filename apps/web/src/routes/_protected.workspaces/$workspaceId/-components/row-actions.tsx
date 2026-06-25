@@ -64,7 +64,11 @@ import {
   CellMetadataMenuSection,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
-import type { CopyToMatterEntity } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
+import {
+  buildSelectionParentLookup,
+  resolveAncestorIds,
+  type CopyToMatterEntity,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
@@ -105,6 +109,10 @@ type RowActionsProps = {
   anchor?: VirtualAnchor | null | undefined;
   /** Extra entities included in bulk actions. */
   selectedEntities?: WorkspaceEntity[] | undefined;
+  /** Resolves an entity's full ancestor chain, spanning the ancestor folders a
+   *  filter/search hid. Supplied by the filesystem tree so cross-matter copy/
+   *  move dedupe stays correct across hidden intermediate folders. */
+  getAncestorIds?: ((entityId: string) => string[]) | undefined;
   cellMetadataTarget?:
     | { propertyId: string; metadata: WorkspaceCellMetadata | undefined }
     | null
@@ -123,6 +131,7 @@ export const RowActions = ({
   triggerTabIndex,
   anchor,
   selectedEntities,
+  getAncestorIds,
   cellMetadataTarget,
 }: RowActionsProps) => {
   const t = useTranslations();
@@ -153,7 +162,9 @@ export const RowActions = ({
   // Show "Edit in Desktop" when: DOCX + (not locked OR locked by me)
   const canOpenInDesktop = isDocx && !isLockedByOther;
   const openCopyToMatterDialog = () => {
-    setCopyToMatterEntities(toCopyToMatterEntities(bulkTargets));
+    setCopyToMatterEntities(
+      toCopyToMatterEntities(bulkTargets, getAncestorIds),
+    );
     setCopyToMatterOpen(true);
   };
   const handleCopyToMatterOpenChange = (nextOpen: boolean) => {
@@ -853,18 +864,25 @@ const CreateSubfolderMenuItem = ({
 
 const toCopyToMatterEntities = (
   targets: readonly (WorkspaceEntity | TableTreeNode)[],
-): CopyToMatterEntity[] => targets.map(toCopyToMatterEntity);
+  getAncestorIds?: (entityId: string) => string[],
+): CopyToMatterEntity[] => {
+  // Filesystem callers pass `getAncestorIds`, a resolver spanning the full
+  // entity set (including the ancestor folders a filter/search hid), so the
+  // chain stays unbroken across hidden intermediate folders. Other callers fall
+  // back to a lookup built from the selection's own parent/child links.
+  let resolve = getAncestorIds;
+  if (!resolve) {
+    const parentById = buildSelectionParentLookup(targets);
+    resolve = (entityId: string) => resolveAncestorIds(entityId, parentById);
+  }
 
-const toCopyToMatterEntity = (
-  entity: WorkspaceEntity | TableTreeNode,
-): CopyToMatterEntity => ({
-  children:
-    "children" in entity ? entity.children.map(toCopyToMatterEntity) : [],
-  entityId: entity.entityId,
-  entityName: getEntityName(entity),
-  kind: entity.kind,
-  parentId: entity.parentId,
-});
+  return targets.map((entity) => ({
+    entityId: entity.entityId,
+    entityName: getEntityName(entity),
+    kind: entity.kind,
+    ancestorIds: resolve(entity.entityId),
+  }));
+};
 
 type FileRef = { fieldId: string; fileName: string; mimeType: string | null };
 type Msg = { downloading: string; failed: string };

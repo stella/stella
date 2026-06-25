@@ -652,44 +652,47 @@ const RecentChatsGroup = ({
   }
 
   return (
-    <SidebarGroup className="min-h-0 flex-1">
-      <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
-      <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
-        <SidebarMenu>
-          {threads.map((thread) => {
-            const title = isPlaceholderThreadTitle(thread.title)
-              ? t("chat.newChat")
-              : thread.title;
-            return (
-              <SidebarMenuItem key={thread.id}>
-                <SidebarMenuButton asChild tooltip={title}>
-                  <Link
-                    activeProps={{ "data-active": true }}
-                    {...(thread.scope === "global"
-                      ? {
-                          to: "/chat/$threadId",
-                          params: { threadId: thread.id },
-                        }
-                      : {
-                          to: "/chat/workspaces/$workspaceId/$threadId",
-                          params: {
-                            threadId: thread.id,
-                            workspaceId: thread.workspaceId,
-                          },
-                        })}
-                  >
-                    <MessageSquareIcon />
-                    <BidiText as="span" className="truncate">
-                      {title}
-                    </BidiText>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+    <>
+      <SidebarSeparator />
+      <SidebarGroup className="min-h-0 flex-1">
+        <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
+        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
+          <SidebarMenu>
+            {threads.map((thread) => {
+              const title = isPlaceholderThreadTitle(thread.title)
+                ? t("chat.newChat")
+                : thread.title;
+              return (
+                <SidebarMenuItem key={thread.id}>
+                  <SidebarMenuButton asChild tooltip={title}>
+                    <Link
+                      activeProps={{ "data-active": true }}
+                      {...(thread.scope === "global"
+                        ? {
+                            to: "/chat/$threadId",
+                            params: { threadId: thread.id },
+                          }
+                        : {
+                            to: "/chat/workspaces/$workspaceId/$threadId",
+                            params: {
+                              threadId: thread.id,
+                              workspaceId: thread.workspaceId,
+                            },
+                          })}
+                    >
+                      <MessageSquareIcon />
+                      <BidiText as="span" className="truncate">
+                        {title}
+                      </BidiText>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    </>
   );
 };
 // Pinned workspaces are local UI state until backend user preferences or a
@@ -851,8 +854,14 @@ type DraggedEntityPayload = {
   entityId: string;
   name: string;
   kind: EntityKind;
-  parentId: string | null;
+  /** Ancestor entity IDs (immediate parent up to the root), resolved by the
+   *  drag source against the full tree so the chain crosses unselected
+   *  intermediate folders. Older drag payloads may omit it. */
+  ancestorIds?: string[];
 };
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
 
 const isDraggedEntityPayload = (
   value: unknown,
@@ -886,8 +895,7 @@ const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
       entityId: item.entityId,
       entityName: item.name,
       kind: item.kind,
-      parentId: typeof item.parentId === "string" ? item.parentId : null,
-      children: [],
+      ancestorIds: isStringArray(item.ancestorIds) ? item.ancestorIds : [],
     });
   }
   return result;

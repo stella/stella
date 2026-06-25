@@ -63,6 +63,7 @@ import type {
 } from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
 import { AddEntityMenu } from "@/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu";
+import { resolveAncestorIds } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import { EmptyState } from "@/routes/_protected.workspaces/$workspaceId/-components/empty-state";
@@ -381,6 +382,11 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }),
   );
   const data = entityData.entities;
+  // Parent links of ancestor folders the API backfills when a filter/search
+  // hides an intermediate folder. Used ONLY to complete the ancestor lookup
+  // below so cross-matter copy/move dedup works across hidden folders; never
+  // rendered or selectable, so they cannot become an action target.
+  const ancestorLinks = entityData.ancestorLinks;
 
   // Build a lookup for drag preview data from selected entities.
   const entityMap = useMemo(() => {
@@ -390,6 +396,21 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }
     return map;
   }, [data]);
+  // Spans matched rows plus backfilled ancestor links (not just the selection)
+  // so a dragged descendant's ancestor chain stays unbroken across intermediate
+  // folders hidden by a filter or never selected.
+  const parentById = useMemo(
+    () =>
+      new Map([
+        ...data.map((e) => [e.entityId, e.parentId] as const),
+        ...ancestorLinks.map((l) => [l.entityId, l.parentId] as const),
+      ]),
+    [data, ancestorLinks],
+  );
+  const getAncestorIds = useCallback(
+    (id: string) => resolveAncestorIds(id, parentById),
+    [parentById],
+  );
   const tree = useMemo(() => buildTree(data), [data]);
   const treeNodeMap = useMemo(() => {
     const map = new Map<string, TableTreeNode>();
@@ -885,6 +906,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     extraColumns={extraColumns}
                     getSelectedDragItems={getSelectedDragItems}
                     getSelectedEntities={getSelectedEntities}
+                    getAncestorIds={getAncestorIds}
                     gridTemplate={gridTemplate}
                     node={row.node}
                     onNavigateToFolder={(folderId) => {
@@ -1102,6 +1124,7 @@ type FilesystemRowProps = {
   onSubfolderCreated: (entityId: string, parentId: string) => void;
   getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
   getSelectedEntities: (ids: Set<string>) => WorkspaceEntity[];
+  getAncestorIds: (id: string) => string[];
 };
 
 const FilesystemRow = ({
@@ -1124,6 +1147,7 @@ const FilesystemRow = ({
   onSubfolderCreated,
   getSelectedDragItems,
   getSelectedEntities,
+  getAncestorIds,
 }: FilesystemRowProps) => {
   const t = useTranslations();
   // RowActions can open via two paths: a trigger-button click (anchors
@@ -1216,6 +1240,9 @@ const FilesystemRow = ({
   const getCurrentSelectedEntities = useEffectEvent((ids: Set<string>) =>
     getSelectedEntities(ids),
   );
+  const getCurrentAncestorIds = useEffectEvent((id: string) =>
+    getAncestorIds(id),
+  );
   const toggleCurrentFolder = useEffectEvent(() => {
     onToggleFolder(node.entityId);
   });
@@ -1272,6 +1299,7 @@ const FilesystemRow = ({
                 kind: e.kind,
                 mimeType: getFirstFile(e)?.mimeType ?? null,
                 parentId: e.parentId ?? null,
+                ancestorIds: getCurrentAncestorIds(e.entityId),
               }))
             : [
                 {
@@ -1280,6 +1308,7 @@ const FilesystemRow = ({
                   kind: node.kind,
                   mimeType: file?.mimeType ?? null,
                   parentId: node.parentId ?? null,
+                  ancestorIds: getCurrentAncestorIds(node.entityId),
                 },
               ];
           return {
@@ -1521,6 +1550,7 @@ const FilesystemRow = ({
       <RowActions
         anchor={contextAnchor}
         entity={node}
+        getAncestorIds={getAncestorIds}
         onOpen={openInInspector}
         onOpenChange={(o) => {
           if (!o) {
