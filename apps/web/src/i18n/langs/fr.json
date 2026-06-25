@@ -1919,6 +1919,7 @@
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Invitations en attente",
       "practiceJurisdictions": "Juridictions de pratique",
+      "practiceJurisdictionsDescription": "Sélectionnez les juridictions qui vous concernent.",
       "profile": "Profil",
       "promptCaching": {
         "description": "Lorsqu'activé, stella ajoute des marqueurs de cache afin que les requêtes IA répétées sur le même document ou fil de discussion coûtent ~10× moins et s'achèvent plus vite. Les prompts mis en cache restent chez le fournisseur d'IA jusqu'à 5 minutes, limités à votre organisation. La désactivation empêche stella d'envoyer des marqueurs de cache, mais les fournisseurs peuvent toujours mettre en cache de manière opportuniste — seul un contrat Zero Data Retention avec le fournisseur désactive entièrement la mise en cache côté serveur.",

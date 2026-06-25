@@ -42,6 +42,13 @@ export const JurisdictionPicker = ({
   const filteredCountries = (() => {
     const normalizedQuery = query.trim().toLowerCase();
     const sorted = [...countryOptions].sort((a, b) => {
+      const aSelected = selectedSet.has(a.code);
+      const bSelected = selectedSet.has(b.code);
+
+      if (aSelected !== bSelected) {
+        return aSelected ? -1 : 1;
+      }
+
       const aSuggested = suggestedSet.has(a.code);
       const bSuggested = suggestedSet.has(b.code);
 

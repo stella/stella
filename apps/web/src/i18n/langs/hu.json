@@ -1919,6 +1919,7 @@
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Praxis joghatóságai",
+      "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
       "profile": "Profil",
       "promptCaching": {
         "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt MI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az MI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak — csak az MI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",

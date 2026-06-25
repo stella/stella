@@ -1919,6 +1919,7 @@
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Praktikos jurisdikcijos",
+      "practiceJurisdictionsDescription": "Pasirinkite jums aktualias jurisdikcijas.",
       "profile": "Profilis",
       "promptCaching": {
         "description": "Įjungus stella prideda talpyklos žymes, kad pakartotinės AI užklausos dėl to paties dokumento ar gijos kainuotų ~10× pigiau ir baigtųsi greičiau. Talpyklavime saugomos užklausos lieka pas AI tiekėją iki 5 minučių ir yra ribotos jūsų organizacijai. Išjungus stella nustoja siųsti talpyklos žymes, tačiau tiekėjai vis tiek gali talpyklavti oportunistiškai — tik Zero Data Retention sutartis su tiekėju visiškai išjungia talpyklavimą serverio pusėje.",
