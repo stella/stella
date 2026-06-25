@@ -1,0 +1,93 @@
+---
+import { sourcesForLocale } from "../data/locale-sources";
+
+// Renders the official sources stella connects for a locale as wrapping chips.
+// Count-aware: reads naturally and lays out cleanly whether there is 1 source
+// or 20. Renders nothing when a locale has no local sources yet.
+type Props = { locale: string; country: string };
+const { locale, country } = Astro.props;
+
+const sources = sourcesForLocale(locale);
+const count = sources.length;
+---
+
+{
+  count > 0 && (
+    <div class="connected-sources">
+      <p class="cs-count">
+        <span style="color: var(--foreground)">{count}</span>{" "}
+        official {count === 1 ? "source" : "sources"} connected for {country}
+      </p>
+      <ul class="cs-chips">
+        {sources.map((source) => (
+          <li>
+            {source.homepage ? (
+              <a
+                class="cs-chip"
+                href={source.homepage}
+                title={source.description}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <span class="cs-dot" aria-hidden="true" />
+                {source.displayName}
+              </a>
+            ) : (
+              <span class="cs-chip" title={source.description}>
+                <span class="cs-dot" aria-hidden="true" />
+                {source.displayName}
+              </span>
+            )}
+          </li>
+        ))}
+      </ul>
+    </div>
+  )
+}
+
+<style>
+  .cs-count {
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+  }
+  .cs-count span {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+
+  .cs-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+    margin-top: 0.75rem;
+  }
+
+  .cs-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    height: 2rem;
+    padding: 0 0.75rem;
+    border-radius: 9999px;
+    border: 1px solid var(--border);
+    background: color-mix(in srgb, var(--card) 70%, transparent);
+    color: var(--foreground);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    text-decoration: none;
+    transition:
+      border-color 150ms,
+      transform 150ms;
+  }
+  a.cs-chip:hover {
+    border-color: color-mix(in srgb, var(--primary) 45%, var(--border));
+    transform: translateY(-1px);
+  }
+  .cs-dot {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-radius: 9999px;
+    background: var(--primary);
+    flex: 0 0 auto;
+  }
+</style>

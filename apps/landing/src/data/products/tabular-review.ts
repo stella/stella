@@ -107,14 +107,14 @@ export const tabularReview: Product = {
       body: "Chat across matters, files, and connected sources with approvals and source previews.",
     },
     {
-      title: "Case law",
-      href: "/product/case-law",
-      body: "Read and search official case law and public legal sources.",
+      title: "Public data",
+      href: "/product/public-data",
+      body: "Official case law and company registries, pulled into a matter.",
     },
     {
-      title: "Company registries",
-      href: "/product/registries",
-      body: "Pull company and commercial-registry data straight into a matter.",
+      title: "Anonymization",
+      href: "/product/anonymization",
+      body: "Prepare sensitive material for AI without exposing identifying details.",
     },
     {
       title: "AI fact sheet",

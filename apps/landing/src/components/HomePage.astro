@@ -1,0 +1,1024 @@
+---
+import Base from "../layouts/Base.astro";
+import ThemeToggle from "./ThemeToggle.astro";
+import GitHubIcon from "./GitHubIcon.astro";
+import MainNav from "./MainNav.astro";
+import LanguageSwitcher from "./LanguageSwitcher.astro";
+import ProductShowcase from "./react/ProductShowcase";
+import AskAiBar from "./AskAiBar.astro";
+import {
+  controlCapabilities,
+  dataStackCapabilities,
+} from "../data/capabilities";
+import { getChangelogReleases } from "../lib/changelog";
+import { getTranslations } from "../i18n/utils";
+import { defaultLocale, isLocale } from "../i18n/config";
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
+
+const latestRelease = getChangelogReleases().at(0);
+
+const appUrl = "https://my.stll.app";
+const discordUrl = "https://discord.gg/8dZjmVFjTK";
+const githubUrl = "https://github.com/stella/stella";
+const selfHostingDocsUrl =
+  "https://github.com/stella/stella/blob/main/docs/self-hosting.md";
+---
+
+<Base>
+  {/* Brand accent line */}
+  <div
+    class="h-0.5"
+    style="background: linear-gradient(to right, var(--auth-gradient-end), transparent 70%)"
+    data-no-transition
+  >
+  </div>
+
+  <header
+    id="site-header"
+    class="fixed inset-x-0 top-0 z-50 border-b border-transparent transition-[background-color,backdrop-filter,border-color] duration-300"
+  >
+    <nav
+      class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-4"
+    >
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-3">
+          <img
+            src="/images/stella-logo.svg"
+            alt="stella"
+            class="h-6 dark:invert"
+          />
+        <span
+          class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase"
+        >
+          Beta
+        </span>
+        <span
+          class="h-4 w-px"
+          style="background: var(--border)"
+          aria-hidden="true"></span>
+        <a
+          href={githubUrl}
+          class="inline-flex transition-opacity hover:opacity-70"
+          style="color: var(--muted-foreground)"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="stella on GitHub"
+        >
+          <GitHubIcon class="h-5 w-5" />
+        </a>
+        </div>
+        <MainNav />
+      </div>
+      <div class="flex items-center gap-3">
+        <LanguageSwitcher />
+        <a
+          href={appUrl}
+          class="header-cta inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium whitespace-nowrap"
+          style="background: var(--primary); color: var(--primary-foreground)"
+        >
+          {t("nav.startFree")}
+        </a>
+      </div>
+    </nav>
+  </header>
+
+  <main>
+    {/* ——— Hero ——— */}
+    <section class="relative flex min-h-dvh flex-col overflow-hidden pt-20">
+      <div class="absolute inset-0 overflow-hidden" id="gradient-bg">
+        <div
+          id="gradient-light"
+          class="absolute inset-0 dark:opacity-0 transition-opacity duration-500"
+        >
+        </div>
+        <div
+          id="gradient-dark"
+          class="absolute inset-0 opacity-0 dark:opacity-100 transition-opacity duration-500"
+        >
+        </div>
+      </div>
+
+      <div
+        class="relative z-10 flex flex-1 flex-col items-center justify-center px-6 pb-16"
+      >
+        <a
+          href="/changelog"
+          data-reveal
+          style="--reveal-delay: 120ms; background: color-mix(in srgb, var(--card) 88%, transparent); border: 1px solid var(--border)"
+          class="group mb-8 inline-flex max-w-[calc(100%-3rem)] items-center gap-2.5 rounded-full px-4 py-2 text-sm font-medium shadow-sm transition-transform hover:-translate-y-0.5"
+        >
+          <span
+            class="hero-beta-dot h-2 w-2 shrink-0 rounded-full"
+            style="background: var(--success)"
+            aria-hidden="true"></span>
+          <span
+            class="hidden shrink-0 whitespace-nowrap sm:inline"
+            style="color: var(--foreground)">{t("hero.badge")}</span
+          >
+          <span
+            class="inline-flex min-w-0 items-center gap-1.5 sm:border-l sm:pl-2.5"
+            style="border-color: var(--border); color: var(--muted-foreground)"
+          >
+            {
+              latestRelease && (
+                <span
+                  class="shrink-0 font-medium"
+                  style="color: var(--foreground)"
+                >
+                  {latestRelease.tagName}
+                </span>
+              )
+            }
+            <span class="min-w-0 truncate">
+              {
+                latestRelease
+                  ? (latestRelease.heading ?? latestRelease.displayName)
+                  : "Changelog"
+              }
+            </span>
+            <span
+              aria-hidden="true"
+              class="shrink-0 transition-transform group-hover:translate-x-0.5"
+              >→</span
+            >
+          </span>
+        </a>
+        <h1
+          data-reveal
+          style="--reveal-delay: 240ms"
+          class="max-w-3xl text-center font-display text-5xl font-medium leading-[1.08] sm:text-6xl lg:text-7xl"
+        >
+          {t("hero.titleLine1")}<br /><a
+            href={githubUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            class="os-link"
+            title="View source on GitHub">{t("hero.titleLine2")}</a>
+        </h1>
+        <p
+          data-reveal
+          style="--reveal-delay: 360ms; color: var(--muted-foreground)"
+          class="mt-6 max-w-lg text-center text-lg leading-[1.7]"
+        >
+          {t("hero.subtitle")}
+          <br />
+          {t("hero.subtitle2")}
+        </p>
+        <div
+          data-reveal
+          style="--reveal-delay: 480ms"
+          class="mt-10 flex flex-col items-center gap-3 sm:flex-row"
+        >
+          <a
+            id="hero-cta"
+            href={appUrl}
+            style="background: var(--primary); color: var(--primary-foreground)"
+            class="group inline-flex h-11 items-center gap-2 rounded-[0.85rem] px-6 text-sm font-medium shadow-sm transition-[opacity,transform] hover:-translate-y-0.5 hover:opacity-90 whitespace-nowrap"
+          >
+            {t("hero.startFree")}
+            <span
+              aria-hidden="true"
+              class="transition-transform group-hover:translate-x-0.5">→</span
+            >
+          </a>
+          <a
+            href={selfHostingDocsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            style="background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+            class="inline-flex h-11 items-center rounded-[0.85rem] px-6 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+          >
+            {t("hero.selfHost")}
+          </a>
+        </div>
+        <div data-reveal style="--reveal-delay: 600ms" class="mt-8">
+          <AskAiBar />
+        </div>
+      </div>
+
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-1/3"
+        style="background: linear-gradient(to bottom, transparent, var(--background))"
+      >
+      </div>
+    </section>
+
+    {/* ——— Product ——— */}
+    <section class="-mt-24 relative z-10 px-6 pb-16">
+      <div class="mx-auto max-w-300">
+        <ProductShowcase />
+      </div>
+    </section>
+
+    {/* ——— Legal data stack ——— */}
+    <section class="px-6 py-16 lg:py-20">
+      <div class="mx-auto max-w-300">
+        <div class="mx-auto max-w-4xl text-center">
+          <p
+            data-reveal
+            style="color: var(--muted-foreground)"
+            class="text-xs font-medium uppercase tracking-[0.2em]"
+          >
+            Legal data stack
+          </p>
+          <h2
+            data-reveal
+            style="--reveal-delay: 80ms"
+            class="mt-3 font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl"
+          >
+            Not just documents.
+            <br />
+            The data too.
+          </h2>
+          <p
+            data-reveal
+            style="--reveal-delay: 160ms; color: var(--muted-foreground)"
+            class="mx-auto mt-5 max-w-3xl text-base leading-[1.9] sm:text-lg"
+          >
+            Case law and company registries, ingested and ready to pull into a
+            matter or hand to the agent.
+          </p>
+        </div>
+
+        <div class="mx-auto mt-10 grid max-w-4xl gap-4 sm:grid-cols-2">
+          {
+            dataStackCapabilities.map((card, index) => (
+              <div
+                data-reveal
+                style={`--reveal-delay: ${240 + index * 80}ms; background: var(--card); border: 1px solid var(--border)`}
+                class="rounded-[1.45rem] p-6"
+              >
+                <h3 class="font-display text-lg font-medium tracking-tight">
+                  {card.title}
+                </h3>
+                <p
+                  class="mt-2 text-sm leading-[1.8]"
+                  style="color: var(--muted-foreground)"
+                >
+                  {card.body}
+                </p>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    <section class="px-6 py-16 lg:py-20">
+      <div class="mx-auto max-w-300">
+        <div class="mx-auto max-w-4xl text-center">
+          <p
+            data-reveal
+            style="color: var(--muted-foreground)"
+            class="text-xs font-medium uppercase tracking-[0.2em]"
+          >
+            Built to last
+          </p>
+          <h2
+            data-reveal
+            style="--reveal-delay: 80ms"
+            class="mt-3 font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl"
+          >
+            Ready for you.
+            <br />
+            And your agents.
+            <br />
+            And whatever comes next.
+          </h2>
+          <p
+            data-reveal
+            style="--reveal-delay: 160ms; color: var(--muted-foreground)"
+            class="mx-auto mt-5 max-w-3xl text-base leading-[1.9] sm:text-lg"
+          >
+            Documents, matters, and search are free in the beta preview. AI
+            features are available with your own provider key.
+          </p>
+        </div>
+
+        <div class="mt-10 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {
+            controlCapabilities.slice(0, 3).map((card, index) => (
+              <div
+                data-reveal
+                style={`--reveal-delay: ${240 + index * 80}ms; background: var(--card); border: 1px solid var(--border)`}
+                class="rounded-[1.45rem] p-6"
+              >
+                <h3 class="font-display text-lg font-medium tracking-tight">
+                  {card.title}
+                </h3>
+                <p
+                  class="mt-2 text-sm leading-[1.8]"
+                  style="color: var(--muted-foreground)"
+                >
+                  {card.body}
+                </p>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    {/* ——— Usage options ——— */}
+    <section class="px-6 py-16 lg:py-20">
+      <div class="mx-auto max-w-300">
+        <p
+          data-reveal
+          style="color: var(--muted-foreground)"
+          class="mb-3 text-center text-xs font-medium uppercase tracking-[0.2em]"
+        >
+          Usage options
+        </p>
+        <h2
+          data-reveal
+          style="--reveal-delay: 80ms"
+          class="mb-10 text-center font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl"
+        >
+          Choose how to run stella.
+        </h2>
+        <p
+          data-reveal
+          style="--reveal-delay: 160ms; color: var(--muted-foreground)"
+          class="mx-auto mb-10 max-w-2xl text-center text-base leading-[1.8] sm:text-lg"
+        >
+          No lock-in, no per-seat licensing, no hidden pricing.
+        </p>
+        <div class="mx-auto grid max-w-3xl grid-cols-1 gap-6 md:grid-cols-2">
+          {
+            [
+              {
+                name: "Self-host",
+                cta: "Read docs",
+                external: true,
+                href: selfHostingDocsUrl,
+                price: "Free",
+                note: "",
+                features: [
+                  "Run on your infrastructure",
+                  "Full source access",
+                  "Apache 2.0 license",
+                ],
+              },
+              {
+                name: "Cloud preview",
+                cta: "Try it out now",
+                href: appUrl,
+                note: "",
+                price: "Free",
+                features: [
+                  "Use hosted architecture",
+                  "Currently in beta preview",
+                  "BYOK only",
+                ],
+              },
+            ].map((tier, index) => (
+              <div
+                data-reveal
+                style={`--reveal-delay: ${240 + index * 80}ms; background: var(--card); border: 1px solid var(--border); color: inherit`}
+                class="pricing-card group flex flex-col rounded-2xl p-8 transition-[background-color,border-color,box-shadow,transform] duration-[500ms] ease-[cubic-bezier(0.22,1,0.36,1)]"
+              >
+                <p
+                  class="min-h-5 text-sm italic"
+                  style="color: var(--muted-foreground)"
+                >
+                  {tier.note ?? ""}
+                </p>
+                <p
+                  class="text-xs font-medium uppercase tracking-[0.15em]"
+                  style="color: var(--muted-foreground)"
+                >
+                  {tier.name}
+                </p>
+                <p class="tabular-nums mt-2 font-display text-3xl font-medium">
+                  {tier.price}
+                </p>
+                <div class="my-6 h-px" style="background: var(--border)" />
+                <div
+                  class="flex-1 space-y-1.5 text-sm leading-[1.7]"
+                  style="color: var(--muted-foreground)"
+                >
+                  {tier.features.map((f) => (
+                    <p set:html={f} />
+                  ))}
+                </div>
+                <a
+                  href={tier.href}
+                  class="mt-8 inline-flex h-9 items-center self-start rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+                  rel={tier.external ? "noopener noreferrer" : undefined}
+                  style="background: var(--primary); color: var(--primary-foreground)"
+                  target={tier.external ? "_blank" : undefined}
+                >
+                  {tier.cta}
+                </a>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
+    {/*
+      Removing the design scaffold until everything for the beta preview.
+
+    <section class="px-6 py-16 lg:py-20">
+      <div class="mx-auto max-w-300">
+        <div class="grid grid-cols-1 gap-10 text-center md:grid-cols-3 md:gap-8">
+          {[
+            { label: "Deployment", title: "Self-host or managed cloud", body: "Choose the operating model that fits your firm. Move data on your timetable, not ours.", href: "mailto:contact@stll.app?subject=stella%20deployment", linkText: "Talk deployment \u2192" },
+            { label: "Security", title: "Confidential by design", body: "Least privilege, workspace isolation, and encryption for privileged work.", href: "/security", linkText: "Security \u2192" },
+            { label: "Scale", title: "Grows with you", body: "From solo practitioners to multinational teams.", href: "mailto:contact@stll.app?subject=stella%20scale", linkText: "Talk scale \u2192" },
+          ].map((item) => (
+            <div class="flex flex-col">
+              <p class="mb-1 text-xs font-medium uppercase tracking-[0.2em]" style="color: var(--muted-foreground)">{item.label}</p>
+              <p class="font-display text-lg font-medium">{item.title}</p>
+              <p class="mt-1 flex-1 text-sm leading-[1.7]" style="color: var(--muted-foreground)" set:html={item.body} />
+              <a
+                href={item.href}
+                class="mt-2 inline-block text-sm font-medium transition-opacity hover:opacity-70"
+                style="color: var(--muted-foreground)"
+              >
+                {item.linkText}
+              </a>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+    */}
+
+    {/* ——— Final CTA ——— */}
+    <section class="px-6 pb-20 lg:pb-24">
+      <div
+        class="relative mx-auto max-w-300 overflow-hidden rounded-[2rem] p-8 sm:p-10 lg:p-12"
+        style="background: var(--card); border: 1px solid var(--border)"
+      >
+        <div
+          class="pointer-events-none absolute inset-0 bg-cover bg-center opacity-100 dark:opacity-28"
+          style="background-image: url('/images/gradient-hero.png')"
+          aria-hidden="true"
+        >
+        </div>
+        <div
+          class="pointer-events-none absolute inset-0 dark:hidden"
+          style="background:
+            linear-gradient(180deg, rgba(255,255,255,0.2), rgba(255,255,255,0.34))"
+          aria-hidden="true"
+        >
+        </div>
+        <div
+          class="pointer-events-none absolute inset-0 hidden dark:block"
+          style="background:
+            linear-gradient(180deg, color-mix(in srgb, var(--card) 74%, transparent), color-mix(in srgb, var(--card) 88%, transparent));
+            backdrop-filter: blur(2px)"
+          aria-hidden="true"
+        >
+        </div>
+
+        <div class="relative z-10">
+          <div class="max-w-3xl">
+            <h2
+              data-reveal
+              class="font-display text-3xl font-medium leading-tight sm:text-4xl"
+            >
+              Start with a single click.
+              <br />
+              Need help? Join the community.
+            </h2>
+          </div>
+
+          <div class="mt-8 flex flex-col gap-3 sm:flex-row">
+            <a
+              href={appUrl}
+              data-reveal
+              style="--reveal-delay: 120ms; background: var(--primary); color: var(--primary-foreground)"
+              class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+            >
+              Start free
+            </a>
+            <a
+              href={discordUrl}
+              data-reveal
+              style="--reveal-delay: 200ms; background: var(--background); border: 1px solid var(--border); color: var(--foreground)"
+              class="inline-flex h-11 items-center justify-center rounded-[0.85rem] px-5 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Join our community
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  {/* ——— Footer ——— */}
+  <footer
+    class="relative overflow-hidden px-6 py-12"
+    style="border-top: 1px solid var(--border)"
+  >
+    <div class="mx-auto max-w-300">
+      <div class="flex flex-col items-center justify-between gap-6 sm:flex-row">
+        <nav
+          class="flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm sm:justify-start"
+          style="color: var(--muted-foreground)"
+          aria-label="Footer"
+        >
+          <a
+            href={githubUrl}
+            class="transition-opacity hover:opacity-70"
+            target="_blank"
+            rel="noopener noreferrer">GitHub</a
+          >
+          <a
+            href={discordUrl}
+            class="transition-opacity hover:opacity-70"
+            target="_blank"
+            rel="noopener noreferrer">Discord</a
+          >
+          <a href="/security" class="transition-opacity hover:opacity-70"
+            >Security</a
+          >
+          <a href="/press" class="transition-opacity hover:opacity-70">Press</a>
+          <a href="/blog" class="transition-opacity hover:opacity-70">Blog</a>
+          <a href="/changelog" class="transition-opacity hover:opacity-70"
+            >Changelog</a
+          >
+          <a
+            href="mailto:contact@stll.app"
+            class="transition-opacity hover:opacity-70">Contact</a
+          >
+        </nav>
+        <div class="flex items-center gap-4" aria-label="Social">
+          <ThemeToggle />
+          <a
+            href={githubUrl}
+            class="transition-opacity hover:opacity-70"
+            style="color: var(--muted-foreground)"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="GitHub"
+          >
+            <GitHubIcon class="h-4 w-4" />
+          </a>
+          <a
+            href={discordUrl}
+            class="transition-opacity hover:opacity-70"
+            style="color: var(--muted-foreground)"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="Discord"
+          >
+            <svg
+              class="h-4"
+              fill="currentColor"
+              viewBox="0 0 126.644 96"
+              aria-hidden="true"
+              ><path
+                xmlns="http://www.w3.org/2000/svg"
+                id="Discord-Symbol-White"
+                d="M81.15,0c-1.2376,2.1973-2.3489,4.4704-3.3591,6.794-9.5975-1.4396-19.3718-1.4396-28.9945,0-.985-2.3236-2.1216-4.5967-3.3591-6.794-9.0166,1.5407-17.8059,4.2431-26.1405,8.0568C2.779,32.5304-1.6914,56.3725.5312,79.8863c9.6732,7.1476,20.5083,12.603,32.0505,16.0884,2.6014-3.4854,4.8998-7.1981,6.8698-11.0623-3.738-1.3891-7.3497-3.1318-10.8098-5.1523.9092-.6567,1.7932-1.3386,2.6519-1.9953,20.281,9.547,43.7696,9.547,64.0758,0,.8587.7072,1.7427,1.3891,2.6519,1.9953-3.4601,2.0457-7.0718,3.7632-10.835,5.1776,1.97,3.8642,4.2683,7.5769,6.8698,11.0623,11.5419-3.4854,22.3769-8.9156,32.0509-16.0631,2.626-27.2771-4.496-50.9172-18.817-71.8548C98.9811,4.2684,90.1918,1.5659,81.1752.0505l-.0252-.0505ZM42.2802,65.4144c-6.2383,0-11.4159-5.6575-11.4159-12.6535s4.9755-12.6788,11.3907-12.6788,11.5169,5.708,11.4159,12.6788c-.101,6.9708-5.026,12.6535-11.3907,12.6535ZM84.3576,65.4144c-6.2637,0-11.3907-5.6575-11.3907-12.6535s4.9755-12.6788,11.3907-12.6788,11.4917,5.708,11.3906,12.6788c-.101,6.9708-5.026,12.6535-11.3906,12.6535Z"
+              ></path></svg
+            >
+          </a>
+          <a
+            href="https://x.com/stll_app"
+            class="transition-opacity hover:opacity-70"
+            style="color: var(--muted-foreground)"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="X"
+          >
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+              ><path
+                d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"
+              ></path></svg
+            >
+          </a>
+          <a
+            href="https://www.linkedin.com/company/stella-app"
+            class="transition-opacity hover:opacity-70"
+            style="color: var(--muted-foreground)"
+            target="_blank"
+            rel="noopener noreferrer"
+            aria-label="LinkedIn"
+          >
+            <svg class="h-4 w-4" fill="currentColor" viewBox="0 0 24 24"
+              ><path
+                d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"
+              ></path></svg
+            >
+          </a>
+        </div>
+      </div>
+      <nav
+        class="mt-6 flex flex-wrap items-center justify-center gap-x-4 gap-y-2 text-sm sm:justify-start"
+        style="color: var(--muted-foreground)"
+        aria-label="Footer secondary"
+      >
+        <a
+          href="https://status.stll.app"
+          class="transition-opacity hover:opacity-70"
+          target="_blank"
+          rel="noopener noreferrer">Status</a
+        >
+        <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
+        <a href="/ai-info" class="transition-opacity hover:opacity-70"
+          >AI fact sheet</a
+        >
+        <a href="/imprint" class="transition-opacity hover:opacity-70"
+          >stella labs, s.r.o.</a
+        >
+      </nav>
+    </div>
+    <div
+      class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+      style="background: linear-gradient(to bottom, transparent, color-mix(in srgb, var(--auth-gradient-end) 42%, transparent))"
+    >
+    </div>
+  </footer>
+
+  <style>
+    #site-header.is-scrolled {
+      background: color-mix(in srgb, var(--background) 80%, transparent);
+      -webkit-backdrop-filter: blur(14px);
+      backdrop-filter: blur(14px);
+      border-bottom-color: var(--border);
+    }
+
+    .header-cta {
+      opacity: 0;
+      visibility: hidden;
+      transform: translateY(-4px);
+      pointer-events: none;
+      transition:
+        opacity 220ms var(--ease-out-quint),
+        transform 220ms var(--ease-out-quint),
+        visibility 0s linear 220ms;
+    }
+
+    #site-header.show-cta .header-cta {
+      opacity: 1;
+      visibility: visible;
+      transform: translateY(0);
+      pointer-events: auto;
+      transition:
+        opacity 220ms var(--ease-out-quint),
+        transform 220ms var(--ease-out-quint),
+        visibility 0s;
+    }
+
+    #site-header.show-cta .header-cta:hover {
+      opacity: 0.9;
+    }
+
+    .os-link {
+      text-decoration: none;
+      text-underline-offset: 0.14em;
+      text-decoration-thickness: 0.05em;
+      transition: text-decoration-color 200ms;
+    }
+
+    .os-link:hover {
+      text-decoration: underline;
+      text-decoration-color: color-mix(in srgb, var(--foreground) 45%, transparent);
+    }
+
+    .hero-beta-dot {
+      animation: hero-beta-pulse 4s var(--ease-out-quint) infinite;
+    }
+
+    @keyframes hero-beta-pulse {
+      0%, 100% {
+        box-shadow: 0 0 0 0 color-mix(in srgb, var(--success) 22%, transparent);
+      }
+      60% {
+        box-shadow: 0 0 0 6px color-mix(in srgb, var(--success) 0%, transparent);
+      }
+    }
+
+    .pricing-card {
+      cursor: default;
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      .pricing-card:hover {
+        border-color: color-mix(in srgb, var(--auth-gradient-end) 50%, var(--border) 50%);
+        box-shadow: 0 18px 38px -30px rgba(0, 0, 0, 0.22);
+        transform: translateY(-1px);
+      }
+    }
+  </style>
+
+  <script is:inline>
+    (function () {
+      var header = document.getElementById("site-header");
+      if (!header) return;
+      var heroCta = document.getElementById("hero-cta");
+      var ticking = false;
+      function update() {
+        ticking = false;
+        header.classList.toggle("is-scrolled", window.scrollY > 8);
+        // Reveal the header CTA only once the hero's own CTA has scrolled up
+        // behind the fixed bar, so the two "Start free" buttons never overlap.
+        var revealCta = heroCta
+          ? heroCta.getBoundingClientRect().bottom <= header.offsetHeight
+          : window.scrollY > 8;
+        header.classList.toggle("show-cta", revealCta);
+      }
+      // Coalesce scroll/resize into one layout read per frame (avoids
+      // forced synchronous layout from getBoundingClientRect on every tick).
+      function onScroll() {
+        if (ticking) return;
+        ticking = true;
+        requestAnimationFrame(update);
+      }
+      update();
+      window.addEventListener("scroll", onScroll, { passive: true });
+      window.addEventListener("resize", onScroll, { passive: true });
+    })();
+  </script>
+
+  {/*
+    Web Animations API drives the illustration motion directly.
+    CSS @keyframes get frozen by Chrome when prefers-reduced-motion
+    is set; WAAPI does not, matching how Framer Motion behaves.
+    Negative `delay` starts the animation already in progress so the
+    staggered loops form a continuous cycle.
+  */}
+  <script is:inline>
+    (function () {
+      // Unified master breath shared by all three tiles. Same cycle length
+      // and same 3-phase rhythm (reveal → hold → fade) so they don't drift
+      // in and out of phase side-by-side.
+      var CYCLE      = 9000;
+      var REVEAL_END = 0.60;  // build-up done at 60%
+      var HOLD_END   = 0.85;  // start fading at 85%
+
+      function playReview(svg) {
+        var travelPx = 140;
+
+        var scan = svg.querySelector(".scan");
+        if (scan) {
+          scan.animate(
+            [
+              { transform: "translateY(0px)",                opacity: 0, offset: 0 },
+              { transform: "translateY(0px)",                opacity: 1, offset: 0.015 },
+              { transform: "translateY(" + travelPx + "px)", opacity: 1, offset: REVEAL_END },
+              { transform: "translateY(" + travelPx + "px)", opacity: 0, offset: REVEAL_END + 0.04 },
+              { transform: "translateY(" + travelPx + "px)", opacity: 0, offset: 1 },
+            ],
+            { duration: CYCLE, iterations: Infinity, easing: "linear" }
+          );
+        }
+
+        var lines = svg.querySelectorAll(".line");
+        var count = lines.length;
+        lines.forEach(function (line, i) {
+          var activate = (count > 1 ? i / (count - 1) : 0) * REVEAL_END;
+          var before   = Math.max(0,    activate - 0.012);
+          var after    = Math.min(0.99, activate + 0.012);
+          line.animate(
+            [
+              { strokeOpacity: 0.32, offset: 0 },
+              { strokeOpacity: 0.32, offset: before },
+              { strokeOpacity: 1,    offset: after },
+              { strokeOpacity: 1,    offset: HOLD_END },
+              { strokeOpacity: 0.32, offset: 1 },
+            ],
+            { duration: CYCLE, iterations: Infinity, easing: "linear" }
+          );
+        });
+      }
+
+      function playDraft(svg) {
+        var words = Array.prototype.slice.call(svg.querySelectorAll(".word"));
+        if (!words.length) return;
+        var total = words.length;
+        // Number of trailing words that participate in the delete/rewrite
+        // cycle. The rest stay visible the whole loop.
+        var editCount = Math.min(7, Math.max(3, Math.round(total * 0.32)));
+
+        // Loop phases (offsets in 0-1). At t=0 and t=1 all words are
+        // visible so the cycle seams invisibly.
+        var HOLD_FULL_END = 0.16;  // settled paragraph
+        var DELETE_END    = 0.34;  // backspace pass through last N words
+        var HOLD_PART_END = 0.46;  // brief "thinking" pause
+        // 0.46 → 1.0: slow rewrite of the deleted tail (~600ms per word)
+
+        // Clear any leftover animations from a prior IO activation and
+        // reset inline styles.
+        words.forEach(function (el) {
+          el.getAnimations().forEach(function (a) { a.cancel(); });
+          el.style.opacity = "0.9";
+          el.style.stroke = "";
+          el.style.filter = "";
+        });
+
+        var GLOW = "drop-shadow(0 0 5px rgba(84, 156, 209, 0.55))";
+
+        function frame(now) {
+          var t = (now % CYCLE) / CYCLE;
+          var visible;
+          if (t < HOLD_FULL_END) {
+            visible = total;
+          } else if (t < DELETE_END) {
+            var p = (t - HOLD_FULL_END) / (DELETE_END - HOLD_FULL_END);
+            visible = total - p * editCount;
+          } else if (t < HOLD_PART_END) {
+            visible = total - editCount;
+          } else {
+            var p2 = (t - HOLD_PART_END) / (1 - HOLD_PART_END);
+            visible = (total - editCount) + p2 * editCount;
+          }
+          var intPart = Math.floor(visible);
+          var fracPart = visible - intPart;
+          // The cursor word is the one currently being written or erased
+          // (partial opacity, mid-edit). When fracPart is 0 or 1 we're in
+          // a steady state — no cursor.
+          var activeIdx = (fracPart > 0.01 && fracPart < 0.99 && intPart < total)
+            ? intPart
+            : -1;
+          for (var i = 0; i < total; i++) {
+            var op;
+            if (i < intPart)      op = 0.9;
+            else if (i === intPart) op = fracPart * 0.9;
+            else                  op = 0;
+            var el = words[i];
+            el.style.opacity = op.toFixed(3);
+            if (i === activeIdx) {
+              el.style.stroke = "#549CD1";
+              el.style.filter = GLOW;
+            } else if (el.style.stroke) {
+              el.style.stroke = "";
+              el.style.filter = "";
+            }
+          }
+          requestAnimationFrame(frame);
+        }
+        requestAnimationFrame(frame);
+      }
+
+      function playResearch(svg) {
+        var rays  = svg.querySelectorAll(".ray");
+        var count = rays.length;
+        // The blue is the loading cursor — only the currently-activating
+        // ray is blue. Once the cursor passes a ray it settles to white-
+        // bright (loaded) and stays that way through hold. Dim returns at
+        // the fade.
+        rays.forEach(function (el, i) {
+          var activate = (count > 1 ? i / (count - 1) : 0) * REVEAL_END;
+          var before   = Math.max(0,     activate - 0.012);
+          var blueIn   = Math.max(0.001, activate);
+          var blueOut  = Math.min(0.97,  activate + 0.04);   // hold blue ~360ms
+          var whiteAt  = Math.min(0.985, activate + 0.06);   // settle to white ~180ms later
+          var GLOW_ON  = "drop-shadow(0 0 7px rgba(84, 156, 209, 0.65))";
+          var GLOW_OFF = "drop-shadow(0 0 0px rgba(84, 156, 209, 0))";
+          el.animate(
+            [
+              { stroke: "currentcolor", strokeOpacity: 0.25, filter: GLOW_OFF, offset: 0 },
+              { stroke: "currentcolor", strokeOpacity: 0.25, filter: GLOW_OFF, offset: before },
+              { stroke: "#549CD1",      strokeOpacity: 0.95, filter: GLOW_ON,  offset: blueIn },
+              { stroke: "#549CD1",      strokeOpacity: 0.95, filter: GLOW_ON,  offset: blueOut },
+              { stroke: "currentcolor", strokeOpacity: 0.95, filter: GLOW_OFF, offset: whiteAt },
+              { stroke: "currentcolor", strokeOpacity: 0.95, filter: GLOW_OFF, offset: HOLD_END },
+              { stroke: "currentcolor", strokeOpacity: 0.25, filter: GLOW_OFF, offset: 1 },
+            ],
+            { duration: CYCLE, iterations: Infinity, easing: "linear" }
+          );
+        });
+      }
+
+      function activate(tile) {
+        tile.querySelectorAll(".review-line").forEach(playReview);
+        tile.querySelectorAll(".draft-line").forEach(playDraft);
+        tile.querySelectorAll(".research-burst").forEach(playResearch);
+      }
+
+      function setup() {
+        var tiles = document.querySelectorAll(".showcase-tile");
+        if (!tiles.length) return;
+        if (typeof IntersectionObserver === "undefined") {
+          tiles.forEach(activate);
+          return;
+        }
+        var io = new IntersectionObserver(function (entries) {
+          entries.forEach(function (entry) {
+            if (!entry.isIntersecting) return;
+            activate(entry.target);
+            io.unobserve(entry.target);
+          });
+        }, { rootMargin: "0px 0px -10% 0px", threshold: 0.1 });
+        tiles.forEach(function (t) { io.observe(t); });
+      }
+
+      if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", setup);
+      } else {
+        setup();
+      }
+    })();
+  </script>
+
+  <script>
+    async function initGradient(containerId: string, svgUrl: string) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      const container: HTMLElement = el;
+
+      const resp = await fetch(svgUrl);
+      const svg = await resp.text();
+      container.innerHTML = svg;
+
+      const svgEl = container.querySelector("svg");
+      if (svgEl) {
+        svgEl.style.width = "100%";
+        svgEl.style.height = "100%";
+      }
+
+      // Select the last <g> — in dark mode the SVG has two groups
+      // (glow layer + sharp layer); we animate only the sharp layer.
+      const groups = container.querySelectorAll<SVGGElement>("svg g");
+      const group = groups[groups.length - 1] ?? null;
+      const rects = group
+        ? [...group.querySelectorAll<SVGRectElement>("rect")]
+        : [];
+      const n = rects.length;
+      if (n === 0) return;
+
+      const bases = rects.map((r) => {
+        const gradId = r.getAttribute("fill")?.match(/#(\w+)/)?.[1];
+        if (!gradId) return 0.5;
+        const grad = container.querySelector(`#${gradId}`);
+        if (!grad) return 0.5;
+        let max = 0;
+        for (const stop of grad.querySelectorAll("stop")) {
+          max = Math.max(
+            max,
+            parseFloat(stop.getAttribute("stop-opacity") ?? "0"),
+          );
+        }
+        return max;
+      });
+
+      const startTime = performance.now();
+
+      function loop() {
+        if (!container.isConnected) return;
+        // Skip animation when this layer is hidden (opacity 0)
+        if (getComputedStyle(container).opacity === "0") {
+          requestAnimationFrame(loop);
+          return;
+        }
+
+        const t = (performance.now() - startTime) / 1000;
+
+        const peak1 =
+          0.3 + Math.sin(t * 0.04) * 0.25 + Math.sin(t * 0.067) * 0.1;
+        const peak2 =
+          0.7 + Math.sin(t * 0.053 + 2) * 0.2 + Math.cos(t * 0.037) * 0.15;
+        const w1 = 0.18 + Math.sin(t * 0.03) * 0.06;
+        const w2 = 0.15 + Math.cos(t * 0.045) * 0.05;
+        const hueShift = Math.sin(t * 0.06) * 6.5 - 1.5;
+
+        container.style.filter = `hue-rotate(${hueShift.toFixed(1)}deg)`;
+
+        for (let i = 0; i < n; i++) {
+          const r = rects[i];
+          const norm = i / n;
+          const base = bases[i];
+          const isOdd = i % 2 === 1;
+
+          const d1 = Math.abs(norm - peak1);
+          const d2 = Math.abs(norm - peak2);
+          const envelope = Math.max(
+            Math.exp(-(d1 * d1) / (2 * w1 * w1)),
+            Math.exp(-(d2 * d2) / (2 * w2 * w2)),
+          );
+          const breathe = Math.sin(t * 0.35 + i * 0.2) * 0.08;
+          const opacity = base + envelope * 0.45 + breathe;
+
+          const dir = isOdd ? 1 : -1;
+          const sway = Math.sin(t * 0.22 + i * 0.25) * dir * 6;
+          const ySway = Math.cos(t * 0.15 + i * 0.18) * dir * 3;
+          const scaleX = 1 + Math.sin(t * 0.2 + i * 0.3) * 0.06;
+
+          r.setAttribute(
+            "transform",
+            `translate(${sway.toFixed(1)}, ${ySway.toFixed(1)}) scale(${scaleX.toFixed(3)}, 1)`,
+          );
+          r.style.opacity = Math.min(1.2, Math.max(0.08, opacity)).toFixed(3);
+        }
+
+        requestAnimationFrame(loop);
+      }
+
+      requestAnimationFrame(loop);
+    }
+
+    initGradient("gradient-light", "/images/gradients/hero-light.svg");
+    initGradient("gradient-dark", "/images/gradients/hero-dark.svg");
+  </script>
+</Base>

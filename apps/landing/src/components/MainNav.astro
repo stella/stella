@@ -1,12 +1,19 @@
 ---
 import ProductMediaFrame from "./ProductMediaFrame.astro";
-import { products } from "../data/products/registry";
+import { pillars } from "../data/products/pillars";
+import { products, productBySlug } from "../data/products/registry";
+import { getTranslations } from "../i18n/utils";
+import { defaultLocale, isLocale } from "../i18n/config";
 
 // Shared primary nav (Product mega-menu + section links), used by both the
 // homepage header and SiteHeader so the menu stays in one place. Sourced from
 // the products registry. `current` marks the active entry.
 type Props = { current?: string };
 const { current } = Astro.props;
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
 ---
 
 <div class="hidden items-center gap-1 md:flex">
@@ -14,7 +21,7 @@ const { current } = Astro.props;
     <summary
       class={`nav-link flex cursor-pointer list-none items-center gap-1 ${current === "product" ? "is-current" : ""}`}
     >
-      Product
+      {t("nav.product")}
       <span class="nav-caret text-[0.6rem] transition-transform" aria-hidden="true">▾</span>
     </summary>
     <div
@@ -24,31 +31,37 @@ const { current } = Astro.props;
       <div class="flex">
         <ul class="w-2/5 shrink-0 border-r p-2" style="border-color: var(--border)">
           {
-            products.map((p, i) => (
-              <li>
-                <a
-                  href={`/product/${p.slug}`}
-                  class={`nav-mega-item ${i === 0 ? "is-hover" : ""}`}
-                  data-mega-trigger
-                  data-slug={p.slug}
-                >
-                  <span class="block text-sm font-medium" style="color: var(--foreground)">
-                    {p.eyebrow}
-                  </span>
-                  <span class="mt-0.5 block text-xs leading-[1.4]" style="color: var(--muted-foreground)">
-                    {p.summary.split(/(?<=\.)\s/)[0]}
-                  </span>
-                </a>
+            pillars.map((pillar, pi) => (
+              <li class="mb-1">
+                <span class="nav-mega-grouplabel">{pillar.label}</span>
+                <ul>
+                  {pillar.slugs.map((slug) => {
+                    const p = productBySlug.get(slug);
+                    if (!p) return null;
+                    const first = pi === 0 && slug === pillar.slugs[0];
+                    return (
+                      <li>
+                        <a
+                          href={`/product/${p.slug}`}
+                          class={`nav-mega-item ${first ? "is-hover" : ""}`}
+                          data-mega-trigger
+                          data-slug={p.slug}
+                        >
+                          <span class="block text-sm font-medium" style="color: var(--foreground)">
+                            {p.eyebrow}
+                          </span>
+                        </a>
+                      </li>
+                    );
+                  })}
+                </ul>
               </li>
             ))
           }
-          <li>
+          <li class="mt-1 border-t pt-1" style="border-color: var(--border)">
             <a href="/ai-info" class="nav-mega-item">
               <span class="block text-sm font-medium" style="color: var(--foreground)">
-                AI fact sheet
-              </span>
-              <span class="mt-0.5 block text-xs leading-[1.4]" style="color: var(--muted-foreground)">
-                stella in machine-readable form.
+                {t("nav.aiFactSheet")}
               </span>
             </a>
           </li>
@@ -76,13 +89,13 @@ const { current } = Astro.props;
 
   <a
     href="/security"
-    class={`nav-link ${current === "security" ? "is-current" : ""}`}>Security</a
+    class={`nav-link ${current === "security" ? "is-current" : ""}`}>{t("nav.security")}</a
   >
   <a
     href="/changelog"
-    class={`nav-link ${current === "changelog" ? "is-current" : ""}`}>Changelog</a
+    class={`nav-link ${current === "changelog" ? "is-current" : ""}`}>{t("nav.changelog")}</a
   >
-  <a href="/blog" class={`nav-link ${current === "blog" ? "is-current" : ""}`}>Blog</a>
+  <a href="/blog" class={`nav-link ${current === "blog" ? "is-current" : ""}`}>{t("nav.blog")}</a>
 </div>
 
 <style>
@@ -124,10 +137,20 @@ const { current } = Astro.props;
     pointer-events: auto;
   }
 
+  .nav-mega-grouplabel {
+    display: block;
+    padding: 0.35rem 0.7rem 0.15rem;
+    font-size: 0.625rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--muted-foreground);
+  }
+
   .nav-mega-item {
     display: block;
     border-radius: 0.6rem;
-    padding: 0.6rem 0.7rem;
+    padding: 0.45rem 0.7rem;
     text-decoration: none;
     transition: background-color 150ms;
   }

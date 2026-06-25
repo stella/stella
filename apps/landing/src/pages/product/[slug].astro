@@ -2,6 +2,7 @@
 import Base from "../../layouts/Base.astro";
 import SiteHeader from "../../components/SiteHeader.astro";
 import ProductMediaFrame from "../../components/ProductMediaFrame.astro";
+import ConnectedSources from "../../components/ConnectedSources.astro";
 import { products } from "../../data/products/registry";
 
 export function getStaticPaths() {
@@ -95,6 +96,34 @@ const faqJsonLd = {
           </div>
         </div>
       </section>
+
+      {
+        product.slug === "public-data" && (
+          <section class="px-6 py-10 lg:py-12">
+            <div class="mx-auto max-w-3xl">
+              <h2
+                class="mb-2 text-xs font-medium uppercase tracking-[0.2em]"
+                style="color: var(--muted-foreground)"
+              >
+                Connected sources by jurisdiction
+              </h2>
+              <p
+                class="mb-6 text-sm leading-[1.7]"
+                style="color: var(--muted-foreground)"
+              >
+                Official sources surface automatically for the jurisdictions you
+                work in, derived from the connector catalogue. Coverage grows as
+                adapters are added.
+              </p>
+              <div class="space-y-6">
+                <ConnectedSources locale="cs" country="Czechia" />
+                <ConnectedSources locale="es" country="Spain" />
+                <ConnectedSources locale="zh-TW" country="Taiwan" />
+              </div>
+            </div>
+          </section>
+        )
+      }
 
       {/* ——— Capabilities ——— */}
       <section class="px-6 py-10 lg:py-12">

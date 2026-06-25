@@ -1,0 +1,14 @@
+---
+import HomePage from "../../components/HomePage.astro";
+import { defaultLocale, localeCodes, locales } from "../../i18n/config";
+
+// Emit the homepage for every non-default locale at its path prefix
+// (/es/, /pt-br/). HomePage reads Astro.currentLocale for its translations.
+export function getStaticPaths() {
+  return localeCodes
+    .filter((code) => code !== defaultLocale)
+    .map((code) => ({ params: { locale: locales[code].path } }));
+}
+---
+
+<HomePage />

@@ -1,0 +1,115 @@
+---
+import {
+  defaultLocale,
+  isLocale,
+  locales,
+  localeCodes,
+  type Locale,
+} from "../i18n/config";
+import { localizePath, stripLocale } from "../i18n/utils";
+
+// URL-based language switcher: each item links to the same page under another
+// locale prefix. Matches the web app's language picker (globe + endonym pill),
+// but navigates instead of toggling client state, since locales are routes.
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const current: Locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const basePath = stripLocale(Astro.url.pathname);
+
+const options = localeCodes.map((code) => ({
+  code,
+  label: locales[code].label,
+  hreflang: locales[code].hreflang,
+  href: localizePath(basePath, code),
+  active: code === current,
+}));
+---
+
+<details class="lang-switcher nav-dropdown relative" data-nav-dropdown>
+  <summary class="lang-trigger flex cursor-pointer list-none items-center gap-1.5">
+    <svg
+      class="size-4 shrink-0"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      stroke-width="2"
+      stroke-linecap="round"
+      stroke-linejoin="round"
+      aria-hidden="true"
+    >
+      <circle cx="12" cy="12" r="10"></circle>
+      <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
+      <path d="M2 12h20"></path>
+    </svg>
+    {locales[current].label}
+  </summary>
+  <div
+    class="lang-menu absolute right-0 top-full mt-2 min-w-[11rem] rounded-xl border p-1"
+    style="border-color: var(--border); background: linear-gradient(0deg, var(--card), var(--card)), var(--background); box-shadow: 0 24px 48px -20px rgba(0,0,0,0.55)"
+  >
+    {
+      options.map((option) => (
+        <a
+          href={option.href}
+          hreflang={option.hreflang}
+          class={`lang-item ${option.active ? "is-active" : ""}`}
+        >
+          {option.label}
+        </a>
+      ))
+    }
+  </div>
+</details>
+
+<style>
+  /* Trigger matches the web app's language pill. */
+  .lang-trigger {
+    border-radius: 0.5rem;
+    border: 1px solid var(--border);
+    padding: 0.375rem 0.75rem;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    transition:
+      color 150ms,
+      background-color 150ms;
+  }
+  .lang-trigger:hover {
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+  .lang-switcher summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .lang-menu {
+    z-index: 50;
+    opacity: 0;
+    transform: translateY(-4px);
+    pointer-events: none;
+    transition:
+      opacity 150ms,
+      transform 150ms;
+  }
+  .lang-switcher[open] .lang-menu {
+    opacity: 1;
+    transform: translateY(0);
+    pointer-events: auto;
+  }
+
+  .lang-item {
+    display: block;
+    border-radius: 0.45rem;
+    padding: 0.45rem 0.6rem;
+    font-size: 0.875rem;
+    color: var(--muted-foreground);
+    text-decoration: none;
+    transition: background-color 150ms;
+  }
+  .lang-item:hover {
+    color: var(--foreground);
+    background: color-mix(in srgb, var(--foreground) 6%, transparent);
+  }
+  .lang-item.is-active {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+</style>

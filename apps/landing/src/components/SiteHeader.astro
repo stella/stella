@@ -1,10 +1,17 @@
 ---
 import ThemeToggle from "./ThemeToggle.astro";
 import MainNav from "./MainNav.astro";
+import LanguageSwitcher from "./LanguageSwitcher.astro";
+import { getTranslations } from "../i18n/utils";
+import { defaultLocale, isLocale } from "../i18n/config";
 
 // `current` lets a page mark its own nav entry.
 type Props = { current?: string };
 const { current } = Astro.props;
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const t = getTranslations(locale);
 
 const appUrl = "https://my.stll.app";
 ---
@@ -26,12 +33,13 @@ const appUrl = "https://my.stll.app";
 
     <div class="flex items-center gap-3">
       <ThemeToggle />
+      <LanguageSwitcher />
       <a
         href={appUrl}
         class="inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
         style="background: var(--primary); color: var(--primary-foreground)"
       >
-        Start free
+        {t("nav.startFree")}
       </a>
     </div>
   </nav>

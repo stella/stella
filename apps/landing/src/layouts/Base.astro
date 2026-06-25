@@ -1,5 +1,13 @@
 ---
 import "../styles/global.css";
+import {
+  defaultLocale,
+  isLocale,
+  locales,
+  localeCodes,
+  type Locale,
+} from "../i18n/config";
+import { getAlternates, stripLocale } from "../i18n/utils";
 
 type Props = {
   title?: string;
@@ -17,13 +25,22 @@ const {
 
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
 const socialImageUrl = new URL(socialImage, Astro.site);
+
+const rawLocale = Astro.currentLocale ?? defaultLocale;
+const locale: Locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
+const localeConfig = locales[locale];
+const basePath = stripLocale(Astro.url.pathname);
+const alternates = Astro.site ? getAlternates(basePath, Astro.site) : [];
+const ogAlternates = localeCodes
+  .filter((code) => code !== locale)
+  .map((code) => locales[code].og);
 ---
 
 {/*
   stll.app — stella landing page
 */}
 <!doctype html>
-<html lang="en" class="scroll-smooth">
+<html lang={localeConfig.hreflang} class="scroll-smooth">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -34,9 +51,17 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     {/* Canonical */}
     <link rel="canonical" href={canonicalUrl.href} />
 
+    {/* hreflang alternates for multilingual SEO */}
+    {
+      alternates.map((alt) => (
+        <link rel="alternate" hreflang={alt.hreflang} href={alt.href} />
+      ))
+    }
+
     {/* Open Graph */}
     <meta property="og:type" content="website" />
-    <meta property="og:locale" content="en_US" />
+    <meta property="og:locale" content={localeConfig.og} />
+    {ogAlternates.map((og) => <meta property="og:locale:alternate" content={og} />)}
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:site_name" content="stella" />
@@ -202,8 +227,8 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     */}
     <script is:inline>
       document.documentElement.classList.add("no-transitions");
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => {
+      requestAnimationFrame(function() {
+        requestAnimationFrame(function() {
           document.documentElement.classList.remove("no-transitions");
         });
       });

@@ -1,8 +1,21 @@
-import { caseLaw } from "./case-law";
+import { agent } from "./agent";
+import { anonymization } from "./anonymization";
+import { publicData } from "./public-data";
 import { tabularReview } from "./tabular-review";
+import { templates } from "./templates";
 import type { Product } from "./types";
+import { workspace } from "./workspace";
 
-// Add a product page by importing its data file and listing it here. The
-// [slug].astro route, the Product nav menu, and the llms-full.txt feed all
-// read from this registry.
-export const products: readonly Product[] = [tabularReview, caseLaw];
+// All product pages. Display order in the menu, homepage, and sections is
+// driven by pillars.ts (the README spine), not by this list. The [slug].astro
+// route and llms-full.txt feed read from here.
+export const products: readonly Product[] = [
+  publicData,
+  anonymization,
+  tabularReview,
+  agent,
+  templates,
+  workspace,
+];
+
+export const productBySlug = new Map(products.map((p) => [p.slug, p]));

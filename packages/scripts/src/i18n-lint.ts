@@ -623,6 +623,15 @@ if (import.meta.main) {
       args.find((a) => !a.startsWith("--")) ??
       panic("Usage: i18n-lint <langs-dir> [--write-baseline]");
     const writeBaseline = args.includes("--write-baseline");
+    // Optional shared glossary path, so multiple catalog surfaces (web app,
+    // landing) can lint against one TERMINOLOGY-derived glossary. Defaults to
+    // the glossary beside the langs dir.
+    const glossaryArg = args
+      .find((a) => a.startsWith("--glossary="))
+      ?.slice("--glossary=".length);
+    const glossaryPath = glossaryArg
+      ? path.resolve(glossaryArg)
+      : path.resolve(langsDir, "..", "glossary.json");
 
     const readJson = async (filePath: string): Promise<NestedMessages> => {
       const text = await Bun.file(filePath).text();
@@ -632,9 +641,7 @@ if (import.meta.main) {
     };
 
     const source = flatten(await readJson(path.resolve(langsDir, "en.json")));
-    const glossary = parseGlossary(
-      await Bun.file(path.resolve(langsDir, "..", "glossary.json")).text(),
-    );
+    const glossary = parseGlossary(await Bun.file(glossaryPath).text());
     const rules = buildForbiddenRules(glossary);
 
     const baselinePath = path.resolve(
