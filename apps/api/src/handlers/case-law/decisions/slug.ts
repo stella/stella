@@ -1,4 +1,8 @@
 import { panic } from "better-result";
+import { type SQL, and, eq, like, or, sql } from "drizzle-orm";
+
+import { caseLawDecisions } from "@/api/db/schema";
+import { escapeLike } from "@/api/lib/escape-like";
 
 const CASE_LAW_DECISION_SLUG_MAX_LENGTH = 256;
 const MIN_CASE_LAW_DECISION_SLUG_SUFFIX = 2;
@@ -58,6 +62,50 @@ export const createCaseLawDecisionSlugCollisionScanPrefix = ({
     CASE_LAW_DECISION_SLUG_MAX_LENGTH - suffixText.length,
   );
   return trimSlugHyphens(normalizedBase.slice(0, maxBaseLength)) || "unknown";
+};
+
+/**
+ * Builds the WHERE condition that selects every slug colliding with `baseSlug`
+ * (the bare base plus its `-<n>` suffixes), for both ingest and the backfill so
+ * they share one collision-scan definition.
+ *
+ * When the base is short enough that no suffix within the scan window truncates
+ * it, every colliding slug is exactly `base` or `base-<digits>`, so the filter
+ * matches that set precisely. A bare `LIKE base%` would also pull in unrelated
+ * slugs that merely share the textual prefix (e.g. base `c-752` matching
+ * `c-7524`); on a short or common base those can fill the scan cap and hide the
+ * real collision, so the caller would pick an already-used slug. For the rare
+ * max-length base whose `-<n>` variants truncate to different prefixes, fall
+ * back to the shared prefix scan (collision risk there is negligible since the
+ * prefix is already ~250 chars).
+ */
+export const caseLawDecisionSlugCollisionFilter = ({
+  baseSlug,
+  maxSuffix,
+}: CaseLawDecisionSlugCollisionScanPrefixOptions): SQL | undefined => {
+  const normalizedBase = fitSlug(baseSlug);
+  const suffix = Math.max(MIN_CASE_LAW_DECISION_SLUG_SUFFIX, maxSuffix);
+  const longestSuffixLength = toSuffixText(suffix).length;
+
+  if (
+    normalizedBase.length + longestSuffixLength <=
+    CASE_LAW_DECISION_SLUG_MAX_LENGTH
+  ) {
+    // normalizedBase contains only [a-z0-9-], so it is already regex-safe.
+    return or(
+      eq(caseLawDecisions.slug, normalizedBase),
+      and(
+        like(caseLawDecisions.slug, `${escapeLike(normalizedBase)}-%`),
+        sql`${caseLawDecisions.slug} ~ ${`^${normalizedBase}-[0-9]+$`}`,
+      ),
+    );
+  }
+
+  const scanPrefix = createCaseLawDecisionSlugCollisionScanPrefix({
+    baseSlug,
+    maxSuffix,
+  });
+  return like(caseLawDecisions.slug, `${escapeLike(scanPrefix)}%`);
 };
 
 export const createAvailableCaseLawDecisionSlug = (

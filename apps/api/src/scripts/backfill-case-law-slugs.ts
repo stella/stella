@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNull, like } from "drizzle-orm";
+import { and, asc, eq, gt, isNull } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
 /**
@@ -21,13 +21,12 @@ import { createIngestionDb } from "@/api/db";
 import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions } from "@/api/db/schema";
 import {
+  caseLawDecisionSlugCollisionFilter,
   createAvailableCaseLawDecisionSlug,
   createCaseLawDecisionSlug,
-  createCaseLawDecisionSlugCollisionScanPrefix,
 } from "@/api/handlers/case-law/decisions/slug";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
@@ -56,7 +55,7 @@ let failed = 0;
 
 const assignSlug = async (row: BackfillRow): Promise<void> => {
   const baseSlug = createCaseLawDecisionSlug(row.caseNumber);
-  const scanPrefix = createCaseLawDecisionSlugCollisionScanPrefix({
+  const collisionFilter = caseLawDecisionSlugCollisionFilter({
     baseSlug,
     maxSuffix: LIMITS.caseLawSlugCollisionScanLimit + 1,
   });
@@ -67,7 +66,7 @@ const assignSlug = async (row: BackfillRow): Promise<void> => {
       tx
         .select({ slug: caseLawDecisions.slug })
         .from(caseLawDecisions)
-        .where(like(caseLawDecisions.slug, `${escapeLike(scanPrefix)}%`))
+        .where(collisionFilter)
         .limit(LIMITS.caseLawSlugCollisionScanLimit),
     );
     const slug = createAvailableCaseLawDecisionSlug(
