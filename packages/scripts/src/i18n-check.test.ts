@@ -4,6 +4,7 @@ import {
   buildCommonValueMap,
   emptyBaseline,
   findCommonDuplicates,
+  findSharedValueDuplicates,
   findUntranslated,
   isSorted,
   sortKeys,
@@ -227,8 +228,8 @@ describe("findUntranslated", () => {
       auth: { signIn: "Přihlásit se" },
     };
     const baseline: CheckBaseline = {
+      ...emptyBaseline(),
       identicalToSource: { "common.greeting": ["cs"] },
-      duplicatesCommon: [],
     };
     expect(findUntranslated(en, target, "cs", baseline)).toEqual([]);
     // ...but still flagged for a locale NOT in the baseline list.
@@ -260,11 +261,54 @@ describe("findCommonDuplicates", () => {
 
   test("skips baseline-grandfathered duplicates", () => {
     const baseline: CheckBaseline = {
-      identicalToSource: {},
+      ...emptyBaseline(),
       duplicatesCommon: ["folio.removeThing"],
     };
     expect(findCommonDuplicates(en, baseline)).toEqual([
       { key: "chat.saveDraft", reuse: "common.save" },
+    ]);
+  });
+});
+
+describe("findSharedValueDuplicates", () => {
+  const en: NestedMessages = {
+    common: { save: "Save" },
+    billing: { week: "Week", saveAlias: "Save" },
+    workspaces: { week: "Week", unique: "Timeline" },
+    chat: { id: "OK" },
+  };
+
+  test("flags feature keys that share a value and lists the others", () => {
+    expect(findSharedValueDuplicates(en, emptyBaseline())).toEqual([
+      { key: "billing.week", shares: ["workspaces.week"] },
+      { key: "workspaces.week", shares: ["billing.week"] },
+    ]);
+  });
+
+  test("does not flag values already held by a common.* key", () => {
+    // "Save" lives in common.save, so billing.saveAlias is a common-duplicate
+    // (handled by findCommonDuplicates), not a shared-value finding.
+    const keys = findSharedValueDuplicates(en, emptyBaseline()).map(
+      (o) => o.key,
+    );
+    expect(keys).not.toContain("billing.saveAlias");
+  });
+
+  test("skips trivially-identical values and unique feature values", () => {
+    const keys = findSharedValueDuplicates(en, emptyBaseline()).map(
+      (o) => o.key,
+    );
+    expect(keys).not.toContain("chat.id"); // "OK" is trivially identical
+    expect(keys).not.toContain("workspaces.unique");
+  });
+
+  test("skips baseline-grandfathered shared values", () => {
+    const baseline: CheckBaseline = {
+      ...emptyBaseline(),
+      duplicateValues: ["billing.week"],
+    };
+    expect(findSharedValueDuplicates(en, baseline)).toEqual([
+      { key: "workspaces.week", shares: ["billing.week"] },
     ]);
   });
 });
