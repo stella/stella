@@ -6,6 +6,11 @@ import { join } from "node:path";
 type Statement = {
   line: number;
   text: string;
+  // Surfaced from a stored-routine (CREATE FUNCTION/PROCEDURE) body: the body is
+  // stored, not executed during the migration, so backfill rules that judge
+  // runtime row effects must not fire on it. DO blocks execute immediately and
+  // are not deferred.
+  deferred?: boolean;
 };
 
 type AcknowledgementCategory = (typeof ACKNOWLEDGEMENT_CATEGORIES)[number];
@@ -608,11 +613,16 @@ const parseStatements = (source: string): Statement[] => {
       if (shouldScanDollarQuoteBody(current)) {
         const body = source.slice(bodyStartIndex, closingIndex);
         const bodyStartLine = line + countNewlines(dollarTag);
+        // A DO block runs at migration time; a routine body is only stored, so
+        // its statements (and anything nested in them) are deferred.
+        const bodyIsDeferred =
+          !DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN.test(current);
 
         for (const statement of parseStatements(body)) {
           statements.push({
             line: bodyStartLine + statement.line - 1,
             text: statement.text,
+            deferred: bodyIsDeferred || statement.deferred,
           });
         }
       }
@@ -739,6 +749,11 @@ const main = () => {
       )
         .filter((rule) => !acknowledgedCategories.has(rule.category))
         .filter((rule) => !isGrandfatheredViolation(file, rule.id))
+        // A deferred (stored-routine) statement rewrites no rows at migration
+        // time, so backfill rules do not apply to it.
+        .filter(
+          (rule) => !(statement.deferred && rule.category === "bulk-backfill"),
+        )
         .map((rule) => ({
           file,
           line: statement.line,

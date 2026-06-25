@@ -198,6 +198,21 @@ describe("check-migration-safety", () => {
     expect(result.stderr).toContain("unbounded-update");
   });
 
+  it("allows an unbounded UPDATE inside a stored routine body", () => {
+    // CREATE FUNCTION only stores the body; the UPDATE runs when the routine is
+    // called, not during the migration, so it is not a migration-time backfill.
+    const result = runChecker(`
+      CREATE OR REPLACE FUNCTION "archive_all"() RETURNS void AS $$
+      BEGIN
+        UPDATE "documents" SET "status" = 'archived';
+      END
+      $$ LANGUAGE plpgsql;
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
   it("allows a CREATE POLICY ... FOR UPDATE clause", () => {
     // The outer command is CREATE, not UPDATE: `FOR UPDATE` is a policy clause
     // and rewrites no table data, so it must not trip the unbounded-update rule.
