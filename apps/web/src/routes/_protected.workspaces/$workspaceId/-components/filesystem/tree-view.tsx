@@ -650,9 +650,17 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     [],
   );
 
+  // Structural scaffolding folders are always expanded: they exist only to
+  // reveal the matched descendants below them, so collapsing one would re-hide
+  // a search/filter match. This also covers the initial filtered load, where
+  // the backfilled ancestors are absent from the seeded `expandedIds`.
+  const expandedWithStructural = useMemo(
+    () => new Set([...expandedIds, ...structuralIds]),
+    [expandedIds, structuralIds],
+  );
   const flattenedRows = useMemo(
-    () => flattenFilesystemRows(visibleNodes, expandedIds),
-    [visibleNodes, expandedIds],
+    () => flattenFilesystemRows(visibleNodes, expandedWithStructural),
+    [visibleNodes, expandedWithStructural],
   );
   const rowsViewportRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
