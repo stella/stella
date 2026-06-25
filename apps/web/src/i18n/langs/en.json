@@ -1918,7 +1918,7 @@
       "matterNumberingDescription": "Configure how new matter reference numbers are generated",
       "membersDescription": "Manage who has access to this organization and any pending invitations",
       "pendingInvitations": "Pending invitations",
-      "practiceJurisdictions": "Practice jurisdictions",
+      "practiceJurisdictions": "Jurisdictions",
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.",
       "profile": "Profile",
       "promptCaching": {

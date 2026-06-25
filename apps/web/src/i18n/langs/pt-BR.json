@@ -1918,7 +1918,7 @@
       "matterNumberingDescription": "Configure como os novos números de referência de casos são gerados",
       "membersDescription": "Gerenciar quem tem acesso a esta organização e quaisquer convites pendentes",
       "pendingInvitations": "Convites pendentes",
-      "practiceJurisdictions": "Jurisdições de atuação",
+      "practiceJurisdictions": "Jurisdições",
       "practiceJurisdictionsDescription": "Selecione as jurisdições relevantes para você.",
       "profile": "Perfil",
       "promptCaching": {

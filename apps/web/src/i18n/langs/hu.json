@@ -1918,7 +1918,7 @@
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Függőben lévő meghívók",
-      "practiceJurisdictions": "Praxis joghatóságai",
+      "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
       "profile": "Profil",
       "promptCaching": {
