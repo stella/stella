@@ -43,6 +43,16 @@ RUN bun build \
     --target bun \
     --outfile /app/server \
     apps/api/src/index.ts
+# One-off maintenance tool: assigns public slugs to legacy case-law rows that
+# predate slug-at-ingest. Bundled to a single JS file (like the workers above,
+# not --compile) so it reuses the container's Bun runtime instead of embedding
+# a second copy; bundling still resolves the `@/api/*` aliases. Run as a one-off
+# task on the API task-def (it needs the API env, not the migrate env):
+#   command override -> ["bun", "/app/backfill.js"]
+RUN bun build \
+    --target bun \
+    --outfile /app/backfill.js \
+    apps/api/src/scripts/backfill-case-law-slugs.ts
 RUN mkdir -p /app/runtime-workers && \
     bun build \
       --target bun \
@@ -67,6 +77,7 @@ ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/server /app/server
+COPY --chown=stella:stella --from=builder /app/backfill.js /app/backfill.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
 # Loose files for the one-off migrate task (the API itself is the compiled
 # /app/server binary). migrate.ts runs the drizzle migrator over Bun's SQL
