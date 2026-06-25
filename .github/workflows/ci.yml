@@ -962,6 +962,7 @@ jobs:
           workspace_body="$(jq -n \
             --arg id "$workspace_id" \
             '{
+              queryKey: ["workspaces"],
               id: $id,
               name: "Compiled Chat Smoke",
               filePropertyName: "Documents"
