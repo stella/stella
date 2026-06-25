@@ -958,6 +958,31 @@ jobs:
             exit 1
           fi
 
+          workspace_id="$(cat /proc/sys/kernel/random/uuid)"
+          workspace_body="$(jq -n \
+            --arg id "$workspace_id" \
+            '{
+              id: $id,
+              name: "Compiled Chat Smoke",
+              filePropertyName: "Documents"
+            }')"
+          workspace_code="$(curl -sS \
+            -o /tmp/compiled-chat-workspace-response.txt \
+            -w "%{http_code}" \
+            -X PUT \
+            -H "Content-Type: application/json" \
+            -H "Origin: http://localhost:3000" \
+            -H "Cookie: ${cookie_name}=${cookie_value}" \
+            --data "$workspace_body" \
+            http://127.0.0.1:3001/v1/workspaces/)"
+          echo "workspace_code=${workspace_code}"
+          if [[ "$workspace_code" != 2* ]]; then
+            echo "::error::failed to create smoke workspace"
+            cat /tmp/compiled-chat-workspace-response.txt || true
+            docker logs stella-api-compiled-chat-smoke || true
+            exit 1
+          fi
+
           thread_id="$(cat /proc/sys/kernel/random/uuid)"
           message_id="$(cat /proc/sys/kernel/random/uuid)"
           request_body="$(jq -n \
