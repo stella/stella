@@ -36,10 +36,10 @@ RUN bun install --filter @stll/api --filter @stll/legal-atlas-runner --frozen-lo
 FROM deps AS builder
 ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
+# Build the server unminified: `bun build --minify` can break Elysia's AOT
+# handler codegen (minified variable renames vs Sucrose). See elysiajs/elysia#1711.
 RUN bun build \
     --compile \
-    --minify-whitespace \
-    --minify-syntax \
     --target bun \
     --outfile /app/server \
     apps/api/src/index.ts
