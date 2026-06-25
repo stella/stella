@@ -169,13 +169,14 @@ export const ViewSwitcher = ({
   const createView = useCreateView(workspaceId);
   const reorderViews = useReorderViews(workspaceId);
   const [isTemplatePickerOpen, setIsTemplatePickerOpen] = useState(false);
-  const [previewKind, setPreviewKind] = useState<ViewLayoutPreviewKind | null>(
-    null,
-  );
   const hasOverviewView = views.some((view) => view.layout.type === "overview");
   const createLayoutOptions = hasOverviewView
     ? LAYOUT_OPTIONS.filter((layoutType) => layoutType !== "overview")
     : LAYOUT_OPTIONS;
+  const defaultPreviewKind = createLayoutOptions[0] ?? "table";
+  const [previewKind, setPreviewKind] = useState<ViewLayoutPreviewKind | null>(
+    defaultPreviewKind,
+  );
   const disallowedTemplateLayouts = new Set<ViewLayoutType>(
     hasOverviewView ? ["overview"] : [],
   );
@@ -231,10 +232,8 @@ export const ViewSwitcher = ({
       </Tabs>
       {canCreateView && (
         <Menu
-          onOpenChange={(open) => {
-            if (!open) {
-              setPreviewKind(null);
-            }
+          onOpenChange={() => {
+            setPreviewKind(defaultPreviewKind);
           }}
         >
           <MenuTrigger
