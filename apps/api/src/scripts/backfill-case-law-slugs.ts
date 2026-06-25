@@ -29,6 +29,7 @@ import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 
 const BATCH_SIZE = 200;
 const MAX_SLUG_ATTEMPTS = 5;
@@ -42,14 +43,10 @@ const ingestionDb = createIngestionDb(rlsDb);
 
 // Postgres unique_violation: a concurrent ingest grabbed our scanned slug
 // between the prefix scan and the update; re-scan and try a higher suffix.
-// Bun's SQL client exposes the Postgres SQLSTATE on `errno` (`code` carries
-// the Bun error class, e.g. ERR_POSTGRES_SERVER_ERROR); node-postgres uses
-// `code`. Accept either so the retry path works under both drivers.
+// Drizzle wraps the driver error, so `isPgError` reads the SQLSTATE off
+// `.cause` (errno for Bun SQL, code for pg/PGlite) rather than the wrapper.
 const isUniqueViolation = (error: unknown): boolean =>
-  typeof error === "object" &&
-  error !== null &&
-  (("errno" in error && error.errno === "23505") ||
-    ("code" in error && error.code === "23505"));
+  isPgError(error, PG_ERROR.UNIQUE_VIOLATION);
 
 console.log("=== BACKFILL CASE-LAW SLUGS ===");
 
