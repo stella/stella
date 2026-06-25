@@ -64,7 +64,10 @@ import {
   CellMetadataMenuSection,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags";
 import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
-import type { CopyToMatterEntity } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
+import {
+  resolveAncestorIds,
+  type CopyToMatterEntity,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
 import { getExtension } from "@/routes/_protected.workspaces/$workspaceId/-components/file-extension";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { getPdfDownloadFileName } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions.logic";
@@ -853,18 +856,32 @@ const CreateSubfolderMenuItem = ({
 
 const toCopyToMatterEntities = (
   targets: readonly (WorkspaceEntity | TableTreeNode)[],
-): CopyToMatterEntity[] => targets.map(toCopyToMatterEntity);
+): CopyToMatterEntity[] => {
+  // Index every parent->child link reachable from the selected subtrees so the
+  // ancestor chain stays unbroken across unselected intermediate folders.
+  const parentById = new Map<string, string | null>();
+  const indexChildren = (
+    nodes: readonly (WorkspaceEntity | TableTreeNode)[],
+  ) => {
+    for (const node of nodes) {
+      if (!("children" in node)) {
+        continue;
+      }
+      for (const child of node.children) {
+        parentById.set(child.entityId, node.entityId);
+      }
+      indexChildren(node.children);
+    }
+  };
+  indexChildren(targets);
 
-const toCopyToMatterEntity = (
-  entity: WorkspaceEntity | TableTreeNode,
-): CopyToMatterEntity => ({
-  children:
-    "children" in entity ? entity.children.map(toCopyToMatterEntity) : [],
-  entityId: entity.entityId,
-  entityName: getEntityName(entity),
-  kind: entity.kind,
-  parentId: entity.parentId,
-});
+  return targets.map((entity) => ({
+    entityId: entity.entityId,
+    entityName: getEntityName(entity),
+    kind: entity.kind,
+    ancestorIds: resolveAncestorIds(entity.entityId, parentById),
+  }));
+};
 
 type FileRef = { fieldId: string; fileName: string; mimeType: string | null };
 type Msg = { downloading: string; failed: string };

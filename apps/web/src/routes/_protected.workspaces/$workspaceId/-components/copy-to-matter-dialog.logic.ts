@@ -4,70 +4,40 @@ export type CopyToMatterEntity = {
   entityId: string;
   entityName: string;
   kind: EntityKind;
-  parentId: string | null;
-  children: CopyToMatterEntity[];
+  /** Ancestor entity IDs from the immediate parent up to the root. The
+   *  transfer drops any entity whose ancestor is also selected, since copying
+   *  the selected ancestor folder already carries the whole subtree. The chain
+   *  must be resolved from a lookup spanning every entity (not just the
+   *  selection) so it stays unbroken across unselected intermediate folders. */
+  ancestorIds: string[];
+};
+
+// Walk the immediate-parent links up to the root. The lookup must span every
+// entity so the chain is unbroken even when an intermediate folder is not part
+// of the selection; the visited guard stops a cyclic parent link.
+export const resolveAncestorIds = (
+  entityId: string,
+  parentById: ReadonlyMap<string, string | null>,
+): string[] => {
+  const ancestorIds: string[] = [];
+  const visited = new Set<string>([entityId]);
+  let parentId = parentById.get(entityId) ?? null;
+
+  while (parentId && !visited.has(parentId)) {
+    ancestorIds.push(parentId);
+    visited.add(parentId);
+    parentId = parentById.get(parentId) ?? null;
+  }
+
+  return ancestorIds;
 };
 
 export const getCopyToMatterRootEntities = (
   entities: readonly CopyToMatterEntity[],
 ): CopyToMatterEntity[] => {
   const selectedIds = new Set(entities.map((entity) => entity.entityId));
-  const entitiesById = new Map(
-    entities.map((entity) => [entity.entityId, entity]),
-  );
-  const descendantIds = new Set<string>();
-
-  const collectSelectedDescendants = (entity: CopyToMatterEntity) => {
-    for (const child of entity.children) {
-      if (selectedIds.has(child.entityId)) {
-        descendantIds.add(child.entityId);
-      }
-      collectSelectedDescendants(child);
-    }
-  };
-
-  for (const entity of entities) {
-    if (entity.kind === "folder") {
-      collectSelectedDescendants(entity);
-    }
-  }
 
   return entities.filter(
-    (entity) =>
-      !descendantIds.has(entity.entityId) &&
-      !hasSelectedAncestor({ entity, entitiesById, selectedIds }),
+    (entity) => !entity.ancestorIds.some((id) => selectedIds.has(id)),
   );
-};
-
-type HasSelectedAncestorOptions = {
-  entity: CopyToMatterEntity;
-  entitiesById: ReadonlyMap<string, CopyToMatterEntity>;
-  selectedIds: ReadonlySet<string>;
-};
-
-const hasSelectedAncestor = ({
-  entity,
-  entitiesById,
-  selectedIds,
-}: HasSelectedAncestorOptions): boolean => {
-  const visitedIds = new Set([entity.entityId]);
-  let parentId = entity.parentId;
-
-  while (parentId) {
-    if (visitedIds.has(parentId)) {
-      return false;
-    }
-    if (selectedIds.has(parentId)) {
-      return true;
-    }
-
-    visitedIds.add(parentId);
-    const parent = entitiesById.get(parentId);
-    if (!parent) {
-      return false;
-    }
-    parentId = parent.parentId;
-  }
-
-  return false;
 };

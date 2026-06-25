@@ -851,8 +851,14 @@ type DraggedEntityPayload = {
   entityId: string;
   name: string;
   kind: EntityKind;
-  parentId: string | null;
+  /** Ancestor entity IDs (immediate parent up to the root), resolved by the
+   *  drag source against the full tree so the chain crosses unselected
+   *  intermediate folders. Older drag payloads may omit it. */
+  ancestorIds?: string[];
 };
+
+const isStringArray = (value: unknown): value is string[] =>
+  Array.isArray(value) && value.every((item) => typeof item === "string");
 
 const isDraggedEntityPayload = (
   value: unknown,
@@ -886,8 +892,7 @@ const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
       entityId: item.entityId,
       entityName: item.name,
       kind: item.kind,
-      parentId: typeof item.parentId === "string" ? item.parentId : null,
-      children: [],
+      ancestorIds: isStringArray(item.ancestorIds) ? item.ancestorIds : [],
     });
   }
   return result;
