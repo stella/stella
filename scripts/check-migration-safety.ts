@@ -177,7 +177,9 @@ const getAcknowledgedCategories = (
       continue;
     }
 
-    const category = parseAcknowledgementCategory(match.groups?.category ?? "");
+    const category = parseAcknowledgementCategory(
+      match.groups?.["category"] ?? "",
+    );
 
     if (category) {
       categories.add(category);
