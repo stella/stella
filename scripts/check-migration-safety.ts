@@ -68,7 +68,9 @@ const ROUTINE_DOLLAR_QUOTE_PREFIX_PATTERN =
 
 const WHERE_KEYWORD_PATTERN = /^WHERE\b/iu;
 const IDENTIFIER_CHARACTER_PATTERN = /[A-Za-z0-9_]/u;
+const IDENTIFIER_WORD_PATTERN = /^[A-Za-z0-9_]+/u;
 const TOP_LEVEL_COMMAND_PATTERN = /^(?:INSERT|UPDATE|DELETE|MERGE|SELECT)\b/iu;
+const CTE_PREFIX_KEYWORD = "WITH";
 
 // A WHERE that bounds the outer UPDATE sits at parenthesis depth 0. A WHERE
 // only inside a parenthesised subquery (e.g. `SET col = (SELECT ... WHERE ...)`)
@@ -104,12 +106,17 @@ const hasTopLevelWhere = (statement: string): boolean => {
   return false;
 };
 
-// The statement's true outer command is the first SQL command keyword at
-// parenthesis depth 0: CTE bodies (`WITH x AS (...)`) and SET subqueries live
-// inside parens, so an inner INSERT/SELECT cannot be mistaken for the outer
-// command. The text is already string/comment-masked by parseStatements.
+// The statement's true outer command is the first SQL keyword at parenthesis
+// depth 0. A leading `WITH` only introduces CTEs whose bodies live inside
+// parens, so the real command is the first depth-0 DML keyword after it; any
+// other leading keyword (INSERT/UPDATE/CREATE/ALTER/...) is itself the command.
+// Scanning at depth 0 keeps an inner clause keyword (`CREATE POLICY ... FOR
+// UPDATE`, `CREATE TRIGGER ... BEFORE UPDATE`, `WITH x AS (INSERT ...)`) from
+// being mistaken for the outer command. The text is already string/comment-
+// masked by parseStatements.
 const getTopLevelCommand = (statement: string): string | null => {
   let depth = 0;
+  let afterCtePrefix = false;
 
   for (let index = 0; index < statement.length; index++) {
     const char = statement[index] ?? "";
@@ -124,15 +131,30 @@ const getTopLevelCommand = (statement: string): string | null => {
       continue;
     }
 
-    if (
+    const isWordStart =
       depth === 0 &&
       IDENTIFIER_CHARACTER_PATTERN.test(char) &&
-      !IDENTIFIER_CHARACTER_PATTERN.test(statement[index - 1] ?? "")
-    ) {
-      const match = TOP_LEVEL_COMMAND_PATTERN.exec(statement.slice(index));
-      if (match) {
-        return match[0].toUpperCase();
+      !IDENTIFIER_CHARACTER_PATTERN.test(statement[index - 1] ?? "");
+    if (!isWordStart) {
+      continue;
+    }
+
+    const word = (
+      IDENTIFIER_WORD_PATTERN.exec(statement.slice(index))?.[0] ?? ""
+    ).toUpperCase();
+
+    if (!afterCtePrefix) {
+      // The first depth-0 keyword is the command, unless it opens a CTE list.
+      if (word === CTE_PREFIX_KEYWORD) {
+        afterCtePrefix = true;
+        continue;
       }
+      return word;
+    }
+
+    // Past `WITH`: the command is the first DML keyword after the CTE list.
+    if (TOP_LEVEL_COMMAND_PATTERN.test(word)) {
+      return word;
     }
   }
 

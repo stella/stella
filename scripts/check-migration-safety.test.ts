@@ -128,6 +128,28 @@ describe("check-migration-safety", () => {
     expect(result.stderr).toContain("unbounded-update");
   });
 
+  it("allows a CREATE POLICY ... FOR UPDATE clause", () => {
+    // The outer command is CREATE, not UPDATE: `FOR UPDATE` is a policy clause
+    // and rewrites no table data, so it must not trip the unbounded-update rule.
+    const result = runChecker(`
+      CREATE POLICY "documents_update" ON "documents"
+      FOR UPDATE USING ("organization_id" = current_setting('app.org')::uuid);
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("allows a CREATE TRIGGER ... BEFORE UPDATE definition", () => {
+    const result = runChecker(`
+      CREATE TRIGGER "documents_touch" BEFORE UPDATE ON "documents"
+      FOR EACH ROW EXECUTE FUNCTION "touch_updated_at"();
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
   it("flags a full-table UPDATE whose only WHERE is in a SET subquery", () => {
     const result = runChecker(`
       UPDATE "documents"
