@@ -28,7 +28,6 @@
     "tasks.statusValues.open",
     "templates.conditionMatchAll",
     "templates.fieldOptions",
-    "templates.inputTypes.date",
     "templates.studio.filledByPerson",
     "translate.settings.remove",
     "translate.settings.save",
@@ -1031,19 +1030,6 @@
     ],
     "templates.fieldOptions": [
       "fr"
-    ],
-    "templates.inputTypes.date": [
-      "fr"
-    ],
-    "templates.inputTypes.text": [
-      "cs",
-      "de",
-      "sk"
-    ],
-    "templates.studio.draftedByAi": [
-      "cs",
-      "pl",
-      "sk"
     ],
     "templates.studio.expressionPlaceholder": [
       "fr"

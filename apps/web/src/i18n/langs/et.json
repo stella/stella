@@ -67,6 +67,11 @@
     "createOrganization": "Loo organisatsioon",
     "createOrganizationButton": "Loo organisatsioon",
     "emailPlaceholder": "teie@example.com",
+    "error": {
+      "accountNotLinked": "See e-post logib sisse teisiti. Kasutage oma algset sisselogimisviisi või proovige uuesti.",
+      "generic": "Sisselogimisel läks midagi valesti. Palun proovige uuesti.",
+      "title": "Sisselogimine ebaõnnestus"
+    },
     "headline": "Selgus igas asjas.",
     "invitation": {
       "declined": "Kutse tagasi lükatud",

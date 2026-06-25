@@ -67,6 +67,11 @@
     "createOrganization": "Szervezet létrehozása",
     "createOrganizationButton": "Szervezet létrehozása",
     "emailPlaceholder": "te@example.com",
+    "error": {
+      "accountNotLinked": "Ez az e-mail-cím másképp jelentkezik be. Használja az eredeti bejelentkezési módot, vagy próbálja újra.",
+      "generic": "A bejelentkezés során hiba történt. Kérjük, próbálja újra.",
+      "title": "Nem sikerült bejelentkeztetni"
+    },
     "headline": "Tisztán látás minden ügyben.",
     "invitation": {
       "declined": "Meghívó elutasítva",

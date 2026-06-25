@@ -67,6 +67,11 @@
     "createOrganization": "إنشاء مؤسسة",
     "createOrganizationButton": "إنشاء مؤسسة",
     "emailPlaceholder": "you@example.com",
+    "error": {
+      "accountNotLinked": "يسجّل هذا البريد الإلكتروني الدخول بطريقة مختلفة. استخدم طريقة تسجيل الدخول الأصلية أو حاول مرة أخرى.",
+      "generic": "حدث خطأ ما أثناء تسجيل دخولك. يُرجى المحاولة مرة أخرى.",
+      "title": "تعذّر تسجيل دخولك"
+    },
     "headline": "وضوح لكل قضية.",
     "invitation": {
       "declined": "تم رفض الدعوة",

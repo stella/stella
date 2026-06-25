@@ -67,6 +67,11 @@
     "createOrganization": "Utwórz organizację",
     "createOrganizationButton": "Utwórz organizację",
     "emailPlaceholder": "ty@example.com",
+    "error": {
+      "accountNotLinked": "Ten e-mail loguje się w inny sposób. Użyj swojej pierwotnej metody logowania lub spróbuj ponownie.",
+      "generic": "Coś poszło nie tak podczas logowania. Spróbuj ponownie.",
+      "title": "Nie udało się Cię zalogować"
+    },
     "headline": "Jasność w każdej sprawie.",
     "invitation": {
       "declined": "Zaproszenie odrzucone",
