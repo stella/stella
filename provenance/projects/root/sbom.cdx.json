@@ -2,7 +2,7 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
-      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.84",
+      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.85",
       "evidence": {
         "identity": [
           {
@@ -50,16 +50,16 @@
           "value": "node_modules/@ai-sdk/anthropic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.84",
+      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.85",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.84"
+      "version": "3.0.85"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.74",
+      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.76",
       "evidence": {
         "identity": [
           {
@@ -107,13 +107,13 @@
           "value": "node_modules/@ai-sdk/azure/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/azure@3.0.74",
+      "purl": "pkg:npm/%40ai-sdk/azure@3.0.76",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.74"
+      "version": "3.0.76"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.19",
@@ -173,7 +173,7 @@
       "version": "0.0.19"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.145",
+      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.147",
       "evidence": {
         "identity": [
           {
@@ -221,16 +221,16 @@
           "value": "node_modules/@ai-sdk/google-vertex/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.145",
+      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.147",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.145"
+      "version": "4.0.147"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.82",
+      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.83",
       "evidence": {
         "identity": [
           {
@@ -281,16 +281,16 @@
           "value": "node_modules/@ai-sdk/google/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/google@3.0.82",
+      "purl": "pkg:npm/%40ai-sdk/google@3.0.83",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.82"
+      "version": "3.0.83"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.51",
+      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.52",
       "evidence": {
         "identity": [
           {
@@ -347,16 +347,16 @@
           "value": "node_modules/@ai-sdk/mcp/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.51",
+      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.52",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.0.51"
+      "version": "1.0.52"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.39",
+      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.40",
       "evidence": {
         "identity": [
           {
@@ -404,16 +404,16 @@
           "value": "node_modules/@ai-sdk/mistral/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.39",
+      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.40",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.0.39"
+      "version": "3.0.40"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.71",
+      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.73",
       "evidence": {
         "identity": [
           {
@@ -464,17 +464,74 @@
           "value": "node_modules/@ai-sdk/openai/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/openai@3.0.71",
+      "purl": "pkg:npm/%40ai-sdk/openai@3.0.73",
       "scope": "required",
       "tags": [
         "framework",
         "ml"
       ],
       "type": "framework",
-      "version": "3.0.71"
+      "version": "3.0.73"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.29",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/react/node_modules/@ai-sdk/provider-utils/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/react/node_modules/@ai-sdk/provider-utils/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "@ai-sdk",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "provider-utils",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/react/node_modules/@ai-sdk/provider-utils/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.29",
+      "scope": "required",
+      "tags": [
+        "framework"
+      ],
+      "type": "framework",
+      "version": "4.0.29"
+    },
+    {
+      "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.30",
       "evidence": {
         "identity": [
           {
@@ -522,13 +579,13 @@
           "value": "node_modules/@ai-sdk/provider-utils/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.29",
+      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.30",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "4.0.29"
+      "version": "4.0.30"
     },
     {
       "bom-ref": "pkg:npm/@ai-sdk/provider@3.0.10",
@@ -649,6 +706,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-effect.ts#1"
@@ -2034,6 +2094,9 @@
             "location": "packages/ui/src/components/select.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/separator.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/sheet.tsx#3"
           },
           {
@@ -2085,7 +2148,7 @@
       "version": "3.0.207"
     },
     {
-      "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.30",
+      "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.31",
       "evidence": {
         "identity": [
           {
@@ -2304,13 +2367,13 @@
             "location": "packages/legal-ast/src/analysis.ts#5"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#6"
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
           },
           {
             "location": "apps/web/src/components/auth/sign-in-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/components/selfhost-update-banner.tsx#6"
+            "location": "apps/web/src/components/selfhost-update-banner.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#7"
@@ -2397,13 +2460,13 @@
           "value": "node_modules/@ai-sdk/valibot/package.json"
         }
       ],
-      "purl": "pkg:npm/%40ai-sdk/valibot@2.0.30",
+      "purl": "pkg:npm/%40ai-sdk/valibot@2.0.31",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "2.0.30"
+      "version": "2.0.31"
     },
     {
       "authors": [
@@ -2464,6 +2527,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-effect.ts#1"
@@ -3847,6 +3913,9 @@
           },
           {
             "location": "packages/ui/src/components/select.tsx#3"
+          },
+          {
+            "location": "packages/ui/src/components/separator.tsx#1"
           },
           {
             "location": "packages/ui/src/components/sheet.tsx#3"
@@ -4673,7 +4742,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1068.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-s3@3.1072.0",
       "description": "AWS SDK for JavaScript S3 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4722,13 +4791,13 @@
           "value": "node_modules/@aws-sdk/client-s3/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1068.0",
+      "purl": "pkg:npm/%40aws-sdk/client-s3@3.1072.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1068.0"
+      "version": "3.1072.0"
     },
     {
       "authors": [
@@ -4736,7 +4805,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1068.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sesv2@3.1072.0",
       "description": "AWS SDK for JavaScript Sesv2 Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4785,13 +4854,13 @@
           "value": "node_modules/@aws-sdk/client-sesv2/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1068.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sesv2@3.1072.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1068.0"
+      "version": "3.1072.0"
     },
     {
       "authors": [
@@ -4799,7 +4868,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1068.0",
+      "bom-ref": "pkg:npm/@aws-sdk/client-sts@3.1072.0",
       "description": "AWS SDK for JavaScript Sts Client for Node.js, Browser and React Native",
       "evidence": {
         "identity": [
@@ -4848,13 +4917,13 @@
           "value": "node_modules/@aws-sdk/client-sts/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1068.0",
+      "purl": "pkg:npm/%40aws-sdk/client-sts@3.1072.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1068.0"
+      "version": "3.1072.0"
     },
     {
       "authors": [
@@ -4862,7 +4931,7 @@
           "name": "AWS SDK for JavaScript Team (https://aws.amazon.com/sdk-for-javascript/)"
         }
       ],
-      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1068.0",
+      "bom-ref": "pkg:npm/@aws-sdk/s3-request-presigner@3.1072.0",
       "evidence": {
         "identity": [
           {
@@ -4910,13 +4979,13 @@
           "value": "node_modules/@aws-sdk/s3-request-presigner/package.json"
         }
       ],
-      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1068.0",
+      "purl": "pkg:npm/%40aws-sdk/s3-request-presigner@3.1072.0",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "3.1068.0"
+      "version": "3.1072.0"
     },
     {
       "authors": [
@@ -5173,7 +5242,7 @@
           "name": "MUI Team"
         }
       ],
-      "bom-ref": "pkg:npm/@base-ui/react@1.5.0",
+      "bom-ref": "pkg:npm/@base-ui/react@1.6.0",
       "description": "Base UI is a library of headless ('unstyled') React components and low-level hooks. You gain complete control over your app's CSS and accessibility features.",
       "evidence": {
         "identity": [
@@ -5226,6 +5295,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-effect.ts#1"
@@ -6611,6 +6683,9 @@
             "location": "packages/ui/src/components/select.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/separator.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/sheet.tsx#3"
           },
           {
@@ -6653,10 +6728,10 @@
           "value": "node_modules/@base-ui/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40base-ui/react@1.5.0",
+      "purl": "pkg:npm/%40base-ui/react@1.6.0",
       "scope": "required",
       "type": "library",
-      "version": "1.5.0"
+      "version": "1.6.0"
     },
     {
       "bom-ref": "pkg:npm/@better-auth/oauth-provider@1.6.12",
@@ -7013,7 +7088,7 @@
       "version": "3.5.1"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/provider@4.2.0",
+      "bom-ref": "pkg:npm/@hocuspocus/provider@4.3.0",
       "description": "hocuspocus provider",
       "evidence": {
         "identity": [
@@ -7065,13 +7140,13 @@
           "value": "node_modules/@hocuspocus/provider/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/provider@4.2.0",
+      "purl": "pkg:npm/%40hocuspocus/provider@4.3.0",
       "scope": "required",
       "type": "library",
-      "version": "4.2.0"
+      "version": "4.3.0"
     },
     {
-      "bom-ref": "pkg:npm/@hocuspocus/server@4.2.0",
+      "bom-ref": "pkg:npm/@hocuspocus/server@4.3.0",
       "description": "plug & play collaboration backend",
       "evidence": {
         "identity": [
@@ -7123,10 +7198,10 @@
           "value": "node_modules/@hocuspocus/server/package.json"
         }
       ],
-      "purl": "pkg:npm/%40hocuspocus/server@4.2.0",
+      "purl": "pkg:npm/%40hocuspocus/server@4.3.0",
       "scope": "required",
       "type": "library",
-      "version": "4.2.0"
+      "version": "4.3.0"
     },
     {
       "authors": [
@@ -7546,7 +7621,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/@posthog/react@1.10.1",
+      "bom-ref": "pkg:npm/@posthog/react@1.10.2",
       "description": "Provides components and hooks for React integrations of PostHog.",
       "evidence": {
         "identity": [
@@ -7599,6 +7674,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-effect.ts#1"
@@ -8984,6 +9062,9 @@
             "location": "packages/ui/src/components/select.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/separator.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/sheet.tsx#3"
           },
           {
@@ -9026,10 +9107,10 @@
           "value": "node_modules/@posthog/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40posthog/react@1.10.1",
+      "purl": "pkg:npm/%40posthog/react@1.10.2",
       "scope": "required",
       "type": "library",
-      "version": "1.10.1"
+      "version": "1.10.2"
     },
     {
       "authors": [
@@ -9206,7 +9287,7 @@
       "version": "2.0.6"
     },
     {
-      "bom-ref": "pkg:npm/@react-email/render@2.0.8",
+      "bom-ref": "pkg:npm/@react-email/render@2.0.9",
       "description": "Transform React components into HTML email templates",
       "evidence": {
         "identity": [
@@ -9231,6 +9312,10 @@
       },
       "externalReferences": [
         {
+          "type": "website",
+          "url": "https://react.email"
+        },
+        {
           "type": "vcs",
           "url": "https://github.com/resend/react-email.git"
         }
@@ -9251,13 +9336,13 @@
           "value": "node_modules/@react-email/render/package.json"
         }
       ],
-      "purl": "pkg:npm/%40react-email/render@2.0.8",
+      "purl": "pkg:npm/%40react-email/render@2.0.9",
       "scope": "required",
       "tags": [
         "html"
       ],
       "type": "library",
-      "version": "2.0.8"
+      "version": "2.0.9"
     },
     {
       "bom-ref": "pkg:npm/@resvg/resvg-js@2.6.2",
@@ -9616,7 +9701,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.5",
+      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.7",
       "description": "TanStack Devtools is a set of tools for building advanced devtools for your React application.",
       "evidence": {
         "identity": [
@@ -9665,13 +9750,13 @@
           "value": "node_modules/@tanstack/react-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.5",
+      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.7",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "0.10.5"
+      "version": "0.10.7"
     },
     {
       "authors": [
@@ -9959,6 +10044,12 @@
             "location": "apps/web/src/features/case-law/queries/decisions.ts#1"
           },
           {
+            "location": "apps/web/src/hooks/use-chrome-query.ts#3"
+          },
+          {
+            "location": "apps/web/src/hooks/use-chrome-query.ts#9"
+          },
+          {
             "location": "apps/web/src/hooks/use-client-auth-status.ts#1"
           },
           {
@@ -10214,12 +10305,6 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#11"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/app-sidebar.tsx#14"
-          },
-          {
             "location": "apps/web/src/components/auth/otp-panel.tsx#4"
           },
           {
@@ -10253,10 +10338,10 @@
             "location": "apps/web/src/components/chat/tool-call-card.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#17"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#13"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#18"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#14"
           },
           {
             "location": "apps/web/src/components/chat-mention-list.tsx#4"
@@ -10323,12 +10408,6 @@
           },
           {
             "location": "apps/web/src/components/search-dialog.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/selfhost-update-banner.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/sidebar-user-menu.tsx#1"
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#12"
@@ -10476,9 +10555,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.todos/index.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#22"
@@ -10910,7 +10986,7 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#12"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#15"
+            "location": "apps/web/src/components/app-sidebar.tsx#14"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#5"
@@ -10991,7 +11067,7 @@
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#5"
           },
           {
-            "location": "apps/web/src/components/sidebar-user-menu.tsx#2"
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#1"
           },
           {
             "location": "apps/web/src/components/translate-document-dialog.tsx#13"
@@ -11162,7 +11238,7 @@
             "location": "apps/web/src/routes/_protected.todos/index.tsx#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.tsx#11"
+            "location": "apps/web/src/routes/_protected.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#27"
@@ -11602,7 +11678,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.0.0-beta.17",
+      "bom-ref": "pkg:npm/@tanstack/react-table-devtools@9.0.0-beta.18",
       "description": "React devtools for TanStack Table.",
       "evidence": {
         "identity": [
@@ -11654,10 +11730,10 @@
           "value": "node_modules/@tanstack/react-table-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.0.0-beta.17",
+      "purl": "pkg:npm/%40tanstack/react-table-devtools@9.0.0-beta.18",
       "scope": "required",
       "type": "library",
-      "version": "9.0.0-beta.17"
+      "version": "9.0.0-beta.18"
     },
     {
       "authors": [
@@ -11665,7 +11741,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-table@9.0.0-beta.17",
+      "bom-ref": "pkg:npm/@tanstack/react-table@9.0.0-beta.18",
       "description": "Headless UI for building powerful tables & datagrids for React.",
       "evidence": {
         "identity": [
@@ -11756,10 +11832,10 @@
           "value": "node_modules/@tanstack/react-table/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-table@9.0.0-beta.17",
+      "purl": "pkg:npm/%40tanstack/react-table@9.0.0-beta.18",
       "scope": "required",
       "type": "library",
-      "version": "9.0.0-beta.17"
+      "version": "9.0.0-beta.18"
     },
     {
       "authors": [
@@ -11831,7 +11907,7 @@
       "version": "3.14.3"
     },
     {
-      "bom-ref": "pkg:npm/@tauri-apps/api@2.11.0",
+      "bom-ref": "pkg:npm/@tauri-apps/api@2.11.1",
       "description": "Tauri API definitions",
       "evidence": {
         "identity": [
@@ -11880,16 +11956,16 @@
           "value": "node_modules/@tauri-apps/api/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tauri-apps/api@2.11.0",
+      "purl": "pkg:npm/%40tauri-apps/api@2.11.1",
       "scope": "required",
       "tags": [
         "api"
       ],
       "type": "library",
-      "version": "2.11.0"
+      "version": "2.11.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/core@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/core@3.27.1",
       "description": "headless rich text editor",
       "evidence": {
         "identity": [
@@ -11953,13 +12029,13 @@
           "value": "node_modules/@tiptap/core/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/core@3.26.1",
+      "purl": "pkg:npm/%40tiptap/core@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-bold@3.27.1",
       "description": "bold extension for tiptap",
       "evidence": {
         "identity": [
@@ -12008,13 +12084,13 @@
           "value": "node_modules/@tiptap/extension-bold/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-bold@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-bold@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-document@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-document@3.27.1",
       "description": "document extension for tiptap",
       "evidence": {
         "identity": [
@@ -12066,13 +12142,13 @@
           "value": "node_modules/@tiptap/extension-document/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-document@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-document@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-hard-break@3.27.1",
       "description": "hard break extension for tiptap",
       "evidence": {
         "identity": [
@@ -12091,7 +12167,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#19"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#15"
           }
         ]
       },
@@ -12121,13 +12197,13 @@
           "value": "node_modules/@tiptap/extension-hard-break/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-hard-break@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-heading@3.27.1",
       "description": "heading extension for tiptap",
       "evidence": {
         "identity": [
@@ -12176,13 +12252,13 @@
           "value": "node_modules/@tiptap/extension-heading/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-heading@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-heading@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-history@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-history@3.27.1",
       "description": "history extension for tiptap",
       "evidence": {
         "identity": [
@@ -12204,7 +12280,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#20"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#6"
@@ -12237,13 +12313,13 @@
           "value": "node_modules/@tiptap/extension-history/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-history@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-history@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-italic@3.27.1",
       "description": "italic extension for tiptap",
       "evidence": {
         "identity": [
@@ -12292,13 +12368,13 @@
           "value": "node_modules/@tiptap/extension-italic/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-italic@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-italic@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-list@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-list@3.27.1",
       "description": "List extension for tiptap",
       "evidence": {
         "identity": [
@@ -12347,13 +12423,13 @@
           "value": "node_modules/@tiptap/extension-list/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-list@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-list@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-mention@3.27.1",
       "description": "mention extension for tiptap",
       "evidence": {
         "identity": [
@@ -12414,13 +12490,13 @@
           "value": "node_modules/@tiptap/extension-mention/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-mention@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-mention@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-paragraph@3.27.1",
       "description": "paragraph extension for tiptap",
       "evidence": {
         "identity": [
@@ -12442,7 +12518,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#7"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#21"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#14"
@@ -12475,13 +12551,13 @@
           "value": "node_modules/@tiptap/extension-paragraph/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-paragraph@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-placeholder@3.27.1",
       "description": "placeholder extension for tiptap",
       "evidence": {
         "identity": [
@@ -12503,7 +12579,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#8"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#22"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#15"
@@ -12536,13 +12612,13 @@
           "value": "node_modules/@tiptap/extension-placeholder/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-placeholder@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/extension-text@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/extension-text@3.27.1",
       "description": "text extension for tiptap",
       "evidence": {
         "identity": [
@@ -12564,7 +12640,7 @@
             "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#9"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#23"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#16"
@@ -12597,13 +12673,13 @@
           "value": "node_modules/@tiptap/extension-text/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/extension-text@3.26.1",
+      "purl": "pkg:npm/%40tiptap/extension-text@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/pm@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/pm@3.27.1",
       "description": "prosemirror wrapper package for tiptap",
       "evidence": {
         "identity": [
@@ -12631,7 +12707,7 @@
             "location": "apps/web/src/lib/anonymize/chat-anon-plugin-lifecycle.ts#1"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#24"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#20"
           },
           {
             "location": "apps/web/src/components/prompt-editor.tsx#5"
@@ -12676,13 +12752,13 @@
           "value": "node_modules/@tiptap/pm/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/pm@3.26.1",
+      "purl": "pkg:npm/%40tiptap/pm@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/react@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/react@3.27.1",
       "description": "React components for tiptap",
       "evidence": {
         "identity": [
@@ -12735,6 +12811,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-effect.ts#1"
@@ -14120,6 +14199,9 @@
             "location": "packages/ui/src/components/select.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/separator.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/sheet.tsx#3"
           },
           {
@@ -14162,13 +14244,13 @@
           "value": "node_modules/@tiptap/react/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/react@3.26.1",
+      "purl": "pkg:npm/%40tiptap/react@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
-      "bom-ref": "pkg:npm/@tiptap/suggestion@3.26.1",
+      "bom-ref": "pkg:npm/@tiptap/suggestion@3.27.1",
       "description": "suggestion plugin for tiptap",
       "evidence": {
         "identity": [
@@ -14235,10 +14317,10 @@
           "value": "node_modules/@tiptap/suggestion/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tiptap/suggestion@3.26.1",
+      "purl": "pkg:npm/%40tiptap/suggestion@3.27.1",
       "scope": "required",
       "type": "library",
-      "version": "3.26.1"
+      "version": "3.27.1"
     },
     {
       "authors": [
@@ -14314,6 +14396,292 @@
     },
     {
       "bom-ref": "pkg:npm/ai@6.0.205",
+      "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@ai-sdk/react/node_modules/ai/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@ai-sdk/react/node_modules/ai/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#13"
+          },
+          {
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#14"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#2"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#3"
+          },
+          {
+            "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/attachment-validation.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/compaction.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/get-suggested-prompts.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/send-message.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#14"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/thread-recap.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/template-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/tool-policy.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/tool-scope.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/types.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/upload-files.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/upload-files.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/clauses/rewrite.ts#16"
+          },
+          {
+            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/docx/ai-skill-tools.ts#17"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/search/ai.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/prefill.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/templates/suggest-template-fields.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/ai-caching.ts#16"
+          },
+          {
+            "location": "apps/api/src/lib/ai-change-summary.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/ai-error.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#43"
+          },
+          {
+            "location": "apps/api/src/lib/ai-models.ts#44"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#27"
+          },
+          {
+            "location": "apps/api/src/lib/ai-output-schema.ts#28"
+          },
+          {
+            "location": "apps/api/src/lib/analytics/ai.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/tool-utils.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-ui-tools.ts#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-lib/build-chat-request-message.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-queries.ts#8"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/needs-matter-card.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#5"
+          },
+          {
+            "location": "apps/web/src/components/chat/source-chips.tsx#6"
+          },
+          {
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#3"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://ai-sdk.dev/docs"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/vercel/ai"
+        }
+      ],
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "ai",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@ai-sdk/react/node_modules/ai/package.json"
+        }
+      ],
+      "purl": "pkg:npm/ai@6.0.205",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "6.0.205"
+    },
+    {
+      "bom-ref": "pkg:npm/ai@6.0.208",
       "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
       "evidence": {
         "identity": [
@@ -14590,13 +14958,13 @@
           "value": "node_modules/ai/package.json"
         }
       ],
-      "purl": "pkg:npm/ai@6.0.205",
+      "purl": "pkg:npm/ai@6.0.208",
       "scope": "required",
       "tags": [
         "ai"
       ],
       "type": "library",
-      "version": "6.0.205"
+      "version": "6.0.208"
     },
     {
       "authors": [
@@ -14604,7 +14972,7 @@
           "name": "withastro"
         }
       ],
-      "bom-ref": "pkg:npm/astro@6.4.6",
+      "bom-ref": "pkg:npm/astro@6.4.8",
       "description": "Astro is a modern site builder with web best practices, performance, and DX front-of-mind.",
       "evidence": {
         "identity": [
@@ -14659,13 +15027,13 @@
           "value": "node_modules/astro/package.json"
         }
       ],
-      "purl": "pkg:npm/astro@6.4.6",
+      "purl": "pkg:npm/astro@6.4.8",
       "scope": "required",
       "tags": [
         "web"
       ],
       "type": "library",
-      "version": "6.4.6"
+      "version": "6.4.8"
     },
     {
       "bom-ref": "pkg:npm/babel-plugin-react-compiler@1.0.0",
@@ -16412,7 +16780,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#27"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#23"
           },
           {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#15"
@@ -16525,7 +16893,7 @@
           "name": "Taskforce.sh Inc."
         }
       ],
-      "bom-ref": "pkg:npm/bullmq@5.78.1",
+      "bom-ref": "pkg:npm/bullmq@5.79.0",
       "description": "Queue for messages and jobs based on Redis",
       "evidence": {
         "identity": [
@@ -16586,10 +16954,10 @@
           "value": "node_modules/bullmq/package.json"
         }
       ],
-      "purl": "pkg:npm/bullmq@5.78.1",
+      "purl": "pkg:npm/bullmq@5.79.0",
       "scope": "required",
       "type": "library",
-      "version": "5.78.1"
+      "version": "5.79.0"
     },
     {
       "authors": [
@@ -18530,7 +18898,7 @@
           "name": "saltyAom <saltyaom@gmail.com> (https://github.com/SaltyAom)"
         }
       ],
-      "bom-ref": "pkg:npm/elysia@1.4.28",
+      "bom-ref": "pkg:npm/elysia@1.4.29",
       "description": "Ergonomic Framework for Human",
       "evidence": {
         "identity": [
@@ -19638,13 +20006,13 @@
           "value": "node_modules/elysia/package.json"
         }
       ],
-      "purl": "pkg:npm/elysia@1.4.28",
+      "purl": "pkg:npm/elysia@1.4.29",
       "scope": "required",
       "tags": [
         "framework"
       ],
       "type": "framework",
-      "version": "1.4.28"
+      "version": "1.4.29"
     },
     {
       "authors": [
@@ -19712,7 +20080,7 @@
           "name": "Amit Gupta (https://solothought.com)"
         }
       ],
-      "bom-ref": "pkg:npm/fast-xml-parser@5.9.0",
+      "bom-ref": "pkg:npm/fast-xml-parser@5.9.3",
       "description": "Validate XML, Parse XML, Build XML without C/C++ based libraries",
       "evidence": {
         "identity": [
@@ -19757,14 +20125,14 @@
           "value": "node_modules/fast-xml-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/fast-xml-parser@5.9.0",
+      "purl": "pkg:npm/fast-xml-parser@5.9.3",
       "scope": "required",
       "tags": [
         "parse",
         "xml"
       ],
       "type": "library",
-      "version": "5.9.0"
+      "version": "5.9.3"
     },
     {
       "authors": [
@@ -20200,7 +20568,7 @@
           "name": "Eric Fennis"
         }
       ],
-      "bom-ref": "pkg:npm/lucide-react@1.17.0",
+      "bom-ref": "pkg:npm/lucide-react@1.21.0",
       "description": "A Lucide icon library package for React applications.",
       "evidence": {
         "identity": [
@@ -20225,10 +20593,10 @@
             "location": "apps/web/src/components/workspace-primary-nav.ts#9"
           },
           {
-            "location": "apps/web/src/lib/value-types.ts#22"
+            "location": "apps/web/src/lib/value-types.ts#21"
           },
           {
-            "location": "apps/web/src/lib/value-types.ts#23"
+            "location": "apps/web/src/lib/value-types.ts#22"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants.ts#10"
@@ -20261,10 +20629,10 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#18"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#3"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#25"
+            "location": "apps/web/src/components/app-sidebar.tsx#24"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#6"
@@ -20366,6 +20734,9 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#13"
           },
           {
+            "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#3"
+          },
+          {
             "location": "apps/web/src/components/inspector/inspector-pdf-error-fallback.tsx#1"
           },
           {
@@ -20408,10 +20779,10 @@
             "location": "apps/web/src/components/search-dialog.tsx#20"
           },
           {
-            "location": "apps/web/src/components/selfhost-update-banner.tsx#4"
+            "location": "apps/web/src/components/selfhost-update-banner.tsx#3"
           },
           {
-            "location": "apps/web/src/components/sidebar-user-menu.tsx#11"
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#10"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#7"
@@ -20525,7 +20896,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#15"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#13"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#19"
@@ -20540,10 +20911,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#29"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#41"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#44"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#42"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#45"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-upload.tsx#4"
@@ -20585,7 +20956,7 @@
             "location": "apps/web/src/routes/_protected.todos/index.tsx#17"
           },
           {
-            "location": "apps/web/src/routes/_protected.tsx#18"
+            "location": "apps/web/src/routes/_protected.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#28"
@@ -20999,13 +21370,13 @@
           "value": "node_modules/lucide-react/package.json"
         }
       ],
-      "purl": "pkg:npm/lucide-react@1.17.0",
+      "purl": "pkg:npm/lucide-react@1.21.0",
       "scope": "required",
       "tags": [
         "cloud"
       ],
       "type": "library",
-      "version": "1.17.0"
+      "version": "1.21.0"
     },
     {
       "authors": [
@@ -21448,7 +21819,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.386.6",
+      "bom-ref": "pkg:npm/posthog-js@1.391.2",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -21497,10 +21868,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.386.6",
+      "purl": "pkg:npm/posthog-js@1.391.2",
       "scope": "required",
       "type": "library",
-      "version": "1.386.6"
+      "version": "1.391.2"
     },
     {
       "authors": [
@@ -21995,7 +22366,7 @@
             "location": "packages/folio/src/core/utils/headingCollector.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#43"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#46"
           },
           {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#6"
@@ -22211,6 +22582,12 @@
             "location": "packages/folio/src/core/prosemirror/plugins/templatePreviewValues.ts#19"
           },
           {
+            "location": "packages/folio/src/core/prosemirror/plugins/templateSlashMenu.ts#21"
+          },
+          {
+            "location": "packages/folio/src/core/prosemirror/plugins/templateSlashMenu.ts#22"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/selectionState.ts#8"
           },
           {
@@ -22220,10 +22597,10 @@
             "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#44"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#47"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#45"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#48"
           },
           {
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#7"
@@ -22488,7 +22865,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#30"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#46"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#49"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#25"
@@ -22843,6 +23220,9 @@
           },
           {
             "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
+          },
+          {
+            "location": "apps/web/src/hooks/use-chrome-query.ts#1"
           },
           {
             "location": "apps/web/src/hooks/use-effect.ts#1"
@@ -24228,6 +24608,9 @@
             "location": "packages/ui/src/components/select.tsx#3"
           },
           {
+            "location": "packages/ui/src/components/separator.tsx#1"
+          },
+          {
             "location": "packages/ui/src/components/sheet.tsx#3"
           },
           {
@@ -24673,10 +25056,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#12"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#26"
+            "location": "apps/web/src/components/app-sidebar.tsx#25"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#28"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#24"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#6"
@@ -24703,7 +25086,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#47"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#50"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#5"
@@ -24838,10 +25221,10 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#19"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#27"
+            "location": "apps/web/src/components/app-sidebar.tsx#26"
           },
           {
             "location": "apps/web/src/components/auth/inbox-quick-jump.tsx#1"
@@ -24910,7 +25293,7 @@
             "location": "apps/web/src/components/chat/web-search-sources.tsx#2"
           },
           {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#29"
+            "location": "apps/web/src/components/chat-editor-provider.tsx#25"
           },
           {
             "location": "apps/web/src/components/chat-input-surface.tsx#5"
@@ -24967,6 +25350,9 @@
             "location": "apps/web/src/components/inspector/file-tab-panel.tsx#14"
           },
           {
+            "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#4"
+          },
+          {
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#12"
           },
           {
@@ -25012,13 +25398,13 @@
             "location": "apps/web/src/components/search-dialog.tsx#22"
           },
           {
-            "location": "apps/web/src/components/selfhost-update-banner.tsx#5"
+            "location": "apps/web/src/components/selfhost-update-banner.tsx#4"
           },
           {
             "location": "apps/web/src/components/shortcut-hints-overlay.tsx#7"
           },
           {
-            "location": "apps/web/src/components/sidebar-user-menu.tsx#12"
+            "location": "apps/web/src/components/sidebar-user-menu.tsx#11"
           },
           {
             "location": "apps/web/src/components/sidebar.tsx#8"
@@ -25165,7 +25551,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#16"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#14"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#20"
@@ -25180,7 +25566,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#31"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#48"
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#51"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-upload.tsx#5"
@@ -25267,7 +25653,7 @@
             "location": "apps/web/src/routes/_protected.todos/index.tsx#18"
           },
           {
-            "location": "apps/web/src/routes/_protected.tsx#19"
+            "location": "apps/web/src/routes/_protected.tsx#18"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#29"
@@ -26065,13 +26451,13 @@
             "location": "packages/legal-ast/src/analysis.ts#5"
           },
           {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#6"
+            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
           },
           {
             "location": "apps/web/src/components/auth/sign-in-panel.tsx#8"
           },
           {
-            "location": "apps/web/src/components/selfhost-update-banner.tsx#6"
+            "location": "apps/web/src/components/selfhost-update-banner.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#7"
@@ -26431,7 +26817,7 @@
             "location": "apps/web/src/stores/config-store.ts#2"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#28"
+            "location": "apps/web/src/components/app-sidebar.tsx#27"
           },
           {
             "location": "apps/web/src/components/chat/model-selector-dialog.tsx#2"
@@ -26509,7 +26895,7 @@
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#5"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#28"
+            "location": "apps/web/src/components/app-sidebar.tsx#27"
           },
           {
             "location": "apps/web/src/components/chat/model-selector-dialog.tsx#2"
