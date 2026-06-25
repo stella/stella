@@ -12,6 +12,18 @@ export type ChangelogRelease = {
 const CHANGELOG_DIR = resolveRepoPath("docs", "changelog");
 const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
 
+export type ReleaseKind = "major" | "minor" | "patch";
+
+export const getReleaseKind = (tagName: string): ReleaseKind => {
+  const [, minor, patch] = tagName.replace(/^v/u, "").split(".").map(Number);
+
+  if (patch !== 0) {
+    return "patch";
+  }
+
+  return minor === 0 ? "major" : "minor";
+};
+
 export const releaseAnchorId = (tagName: string) =>
   tagName
     .toLowerCase()
@@ -52,6 +64,11 @@ export const getChangelogReleases = (): ChangelogRelease[] => {
     right.tagName.localeCompare(left.tagName, "en", { numeric: true }),
   );
 };
+
+export const getLatestFeatureRelease = (): ChangelogRelease | undefined =>
+  getChangelogReleases().find(
+    (release) => getReleaseKind(release.tagName) !== "patch",
+  );
 
 const findHeading = (markdown: string, level: 1 | 2) => {
   const marker = "#".repeat(level);
