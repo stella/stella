@@ -535,7 +535,7 @@ if (import.meta.main) {
       console.log(`\n${path.resolve(langsDir, "en.json")}:`);
       for (const { key, shares } of shared) {
         console.log(
-          `  = shared value: ${key} (also ${shares.join(", ")}) — consider moving the term to common.* and reusing it, or baseline it`,
+          `  = shared value: ${key} (also ${shares.join(", ")}): consider moving the term to common.* and reusing it, or baseline it`,
         );
       }
     }
