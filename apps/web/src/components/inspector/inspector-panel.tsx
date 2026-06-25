@@ -424,7 +424,7 @@ export const InspectorPanel = ({ workspaceId }: InspectorPanelProps) => {
   });
 
   return (
-    <div className="bg-background flex h-full shadow-lg md:border-s">
+    <div className="bg-background flex h-full shadow-lg">
       <div className="hidden md:contents">
         <InspectorRail
           activeId={activeId}

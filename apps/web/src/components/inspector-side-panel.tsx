@@ -175,7 +175,7 @@ const LazyInspectorPanel = lazy(
 // the lazy chunk fetch. Buttons are inert; they activate once the
 // real panel mounts.
 const InspectorRailFallback = () => (
-  <div className="bg-background flex h-full border-s shadow-lg">
+  <div className="bg-background flex h-full shadow-lg">
     <div className={SIDE_RAIL_CONTAINER_CLASS}>
       <div
         aria-hidden="true"

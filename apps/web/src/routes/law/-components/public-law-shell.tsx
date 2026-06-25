@@ -391,7 +391,7 @@ function PublicInspectorRail({
         )}
       >
         <div className="bg-sidebar flex h-full w-full flex-col">
-          <div className="bg-background flex h-full border-s shadow-lg">
+          <div className="bg-background flex h-full shadow-lg">
             <div className={SIDE_RAIL_CONTAINER_CLASS}>
               {railButton({
                 icon: <PanelRightIcon className="size-4" />,
