@@ -19,9 +19,9 @@ const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
 const socialImageUrl = new URL(socialImage, Astro.site);
 ---
 
-<!--
+{/*
   stll.app — stella landing page
--->
+*/}
 <!doctype html>
 <html lang="en" class="scroll-smooth">
   <head>
@@ -31,10 +31,10 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <meta name="robots" content="index, follow, max-image-preview:large" />
     <title>{title}</title>
 
-    <!-- Canonical -->
+    {/* Canonical */}
     <link rel="canonical" href={canonicalUrl.href} />
 
-    <!-- Open Graph -->
+    {/* Open Graph */}
     <meta property="og:type" content="website" />
     <meta property="og:locale" content="en_US" />
     <meta property="og:title" content={title} />
@@ -46,7 +46,7 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <meta property="og:image:width" content="1200" />
     <meta property="og:image:height" content="630" />
 
-    <!-- Twitter -->
+    {/* Twitter */}
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="twitter:site" content="@stll_app" />
     <meta name="twitter:title" content={title} />
@@ -54,25 +54,25 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     <meta name="twitter:image" content={socialImageUrl.href} />
     <meta name="twitter:image:alt" content={socialImageAlt} />
 
-    <!-- Favicons -->
+    {/* Favicons */}
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="icon" type="image/x-icon" href="/favicon.ico" />
 
-    <!-- Fonts: self-hosted, no external requests -->
+    {/* Fonts: self-hosted, no external requests */}
     <link rel="preload" href="/fonts/CabinetGrotesk-Variable.woff2" as="font" type="font/woff2" crossorigin />
     <link rel="preload" href="/fonts/dm-sans-latin-wght-normal.woff2" as="font" type="font/woff2" crossorigin />
 
-    <!--
+    {/*
       Reveal capability gate. The [data-reveal] hidden initial state in
       global.css is scoped under .js-reveal so it only applies when JS
       is available. Without JS, reveal content renders at its natural
       visible state instead of being trapped at opacity 0.
-    -->
+    */}
     <script is:inline>
       document.documentElement.classList.add("js-reveal");
     </script>
 
-    <!-- Theme: follow system preference, allow manual override -->
+    {/* Theme: follow system preference, allow manual override */}
     <script is:inline>
       (function() {
         const t = localStorage.getItem("theme");
@@ -88,7 +88,7 @@ const socialImageUrl = new URL(socialImage, Astro.site);
       })();
     </script>
 
-    <!-- Structured data -->
+    {/* Structured data */}
     <script is:inline type="application/ld+json" set:html={JSON.stringify({
       "@context": "https://schema.org",
       "@graph": [
@@ -196,10 +196,10 @@ const socialImageUrl = new URL(socialImage, Astro.site);
   <body class="antialiased">
     <slot />
 
-    <!--
+    {/*
       Disable transitions on first load so the theme
       applies instantly, then enable after paint.
-    -->
+    */}
     <script is:inline>
       document.documentElement.classList.add("no-transitions");
       requestAnimationFrame(() => {

@@ -84,4 +84,10 @@ minimumReleaseAgeExcludes = [
   "@typescript/typescript-win32-x64",
   "drizzle-kit",
   "drizzle-orm",
+  # TEMPORARY — Astro 7 major adopted ahead of its 5-day quarantine
+  # (clears 2026-06-27). REVERT this block before merging the PR so the
+  # quarantine guards Astro again.
+  "astro",
+  "@astrojs/react",
+  "@astrojs/markdown-satteri",
 ]
