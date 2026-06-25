@@ -176,7 +176,11 @@ const buildRequestLogAttributes = ({
   return attributes;
 };
 
-const api = new Elysia()
+// Disable Elysia's ahead-of-time codegen (Sucrose): it reads handler source via
+// fn.toString(), which `bun build --compile` transforms — a known
+// incompatibility. Dynamic dispatch is correct in every build, and AOT can be
+// slower on Bun anyway. See elysiajs/elysia#740 and #1711.
+const api = new Elysia({ aot: false })
   .onRequest(({ request, set }) => {
     setSecurityHeaders(set);
 

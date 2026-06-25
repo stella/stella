@@ -13,7 +13,7 @@ import sendMessage from "@/api/handlers/chat/send-message";
 import updateThread from "@/api/handlers/chat/update-thread";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
-export const chatRoute = new Elysia({ prefix: "/chat" })
+export const chatRoute = new Elysia({ prefix: "/chat", aot: false })
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
