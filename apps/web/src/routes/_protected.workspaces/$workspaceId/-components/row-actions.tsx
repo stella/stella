@@ -857,9 +857,14 @@ const CreateSubfolderMenuItem = ({
 const toCopyToMatterEntities = (
   targets: readonly (WorkspaceEntity | TableTreeNode)[],
 ): CopyToMatterEntity[] => {
-  // Index every parent->child link reachable from the selected subtrees so the
-  // ancestor chain stays unbroken across unselected intermediate folders.
+  // Seed each target's own immediate parent so flat WorkspaceEntity selections
+  // (table toolbar / row context menu) still dedupe a selected direct parent,
+  // then overlay every parent->child link reachable from the selected subtrees
+  // so the chain stays unbroken across unselected intermediate folders.
   const parentById = new Map<string, string | null>();
+  for (const target of targets) {
+    parentById.set(target.entityId, target.parentId ?? null);
+  }
   const indexChildren = (
     nodes: readonly (WorkspaceEntity | TableTreeNode)[],
   ) => {
