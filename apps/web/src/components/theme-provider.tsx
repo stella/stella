@@ -110,6 +110,12 @@ export const ThemeProvider = ({ children }: PropsWithChildren) => {
       const resolved = resolveTheme(theme);
       const restore = suppressTransitions();
       root.classList.toggle("dark", resolved === "dark");
+      // Override the inline color-scheme/background the pre-paint init script
+      // (dark-mode-init.js) may have set; inline styles win over the CSS
+      // `html { color-scheme }` rule, so without this a dark->light override
+      // would leave native scrollbars and form controls painted dark.
+      root.style.colorScheme = resolved;
+      root.style.removeProperty("background-color");
       setResolvedTheme(resolved);
       restore();
     };
