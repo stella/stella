@@ -279,6 +279,27 @@ const INVARIANT_RULES: InvariantRule[] = [
   },
 ];
 
+// Migrations applied before this guard existed carry backfills that are now
+// immutable: editing an applied migration breaks its journal hash. They are
+// grandfathered by (migration directory, rule id) so the full-tree / no-arg scan
+// stays usable, while any new migration, or a new rule firing on these files,
+// still fails. CI lints only changed files, so it never reaches these.
+const GRANDFATHERED_VIOLATIONS: ReadonlyMap<
+  string,
+  ReadonlySet<string>
+> = new Map([
+  ["20260429220500_global-search-unaccent", new Set(["unbounded-update"])],
+  ["20260522100000_entity_hot_path_indexes", new Set(["unbounded-update"])],
+  ["20260603120000_case_law_public_slugs", new Set(["recursive-cte"])],
+]);
+
+const getMigrationName = (file: string): string | undefined =>
+  file.split(/[/\\]/u).at(-2);
+
+const isGrandfatheredViolation = (file: string, ruleId: string): boolean =>
+  GRANDFATHERED_VIOLATIONS.get(getMigrationName(file) ?? "")?.has(ruleId) ??
+  false;
+
 const usage = () => {
   console.error(
     "Usage: bun scripts/check-migration-safety.ts [apps/api/drizzle/<migration>/migration.sql ...]",
@@ -681,10 +702,12 @@ const main = () => {
     const source = readFileSync(file, "utf-8");
     const statements = parseStatements(source);
     const invariantFindings = statements.flatMap((statement) =>
-      INVARIANT_RULES.filter((rule) =>
-        rule.matches
-          ? rule.matches(statement.text)
-          : (rule.pattern?.test(statement.text) ?? false),
+      INVARIANT_RULES.filter(
+        (rule) =>
+          (rule.matches
+            ? rule.matches(statement.text)
+            : (rule.pattern?.test(statement.text) ?? false)) &&
+          !isGrandfatheredViolation(file, rule.id),
       ).map((rule) => ({
         file,
         line: statement.line,
@@ -715,6 +738,7 @@ const main = () => {
           : (rule.pattern?.test(statement.text) ?? false),
       )
         .filter((rule) => !acknowledgedCategories.has(rule.category))
+        .filter((rule) => !isGrandfatheredViolation(file, rule.id))
         .map((rule) => ({
           file,
           line: statement.line,

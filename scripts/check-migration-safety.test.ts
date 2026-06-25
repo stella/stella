@@ -34,7 +34,38 @@ const runChecker = (sql: string): CheckerResult => {
   }
 };
 
+const runCheckerOn = (...args: string[]): CheckerResult => {
+  const result = Bun.spawnSync([
+    "bun",
+    "scripts/check-migration-safety.ts",
+    ...args,
+  ]);
+
+  return {
+    exitCode: result.exitCode,
+    stderr: decoder.decode(result.stderr),
+    stdout: decoder.decode(result.stdout),
+  };
+};
+
 describe("check-migration-safety", () => {
+  it("passes the full no-argument scan of the migration tree", () => {
+    // The default scan walks every applied migration; pre-existing backfills are
+    // grandfathered, so the standalone checker stays usable for developers.
+    const result = runCheckerOn();
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("grandfathers a pre-existing applied migration's backfill", () => {
+    const result = runCheckerOn(
+      "apps/api/drizzle/20260429220500_global-search-unaccent/migration.sql",
+    );
+
+    expect(result.exitCode).toBe(0);
+  });
+
   it("rejects column-target ON CONFLICT clauses", () => {
     const result = runChecker(`
       INSERT INTO "mcp_connectors" ("slug")
