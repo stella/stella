@@ -113,6 +113,30 @@ describe("check-migration-safety", () => {
     expect(result.stderr).toBe("");
   });
 
+  it("flags a full-table UPDATE whose only WHERE is in a SET subquery", () => {
+    const result = runChecker(`
+      UPDATE "documents"
+      SET "workspace_id" = (
+        SELECT "id" FROM "workspaces" WHERE "workspaces"."slug" = 'x'
+      );
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("allows a FROM-join UPDATE bounded by a top-level WHERE", () => {
+    const result = runChecker(`
+      UPDATE "documents" AS d
+      SET "workspace_id" = w."id"
+      FROM "workspaces" AS w
+      WHERE d."workspace_slug" = w."slug";
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
   it("clears an unbounded UPDATE with a bulk-backfill acknowledgement", () => {
     const result = runChecker(`
       -- stella-migration-safety: reviewed bulk-backfill - table has under ten rows

@@ -67,9 +67,44 @@ const ROUTINE_DOLLAR_QUOTE_PREFIX_PATTERN =
   /\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b[\s\S]*\b(?:AS|IS)\s*$/i;
 
 const UPDATE_STATEMENT_PATTERN = /\bUPDATE\b[\s\S]*\bSET\b/iu;
-const WHERE_CLAUSE_PATTERN = /\bWHERE\b/iu;
+const WHERE_KEYWORD_PATTERN = /^WHERE\b/iu;
+const IDENTIFIER_CHARACTER_PATTERN = /[A-Za-z0-9_]/u;
 
 const INSERT_OR_UPSERT_PATTERN = /(?:^\s*INSERT\b)|(?:\bON\s+CONFLICT\b)/iu;
+
+// A WHERE that bounds the outer UPDATE sits at parenthesis depth 0. A WHERE
+// only inside a parenthesised subquery (e.g. `SET col = (SELECT ... WHERE ...)`)
+// does not bound the update, so the statement is still a full-table write. The
+// statement text is already string/comment-masked by parseStatements, so paren
+// and keyword scanning here cannot be fooled by literals.
+const hasTopLevelWhere = (statement: string): boolean => {
+  let depth = 0;
+
+  for (let index = 0; index < statement.length; index++) {
+    const char = statement[index] ?? "";
+
+    if (char === "(") {
+      depth++;
+      continue;
+    }
+
+    if (char === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    if (
+      depth === 0 &&
+      (char === "W" || char === "w") &&
+      WHERE_KEYWORD_PATTERN.test(statement.slice(index)) &&
+      !IDENTIFIER_CHARACTER_PATTERN.test(statement[index - 1] ?? "")
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+};
 
 const isUnboundedUpdate = (statement: string): boolean => {
   // INSERT ... ON CONFLICT DO UPDATE SET ... is an upsert, not a full-table
@@ -79,12 +114,11 @@ const isUnboundedUpdate = (statement: string): boolean => {
     return false;
   }
 
-  // Intentionally conservative: any WHERE token anywhere in the statement
-  // (including inside a subquery) clears the finding. A full-table UPDATE has
-  // no WHERE at all, so this never misses the heavy backfill we care about.
+  // A full-table UPDATE has no WHERE bounding the outer statement. A WHERE that
+  // lives only inside a SET subquery (the common "populate from related table"
+  // backfill) still rewrites every row, so require a top-level WHERE to clear.
   return (
-    UPDATE_STATEMENT_PATTERN.test(statement) &&
-    !WHERE_CLAUSE_PATTERN.test(statement)
+    UPDATE_STATEMENT_PATTERN.test(statement) && !hasTopLevelWhere(statement)
   );
 };
 
