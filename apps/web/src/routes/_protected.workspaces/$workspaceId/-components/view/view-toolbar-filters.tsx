@@ -84,6 +84,11 @@ export const FilterChips = ({
 }: FilterChipsProps) => {
   const t = useTranslations();
   const fields = useFilterFields(properties);
+  // Which advanced-filter chip's editor is open. Set when a chip is created so
+  // it opens immediately (an unopened "1 rule" chip is otherwise a dead end).
+  const [openAdvancedIndex, setOpenAdvancedIndex] = useState<number | null>(
+    null,
+  );
 
   const replaceAt = (index: number, node: ConditionNode) => {
     onUpdate(filters.map((existing, i) => (i === index ? node : existing)));
@@ -104,11 +109,17 @@ export const FilterChips = ({
     ? fields.filter((field) => field.operand.type !== "kind")
     : fields;
 
+  // The seeded group lands at the current end, so open the chip at that index.
+  const addAdvanced = () => {
+    setOpenAdvancedIndex(filters.length);
+    append(seededAdvancedGroup(pickerFields));
+  };
+
   if (filters.length === 0) {
     return (
       <AddFilterPicker
         fields={pickerFields}
-        onAddAdvanced={() => append(seededAdvancedGroup(pickerFields))}
+        onAddAdvanced={addAdvanced}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
           <Button
@@ -139,7 +150,11 @@ export const FilterChips = ({
               key={index}
               node={node}
               onChange={(next) => replaceAt(index, next)}
+              onOpenChange={(nextOpen) =>
+                setOpenAdvancedIndex(nextOpen ? index : null)
+              }
               onRemove={() => removeAt(index)}
+              open={openAdvancedIndex === index}
             />
           );
         }
@@ -156,7 +171,7 @@ export const FilterChips = ({
       })}
       <AddFilterPicker
         fields={pickerFields}
-        onAddAdvanced={() => append(seededAdvancedGroup(pickerFields))}
+        onAddAdvanced={addAdvanced}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
           <Button
@@ -431,6 +446,8 @@ type AdvancedFilterChipProps = {
   node: GroupNode;
   fields: FieldOption[];
   facetContext?: FacetContext | undefined;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onChange: (next: GroupNode) => void;
   onRemove: () => void;
 };
@@ -439,13 +456,15 @@ const AdvancedFilterChip = ({
   node,
   fields,
   facetContext,
+  open,
+  onOpenChange,
   onChange,
   onRemove,
 }: AdvancedFilterChipProps) => {
   const t = useTranslations();
 
   return (
-    <Popover>
+    <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger
         render={
           <Button
@@ -465,7 +484,7 @@ const AdvancedFilterChip = ({
           })}
         </span>
       </PopoverTrigger>
-      <PopoverPopup align="start" className="w-[34rem] max-w-[90vw] p-3">
+      <PopoverPopup align="start" className="w-[44rem] max-w-[92vw] p-3">
         <ConditionBuilder
           capabilities={filterCapabilities({
             fields,

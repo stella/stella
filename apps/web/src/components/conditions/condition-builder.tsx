@@ -203,7 +203,7 @@ export const ConditionBuilder = ({
         })}
       </div>
 
-      <div className="ms-18 flex flex-wrap gap-1">
+      <div className="ms-[5.375rem] flex flex-wrap gap-1">
         <Button
           className="w-fit justify-start"
           disabled={!firstField}
@@ -260,7 +260,7 @@ const ConditionGutter = ({
   onCombinator: (next: GroupNode["combinator"]) => void;
 }) => {
   const t = useTranslations();
-  const gutterClass = "w-16 shrink-0 text-muted-foreground text-xs";
+  const gutterClass = "w-20 shrink-0 text-muted-foreground text-xs";
 
   if (index === 0) {
     return (
@@ -277,7 +277,7 @@ const ConditionGutter = ({
       >
         <SelectTrigger
           aria-label={t("templates.conditionMatch")}
-          className="w-16 min-w-0 shrink-0"
+          className="h-7 min-h-0 w-20 min-w-0 shrink-0 text-xs"
           size="sm"
         >
           <SelectValue />
@@ -411,76 +411,78 @@ const LeafRow = ({
   const editorKind = editorFor(field.valueType, operator);
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex items-center gap-1.5">
       <ConditionGutter
         combinator={combinator}
         index={index}
         onCombinator={onSetCombinator}
       />
-      <Select
-        onValueChange={(next) => {
-          if (next === null) {
-            return;
-          }
-          if (next === FORMULA_OPTION) {
-            onChange(
-              buildLeaf({
-                operand: { type: "formula", expr: "" },
-                operator: opsFor(FORMULA_VALUE_TYPE).at(0) ?? "eq",
-                value: "",
-              }),
-            );
-            return;
-          }
-          const nextField = fields[Number(next)];
-          if (nextField) {
-            onChange(leafFromField(nextField));
-          }
-        }}
-        value={String(fieldIndex)}
-      >
-        <SelectTrigger
-          className="h-7 min-h-0 w-auto min-w-32 text-xs"
-          size="sm"
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <Select
+          onValueChange={(next) => {
+            if (next === null) {
+              return;
+            }
+            if (next === FORMULA_OPTION) {
+              onChange(
+                buildLeaf({
+                  operand: { type: "formula", expr: "" },
+                  operator: opsFor(FORMULA_VALUE_TYPE).at(0) ?? "eq",
+                  value: "",
+                }),
+              );
+              return;
+            }
+            const nextField = fields[Number(next)];
+            if (nextField) {
+              onChange(leafFromField(nextField));
+            }
+          }}
+          value={String(fieldIndex)}
         >
-          <SelectValue placeholder={t("templates.conditionField")}>
-            {field.label}
-          </SelectValue>
-        </SelectTrigger>
-        <SelectPopup alignItemWithTrigger={false}>
-          {fields.map((option, optionIndex) => (
-            <SelectItem key={optionIndex} value={String(optionIndex)}>
-              {option.label}
-            </SelectItem>
-          ))}
-          {allowFormula && (
-            <>
-              <SelectSeparator />
-              <SelectItem value={FORMULA_OPTION}>
-                {t("templates.conditionUseFormula")}
+          <SelectTrigger
+            className="h-7 min-h-0 w-auto max-w-44 min-w-0 text-xs"
+            size="sm"
+          >
+            <SelectValue placeholder={t("templates.conditionField")}>
+              {field.label}
+            </SelectValue>
+          </SelectTrigger>
+          <SelectPopup alignItemWithTrigger={false}>
+            {fields.map((option, optionIndex) => (
+              <SelectItem key={optionIndex} value={String(optionIndex)}>
+                {option.label}
               </SelectItem>
-            </>
-          )}
-        </SelectPopup>
-      </Select>
+            ))}
+            {allowFormula && (
+              <>
+                <SelectSeparator />
+                <SelectItem value={FORMULA_OPTION}>
+                  {t("templates.conditionUseFormula")}
+                </SelectItem>
+              </>
+            )}
+          </SelectPopup>
+        </Select>
 
-      <OperatorSelect
-        field={field}
-        labelKey={capabilities.operatorLabelKey ?? operatorLabelKey}
-        node={node}
-        onChange={onChange}
-        operator={operator}
-        operators={operators}
-      />
+        <OperatorSelect
+          field={field}
+          labelKey={capabilities.operatorLabelKey ?? operatorLabelKey}
+          node={node}
+          onChange={onChange}
+          operator={operator}
+          operators={operators}
+        />
 
-      <LeafValueEditor
-        capabilities={capabilities}
-        editorKind={editorKind}
-        field={field}
-        node={node}
-        onChange={onChange}
-        operator={operator}
-      />
+        <LeafValueEditor
+          capabilities={capabilities}
+          editorKind={editorKind}
+          field={field}
+          node={node}
+          onChange={onChange}
+          operator={operator}
+        />
+      </div>
 
       <RemoveButton onRemove={onRemove} />
     </div>
@@ -518,53 +520,55 @@ const FormulaLeafRow = ({
   const formulaOperand = { type: "formula", expr } as const;
 
   return (
-    <div className="flex flex-wrap items-center gap-1.5">
+    <div className="flex items-center gap-1.5">
       <ConditionGutter
         combinator={combinator}
         index={index}
         onCombinator={onSetCombinator}
       />
-      <FormulaCell
-        numberFields={formulaNumberFields}
-        onChange={(nextExpr) =>
-          onChange(
-            buildLeaf({
-              operand: { type: "formula", expr: nextExpr },
-              operator,
-              value: leafValueString(node),
-            }),
-          )
-        }
-        onUseField={() => {
-          if (firstField) {
-            onChange(leafFromField(firstField));
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <FormulaCell
+          numberFields={formulaNumberFields}
+          onChange={(nextExpr) =>
+            onChange(
+              buildLeaf({
+                operand: { type: "formula", expr: nextExpr },
+                operator,
+                value: leafValueString(node),
+              }),
+            )
           }
-        }}
-        value={expr}
-      />
-      <OperatorSelectFormula
-        labelKey={labelFor}
-        node={node}
-        onChange={onChange}
-        operand={formulaOperand}
-        operator={operator}
-        operators={operators}
-      />
-      <Input
-        className="h-7! w-24 text-xs"
-        onChange={(e) =>
-          onChange(
-            buildLeaf({
-              operand: formulaOperand,
-              operator,
-              value: e.currentTarget.value,
-            }),
-          )
-        }
-        size="sm"
-        type="number"
-        value={leafValueString(node)}
-      />
+          onUseField={() => {
+            if (firstField) {
+              onChange(leafFromField(firstField));
+            }
+          }}
+          value={expr}
+        />
+        <OperatorSelectFormula
+          labelKey={labelFor}
+          node={node}
+          onChange={onChange}
+          operand={formulaOperand}
+          operator={operator}
+          operators={operators}
+        />
+        <Input
+          className="h-7! w-24 text-xs"
+          onChange={(e) =>
+            onChange(
+              buildLeaf({
+                operand: formulaOperand,
+                operator,
+                value: e.currentTarget.value,
+              }),
+            )
+          }
+          size="sm"
+          type="number"
+          value={leafValueString(node)}
+        />
+      </div>
       <RemoveButton onRemove={onRemove} />
     </div>
   );
