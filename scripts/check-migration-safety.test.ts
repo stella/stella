@@ -82,4 +82,78 @@ describe("check-migration-safety", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stderr).toBe("");
   });
+
+  it("flags a full-table UPDATE with no WHERE clause", () => {
+    const result = runChecker(`
+      UPDATE "documents" SET "status" = 'archived';
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("allows an UPDATE bounded by a WHERE clause", () => {
+    const result = runChecker(`
+      UPDATE "documents" SET "status" = 'archived' WHERE "id" = 2;
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("clears an unbounded UPDATE with a bulk-backfill acknowledgement", () => {
+    const result = runChecker(`
+      -- stella-migration-safety: reviewed bulk-backfill - table has under ten rows
+      UPDATE "documents" SET "status" = 'archived';
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
+  it("does not clear an unbounded UPDATE with a destructive-change acknowledgement", () => {
+    const result = runChecker(`
+      -- stella-migration-safety: reviewed destructive-change - rollback handled separately
+      UPDATE "documents" SET "status" = 'archived';
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
+  it("flags a recursive CTE", () => {
+    const result = runChecker(`
+      WITH RECURSIVE "ancestors" AS (
+        SELECT "id", "parent_id" FROM "matters" WHERE "id" = 1
+        UNION ALL
+        SELECT "m"."id", "m"."parent_id"
+        FROM "matters" "m"
+        JOIN "ancestors" "a" ON "m"."id" = "a"."parent_id"
+      )
+      UPDATE "matters" SET "depth" = 0 WHERE "id" IN (SELECT "id" FROM "ancestors");
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("recursive-cte");
+  });
+
+  it("does not clear a destructive change with a bulk-backfill acknowledgement", () => {
+    const result = runChecker(`
+      -- stella-migration-safety: reviewed bulk-backfill - small table backfill
+      DROP TABLE "documents";
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("drop-object");
+  });
+
+  it("clears a destructive change with a destructive-change acknowledgement", () => {
+    const result = runChecker(`
+      -- stella-migration-safety: reviewed destructive-change - replaced by documents_v2, rollback restores from backup
+      DROP TABLE "documents";
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
 });

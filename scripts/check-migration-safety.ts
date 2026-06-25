@@ -8,14 +8,21 @@ type Statement = {
   text: string;
 };
 
+type AcknowledgementCategory = (typeof ACKNOWLEDGEMENT_CATEGORIES)[number];
+
 type GuardedRule = {
   id: string;
   description: string;
+  category: AcknowledgementCategory;
   pattern?: RegExp;
   matches?: (statement: string) => boolean;
 };
 
-type InvariantRule = GuardedRule & {
+type InvariantRule = {
+  id: string;
+  description: string;
+  pattern?: RegExp;
+  matches?: (statement: string) => boolean;
   guidance: string;
 };
 
@@ -35,8 +42,20 @@ type SingleQuoteScanResult = {
   singleQuoteAllowsBackslashEscapes: boolean;
 };
 
+const ACKNOWLEDGEMENT_CATEGORIES = [
+  "destructive-change",
+  "bulk-backfill",
+] as const;
+
 const ACKNOWLEDGEMENT_PREFIX_PATTERN =
-  /^\s*--\s*stella-migration-safety:\s*reviewed\s+destructive-change\s*-\s*/i;
+  /^\s*--\s*stella-migration-safety:\s*reviewed\s+(?<category>destructive-change|bulk-backfill)\s*-\s*/iu;
+
+const parseAcknowledgementCategory = (
+  value: string,
+): AcknowledgementCategory | null =>
+  ACKNOWLEDGEMENT_CATEGORIES.find(
+    (category) => category === value.toLowerCase(),
+  ) ?? null;
 
 const MIN_ACKNOWLEDGEMENT_REASON_LENGTH = 12;
 const DEFAULT_MIGRATIONS_DIR = "apps/api/drizzle";
@@ -47,32 +66,47 @@ const DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN = /\bDO(?:\s+LANGUAGE\s+\S+)?\s*$/i;
 const ROUTINE_DOLLAR_QUOTE_PREFIX_PATTERN =
   /\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b[\s\S]*\b(?:AS|IS)\s*$/i;
 
+const UPDATE_STATEMENT_PATTERN = /\bUPDATE\b[\s\S]*\bSET\b/iu;
+const WHERE_CLAUSE_PATTERN = /\bWHERE\b/iu;
+
+const isUnboundedUpdate = (statement: string): boolean =>
+  // Intentionally conservative: any WHERE token anywhere in the statement
+  // (including inside a subquery) clears the finding. A full-table UPDATE has
+  // no WHERE at all, so this never misses the heavy backfill we care about.
+  UPDATE_STATEMENT_PATTERN.test(statement) &&
+  !WHERE_CLAUSE_PATTERN.test(statement);
+
 const GUARDED_RULES: GuardedRule[] = [
   {
     id: "drop-object",
     description: "drops a database object",
+    category: "destructive-change",
     pattern:
       /\bDROP\s+(?:DATABASE|EXTENSION|FUNCTION|INDEX|MATERIALIZED\s+VIEW|POLICY|SCHEMA|SEQUENCE|TABLE|TRIGGER|TYPE|VIEW)\b/i,
   },
   {
     id: "drop-column",
     description: "drops a table column",
+    category: "destructive-change",
     pattern:
       /\bALTER\s+TABLE\b[\s\S]*\bDROP\s+(?:COLUMN\s+)?(?:IF\s+EXISTS\s+)?(?!(?:CONSTRAINT|DEFAULT|NOT\s+NULL)\b)\S+/i,
   },
   {
     id: "drop-constraint",
     description: "drops a table constraint",
+    category: "destructive-change",
     pattern: /\bALTER\s+TABLE\b[\s\S]*\bDROP\s+CONSTRAINT\b/i,
   },
   {
     id: "rename-table-or-column",
     description: "renames a table or column",
+    category: "destructive-change",
     pattern: /\bALTER\s+TABLE\b[\s\S]*\bRENAME\b/i,
   },
   {
     id: "alter-column-type",
     description: "changes a column type",
+    category: "destructive-change",
     matches: (statement) =>
       ALTER_TABLE_PATTERN.test(statement) &&
       ALTER_COLUMN_TYPE_PATTERN.test(statement),
@@ -80,17 +114,32 @@ const GUARDED_RULES: GuardedRule[] = [
   {
     id: "truncate-table",
     description: "truncates table data",
+    category: "destructive-change",
     pattern: /\bTRUNCATE\b/i,
   },
   {
     id: "delete-data",
     description: "deletes table data",
+    category: "destructive-change",
     pattern: /\bDELETE\s+FROM\b/i,
   },
   {
     id: "disable-row-level-security",
     description: "disables row-level security",
+    category: "destructive-change",
     pattern: /\bALTER\s+TABLE\b[\s\S]*\bDISABLE\s+ROW\s+LEVEL\s+SECURITY\b/i,
+  },
+  {
+    id: "unbounded-update",
+    description: "runs a full-table UPDATE with no WHERE clause",
+    category: "bulk-backfill",
+    matches: isUnboundedUpdate,
+  },
+  {
+    id: "recursive-cte",
+    description: "uses a recursive CTE (WITH RECURSIVE)",
+    category: "bulk-backfill",
+    pattern: /\bWITH\s+RECURSIVE\b/iu,
   },
 ];
 
@@ -110,7 +159,11 @@ const usage = () => {
   );
 };
 
-const hasAcknowledgement = (source: string): boolean => {
+const getAcknowledgedCategories = (
+  source: string,
+): Set<AcknowledgementCategory> => {
+  const categories = new Set<AcknowledgementCategory>();
+
   for (const line of source.split("\n")) {
     const match = ACKNOWLEDGEMENT_PREFIX_PATTERN.exec(line);
 
@@ -120,12 +173,18 @@ const hasAcknowledgement = (source: string): boolean => {
 
     const reason = line.slice(match[0].length).trim();
 
-    if (reason.length >= MIN_ACKNOWLEDGEMENT_REASON_LENGTH) {
-      return true;
+    if (reason.length < MIN_ACKNOWLEDGEMENT_REASON_LENGTH) {
+      continue;
+    }
+
+    const category = parseAcknowledgementCategory(match.groups?.category ?? "");
+
+    if (category) {
+      categories.add(category);
     }
   }
 
-  return false;
+  return categories;
 };
 
 const isWhitespaceOnly = (value: string): boolean => value.trim().length === 0;
@@ -519,23 +578,23 @@ const main = () => {
       }
     }
 
+    const acknowledgedCategories = getAcknowledgedCategories(source);
+
     const guardedFindings = statements.flatMap((statement) =>
       GUARDED_RULES.filter((rule) =>
         rule.matches
           ? rule.matches(statement.text)
           : (rule.pattern?.test(statement.text) ?? false),
-      ).map((rule) => ({
-        file,
-        line: statement.line,
-        rule,
-      })),
+      )
+        .filter((rule) => !acknowledgedCategories.has(rule.category))
+        .map((rule) => ({
+          file,
+          line: statement.line,
+          rule,
+        })),
     );
 
     if (guardedFindings.length === 0) {
-      continue;
-    }
-
-    if (hasAcknowledgement(source)) {
       continue;
     }
 
@@ -550,12 +609,34 @@ const main = () => {
       );
     }
 
-    console.error(
-      "Add a file-level SQL comment after confirming the operation is safe:",
+    const findingCategories = new Set(
+      guardedFindings.map((finding) => finding.rule.category),
     );
-    console.error(
-      "  -- stella-migration-safety: reviewed destructive-change - <why this is safe and how rollback is handled>",
-    );
+
+    if (findingCategories.has("destructive-change")) {
+      console.error(
+        "Add a file-level SQL comment after confirming the operation is safe:",
+      );
+      console.error(
+        "  -- stella-migration-safety: reviewed destructive-change - <why this is safe and how rollback is handled>",
+      );
+    }
+
+    if (findingCategories.has("bulk-backfill")) {
+      console.error(
+        "Migrations should be fast, additive DDL. Move bulk or idempotent backfills",
+      );
+      console.error("to an out-of-band batched script (see the pattern in");
+      console.error(
+        "apps/api/src/scripts/backfill-case-law-slugs.ts), or add a bounded WHERE clause.",
+      );
+      console.error(
+        "If the backfill is genuinely small and safe at scale, acknowledge it:",
+      );
+      console.error(
+        "  -- stella-migration-safety: reviewed bulk-backfill - <why this is safe at scale>",
+      );
+    }
   }
 
   if (violations > 0 || process.exitCode) {
