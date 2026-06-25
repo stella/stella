@@ -200,6 +200,20 @@ const createAuth = () => {
       ...(env.EXTENSION_ORIGIN ? [env.EXTENSION_ORIGIN] : []),
     ],
     disabledPaths: ["/token"],
+    account: {
+      // Make the social-to-existing-account linking policy explicit rather
+      // than relying on library defaults. A social sign-in links to an
+      // existing same-email account only for providers we trust to assert
+      // the signed-in identity actually owns that email. Google asserts a
+      // verified email for consumer and Workspace addresses. Microsoft Entra
+      // omits the email_verified claim by default, so it must be listed
+      // explicitly for tenant SSO users to link instead of erroring
+      // account_not_linked; this is bounded to the single configured tenant.
+      accountLinking: {
+        enabled: true,
+        trustedProviders: ["google", "microsoft"],
+      },
+    },
     user: {
       additionalFields: {
         timezoneId: {
