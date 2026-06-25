@@ -68,10 +68,10 @@
     "createOrganizationButton": "Szervezet létrehozása",
     "emailPlaceholder": "te@example.com",
     "error": {
-      "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.",
-      "generic": "Something went wrong while signing you in. Please try again.",
-      "title": "We couldn't sign you in",
-      "tryAgain": "Try again"
+      "accountNotLinked": "Ez az e-mail-cím másképp jelentkezik be. Használja az eredeti bejelentkezési módot, vagy próbálja újra.",
+      "generic": "A bejelentkezés során hiba történt. Kérjük, próbálja újra.",
+      "title": "Nem sikerült bejelentkeztetni",
+      "tryAgain": "Próbálja újra"
     },
     "headline": "Tisztán látás minden ügyben.",
     "invitation": {

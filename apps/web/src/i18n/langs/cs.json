@@ -68,10 +68,10 @@
     "createOrganizationButton": "Vytvořit organizaci",
     "emailPlaceholder": "vy@priklad.cz",
     "error": {
-      "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.",
-      "generic": "Something went wrong while signing you in. Please try again.",
-      "title": "We couldn't sign you in",
-      "tryAgain": "Try again"
+      "accountNotLinked": "Tento e-mail se přihlašuje jiným způsobem. Použijte svůj původní způsob přihlášení, nebo to zkuste znovu.",
+      "generic": "Při přihlašování se něco pokazilo. Zkuste to prosím znovu.",
+      "title": "Nepodařilo se vás přihlásit",
+      "tryAgain": "Zkusit znovu"
     },
     "headline": "Jasno v každém případě.",
     "invitation": {

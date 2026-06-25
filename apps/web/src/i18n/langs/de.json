@@ -68,10 +68,10 @@
     "createOrganizationButton": "Organisation erstellen",
     "emailPlaceholder": "sie@beispiel.de",
     "error": {
-      "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.",
-      "generic": "Something went wrong while signing you in. Please try again.",
-      "title": "We couldn't sign you in",
-      "tryAgain": "Try again"
+      "accountNotLinked": "Diese E-Mail meldet sich auf andere Weise an. Verwenden Sie Ihre ursprüngliche Anmeldemethode oder versuchen Sie es erneut.",
+      "generic": "Bei der Anmeldung ist etwas schiefgelaufen. Bitte versuchen Sie es erneut.",
+      "title": "Wir konnten Sie nicht anmelden",
+      "tryAgain": "Erneut versuchen"
     },
     "headline": "Klarheit für jeden Fall.",
     "invitation": {

@@ -68,10 +68,10 @@
     "createOrganizationButton": "Izveidot organizāciju",
     "emailPlaceholder": "jus@example.com",
     "error": {
-      "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.",
-      "generic": "Something went wrong while signing you in. Please try again.",
-      "title": "We couldn't sign you in",
-      "tryAgain": "Try again"
+      "accountNotLinked": "Šis e-pasts pieslēdzas citādi. Izmantojiet savu sākotnējo pieslēgšanās veidu vai mēģiniet vēlreiz.",
+      "generic": "Pieslēdzoties kaut kas nogāja greizi. Lūdzu, mēģiniet vēlreiz.",
+      "title": "Neizdevās jūs pieslēgt",
+      "tryAgain": "Mēģināt vēlreiz"
     },
     "headline": "Skaidrība ikvienā lietā.",
     "invitation": {

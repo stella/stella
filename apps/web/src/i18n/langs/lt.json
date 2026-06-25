@@ -68,10 +68,10 @@
     "createOrganizationButton": "Sukurti organizaciją",
     "emailPlaceholder": "jus@example.com",
     "error": {
-      "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.",
-      "generic": "Something went wrong while signing you in. Please try again.",
-      "title": "We couldn't sign you in",
-      "tryAgain": "Try again"
+      "accountNotLinked": "Šis el. paštas prisijungia kitu būdu. Naudokite pradinį prisijungimo būdą arba bandykite dar kartą.",
+      "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
+      "title": "Nepavyko jūsų prijungti",
+      "tryAgain": "Bandyti dar kartą"
     },
     "headline": "Aiškumas kiekvienai bylai.",
     "invitation": {
