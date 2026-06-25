@@ -4,6 +4,7 @@ import { t } from "elysia";
 
 import { entities } from "@/api/db/schema";
 import { queryEntities } from "@/api/handlers/entities/query-entities";
+import { collectMissingAncestorIds } from "@/api/handlers/entities/read-filesystem-tree.logic";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tConditionNode } from "@/api/lib/conditions/contract";
@@ -29,34 +30,6 @@ const config = {
 } satisfies HandlerConfig;
 
 type QueryEntities = typeof queryEntities;
-
-type FilesystemEntity = { entityId: string; parentId: string | null };
-
-// Walk up the workspace folder skeleton to collect every ancestor folder of the
-// matched rows that the filter/search itself did not return. Without these the
-// filtered tree orphans deep descendants and the client cannot resolve their
-// ancestor chain (e.g. for cross-matter copy dedup) across the hidden folders.
-export const collectMissingAncestorIds = (
-  matched: readonly FilesystemEntity[],
-  parentById: ReadonlyMap<string, string | null>,
-): string[] => {
-  const presentIds = new Set(matched.map((entity) => entity.entityId));
-  const missingIds = new Set<string>();
-
-  for (const entity of matched) {
-    const visited = new Set<string>([entity.entityId]);
-    let parentId = entity.parentId;
-    while (parentId && !visited.has(parentId)) {
-      visited.add(parentId);
-      if (!presentIds.has(parentId)) {
-        missingIds.add(parentId);
-      }
-      parentId = parentById.get(parentId) ?? null;
-    }
-  }
-
-  return [...missingIds];
-};
 
 export const createReadFilesystemTreeHandler = (
   queryEntitiesImpl: QueryEntities = queryEntities,

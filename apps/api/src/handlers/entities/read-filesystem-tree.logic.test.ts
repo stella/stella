@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { collectMissingAncestorIds } from "@/api/handlers/entities/read-filesystem-tree";
+import { collectMissingAncestorIds } from "@/api/handlers/entities/read-filesystem-tree.logic";
 
 describe("collectMissingAncestorIds", () => {
   test("backfills an ancestor folder hidden by the filter", () => {
