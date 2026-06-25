@@ -711,6 +711,18 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }),
   );
 
+  // A folder selected before a filter/search applied can become structural
+  // scaffolding afterwards. Drop it from the selection so bulk copy/move/delete
+  // can never resolve it (and its filtered-out subtree) from the tree map.
+  useExternalSyncEffect(() => {
+    setSelectedIds((prev) => {
+      if (![...prev].some((id) => structuralIds.has(id))) {
+        return prev;
+      }
+      return new Set([...prev].filter((id) => !structuralIds.has(id)));
+    });
+  }, [structuralIds]);
+
   useExternalSyncEffect(() => {
     setFilesystemSelectedIds(selectedIds);
   }, [selectedIds, setFilesystemSelectedIds]);
