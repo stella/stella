@@ -652,44 +652,47 @@ const RecentChatsGroup = ({
   }
 
   return (
-    <SidebarGroup className="min-h-0 flex-1">
-      <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
-      <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
-        <SidebarMenu>
-          {threads.map((thread) => {
-            const title = isPlaceholderThreadTitle(thread.title)
-              ? t("chat.newChat")
-              : thread.title;
-            return (
-              <SidebarMenuItem key={thread.id}>
-                <SidebarMenuButton asChild tooltip={title}>
-                  <Link
-                    activeProps={{ "data-active": true }}
-                    {...(thread.scope === "global"
-                      ? {
-                          to: "/chat/$threadId",
-                          params: { threadId: thread.id },
-                        }
-                      : {
-                          to: "/chat/workspaces/$workspaceId/$threadId",
-                          params: {
-                            threadId: thread.id,
-                            workspaceId: thread.workspaceId,
-                          },
-                        })}
-                  >
-                    <MessageSquareIcon />
-                    <BidiText as="span" className="truncate">
-                      {title}
-                    </BidiText>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            );
-          })}
-        </SidebarMenu>
-      </SidebarGroupContent>
-    </SidebarGroup>
+    <>
+      <SidebarSeparator />
+      <SidebarGroup className="min-h-0 flex-1">
+        <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
+        <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>
+          <SidebarMenu>
+            {threads.map((thread) => {
+              const title = isPlaceholderThreadTitle(thread.title)
+                ? t("chat.newChat")
+                : thread.title;
+              return (
+                <SidebarMenuItem key={thread.id}>
+                  <SidebarMenuButton asChild tooltip={title}>
+                    <Link
+                      activeProps={{ "data-active": true }}
+                      {...(thread.scope === "global"
+                        ? {
+                            to: "/chat/$threadId",
+                            params: { threadId: thread.id },
+                          }
+                        : {
+                            to: "/chat/workspaces/$workspaceId/$threadId",
+                            params: {
+                              threadId: thread.id,
+                              workspaceId: thread.workspaceId,
+                            },
+                          })}
+                    >
+                      <MessageSquareIcon />
+                      <BidiText as="span" className="truncate">
+                        {title}
+                      </BidiText>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              );
+            })}
+          </SidebarMenu>
+        </SidebarGroupContent>
+      </SidebarGroup>
+    </>
   );
 };
 // Pinned workspaces are local UI state until backend user preferences or a
