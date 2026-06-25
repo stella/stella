@@ -51,7 +51,7 @@ function AuthError() {
             void navigate({ to: "/auth", search: { redirectTo } });
           }}
         >
-          {t("auth.error.tryAgain")}
+          {t("common.tryAgain")}
         </Button>
       </FramePanel>
     </Frame>

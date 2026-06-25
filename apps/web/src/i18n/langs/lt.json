@@ -70,8 +70,7 @@
     "error": {
       "accountNotLinked": "Šis el. paštas prisijungia kitu būdu. Naudokite pradinį prisijungimo būdą arba bandykite dar kartą.",
       "generic": "Prijungiant kažkas nepavyko. Bandykite dar kartą.",
-      "title": "Nepavyko jūsų prijungti",
-      "tryAgain": "Bandyti dar kartą"
+      "title": "Nepavyko jūsų prijungti"
     },
     "headline": "Aiškumas kiekvienai bylai.",
     "invitation": {

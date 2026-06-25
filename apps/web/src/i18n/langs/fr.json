@@ -70,8 +70,7 @@
     "error": {
       "accountNotLinked": "Cette adresse e-mail se connecte d'une autre manière. Utilisez votre méthode de connexion d'origine ou réessayez.",
       "generic": "Une erreur est survenue lors de votre connexion. Veuillez réessayer.",
-      "title": "Nous n'avons pas pu vous connecter",
-      "tryAgain": "Réessayer"
+      "title": "Nous n'avons pas pu vous connecter"
     },
     "headline": "La clarté pour chaque affaire.",
     "invitation": {

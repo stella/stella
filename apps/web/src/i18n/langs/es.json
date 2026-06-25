@@ -70,8 +70,7 @@
     "error": {
       "accountNotLinked": "Este correo inicia sesión de otra forma. Usa tu método de inicio de sesión original o inténtalo de nuevo.",
       "generic": "Algo salió mal al iniciar tu sesión. Inténtalo de nuevo.",
-      "title": "No pudimos iniciar tu sesión",
-      "tryAgain": "Reintentar"
+      "title": "No pudimos iniciar tu sesión"
     },
     "headline": "Claridad en cada caso.",
     "invitation": {

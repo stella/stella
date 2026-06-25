@@ -70,8 +70,7 @@
     "error": {
       "accountNotLinked": "Ez az e-mail-cím másképp jelentkezik be. Használja az eredeti bejelentkezési módot, vagy próbálja újra.",
       "generic": "A bejelentkezés során hiba történt. Kérjük, próbálja újra.",
-      "title": "Nem sikerült bejelentkeztetni",
-      "tryAgain": "Próbálja újra"
+      "title": "Nem sikerült bejelentkeztetni"
     },
     "headline": "Tisztán látás minden ügyben.",
     "invitation": {

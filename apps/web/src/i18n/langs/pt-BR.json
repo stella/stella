@@ -70,8 +70,7 @@
     "error": {
       "accountNotLinked": "Este e-mail faz login de outra forma. Use seu método de login original ou tente novamente.",
       "generic": "Algo deu errado ao fazer seu login. Tente novamente.",
-      "title": "Não foi possível fazer seu login",
-      "tryAgain": "Tente novamente"
+      "title": "Não foi possível fazer seu login"
     },
     "headline": "Clareza para cada caso.",
     "invitation": {

@@ -70,8 +70,7 @@
     "error": {
       "accountNotLinked": "Tento e-mail se přihlašuje jiným způsobem. Použijte svůj původní způsob přihlášení, nebo to zkuste znovu.",
       "generic": "Při přihlašování se něco pokazilo. Zkuste to prosím znovu.",
-      "title": "Nepodařilo se vás přihlásit",
-      "tryAgain": "Zkusit znovu"
+      "title": "Nepodařilo se vás přihlásit"
     },
     "headline": "Jasno v každém případě.",
     "invitation": {
