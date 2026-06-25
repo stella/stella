@@ -382,6 +382,22 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }),
   );
   const data = entityData.entities;
+  // Structural ancestor folders backfilled by the API to keep a filtered tree
+  // navigable. They render as non-selectable scaffolding only: never matched,
+  // never a drag/selection/action target (their subtree includes filtered-out
+  // rows, so a destructive/transfer action on one would hit hidden siblings).
+  const ancestorEntities = entityData.ancestorEntities;
+  const structuralIds = useMemo(
+    () => new Set(ancestorEntities.map((e) => e.entityId)),
+    [ancestorEntities],
+  );
+  // Matched rows plus structural scaffolding, used wherever the full tree shape
+  // matters (rendering, ancestor-chain resolution); selection-facing lookups
+  // stay on `data` so structural folders never become selectable.
+  const allEntities = useMemo(
+    () => [...data, ...ancestorEntities],
+    [data, ancestorEntities],
+  );
 
   // Build a lookup for drag preview data from selected entities.
   const entityMap = useMemo(() => {
@@ -394,14 +410,14 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   // Spans every entity (not just the selection) so a dragged descendant's
   // ancestor chain stays unbroken across unselected intermediate folders.
   const parentById = useMemo(
-    () => new Map(data.map((e) => [e.entityId, e.parentId])),
-    [data],
+    () => new Map(allEntities.map((e) => [e.entityId, e.parentId])),
+    [allEntities],
   );
   const getAncestorIds = useCallback(
     (id: string) => resolveAncestorIds(id, parentById),
     [parentById],
   );
-  const tree = useMemo(() => buildTree(data), [data]);
+  const tree = useMemo(() => buildTree(allEntities), [allEntities]);
   const treeNodeMap = useMemo(() => {
     const map = new Map<string, TableTreeNode>();
     const visit = (nodes: readonly TableTreeNode[]) => {
@@ -462,12 +478,14 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     return target ? target.children : tree;
   }, [tree, currentFolderId]);
 
-  // Cmd+A: select all visible entities.
+  // Cmd+A: select all visible entities, except structural scaffolding folders.
   const allVisibleIds = useMemo(() => {
     const ids = new Set<string>();
     const collect = (nodes: readonly TableTreeNode[]) => {
       for (const n of nodes) {
-        ids.add(n.entityId);
+        if (!structuralIds.has(n.entityId)) {
+          ids.add(n.entityId);
+        }
         if (n.children.length > 0) {
           collect(n.children);
         }
@@ -475,7 +493,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     };
     collect(visibleNodes);
     return ids;
-  }, [visibleNodes]);
+  }, [visibleNodes, structuralIds]);
 
   useHotkey(
     HOTKEYS.SELECT_ALL,
@@ -496,7 +514,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       return [];
     }
     const trail: { id: string; name: string }[] = [];
-    const nodeMap = new Map(data.map((e) => [e.entityId, e]));
+    const nodeMap = new Map(allEntities.map((e) => [e.entityId, e]));
     let current = nodeMap.get(currentFolderId);
     while (current) {
       trail.unshift({
@@ -506,7 +524,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
       current = current.parentId ? nodeMap.get(current.parentId) : undefined;
     }
     return trail;
-  }, [currentFolderId, data]);
+  }, [currentFolderId, allEntities]);
 
   const navigateToFolder = useCallback(
     async (folderId?: string) => {
@@ -898,6 +916,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
                     getSelectedEntities={getSelectedEntities}
                     getAncestorIds={getAncestorIds}
                     gridTemplate={gridTemplate}
+                    isStructural={structuralIds.has(row.node.entityId)}
                     node={row.node}
                     onNavigateToFolder={(folderId) => {
                       void navigateToFolder(folderId);
@@ -1115,6 +1134,9 @@ type FilesystemRowProps = {
   getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
   getSelectedEntities: (ids: Set<string>) => WorkspaceEntity[];
   getAncestorIds: (id: string) => string[];
+  /** Backfilled ancestor folder shown only to keep a filtered tree navigable.
+   *  Renders as non-interactive scaffolding: no selection, drag, or actions. */
+  isStructural: boolean;
 };
 
 const FilesystemRow = ({
@@ -1138,6 +1160,7 @@ const FilesystemRow = ({
   getSelectedDragItems,
   getSelectedEntities,
   getAncestorIds,
+  isStructural,
 }: FilesystemRowProps) => {
   const t = useTranslations();
   // RowActions can open via two paths: a trigger-button click (anchors
@@ -1268,7 +1291,9 @@ const FilesystemRow = ({
 
   useExternalSyncEffect(() => {
     const el = rowRef.current;
-    if (!el) {
+    // Structural scaffolding folders are neither a drag source nor a drop
+    // target: they are filter context, not real selection/move targets.
+    if (!el || isStructural) {
       return undefined;
     }
     const cleanup = combine(
@@ -1382,6 +1407,7 @@ const FilesystemRow = ({
     name,
     file?.mimeType,
     isFolder,
+    isStructural,
     workspaceId,
     t,
     scheduleAutoExpand,
@@ -1564,9 +1590,12 @@ const FilesystemRow = ({
   return (
     <>
       <div
-        className="group/row relative h-full"
+        className={cn(
+          "group/row relative h-full",
+          isStructural && "opacity-60",
+        )}
         data-entity-row
-        onContextMenu={handleContextMenu}
+        onContextMenu={isStructural ? undefined : handleContextMenu}
         ref={rowRef}
       >
         {isFolder ? (
@@ -1583,7 +1612,10 @@ const FilesystemRow = ({
                 });
 
                 if (intent.type === "toggle-selection") {
-                  onSelect(node.entityId, true);
+                  // Structural scaffolding folders are not selectable.
+                  if (!isStructural) {
+                    onSelect(node.entityId, true);
+                  }
                   return;
                 }
 
@@ -1600,7 +1632,7 @@ const FilesystemRow = ({
             >
               {contentCells}
             </button>
-            {rowActionsNode}
+            {!isStructural && rowActionsNode}
           </div>
         ) : (
           <div
@@ -1616,7 +1648,7 @@ const FilesystemRow = ({
             >
               {contentCells}
             </button>
-            {rowActionsNode}
+            {!isStructural && rowActionsNode}
           </div>
         )}
       </div>

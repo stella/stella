@@ -215,8 +215,12 @@ export const filesystemEntitiesOptions = (
 
       const entities: WorkspaceEntity[] =
         response.data.entities.map(toWorkspaceEntity);
+      // Structural ancestor folders backfilled to keep a filtered tree
+      // navigable; rendered as non-selectable scaffolding only.
+      const ancestorEntities: WorkspaceEntity[] =
+        response.data.ancestorEntities.map(toWorkspaceEntity);
 
-      return { entities };
+      return { entities, ancestorEntities };
     },
     staleTime: ROUTE_QUERY_STALE_TIME_MS,
   });

@@ -68,7 +68,7 @@ export const createReadFilesystemTreeHandler = (
       // An unfiltered query already returns the whole subtree, so ancestor
       // backfill only matters when a filter or search can hide intermediates.
       if (!isFiltered || result.entities.length === 0) {
-        return Result.ok({ entities: result.entities });
+        return Result.ok({ entities: result.entities, ancestorEntities: [] });
       }
 
       const folderSkeleton = yield* Result.await(
@@ -97,7 +97,7 @@ export const createReadFilesystemTreeHandler = (
         .map((folder) => folder.entityId);
 
       if (missingAncestorIds.length === 0) {
-        return Result.ok({ entities: result.entities });
+        return Result.ok({ entities: result.entities, ancestorEntities: [] });
       }
 
       const ancestors = yield* Result.await(
@@ -118,8 +118,12 @@ export const createReadFilesystemTreeHandler = (
         }),
       );
 
+      // Returned separately so the client renders these as non-selectable tree
+      // scaffolding (folder path only); destructive/transfer actions must never
+      // target a structural ancestor, whose subtree includes filtered-out rows.
       return Result.ok({
-        entities: [...result.entities, ...ancestors.entities],
+        entities: result.entities,
+        ancestorEntities: ancestors.entities,
       });
     },
   );
