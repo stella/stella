@@ -27,6 +27,7 @@ import {
 } from "@/api/handlers/case-law/decisions/slug";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 
 const BATCH_SIZE = 200;
@@ -61,11 +62,12 @@ const assignSlug = async (row: BackfillRow): Promise<void> => {
   });
 
   for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS; attempt += 1) {
+    // oxlint-disable-next-line no-await-in-loop -- retry loop: each attempt re-scans after a concurrent writer took the prior candidate
     const existingSlugRows = await ingestionDb((tx) =>
       tx
         .select({ slug: caseLawDecisions.slug })
         .from(caseLawDecisions)
-        .where(like(caseLawDecisions.slug, `${scanPrefix}%`))
+        .where(like(caseLawDecisions.slug, `${escapeLike(scanPrefix)}%`))
         .limit(LIMITS.caseLawSlugCollisionScanLimit),
     );
     const slug = createAvailableCaseLawDecisionSlug(
@@ -76,6 +78,7 @@ const assignSlug = async (row: BackfillRow): Promise<void> => {
     try {
       // Compare-and-set on a still-null slug: a concurrent ingest may have
       // filled this row, in which case we leave its slug untouched.
+      // oxlint-disable-next-line no-await-in-loop -- retry loop: must observe this write before deciding to retry
       const updated = await ingestionDb((tx) =>
         tx
           .update(caseLawDecisions)
