@@ -1,5 +1,6 @@
 {
   "duplicatesCommon": [
+    "auth.error.tryAgain",
     "contacts.fields.bankAccountIban",
     "contacts.fields.registrationNumber",
     "contacts.type.organization",
@@ -28,7 +29,6 @@
     "tasks.statusValues.open",
     "templates.conditionMatchAll",
     "templates.fieldOptions",
-    "templates.inputTypes.date",
     "templates.studio.filledByPerson",
     "translate.settings.remove",
     "translate.settings.save",
@@ -92,6 +92,62 @@
     ],
     "auth.emailPlaceholder": [
       "ar"
+    ],
+    "auth.error.accountNotLinked": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "auth.error.generic": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "auth.error.title": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "auth.error.tryAgain": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "billing.codes.codeLabel": [
       "de",
@@ -1031,19 +1087,6 @@
     ],
     "templates.fieldOptions": [
       "fr"
-    ],
-    "templates.inputTypes.date": [
-      "fr"
-    ],
-    "templates.inputTypes.text": [
-      "cs",
-      "de",
-      "sk"
-    ],
-    "templates.studio.draftedByAi": [
-      "cs",
-      "pl",
-      "sk"
     ],
     "templates.studio.expressionPlaceholder": [
       "fr"

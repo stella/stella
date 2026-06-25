@@ -77,12 +77,15 @@ export function SignInPanel({
   const handleSocialSignIn = async (provider: "google" | "microsoft") => {
     setSocialLoading(provider);
     const callbackURL = new URL("/auth/organization", window.location.origin);
+    const errorCallbackURL = new URL("/auth/error", window.location.origin);
     if (redirectTo) {
       callbackURL.searchParams.set("redirectTo", redirectTo);
+      errorCallbackURL.searchParams.set("redirectTo", redirectTo);
     }
     const { error } = await authClient.signIn.social({
       provider,
       callbackURL: callbackURL.toString(),
+      errorCallbackURL: errorCallbackURL.toString(),
     });
 
     if (!error) {

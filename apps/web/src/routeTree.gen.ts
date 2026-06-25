@@ -24,6 +24,7 @@ import { Route as SitemapsLawDotxmlRouteImport } from './routes/sitemaps/law[.]x
 import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
 import { Route as AuthOtpRouteImport } from './routes/auth/otp'
 import { Route as AuthOrganizationRouteImport } from './routes/auth/organization'
+import { Route as AuthErrorRouteImport } from './routes/auth/error'
 import { Route as ProtectedSettingsRouteRouteImport } from './routes/_protected.settings/route'
 import { Route as ProtectedKnowledgeRouteRouteImport } from './routes/_protected.knowledge/route'
 import { Route as ProtectedChatRouteRouteImport } from './routes/_protected.chat/route'
@@ -146,6 +147,11 @@ const AuthOtpRoute = AuthOtpRouteImport.update({
 const AuthOrganizationRoute = AuthOrganizationRouteImport.update({
   id: '/organization',
   path: '/organization',
+  getParentRoute: () => AuthRouteRoute,
+} as any)
+const AuthErrorRoute = AuthErrorRouteImport.update({
+  id: '/error',
+  path: '/error',
   getParentRoute: () => AuthRouteRoute,
 } as any)
 const ProtectedSettingsRouteRoute = ProtectedSettingsRouteRouteImport.update({
@@ -442,6 +448,7 @@ export interface FileRoutesByFullPath {
   '/chat': typeof ProtectedChatRouteRouteWithChildren
   '/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/settings': typeof ProtectedSettingsRouteRouteWithChildren
+  '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
@@ -502,6 +509,7 @@ export interface FileRoutesByTo {
   '/dev': typeof DevRoute
   '/robots.txt': typeof RobotsDottxtRoute
   '/sitemap.xml': typeof SitemapDotxmlRoute
+  '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
@@ -566,6 +574,7 @@ export interface FileRoutesById {
   '/_protected/chat': typeof ProtectedChatRouteRouteWithChildren
   '/_protected/knowledge': typeof ProtectedKnowledgeRouteRouteWithChildren
   '/_protected/settings': typeof ProtectedSettingsRouteRouteWithChildren
+  '/auth/error': typeof AuthErrorRoute
   '/auth/organization': typeof AuthOrganizationRoute
   '/auth/otp': typeof AuthOtpRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
@@ -633,6 +642,7 @@ export interface FileRouteTypes {
     | '/chat'
     | '/knowledge'
     | '/settings'
+    | '/auth/error'
     | '/auth/organization'
     | '/auth/otp'
     | '/mcp/oauth-callback'
@@ -693,6 +703,7 @@ export interface FileRouteTypes {
     | '/dev'
     | '/robots.txt'
     | '/sitemap.xml'
+    | '/auth/error'
     | '/auth/organization'
     | '/auth/otp'
     | '/mcp/oauth-callback'
@@ -756,6 +767,7 @@ export interface FileRouteTypes {
     | '/_protected/chat'
     | '/_protected/knowledge'
     | '/_protected/settings'
+    | '/auth/error'
     | '/auth/organization'
     | '/auth/otp'
     | '/mcp/oauth-callback'
@@ -931,6 +943,13 @@ declare module '@tanstack/react-router' {
       path: '/organization'
       fullPath: '/auth/organization'
       preLoaderRoute: typeof AuthOrganizationRouteImport
+      parentRoute: typeof AuthRouteRoute
+    }
+    '/auth/error': {
+      id: '/auth/error'
+      path: '/error'
+      fullPath: '/auth/error'
+      preLoaderRoute: typeof AuthErrorRouteImport
       parentRoute: typeof AuthRouteRoute
     }
     '/_protected/settings': {
@@ -1280,6 +1299,7 @@ declare module '@tanstack/react-router' {
 }
 
 interface AuthRouteRouteChildren {
+  AuthErrorRoute: typeof AuthErrorRoute
   AuthOrganizationRoute: typeof AuthOrganizationRoute
   AuthOtpRoute: typeof AuthOtpRoute
   AuthIndexRoute: typeof AuthIndexRoute
@@ -1287,6 +1307,7 @@ interface AuthRouteRouteChildren {
 }
 
 const AuthRouteRouteChildren: AuthRouteRouteChildren = {
+  AuthErrorRoute: AuthErrorRoute,
   AuthOrganizationRoute: AuthOrganizationRoute,
   AuthOtpRoute: AuthOtpRoute,
   AuthIndexRoute: AuthIndexRoute,

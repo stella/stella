@@ -70,6 +70,12 @@ type Messages = {
     "createOrganization": "Create an organization";
     "createOrganizationButton": "Create organization";
     "emailPlaceholder": "you@example.com";
+    "error": {
+      "accountNotLinked": "This email already signs in a different way. Use your original sign-in method, or try again.";
+      "generic": "Something went wrong while signing you in. Please try again.";
+      "title": "We couldn't sign you in";
+      "tryAgain": "Try again";
+    };
     "headline": "Clarity for every case.";
     "invitation": {
       "declined": "Invitation declined";
