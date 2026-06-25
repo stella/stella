@@ -13,6 +13,7 @@ import {
   LoaderCircleIcon,
   RotateCcwIcon,
   Rows3Icon,
+  SparklesIcon,
   Trash2Icon,
   TriangleAlertIcon,
 } from "lucide-react";
@@ -148,7 +149,7 @@ export const ExistingFileOrganizerDialog = ({
     (folder) => folder.selected,
   );
   const canApply =
-    suggestionStatus === "ready" &&
+    suggestionStatus !== "generating" &&
     (rows.length > 0 || selectedDeleteFolders.length > 0);
 
   const folderByEntityId = useMemo(
@@ -180,7 +181,7 @@ export const ExistingFileOrganizerDialog = ({
           mimeType: file?.mimeType ?? null,
           parentId: file?.parentId ?? null,
           originalName: suggestion.originalName,
-          suggestedName: suggestion.originalName,
+          suggestedName: suggestion.suggestedName,
         };
       }),
     [files, fileByEntityId, folderByEntityId],
@@ -203,15 +204,35 @@ export const ExistingFileOrganizerDialog = ({
     [existingFolders, files],
   );
 
+  // The toolbar keeps this dialog mounted and only toggles `open`, so reset the
+  // explicit-AI trigger on close. Reopening then starts from the local-first
+  // state instead of silently re-firing a prior AI request; cached AI results
+  // for the same files stay keyed by requestKey and are reshown without a call.
+  useExternalSyncEffect(() => {
+    if (!open) {
+      setRetryNonce(0);
+    }
+  }, [open]);
+
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- data fetch + setState; migrate to TanStack Query
   useEffect(() => {
     if (!open || files.length === 0) {
       return undefined;
     }
 
-    if (cachedSuggestions?.key === requestKey && retryNonce === 0) {
+    if (cachedSuggestions?.key === requestKey) {
       setRows(cachedSuggestions.rows);
       setDeleteFolders(cachedSuggestions.deleteFolders);
+      setSuggestionStatus("ready");
+      return undefined;
+    }
+
+    // Show the cheap, deterministic local suggestions immediately and
+    // stay actionable. The expensive AI call only runs once the user
+    // explicitly asks for it (retryNonce bumps past 0).
+    if (retryNonce === 0) {
+      setRows(initialRows);
+      setDeleteFolders([]);
       setSuggestionStatus("ready");
       return undefined;
     }
@@ -409,12 +430,10 @@ export const ExistingFileOrganizerDialog = ({
   };
 
   const summary = useMemo<RowChangeSummary>(() => {
-    // Buckets are mutually exclusive so the three counts always sum
-    // to rows.length. A file that is both moved and renamed is
-    // attributed to "moved" because the move is the more impactful
-    // change for the user — the renamed-side label still reads "to
-    // rename" in the UI, but it counts only files that change name
-    // without moving.
+    // Move and rename are counted independently: a file that both
+    // moves and renames increments both "moved" and "renamed". Only
+    // files that neither move nor rename count as "unchanged". The
+    // three counts therefore do not sum to rows.length.
     let moved = 0;
     let renamed = 0;
     let unchanged = 0;
@@ -432,9 +451,11 @@ export const ExistingFileOrganizerDialog = ({
       const willRename = targetName !== row.originalName;
       if (willMove) {
         moved++;
-      } else if (willRename) {
+      }
+      if (willRename) {
         renamed++;
-      } else {
+      }
+      if (!willMove && !willRename) {
         unchanged++;
       }
     }
@@ -570,6 +591,11 @@ export const ExistingFileOrganizerDialog = ({
       });
   };
 
+  const requestAiSuggestions = () => {
+    setCachedSuggestions(null);
+    setRetryNonce((current) => current + 1);
+  };
+  const hasAiSuggestions = cachedSuggestions?.key === requestKey;
   const interactionsDisabled = isGeneratingSuggestions;
 
   return (
@@ -597,21 +623,12 @@ export const ExistingFileOrganizerDialog = ({
                 window.localStorage.setItem(userInstructionsKey, value);
               }
             }}
-            onRegenerate={() => {
-              setCachedSuggestions(null);
-              setRetryNonce((current) => current + 1);
-            }}
+            onRegenerate={requestAiSuggestions}
             onToggle={() => setShowInstructions((current) => !current)}
             value={userInstructions}
           />
           {suggestionStatus === "failed" && (
-            <FailureBanner
-              disabled={false}
-              onRetry={() => {
-                setCachedSuggestions(null);
-                setRetryNonce((current) => current + 1);
-              }}
-            />
+            <FailureBanner disabled={false} onRetry={requestAiSuggestions} />
           )}
           {isGeneratingSuggestions ? (
             <OrganizerSkeleton />
@@ -643,6 +660,22 @@ export const ExistingFileOrganizerDialog = ({
           >
             {t("common.cancel")}
           </Button>
+          {!hasAiSuggestions && (
+            <Button
+              className="me-auto"
+              disabled={isGeneratingSuggestions || rows.length === 0}
+              onClick={requestAiSuggestions}
+              type="button"
+              variant="outline"
+            >
+              {isGeneratingSuggestions ? (
+                <LoaderCircleIcon className="animate-spin" />
+              ) : (
+                <SparklesIcon />
+              )}
+              {t("workspaces.importOrganizer.generateAi")}
+            </Button>
+          )}
           <Button
             disabled={isGeneratingSuggestions || !canApply}
             onClick={handleApply}
