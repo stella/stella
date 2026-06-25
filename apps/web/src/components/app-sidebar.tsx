@@ -11,10 +11,12 @@ import {
   useHotkey,
   useKeyHold,
 } from "@tanstack/react-hotkeys";
+import { useInfiniteQuery } from "@tanstack/react-query";
 import { getRouteApi, Link, useMatch } from "@tanstack/react-router";
 import {
   EllipsisVerticalIcon,
   LayersIcon,
+  MessageSquareIcon,
   PanelLeftIcon,
   PinIcon,
   PinOffIcon,
@@ -64,17 +66,26 @@ import {
   getWorkspacePrimaryNavItems,
   type WorkspacePrimaryNavId,
 } from "@/components/workspace-primary-nav";
-import { useChromeQuery } from "@/hooks/use-chrome-query";
+import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
+import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
 import { HOTKEYS, NAV_KEY } from "@/lib/hotkeys";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { usePinnedStore } from "@/lib/pinned-store";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
+import type { EntityKind } from "@/lib/types";
+import {
+  groupedChatThreadsOptions,
+  mergeGroupedChatThreadPages,
+} from "@/routes/_protected.chat/-queries";
 import { knowledgeSections } from "@/routes/_protected.knowledge/index";
+import { CopyToMatterDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog";
+import type { CopyToMatterEntity } from "@/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.logic";
+import { ENTITY_DRAG_TYPE } from "@/routes/_protected.workspaces/$workspaceId/-components/drag-constants";
 import {
   MatterMenuHeader,
   MatterMenuItems,
@@ -100,6 +111,8 @@ export function AppSidebar(props: AppSidebarProps) {
   });
 
   const [searchOpen, setSearchOpen] = useState(false);
+  const [pendingEntityDrop, setPendingEntityDrop] =
+    useState<PendingEntityDrop | null>(null);
   const { pinnedOrder, pinnedIds, togglePin, reorderPinned } = usePinnedStore(
     useShallow((s) => ({
       pinnedOrder: s.pinnedOrder,
@@ -143,6 +156,27 @@ export function AppSidebar(props: AppSidebarProps) {
     if (workspaceMatch?.params.workspaceId === workspaceId) {
       void navigate({ to: "/workspaces" });
     }
+  };
+
+  // Opens the copy/move dialog pre-targeted to the matter an entity was
+  // dropped onto. The source workspace is the matter currently open (entities
+  // can only be dragged from the open matter's table). Skips no-op drops onto
+  // the same matter the entity already lives in.
+  const handleEntityDropOnMatter = (
+    targetWorkspaceId: string,
+    entities: CopyToMatterEntity[],
+  ) => {
+    if (!activeWorkspaceId || targetWorkspaceId === activeWorkspaceId) {
+      return;
+    }
+    if (entities.length === 0) {
+      return;
+    }
+    setPendingEntityDrop({
+      sourceWorkspaceId: activeWorkspaceId,
+      targetWorkspaceId,
+      entities,
+    });
   };
 
   useHotkey(HOTKEYS.SEARCH, () => {
@@ -489,6 +523,7 @@ export function AppSidebar(props: AppSidebarProps) {
                           : undefined
                       }
                       onDeleted={handleMatterDeleted}
+                      onEntityDrop={handleEntityDropOnMatter}
                       onReorder={reorderPinned}
                       onTogglePin={togglePin}
                       workspace={ws}
@@ -509,6 +544,7 @@ export function AppSidebar(props: AppSidebarProps) {
                     <MatterItem
                       key={ws.id}
                       onDeleted={handleMatterDeleted}
+                      onEntityDrop={handleEntityDropOnMatter}
                       onTogglePin={togglePin}
                       workspace={ws}
                     />
@@ -517,6 +553,8 @@ export function AppSidebar(props: AppSidebarProps) {
               </SidebarGroupContent>
             </SidebarGroup>
           )}
+
+          <RecentChatsGroup activeOrganizationId={user.activeOrganizationId} />
         </SidebarContextArea>
       </SidebarContent>
 
@@ -529,12 +567,125 @@ export function AppSidebar(props: AppSidebarProps) {
       </SidebarFooter>
 
       <SearchDialog onOpenChange={setSearchOpen} open={searchOpen} />
+
+      {pendingEntityDrop && (
+        <CopyToMatterDialog
+          entities={pendingEntityDrop.entities}
+          initialTargetWorkspaceId={pendingEntityDrop.targetWorkspaceId}
+          onOpenChange={(open) => {
+            if (!open) {
+              setPendingEntityDrop(null);
+            }
+          }}
+          open
+          sourceWorkspaceId={pendingEntityDrop.sourceWorkspaceId}
+        />
+      )}
     </Sidebar>
   );
 }
 
 const RECENTS_LIMIT = 5;
+const RECENT_CHATS_LIMIT = 5;
 const HOLD_DELAY_MS = 500;
+
+type RecentChatThread =
+  | { scope: "global"; id: string; title: string; updatedAt: string | Date }
+  | {
+      scope: "workspace";
+      id: string;
+      title: string;
+      updatedAt: string | Date;
+      workspaceId: string;
+    };
+
+const RecentChatsGroup = ({
+  activeOrganizationId,
+}: {
+  activeOrganizationId: string;
+}) => {
+  const t = useTranslations();
+  const mounted = useHasMounted();
+  const { data } = useInfiniteQuery({
+    ...groupedChatThreadsOptions(activeOrganizationId),
+    enabled: mounted,
+  });
+
+  const merged = mergeGroupedChatThreadPages(data?.pages);
+  const threads: RecentChatThread[] = [
+    ...merged.global.map(
+      (thread): RecentChatThread => ({
+        scope: "global",
+        id: thread.id,
+        title: thread.title,
+        updatedAt: thread.updatedAt,
+      }),
+    ),
+    ...merged.workspaces.flatMap((workspace) =>
+      workspace.threads.map(
+        (thread): RecentChatThread => ({
+          scope: "workspace",
+          id: thread.id,
+          title: thread.title,
+          updatedAt: thread.updatedAt,
+          workspaceId: workspace.workspaceId,
+        }),
+      ),
+    ),
+  ]
+    // Recency is updatedAt (a new message bumps it); the threads API
+    // orders the same way.
+    .toSorted(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime(),
+    )
+    .slice(0, RECENT_CHATS_LIMIT);
+
+  if (threads.length === 0) {
+    return null;
+  }
+
+  return (
+    <SidebarGroup className="min-h-0 flex-1">
+      <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
+      <SidebarGroupContent className="overflow-x-hidden overflow-y-auto">
+        <SidebarMenu>
+          {threads.map((thread) => {
+            const title = isPlaceholderThreadTitle(thread.title)
+              ? t("chat.newChat")
+              : thread.title;
+            return (
+              <SidebarMenuItem key={thread.id}>
+                <SidebarMenuButton asChild tooltip={title}>
+                  <Link
+                    activeProps={{ "data-active": true }}
+                    {...(thread.scope === "global"
+                      ? {
+                          to: "/chat/$threadId",
+                          params: { threadId: thread.id },
+                        }
+                      : {
+                          to: "/chat/workspaces/$workspaceId/$threadId",
+                          params: {
+                            threadId: thread.id,
+                            workspaceId: thread.workspaceId,
+                          },
+                        })}
+                  >
+                    <MessageSquareIcon />
+                    <BidiText as="span" className="truncate">
+                      {title}
+                    </BidiText>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            );
+          })}
+        </SidebarMenu>
+      </SidebarGroupContent>
+    </SidebarGroup>
+  );
+};
 // Pinned workspaces are local UI state until backend user preferences or a
 // workspace-member `pinned` flag exists.
 
@@ -653,6 +804,12 @@ const NavBadge = ({ digit }: { digit: number }) => (
   </SidebarMenuBadge>
 );
 
+type PendingEntityDrop = {
+  sourceWorkspaceId: string;
+  targetWorkspaceId: string;
+  entities: CopyToMatterEntity[];
+};
+
 type AppSidebarProps = React.ComponentProps<typeof Sidebar>;
 type AppSidebarStyle = React.CSSProperties & {
   "--matter-sidebar-tint"?: string;
@@ -670,10 +827,65 @@ type MatterItemProps = {
    *  delete itself is owned by the shared menu via useMatterActions. */
   onDeleted: (id: string) => void;
   onReorder?: (draggedId: string, targetId: string) => void;
+  /** Drop an entity dragged from the open matter's table onto this matter to
+   *  open the copy/move dialog pre-targeted here. */
+  onEntityDrop?: (
+    targetWorkspaceId: string,
+    entities: CopyToMatterEntity[],
+  ) => void;
   navBadge?: number | undefined;
 };
 
 const MATTER_DRAG_TYPE = "stella/pinned-matter-id";
+
+// The entity drag payload shape produced by row-cells.tsx `getInitialData`.
+// Matched structurally off the untrusted drop data before mapping into the
+// dialog's `CopyToMatterEntity`.
+type DraggedEntityPayload = {
+  entityId: string;
+  name: string;
+  kind: EntityKind;
+  parentId: string | null;
+};
+
+const isDraggedEntityPayload = (
+  value: unknown,
+): value is DraggedEntityPayload => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  return (
+    "entityId" in value &&
+    typeof value.entityId === "string" &&
+    "name" in value &&
+    typeof value.name === "string" &&
+    "kind" in value &&
+    typeof value.kind === "string"
+  );
+};
+
+// Maps the entity drag payload into the `CopyToMatterEntity` shape the
+// copy/move dialog consumes. The payload comes from our own draggable, so only
+// the array structure is validated.
+const toCopyToMatterEntities = (raw: unknown): CopyToMatterEntity[] => {
+  if (!Array.isArray(raw)) {
+    return [];
+  }
+  const result: CopyToMatterEntity[] = [];
+  for (const item of raw) {
+    if (!isDraggedEntityPayload(item)) {
+      continue;
+    }
+    result.push({
+      entityId: item.entityId,
+      entityName: item.name,
+      kind: item.kind,
+      parentId: typeof item.parentId === "string" ? item.parentId : null,
+      children: [],
+    });
+  }
+  return result;
+};
 
 const MatterItem = ({
   workspace: ws,
@@ -681,6 +893,7 @@ const MatterItem = ({
   onTogglePin,
   onDeleted,
   onReorder,
+  onEntityDrop,
   navBadge,
 }: MatterItemProps) => {
   // Read pin state directly from the store so the menu label
@@ -696,6 +909,7 @@ const MatterItem = ({
   const updateWorkspace = useUpdateWorkspace();
   const dropRef = useRef<HTMLLIElement>(null);
   const [isDropTarget, setIsDropTarget] = useState(false);
+  const [isEntityDropTarget, setIsEntityDropTarget] = useState(false);
   const rename = useInlineRename({
     initial: ws.name,
     onCommit: (value, { setError }) => {
@@ -726,32 +940,79 @@ const MatterItem = ({
     },
   );
 
+  const handleEntityDrop = useEffectEvent((entities: CopyToMatterEntity[]) => {
+    onEntityDrop?.(ws.id, entities);
+  });
+
+  // Entity drops (files from the open matter's table) are accepted on every
+  // matter row; the pinned-reorder draggable + drop target only attaches to
+  // draggable (pinned) rows.
   useExternalSyncEffect(() => {
     const el = dropRef.current;
-    if (!el || !canDrag) {
+    if (!el) {
       return undefined;
     }
+
+    // A single drop target per element (pragmatic-drag-and-drop forbids more
+    // than one) that dispatches by drag type: entity drops (copy/move) on
+    // every row, matter-reorder only on draggable (pinned) rows.
+    const dropTarget = dropTargetForElements({
+      element: el,
+      canDrop: ({ source }) => {
+        const type = source.data["type"];
+        if (type === ENTITY_DRAG_TYPE) {
+          // Only entity drags that carry a usable transfer payload (the table
+          // rows) are droppable; ENTITY_DRAG_TYPE drags without an `entities`
+          // array (e.g. calendar chips) must not highlight as valid targets.
+          return toCopyToMatterEntities(source.data["entities"]).length > 0;
+        }
+        return canDrag && type === MATTER_DRAG_TYPE;
+      },
+      onDragEnter: ({ source }) => {
+        if (source.data["type"] === ENTITY_DRAG_TYPE) {
+          setIsEntityDropTarget(true);
+        } else {
+          setIsDropTarget(true);
+        }
+      },
+      onDragLeave: ({ source }) => {
+        if (source.data["type"] === ENTITY_DRAG_TYPE) {
+          setIsEntityDropTarget(false);
+        } else {
+          setIsDropTarget(false);
+        }
+      },
+      onDrop: ({ source }) => {
+        if (source.data["type"] === ENTITY_DRAG_TYPE) {
+          setIsEntityDropTarget(false);
+          const entities = toCopyToMatterEntities(source.data["entities"]);
+          if (entities.length === 0) {
+            return;
+          }
+          handleEntityDrop(entities);
+          return;
+        }
+        setIsDropTarget(false);
+        const draggedId = source.data["matterId"];
+        if (typeof draggedId !== "string" || draggedId === ws.id) {
+          return;
+        }
+        handleReorder(draggedId, ws.id);
+      },
+    });
+
+    if (!canDrag) {
+      return dropTarget;
+    }
+
     return combine(
+      dropTarget,
       draggable({
         element: el,
         getInitialData: () => ({
           type: MATTER_DRAG_TYPE,
           matterId: ws.id,
         }),
-      }),
-      dropTargetForElements({
-        element: el,
-        canDrop: ({ source }) => source.data["type"] === MATTER_DRAG_TYPE,
-        onDragEnter: () => setIsDropTarget(true),
-        onDragLeave: () => setIsDropTarget(false),
-        onDrop: ({ source }) => {
-          setIsDropTarget(false);
-          const draggedId = source.data["matterId"];
-          if (typeof draggedId !== "string" || draggedId === ws.id) {
-            return;
-          }
-          handleReorder(draggedId, ws.id);
-        },
       }),
     );
   }, [ws.id, canDrag]);
@@ -815,11 +1076,12 @@ const MatterItem = ({
   return (
     <>
       <SidebarMenuItem
-        className={
-          isDropTarget
-            ? "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full"
-            : undefined
-        }
+        className={cn(
+          isDropTarget &&
+            "before:bg-primary before:pointer-events-none before:absolute before:inset-x-2 before:top-0 before:h-0.5 before:rounded-full",
+          isEntityDropTarget &&
+            "bg-primary/8 ring-primary rounded-md ring-2 ring-inset",
+        )}
         onContextMenu={(e) => {
           e.preventDefault();
           e.stopPropagation();
