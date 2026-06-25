@@ -101,6 +101,18 @@ describe("check-migration-safety", () => {
     expect(result.stderr).toBe("");
   });
 
+  it("allows an INSERT ... ON CONFLICT DO UPDATE SET upsert", () => {
+    // Named-constraint arbiter so this exercises only the unbounded-update
+    // exclusion, not the separate on-conflict-column-target invariant.
+    const result = runChecker(`
+      INSERT INTO "documents" ("id", "status") VALUES (1, 'archived')
+      ON CONFLICT ON CONSTRAINT "documents_pkey" DO UPDATE SET "status" = EXCLUDED."status";
+    `);
+
+    expect(result.exitCode).toBe(0);
+    expect(result.stderr).toBe("");
+  });
+
   it("clears an unbounded UPDATE with a bulk-backfill acknowledgement", () => {
     const result = runChecker(`
       -- stella-migration-safety: reviewed bulk-backfill - table has under ten rows

@@ -69,12 +69,24 @@ const ROUTINE_DOLLAR_QUOTE_PREFIX_PATTERN =
 const UPDATE_STATEMENT_PATTERN = /\bUPDATE\b[\s\S]*\bSET\b/iu;
 const WHERE_CLAUSE_PATTERN = /\bWHERE\b/iu;
 
-const isUnboundedUpdate = (statement: string): boolean =>
+const INSERT_OR_UPSERT_PATTERN = /(?:^\s*INSERT\b)|(?:\bON\s+CONFLICT\b)/iu;
+
+const isUnboundedUpdate = (statement: string): boolean => {
+  // INSERT ... ON CONFLICT DO UPDATE SET ... is an upsert, not a full-table
+  // backfill: it matches UPDATE/SET with no WHERE but only touches the
+  // conflicting row(s). Exclude it so idempotent seed migrations don't trip.
+  if (INSERT_OR_UPSERT_PATTERN.test(statement)) {
+    return false;
+  }
+
   // Intentionally conservative: any WHERE token anywhere in the statement
   // (including inside a subquery) clears the finding. A full-table UPDATE has
   // no WHERE at all, so this never misses the heavy backfill we care about.
-  UPDATE_STATEMENT_PATTERN.test(statement) &&
-  !WHERE_CLAUSE_PATTERN.test(statement);
+  return (
+    UPDATE_STATEMENT_PATTERN.test(statement) &&
+    !WHERE_CLAUSE_PATTERN.test(statement)
+  );
+};
 
 const GUARDED_RULES: GuardedRule[] = [
   {
