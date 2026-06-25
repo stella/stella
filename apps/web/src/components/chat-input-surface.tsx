@@ -216,13 +216,13 @@ const ChatSubmitButton = ({
       >
         <SquareIcon
           className={cn(
-            "absolute inset-0 size-full transition-[opacity,transform] duration-150 ease-out",
+            "absolute inset-0 mx-0! size-full transition-[opacity,transform] duration-150 ease-out",
             isStop ? "scale-100 opacity-100" : "scale-75 opacity-0",
           )}
         />
         <ArrowUpIcon
           className={cn(
-            "absolute inset-0 size-full transition-[opacity,transform] duration-150 ease-out",
+            "absolute inset-0 mx-0! size-full transition-[opacity,transform] duration-150 ease-out",
             isStop ? "scale-75 opacity-0" : "scale-100 opacity-100",
           )}
         />
