@@ -12,6 +12,18 @@ export type ChangelogRelease = {
 const CHANGELOG_DIR = resolveRepoPath("docs", "changelog");
 const STABLE_CHANGELOG_FILE_PATTERN = /^v\d+\.\d+\.\d+\.md$/u;
 
+export type ReleaseKind = "major" | "minor" | "patch";
+
+export const getReleaseKind = (tagName: string): ReleaseKind => {
+  const [, minor, patch] = tagName.replace(/^v/u, "").split(".").map(Number);
+
+  if (patch !== 0) {
+    return "patch";
+  }
+
+  return minor === 0 ? "major" : "minor";
+};
+
 export const releaseAnchorId = (tagName: string) =>
   tagName
     .toLowerCase()
@@ -20,37 +32,45 @@ export const releaseAnchorId = (tagName: string) =>
     .replace(/-+/gu, "-")
     .replace(/^-|-$/gu, "");
 
-export const getChangelogReleases = (): ChangelogRelease[] => {
+const listReleaseTags = (): string[] => {
   if (!existsSync(CHANGELOG_DIR)) {
     return [];
   }
 
-  const releases: ChangelogRelease[] = [];
+  return readdirSync(CHANGELOG_DIR)
+    .filter((fileName) => STABLE_CHANGELOG_FILE_PATTERN.test(fileName))
+    .map((fileName) => fileName.replace(/\.md$/u, ""))
+    .sort((left, right) => right.localeCompare(left, "en", { numeric: true }));
+};
 
-  for (const fileName of readdirSync(CHANGELOG_DIR)) {
-    if (!STABLE_CHANGELOG_FILE_PATTERN.test(fileName)) {
-      continue;
-    }
-
-    const tagName = fileName.replace(/\.md$/u, "");
-    const markdown = readFileSync(path.join(CHANGELOG_DIR, fileName), "utf-8");
-    const heading = findHeading(markdown, 1);
-    const description =
-      findHeading(markdown, 2) ??
-      `Release notes for ${formatReleaseName(tagName)}.`;
-
-    releases.push({
-      description,
-      displayName: formatReleaseName(tagName),
-      heading,
-      slug: releaseAnchorId(tagName),
-      tagName,
-    });
-  }
-
-  return releases.sort((left, right) =>
-    right.tagName.localeCompare(left.tagName, "en", { numeric: true }),
+const readRelease = (tagName: string): ChangelogRelease => {
+  const markdown = readFileSync(
+    path.join(CHANGELOG_DIR, `${tagName}.md`),
+    "utf-8",
   );
+  const heading = findHeading(markdown, 1);
+  const description =
+    findHeading(markdown, 2) ??
+    `Release notes for ${formatReleaseName(tagName)}.`;
+
+  return {
+    description,
+    displayName: formatReleaseName(tagName),
+    heading,
+    slug: releaseAnchorId(tagName),
+    tagName,
+  };
+};
+
+export const getChangelogReleases = (): ChangelogRelease[] =>
+  listReleaseTags().map(readRelease);
+
+export const getLatestFeatureRelease = (): ChangelogRelease | undefined => {
+  const tagName = listReleaseTags().find(
+    (tag) => getReleaseKind(tag) !== "patch",
+  );
+
+  return tagName ? readRelease(tagName) : undefined;
 };
 
 const findHeading = (markdown: string, level: 1 | 2) => {

@@ -4,9 +4,9 @@ import ThemeToggle from "../components/ThemeToggle.astro";
 import GitHubIcon from "../components/GitHubIcon.astro";
 import ProductShowcase from "../components/react/ProductShowcase";
 import { controlCapabilities } from "../data/capabilities";
-import { getChangelogReleases } from "../lib/changelog";
+import { getLatestFeatureRelease } from "../lib/changelog";
 
-const latestRelease = getChangelogReleases().at(0);
+const latestRelease = getLatestFeatureRelease();
 
 const appUrl = "https://my.stll.app";
 const discordUrl = "https://discord.gg/8dZjmVFjTK";
