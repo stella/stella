@@ -71,6 +71,9 @@ export const OrganizationJurisdictionsCard = () => {
     <Frame>
       <FramePanel>
         <div className="flex flex-col gap-3 p-1">
+          <p className="text-muted-foreground text-sm">
+            {t("settings.organization.practiceJurisdictionsDescription")}
+          </p>
           <JurisdictionPicker
             onChange={(next) => {
               const generation = selectionGenerationRef.current + 1;

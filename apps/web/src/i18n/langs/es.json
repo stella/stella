@@ -1918,7 +1918,8 @@
       "matterNumberingDescription": "Configura cómo se generan los números de referencia de los asuntos nuevos",
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Invitaciones pendientes",
-      "practiceJurisdictions": "Jurisdicciones de práctica",
+      "practiceJurisdictions": "Jurisdicciones",
+      "practiceJurisdictionsDescription": "Seleccione las jurisdicciones relevantes para usted.",
       "profile": "Perfil",
       "promptCaching": {
         "description": "Cuando está activado, stella añade marcadores de caché para que las solicitudes de IA repetidas sobre el mismo documento o hilo cuesten ~10× menos y terminen más rápido. Los prompts en caché permanecen con el proveedor de IA hasta 5 minutos, limitados a tu organización. Al desactivarlo, stella deja de enviar marcadores de caché, pero los proveedores pueden seguir cacheando oportunísticamente — solo un contrato de Zero Data Retention con el proveedor desactiva por completo el cacheo del lado del servidor.",

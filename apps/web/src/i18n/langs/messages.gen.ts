@@ -1921,7 +1921,8 @@ type Messages = {
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";
       "pendingInvitations": "Pending invitations";
-      "practiceJurisdictions": "Practice jurisdictions";
+      "practiceJurisdictions": "Jurisdictions";
+      "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.";
       "profile": "Profile";
       "promptCaching": {
         "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically — only a Zero Data Retention contract with the provider fully disables server-side caching.";

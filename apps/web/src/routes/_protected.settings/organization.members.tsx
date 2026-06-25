@@ -488,7 +488,15 @@ const RoleCell = ({
         >
           <SelectValue>{t(`organization.roles.${memberRole}`)}</SelectValue>
         </SelectTrigger>
-        <SelectPopup alignItemWithTrigger={false} className="min-w-72">
+        <SelectPopup
+          alignItemWithTrigger={false}
+          className="min-w-72"
+          collisionAvoidance={{
+            align: "shift",
+            fallbackAxisSide: "end",
+            side: "flip",
+          }}
+        >
           {ASSIGNABLE_ROLES.map((role) => {
             const item = roleData.find((r) => r.value === role);
             if (!item) {

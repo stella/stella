@@ -1918,7 +1918,8 @@
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
       "membersDescription": "Manage who has access to this organization",
       "pendingInvitations": "Ootel kutsed",
-      "practiceJurisdictions": "Praktika jurisdiktsioonid",
+      "practiceJurisdictions": "Jurisdiktsioonid",
+      "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
       "profile": "Profiil",
       "promptCaching": {
         "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada — ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
