@@ -1,0 +1,336 @@
+---
+import Base from "../../layouts/Base.astro";
+import SiteHeader from "../../components/SiteHeader.astro";
+import ProductMediaFrame from "../../components/ProductMediaFrame.astro";
+import { products } from "../../data/products/registry";
+
+export function getStaticPaths() {
+  return products.map((product) => ({
+    params: { slug: product.slug },
+    props: { product },
+  }));
+}
+
+const { product } = Astro.props;
+
+// FAQPage structured data: the quick answer plus every FAQ, sourced from the
+// same content rendered below so assistants and people see the same answers.
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: [product.quickAnswer, ...product.faqs].map((faq) => ({
+    "@type": "Question",
+    name: faq.question,
+    acceptedAnswer: { "@type": "Answer", text: faq.answer },
+  })),
+};
+---
+
+<Base title={`stella | ${product.eyebrow}`} description={product.summary}>
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify(faqJsonLd)}
+  />
+
+  <div class="flex min-h-dvh flex-col">
+    <SiteHeader current="product" />
+
+    <main class="flex-1">
+      {/* ——— Hero ——— */}
+      <section class="px-6 pt-12 pb-10 lg:pt-16">
+        <div class="mx-auto max-w-300">
+          <div class="mx-auto max-w-3xl text-center">
+            <p
+              data-reveal
+              class="text-xs font-medium uppercase tracking-[0.2em]"
+              style="color: var(--primary)"
+            >
+              {product.eyebrow}
+            </p>
+            <h1
+              data-reveal
+              style="--reveal-delay: 80ms"
+              class="mt-3 font-display text-4xl font-medium leading-[1.1] tracking-tight sm:text-5xl lg:text-6xl"
+            >
+              {product.title}
+            </h1>
+            <p
+              data-reveal
+              style="--reveal-delay: 160ms; color: var(--muted-foreground)"
+              class="mx-auto mt-5 max-w-2xl text-lg leading-[1.7]"
+            >
+              {product.summary}
+            </p>
+          </div>
+          <div
+            data-reveal
+            style="--reveal-delay: 240ms"
+            class="mx-auto mt-10 max-w-4xl"
+          >
+            <ProductMediaFrame media={product.hero} />
+          </div>
+        </div>
+      </section>
+
+      {/* ——— Quick answer ——— */}
+      <section class="px-6 py-10">
+        <div class="mx-auto max-w-3xl">
+          <div data-reveal class="quick-answer relative overflow-hidden rounded-2xl border p-6 backdrop-blur-md lg:p-8">
+            <p
+              class="text-xs font-medium uppercase tracking-[0.18em]"
+              style="color: var(--primary)"
+            >
+              In short
+            </p>
+            <h2 class="mt-2 font-display text-xl font-medium tracking-tight">
+              {product.quickAnswer.question}
+            </h2>
+            <p
+              class="mt-3 text-base leading-[1.8]"
+              style="color: var(--muted-foreground)"
+            >
+              {product.quickAnswer.answer}
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ——— Capabilities ——— */}
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <p
+            data-reveal
+            class="mb-8 text-xs font-medium uppercase tracking-[0.2em]"
+            style="color: var(--muted-foreground)"
+          >
+            Capabilities
+          </p>
+          <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {
+              product.capabilities.map((cap, index) => (
+                <div
+                  data-reveal
+                  style={`--reveal-delay: ${index * 60}ms`}
+                  class="capability-card relative overflow-hidden rounded-[1.45rem] border p-6 backdrop-blur-md"
+                >
+                  <span
+                    class="font-mono text-xs font-medium tabular-nums"
+                    style="color: color-mix(in srgb, var(--primary) 75%, transparent)"
+                  >
+                    {String(index + 1).padStart(2, "0")}
+                  </span>
+                  <h3 class="mt-3 font-display text-lg font-medium tracking-tight">
+                    {cap.title}
+                  </h3>
+                  <p
+                    class="mt-2 text-sm leading-[1.8]"
+                    style="color: var(--muted-foreground)"
+                  >
+                    {cap.body}
+                  </p>
+                </div>
+              ))
+            }
+          </div>
+        </div>
+      </section>
+
+      {/* ——— Deep-dive sections (alternating) ——— */}
+      {
+        product.sections.map((section, index) => (
+          <section class="px-6 py-10 lg:py-14">
+            <div class="mx-auto grid max-w-300 items-center gap-8 md:grid-cols-2 md:gap-12">
+              <div
+                data-reveal
+                class={index % 2 === 1 ? "md:order-2" : ""}
+              >
+                <h2 class="font-display text-2xl font-medium tracking-tight sm:text-3xl">
+                  {section.heading}
+                </h2>
+                <ul class="mt-5 space-y-3">
+                  {section.bullets.map((bullet) => (
+                    <li
+                      class="flex items-start gap-2.5 text-sm leading-[1.7]"
+                      style="color: var(--muted-foreground)"
+                    >
+                      <span
+                        class="mt-[7px] block h-2 w-2 shrink-0 rounded-full"
+                        style="background: var(--primary)"
+                        aria-hidden="true"
+                      />
+                      <span>{bullet}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div
+                data-reveal
+                style="--reveal-delay: 100ms"
+                class={index % 2 === 1 ? "md:order-1" : ""}
+              >
+                <ProductMediaFrame media={section.media} />
+              </div>
+            </div>
+          </section>
+        ))
+      }
+
+      {/* ——— FAQ ——— */}
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-3xl">
+          <h2
+            class="mb-6 text-xs font-medium uppercase tracking-[0.2em]"
+            style="color: var(--muted-foreground)"
+          >
+            FAQ
+          </h2>
+          <div class="divide-y" style="border-color: var(--border)">
+            {
+              product.faqs.map((faq) => (
+                <details class="product-faq group">
+                  <summary class="flex cursor-pointer items-center justify-between gap-4 py-4 font-display text-base font-medium">
+                    {faq.question}
+                    <span
+                      class="product-faq-mark shrink-0 text-lg leading-none transition-transform"
+                      style="color: var(--muted-foreground)"
+                      aria-hidden="true"
+                    >
+                      +
+                    </span>
+                  </summary>
+                  <p
+                    class="pb-5 text-sm leading-[1.8]"
+                    style="color: var(--muted-foreground)"
+                  >
+                    {faq.answer}
+                  </p>
+                </details>
+              ))
+            }
+          </div>
+        </div>
+      </section>
+
+      {/* ——— Adjacent products ——— */}
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <h2
+            class="mb-6 text-xs font-medium uppercase tracking-[0.2em]"
+            style="color: var(--muted-foreground)"
+          >
+            Explore more
+          </h2>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {
+              product.adjacent.map((link) => (
+                <a
+                  href={link.href}
+                  class="adjacent-card flex flex-col rounded-2xl p-6 no-underline transition-[border-color,transform] duration-200"
+                  style="background: var(--card); border: 1px solid var(--border); color: inherit"
+                >
+                  <span class="font-display text-base font-medium" style="color: var(--foreground)">
+                    {link.title}
+                  </span>
+                  <span
+                    class="mt-1.5 text-sm leading-[1.6]"
+                    style="color: var(--muted-foreground)"
+                  >
+                    {link.body}
+                  </span>
+                </a>
+              ))
+            }
+          </div>
+        </div>
+      </section>
+
+      {/* ——— CTA ——— */}
+      <section class="px-6 py-16 lg:py-20">
+        <div class="mx-auto max-w-3xl text-center">
+          <h2
+            data-reveal
+            class="font-display text-3xl font-medium tracking-tight sm:text-4xl"
+          >
+            {product.cta.heading}
+          </h2>
+          <div class="mt-8">
+            <a
+              href={product.cta.href}
+              data-reveal
+              style="--reveal-delay: 120ms; background: var(--primary); color: var(--primary-foreground)"
+              class="inline-flex h-11 items-center rounded-[0.85rem] px-6 text-sm font-medium transition-opacity hover:opacity-90"
+            >
+              {product.cta.label}
+            </a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    {/* ——— Footer ——— */}
+    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
+      <div class="mx-auto max-w-300 text-center">
+        <p class="text-sm" style="color: var(--muted-foreground)">
+          <a href="/" class="transition-opacity hover:opacity-70">stella</a>
+          <span aria-hidden="true"> · </span>
+          <a href="/ai-info" class="transition-opacity hover:opacity-70">AI fact sheet</a>
+          <span aria-hidden="true"> · </span>
+          <a href="/security" class="transition-opacity hover:opacity-70">Security</a>
+        </p>
+      </div>
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
+      >
+      </div>
+    </footer>
+  </div>
+
+  <style>
+    .quick-answer {
+      background: color-mix(in srgb, var(--card) 80%, transparent);
+      border-color: color-mix(in srgb, var(--border) 90%, transparent);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+    }
+    .quick-answer::before {
+      content: "";
+      position: absolute;
+      inset: 0 auto 0 0;
+      width: 3px;
+      background: linear-gradient(
+        180deg,
+        var(--primary),
+        color-mix(in srgb, var(--primary) 0%, transparent)
+      );
+    }
+
+    .capability-card {
+      background: color-mix(in srgb, var(--card) 78%, transparent);
+      border-color: color-mix(in srgb, var(--border) 90%, transparent);
+      box-shadow: inset 0 1px 0 color-mix(in srgb, white 8%, transparent);
+      transition:
+        border-color 200ms,
+        transform 200ms,
+        box-shadow 200ms;
+    }
+    .capability-card:hover {
+      border-color: color-mix(in srgb, var(--primary) 42%, var(--border));
+      transform: translateY(-2px);
+      box-shadow:
+        inset 0 1px 0 color-mix(in srgb, white 10%, transparent),
+        0 18px 40px -30px rgba(0, 0, 0, 0.3);
+    }
+
+    .product-faq[open] .product-faq-mark {
+      transform: rotate(45deg);
+    }
+    .product-faq summary::-webkit-details-marker {
+      display: none;
+    }
+    .adjacent-card:hover {
+      border-color: var(--primary) !important;
+      transform: translateY(-2px);
+    }
+  </style>
+</Base>

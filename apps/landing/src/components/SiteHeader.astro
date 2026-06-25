@@ -1,0 +1,38 @@
+---
+import ThemeToggle from "./ThemeToggle.astro";
+import MainNav from "./MainNav.astro";
+
+// `current` lets a page mark its own nav entry.
+type Props = { current?: string };
+const { current } = Astro.props;
+
+const appUrl = "https://my.stll.app";
+---
+
+<header
+  class="sticky top-0 z-50 border-b backdrop-blur-md"
+  style="border-color: var(--border); background: color-mix(in srgb, var(--background) 82%, transparent)"
+>
+  <nav
+    class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-4"
+  >
+    <div class="flex items-center gap-6">
+      <a href="/" class="shrink-0">
+        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
+      </a>
+
+      <MainNav current={current} />
+    </div>
+
+    <div class="flex items-center gap-3">
+      <ThemeToggle />
+      <a
+        href={appUrl}
+        class="inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90 whitespace-nowrap"
+        style="background: var(--primary); color: var(--primary-foreground)"
+      >
+        Start free
+      </a>
+    </div>
+  </nav>
+</header>

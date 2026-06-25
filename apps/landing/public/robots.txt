@@ -1,4 +1,22 @@
+# stella is open source and wants to be cited accurately by AI search
+# engines. AI crawlers are explicitly welcome; see /ai-info and /llms-full.txt.
+
 User-agent: *
+Allow: /
+
+# AI assistants and answer engines (explicit allow-list)
+User-agent: GPTBot
+User-agent: OAI-SearchBot
+User-agent: ChatGPT-User
+User-agent: ClaudeBot
+User-agent: Claude-Web
+User-agent: anthropic-ai
+User-agent: PerplexityBot
+User-agent: Perplexity-User
+User-agent: Google-Extended
+User-agent: Applebot-Extended
+User-agent: Bytespider
+User-agent: CCBot
 Allow: /
 
 Sitemap: https://stll.app/sitemap-index.xml

@@ -1,0 +1,226 @@
+---
+import Base from "../layouts/Base.astro";
+import ThemeToggle from "../components/ThemeToggle.astro";
+import AskAiBar from "../components/AskAiBar.astro";
+import { aiTagline, aiFaqs, aiCanonicalSources } from "../data/ai-facts";
+
+const crawlerResources = [
+  {
+    label: "llms.txt",
+    href: "/llms.txt",
+    body: "Index of canonical URLs in llms.txt format.",
+  },
+  {
+    label: "llms-full.txt",
+    href: "/llms-full.txt",
+    body: "Full canonical content, concatenated for ingestion.",
+  },
+  {
+    label: "robots.txt",
+    href: "/robots.txt",
+    body: "Explicit allow-list for AI crawlers (GPTBot, ClaudeBot, and others).",
+  },
+  {
+    label: "sitemap",
+    href: "/sitemap-index.xml",
+    body: "All public URLs with last-modified dates.",
+  },
+  {
+    label: "Source",
+    href: "https://github.com/stella/stella",
+    body: "Open-source repository: code, issues, and docs.",
+    external: true,
+  },
+];
+
+// FAQPage structured data, sourced from the same answers rendered below so
+// the markup an assistant scrapes matches what a person reads.
+const faqJsonLd = {
+  "@context": "https://schema.org",
+  "@type": "FAQPage",
+  mainEntity: aiFaqs.map((faq) => ({
+    "@type": "Question",
+    name: faq.question,
+    acceptedAnswer: { "@type": "Answer", text: faq.answer },
+  })),
+};
+---
+
+<Base
+  title="stella | AI fact sheet"
+  description="stella in machine-readable form: a canonical fact page for AI search engines like ChatGPT, Claude, Perplexity, Gemini, and Grok."
+>
+  <script
+    is:inline
+    type="application/ld+json"
+    set:html={JSON.stringify(faqJsonLd)}
+  />
+
+  <div class="flex min-h-dvh flex-col">
+    <nav
+      class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5"
+    >
+      <a href="/">
+        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
+      </a>
+      <div class="flex items-center gap-4">
+        <ThemeToggle />
+        <a
+          href="/"
+          class="inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90"
+          style="background: var(--primary); color: var(--primary-foreground)"
+        >
+          Back to stella
+        </a>
+      </div>
+    </nav>
+
+    <main class="flex-1">
+      {/* ——— Hero ——— */}
+      <section class="px-6 pt-16 pb-10 lg:pt-24 lg:pb-12">
+        <div class="mx-auto max-w-300">
+          <div class="max-w-4xl">
+            <p
+              class="text-xs font-medium uppercase tracking-[0.2em]"
+              style="color: var(--primary)"
+            >
+              AI fact sheet
+            </p>
+            <h1
+              class="mt-3 font-display text-4xl font-medium tracking-tight sm:text-5xl"
+            >
+              stella, in machine-readable form
+            </h1>
+            <p
+              class="mt-6 text-lg leading-[1.8]"
+              style="color: var(--muted-foreground)"
+            >
+              A canonical fact page for AI search engines — ChatGPT, Claude,
+              Perplexity, Gemini, and Grok. {aiTagline}
+            </p>
+          </div>
+
+          <div class="mt-10">
+            <AskAiBar />
+          </div>
+        </div>
+      </section>
+
+      {/* ——— Citation-ready Q&A ——— */}
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <h2
+            class="mb-2 text-xs font-medium uppercase tracking-[0.2em]"
+            style="color: var(--muted-foreground)"
+          >
+            Citation-ready Q&amp;A
+          </h2>
+          <p
+            class="mb-6 text-sm leading-[1.7]"
+            style="color: var(--muted-foreground)"
+          >
+            Pre-written answers for AI assistants. Each one is self-contained and
+            safe to quote on its own.
+          </p>
+          <div class="mx-auto max-w-4xl divide-y" style="border-color: var(--border)">
+            {
+              aiFaqs.map((faq) => (
+                <details class="ai-faq group">
+                  <summary
+                    class="flex cursor-pointer items-center justify-between gap-4 py-4 font-display text-base font-medium"
+                  >
+                    {faq.question}
+                    <span
+                      class="ai-faq-mark shrink-0 text-lg leading-none transition-transform"
+                      style="color: var(--muted-foreground)"
+                      aria-hidden="true"
+                    >
+                      +
+                    </span>
+                  </summary>
+                  <p
+                    class="pb-5 text-sm leading-[1.8]"
+                    style="color: var(--muted-foreground)"
+                  >
+                    {faq.answer}
+                  </p>
+                </details>
+              ))
+            }
+          </div>
+        </div>
+      </section>
+
+      {/* ——— For crawlers ——— */}
+      <section class="px-6 py-10 lg:py-12">
+        <div class="mx-auto max-w-300">
+          <h2
+            class="mb-6 text-xs font-medium uppercase tracking-[0.2em]"
+            style="color: var(--muted-foreground)"
+          >
+            For crawlers
+          </h2>
+          <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {
+              crawlerResources.map((res) => (
+                <a
+                  href={res.href}
+                  class="crawler-card flex flex-col rounded-2xl p-6 no-underline transition-[border-color,transform] duration-200"
+                  style="background: var(--card); border: 1px solid var(--border); color: inherit"
+                  target={res.external ? "_blank" : undefined}
+                  rel={res.external ? "noopener noreferrer" : undefined}
+                >
+                  <span class="font-mono text-sm font-medium" style="color: var(--foreground)">
+                    {res.label}
+                  </span>
+                  <span
+                    class="mt-1.5 text-sm leading-[1.6]"
+                    style="color: var(--muted-foreground)"
+                  >
+                    {res.body}
+                  </span>
+                </a>
+              ))
+            }
+          </div>
+        </div>
+      </section>
+    </main>
+
+    {/* ——— Footer ——— */}
+    <footer class="relative px-6 py-12" style="border-top: 1px solid var(--border)">
+      <div class="mx-auto max-w-300 text-center">
+        <p class="text-sm" style="color: var(--muted-foreground)">
+          {
+            aiCanonicalSources.map((src, i) => (
+              <>
+                {i > 0 && <span aria-hidden="true"> · </span>}
+                <a href={src.path} class="transition-opacity hover:opacity-70">
+                  {src.label}
+                </a>
+              </>
+            ))
+          }
+        </p>
+      </div>
+      <div
+        class="pointer-events-none absolute inset-x-0 bottom-0 h-32"
+        style="background: linear-gradient(to bottom, transparent, var(--auth-gradient-end))"
+      >
+      </div>
+    </footer>
+  </div>
+
+  <style>
+    .ai-faq[open] .ai-faq-mark {
+      transform: rotate(45deg);
+    }
+    .ai-faq summary::-webkit-details-marker {
+      display: none;
+    }
+    .crawler-card:hover {
+      border-color: var(--primary) !important;
+      transform: translateY(-2px);
+    }
+  </style>
+</Base>

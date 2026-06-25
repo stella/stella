@@ -1,12 +1,17 @@
 ---
 import Base from "../layouts/Base.astro";
 import ThemeToggle from "../components/ThemeToggle.astro";
-import { DiscordLogoIcon, GitHubLogoIcon } from "@stll/ui/components/brand-icons";
+import GitHubIcon from "../components/GitHubIcon.astro";
+import MainNav from "../components/MainNav.astro";
 import ProductShowcase from "../components/react/ProductShowcase";
-import { controlCapabilities } from "../data/capabilities";
-import { getLatestFeatureRelease } from "../lib/changelog";
+import AskAiBar from "../components/AskAiBar.astro";
+import {
+  controlCapabilities,
+  dataStackCapabilities,
+} from "../data/capabilities";
+import { getChangelogReleases } from "../lib/changelog";
 
-const latestRelease = getLatestFeatureRelease();
+const latestRelease = getChangelogReleases().at(0);
 
 const appUrl = "https://my.stll.app";
 const discordUrl = "https://discord.gg/8dZjmVFjTK";
@@ -16,7 +21,7 @@ const selfHostingDocsUrl =
 ---
 
 <Base>
-  <!-- Brand accent line -->
+  {/* Brand accent line */}
   <div
     class="h-0.5"
     style="background: linear-gradient(to right, var(--auth-gradient-end), transparent 70%)"
@@ -31,12 +36,13 @@ const selfHostingDocsUrl =
     <nav
       class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-4"
     >
-      <div class="flex items-center gap-3">
-        <img
-          src="/images/stella-logo.svg"
-          alt="stella"
-          class="h-6 dark:invert"
-        />
+      <div class="flex items-center gap-6">
+        <div class="flex items-center gap-3">
+          <img
+            src="/images/stella-logo.svg"
+            alt="stella"
+            class="h-6 dark:invert"
+          />
         <span
           class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase"
         >
@@ -54,8 +60,10 @@ const selfHostingDocsUrl =
           rel="noopener noreferrer"
           aria-label="stella on GitHub"
         >
-          <GitHubLogoIcon className="h-5 w-5" />
+          <GitHubIcon class="h-5 w-5" />
         </a>
+        </div>
+        <MainNav />
       </div>
       <a
         href={appUrl}
@@ -68,7 +76,7 @@ const selfHostingDocsUrl =
   </header>
 
   <main>
-    <!-- ——— Hero ——— -->
+    {/* ——— Hero ——— */}
     <section class="relative flex min-h-dvh flex-col overflow-hidden pt-20">
       <div class="absolute inset-0 overflow-hidden" id="gradient-bg">
         <div
@@ -145,7 +153,8 @@ const selfHostingDocsUrl =
           style="--reveal-delay: 360ms; color: var(--muted-foreground)"
           class="mt-6 max-w-lg text-center text-lg leading-[1.7]"
         >
-          Documents, matters, review, and research in one place.
+          Matters, documents, and review, plus case law, company
+          registries, and an AI agent.
           <br />
           Free to use, open to inspect, yours to keep.
         </p>
@@ -176,6 +185,9 @@ const selfHostingDocsUrl =
             Self-host
           </a>
         </div>
+        <div data-reveal style="--reveal-delay: 600ms" class="mt-8">
+          <AskAiBar />
+        </div>
       </div>
 
       <div
@@ -185,12 +197,67 @@ const selfHostingDocsUrl =
       </div>
     </section>
 
-    <!-- ——— Product ——— -->
+    {/* ——— Product ——— */}
     <section class="-mt-24 relative z-10 px-6 pb-16">
       <div class="mx-auto max-w-300">
         <ProductShowcase />
       </div>
     </section>
+
+    {/* ——— Legal data stack ——— */}
+    <section class="px-6 py-16 lg:py-20">
+      <div class="mx-auto max-w-300">
+        <div class="mx-auto max-w-4xl text-center">
+          <p
+            data-reveal
+            style="color: var(--muted-foreground)"
+            class="text-xs font-medium uppercase tracking-[0.2em]"
+          >
+            Legal data stack
+          </p>
+          <h2
+            data-reveal
+            style="--reveal-delay: 80ms"
+            class="mt-3 font-display text-4xl font-medium leading-[1.1] sm:text-5xl lg:text-6xl"
+          >
+            Not just documents.
+            <br />
+            The data too.
+          </h2>
+          <p
+            data-reveal
+            style="--reveal-delay: 160ms; color: var(--muted-foreground)"
+            class="mx-auto mt-5 max-w-3xl text-base leading-[1.9] sm:text-lg"
+          >
+            Case law and company registries, ingested and ready to pull into a
+            matter or hand to the agent.
+          </p>
+        </div>
+
+        <div class="mx-auto mt-10 grid max-w-4xl gap-4 sm:grid-cols-2">
+          {
+            dataStackCapabilities.map((card, index) => (
+              <div
+                data-reveal
+                style={`--reveal-delay: ${240 + index * 80}ms; background: var(--card); border: 1px solid var(--border)`}
+                class="rounded-[1.45rem] p-6"
+              >
+                <h3 class="font-display text-lg font-medium tracking-tight">
+                  {card.title}
+                </h3>
+                <p
+                  class="mt-2 text-sm leading-[1.8]"
+                  style="color: var(--muted-foreground)"
+                >
+                  {card.body}
+                </p>
+              </div>
+            ))
+          }
+        </div>
+      </div>
+    </section>
+
     <section class="px-6 py-16 lg:py-20">
       <div class="mx-auto max-w-300">
         <div class="mx-auto max-w-4xl text-center">
@@ -246,7 +313,7 @@ const selfHostingDocsUrl =
       </div>
     </section>
 
-    <!-- ——— Usage options ——— -->
+    {/* ——— Usage options ——— */}
     <section class="px-6 py-16 lg:py-20">
       <div class="mx-auto max-w-300">
         <p
@@ -344,7 +411,7 @@ const selfHostingDocsUrl =
       </div>
     </section>
 
-    <!--
+    {/*
       Removing the design scaffold until everything for the beta preview.
 
     <section class="px-6 py-16 lg:py-20">
@@ -371,9 +438,9 @@ const selfHostingDocsUrl =
         </div>
       </div>
     </section>
-    -->
+    */}
 
-    <!-- ——— Final CTA ——— -->
+    {/* ——— Final CTA ——— */}
     <section class="px-6 pb-20 lg:pb-24">
       <div
         class="relative mx-auto max-w-300 overflow-hidden rounded-[2rem] p-8 sm:p-10 lg:p-12"
@@ -438,7 +505,7 @@ const selfHostingDocsUrl =
     </section>
   </main>
 
-  <!-- ——— Footer ——— -->
+  {/* ——— Footer ——— */}
   <footer
     class="relative overflow-hidden px-6 py-12"
     style="border-top: 1px solid var(--border)"
@@ -485,7 +552,7 @@ const selfHostingDocsUrl =
             rel="noopener noreferrer"
             aria-label="GitHub"
           >
-            <GitHubLogoIcon className="h-4 w-4" />
+            <GitHubIcon class="h-4 w-4" />
           </a>
           <a
             href={discordUrl}
@@ -495,7 +562,17 @@ const selfHostingDocsUrl =
             rel="noopener noreferrer"
             aria-label="Discord"
           >
-            <DiscordLogoIcon className="h-4 w-auto" />
+            <svg
+              class="h-4"
+              fill="currentColor"
+              viewBox="0 0 126.644 96"
+              aria-hidden="true"
+              ><path
+                xmlns="http://www.w3.org/2000/svg"
+                id="Discord-Symbol-White"
+                d="M81.15,0c-1.2376,2.1973-2.3489,4.4704-3.3591,6.794-9.5975-1.4396-19.3718-1.4396-28.9945,0-.985-2.3236-2.1216-4.5967-3.3591-6.794-9.0166,1.5407-17.8059,4.2431-26.1405,8.0568C2.779,32.5304-1.6914,56.3725.5312,79.8863c9.6732,7.1476,20.5083,12.603,32.0505,16.0884,2.6014-3.4854,4.8998-7.1981,6.8698-11.0623-3.738-1.3891-7.3497-3.1318-10.8098-5.1523.9092-.6567,1.7932-1.3386,2.6519-1.9953,20.281,9.547,43.7696,9.547,64.0758,0,.8587.7072,1.7427,1.3891,2.6519,1.9953-3.4601,2.0457-7.0718,3.7632-10.835,5.1776,1.97,3.8642,4.2683,7.5769,6.8698,11.0623,11.5419-3.4854,22.3769-8.9156,32.0509-16.0631,2.626-27.2771-4.496-50.9172-18.817-71.8548C98.9811,4.2684,90.1918,1.5659,81.1752.0505l-.0252-.0505ZM42.2802,65.4144c-6.2383,0-11.4159-5.6575-11.4159-12.6535s4.9755-12.6788,11.3907-12.6788,11.5169,5.708,11.4159,12.6788c-.101,6.9708-5.026,12.6535-11.3907,12.6535ZM84.3576,65.4144c-6.2637,0-11.3907-5.6575-11.3907-12.6535s4.9755-12.6788,11.3907-12.6788,11.4917,5.708,11.3906,12.6788c-.101,6.9708-5.026,12.6535-11.3906,12.6535Z"
+              ></path></svg
+            >
           </a>
           <a
             href="https://x.com/stll_app"
@@ -539,6 +616,9 @@ const selfHostingDocsUrl =
           rel="noopener noreferrer">Status</a
         >
         <a href="/terms" class="transition-opacity hover:opacity-70">Terms</a>
+        <a href="/ai-info" class="transition-opacity hover:opacity-70"
+          >AI fact sheet</a
+        >
         <a href="/imprint" class="transition-opacity hover:opacity-70"
           >stella labs, s.r.o.</a
         >

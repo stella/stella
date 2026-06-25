@@ -1,0 +1,117 @@
+---
+import type { ProductMedia } from "../data/products/types";
+
+type Props = { media: ProductMedia };
+const { media } = Astro.props;
+const aspect = media.aspect ?? "16 / 9";
+
+// Faint skeleton rows so a stubbed shot reads as "product UI slots in here",
+// not an empty void. Opacities step down to suggest depth.
+const sidebarRows = [0.1, 0.08, 0.08, 0.06, 0.06];
+const tableRows = [0.07, 0.06, 0.06, 0.05, 0.05];
+---
+
+<div
+  class="product-media relative overflow-hidden rounded-[1.45rem] border backdrop-blur-md"
+  style={`aspect-ratio: ${aspect}; border-color: color-mix(in srgb, var(--border) 90%, transparent); background: color-mix(in srgb, var(--card) 78%, transparent); box-shadow: inset 0 1px 0 color-mix(in srgb, white 10%, transparent), 0 18px 40px -28px rgba(0, 0, 0, 0.28)`}
+>
+  {/* Glass light catch, matching the homepage showcase tiles. */}
+  <div
+    class="pointer-events-none absolute inset-0 z-10"
+    style="background: linear-gradient(180deg, color-mix(in srgb, white 7%, transparent) 0%, transparent 38%)"
+    aria-hidden="true"
+  >
+  </div>
+
+  {
+    media.type === "image" && (
+      <img
+        src={media.src}
+        alt={media.alt}
+        class="absolute inset-0 h-full w-full object-cover"
+        loading="lazy"
+        decoding="async"
+      />
+    )
+  }
+
+  {
+    media.type === "video" && (
+      <video
+        class="absolute inset-0 h-full w-full object-cover"
+        poster={media.poster}
+        aria-label={media.alt}
+        autoplay
+        muted
+        loop
+        playsinline
+      >
+        <source src={media.src} type="video/mp4" />
+      </video>
+    )
+  }
+
+  {
+    media.type === "placeholder" && (
+      <div class="absolute inset-0 flex flex-col">
+        {/* Faux window toolbar */}
+        <div
+          class="flex items-center gap-1.5 border-b px-4 py-3"
+          style="border-color: color-mix(in srgb, var(--border) 65%, transparent)"
+          aria-hidden="true"
+        >
+          <span class="h-2.5 w-2.5 rounded-full" style="background: color-mix(in srgb, var(--muted-foreground) 32%, transparent)" />
+          <span class="h-2.5 w-2.5 rounded-full" style="background: color-mix(in srgb, var(--muted-foreground) 22%, transparent)" />
+          <span class="h-2.5 w-2.5 rounded-full" style="background: color-mix(in srgb, var(--muted-foreground) 16%, transparent)" />
+          <span class="ml-3 h-2.5 w-32 rounded-full" style="background: color-mix(in srgb, var(--muted-foreground) 12%, transparent)" />
+        </div>
+
+        {/* Faint sidebar + table skeleton */}
+        <div class="flex flex-1 gap-4 p-4" aria-hidden="true">
+          <div class="hidden w-1/5 flex-col gap-2.5 sm:flex">
+            {sidebarRows.map((o) => (
+              <span
+                class="h-2.5 w-full rounded-full"
+                style={`background: color-mix(in srgb, var(--muted-foreground) ${o * 100}%, transparent)`}
+              />
+            ))}
+          </div>
+          <div class="flex flex-1 flex-col gap-2.5">
+            <span
+              class="h-3 w-full rounded"
+              style="background: color-mix(in srgb, var(--muted-foreground) 13%, transparent)"
+            />
+            {tableRows.map((o) => (
+              <span
+                class="h-2.5 w-full rounded"
+                style={`background: color-mix(in srgb, var(--muted-foreground) ${o * 100}%, transparent)`}
+              />
+            ))}
+          </div>
+        </div>
+
+        {/* Caption: what the captured shot will show */}
+        <div class="flex items-center justify-center gap-2 px-4 pb-3.5">
+          <svg
+            class="h-3.5 w-3.5 shrink-0"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="2"
+            style="color: color-mix(in srgb, var(--primary) 80%, transparent)"
+            aria-hidden="true"
+          >
+            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
+            <circle cx="12" cy="13" r="3" />
+          </svg>
+          <span
+            class="text-[0.7rem] leading-[1.4]"
+            style="color: color-mix(in srgb, var(--muted-foreground) 85%, transparent)"
+          >
+            {media.note}
+          </span>
+        </div>
+      </div>
+    )
+  }
+</div>
