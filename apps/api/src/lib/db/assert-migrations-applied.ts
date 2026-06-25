@@ -9,6 +9,19 @@ import { logger } from "@/api/lib/observability/logger";
 const MIGRATIONS_DIR = nodePath.resolve(process.cwd(), "drizzle");
 const ESCAPE_HATCH_ENV = "SKIP_MIGRATION_CHECK";
 
+// Migrations intentionally rewritten after they shipped in a release. A
+// database that applied the earlier version recorded its hash, and the
+// migrator never re-runs an already-applied folder, so the rewritten hash is
+// never stored. Accept the prior hash as satisfying the check for these.
+const REWRITTEN_MIGRATION_PRIOR_HASHES: Record<string, string> = {
+  // 0.5.0 backfilled slugs inside the migration and built the unique index
+  // non-concurrently. The in-transaction backfill exceeded statement_timeout
+  // on large corpora, so 0.5.1 rewrote it to build the index CONCURRENTLY and
+  // moved the slug backfill into src/scripts/backfill-case-law-slugs.ts.
+  "20260603120000_case_law_public_slugs":
+    "4757efe9484615eff7bcba9c34687be4aa9b28e07a71137a3638a3072d8a6d3d",
+};
+
 type LocalMigration = { name: string; hash: string };
 type AppliedMigrationRow = { hash: string };
 
@@ -60,7 +73,14 @@ export const assertMigrationsApplied = async (): Promise<void> => {
   }
 
   const appliedHashes = await queryAppliedHashes();
-  const missing = local.filter((m) => !appliedHashes.has(m.hash));
+  const isApplied = (m: LocalMigration): boolean => {
+    if (appliedHashes.has(m.hash)) {
+      return true;
+    }
+    const priorHash = REWRITTEN_MIGRATION_PRIOR_HASHES[m.name];
+    return priorHash !== undefined && appliedHashes.has(priorHash);
+  };
+  const missing = local.filter((m) => !isApplied(m));
 
   if (missing.length > 0) {
     const missingNames = missing.map((m) => m.name).join(", ");
