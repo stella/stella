@@ -2,12 +2,10 @@ import { Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import { t } from "elysia";
 
-import type { SafeDb } from "@/api/db";
 import { entities } from "@/api/db/schema";
 import { queryEntities } from "@/api/handlers/entities/query-entities";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
-import type { SafeId } from "@/api/lib/branded-types";
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
@@ -41,7 +39,7 @@ type FilesystemEntity = { entityId: string; parentId: string | null };
 export const collectMissingAncestorIds = (
   matched: readonly FilesystemEntity[],
   parentById: ReadonlyMap<string, string | null>,
-): SafeId<"entity">[] => {
+): string[] => {
   const presentIds = new Set(matched.map((entity) => entity.entityId));
   const missingIds = new Set<string>();
 
@@ -57,23 +55,8 @@ export const collectMissingAncestorIds = (
     }
   }
 
-  // SAFETY: every collected id is a `parentId` from the entities table (the
-  // folder skeleton or a matched row), so it is a valid entity id.
-  return [...missingIds] as SafeId<"entity">[];
+  return [...missingIds];
 };
-
-const fetchFolderSkeleton = (
-  safeDb: SafeDb,
-  workspaceId: SafeId<"workspace">,
-) =>
-  safeDb((tx) =>
-    tx
-      .select({ entityId: entities.id, parentId: entities.parentId })
-      .from(entities)
-      .where(
-        and(eq(entities.workspaceId, workspaceId), eq(entities.kind, "folder")),
-      ),
-  );
 
 export const createReadFilesystemTreeHandler = (
   queryEntitiesImpl: QueryEntities = queryEntities,
@@ -116,15 +99,29 @@ export const createReadFilesystemTreeHandler = (
       }
 
       const folderSkeleton = yield* Result.await(
-        fetchFolderSkeleton(safeDb, workspaceId),
+        safeDb((tx) =>
+          tx
+            .select({ entityId: entities.id, parentId: entities.parentId })
+            .from(entities)
+            .where(
+              and(
+                eq(entities.workspaceId, workspaceId),
+                eq(entities.kind, "folder"),
+              ),
+            ),
+        ),
       );
       const parentById = new Map(
         folderSkeleton.map((folder) => [folder.entityId, folder.parentId]),
       );
-      const missingAncestorIds = collectMissingAncestorIds(
-        result.entities,
-        parentById,
+      const missingIds = new Set(
+        collectMissingAncestorIds(result.entities, parentById),
       );
+      // Source the branded ids straight from the skeleton column so no `id`
+      // cast is needed for the `inArray` filter below.
+      const missingAncestorIds = folderSkeleton
+        .filter((folder) => missingIds.has(folder.entityId))
+        .map((folder) => folder.entityId);
 
       if (missingAncestorIds.length === 0) {
         return Result.ok({ entities: result.entities });
