@@ -113,6 +113,21 @@ describe("check-migration-safety", () => {
     expect(result.stderr).toBe("");
   });
 
+  it("flags a CTE upsert wrapping an unbounded outer UPDATE", () => {
+    // The inner INSERT ... ON CONFLICT lives at paren depth > 0, so the outer
+    // command is the full-table UPDATE: the upsert must not exempt it.
+    const result = runChecker(`
+      WITH "seed" AS (
+        INSERT INTO "documents" ("id", "status") VALUES (1, 'archived')
+        ON CONFLICT ON CONSTRAINT "documents_pkey" DO NOTHING RETURNING "id"
+      )
+      UPDATE "documents" SET "status" = 'archived';
+    `);
+
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr).toContain("unbounded-update");
+  });
+
   it("flags a full-table UPDATE whose only WHERE is in a SET subquery", () => {
     const result = runChecker(`
       UPDATE "documents"

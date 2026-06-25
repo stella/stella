@@ -66,11 +66,9 @@ const DO_BLOCK_DOLLAR_QUOTE_PREFIX_PATTERN = /\bDO(?:\s+LANGUAGE\s+\S+)?\s*$/i;
 const ROUTINE_DOLLAR_QUOTE_PREFIX_PATTERN =
   /\bCREATE\s+(?:OR\s+REPLACE\s+)?(?:FUNCTION|PROCEDURE)\b[\s\S]*\b(?:AS|IS)\s*$/i;
 
-const UPDATE_STATEMENT_PATTERN = /\bUPDATE\b[\s\S]*\bSET\b/iu;
 const WHERE_KEYWORD_PATTERN = /^WHERE\b/iu;
 const IDENTIFIER_CHARACTER_PATTERN = /[A-Za-z0-9_]/u;
-
-const INSERT_OR_UPSERT_PATTERN = /(?:^\s*INSERT\b)|(?:\bON\s+CONFLICT\b)/iu;
+const TOP_LEVEL_COMMAND_PATTERN = /^(?:INSERT|UPDATE|DELETE|MERGE|SELECT)\b/iu;
 
 // A WHERE that bounds the outer UPDATE sits at parenthesis depth 0. A WHERE
 // only inside a parenthesised subquery (e.g. `SET col = (SELECT ... WHERE ...)`)
@@ -106,20 +104,54 @@ const hasTopLevelWhere = (statement: string): boolean => {
   return false;
 };
 
+// The statement's true outer command is the first SQL command keyword at
+// parenthesis depth 0: CTE bodies (`WITH x AS (...)`) and SET subqueries live
+// inside parens, so an inner INSERT/SELECT cannot be mistaken for the outer
+// command. The text is already string/comment-masked by parseStatements.
+const getTopLevelCommand = (statement: string): string | null => {
+  let depth = 0;
+
+  for (let index = 0; index < statement.length; index++) {
+    const char = statement[index] ?? "";
+
+    if (char === "(") {
+      depth++;
+      continue;
+    }
+
+    if (char === ")") {
+      depth = Math.max(0, depth - 1);
+      continue;
+    }
+
+    if (
+      depth === 0 &&
+      IDENTIFIER_CHARACTER_PATTERN.test(char) &&
+      !IDENTIFIER_CHARACTER_PATTERN.test(statement[index - 1] ?? "")
+    ) {
+      const match = TOP_LEVEL_COMMAND_PATTERN.exec(statement.slice(index));
+      if (match) {
+        return match[0].toUpperCase();
+      }
+    }
+  }
+
+  return null;
+};
+
 const isUnboundedUpdate = (statement: string): boolean => {
-  // INSERT ... ON CONFLICT DO UPDATE SET ... is an upsert, not a full-table
-  // backfill: it matches UPDATE/SET with no WHERE but only touches the
-  // conflicting row(s). Exclude it so idempotent seed migrations don't trip.
-  if (INSERT_OR_UPSERT_PATTERN.test(statement)) {
+  // Only a statement whose top-level command is UPDATE can be a full-table
+  // backfill. INSERT ... ON CONFLICT DO UPDATE (an upsert) and data-modifying
+  // CTEs wrapping an inner upsert have a non-UPDATE outer command, so they are
+  // not unbounded even though they contain UPDATE/SET and no top-level WHERE.
+  if (getTopLevelCommand(statement) !== "UPDATE") {
     return false;
   }
 
   // A full-table UPDATE has no WHERE bounding the outer statement. A WHERE that
   // lives only inside a SET subquery (the common "populate from related table"
   // backfill) still rewrites every row, so require a top-level WHERE to clear.
-  return (
-    UPDATE_STATEMENT_PATTERN.test(statement) && !hasTopLevelWhere(statement)
-  );
+  return !hasTopLevelWhere(statement);
 };
 
 const GUARDED_RULES: GuardedRule[] = [
