@@ -2,7 +2,7 @@ import { Type } from "@sinclair/typebox";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { conditionNodeSchema } from "@stll/conditions";
+import { conditionHasFormula, conditionNodeSchema } from "@stll/conditions";
 
 import {
   manualInputToolSchema,
@@ -120,14 +120,18 @@ const hasFiltersField = (value: unknown): value is { filters: unknown } =>
  * Stored filters are validated leniently: any node that does not parse as the
  * canonical condition AST is dropped, so a stray pre-AST row resets to an empty
  * filter instead of failing the whole layout read. New writes are AST nodes and
- * pass through untouched.
+ * pass through untouched. A `formula` operand is valid in the type system (it
+ * exists for template rules) but has no SQL transpilation, so a filter that
+ * carries one is dropped rather than silently mismatched.
  */
 const withValidFilters = (value: unknown): unknown => {
   if (!hasFiltersField(value)) {
     return value;
   }
   const filters = Array.isArray(value.filters)
-    ? value.filters.filter((node) => v.is(conditionNodeSchema, node))
+    ? value.filters.filter(
+        (node) => v.is(conditionNodeSchema, node) && !conditionHasFormula(node),
+      )
     : [];
   return { ...value, filters };
 };

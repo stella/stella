@@ -15,7 +15,9 @@ import {
   type RefOperand,
 } from "./schema";
 
-/** A simple record-backed resolver for `property`/`path` operands. */
+/** A simple record-backed resolver for `property`/`path`/`formula` operands.
+ *  A `formula` operand reads a precomputed value keyed by its expression, the
+ *  way the template domain resolves it through the arithmetic engine. */
 const resolverFor =
   (data: Record<string, ConditionValue>) =>
   (operand: RefOperand): ConditionValue => {
@@ -27,6 +29,9 @@ const resolverFor =
     }
     if (operand.type === "kind") {
       return data["kind"];
+    }
+    if (operand.type === "formula") {
+      return data[operand.expr];
     }
     return data[operand.field];
   };
@@ -265,5 +270,51 @@ describe("schema", () => {
         right: { type: "literal", value: "x" },
       }),
     ).toThrow();
+  });
+});
+
+describe("formula operand", () => {
+  test("evaluator resolves a formula operand through the adapter", () => {
+    // `rent * 12 < 100000`: the resolver supplies the computed left value.
+    const node: ConditionNode = {
+      type: "compare",
+      left: { type: "formula", expr: "rent * 12" },
+      op: "lt",
+      right: { type: "literal", value: 100_000 },
+    };
+    expect(evaluateCondition(node, resolverFor({ "rent * 12": 96_000 }))).toBe(
+      true,
+    );
+    expect(evaluateCondition(node, resolverFor({ "rent * 12": 120_000 }))).toBe(
+      false,
+    );
+  });
+
+  test("schema accepts a formula operand and rejects an empty expression", () => {
+    const node: ConditionNode = {
+      type: "compare",
+      left: { type: "formula", expr: "rent * 12" },
+      op: "gte",
+      right: { type: "literal", value: 1000 },
+    };
+    expect(v.parse(conditionNodeSchema, node)).toEqual(node);
+    expect(() =>
+      v.parse(conditionNodeSchema, {
+        type: "compare",
+        left: { type: "formula", expr: "" },
+        op: "gte",
+        right: { type: "literal", value: 1000 },
+      }),
+    ).toThrow();
+  });
+
+  test("a formula-right ordered comparison is complete, not pruned", () => {
+    const node: ConditionNode = {
+      type: "compare",
+      left: { type: "path", path: "cap" },
+      op: "lte",
+      right: { type: "formula", expr: "base * 1.05" },
+    };
+    expect(pruneIncomplete(node)).toEqual(node);
   });
 });

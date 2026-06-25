@@ -13,10 +13,12 @@
 
 import {
   evaluateCondition as evaluateConditionAst,
+  type ConditionNode,
   type ConditionValue,
   type OperandResolver,
 } from "@stll/conditions";
 
+import { evaluateNumericExpression } from "./compute.js";
 import { parseCondition } from "./parse.js";
 import { resolvePath } from "./path.js";
 
@@ -26,7 +28,15 @@ export { resolvePath };
 
 export type NamedCondition = {
   name: string;
+  /** The `{{#if}}` expression string. Authoritative unless `node` is set. */
   expression: string;
+  /**
+   * The canonical AST, set when the condition cannot round-trip through the
+   * expression string — i.e. it uses a `formula` operand the `{{#if}}` grammar
+   * has no syntax for. When present it is evaluated directly and `expression`
+   * is ignored.
+   */
+  node?: ConditionNode;
   label?: string;
 };
 
@@ -79,6 +89,11 @@ const makeResolver = (
   depth: number,
 ): OperandResolver => {
   const resolve: OperandResolver = (operand) => {
+    // An arithmetic expression over numeric fields, resolved against the same
+    // fill bag (`rent * 12`); a non-numeric/unparseable expression is undefined.
+    if (operand.type === "formula") {
+      return evaluateNumericExpression(operand.expr, data);
+    }
     if (operand.type !== "path") {
       return undefined;
     }
@@ -90,6 +105,14 @@ const makeResolver = (
       }
       const next = new Set(resolved);
       next.add(path);
+      // An AST-backed named condition (uses a formula operand) is evaluated
+      // directly; a string-backed one re-parses its expression.
+      if (named.node) {
+        return evaluateConditionAst(
+          named.node,
+          makeResolver(data, namedConditions, next, depth + 1),
+        );
+      }
       return evaluateCondition(
         named.expression,
         data,
@@ -157,6 +180,7 @@ export type {
 // parses. Re-export the AST surface so template consumers import from one place.
 export { serializeCondition } from "./condition-builder.js";
 export {
+  conditionHasFormula,
   conditionNodeSchema,
   conditionSchema,
   emptyCondition,
