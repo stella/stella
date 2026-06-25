@@ -11,7 +11,6 @@ import {
   FrameTitle,
 } from "@stll/ui/components/frame";
 
-import type { TranslationKey } from "@/i18n/types";
 import { redirectToSchema } from "@/lib/redirect";
 
 const searchSchema = v.object({
@@ -24,12 +23,6 @@ export const Route = createFileRoute("/auth/error")({
   component: AuthError,
 });
 
-const ERROR_MESSAGE_KEYS: Record<string, TranslationKey> = {
-  account_not_linked: "auth.error.accountNotLinked",
-};
-
-const GENERIC_ERROR_KEY: TranslationKey = "auth.error.generic";
-
 function AuthError() {
   const t = useTranslations();
   const navigate = useNavigate();
@@ -37,13 +30,19 @@ function AuthError() {
     select: (s) => ({ error: s.error, redirectTo: s.redirectTo }),
   });
 
-  const messageKey = (error && ERROR_MESSAGE_KEYS[error]) ?? GENERIC_ERROR_KEY;
+  // Resolve with literal translation keys: a dynamic key lookup both trips the
+  // typed translator's arity overload and risks Object.prototype keys via the
+  // untrusted `error` query param.
+  const message =
+    error === "account_not_linked"
+      ? t("auth.error.accountNotLinked")
+      : t("auth.error.generic");
 
   return (
     <Frame className="w-full max-w-sm">
       <FrameHeader>
         <FrameTitle>{t("auth.error.title")}</FrameTitle>
-        <FrameDescription>{t(messageKey)}</FrameDescription>
+        <FrameDescription>{message}</FrameDescription>
       </FrameHeader>
       <FramePanel>
         <Button
