@@ -2406,6 +2406,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#21"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/auth/error.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/auth/index.tsx#2"
           },
           {
@@ -10305,6 +10311,9 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#11"
           },
           {
+            "location": "apps/web/src/components/app-sidebar.tsx#14"
+          },
+          {
             "location": "apps/web/src/components/auth/otp-panel.tsx#4"
           },
           {
@@ -10986,7 +10995,7 @@
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#12"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#14"
+            "location": "apps/web/src/components/app-sidebar.tsx#15"
           },
           {
             "location": "apps/web/src/components/auth/otp-panel.tsx#5"
@@ -11256,9 +11265,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-day-view.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#4"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#17"
           },
           {
@@ -11347,6 +11353,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#9"
+          },
+          {
+            "location": "apps/web/src/routes/auth/error.tsx#1"
           },
           {
             "location": "apps/web/src/routes/auth/index.tsx#1"
@@ -11460,7 +11469,7 @@
             "location": "apps/web/src/lib/beta-features.ts#1"
           },
           {
-            "location": "apps/web/src/routeTree.gen.ts#1536"
+            "location": "apps/web/src/routeTree.gen.ts#1557"
           },
           {
             "location": "apps/web/src/lib/beta-features.ts#2"
@@ -16822,7 +16831,7 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#5"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#4"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value.tsx#1"
@@ -17873,6 +17882,9 @@
             "location": "apps/api/src/handlers/case-law/decisions/sitemap.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/case-law/decisions/slug.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/case-law/erasure.ts#1"
           },
           {
@@ -18105,6 +18117,9 @@
           },
           {
             "location": "apps/api/src/handlers/entities/query-entities.ts#13"
+          },
+          {
+            "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/read-group-counts.ts#2"
@@ -18734,6 +18749,12 @@
             "location": "apps/api/src/scripts/adapter-health.ts#17"
           },
           {
+            "location": "apps/api/src/scripts/backfill-case-law-slugs.ts#1"
+          },
+          {
+            "location": "apps/api/src/scripts/backfill-case-law-slugs.ts#2"
+          },
+          {
             "location": "apps/api/src/scripts/backfill-corpus-storage.ts#1"
           },
           {
@@ -19265,7 +19286,7 @@
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#2"
+            "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#3"
           },
           {
             "location": "apps/api/src/handlers/entities/read-group-counts.ts#4"
@@ -20632,7 +20653,7 @@
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#3"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#24"
+            "location": "apps/web/src/components/app-sidebar.tsx#26"
           },
           {
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#6"
@@ -21019,9 +21040,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#6"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#5"
           },
           {
@@ -21040,7 +21058,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/entity-kind-icon.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#18"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#19"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value.tsx#2"
@@ -25056,7 +25074,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#12"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#25"
+            "location": "apps/web/src/components/app-sidebar.tsx#27"
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#24"
@@ -25224,7 +25242,7 @@
             "location": "apps/web/src/components/api-version-mismatch-banner.tsx#4"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#26"
+            "location": "apps/web/src/components/app-sidebar.tsx#28"
           },
           {
             "location": "apps/web/src/components/auth/inbox-quick-jump.tsx#1"
@@ -25740,7 +25758,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#7"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#6"
@@ -25758,7 +25776,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#19"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value-select.tsx#1"
@@ -25978,6 +25996,9 @@
           },
           {
             "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/auth/error.tsx#2"
           },
           {
             "location": "apps/web/src/routes/auth/organization.tsx#8"
@@ -26490,6 +26511,12 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#21"
           },
           {
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#15"
+          },
+          {
+            "location": "apps/web/src/routes/auth/error.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/auth/index.tsx#2"
           },
           {
@@ -26817,7 +26844,7 @@
             "location": "apps/web/src/stores/config-store.ts#2"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#27"
+            "location": "apps/web/src/components/app-sidebar.tsx#29"
           },
           {
             "location": "apps/web/src/components/chat/model-selector-dialog.tsx#2"
@@ -26874,7 +26901,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#16"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-store.ts#4"
@@ -26895,7 +26922,7 @@
             "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#5"
           },
           {
-            "location": "apps/web/src/components/app-sidebar.tsx#27"
+            "location": "apps/web/src/components/app-sidebar.tsx#29"
           },
           {
             "location": "apps/web/src/components/chat/model-selector-dialog.tsx#2"
@@ -26967,7 +26994,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/-filters/active-filter-chips.tsx#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#15"
+            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#16"
           }
         ]
       },
