@@ -129,7 +129,8 @@ type RuleContext = {
       | "painterToEngineNonSeam"
       | "bridgeToPainter"
       | "engineToPainter"
-      | "engineToBridge";
+      | "engineToBridge"
+      | "reactInCore";
   }) => void;
 };
 
@@ -208,6 +209,49 @@ const checkEdge = (context: RuleContext, importNode: AstNode): void => {
   }
 };
 
+// ---------------------------------------------------------------------------
+// React-free core seam.
+//
+// `packages/folio/src/core/` is the headless, framework-neutral core: the
+// document model, OOXML I/O, and the layout pipeline. It must not import a UI
+// framework, so adapters (React today; a Vue adapter, a Tauri shell, or a Rust
+// core tomorrow) can all sit on top of one shared core. Forbid React and the
+// React UI kit by name from anywhere under core/. Type-only imports count:
+// pulling `CSSProperties` from React would drag React back into core's type
+// graph, which is exactly the coupling this seam removes.
+// ---------------------------------------------------------------------------
+
+const CORE_PREFIX = "packages/folio/src/core/";
+
+const FORBIDDEN_IN_CORE = ["react", "react-dom", "@stll/ui"];
+
+const isCoreFile = (importerPath: string): boolean =>
+  importerPath.replaceAll("\\", "/").includes(CORE_PREFIX);
+
+const isForbiddenInCore = (specifier: string): boolean => {
+  for (const pkg of FORBIDDEN_IN_CORE) {
+    if (specifier === pkg || specifier.startsWith(`${pkg}/`)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const checkReactFreeCore = (
+  context: RuleContext,
+  importNode: AstNode,
+): void => {
+  const specifier = importSpecifierOf(importNode);
+  if (specifier === null || !isForbiddenInCore(specifier)) {
+    return;
+  }
+  const importerPath = filenameOf(context);
+  if (importerPath === "" || !isCoreFile(importerPath)) {
+    return;
+  }
+  context.report({ node: importNode, messageId: "reactInCore" });
+};
+
 export default {
   meta: { name: "folio-layer-boundaries" },
   rules: {
@@ -245,6 +289,32 @@ export default {
         const handle = (node: unknown) => {
           if (isAstNode(node)) {
             checkEdge(context, node);
+          }
+        };
+        return {
+          ImportDeclaration: handle,
+          ImportExpression: handle,
+          ExportNamedDeclaration: handle,
+          ExportAllDeclaration: handle,
+        };
+      },
+    },
+    "no-react-in-core": {
+      meta: {
+        type: "problem",
+        messages: {
+          reactInCore:
+            "packages/folio/src/core is the headless, framework-neutral core " +
+            "and must not import React, react-dom, or @stll/ui (type-only " +
+            "imports included). Keep framework code in the adapter layer " +
+            "(components/, hooks/, paged-editor/); if core needs a shared CSS " +
+            "type, depend on csstype directly instead of React.",
+        },
+      },
+      create(context: RuleContext) {
+        const handle = (node: unknown) => {
+          if (isAstNode(node)) {
+            checkReactFreeCore(context, node);
           }
         };
         return {
