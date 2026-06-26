@@ -35,8 +35,12 @@ type CreateTemplateToolsArgs = {
   organizationId: SafeId<"organization">;
   /** Acting user for the consumption ledger row. */
   userId: SafeId<"user">;
-  /** Org AI config from the chat turn; enables AI-fillable fields when set. */
-  orgAIConfig?: OrgAIConfig | null | undefined;
+  /**
+   * Org AI config from the chat turn. Required (not optional): the fill tools
+   * eagerly resolve an AI model for metering, which needs this on BYOK-only
+   * deployments. Callers must pass it (use `null` when there is genuinely none).
+   */
+  orgAIConfig: OrgAIConfig | null;
   /** Records the EXECUTE audit event for a fill when present. */
   recordAuditEvent?: AuditRecorder | undefined;
 };

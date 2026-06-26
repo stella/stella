@@ -113,6 +113,7 @@ describe("chat tool schemas", () => {
 
   test("chat tools expose readonly data through the stella API", () => {
     const tools = getChatTools({
+      orgAIConfig: null,
       memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
@@ -144,6 +145,7 @@ describe("chat tool schemas", () => {
 
   test("only exposes current skill edit tools for editable active skill chats", () => {
     const tools = getChatTools({
+      orgAIConfig: null,
       memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
@@ -192,6 +194,7 @@ describe("chat tool schemas", () => {
 
   test("does not expose full body replacement for truncated active skill bodies", () => {
     const tools = getChatTools({
+      orgAIConfig: null,
       memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
@@ -226,6 +229,7 @@ describe("chat tool schemas", () => {
 
   test("applies approval and anonymization policies by tool risk", () => {
     const tools = getChatTools({
+      orgAIConfig: null,
       memberRole: "owner",
       organizationId,
       refRegistry: createChatRefRegistry(),
