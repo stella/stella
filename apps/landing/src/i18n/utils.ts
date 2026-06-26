@@ -2,10 +2,19 @@ import { createTranslator } from "use-intl/core";
 
 import { defaultLocale, locales, localeCodes, type Locale } from "./config";
 import ar from "./messages/ar.json";
+import cs from "./messages/cs.json";
+import de from "./messages/de.json";
 import en from "./messages/en.json";
 import es from "./messages/es.json";
+import et from "./messages/et.json";
+import fr from "./messages/fr.json";
+import hu from "./messages/hu.json";
+import lt from "./messages/lt.json";
+import lv from "./messages/lv.json";
 import type Messages from "./messages/messages.gen";
+import pl from "./messages/pl.json";
 import ptBR from "./messages/pt-BR.json";
+import sk from "./messages/sk.json";
 
 // Locale catalogs share en's key structure (from messages.gen) with arbitrary
 // string values. Mirrors the web app so createTranslator infers the precise
@@ -17,10 +26,19 @@ type LocalizedMessages<T> = {
 type LocaleMessages = LocalizedMessages<Messages>;
 
 const catalogs: Record<Locale, LocaleMessages> = {
+  ar,
+  cs,
+  de,
   en,
   es,
+  et,
+  fr,
+  hu,
+  lt,
+  lv,
+  pl,
   "pt-BR": ptBR,
-  ar,
+  sk,
 };
 
 // use-intl translator for a locale. Same `use-intl` runtime the web app uses,

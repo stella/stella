@@ -1,0 +1,27 @@
+{
+  "askAi": {
+    "copied": "Nokopēts",
+    "copy": "Kopēt uzvedni",
+    "label": "Jautāt AI par stella"
+  },
+  "common": {
+    "startFree": "Sākt bez maksas"
+  },
+  "hero": {
+    "badge": "Mēs attīstāmies neticami ātri",
+    "selfHost": "Mitināt pašiem",
+    "subtitle": "Lietas, dokumenti un pārskatīšana, kā arī tiesu prakse, uzņēmumu reģistri un AI aģents.",
+    "subtitle2": "Bezmaksas lietošanai, atvērts pārbaudei, paliek jūsu rokās.",
+    "titleLine1": "Juridiska darbvieta.",
+    "titleLine2": "Atvērtā pirmkoda."
+  },
+  "nav": {
+    "aiFactSheet": "AI faktu lapa",
+    "aiFactSheetBlurb": "stella mašīnlasāmā formā.",
+    "beta": "Beta",
+    "blog": "Blogs",
+    "changelog": "Izmaiņu žurnāls",
+    "product": "Produkts",
+    "security": "Drošība"
+  }
+}

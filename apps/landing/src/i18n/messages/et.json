@@ -1,0 +1,27 @@
+{
+  "askAi": {
+    "copied": "Kopeeritud",
+    "copy": "Kopeeri viip",
+    "label": "Küsi tehisintellektilt stella kohta"
+  },
+  "common": {
+    "startFree": "Alusta tasuta"
+  },
+  "hero": {
+    "badge": "Me arendame imekiiresti",
+    "selfHost": "Majuta ise",
+    "subtitle": "Toimikud, dokumendid ja ülevaatus, lisaks kohtupraktika, äriregistrid ja tehisintellekti agent.",
+    "subtitle2": "Tasuta kasutada, avatud uurida, sinu hoida.",
+    "titleLine1": "Õiguslik tööruum.",
+    "titleLine2": "Avatud lähtekood."
+  },
+  "nav": {
+    "aiFactSheet": "Tehisintellekti teabeleht",
+    "aiFactSheetBlurb": "stella masinloetaval kujul.",
+    "beta": "Beeta",
+    "blog": "Blogi",
+    "changelog": "Muudatuste logi",
+    "product": "Toode",
+    "security": "Turvalisus"
+  }
+}

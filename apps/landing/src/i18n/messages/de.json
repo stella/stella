@@ -1,0 +1,27 @@
+{
+  "askAi": {
+    "copied": "Kopiert",
+    "copy": "Prompt kopieren",
+    "label": "stella mit KI fragen"
+  },
+  "common": {
+    "startFree": "Kostenlos loslegen"
+  },
+  "hero": {
+    "badge": "Wir liefern irrwitzig schnell",
+    "selfHost": "Selbst hosten",
+    "subtitle": "Akten, Dokumente und Prüfung, dazu Rechtsprechung, Handelsregister und ein KI-Agent.",
+    "subtitle2": "Kostenlos nutzbar, offen einsehbar, für immer Ihres.",
+    "titleLine1": "Juristischer Arbeitsbereich.",
+    "titleLine2": "Open Source."
+  },
+  "nav": {
+    "aiFactSheet": "KI-Faktenblatt",
+    "aiFactSheetBlurb": "stella in maschinenlesbarer Form.",
+    "beta": "Beta",
+    "blog": "Blog",
+    "changelog": "Änderungsprotokoll",
+    "product": "Produkt",
+    "security": "Sicherheit"
+  }
+}

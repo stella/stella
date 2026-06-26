@@ -1,0 +1,27 @@
+{
+  "askAi": {
+    "copied": "Másolva",
+    "copy": "Prompt másolása",
+    "label": "Kérdezz az AI-tól a stella-ról"
+  },
+  "common": {
+    "startFree": "Kezdje el ingyen"
+  },
+  "hero": {
+    "badge": "Furcsán gyorsan szállítunk",
+    "selfHost": "Saját üzemeltetés",
+    "subtitle": "Ügyek, dokumentumok és felülvizsgálat, valamint joggyakorlat, cégnyilvántartások és egy AI-ügynök.",
+    "subtitle2": "Ingyen használható, szabadon átvizsgálható, az öné marad.",
+    "titleLine1": "Jogi munkaterület.",
+    "titleLine2": "Nyílt forráskód."
+  },
+  "nav": {
+    "aiFactSheet": "AI-adatlap",
+    "aiFactSheetBlurb": "A stella géppel olvasható formában.",
+    "beta": "Béta",
+    "blog": "Blog",
+    "changelog": "Változásnapló",
+    "product": "Termék",
+    "security": "Biztonság"
+  }
+}

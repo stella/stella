@@ -1,0 +1,27 @@
+{
+  "askAi": {
+    "copied": "Skopírované",
+    "copy": "Kopírovať prompt",
+    "label": "Spýtajte sa AI na stella"
+  },
+  "common": {
+    "startFree": "Začnite zadarmo"
+  },
+  "hero": {
+    "badge": "Vyvíjame neuveriteľne rýchlo",
+    "selfHost": "Vlastný hosting",
+    "subtitle": "Spisy, dokumenty a posudzovanie, plus judikatúra, obchodné registre a AI agent.",
+    "subtitle2": "Zadarmo na používanie, otvorené na nahliadnutie, vaše navždy.",
+    "titleLine1": "Právny pracovný priestor.",
+    "titleLine2": "Otvorený zdroj."
+  },
+  "nav": {
+    "aiFactSheet": "Prehľad pre AI",
+    "aiFactSheetBlurb": "stella v strojovo čitateľnej podobe.",
+    "beta": "Beta",
+    "blog": "Blog",
+    "changelog": "Zoznam zmien",
+    "product": "Produkt",
+    "security": "Bezpečnosť"
+  }
+}

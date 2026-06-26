@@ -1,0 +1,27 @@
+{
+  "askAi": {
+    "copied": "Nukopijuota",
+    "copy": "Kopijuoti užklausą",
+    "label": "Klauskite DI apie stella"
+  },
+  "common": {
+    "startFree": "Pradėkite nemokamai"
+  },
+  "hero": {
+    "badge": "Tobuliname stebėtinai greitai",
+    "selfHost": "Talpinkite patys",
+    "subtitle": "Bylos, dokumentai ir peržiūra, taip pat teismų praktika, įmonių registrai ir DI agentas.",
+    "subtitle2": "Nemokama naudoti, atvira tikrinti, jūsų pasilikti.",
+    "titleLine1": "Teisinė darbo erdvė.",
+    "titleLine2": "Atviro kodo."
+  },
+  "nav": {
+    "aiFactSheet": "DI duomenų lapas",
+    "aiFactSheetBlurb": "stella mašinai skaitomu formatu.",
+    "beta": "Beta",
+    "blog": "Tinklaraštis",
+    "changelog": "Pakeitimų žurnalas",
+    "product": "Produktas",
+    "security": "Saugumas"
+  }
+}

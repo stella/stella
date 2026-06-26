@@ -1,0 +1,27 @@
+{
+  "askAi": {
+    "copied": "Skopiowano",
+    "copy": "Kopiuj prompt",
+    "label": "Zapytaj AI o stella"
+  },
+  "common": {
+    "startFree": "Zacznij za darmo"
+  },
+  "hero": {
+    "badge": "Wydajemy zaskakująco szybko",
+    "selfHost": "Hostuj samodzielnie",
+    "subtitle": "Sprawy, dokumenty i przegląd, a do tego orzecznictwo, rejestry przedsiębiorstw i agent AI.",
+    "subtitle2": "Darmowa w użyciu, otwarta do wglądu, na zawsze Twoja.",
+    "titleLine1": "Środowisko pracy dla prawników.",
+    "titleLine2": "Otwarte źródło."
+  },
+  "nav": {
+    "aiFactSheet": "Karta informacyjna AI",
+    "aiFactSheetBlurb": "stella w formie czytelnej dla maszyn.",
+    "beta": "Beta",
+    "blog": "Blog",
+    "changelog": "Dziennik zmian",
+    "product": "Produkt",
+    "security": "Bezpieczeństwo"
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "askAi": {
+    "copied": "Copié",
+    "copy": "Copier l'invite",
+    "label": "Interroger l'IA sur stella"
+  },
+  "common": {
+    "startFree": "Commencer gratuitement"
+  },
+  "hero": {
+    "badge": "On livre à une vitesse folle",
+    "selfHost": "Auto-hébergement",
+    "subtitle": "Dossiers, documents et revue, ainsi que la jurisprudence, les registres d'entreprises et un agent IA.",
+    "subtitle2": "Libre d'utilisation, ouvert à l'inspection, à vous pour toujours.",
+    "titleLine1": "Espace de travail juridique.",
+    "titleLine2": "Code source ouvert."
+  },
+  "nav": {
+    "aiFactSheet": "Fiche technique IA",
+    "aiFactSheetBlurb": "stella sous forme lisible par machine.",
+    "beta": "Bêta",
+    "blog": "Blog",
+    "changelog": "Journal des modifications",
+    "product": "Produit",
+    "security": "Sécurité"
+  }
+}
