@@ -374,9 +374,15 @@ jobs:
           AMD64_DIGEST: ${{ needs.build-amd64.outputs.digest }}
           SHA: ${{ needs.resolve.outputs.release_sha }}
         run: |
-          docker buildx imagetools create \
-            -t "${IMAGE}:${RELEASE_REF}" \
-            -t "${IMAGE}:sha-${SHA:0:7}" \
+          tags=(-t "${IMAGE}:${RELEASE_REF}" -t "${IMAGE}:sha-${SHA:0:7}")
+          # Advance the convenience `:latest` tag only for stable releases, so
+          # self-host `docker compose pull` resolves to the newest stable image.
+          # Prereleases (e.g. v1.2.3-rc1, which contain a hyphen) must not move it.
+          case "${RELEASE_REF}" in
+            *-*) ;;
+            *) tags+=(-t "${IMAGE}:latest") ;;
+          esac
+          docker buildx imagetools create "${tags[@]}" \
             "${IMAGE}@${ARM64_DIGEST}" \
             "${IMAGE}@${AMD64_DIGEST}"
 

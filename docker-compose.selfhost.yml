@@ -1,5 +1,11 @@
 services:
   api:
+    # Defaults to the prebuilt multi-arch (amd64/arm64) image published to GHCR
+    # on each release, so `docker compose pull` works without a local toolchain.
+    # Pin a version (e.g. ...:v0.5.2) for reproducible deploys, or point
+    # STELLA_API_IMAGE at your own registry. The `build:` block below stays as a
+    # fallback for `docker compose up --build` (build from source).
+    image: ${STELLA_API_IMAGE:-ghcr.io/stella/stella-api:latest}
     build:
       context: .
       dockerfile: apps/api/Dockerfile
