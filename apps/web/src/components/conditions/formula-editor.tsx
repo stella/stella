@@ -1,5 +1,6 @@
 import { useRef, useState } from "react";
 
+import { Result } from "better-result";
 import { FunctionSquareIcon, HashIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -74,6 +75,18 @@ const FORMULA_FUNCTION_TOKENS: readonly string[] = [
  *  focus (and the painted caret) in the input while clicking a chip/operator. */
 const keepEditorFocus = (event: { preventDefault: () => void }) => {
   event.preventDefault();
+};
+
+const evaluateFormulaExample = (
+  expression: string,
+  data: Record<string, number>,
+): number | undefined => {
+  if (expression.trim() === "") {
+    return undefined;
+  }
+
+  const result = Result.try(() => evaluateNumericExpression(expression, data));
+  return Result.isError(result) ? undefined : result.value;
 };
 
 /** Formula editor: the expression input, clickable chips of the number fields
@@ -181,10 +194,7 @@ export const FormulaEditor = ({
   for (const entry of exampleFields) {
     exampleData[entry.path] = entry.value;
   }
-  const exampleResult =
-    value.trim() === ""
-      ? undefined
-      : evaluateNumericExpression(value, exampleData);
+  const exampleResult = evaluateFormulaExample(value, exampleData);
   const finiteExampleResult =
     exampleResult !== undefined && Number.isFinite(exampleResult)
       ? exampleResult

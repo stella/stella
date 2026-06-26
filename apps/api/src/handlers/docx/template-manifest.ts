@@ -10,9 +10,13 @@
  * leak risk). The manifest is stripped during `fillTemplate()`.
  */
 
+import { Result } from "better-result";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
+import * as valibot from "valibot";
 
+import type { ConditionNode } from "@stll/conditions";
+import { conditionNodeSchema } from "@stll/conditions";
 import { isFieldPath } from "@stll/template-conditions";
 
 import { isElement } from "./ooxml";
@@ -78,6 +82,7 @@ const CUSTOM_XML_PROPS_REL_TYPE =
 // ── Current manifest version ─────────────────────────────
 
 const CURRENT_VERSION = 1;
+const CONDITION_AST_VERSION = "1";
 
 // ── Input type validation ────────────────────────────────
 
@@ -106,6 +111,11 @@ const escapeXml = (s: string): string =>
     .replace(/</gu, "&lt;")
     .replace(/>/gu, "&gt;")
     .replace(/"/gu, "&quot;");
+
+const buildConditionAstAttrs = (conditionAst: ConditionNode): string[] => [
+  `conditionAstVersion="${CONDITION_AST_VERSION}"`,
+  `conditionAst="${escapeXml(JSON.stringify(conditionAst))}"`,
+];
 
 const buildOptionsXml = (options: readonly string[]): string => {
   const optionElements = options
@@ -187,6 +197,9 @@ const buildFieldXml = (field: FieldMeta): string => {
   }
   if (field.condition !== undefined) {
     attrs.push(`condition="${escapeXml(field.condition)}"`);
+  }
+  if (field.conditionAst !== undefined) {
+    attrs.push(...buildConditionAstAttrs(field.conditionAst));
   }
 
   const children: string[] = [];
@@ -302,6 +315,30 @@ const getFirstElementChild = (
     }
   }
   return null;
+};
+
+const parseConditionAst = ({
+  version,
+  value,
+}: {
+  version: string | null;
+  value: string | null;
+}): ConditionNode | undefined => {
+  if (version !== CONDITION_AST_VERSION) {
+    return undefined;
+  }
+  if (value === null) {
+    return undefined;
+  }
+
+  const parsed = Result.try((): unknown => JSON.parse(value));
+  if (Result.isError(parsed)) {
+    return undefined;
+  }
+
+  return valibot.is(conditionNodeSchema, parsed.value)
+    ? parsed.value
+    : undefined;
 };
 
 const parseFieldPart = (el: slimdom.Element): FieldPart | null => {
@@ -515,12 +552,28 @@ const parseFieldMeta = (el: slimdom.Element): FieldMeta => {
     field.formula = formula;
   }
 
+  const conditionAst = parseConditionAst({
+    version: el.getAttribute("conditionAstVersion"),
+    value: el.getAttribute("conditionAst"),
+  });
+  if (
+    conditionAst !== undefined &&
+    field.formula === undefined &&
+    field.aiPrompt === undefined &&
+    field.aiAdapt === undefined &&
+    field.lookup === undefined &&
+    field.parts === undefined
+  ) {
+    field.conditionAst = conditionAst;
+  }
+
   // A condition field is a boolean derived by rule; like a formula it cannot
   // coexist with another value source. A hand-edited condition on a field that
   // already has one is dropped so the isFieldMeta invariant holds downstream.
   const condition = el.getAttribute("condition");
   if (
     condition !== null &&
+    field.conditionAst === undefined &&
     field.formula === undefined &&
     field.aiPrompt === undefined &&
     field.aiAdapt === undefined &&
@@ -854,6 +907,7 @@ export const mergeManifestWithDiscovery = (
         lookup: f.lookup,
         formula: f.formula,
         condition: f.condition,
+        conditionAst: f.conditionAst,
         dateFormat: f.dateFormat,
       });
     }
@@ -935,6 +989,9 @@ const mergeField = (
     }
     if (meta.condition !== undefined) {
       resolved.condition = meta.condition;
+    }
+    if (meta.conditionAst !== undefined) {
+      resolved.conditionAst = meta.conditionAst;
     }
     if (meta.dateFormat !== undefined) {
       resolved.dateFormat = meta.dateFormat;

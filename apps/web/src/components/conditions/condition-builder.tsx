@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 import { PlusIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
@@ -372,14 +374,14 @@ const LeafRow = ({
   const t = useTranslations();
   const { fields, allowFormula = false } = capabilities;
   const operand = leafOperand(node);
-  const isFormula = operand?.type === "formula";
 
-  if (isFormula) {
+  if (operand?.type === "formula") {
+    const formulaOperand = operand;
     return (
       <FormulaLeafRow
         capabilities={capabilities}
         combinator={combinator}
-        expr={operand.expr}
+        expr={formulaOperand.expr}
         index={index}
         node={node}
         onChange={onChange}
@@ -712,7 +714,7 @@ const LeafValueEditor = ({
   node,
   operator,
   onChange,
-}: LeafValueEditorProps) => {
+}: LeafValueEditorProps): ReactNode => {
   const t = useTranslations();
 
   const emit = (value: string | string[]) => {

@@ -704,6 +704,9 @@ export type ResolvedField = {
    *  time, so the fill form renders no input (computed/derived); a plain
    *  boolean field without a condition is asked as a yes/no question instead. */
   condition?: string | undefined;
+  /** Mirrors {@link FieldMeta.conditionAst}: the AST-backed form for boolean
+   *  condition rules that cannot be represented by the string grammar. */
+  conditionAst?: ConditionNode | undefined;
   /** Mirrors {@link FieldMeta.dateFormat}: the fill form can preview how the
    *  entered date will render in the document's language. */
   dateFormat?: FieldDateFormat | undefined;

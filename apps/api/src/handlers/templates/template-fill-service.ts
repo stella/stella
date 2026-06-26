@@ -134,7 +134,9 @@ export const describeStoredTemplate = async ({
       fields: manifest.fields
         .filter(
           (field) =>
-            field.formula === undefined && field.condition === undefined,
+            field.formula === undefined &&
+            field.condition === undefined &&
+            field.conditionAst === undefined,
         )
         .map((field) => ({
           path: field.path,

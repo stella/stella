@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { ConditionNode } from "@stll/conditions";
 import type { NamedCondition } from "@stll/template-conditions";
 
 import {
@@ -1256,6 +1257,72 @@ describe("round-trip", () => {
       registry: "krs",
       formats: [{ key: "output_1", template: "[name]" }],
     });
+  });
+
+  test("conditionAst round-trips; a hand-edited value-source conflict is dropped", async () => {
+    const conditionAst: ConditionNode = {
+      type: "group",
+      combinator: "and",
+      children: [
+        {
+          type: "compare",
+          left: { type: "formula", expr: "rent * 12" },
+          op: "lt",
+          right: { type: "literal", value: 100_000 },
+        },
+      ],
+    };
+    const manifest: TemplateManifest = {
+      version: 1,
+      fields: [
+        {
+          path: "is_affordable",
+          inputType: "boolean",
+          conditionAst,
+        },
+      ],
+    };
+
+    const docx = await createMinimalDocx();
+    const withManifest = await writeManifest(docx, manifest);
+    const readBack = await readManifest(withManifest);
+    expect(readBack?.fields.at(0)?.conditionAst).toEqual(conditionAst);
+    expect(readBack?.fields.at(0)?.condition).toBeUndefined();
+
+    const versionedZip = await JSZip.loadAsync(withManifest);
+    const versionedEntry = versionedZip.file("customXml/item1.xml");
+    const versionedXml = await versionedEntry?.async("string");
+    expect(versionedXml).toContain('conditionAstVersion="1"');
+
+    versionedZip.file(
+      "customXml/item1.xml",
+      (versionedXml ?? "").replace(
+        'conditionAstVersion="1"',
+        'conditionAstVersion="999"',
+      ),
+    );
+    const futureVersionDocx = Buffer.from(
+      await versionedZip.generateAsync({ type: "nodebuffer" }),
+    );
+    const futureVersionBack = await readManifest(futureVersionDocx);
+    expect(futureVersionBack?.fields.at(0)?.conditionAst).toBeUndefined();
+
+    const zip = await JSZip.loadAsync(withManifest);
+    const itemEntry = zip.file("customXml/item1.xml");
+    const itemXml = await itemEntry?.async("string");
+    zip.file(
+      "customXml/item1.xml",
+      (itemXml ?? "").replace(
+        'path="is_affordable"',
+        'path="is_affordable" formula="rent * 2"',
+      ),
+    );
+    const tampered = Buffer.from(
+      await zip.generateAsync({ type: "nodebuffer" }),
+    );
+    const tamperedBack = await readManifest(tampered);
+    expect(tamperedBack?.fields.at(0)?.formula).toBe("rent * 2");
+    expect(tamperedBack?.fields.at(0)?.conditionAst).toBeUndefined();
   });
 
   test("dateFormat round-trips; a hand-edited implausible locale is dropped", async () => {

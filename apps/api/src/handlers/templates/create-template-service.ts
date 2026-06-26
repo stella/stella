@@ -123,6 +123,7 @@ export const createStoredTemplate = async function* ({
     lookup: f.lookup,
     formula: f.formula,
     condition: f.condition,
+    conditionAst: f.conditionAst,
     dateFormat: f.dateFormat,
   }));
 

@@ -53,6 +53,12 @@ import * as v from "valibot";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
 import {
+  conditionHasFormula,
+  conditionNodeSchema,
+  type ConditionNode,
+  type GroupNode,
+} from "@stll/conditions";
+import {
   buildPositionalText,
   clearTemplateSlashMenu,
   consumeTemplateSlashQuery,
@@ -74,17 +80,11 @@ import type {
 } from "@stll/folio";
 import { displayLanguageName } from "@stll/locales";
 import {
-  conditionHasFormula,
-  conditionNodeSchema,
   isFieldPath,
   renderDeterministicFieldValue,
   serializeCondition,
 } from "@stll/template-conditions";
-import type {
-  ConditionNode,
-  DeterministicFieldConfig,
-  GroupNode,
-} from "@stll/template-conditions";
+import type { DeterministicFieldConfig } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -2380,7 +2380,7 @@ export const TemplateStudioPage = ({
   };
 
   actionsRef.current = {
-    toggleDirectives: () => setShowDirectives((v) => !v),
+    toggleDirectives: () => setShowDirectives((visible) => !visible),
     deleteField: (path) => {
       const view = editorViewRef.current;
       if (!view) {
@@ -3637,7 +3637,7 @@ const GestureSplitRow = ({
             aria-expanded={open}
             aria-label={reuseLabel}
             className="shrink-0"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setOpen((isOpen) => !isOpen)}
             onMouseDown={keepEditorFocus}
             size="icon-sm"
             title={reuseLabel}
@@ -5347,6 +5347,9 @@ const persistRuleGroup = (
   upsertField: (path: string, patch: Partial<StudioField>) => void,
 ): void => {
   if (conditionHasFormula(group)) {
+    if (!v.is(conditionNodeSchema, group)) {
+      return;
+    }
     upsertField(path, {
       condition: undefined,
       conditionAst: group,
@@ -5355,15 +5358,15 @@ const persistRuleGroup = (
     return;
   }
   const expression = serializeCondition(group);
-  if (expression === "") {
-    return;
-  }
   upsertField(path, {
-    condition: expression,
+    condition: expression === "" ? undefined : expression,
     conditionAst: undefined,
     aiPrompt: undefined,
   });
 };
+
+const canPersistRuleGroup = (group: GroupNode): boolean =>
+  !conditionHasFormula(group) || v.is(conditionNodeSchema, group);
 
 /** One reusable condition the picker can insert: every boolean field (its bare
  *  path is the gate). Shown in plain language; inserting references it by path
@@ -5698,6 +5701,9 @@ const ConditionFieldEditor = ({
     });
   };
   const applyRule = () => {
+    if (!canPersistRuleGroup(group)) {
+      return;
+    }
     persistRuleGroup(field.path, group, upsertField);
     if (conditionHasFormula(group)) {
       return;
@@ -5776,7 +5782,12 @@ const ConditionFieldEditor = ({
             group={group}
             onChange={setGroup}
           />
-          <Button className="self-start" onClick={applyRule} size="sm">
+          <Button
+            className="self-start"
+            disabled={!canPersistRuleGroup(group)}
+            onClick={applyRule}
+            size="sm"
+          >
             {t("common.done")}
           </Button>
         </div>
@@ -6058,6 +6069,9 @@ const ConditionRuleBuilder = ({
   // picker and edit-once-propagates to every `{{#if path}}` referencing it.
   const apply = () => {
     const isFormula = conditionHasFormula(group);
+    if (isFormula && !canPersistRuleGroup(group)) {
+      return;
+    }
     // A formula rule has no `{{#if}}` string form, so it can only be derived a
     // label from the field name (not the humanized expression) and is persisted
     // as the AST. Otherwise serialize as before.
@@ -6112,7 +6126,11 @@ const ConditionRuleBuilder = ({
         onChange={setGroup}
       />
       <div className="flex items-center gap-2">
-        <Button onClick={apply} size="sm">
+        <Button
+          disabled={!canPersistRuleGroup(group)}
+          onClick={apply}
+          size="sm"
+        >
           {t("common.done")}
         </Button>
         <Button
@@ -6384,7 +6402,7 @@ const FieldNavigator = ({
           <button
             aria-expanded={showUnused}
             className="hover:bg-muted text-muted-foreground flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start text-xs font-medium"
-            onClick={() => setShowUnused((v) => !v)}
+            onClick={() => setShowUnused((visible) => !visible)}
             type="button"
           >
             {showUnused ? (
@@ -6692,7 +6710,7 @@ const OutlineGroupRow = ({
             aria-expanded={open}
             aria-label={groupTitle}
             className="hover:bg-muted text-muted-foreground me-1 shrink-0 rounded p-0.5"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setOpen((isOpen) => !isOpen)}
             type="button"
           >
             {open ? (
@@ -7713,8 +7731,8 @@ const slugify = (text: string): string => {
   return slug.length > 0 ? slug : "field";
 };
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 /** Read a non-negative integer attribute, or undefined when absent/invalid. */
 const parseBound = (value: unknown): number | undefined => {
