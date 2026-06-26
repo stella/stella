@@ -110,7 +110,7 @@ export const hasBlockDirectivePattern = (): RegExp => /\{\{\s*[#/]/u;
 
 /** A whole line that is a single block directive — `tag` and `expr` groups. */
 export const blockDirectiveLinePattern = (): RegExp =>
-  /^\s*\{\{\s*(?<tag>#if|#elseif|#else|#each|\/if|\/each)\s*(?<expr>.*?)\}\}\s*$/u;
+  /^\s*\{\{\s*(?<tag>#if|#elseif|#else|#each|\/if|\/each)\b(?<expr>[^{}]*)\}\}\s*$/u;
 
 // ── Classifier ───────────────────────────────────────────
 

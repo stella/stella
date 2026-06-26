@@ -151,6 +151,75 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       scroll-margin-top: 2rem;
     }
 
+    :global(.changelog-feature-release) {
+      box-shadow: 0 24px 72px color-mix(in srgb, var(--foreground) 7%, transparent);
+      overflow: hidden;
+      position: relative;
+    }
+
+    :global(.changelog-feature-release::before) {
+      background: linear-gradient(
+        90deg,
+        transparent,
+        color-mix(in srgb, var(--auth-gradient-end) 76%, var(--foreground)),
+        transparent
+      );
+      content: "";
+      height: 1px;
+      inset-block-start: 0;
+      inset-inline: 1.5rem;
+      opacity: 0.9;
+      position: absolute;
+    }
+
+    :global(.changelog-feature-release .changelog-body > h2:first-child) {
+      font-size: clamp(2rem, 5vw, 3.25rem);
+      line-height: 1.02;
+      text-wrap: balance;
+    }
+
+    :global(.changelog-feature-release .changelog-body > h3:first-of-type) {
+      color: color-mix(in srgb, var(--foreground) 82%, var(--muted-foreground));
+      font-size: 1.25rem;
+      line-height: 1.5;
+      text-wrap: balance;
+    }
+
+    :global(.changelog-patch-release) {
+      transition:
+        border-color 160ms ease,
+        box-shadow 160ms ease,
+        transform 160ms ease;
+    }
+
+    :global(.changelog-patch-release:hover),
+    :global(.changelog-patch-release[open]) {
+      border-color: color-mix(in srgb, var(--foreground) 18%, var(--border));
+      box-shadow: 0 14px 44px color-mix(in srgb, var(--foreground) 5%, transparent);
+    }
+
+    :global(.changelog-patch-release[open]) {
+      transform: translateY(-1px);
+    }
+
+    :global(.changelog-patch-summary) {
+      list-style: none;
+    }
+
+    :global(.changelog-patch-summary::-webkit-details-marker) {
+      display: none;
+    }
+
+    :global(.changelog-patch-marker) {
+      transition:
+        opacity 160ms ease,
+        transform 160ms ease;
+    }
+
+    :global(.changelog-patch-release[open] .changelog-patch-marker) {
+      transform: rotate(45deg);
+    }
+
     :global(.changelog-body h2),
     :global(.changelog-body h3) {
       color: var(--foreground);
@@ -235,6 +304,8 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       tag_name: string;
     };
 
+    type ReleaseKind = "major" | "minor" | "patch";
+
     const RELEASES_PER_PAGE = 5;
     const GITHUB_RELEASES_PER_PAGE = 100;
     const releasesApiBase = "https://api.github.com/repos/stella/stella/releases";
@@ -283,6 +354,60 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
         .replace(/[^a-z0-9-]/g, "-")
         .replace(/-+/g, "-")
         .replace(/^-|-$/g, "");
+
+    const getReleaseKind = (tagName: string): ReleaseKind => {
+      const version = tagName.match(/^v?(\d+)\.(\d+)\.(\d+)$/i);
+      if (!version) {
+        return "minor";
+      }
+
+      const minor = Number(version[2]);
+      const patch = Number(version[3]);
+      if (patch !== 0) {
+        return "patch";
+      }
+
+      return minor === 0 ? "major" : "minor";
+    };
+
+    const normalizeMarkdownText = (text: string) =>
+      text
+        .replace(/\[([^\]]+)]\((https?:\/\/[^)\s]+)\)/g, "$1")
+        .replace(/[*_`]/g, "")
+        .replace(/\s+/g, " ")
+        .trim();
+
+    const findMarkdownHeading = (body: string, level: 1 | 2) => {
+      const marker = "#".repeat(level);
+      const heading = body
+        .split("\n")
+        .map((line) => line.trim())
+        .find((line) => line.startsWith(`${marker} `));
+
+      if (!heading) {
+        return null;
+      }
+
+      return normalizeMarkdownText(heading.slice(marker.length + 1));
+    };
+
+    const getReleaseSummaryTitle = (release: GitHubRelease) => {
+      const body = release.body ?? "";
+      return findMarkdownHeading(body, 1) ?? release.name ?? release.tag_name;
+    };
+
+    const removeFirstMarkdownTitle = (body: string) => {
+      const lines = body.split("\n");
+      const titleIndex = lines.findIndex((line) => line.trim().startsWith("# "));
+      if (titleIndex === -1) {
+        return body;
+      }
+
+      return [
+        ...lines.slice(0, titleIndex),
+        ...lines.slice(titleIndex + 1),
+      ].join("\n").trim();
+    };
 
     const appendTextWithInlineMarkdown = (target: HTMLElement, text: string) => {
       const inlinePattern =
@@ -460,10 +585,30 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       }).format(new Date(publishedAt));
     };
 
-    const renderRelease = (release: GitHubRelease) => {
+    const createReleaseLink = (release: GitHubRelease) => {
+      const safeUrl = safeHttpsUrl(release.html_url);
+      if (!safeUrl) {
+        return null;
+      }
+
+      const releaseLink = document.createElement("a");
+      releaseLink.className =
+        "inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap";
+      releaseLink.href = safeUrl;
+      releaseLink.target = "_blank";
+      releaseLink.rel = "noopener noreferrer";
+      releaseLink.style.background = "var(--background)";
+      releaseLink.style.border = "1px solid var(--border)";
+      releaseLink.style.color = "var(--foreground)";
+      releaseLink.textContent = "View release on GitHub";
+      return releaseLink;
+    };
+
+    const renderFeatureRelease = (release: GitHubRelease) => {
       const article = document.createElement("article");
       article.id = releaseAnchorId(release.tag_name);
-      article.className = "changelog-entry rounded-lg p-6 sm:p-7";
+      article.className =
+        "changelog-entry changelog-feature-release rounded-lg p-6 sm:p-8";
 
       const meta = document.createElement("div");
       meta.className = "flex flex-wrap items-center gap-3 text-sm font-medium";
@@ -495,24 +640,84 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       date.textContent = formatDate(release.published_at);
       meta.append(date);
 
-      const releaseLink = document.createElement("a");
-      releaseLink.className =
-        "inline-flex h-9 shrink-0 items-center justify-center rounded-[0.625rem] px-3 text-sm font-medium transition-opacity hover:opacity-80 whitespace-nowrap";
-      releaseLink.href = release.html_url;
-      releaseLink.target = "_blank";
-      releaseLink.rel = "noopener noreferrer";
-      releaseLink.style.background = "var(--background)";
-      releaseLink.style.border = "1px solid var(--border)";
-      releaseLink.style.color = "var(--foreground)";
-      releaseLink.textContent = "View release";
-      meta.append(releaseLink);
+      const releaseLink = createReleaseLink(release);
+      if (releaseLink) {
+        meta.append(releaseLink);
+      }
 
       const body = document.createElement("div");
-      body.className = "changelog-body mt-6 space-y-3";
+      body.className = "changelog-body mt-7 space-y-3";
       body.append(renderReleaseBody(release.body || "No release notes published."));
 
       article.append(meta, body);
       return article;
+    };
+
+    const renderPatchRelease = (release: GitHubRelease) => {
+      const details = document.createElement("details");
+      details.id = releaseAnchorId(release.tag_name);
+      details.className = "changelog-entry changelog-patch-release rounded-lg";
+      details.open = decodeURIComponent(window.location.hash.slice(1)) === details.id;
+
+      const summary = document.createElement("summary");
+      summary.className =
+        "changelog-patch-summary flex min-h-14 cursor-pointer flex-wrap items-center gap-x-4 gap-y-1 px-5 py-3 sm:flex-nowrap sm:px-6";
+
+      const version = document.createElement("span");
+      version.className = "shrink-0 tabular-nums text-sm font-medium";
+      version.style.color = "var(--muted-foreground)";
+      version.textContent = release.name ?? release.tag_name;
+
+      const title = document.createElement("h2");
+      title.className =
+        "min-w-0 flex-1 truncate font-display text-base font-medium sm:text-lg";
+      title.style.color = "var(--foreground)";
+      title.textContent = getReleaseSummaryTitle(release);
+
+      const date = document.createElement("span");
+      date.className = "shrink-0 text-sm tabular-nums";
+      date.style.color = "var(--muted-foreground)";
+      date.textContent = formatDate(release.published_at);
+
+      const marker = document.createElement("span");
+      marker.className =
+        "changelog-patch-marker inline-flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-lg leading-none";
+      marker.setAttribute("aria-hidden", "true");
+      marker.style.background = "var(--muted)";
+      marker.style.color = "var(--foreground)";
+      marker.textContent = "+";
+
+      summary.append(version, title, date, marker);
+
+      const body = document.createElement("div");
+      body.className = "changelog-body px-5 pb-5 pt-1 sm:px-6";
+      body.style.borderTop = "1px solid var(--border)";
+      body.append(
+        renderReleaseBody(
+          release.body
+            ? removeFirstMarkdownTitle(release.body)
+            : "No release notes published.",
+        ),
+      );
+
+      const releaseLink = createReleaseLink(release);
+      if (releaseLink) {
+        const footer = document.createElement("div");
+        footer.className = "mt-5 flex flex-wrap items-center gap-3";
+        footer.append(releaseLink);
+        body.append(footer);
+      }
+
+      details.append(summary, body);
+      return details;
+    };
+
+    const renderRelease = (release: GitHubRelease) => {
+      if (getReleaseKind(release.tag_name) === "patch") {
+        return renderPatchRelease(release);
+      }
+
+      return renderFeatureRelease(release);
     };
 
     const renderMessage = (text: string) => {
@@ -713,7 +918,18 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       const id = decodeURIComponent(window.location.hash.slice(1));
       if (!id) return;
 
-      document.getElementById(id)?.scrollIntoView({ block: "start" });
+      const target = document.getElementById(id);
+      if (!target) return;
+
+      let ancestor: HTMLElement | null = target;
+      while (ancestor) {
+        if (ancestor instanceof HTMLDetailsElement) {
+          ancestor.open = true;
+        }
+        ancestor = ancestor.parentElement;
+      }
+
+      target.scrollIntoView({ block: "start" });
     };
 
     loadReleases();

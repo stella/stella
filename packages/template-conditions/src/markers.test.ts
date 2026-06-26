@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  blockDirectiveLinePattern,
   classifyMarker,
   DIRECTIVE_KINDS,
   isBlockDirectiveKind,
@@ -106,6 +107,24 @@ describe("scanMarkers", () => {
         meta: { kind: "placeholder", expr: "tenant.name" },
       },
     ]);
+  });
+});
+
+describe("blockDirectiveLinePattern", () => {
+  test("captures a whole-line block directive tag and expression", () => {
+    const match = blockDirectiveLinePattern().exec(
+      "  {{ #if tenant.active }} ",
+    );
+
+    expect(match?.groups?.["tag"]).toBe("#if");
+    expect(match?.groups?.["expr"]?.trim()).toBe("tenant.active");
+    expect(match?.[1]).toBe("#if");
+  });
+
+  test("rejects directive prefixes that are not complete tokens", () => {
+    expect(blockDirectiveLinePattern().test("{{ #ifx tenant.active }}")).toBe(
+      false,
+    );
   });
 });
 
