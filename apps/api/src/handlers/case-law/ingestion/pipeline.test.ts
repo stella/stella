@@ -1,8 +1,18 @@
-import { describe, expect, test } from "bun:test";
+import { Result } from "better-result";
+import { afterEach, describe, expect, test } from "bun:test";
 
+import type { ScopedDb, Transaction } from "@/api/db";
+import { caseLawSources } from "@/api/db/schema";
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst, Inline } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
-import { sanitizeResult } from "@/api/handlers/case-law/ingestion/pipeline";
+import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import {
+  runIngestionPipeline,
+  sanitizeResult,
+} from "@/api/handlers/case-law/ingestion/pipeline";
+import { createSafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 
 const concatInlineText = (inlines: Inline[]): string => {
   let out = "";
@@ -26,7 +36,9 @@ const concatInlineText = (inlines: Inline[]): string => {
   return out;
 };
 
-const baseResult = (documentAst: DocumentAst): IngestionResult => ({
+const baseResult = (
+  documentAst: IngestionResult["documentAst"],
+): IngestionResult => ({
   caseNumber: "X/1/2026",
   court: "Test Court",
   country: "SK",
@@ -45,6 +57,12 @@ const astMetadata = {
   keywords: [],
   statutes: [],
 };
+
+const originalCzNsFetchPage = czNsAdapter.fetchPage;
+
+afterEach(() => {
+  czNsAdapter.fetchPage = originalCzNsFetchPage;
+});
 
 describe("sanitizeResult — documentAst text fields", () => {
   // plainText fields feed the DB full-text search index, so we
@@ -220,5 +238,66 @@ describe("sanitizeResult — documentAst text fields", () => {
     expect(prep1.plainText).toBe("bydlel u a v dome");
     expect(prep2.plainText).toBe("podiel i s príslušenstvom");
     expect(spaced.plainText).toBe("súd rozhodol takto");
+  });
+});
+
+describe("runIngestionPipeline — database timeouts", () => {
+  test("holds the source cursor when a decision DB operation times out", async () => {
+    const source = {
+      id: createSafeId<"caseLawSource">(),
+      adapterKey: ADAPTER_KEYS.CZ_NS,
+      name: "Timeout source",
+      enabled: true,
+      syncCursor: "cursor-1",
+      lastSyncAt: null,
+      config: {},
+      descriptor: null,
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+    } satisfies typeof caseLawSources.$inferSelect;
+
+    const decision = baseResult({});
+    czNsAdapter.fetchPage = async () =>
+      Result.ok({ decisions: [decision], nextCursor: "cursor-2" });
+
+    let calls = 0;
+    let persistedCursor: string | null | undefined;
+    const scopedDb: ScopedDb = async (callback) => {
+      calls++;
+
+      if (calls === 1) {
+        throw new TimeoutError({
+          message: "decision write exceeded deadline",
+          label: "ingestion-db-transaction",
+          timeoutMs: 10,
+        });
+      }
+
+      const tx = {
+        update: (table: unknown) => ({
+          set: (values: { syncCursor?: string | null }) => {
+            if (table === caseLawSources) {
+              persistedCursor = values.syncCursor;
+            }
+
+            return { where: async () => undefined };
+          },
+        }),
+      };
+
+      // SAFETY: this test exercises only the final case_law_sources cursor
+      // update after the synthetic timeout; the fake implements that chain.
+      // eslint-disable-next-line typescript/no-unsafe-type-assertion
+      return await callback(tx as unknown as Transaction);
+    };
+
+    const result = await runIngestionPipeline({ source, scopedDb });
+
+    expect(result.inserted).toBe(0);
+    expect(result.skipped).toBe(0);
+    expect(result.pagesProcessed).toBe(0);
+    expect(result.nextCursor).toBe("cursor-1");
+    expect(result.haltReason?.startsWith("Database timeout;")).toBe(true);
+    expect(persistedCursor).toBe("cursor-1");
   });
 });

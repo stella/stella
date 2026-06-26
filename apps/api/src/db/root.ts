@@ -8,13 +8,23 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 
 const databaseRelations = { ...relations, ...authRelationsPart };
+
+// Optional pool recycling. Defaults remain disabled until the Bun SQL runtime
+// retires only idle connections; values are seconds and apply to both pools.
+const poolRecycling = {
+  maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
+  idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
+} as const;
+
 const rootClient = new SQL({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_ROOT_POOL_MAX,
+  ...poolRecycling,
 });
 const rlsClient = new SQL({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_RLS_POOL_MAX,
+  ...poolRecycling,
 });
 
 /**

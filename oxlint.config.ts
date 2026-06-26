@@ -1290,6 +1290,43 @@ export default defineConfig({
       },
     },
     {
+      // The legal-atlas-runner daemons are long-lived: an un-timed-out DB
+      // await on a connection the server reaped silently hangs forever and
+      // wedges the worker until external supervision restarts it.
+      // All DB access must go through the timeout-wrapped handles in
+      // apps/legal-atlas-runner/src/db.ts so no caller can build an unbounded
+      // handle. That module is the only sanctioned importer of the raw pools.
+      files: ["apps/legal-atlas-runner/**/*.ts"],
+      excludeFiles: [
+        "apps/legal-atlas-runner/src/db.ts",
+        "apps/legal-atlas-runner/**/*.test.ts",
+      ],
+      rules: {
+        "no-restricted-imports": [
+          "error",
+          {
+            paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
+              {
+                name: "@/api/db/root",
+                message:
+                  "Import timeout-wrapped DB handles from '../db' instead of the raw Bun SQL pools.",
+              },
+              {
+                name: "@/api/db",
+                importNames: ["createIngestionDb", "createScopedDb"],
+                message:
+                  "Import the timeout-wrapped `ingestionDb` from '../db' instead of building a raw handle.",
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       files: [
         "apps/api/src/lib/auth.ts",
         "apps/api/src/lib/search/**",
