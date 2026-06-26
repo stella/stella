@@ -104,12 +104,12 @@ export const useTemplateCategoryLabels = (): CategoryLabels => {
   const t = useTranslations();
   return {
     all: t("templates.allTemplates"),
-    createCategory: t("templates.createCategory"),
-    editCategory: t("templates.editCategory"),
-    deleteCategory: t("templates.deleteCategory"),
+    createCategory: t("common.createCategory"),
+    editCategory: t("common.editCategory"),
+    deleteCategory: t("common.deleteCategory"),
     deleteConfirm: t("templates.categoryDeleteConfirm"),
-    nameLabel: t("templates.categoryName"),
-    namePlaceholder: t("templates.categoryName"),
+    nameLabel: t("common.categoryName"),
+    namePlaceholder: t("common.categoryName"),
   };
 };
 

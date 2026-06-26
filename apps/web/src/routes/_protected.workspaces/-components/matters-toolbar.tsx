@@ -216,14 +216,14 @@ const CreateMatterPopover = ({ className }: CreateMatterPopoverProps) => {
 
   return (
     <Button
-      aria-label={t("workspaces.newMatter")}
+      aria-label={t("common.newMatter")}
       className={className}
       onClick={() => openCreateMatter()}
       size="xs"
-      title={t("workspaces.newMatter")}
+      title={t("common.newMatter")}
     >
       <PlusIcon />
-      <span className="hidden sm:inline">{t("workspaces.newMatter")}</span>
+      <span className="hidden sm:inline">{t("common.newMatter")}</span>
     </Button>
   );
 };

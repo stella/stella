@@ -130,7 +130,7 @@ export const AppBreadcrumbs = () => {
     defineBreadcrumb(
       ["/settings/account/profile"],
       <BreadcrumbLink to="/settings/account/profile">
-        {t("settings.account.profile")}
+        {t("common.profile")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
@@ -146,7 +146,7 @@ export const AppBreadcrumbs = () => {
     defineBreadcrumb(
       ["/settings/organization/members"],
       <BreadcrumbLink to="/settings/organization/members">
-        {t("navigation.members")}
+        {t("common.members")}
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(

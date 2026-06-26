@@ -110,7 +110,7 @@ export const TeamFilterPopover = ({
 
       <section className="flex flex-col gap-1">
         <p className="text-muted-foreground px-2 text-xs font-medium tracking-tight uppercase">
-          {t("workspaces.filters.team.members")}
+          {t("common.members")}
         </p>
         <Input
           onChange={(e) => setSearch(e.target.value)}

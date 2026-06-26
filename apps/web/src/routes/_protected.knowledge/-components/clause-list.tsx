@@ -172,15 +172,15 @@ export const ClauseList = ({
               <div className="flex gap-1">
                 {canCreateClause && (
                   <Button
-                    aria-label={t("clauses.import")}
+                    aria-label={t("common.import")}
                     onClick={() => setImportOpen(true)}
                     size="sm"
-                    title={t("clauses.import")}
+                    title={t("common.import")}
                     variant="outline"
                   >
                     <UploadIcon />
                     <span className="hidden sm:inline">
-                      {t("clauses.import")}
+                      {t("common.import")}
                     </span>
                   </Button>
                 )}
@@ -318,7 +318,7 @@ const ClauseRow = ({
           </p>
         </div>
         <span className="text-muted-foreground shrink-0 text-xs">
-          {t("clauses.version", {
+          {t("common.versionLabel", {
             version: String(clause.currentVersion),
           })}
         </span>
@@ -428,11 +428,11 @@ const useClauseCategoryLabels = (): CategoryLabels => {
   const t = useTranslations();
   return {
     all: t("clauses.allClauses"),
-    createCategory: t("clauses.createCategory"),
-    editCategory: t("clauses.editCategory"),
-    deleteCategory: t("clauses.deleteCategory"),
+    createCategory: t("common.createCategory"),
+    editCategory: t("common.editCategory"),
+    deleteCategory: t("common.deleteCategory"),
     deleteConfirm: t("clauses.categoryDeleteConfirm"),
-    nameLabel: t("clauses.categoryName"),
+    nameLabel: t("common.categoryName"),
     namePlaceholder: t("clauses.categoryNamePlaceholder"),
   };
 };

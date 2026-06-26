@@ -46,7 +46,7 @@ export const SHORTCUT_HINT_GROUPS = [
     hints: [
       {
         hotkey: HOTKEYS.NEW_MATTER,
-        labelKey: "navigation.newMatter",
+        labelKey: "common.newMatter",
         contexts: ["global", "workspace"],
       },
     ],

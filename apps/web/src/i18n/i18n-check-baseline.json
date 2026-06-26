@@ -40,7 +40,6 @@
   ],
   "duplicateValues": [
     "account.sessions.currentSession",
-    "ai.regenerate",
     "app.versionMismatch.dismiss",
     "appearance.calendar",
     "appearance.numbersAuto",
@@ -88,17 +87,10 @@
     "chat.tool.run-stella-query",
     "chat.toolCall.field",
     "clauses.body",
-    "clauses.categoryName",
     "clauses.clauseDeleted",
     "clauses.clauseDeletedTombstone",
-    "clauses.createCategory",
-    "clauses.deleteCategory",
-    "clauses.editCategory",
-    "clauses.import",
-    "clauses.noVersions",
     "clauses.searchClauses",
     "clauses.searchPlaceholder",
-    "clauses.version",
     "consent.deny",
     "contacts.customFields.label",
     "contacts.customFields.labelPlaceholder",
@@ -132,7 +124,6 @@
     "inspector.facet.anonymization",
     "inspector.metadata.author",
     "inspector.metadata.updatedAt",
-    "inspector.metadata.version",
     "knowledge.agentSkills.newFolder",
     "knowledge.agentSkills.scopePrivate",
     "knowledge.agentSkills.scopeTeam",
@@ -143,9 +134,7 @@
     "knowledge.skills.form.scopePrivate",
     "knowledge.skills.form.scopeTeam",
     "navigation.chat",
-    "navigation.members",
     "navigation.myTodos",
-    "navigation.newMatter",
     "navigation.templates",
     "onboarding.catalogueCommunityHeading",
     "onboarding.catalogueDetailAuthor",
@@ -169,7 +158,6 @@
     "organization.members.changeRole",
     "organization.members.confirmRoleChangeTitle",
     "organization.members.noMembersFound",
-    "organization.members.removeMember",
     "search.dateFrom",
     "search.dateTo",
     "search.kinds.chat",
@@ -179,12 +167,10 @@
     "search.updatedWithinOptions.week",
     "selfhost.dismissUpdate",
     "settings.account.desktop",
-    "settings.account.profile",
     "settings.account.title",
     "settings.account.wordEditShortcutPlaceholder",
     "settings.organization.ai",
     "settings.organization.anonymization.deleteAction",
-    "settings.organization.anonymization.importAction",
     "settings.organization.anonymization.labelPickerAriaLabel",
     "settings.organization.anonymization.labelPickerEmpty",
     "settings.organization.anonymization.labelPickerPlaceholder",
@@ -192,7 +178,6 @@
     "settings.organization.matterNumbering",
     "settings.organization.matterNumberingDescription",
     "settings.organization.practiceJurisdictions",
-    "settings.organization.profile",
     "settings.organization.usageStatusActive",
     "settings.organization.usageStatusCancelled",
     "success.documentCreated",
@@ -202,19 +187,15 @@
     "tasks.priorityValues.low",
     "tasks.priorityValues.medium",
     "tasks.statusValues.cancelled",
-    "templates.categoryName",
     "templates.conditionField",
     "templates.conditionOpContains",
     "templates.conditionOpIs",
     "templates.conditionOpIsNot",
     "templates.conditionOpNotEquals",
     "templates.conditionValue",
-    "templates.createCategory",
     "templates.createDocument",
-    "templates.deleteCategory",
     "templates.deleteFailed",
     "templates.discovering",
-    "templates.editCategory",
     "templates.fieldLabel",
     "templates.previewSectionBody",
     "templates.saveFailed",
@@ -225,8 +206,6 @@
     "templates.studio.slashEmpty",
     "templates.studio.slashGroupInsert",
     "templates.tags",
-    "templates.versionLabel",
-    "templates.versionsEmpty",
     "translate.settings.apiKeyLabel",
     "translate.settings.tierFree",
     "workspaces.entitiesCount",
@@ -235,26 +214,21 @@
     "workspaces.files.defaultPropertyName",
     "workspaces.filesystem.author",
     "workspaces.filesystem.lastUpdated",
-    "workspaces.filesystem.version",
     "workspaces.filters.date.last30d",
     "workspaces.filters.date.last7d",
     "workspaces.filters.from",
     "workspaces.filters.noMatches",
     "workspaces.filters.team.lead",
     "workspaces.filters.team.leadActive",
-    "workspaces.filters.team.members",
     "workspaces.filters.team.noLead",
     "workspaces.filters.to",
     "workspaces.importOrganizer.action",
-    "workspaces.importOrganizer.regenerate",
     "workspaces.importOrganizer.title",
     "workspaces.kanban.hideColumn",
     "workspaces.lead",
     "workspaces.leadEmpty",
     "workspaces.members.noMembersFound",
-    "workspaces.members.removeMember",
     "workspaces.newFolder",
-    "workspaces.newMatter",
     "workspaces.ownerType.client",
     "workspaces.ownerType.personal",
     "workspaces.parties.client",
@@ -273,7 +247,6 @@
     "workspaces.properties.documentsLabel",
     "workspaces.properties.newColumnName",
     "workspaces.properties.text",
-    "workspaces.sections.members",
     "workspaces.team",
     "workspaces.views.calendar.month",
     "workspaces.views.calendar.updatedAt",
@@ -389,10 +362,6 @@
     "clauses.variant": [
       "et",
       "sk"
-    ],
-    "clauses.version": [
-      "de",
-      "fr"
     ],
     "common.actions": [
       "fr"
@@ -519,6 +488,14 @@
     ],
     "common.urlIdentifierPlaceholder": [
       "ar"
+    ],
+    "common.version": [
+      "de",
+      "fr"
+    ],
+    "common.versionLabel": [
+      "de",
+      "fr"
     ],
     "contacts.communication.emailPlaceholder": [
       "ar",
@@ -774,10 +751,6 @@
       "es",
       "fr",
       "pt-BR"
-    ],
-    "inspector.metadata.version": [
-      "de",
-      "fr"
     ],
     "knowledge.agentSkills.coaching.publish": [
       "cs",
@@ -1374,10 +1347,6 @@
     "templates.studio.scopeCondition": [
       "fr"
     ],
-    "templates.versionLabel": [
-      "de",
-      "fr"
-    ],
     "translate.settings.apiKeyPlaceholder": [
       "ar",
       "cs",
@@ -1420,10 +1389,6 @@
       "sk"
     ],
     "workspaces.files.defaultPropertyName": [
-      "fr"
-    ],
-    "workspaces.filesystem.version": [
-      "de",
       "fr"
     ],
     "workspaces.filters.chips.lead": [

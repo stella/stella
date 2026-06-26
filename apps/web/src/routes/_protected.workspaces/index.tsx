@@ -405,7 +405,7 @@ const MattersToolbarSkeleton = () => {
       </Button>
       <Button className="ms-auto" disabled size="xs">
         <PlusIcon />
-        {t("workspaces.newMatter")}
+        {t("common.newMatter")}
       </Button>
     </div>
   );

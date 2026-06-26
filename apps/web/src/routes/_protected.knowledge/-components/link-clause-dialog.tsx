@@ -327,7 +327,7 @@ export const LinkClauseDialog = ({
                       {clause.title}
                     </span>
                     <span className="text-muted-foreground shrink-0 text-xs">
-                      {t("clauses.version", {
+                      {t("common.versionLabel", {
                         version: String(clause.currentVersion),
                       })}
                     </span>

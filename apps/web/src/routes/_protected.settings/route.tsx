@@ -62,7 +62,7 @@ const ACCOUNT_SECTION = {
   items: [
     {
       to: "/settings/account/profile",
-      labelKey: "settings.account.profile",
+      labelKey: "common.profile",
       icon: UserIcon,
     },
     {
@@ -81,7 +81,7 @@ const ORGANIZATION_SECTION = {
   items: [
     {
       to: "/settings/organization/members",
-      labelKey: "navigation.members",
+      labelKey: "common.members",
       icon: UsersIcon,
     },
     {

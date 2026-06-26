@@ -210,12 +210,12 @@ function Members() {
     <>
       <SettingsPageHeader
         description={t("settings.organization.membersDescription")}
-        title={t("navigation.members")}
+        title={t("common.members")}
       />
 
       <section className="flex flex-col gap-2">
         <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-          {t("settings.organization.profile")}
+          {t("common.profile")}
         </h2>
         <OrganizationProfileCard />
       </section>
@@ -280,7 +280,7 @@ function Members() {
                               onClick={() => removeMember.mutate(member.id)}
                               variant="destructive"
                             >
-                              {t("organization.members.removeMember")}
+                              {t("common.removeMember")}
                             </MenuItem>
                           </MenuPopup>
                         </Menu>
@@ -718,12 +718,12 @@ function MembersPendingComponent() {
     <>
       <SettingsPageHeader
         description={t("settings.organization.membersDescription")}
-        title={t("navigation.members")}
+        title={t("common.members")}
       />
 
       <section className="flex flex-col gap-2">
         <h2 className="text-muted-foreground px-1 text-xs font-medium tracking-wide uppercase">
-          {t("settings.organization.profile")}
+          {t("common.profile")}
         </h2>
         <CardSkeletonPlaceholder />
       </section>

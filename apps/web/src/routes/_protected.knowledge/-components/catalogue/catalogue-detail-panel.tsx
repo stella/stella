@@ -124,7 +124,7 @@ export const CatalogueDetailPanel = ({
               />
               {entry.serverVersion && (
                 <Field
-                  ariaLabel={t("inspector.metadata.version")}
+                  ariaLabel={t("common.version")}
                   icon={TagIcon}
                   value={entry.serverVersion}
                 />

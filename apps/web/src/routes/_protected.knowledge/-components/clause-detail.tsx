@@ -258,7 +258,7 @@ const DetailContent = ({
       />
 
       <p className="text-muted-foreground mt-2 text-sm">
-        {t("clauses.version", {
+        {t("common.versionLabel", {
           version: String(detail.currentVersion),
         })}
         {" \u00b7 "}
@@ -1492,7 +1492,7 @@ const HistoryTab = ({
   if (versions.length === 0) {
     return (
       <p className="text-muted-foreground mt-4 py-4 text-center text-sm">
-        {t("clauses.noVersions")}
+        {t("common.noVersions")}
       </p>
     );
   }
@@ -1603,7 +1603,7 @@ const VersionRow = ({
         type="button"
       >
         <span className="font-medium">
-          {t("clauses.version", {
+          {t("common.versionLabel", {
             version: String(version.version),
           })}
         </span>

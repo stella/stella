@@ -583,7 +583,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     () => ({
       [FILESYSTEM_CREATED_BY_ID]: t("workspaces.filesystem.author"),
       [FILESYSTEM_UPDATED_AT_ID]: t("workspaces.filesystem.lastUpdated"),
-      [FILESYSTEM_VERSION_ID]: t("workspaces.filesystem.version"),
+      [FILESYSTEM_VERSION_ID]: t("common.version"),
     }),
     [t],
   );

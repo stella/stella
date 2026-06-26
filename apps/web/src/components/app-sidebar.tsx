@@ -288,7 +288,7 @@ export function AppSidebar(props: AppSidebarProps) {
       },
       contextMenu: {
         primaryAction: {
-          label: t("navigation.newMatter"),
+          label: t("common.newMatter"),
           icon: <PlusIcon />,
           onClick: handleCreateWorkspace,
         },
@@ -491,7 +491,7 @@ export function AppSidebar(props: AppSidebarProps) {
                           <SidebarMenuAction
                             onClick={handleCreateWorkspace}
                             showOnHover
-                            title={t("navigation.newMatter")}
+                            title={t("common.newMatter")}
                           >
                             <PlusIcon />
                           </SidebarMenuAction>
@@ -1248,7 +1248,7 @@ const SidebarContextArea = ({
           {canCreateWorkspace && (
             <MenuItem onClick={onCreateWorkspace}>
               <PlusIcon />
-              {t("navigation.newMatter")}
+              {t("common.newMatter")}
             </MenuItem>
           )}
         </MenuPopup>
