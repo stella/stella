@@ -32,11 +32,25 @@ const databasePoolMaxSchema = v.optional(
   "5",
 );
 
+// Connection-recycling bounds for the Bun SQL pools, in seconds.
+// Bun never recycles connections by default (maxLifetime/idleTimeout
+// both 0) and has no TCP keepalive, so a connection the server reaps
+// while idle is only discovered on next use (`Failed to read data`),
+// and a silently-dead socket can hang a read indefinitely. Recycling
+// rotates connections before they go stale. 0 disables a bound.
+const databasePoolSecondsSchema = (fallback: string) =>
+  v.optional(
+    v.pipe(v.string(), v.digits(), v.transform(Number), v.integer()),
+    fallback,
+  );
+
 export const envBase = createEnv({
   server: {
     DATABASE_URL: v.pipe(v.string(), v.url()),
     DATABASE_ROOT_POOL_MAX: databasePoolMaxSchema,
     DATABASE_RLS_POOL_MAX: databasePoolMaxSchema,
+    DATABASE_POOL_MAX_LIFETIME_S: databasePoolSecondsSchema("600"),
+    DATABASE_POOL_IDLE_TIMEOUT_S: databasePoolSecondsSchema("120"),
     S3_ENDPOINT: v.string(),
     S3_BUCKET: v.string(),
     S3_CREDENTIALS_PROVIDER: v.optional(

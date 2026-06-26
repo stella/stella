@@ -3,8 +3,6 @@ import type { SQL } from "drizzle-orm";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { createIngestionDb } from "@/api/db";
-import { rlsDb } from "@/api/db/root";
 import { caseLawDecisions, legislationDocuments } from "@/api/db/schema";
 import { backfillCorpusIndex } from "@/api/handlers/case-law/corpus-index";
 import { writeCorpusDocument } from "@/api/handlers/case-law/corpus-storage";
@@ -20,6 +18,8 @@ import {
   refreshCorpusS3,
   refreshS3,
 } from "@/api/lib/s3";
+
+import { ingestionDb } from "../db";
 
 const BATCH_SIZE = 50;
 const CONCURRENCY = 4;
@@ -50,8 +50,6 @@ type BackfillOptions = {
 type ParseResult =
   | { ok: true; options: BackfillOptions }
   | { ok: false; message: string };
-
-const ingestionDb = createIngestionDb(rlsDb);
 
 const logInfo = (message: string): void => {
   void Bun.write(Bun.stdout, `${message}\n`);

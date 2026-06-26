@@ -8,13 +8,25 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { envBase } from "@/api/env-base";
 
 const databaseRelations = { ...relations, ...authRelationsPart };
+
+// Recycle pooled connections before the server reaps them while idle.
+// Bun's defaults never rotate connections (maxLifetime/idleTimeout 0)
+// and it has no TCP keepalive, so a stale socket is only discovered on
+// next use. Applied to both pools; values are seconds.
+const poolRecycling = {
+  maxLifetime: envBase.DATABASE_POOL_MAX_LIFETIME_S,
+  idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
+} as const;
+
 const rootClient = new SQL({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_ROOT_POOL_MAX,
+  ...poolRecycling,
 });
 const rlsClient = new SQL({
   url: envBase.DATABASE_URL,
   max: envBase.DATABASE_RLS_POOL_MAX,
+  ...poolRecycling,
 });
 
 /**

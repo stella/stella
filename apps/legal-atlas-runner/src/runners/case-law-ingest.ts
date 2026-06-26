@@ -19,9 +19,7 @@
 
 import { panic } from "better-result";
 
-import { createIngestionDb } from "@/api/db";
-import { rootDb, rlsDb } from "@/api/db/root";
-import { caseLawIngestionEvents, caseLawSources } from "@/api/db/schema";
+import { caseLawIngestionEvents } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
 import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citation-authority";
 import { ADAPTER_KEYS, MAX_CYCLE_MS } from "@/api/handlers/case-law/consts";
@@ -31,6 +29,7 @@ import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline
 import { backfillSearchIndex } from "@/api/handlers/case-law/search-index";
 import { backfillLegislationCorpusIndex } from "@/api/handlers/legislation/corpus-index";
 import { backfillLegislationSearchIndex } from "@/api/handlers/legislation/search-index";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { corpusGeneration } from "@/api/lib/legal-search/corpus-family";
 import { LIMITS } from "@/api/lib/limits";
@@ -42,6 +41,7 @@ import {
   refreshS3,
 } from "@/api/lib/s3";
 
+import { createCaseLawSource, findCaseLawSource, ingestionDb } from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
 
 const formatLogDetail = (detail: unknown): string => {
@@ -74,14 +74,6 @@ const logError = (message: string, detail?: unknown): void => {
   void Bun.write(Bun.stderr, `${line}\n`);
 };
 
-// Case-law ingestion writes the global corpus. The customer-scoped
-// `stella` role is read-only on case_law_* (see migration
-// 20260510140000); the daemon switches to `stella_ingestion`, which
-// has narrow writes on the corpus and nothing else. Any future code
-// path that strays outside case_law_* will hit a loud
-// `permission denied`.
-const ingestionDb = createIngestionDb(rlsDb);
-
 /**
  * Bun's native Postgres pool emits unhandled errors when the
  * server closes a connection (e.g. database failover or
@@ -90,20 +82,31 @@ const ingestionDb = createIngestionDb(rlsDb);
  * try/catch. Without this handler, the process crashes on
  * any connection drop.
  *
+ * A TimeoutError is the same failure class surfacing differently: a
+ * connection the server reaped silently never errors, so the bounded
+ * DB handle in `../db` rejects the wedged await. Both retry next cycle.
+ *
  * Adapter loops already retry on the next cycle, so the
  * daemon self-heals within CYCLE_DELAY_MS (5s).
  */
-const isTransientConnectionError = (msg: string): boolean =>
-  msg.includes("Connection closed") ||
-  msg.includes("ERR_POSTGRES_CONNECTION_CLOSED") ||
-  msg.includes("PostgresError");
+const isTransientConnectionError = (error: unknown): boolean => {
+  if (error instanceof TimeoutError) {
+    return true;
+  }
+  const msg = error instanceof Error ? error.message : String(error);
+  return (
+    msg.includes("Connection closed") ||
+    msg.includes("ERR_POSTGRES_CONNECTION_CLOSED") ||
+    msg.includes("PostgresError")
+  );
+};
 
 /** Set to true once daemon mode starts; single-adapter mode exits on all errors. */
 let daemonMode = false;
 
 process.on("unhandledRejection", (reason) => {
   const message = reason instanceof Error ? reason.message : String(reason);
-  if (daemonMode && isTransientConnectionError(message)) {
+  if (daemonMode && isTransientConnectionError(reason)) {
     logError(`[daemon] DB connection lost (will retry): ${message}`);
     return;
   }
@@ -343,23 +346,17 @@ const ensureSource = async (
   name: string,
   initialCursor: string | null,
 ) => {
-  const existing = await rootDb.query.caseLawSources.findFirst({
-    where: { adapterKey },
-  });
+  const existing = await findCaseLawSource(adapterKey);
 
   if (existing) {
     return existing;
   }
 
-  const [created] = await rootDb
-    .insert(caseLawSources)
-    .values({
-      adapterKey,
-      name,
-      syncCursor: initialCursor,
-      config: {},
-    })
-    .returning();
+  const created = await createCaseLawSource({
+    adapterKey,
+    name,
+    syncCursor: initialCursor,
+  });
 
   if (!created) {
     panic(`Failed to create source row for adapter "${adapterKey}"`);
@@ -582,7 +579,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       noProgressStreak++;
       backoffFailures++;
       const msg = error instanceof Error ? error.message : String(error);
-      if (isTransientConnectionError(msg)) {
+      if (isTransientConnectionError(error)) {
         logError(`[${adapterKey}] DB connection error (will retry): ${msg}`);
       } else {
         logError(`[${adapterKey}] Unexpected error:`, error);
@@ -753,7 +750,7 @@ export const runCaseLawIngest = async (
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (isTransientConnectionError(msg)) {
+        if (isTransientConnectionError(error)) {
           logError(`[search-index] DB connection error (will retry): ${msg}`);
         } else {
           logError("[search-index] Backfill error:", error);
@@ -778,7 +775,7 @@ export const runCaseLawIngest = async (
         logInfo(`[citation-authority] Recomputed (${updated} cited decisions)`);
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (isTransientConnectionError(msg)) {
+        if (isTransientConnectionError(error)) {
           logError(
             `[citation-authority] DB connection error (will retry): ${msg}`,
           );
@@ -813,7 +810,7 @@ export const runCaseLawIngest = async (
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (isTransientConnectionError(msg)) {
+        if (isTransientConnectionError(error)) {
           logError(`[corpus-index] DB connection error (will retry): ${msg}`);
         } else {
           logError("[corpus-index] Backfill error:", error);
@@ -839,7 +836,7 @@ export const runCaseLawIngest = async (
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (isTransientConnectionError(msg)) {
+        if (isTransientConnectionError(error)) {
           logError(
             `[legislation-search-index] DB connection error (will retry): ${msg}`,
           );
@@ -872,7 +869,7 @@ export const runCaseLawIngest = async (
         }
       } catch (error) {
         const msg = error instanceof Error ? error.message : String(error);
-        if (isTransientConnectionError(msg)) {
+        if (isTransientConnectionError(error)) {
           logError(
             `[legislation-corpus-index] DB connection error (will retry): ${msg}`,
           );
