@@ -65,13 +65,20 @@ const layerOfPath = (absolutePath: string): Layer | null => {
 };
 
 // Match the specifier of every static import/export, bare side-effect import
-// (`import "../setup"`), and dynamic import (`import("../setup")`). The
-// literal `from ` elsewhere in the file (e.g. inside comments) is filtered
-// later by the
-// `specifier.startsWith(".")` check — only relative paths are checked. The
-// regex itself uses bounded character classes to keep matching linear.
+// (`import "../setup"`), and dynamic import (`import("../setup")`). Comments are
+// stripped first (see stripComments), so a relative path mentioned in prose
+// cannot false-fire; the regex uses bounded character classes to keep matching
+// linear.
 const IMPORT_REGEX =
   /\bfrom\s*["'](?<fromSpec>[^"']+)["']|\bimport\s*["'](?<importSpec>[^"']+)["']|\bimport\s*\(\s*["'](?<dynImportSpec>[^"']+)["']\s*\)/gu;
+
+// Strip block and line comments before the raw-text scan so an import mentioned
+// in a comment cannot trip it. The line-comment pattern keeps the character
+// before `//` so it does not eat a `:` from a `https://` URL.
+const stripComments = (source: string): string =>
+  source
+    .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
+    .replaceAll(/(?<lead>^|[^:])\/\/[^\n]*/gmu, "$<lead>");
 
 type EdgeViolation = {
   importer: string;
@@ -94,7 +101,7 @@ const violationsForSource = (
     return [];
   }
   const violations: EdgeViolation[] = [];
-  for (const match of source.matchAll(IMPORT_REGEX)) {
+  for (const match of stripComments(source).matchAll(IMPORT_REGEX)) {
     const specifier =
       match.groups?.["fromSpec"] ??
       match.groups?.["importSpec"] ??
@@ -338,5 +345,19 @@ describe("folio layer-boundaries — synthetic violation fixtures", () => {
     expect(
       classifyEdge(fromLayer ?? "painter", toLayer ?? "bridge", resolved),
     ).toBe("layout-painter must not import from layout-bridge");
+  });
+
+  test("an import mentioned in a comment is ignored", () => {
+    const importer = resolve(CORE_DIR, "layout-painter/renderPage.ts");
+    const lineComment = violationsForSource(
+      importer,
+      '// historically: import { x } from "../layout-bridge/measuring";\nconst x = 1;',
+    );
+    const blockComment = violationsForSource(
+      importer,
+      '/* import { x } from "../layout-bridge/measuring" */\nconst y = 2;',
+    );
+    expect(lineComment).toEqual([]);
+    expect(blockComment).toEqual([]);
   });
 });

@@ -36,7 +36,10 @@ const ENGINE_PREFIX = "packages/folio/src/core/layout-engine/";
 type Layer = "painter" | "bridge" | "engine";
 
 const matchesLayerPrefix = (normalizedPath: string, prefix: string): boolean =>
-  normalizedPath.includes(prefix) ||
+  // Anchor on a path separator (or the string start) so a directory that merely
+  // contains the prefix as a substring cannot false-match, mirroring isCoreFile.
+  normalizedPath.startsWith(prefix) ||
+  normalizedPath.includes(`/${prefix}`) ||
   normalizedPath.endsWith(prefix.slice(0, -1));
 
 const layerOf = (absolutePath: string): Layer | null => {
