@@ -8,17 +8,7 @@
 //
 // Replaces: scripts/lint-logical-properties.sh
 
-const PHYSICAL_PATTERNS = [
-  /(?:^|[\s"'`{(])(?:-?)(?:[\w[\]:]*:)?(?:ml|mr|pl|pr)-/,
-  /(?:^|[\s"'`{(])(?:[\w[\]:]*:)?text-(?:left|right)(?=["'\s`})]|$)/,
-  /(?:^|[\s"'`{(])(?:[\w[\]:]*:)?border-[lr](?=[-\s"'`})]|$)/,
-  /(?:^|[\s"'`{(])(?:[\w[\]:]*:)?rounded-(?:l|r|tl|tr|bl|br)(?=[-\s"'`})]|$)/,
-  /(?:^|[\s"'`{(])(?:-?)(?:[\w[\]:]*:)?(?:left|right)-/,
-  /(?:^|[\s"'`{(])(?:[\w[\]:]*:)?scroll-(?:ml|mr|pl|pr)-/,
-];
-
-const hasPhysicalProperty = (value: string): boolean =>
-  PHYSICAL_PATTERNS.some((p) => p.test(value));
+import { hasPhysicalProperty } from "./physical-properties";
 
 export default {
   meta: { name: "no-physical-properties" },
@@ -40,7 +30,9 @@ export default {
       create(context) {
         return {
           Literal(node) {
-            if (typeof node.value !== "string") {return;}
+            if (typeof node.value !== "string") {
+              return;
+            }
             if (hasPhysicalProperty(node.value)) {
               context.report({
                 node,

@@ -9,16 +9,16 @@ import {
 //
 // Locales with no entry (or an empty list) simply show no local sources yet,
 // which is the honest signal that data coverage has not reached them.
-const localeCountries: Record<string, readonly string[]> = {
-  cs: ["CZ"],
-  sk: ["SK"],
-  pl: ["PL"],
-  es: ["ES"],
-  fr: ["FR"],
-  de: ["DE"],
-  "zh-TW": ["TW"],
-  en: ["GB", "US"],
-};
+const localeCountries = new Map<string, readonly string[]>([
+  ["cs", ["CZ"]],
+  ["sk", ["SK"]],
+  ["pl", ["PL"]],
+  ["es", ["ES"]],
+  ["fr", ["FR"]],
+  ["de", ["DE"]],
+  ["zh-TW", ["TW"]],
+  ["en", ["GB", "US"]],
+]);
 
 export type LocaleSource = {
   slug: string;
@@ -28,14 +28,14 @@ export type LocaleSource = {
 };
 
 export function localeHasSourceMapping(locale: string): boolean {
-  return (localeCountries[locale]?.length ?? 0) > 0;
+  return (localeCountries.get(locale)?.length ?? 0) > 0;
 }
 
 // Official sources stella connects for a locale, derived from the catalogue.
 // Adding a registry/case-law adapter with a jurisdiction surfaces it here
 // automatically; nothing in the landing is hardcoded per source.
 export function sourcesForLocale(locale: string): LocaleSource[] {
-  const countries = localeCountries[locale] ?? [];
+  const countries = localeCountries.get(locale) ?? [];
   if (countries.length === 0) {
     return [];
   }
