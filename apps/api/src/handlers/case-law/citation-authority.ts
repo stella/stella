@@ -3,7 +3,7 @@ import { sql } from "drizzle-orm";
 
 import { courtWeightSql } from "@/api/handlers/case-law/citation-score";
 import { redistributableCaseLawSourceSqlFor } from "@/api/handlers/case-law/redistribution";
-import { CORPUS_BACKFILL_STATEMENT_TIMEOUT } from "@/api/lib/legal-search/backfill-statement-timeout";
+import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 
 /**
  * Materialize the citation-authority ranking signal onto
@@ -53,11 +53,7 @@ export const recomputeCitationAuthorityForAll = async (
   // every decision so decisions with zero citations are reset to 0 too.
   // The inner JOIN on citing_d matches the original semantics (a
   // citation whose citing decision no longer exists does not count).
-  await tx.execute(
-    sql.raw(
-      `SET LOCAL statement_timeout = '${CORPUS_BACKFILL_STATEMENT_TIMEOUT}'`,
-    ),
-  );
+  await setCorpusBackfillStatementTimeout(tx);
   await tx.execute(sql`
     UPDATE case_law_decisions d
     SET

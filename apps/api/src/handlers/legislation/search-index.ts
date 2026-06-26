@@ -11,7 +11,7 @@ import type { DecisionSection } from "@/api/handlers/case-law/types";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { CORPUS_BACKFILL_STATEMENT_TIMEOUT } from "@/api/lib/legal-search/backfill-statement-timeout";
+import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { logger } from "@/api/lib/observability/logger";
 
 /**
@@ -78,11 +78,7 @@ export const indexLegislationDocument = async (
   const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 
   await scopedDb(async (tx) => {
-    await tx.execute(
-      sql.raw(
-        `SET LOCAL statement_timeout = '${CORPUS_BACKFILL_STATEMENT_TIMEOUT}'`,
-      ),
-    );
+    await setCorpusBackfillStatementTimeout(tx);
     await tx.execute(sql`
     INSERT INTO legislation_search_documents (
       document_id, title, searchable_text,

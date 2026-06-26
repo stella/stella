@@ -10,7 +10,7 @@ import { resolveFtsConfig } from "@/api/handlers/case-law/fts-config";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
-import { CORPUS_BACKFILL_STATEMENT_TIMEOUT } from "@/api/lib/legal-search/backfill-statement-timeout";
+import { setCorpusBackfillStatementTimeout } from "@/api/lib/legal-search/backfill-statement-timeout";
 import { logger } from "@/api/lib/observability/logger";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
@@ -90,13 +90,9 @@ export const indexDecision = async (
   await scopedDb(async (tx) => {
     // Raise statement timeout for the tsvector upsert.
     // to_tsvector + unaccent on very long court decisions is
-    // CPU-intensive. SET LOCAL scopes this to the current
-    // transaction only; user-facing queries keep the default.
-    await tx.execute(
-      sql.raw(
-        `SET LOCAL statement_timeout = '${CORPUS_BACKFILL_STATEMENT_TIMEOUT}'`,
-      ),
-    );
+    // CPU-intensive. The helper scopes the higher timeout to
+    // this transaction only; user-facing queries keep the default.
+    await setCorpusBackfillStatementTimeout(tx);
     await tx.execute(sql`
     INSERT INTO case_law_search_documents (
       decision_id, title, searchable_text,
