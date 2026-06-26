@@ -20,6 +20,32 @@ import type {
 } from "../layout-engine/types";
 import { renderLine } from "./renderParagraph";
 
+const readFontSizePx = (font: string): number | undefined => {
+  const pxIndex = font.indexOf("px");
+  if (pxIndex === -1) {
+    return undefined;
+  }
+
+  let start = pxIndex;
+  while (start > 0) {
+    const codePoint = font.codePointAt(start - 1);
+    const isDigit =
+      codePoint !== undefined && codePoint >= 48 && codePoint <= 57;
+    const isDecimalPoint = codePoint === 46;
+    if (!isDigit && !isDecimalPoint) {
+      break;
+    }
+    start -= 1;
+  }
+
+  if (start === pxIndex) {
+    return undefined;
+  }
+
+  const size = Number(font.slice(start, pxIndex));
+  return Number.isFinite(size) ? size : undefined;
+};
+
 class FakeElement {
   className = "";
   dataset: Record<string, string> = {};
@@ -69,10 +95,7 @@ class FakeElement {
       font: "",
       measureText(text: string): { width: number } {
         // Parse "<weight?> <px>px <family>" — grab the numeric pixel size.
-        const match = /(?<size>\d+(?:\.\d+)?)px/u.exec(ctx.font);
-        const fontSizePx = match
-          ? Number(match.groups?.["size"])
-          : (11 * 96) / 72;
+        const fontSizePx = readFontSizePx(ctx.font) ?? (11 * 96) / 72;
         // 1 char ≈ 0.5 em, so glyph width ≈ fontSizePx / 2.
         return { width: text.length * (fontSizePx / 2) };
       },
