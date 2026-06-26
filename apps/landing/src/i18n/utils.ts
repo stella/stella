@@ -1,6 +1,7 @@
 import { createTranslator } from "use-intl/core";
 
 import { defaultLocale, locales, localeCodes, type Locale } from "./config";
+import ar from "./messages/ar.json";
 import en from "./messages/en.json";
 import es from "./messages/es.json";
 import type Messages from "./messages/messages.gen";
@@ -19,6 +20,7 @@ const catalogs: Record<Locale, LocaleMessages> = {
   en,
   es,
   "pt-BR": ptBR,
+  ar,
 };
 
 // use-intl translator for a locale. Same `use-intl` runtime the web app uses,

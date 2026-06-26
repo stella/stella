@@ -6,7 +6,7 @@
 
 export const defaultLocale = "en";
 
-export type Locale = "en" | "es" | "pt-BR";
+export type Locale = "en" | "es" | "pt-BR" | "ar";
 
 export type LocaleConfig = {
   /** URL path segment ("" for the default locale, served at root). */
@@ -17,17 +17,21 @@ export type LocaleConfig = {
   hreflang: string;
   /** Open Graph locale (og:locale). */
   og: string;
+  /** Writing direction for the <html dir> attribute. */
+  dir: "ltr" | "rtl";
 };
 
 export const locales: Record<Locale, LocaleConfig> = {
-  en: { path: "", label: "English", hreflang: "en", og: "en_US" },
-  es: { path: "es", label: "Español", hreflang: "es", og: "es_ES" },
+  en: { path: "", label: "English", hreflang: "en", og: "en_US", dir: "ltr" },
+  es: { path: "es", label: "Español", hreflang: "es", og: "es_ES", dir: "ltr" },
   "pt-BR": {
     path: "pt-br",
     label: "Português (BR)",
     hreflang: "pt-BR",
     og: "pt_BR",
+    dir: "ltr",
   },
+  ar: { path: "ar", label: "العربية", hreflang: "ar", og: "ar_AR", dir: "rtl" },
 };
 
 export const localeCodes = Object.keys(locales) as Locale[];

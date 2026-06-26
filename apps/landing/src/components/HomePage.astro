@@ -46,14 +46,16 @@ const selfHostingDocsUrl =
       <div class="flex items-center gap-6">
         <div class="flex items-center gap-3">
           <img
-            src="/images/stella-logo.svg"
+            src={locale === "ar"
+              ? "/images/stella-logo-ar.svg"
+              : "/images/stella-logo.svg"}
             alt="stella"
             class="h-6 dark:invert"
           />
         <span
           class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase"
         >
-          Beta
+          {t("nav.beta")}
         </span>
         <span
           class="h-4 w-px"
@@ -141,7 +143,7 @@ const selfHostingDocsUrl =
             </span>
             <span
               aria-hidden="true"
-              class="shrink-0 transition-transform group-hover:translate-x-0.5"
+              class="shrink-0 transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5"
               >→</span
             >
           </span>
@@ -181,7 +183,7 @@ const selfHostingDocsUrl =
             {t("hero.startFree")}
             <span
               aria-hidden="true"
-              class="transition-transform group-hover:translate-x-0.5">→</span
+              class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5">→</span
             >
           </a>
           <a

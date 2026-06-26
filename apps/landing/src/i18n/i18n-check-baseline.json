@@ -1,6 +1,10 @@
 {
   "duplicatesCommon": [],
   "identicalToSource": {
+    "nav.beta": [
+      "es",
+      "pt-BR"
+    ],
     "nav.blog": [
       "es",
       "pt-BR"

@@ -13,6 +13,7 @@ export default defineConfig({
       "en",
       { path: "es", codes: ["es"] },
       { path: "pt-br", codes: ["pt-BR"] },
+      { path: "ar", codes: ["ar"] },
     ],
     routing: { prefixDefaultLocale: false },
   },
@@ -33,7 +34,7 @@ export default defineConfig({
       // hreflang codes.
       i18n: {
         defaultLocale: "en",
-        locales: { en: "en", es: "es", "pt-br": "pt-BR" },
+        locales: { en: "en", es: "es", "pt-br": "pt-BR", ar: "ar" },
       },
     }),
     react(),

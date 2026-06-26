@@ -19,6 +19,7 @@ type Messages = {
   "nav": {
     "aiFactSheet": "AI fact sheet";
     "aiFactSheetBlurb": "stella in machine-readable form.";
+    "beta": "Beta";
     "blog": "Blog";
     "changelog": "Changelog";
     "product": "Product";
