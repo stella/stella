@@ -5,6 +5,7 @@ import { CancelledError } from "@tanstack/react-query";
 import { StartClient } from "@tanstack/react-start/client";
 
 import { initializeI18n } from "@/i18n/i18n-store";
+import { installPreloadErrorRecovery } from "@/lib/preload-error-recovery";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
 
 const hydrate = () => {
@@ -28,6 +29,9 @@ const hydrate = () => {
     );
   });
 };
+
+// Recover from failed route-chunk imports before they blank the screen.
+installPreloadErrorRecovery();
 
 if (isPublicSsrPath(window.location.pathname)) {
   // The server rendered these paths with the bundled English (the only
