@@ -5,6 +5,8 @@ type Translator = ReturnType<typeof getTranslator>;
 
 export const managementRoles: readonly Role[] = ["owner", "admin"];
 
+export const ORGANIZATION_MEMBERS_LIMIT = 500;
+
 export const getRoles = (
   t: Translator,
 ): { label: string; value: Role; description: string }[] => [

@@ -364,6 +364,11 @@ describe("custom oxlint guardrails", () => {
   });
 
   test("protected shell chrome queries stay non-critical and route-fresh", () => {
+    const authSource = readRootFixture("apps/api/src/lib/auth.ts");
+    const limitsSource = readRootFixture("apps/api/src/lib/limits.ts");
+    const organizationConstsSource = readRootFixture(
+      "apps/web/src/routes/_protected.organization/-consts.ts",
+    );
     const protectedRouteSource = readRootFixture(
       "apps/web/src/routes/_protected.tsx",
     );
@@ -392,6 +397,16 @@ describe("custom oxlint guardrails", () => {
     );
     expect(organizationQuerySource).toContain(
       "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+    expect(limitsSource).toContain("organizationMembersCount: 500");
+    expect(authSource).toContain(
+      "membershipLimit: LIMITS.organizationMembersCount",
+    );
+    expect(organizationConstsSource).toContain(
+      "ORGANIZATION_MEMBERS_LIMIT = 500",
+    );
+    expect(organizationQuerySource).toContain(
+      "membersLimit: ORGANIZATION_MEMBERS_LIMIT",
     );
     expect(workspacesQuerySource).toContain("workspacesNavigationOptions");
     expect(workspacesQuerySource).toContain(
