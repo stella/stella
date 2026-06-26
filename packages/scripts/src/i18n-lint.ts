@@ -443,7 +443,11 @@ export type ForbiddenRule = {
  */
 export const buildForbiddenRules = (glossary: Glossary): ForbiddenRule[] => {
   const rules: ForbiddenRule[] = [];
-  for (const term of [...glossary.verbs, ...glossary.legalConcepts]) {
+  for (const term of [
+    ...glossary.verbs,
+    ...glossary.legalConcepts,
+    ...glossary.nouns,
+  ]) {
     if (!term.forbidden && !term.forbiddenOnKey) {
       continue;
     }

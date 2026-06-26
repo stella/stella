@@ -845,5 +845,29 @@
       "pt-BR": "Controle de alterações",
       "note": "Microsoft Word UI term in Brazilian Portuguese."
     }
+  ],
+  "nouns": [
+    {
+      "id": "column",
+      "en": "Column",
+      "note": "Table/grid/board column. Latvian standardises on `kolonna` (Microsoft lv usage); `sleja` is the print/newspaper-column sense and must not be used for a data-grid column. Lint-only entry (not tabulated in TERMINOLOGY.md).",
+      "forbidden": {
+        "lv": ["sleja", "slejas", "sleju", "slejā", "slejām", "slejās"]
+      },
+      "translations": {
+        "ar": "عمود",
+        "cs": "sloupec",
+        "sk": "stĺpec",
+        "pl": "kolumna",
+        "de": "Spalte",
+        "et": "veerg",
+        "hu": "oszlop",
+        "lt": "stulpelis",
+        "lv": "kolonna",
+        "es": "columna",
+        "fr": "colonne",
+        "pt-BR": "coluna"
+      }
+    }
   ]
 }
