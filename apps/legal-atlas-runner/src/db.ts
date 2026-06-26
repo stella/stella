@@ -1,3 +1,5 @@
+import { sql } from "drizzle-orm";
+
 /**
  * The legal-atlas-runner's single sanctioned database surface.
  *
@@ -22,18 +24,35 @@ import { withTimeout } from "@/api/lib/with-timeout";
 import { LEGAL_ATLAS_RUNNER_ENV } from "./env";
 
 const rawIngestionDb = createIngestionDb(rlsDb);
+const transactionTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbTransactionTimeoutMs;
+const TRANSACTION_TIMEOUT_GRACE_MS = 30_000;
 const rootQueryTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbRootQueryTimeoutMs;
 
 /**
- * `stella_ingestion`-scoped transaction runner, bounded by a wall-clock
- * timeout. Drop-in for `ScopedDb`, so it threads straight into the
- * ingestion pipeline and backfill loops.
+ * `stella_ingestion`-scoped transaction runner. Postgres owns the normal
+ * cancellation path through SET LOCAL statement_timeout; the outer wall-clock
+ * grace only catches sockets that never deliver that server-side failure.
  */
-export const ingestionDb: ScopedDb = async (fn) =>
-  await withTimeout(async () => await rawIngestionDb(fn), {
+export const ingestionDb: ScopedDb = async (fn) => {
+  const operation = async () =>
+    await rawIngestionDb(async (tx) => {
+      if (transactionTimeoutMs > 0) {
+        await tx.execute(
+          sql`SELECT set_config('statement_timeout', ${`${transactionTimeoutMs}ms`}, true)`,
+        );
+      }
+
+      return await fn(tx);
+    });
+
+  return await withTimeout(operation, {
     label: "ingestion-db-transaction",
-    timeoutMs: LEGAL_ATLAS_RUNNER_ENV.dbTransactionTimeoutMs,
+    timeoutMs:
+      transactionTimeoutMs === 0
+        ? 0
+        : transactionTimeoutMs + TRANSACTION_TIMEOUT_GRACE_MS,
   });
+};
 
 type CaseLawSource = typeof caseLawSources.$inferSelect;
 

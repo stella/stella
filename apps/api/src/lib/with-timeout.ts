@@ -21,6 +21,10 @@ export const withTimeout = async <T>(
   operation: () => Promise<T>,
   { label, timeoutMs }: WithTimeoutOptions,
 ): Promise<T> => {
+  if (timeoutMs === 0) {
+    return await operation();
+  }
+
   const op = operation();
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<never>((_resolve, reject) => {

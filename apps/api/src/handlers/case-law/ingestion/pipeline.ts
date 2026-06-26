@@ -36,6 +36,7 @@ import {
 import { segmentDecision } from "@/api/handlers/case-law/ingestion/segmenter";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -82,6 +83,9 @@ type PipelineResult = {
   /** Non-null if the adapter was halted early due to repeated failures. */
   haltReason: string | null;
 };
+
+const databaseTimeoutHaltReason = (error: TimeoutError): string =>
+  `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
 
 type ProcessResult = {
   inserted: boolean;
@@ -714,6 +718,11 @@ export const runIngestionPipeline = async ({
             cursor: cursor ?? "",
           });
 
+          if (error instanceof TimeoutError) {
+            haltReason = databaseTimeoutHaltReason(error);
+            break;
+          }
+
           // Persist failure for later analysis
           try {
             // oxlint-disable-next-line no-await-in-loop -- failure logged inline within the sequential decision loop
@@ -730,6 +739,11 @@ export const runIngestionPipeline = async ({
               sourceId: source.id,
               caseNumber: result.caseNumber,
             });
+
+            if (failureLogError instanceof TimeoutError) {
+              haltReason = databaseTimeoutHaltReason(failureLogError);
+              break;
+            }
           }
 
           skipped++;

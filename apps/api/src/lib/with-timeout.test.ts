@@ -34,6 +34,18 @@ describe("withTimeout", () => {
     expect(captured).toMatchObject({ label: "wedged-read", timeoutMs: 10 });
   });
 
+  test("timeoutMs 0 disables the deadline", async () => {
+    const result = await withTimeout(
+      async () => {
+        await Bun.sleep(10);
+        return "ok";
+      },
+      { label: "disabled", timeoutMs: 0 },
+    );
+
+    expect(result).toBe("ok");
+  });
+
   test("a late operation rejection after the timeout does not surface as unhandled", async () => {
     let rejectedLate = false;
     const onUnhandled = () => {
