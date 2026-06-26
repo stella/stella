@@ -117,7 +117,6 @@
       "task": "Ülesanne",
       "taskCode": "Ülesandekood"
     },
-    "day": "Päev",
     "decimalHours": "({hours} h)",
     "deleteSelected": "Kustuta valitud",
     "duration": "Kestus",
@@ -138,8 +137,6 @@
       "markup": "Juurdehindlus (%)",
       "noExpenses": "Selle perioodi kulusid pole"
     },
-    "export": "Ekspordi",
-    "exportCSV": "Ekspordi CSV",
     "exportLEDES": "Ekspordi LEDES",
     "exportPDF": "Ekspordi PDF",
     "failedToDelete": "Kande kustutamine ebaõnnestus",
@@ -214,7 +211,6 @@
     },
     "revertToDraft": "Tagasta mustandiks",
     "running": "Käib",
-    "selectAll": "Vali kõik",
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
     "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
@@ -237,7 +233,6 @@
     "timerActive": "Taimer käib",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",
-    "week": "Nädal",
     "writeOff": "Mahakandmine"
   },
   "caseLaw": {
@@ -316,7 +311,6 @@
     "packDescription": "{count, plural, one {# tööriist} other {# tööriista}} teie praksiseks valitud. Installige ühe klõpsuga või valige allpool eraldi.",
     "packInstalled": "{count, plural, one {# tööriist installitud} other {# tööriista installitud}}",
     "packPartial": "{installed} installitud, {failed} ebaõnnestus",
-    "recommended": "Soovitatud",
     "removed": "See tööriist pole enam saadaval.",
     "sectionOthers": "Muud",
     "sectionRecommended": "Soovitatud",
@@ -356,11 +350,9 @@
       "tracked": "Jah, jälgituna"
     },
     "approval": {
-      "allow": "Luba",
       "allowInConversation": "Luba selles vestluses",
       "allowOnce": "Luba üks kord",
       "alwaysAllow": "Luba alati",
-      "approved": "Lubatud",
       "denied": "Keelatud",
       "deny": "Keela",
       "externalMcpDescription": "Saadetakse ainult selle tööriistakutse jaoks vajalik teave.",
@@ -369,7 +361,6 @@
     "askAnything": "Küsi mida tahes",
     "askUser": {
       "custom": "Kirjuta oma",
-      "default": "Vaikimisi",
       "edit": "Muuda vastuseid",
       "editWarning": "Uuesti käivitamine kustutab selle vestluse järgnevad vastused.",
       "noAnswer": "Vastus puudub",
@@ -396,11 +387,6 @@
       "previewWaiting": "Sisu ootamine…"
     },
     "deleteThread": "Kustuta vestlus",
-    "documentView": {
-      "original": "Originaal",
-      "simple": "Aktsepteeritud",
-      "trackedChanges": "Muudatuste jälgimine"
-    },
     "editableFilePlaceholder": "Vestle või muuda: {fileName}",
     "editableFilePlaceholderAction": "Vestle või muuda",
     "editorLoading": "Redaktori laadimine…",
@@ -433,9 +419,7 @@
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {
-        "contacts": "Kontaktid",
-        "entities": "Selles toimikus",
-        "templates": "Mallid"
+        "entities": "Selles toimikus"
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
@@ -470,7 +454,6 @@
     "removeSuggestion": "(eemalda)",
     "resend": "Saada uuesti",
     "resizeThread": "Muuda vestluse suurust",
-    "send": "Saada sõnum",
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
@@ -893,8 +876,7 @@
       "title": "Arveldusandmed"
     },
     "columns": {
-      "phone": "Telefon",
-      "tags": "Sildid"
+      "phone": "Telefon"
     },
     "communication": {
       "addAddress": "Lisa aadress",
@@ -966,13 +948,10 @@
       "firstName": "Eesnimi",
       "lastName": "Perekonnanimi",
       "middleName": "Keskmine nimi",
-      "originatingAttorney": "Peamine kontakt",
       "paymentTermDays": "Maksetähtaeg (päevad)",
       "prefix": "Eesliide",
       "registrationNumber": "Registrikood",
-      "responsibleAttorney": "Vastutav advokaat",
       "suffix": "Järelliide",
-      "tags": "Sildid",
       "taxId": "KMKR number"
     },
     "filterOrganizations": "Organisatsioonid",
@@ -1128,7 +1107,6 @@
     "uploadDate": "Üleslaadimise kuupäev",
     "uploadNewVersion": "Laadi üles uus versioon",
     "uploadedBy": "Üles laadinud",
-    "version": "Versioon",
     "versionHistory": "Versiooniajalugu",
     "viewVersionHistory": "Kuva üksikasjad ja ajalugu",
     "viewing": "Vaatamisel",
@@ -1224,12 +1202,10 @@
       "noResults": "Tulemusi pole",
       "previous": "Eelmine vaste",
       "previousShortcut": "Eelmine vaste (Shift+Enter)",
-      "replace": "Asenda",
       "replaceAll": "Asenda kõik",
       "replaceCurrent": "Asenda praegune vaste",
       "replacePlaceholder": "Asendustekst…",
       "replaceText": "Asendustekst",
-      "showReplace": "Asenda",
       "wholeWords": "Terved sõnad"
     },
     "finishEditing": "Lõpeta muutmine",
@@ -1376,27 +1352,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "„{name}” eemaldatakse sellest tööruumist.",
-      "deleteConfirmTitle": "Kas kustutada oskus?",
       "deleteFile": "Kustuta fail",
       "deleteFileConfirm": "Kas kustutada fail? Seda ei saa tagasi võtta.",
       "description": "Paigalda SKILL.md-paketid, mis lisavad vestlusele erimeetodeid ja kirjutuskaitstud ressursse.",
       "disableSkill": "Keela oskus",
       "disabled": "Keelatud",
-      "discardChanges": "Loobu",
       "dropFile": "Lohista SKILL.md või .zip siia",
       "editSkill": "Muuda oskust",
-      "editTitle": "Muuda oskust",
       "emptyDescription": "Laadi üles SKILL.md-fail, pakitud oskuse kaust või impordi avalik GitHubi oskuse URL.",
       "emptyTitle": "Paigalda esimene oskus",
       "enableSkill": "Luba oskus",
       "enabled": "Lubatud",
       "fileExists": "Selle teega fail on juba olemas",
       "filesHeading": "Failid",
-      "formBody": "Juhised",
       "formBodyHelp": "Markdown-juhised, mida agent loeb oskuse käivitamisel.",
       "formDescription": "Kirjeldus",
       "formName": "Nimi",
-      "formVersion": "Versioon",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Lisa fail",
       "generateDraft": "Koosta oskuse mustand",
@@ -1426,23 +1397,17 @@
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Uus kaust",
       "pdfPreviewSoon": "PDF eelvaade muutub saadavaks, kui binaarseid oskuseressursse hakatakse toetama.",
-      "privateSection": "Sinu oskused",
-      "regenerate": "Genereeri uuesti",
       "renameFile": "Nimeta ümber",
       "resources": "{count, plural, one {# ressurss} other {# ressurssi}}",
-      "scope": "Nähtavus",
       "scopePrivate": "Ainult mina",
       "scopeTeam": "Kõik meeskonnas",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Valitud: {name}",
       "sourceUpload": "Üles laaditud",
       "sourceUrl": "Avalik URL",
-      "teamSection": "Tiimi oskused",
       "unsavedChanges": "Salvestamata muudatused — kas loobuda?",
       "uploadFile": "Laadi fail üles",
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
-      "uploadSkill": "Laadi oskus üles",
-      "uploadTitle": "Laadi oskus üles",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
     },
@@ -1470,13 +1435,11 @@
       "errorDescription": "Integratsiooni ei saanud uuendada.",
       "errorTitle": "MCP ebaõnnestus",
       "mcpExplainer": "Integratsioonid ühendavad vestlusega väliseid teenuseid, millega tehisintellekt saab töötada.",
-      "namePlaceholder": "Kuvatav nimi",
       "needsReauth": "Vajab taasühendamist",
       "off": "Väljas",
       "on": "Sees",
       "otherTitle": "Muud integratsioonid",
       "probe": "Kontrolli",
-      "recommendedBadge": "Soovitatud",
       "recommendedFor": "Soovitatud: {jurisdictions}",
       "reconnect": "Ühenda uuesti",
       "saveToken": "Salvesta token",
@@ -1517,7 +1480,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Lisa oskus",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1547,11 +1509,8 @@
       "commandLabel": "Kaldkriipsu käsk (valikuline)",
       "commandPlaceholder": "nt kokku võtta",
       "createTitle": "Uus oskus",
-      "defaultBadge": "Vaikimisi",
       "deleteConfirmDescription": "See oskus eemaldatakse jäädavalt.",
-      "deleteConfirmTitle": "Kustutada oskus?",
       "deleteShortcut": "Kustuta oskus",
-      "editShortcut": "Muuda oskust",
       "emptyDescription": "Loo taaskasutatavad oskused tööks, mida su tiim kordab, alates kokkuvõtetest kuni esmase koostamise juhisteni.",
       "emptyState": "Oskusi veel pole. Lisage esimene.",
       "emptyTitle": "Looge esimene oskus",
@@ -1564,21 +1523,17 @@
       "form": {
         "command": "Oskuse otsetee",
         "commandHint": "/ oskuse nimi: ainult väiketähed, numbrid, sidekriipsud ja allkriipsud",
-        "commandPlaceholder": "nt kokku-võtta",
         "commandPrefix": "/",
         "description": "Kirjeldus",
         "descriptionPlaceholder": "Lühikirjeldus, mis kuvatakse valijas",
         "name": "Nimi",
         "namePlaceholder": "nt Võta dokument kokku",
-        "prompt": "Juhised",
         "promptPlaceholder": "Juhised, mis lisatakse vestluse koostajasse selle oskuse kasutamisel",
         "scope": "Nähtavus",
         "scopePrivate": "Ainult mina",
         "scopeTeam": "Kõik meeskonnas"
       },
-      "privateSection": "Teie oskused",
-      "shadowed": "Meeskonna oskus varjutab",
-      "teamSection": "Meeskonna oskused"
+      "shadowed": "Meeskonna oskus varjutab"
     }
   },
   "markdownEditor": {
@@ -2030,7 +1985,6 @@
     "untitled": "Pealkirjata ülesanne"
   },
   "templates": {
-    "addCondition": "Lisa tingimus",
     "addItem": "Lisa element",
     "addPart": "Lisa osa",
     "addTag": "Lisa silt",
@@ -2111,7 +2065,6 @@
     "downloadAnyway": "Laadi ikkagi alla",
     "downloadDocx": "Laadi alla DOCX",
     "downloadPdf": "Laadi alla PDF",
-    "downloadReady": "Dokument on valmis",
     "dragAndDrop": "või lohistage siia",
     "dropToCreate": "Lohistage .docx fail siia, et luua mall",
     "editCategory": "Muuda kategooriat",
@@ -2297,7 +2250,6 @@
       "saveAsRecipe": "Salvesta retseptina",
       "scopeClause": "Klausli koht",
       "scopeCondition": "Tingimus",
-      "scopeField": "Väli",
       "scopeLoop": "Tsükkel",
       "scopeTemplate": "Mall",
       "showOnlyIf": "Kuva ainult siis, kui…",
@@ -2377,7 +2329,6 @@
       "save": "Salvesta",
       "saved": "DeepL-i võti salvestatud",
       "savedDescription": "Tõlked on nüüd saadaval.",
-      "saving": "Salvestan…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-i tõlge"
@@ -2393,10 +2344,7 @@
     "slugRequired": "Slug on kohustuslik"
   },
   "workspaces": {
-    "active": "Aktiivne",
     "archiveMatter": "Arhiveeri",
-    "archived": "Arhiveeritud",
-    "archivedBadge": "Arhiveeritud",
     "copyToMatter": {
       "copied": "Kopeeritud toimikusse",
       "copyOption": "Kopeeri (säilita originaal)",
@@ -2601,8 +2549,6 @@
       "wasNamed": "varem {name}"
     },
     "infosoud": {
-      "cancelled": "Tühistatud",
-      "court": "Kohus",
       "courtPlaceholder": "Otsi kohut või koodi",
       "courtsFailed": "InfoSoudi kohtuid ei õnnestunud laadida",
       "eventCount": "{count, plural, one {# sündmus} other {# sündmust}}",
@@ -2630,7 +2576,6 @@
       "hideColumn": "Peida veerg",
       "readOnlyGrouping": "See rühmitus on ainult lugemiseks",
       "selectPropertyHint": "Valige tööriistaribal omadus, mille järgi rühmitada",
-      "unknown": "Teadmata",
       "uploadDocument": "Laadi üles dokument",
       "usePropertyHint": "Kasutage liiki, autorit või ühekordse valiku omadust"
     },
@@ -2638,9 +2583,7 @@
     "lead": "Vastutaja",
     "leadEmpty": "Vastutajat pole",
     "leadPicker": {
-      "noMatchingMembers": "Sobivaid liikmeid pole",
-      "placeholder": "Otsi liikmeid…",
-      "title": "Määra vastutaja"
+      "noMatchingMembers": "Sobivaid liikmeid pole"
     },
     "lockMatter": "Lukusta",
     "matterInfo": "Toimiku andmed",
@@ -2678,7 +2621,6 @@
       "recentActivity": "Viimane tegevus",
       "timeAndTeam": "Aeg ja meeskond",
       "timeThisWeek": "Aeg sel nädalal",
-      "title": "Ülevaade",
       "totalDocuments": "Dokumente kokku",
       "totalItems": "Elemendid",
       "totalThisWeek": "Kokku sel nädalal",
@@ -2719,7 +2661,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Kohanda lehekülgi tumedale režiimile",
-      "anonymizeSidebar": "Anonüümimine",
       "backToPeek": "Tagasi sirvimisrežiimi",
       "entitySidebar": "Entiteedi üksikasjad",
       "evidence": "Tõend",
@@ -2731,7 +2672,6 @@
       "previousPage": "Eelmine leht",
       "resetZoom": "Lähtesta suum",
       "showOriginal": "Kuva originaalleheküljed",
-      "toggleSidebar": "Lülita külgriba sisse/välja",
       "unlock": "Ava lukk",
       "zoomIn": "Suumi sisse",
       "zoomOut": "Suumi välja"
@@ -2767,13 +2707,11 @@
       "addOption": "Lisa valik",
       "addPromptForBetterResults": "Lisage paremaks tulemuseks päring",
       "addReadingSource": "lisa",
-      "aiExtraction": "AI-väljavõte",
       "autoPromptFailed": "Viipa ei õnnestunud luua.",
       "bulk": {
         "addAnother": "Lisa veel veerg",
         "createFailed": "Veergude loomine ebaõnnestus",
         "createMany": "Loo {count} veergu",
-        "createOne": "Loo veerg",
         "createdMany": "Loodi {count} veergu",
         "createdOne": "Veerg loodud",
         "promptPlaceholder": "What should this column extract?",
@@ -2814,9 +2752,7 @@
       "extractionPlaceholder": "Kirjelda, mida otsida. Teise veeru viitamiseks tipi @.",
       "extractionScope": "Ekstraktsiooni ulatus",
       "file": "Fail",
-      "flowExtraction": "AI ekstraktsioon",
       "flowNoInputs": "sisendeid pole",
-      "flowOutput": "Väljund",
       "ifNoMatchFound": "Kui vastet ei leitud",
       "inputs": "Sisendid",
       "inputsHelp": "Vali veerud, mida AI peab lugema. Klõpsa, et lisada või eemaldada.",
@@ -2952,7 +2888,6 @@
       "hideColumn": "Peida veerg",
       "layouts": {
         "calendar": "Kalender",
-        "filesystem": "Loend",
         "grid": "Ruudustik",
         "kanban": "Kanban",
         "list": "Loend",

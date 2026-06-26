@@ -117,7 +117,6 @@
       "task": "Užduotis",
       "taskCode": "Užduoties kodas"
     },
-    "day": "Diena",
     "decimalHours": "({hours}val.)",
     "deleteSelected": "Ištrinti pasirinktus",
     "duration": "Trukmė",
@@ -138,8 +137,6 @@
       "markup": "Antkainodaras (%)",
       "noExpenses": "Nėra išlaidų šiam laikotarpiui"
     },
-    "export": "Eksportuoti",
-    "exportCSV": "Eksportuoti CSV",
     "exportLEDES": "Eksportuoti LEDES",
     "exportPDF": "Eksportuoti PDF",
     "failedToDelete": "Nepavyko ištrinti įrašo",
@@ -214,7 +211,6 @@
     },
     "revertToDraft": "Grąžinti į juodraštį",
     "running": "Vykdoma",
-    "selectAll": "Pasirinkti visus",
     "selectMatter": "Pasirinkite bylą...",
     "selectMatterToStart": "Pasirinkite bylą, kad pradėtumėte fiksuoti laiką",
     "selectedCount": "{count, plural, one {# pasirinktas} few {# pasirinkti} many {# pasirinkto} other {# pasirinktų}}",
@@ -237,7 +233,6 @@
     "timerActive": "Laikmatis veikia",
     "timesheets": "Darbo laiko apskaita",
     "total": "Iš viso",
-    "week": "Savaitė",
     "writeOff": "Nurašyti"
   },
   "caseLaw": {
@@ -316,7 +311,6 @@
     "packDescription": "{count, plural, one {# įrankis} few {# įrankiai} other {# įrankių}} parinkta jūsų praktikai. Įdiekite vienu paspaudimu arba pasirinkite žemiau.",
     "packInstalled": "{count, plural, one {Įdiegta # įrankis} few {Įdiegti # įrankiai} other {Įdiegta # įrankių}}",
     "packPartial": "Įdiegta {installed}, {failed} nepavyko",
-    "recommended": "Rekomenduojama",
     "removed": "Šis įrankis nebepasiekiamas.",
     "sectionOthers": "Kiti",
     "sectionRecommended": "Rekomenduojami",
@@ -356,11 +350,9 @@
       "tracked": "Taip, su sekimu"
     },
     "approval": {
-      "allow": "Leisti",
       "allowInConversation": "Leisti šiame pokalbyje",
       "allowOnce": "Leisti vieną kartą",
       "alwaysAllow": "Visada leisti",
-      "approved": "Patvirtinta",
       "denied": "Atmesta",
       "deny": "Atmesti",
       "externalMcpDescription": "Bus išsiųsta tik šiam įrankio iškvietimui reikalinga informacija.",
@@ -369,7 +361,6 @@
     "askAnything": "Klauskite bet ko",
     "askUser": {
       "custom": "Rašyti savo",
-      "default": "Numatytasis",
       "edit": "Redaguoti atsakymus",
       "editWarning": "Pakartotinis vykdymas pašalins tolesnius šio pokalbio atsakymus.",
       "noAnswer": "Atsakymo nėra",
@@ -396,11 +387,6 @@
       "previewWaiting": "Laukiama turinio…"
     },
     "deleteThread": "Ištrinti pokalbį",
-    "documentView": {
-      "original": "Originalas",
-      "simple": "Priimta",
-      "trackedChanges": "Pakeitimų sekimas"
-    },
     "editableFilePlaceholder": "Kalbėtis apie {fileName} arba redaguoti",
     "editableFilePlaceholderAction": "Kalbėtis arba redaguoti",
     "editorLoading": "Įkeliamas redaktorius…",
@@ -433,9 +419,7 @@
     "maxAttachmentsReached": "Daugiausiai {count} failų vienoje žinutėje",
     "mention": {
       "category": {
-        "contacts": "Kontaktai",
-        "entities": "Šioje byloje",
-        "templates": "Šablonai"
+        "entities": "Šioje byloje"
       },
       "loadError": "Nepavyko įkelti objektų"
     },
@@ -470,7 +454,6 @@
     "removeSuggestion": "(pašalinti)",
     "resend": "Siųsti dar kartą",
     "resizeThread": "Keisti pokalbio dydį",
-    "send": "Siųsti žinutę",
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorLoopDetected": "AI atsakymas kartojosi per daug kartų. Bandykite dar kartą su siauresne užklausa.",
@@ -893,8 +876,7 @@
       "title": "Atsiskaitymo duomenys"
     },
     "columns": {
-      "phone": "Telefonas",
-      "tags": "Žymos"
+      "phone": "Telefonas"
     },
     "communication": {
       "addAddress": "Pridėti adresą",
@@ -966,13 +948,10 @@
       "firstName": "Vardas",
       "lastName": "Pavardė",
       "middleName": "Antras vardas",
-      "originatingAttorney": "Pagrindinis kontaktas",
       "paymentTermDays": "Mokėjimo terminas (dienos)",
       "prefix": "Priešdėlis",
       "registrationNumber": "Registracijos numeris",
-      "responsibleAttorney": "Atsakingas advokatas",
       "suffix": "Priesaga",
-      "tags": "Žymos",
       "taxId": "PVM mokėtojo kodas"
     },
     "filterOrganizations": "Organizacijos",
@@ -1128,7 +1107,6 @@
     "uploadDate": "Įkėlimo data",
     "uploadNewVersion": "Įkelti naują versiją",
     "uploadedBy": "Įkėlė",
-    "version": "Versija",
     "versionHistory": "Versijų istorija",
     "viewVersionHistory": "Rodyti informaciją ir istoriją",
     "viewing": "Peržiūrima",
@@ -1224,12 +1202,10 @@
       "noResults": "Rezultatų nėra",
       "previous": "Ankstesnis atitikmuo",
       "previousShortcut": "Ankstesnis atitikmuo (Shift+Enter)",
-      "replace": "Pakeisti",
       "replaceAll": "Pakeisti viską",
       "replaceCurrent": "Pakeisti dabartinį atitikmenį",
       "replacePlaceholder": "Pakeičiantysis tekstas…",
       "replaceText": "Pakeičiantysis tekstas",
-      "showReplace": "Pakeisti",
       "wholeWords": "Visi žodžiai"
     },
     "finishEditing": "Baigti redagavimą",
@@ -1376,27 +1352,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "„{name}“ bus pašalintas iš šios darbo srities.",
-      "deleteConfirmTitle": "Ištrinti įgūdį?",
       "deleteFile": "Ištrinti failą",
       "deleteFileConfirm": "Ištrinti failą? Šio veiksmo negalima atšaukti.",
       "description": "Įdiekite SKILL.md paketus, kurie pokalbiui prideda specializuotų metodų ir tik skaitymui skirtų išteklių.",
       "disableSkill": "Išjungti įgūdį",
       "disabled": "Išjungta",
-      "discardChanges": "Atmesti",
       "dropFile": "Numeskite SKILL.md arba .zip čia",
       "editSkill": "Redaguoti įgūdį",
-      "editTitle": "Redaguoti įgūdį",
       "emptyDescription": "Įkelkite SKILL.md failą, suglaudintą įgūdžio aplanką arba importuokite viešą GitHub įgūdžio URL.",
       "emptyTitle": "Įdiekite pirmąjį įgūdį",
       "enableSkill": "Įjungti įgūdį",
       "enabled": "Įjungta",
       "fileExists": "Failas šiuo keliu jau yra",
       "filesHeading": "Failai",
-      "formBody": "Instrukcijos",
       "formBodyHelp": "Markdown instrukcijos, kurias agentas perskaito iškvietus įgūdį.",
       "formDescription": "Aprašymas",
       "formName": "Pavadinimas",
-      "formVersion": "Versija",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Pridėti failą",
       "generateDraft": "Sukurti įgūdžio juodraštį",
@@ -1426,23 +1397,17 @@
       "newFilePathPlaceholder": "aplankas/notes.md",
       "newFolder": "Naujas aplankas",
       "pdfPreviewSoon": "PDF peržiūra bus galima, kai bus palaikomi dvejetainiai įgūdžių ištekliai.",
-      "privateSection": "Jūsų įgūdžiai",
-      "regenerate": "Generuoti iš naujo",
       "renameFile": "Pervadinti",
       "resources": "{count, plural, one {# išteklius} few {# ištekliai} other {# išteklių}}",
-      "scope": "Matomumas",
       "scopePrivate": "Tik man",
       "scopeTeam": "Visiems komandoje",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Pasirinkta: {name}",
       "sourceUpload": "Įkelta",
       "sourceUrl": "Viešas URL",
-      "teamSection": "Komandos įgūdžiai",
       "unsavedChanges": "Neišsaugoti pakeitimai — atmesti?",
       "uploadFile": "Įkelti failą",
       "uploadHelp": "Naudokite SKILL.md failą arba .zip aplanką su SKILL.md ir pasirinktiniais tik skaitymui skirtais ištekliais.",
-      "uploadSkill": "Įkelti įgūdį",
-      "uploadTitle": "Įkelti įgūdį",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/kelias/iki/igudzio",
       "version": "Versija: {version}"
     },
@@ -1470,13 +1435,11 @@
       "errorDescription": "Nepavyko atnaujinti integracijos.",
       "errorTitle": "MCP nepavyko",
       "mcpExplainer": "Integracijos prijungia prie pokalbio išorines paslaugas, su kuriomis gali dirbti DI.",
-      "namePlaceholder": "Rodomas pavadinimas",
       "needsReauth": "Reikia prisijungti iš naujo",
       "off": "Išjungta",
       "on": "Įjungta",
       "otherTitle": "Kitos integracijos",
       "probe": "Patikrinti",
-      "recommendedBadge": "Rekomenduojama",
       "recommendedFor": "Rekomenduojama: {jurisdictions}",
       "reconnect": "Prisijungti iš naujo",
       "saveToken": "Išsaugoti tokeną",
@@ -1517,7 +1480,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Pridėti įgūdį",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1547,11 +1509,8 @@
       "commandLabel": "Įstrižo brūkšnio komanda (neprivaloma)",
       "commandPlaceholder": "pvz. apibendrinti",
       "createTitle": "Naujas įgūdis",
-      "defaultBadge": "Numatytasis",
       "deleteConfirmDescription": "Šis įgūdis bus pašalintas visam laikui.",
-      "deleteConfirmTitle": "Ištrinti įgūdį?",
       "deleteShortcut": "Ištrinti įgūdį",
-      "editShortcut": "Redaguoti įgūdį",
       "emptyDescription": "Kurkite pakartotinai naudojamus įgūdžius darbams, kuriuos jūsų komanda kartoja — nuo santraukų iki pirminio rengimo instrukcijų.",
       "emptyState": "Įgūdžių dar nėra. Pridėkite pirmąjį.",
       "emptyTitle": "Sukurkite pirmąjį įgūdį",
@@ -1564,21 +1523,17 @@
       "form": {
         "command": "Įgūdžio spartusis pavadinimas",
         "commandHint": "/ įgūdžio pavadinimas: tik mažosios raidės, skaičiai, brūkšneliai ir pabraukimai",
-        "commandPlaceholder": "pvz., summarize",
         "commandPrefix": "/",
         "description": "Aprašymas",
         "descriptionPlaceholder": "Trumpas aprašymas, rodomas pasirinkimo lange",
         "name": "Pavadinimas",
         "namePlaceholder": "pvz., Apibendrinti dokumentą",
-        "prompt": "Instrukcijos",
         "promptPlaceholder": "Instrukcijos, įterpiamos į pokalbio redaktorių naudojant šį įgūdį",
         "scope": "Matomumas",
         "scopePrivate": "Tik aš",
         "scopeTeam": "Visi komandoje"
       },
-      "privateSection": "Jūsų įgūdžiai",
-      "shadowed": "Uždengta komandos įgūdžio",
-      "teamSection": "Komandos įgūdžiai"
+      "shadowed": "Uždengta komandos įgūdžio"
     }
   },
   "markdownEditor": {
@@ -2030,7 +1985,6 @@
     "untitled": "Užduotis be pavadinimo"
   },
   "templates": {
-    "addCondition": "Pridėti sąlygą",
     "addItem": "Pridėti elementą",
     "addPart": "Pridėti dalį",
     "addTag": "Pridėti žymą",
@@ -2111,7 +2065,6 @@
     "downloadAnyway": "Vis tiek atsisiųsti",
     "downloadDocx": "Atsisiųsti DOCX",
     "downloadPdf": "Atsisiųsti PDF",
-    "downloadReady": "Dokumentas paruoštas",
     "dragAndDrop": "arba vilkite ir numeskite",
     "dropToCreate": "Vilkite .docx failą, kad sukurtumėte šabloną",
     "editCategory": "Redaguoti kategoriją",
@@ -2297,7 +2250,6 @@
       "saveAsRecipe": "Išsaugoti kaip receptą",
       "scopeClause": "Sąlygos vieta",
       "scopeCondition": "Sąlyga",
-      "scopeField": "Laukas",
       "scopeLoop": "Ciklas",
       "scopeTemplate": "Šablonas",
       "showOnlyIf": "Rodyti tik jei…",
@@ -2377,7 +2329,6 @@
       "save": "Išsaugoti",
       "saved": "DeepL raktas išsaugotas",
       "savedDescription": "Vertimai dabar prieinami.",
-      "saving": "Išsaugoma…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL vertimas"
@@ -2393,10 +2344,7 @@
     "slugRequired": "Slug yra privalomas"
   },
   "workspaces": {
-    "active": "Aktyvus",
     "archiveMatter": "Archyvuoti",
-    "archived": "Archyvuota",
-    "archivedBadge": "Archyvuota",
     "copyToMatter": {
       "copied": "Nukopijuota į bylą",
       "copyOption": "Kopijuoti (palikti originalą)",
@@ -2601,8 +2549,6 @@
       "wasNamed": "anksčiau {name}"
     },
     "infosoud": {
-      "cancelled": "Atšaukta",
-      "court": "Teismas",
       "courtPlaceholder": "Ieškoti teismo arba kodo",
       "courtsFailed": "Nepavyko įkelti InfoSoud teismų",
       "eventCount": "{count, plural, one {# įvykis} few {# įvykiai} other {# įvykių}}",
@@ -2630,7 +2576,6 @@
       "hideColumn": "Slėpti stulpelį",
       "readOnlyGrouping": "Šis grupavimas yra tik skaitomas",
       "selectPropertyHint": "Pasirinkite savybę grupavimui įrankių juostoje",
-      "unknown": "Nežinoma",
       "uploadDocument": "Įkelti dokumentą",
       "usePropertyHint": "Naudokite rūšį, autorių arba vieno pasirinkimo savybę"
     },
@@ -2638,9 +2583,7 @@
     "lead": "Atsakingas",
     "leadEmpty": "Nėra atsakingo",
     "leadPicker": {
-      "noMatchingMembers": "Atitinkančių narių nėra",
-      "placeholder": "Ieškoti narių…",
-      "title": "Nustatyti atsakingą"
+      "noMatchingMembers": "Atitinkančių narių nėra"
     },
     "lockMatter": "Užrakinti",
     "matterInfo": "Bylos informacija",
@@ -2678,7 +2621,6 @@
       "recentActivity": "Naujausia veikla",
       "timeAndTeam": "Laikas ir komanda",
       "timeThisWeek": "Laikas šią savaitę",
-      "title": "Apžvalga",
       "totalDocuments": "Iš viso dokumentų",
       "totalItems": "Elementai",
       "totalThisWeek": "Viso šią savaitę",
@@ -2719,7 +2661,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pritaikyti puslapius tamsiam režimui",
-      "anonymizeSidebar": "Anonimizavimas",
       "backToPeek": "Grįžti į peržiūrą",
       "entitySidebar": "Subjekto informacija",
       "evidence": "Įrodymas",
@@ -2731,7 +2672,6 @@
       "previousPage": "Ankstesnis puslapis",
       "resetZoom": "Atstatyti mastelį",
       "showOriginal": "Rodyti originalius puslapius",
-      "toggleSidebar": "Perjungti šoninę juostą",
       "unlock": "Atrakinti",
       "zoomIn": "Priartinti",
       "zoomOut": "Nutolinti"
@@ -2767,13 +2707,11 @@
       "addOption": "Pridėti parinktį",
       "addPromptForBetterResults": "Pridėkite užklausą geresniems rezultatams",
       "addReadingSource": "pridėti",
-      "aiExtraction": "AI išgavimas",
       "autoPromptFailed": "Nepavyko sugeneruoti prompto.",
       "bulk": {
         "addAnother": "Pridėti kitą stulpelį",
         "createFailed": "Nepavyko sukurti stulpelių",
         "createMany": "Sukurti {count} stulpelius",
-        "createOne": "Sukurti stulpelį",
         "createdMany": "Sukurta {count} stulpelių",
         "createdOne": "Stulpelis sukurtas",
         "promptPlaceholder": "What should this column extract?",
@@ -2814,9 +2752,7 @@
       "extractionPlaceholder": "Aprašykite, ko ieškoti. Rašykite @, kad nurodytumėte kitą stulpelį.",
       "extractionScope": "Ištraukimo apimtis",
       "file": "Failas",
-      "flowExtraction": "AI ištrauka",
       "flowNoInputs": "nėra įvesčių",
-      "flowOutput": "Išvestis",
       "ifNoMatchFound": "Jei atitikmuo nerastas",
       "inputs": "Įvestys",
       "inputsHelp": "Pasirink stulpelius, kuriuos AI turi skaityti. Spausk pridėti ar pašalinti.",
@@ -2952,7 +2888,6 @@
       "hideColumn": "Slėpti stulpelį",
       "layouts": {
         "calendar": "Kalendorius",
-        "filesystem": "Sąrašas",
         "grid": "Tinklelis",
         "kanban": "Kanban",
         "list": "Sąrašas",

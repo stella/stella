@@ -120,7 +120,6 @@ type Messages = {
       "task": "Task";
       "taskCode": "Task code";
     };
-    "day": "Day";
     "decimalHours": "({hours}h)";
     "deleteSelected": "Delete selected";
     "duration": "Duration";
@@ -141,8 +140,6 @@ type Messages = {
       "markup": "Markup (%)";
       "noExpenses": "No expenses for this period";
     };
-    "export": "Export";
-    "exportCSV": "Export CSV";
     "exportLEDES": "Export LEDES";
     "exportPDF": "Export PDF";
     "failedToDelete": "Failed to delete entry";
@@ -217,7 +214,6 @@ type Messages = {
     };
     "revertToDraft": "Revert to draft";
     "running": "Running";
-    "selectAll": "Select all";
     "selectMatter": "Select a matter...";
     "selectMatterToStart": "Select a matter to start timing";
     "selectedCount": "{count, plural, one {# selected} other {# selected}}";
@@ -240,7 +236,6 @@ type Messages = {
     "timerActive": "Timer running";
     "timesheets": "Timesheets";
     "total": "Total";
-    "week": "Week";
     "writeOff": "Write off";
   };
   "caseLaw": {
@@ -319,7 +314,6 @@ type Messages = {
     "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.";
     "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}";
     "packPartial": "Installed {installed}, {failed} failed";
-    "recommended": "Recommended";
     "removed": "This tool is no longer available.";
     "sectionOthers": "Others";
     "sectionRecommended": "Recommended";
@@ -359,11 +353,9 @@ type Messages = {
       "tracked": "Yes, tracked";
     };
     "approval": {
-      "allow": "Allow";
       "allowInConversation": "Allow in this conversation";
       "allowOnce": "Allow once";
       "alwaysAllow": "Always allow";
-      "approved": "Approved";
       "denied": "Denied";
       "deny": "Deny";
       "externalMcpDescription": "Only the information needed for this tool call will be sent.";
@@ -372,7 +364,6 @@ type Messages = {
     "askAnything": "Ask anything";
     "askUser": {
       "custom": "Write your own";
-      "default": "Default";
       "edit": "Edit answers";
       "editWarning": "Re-running will discard the downstream replies in this conversation.";
       "noAnswer": "No answer";
@@ -399,11 +390,6 @@ type Messages = {
       "previewWaiting": "Waiting for content…";
     };
     "deleteThread": "Delete conversation";
-    "documentView": {
-      "original": "Original";
-      "simple": "Accepted";
-      "trackedChanges": "Tracked changes";
-    };
     "editableFilePlaceholder": "Chat about or edit {fileName}";
     "editableFilePlaceholderAction": "Chat about or edit";
     "editorLoading": "Loading editor…";
@@ -436,9 +422,7 @@ type Messages = {
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
       "category": {
-        "contacts": "Contacts";
         "entities": "In this matter";
-        "templates": "Templates";
       };
       "loadError": "Failed to load entities";
     };
@@ -473,7 +457,6 @@ type Messages = {
     "removeSuggestion": "(remove)";
     "resend": "Resend";
     "resizeThread": "Resize conversation";
-    "send": "Send message";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.";
@@ -897,7 +880,6 @@ type Messages = {
     };
     "columns": {
       "phone": "Phone";
-      "tags": "Tags";
     };
     "communication": {
       "addAddress": "Add address";
@@ -969,13 +951,10 @@ type Messages = {
       "firstName": "First name";
       "lastName": "Last name";
       "middleName": "Middle name";
-      "originatingAttorney": "Primary contact";
       "paymentTermDays": "Payment terms (days)";
       "prefix": "Prefix";
       "registrationNumber": "Registration number";
-      "responsibleAttorney": "Responsible person";
       "suffix": "Suffix";
-      "tags": "Tags";
       "taxId": "Tax ID";
     };
     "filterOrganizations": "Organizations";
@@ -1131,7 +1110,6 @@ type Messages = {
     "uploadDate": "Upload date";
     "uploadNewVersion": "Upload new version";
     "uploadedBy": "Uploaded by";
-    "version": "Version";
     "versionHistory": "Version history";
     "viewVersionHistory": "Show details & history";
     "viewing": "Viewing";
@@ -1227,12 +1205,10 @@ type Messages = {
       "noResults": "No results";
       "previous": "Previous match";
       "previousShortcut": "Previous match (Shift+Enter)";
-      "replace": "Replace";
       "replaceAll": "Replace all";
       "replaceCurrent": "Replace current match";
       "replacePlaceholder": "Replacement text...";
       "replaceText": "Replacement text";
-      "showReplace": "Replace";
       "wholeWords": "Whole words";
     };
     "finishEditing": "Finish editing";
@@ -1379,27 +1355,22 @@ type Messages = {
         "publish": "Publish skill";
       };
       "deleteConfirmDescription": "\"{name}\" will be removed from this workspace.";
-      "deleteConfirmTitle": "Delete skill?";
       "deleteFile": "Delete file";
       "deleteFileConfirm": "Delete file? This cannot be undone.";
       "description": "Install SKILL.md packs that add specialist methods and read-only resources to chat.";
       "disableSkill": "Disable skill";
       "disabled": "Disabled";
-      "discardChanges": "Discard";
       "dropFile": "Drop SKILL.md or .zip here";
       "editSkill": "Edit skill";
-      "editTitle": "Edit skill";
       "emptyDescription": "Upload a SKILL.md file, a zipped skill folder, or import a public GitHub skill URL.";
       "emptyTitle": "Install your first skill";
       "enableSkill": "Enable skill";
       "enabled": "Enabled";
       "fileExists": "A file with this path already exists";
       "filesHeading": "Files";
-      "formBody": "Instructions";
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.";
       "formDescription": "Description";
       "formName": "Name";
-      "formVersion": "Version";
       "formVersionPlaceholder": "1.0.0";
       "generateAddResource": "Add file";
       "generateDraft": "Draft skill";
@@ -1429,23 +1400,17 @@ type Messages = {
       "newFilePathPlaceholder": "folder/notes.md";
       "newFolder": "New folder";
       "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.";
-      "privateSection": "Your skills";
-      "regenerate": "Regenerate";
       "renameFile": "Rename";
       "resources": "{count, plural, one {# resource} other {# resources}}";
-      "scope": "Visibility";
       "scopePrivate": "Only me";
       "scopeTeam": "Everyone in the team";
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.";
       "selectedFile": "Selected: {name}";
       "sourceUpload": "Uploaded";
       "sourceUrl": "Public URL";
-      "teamSection": "Team skills";
       "unsavedChanges": "Unsaved changes — discard?";
       "uploadFile": "Upload file";
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.";
-      "uploadSkill": "Upload skill";
-      "uploadTitle": "Upload skill";
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill";
       "version": "Version: {version}";
     };
@@ -1473,13 +1438,11 @@ type Messages = {
       "errorDescription": "The integration could not be updated.";
       "errorTitle": "MCP failed";
       "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.";
-      "namePlaceholder": "Display name";
       "needsReauth": "Needs reconnect";
       "off": "Off";
       "on": "On";
       "otherTitle": "Other integrations";
       "probe": "Probe";
-      "recommendedBadge": "Recommended";
       "recommendedFor": "Recommended for {jurisdictions}";
       "reconnect": "Reconnect";
       "saveToken": "Save token";
@@ -1520,7 +1483,6 @@ type Messages = {
       };
     };
     "skills": {
-      "addShortcut": "Add skill";
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1550,11 +1512,8 @@ type Messages = {
       "commandLabel": "Chat command (optional)";
       "commandPlaceholder": "e.g. summarize";
       "createTitle": "New skill";
-      "defaultBadge": "Default";
       "deleteConfirmDescription": "This skill will be permanently removed.";
-      "deleteConfirmTitle": "Delete skill?";
       "deleteShortcut": "Delete skill";
-      "editShortcut": "Edit skill";
       "emptyDescription": "Create reusable skills for the work your team repeats, from summaries to first-pass drafting instructions.";
       "emptyState": "No skills yet. Add your first one.";
       "emptyTitle": "Create your first skill";
@@ -1567,21 +1526,17 @@ type Messages = {
       "form": {
         "command": "Skill shortcut";
         "commandHint": "The / skill name: lowercase letters, numbers, hyphens, and underscores only";
-        "commandPlaceholder": "e.g. summarize";
         "commandPrefix": "/";
         "description": "Description";
         "descriptionPlaceholder": "Short description shown in the picker";
         "name": "Name";
         "namePlaceholder": "e.g. Summarise document";
-        "prompt": "Instructions";
         "promptPlaceholder": "Instructions inserted into the chat composer when this skill is used";
         "scope": "Visibility";
         "scopePrivate": "Only me";
         "scopeTeam": "Everyone in the team";
       };
-      "privateSection": "Your skills";
       "shadowed": "Shadowed by team skill";
-      "teamSection": "Team skills";
     };
   };
   "markdownEditor": {
@@ -2033,7 +1988,6 @@ type Messages = {
     "untitled": "Untitled task";
   };
   "templates": {
-    "addCondition": "Add condition";
     "addItem": "Add item";
     "addPart": "Add part";
     "addTag": "Add tag";
@@ -2114,7 +2068,6 @@ type Messages = {
     "downloadAnyway": "Download anyway";
     "downloadDocx": "Download DOCX";
     "downloadPdf": "Download PDF";
-    "downloadReady": "Document ready";
     "dragAndDrop": "or drag and drop";
     "dropToCreate": "Drop a .docx to create a template";
     "editCategory": "Edit category";
@@ -2300,7 +2253,6 @@ type Messages = {
       "saveAsRecipe": "Save as recipe";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
-      "scopeField": "Field";
       "scopeLoop": "Loop";
       "scopeTemplate": "Template";
       "showOnlyIf": "Show only if…";
@@ -2380,7 +2332,6 @@ type Messages = {
       "save": "Save";
       "saved": "DeepL key saved";
       "savedDescription": "Translations are now available.";
-      "saving": "Saving…";
       "tierFree": "Free";
       "tierPro": "Pro";
       "title": "DeepL translation";
@@ -2396,10 +2347,7 @@ type Messages = {
     "slugRequired": "Slug is required";
   };
   "workspaces": {
-    "active": "Active";
     "archiveMatter": "Archive";
-    "archived": "Archived";
-    "archivedBadge": "Archived";
     "copyToMatter": {
       "copied": "Copied to Matter";
       "copyOption": "Copy (keep original)";
@@ -2604,8 +2552,6 @@ type Messages = {
       "wasNamed": "was {name}";
     };
     "infosoud": {
-      "cancelled": "Canceled";
-      "court": "Court";
       "courtPlaceholder": "Search court or code";
       "courtsFailed": "Could not load InfoSoud courts";
       "eventCount": "{count, plural, one {# event} other {# events}}";
@@ -2633,7 +2579,6 @@ type Messages = {
       "hideColumn": "Hide column";
       "readOnlyGrouping": "This grouping is read-only";
       "selectPropertyHint": "Select a property to group by in the toolbar";
-      "unknown": "Unknown";
       "uploadDocument": "Upload document";
       "usePropertyHint": "Use Kind, Author, or a single-select property";
     };
@@ -2642,8 +2587,6 @@ type Messages = {
     "leadEmpty": "No lead";
     "leadPicker": {
       "noMatchingMembers": "No matching members";
-      "placeholder": "Search members…";
-      "title": "Set lead";
     };
     "lockMatter": "Lock";
     "matterInfo": "Matter info";
@@ -2681,7 +2624,6 @@ type Messages = {
       "recentActivity": "Recent activity";
       "timeAndTeam": "Time & Team";
       "timeThisWeek": "Time this week";
-      "title": "Overview";
       "totalDocuments": "Total documents";
       "totalItems": "Items";
       "totalThisWeek": "Total this week";
@@ -2722,7 +2664,6 @@ type Messages = {
     };
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode";
-      "anonymizeSidebar": "Anonymization";
       "backToPeek": "Back to peek";
       "entitySidebar": "Entity details";
       "evidence": "Justification";
@@ -2734,7 +2675,6 @@ type Messages = {
       "previousPage": "Previous page";
       "resetZoom": "Reset zoom";
       "showOriginal": "Show original pages";
-      "toggleSidebar": "Toggle sidebar";
       "unlock": "Unlock";
       "zoomIn": "Zoom in";
       "zoomOut": "Zoom out";
@@ -2770,13 +2710,11 @@ type Messages = {
       "addOption": "Add option";
       "addPromptForBetterResults": "Add a prompt for better results";
       "addReadingSource": "add";
-      "aiExtraction": "AI extraction";
       "autoPromptFailed": "Couldn't generate a prompt.";
       "bulk": {
         "addAnother": "Add another column";
         "createFailed": "Couldn't create columns";
         "createMany": "Create {count} columns";
-        "createOne": "Create column";
         "createdMany": "Created {count} columns";
         "createdOne": "Column created";
         "promptPlaceholder": "What should this column extract? Refine in the column dialog to use / and @.";
@@ -2817,9 +2755,7 @@ type Messages = {
       "extractionPlaceholder": "Describe what to find. Type @ to reference another column.";
       "extractionScope": "Extraction scope";
       "file": "File";
-      "flowExtraction": "AI extraction";
       "flowNoInputs": "no inputs";
-      "flowOutput": "Output";
       "ifNoMatchFound": "If no match found";
       "inputs": "Inputs";
       "inputsHelp": "Pick the columns the AI should read. Click to add or remove.";
@@ -2955,7 +2891,6 @@ type Messages = {
       "hideColumn": "Hide column";
       "layouts": {
         "calendar": "Calendar";
-        "filesystem": "List";
         "grid": "Grid";
         "kanban": "Kanban";
         "list": "List";

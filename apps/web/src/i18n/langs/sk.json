@@ -117,7 +117,6 @@
       "task": "Úloha",
       "taskCode": "Kód úlohy"
     },
-    "day": "Deň",
     "decimalHours": "({hours} hod.)",
     "deleteSelected": "Odstrániť vybrané",
     "duration": "Trvanie",
@@ -138,8 +137,6 @@
       "markup": "Prirážka (%)",
       "noExpenses": "Za toto obdobie žiadne výdavky"
     },
-    "export": "Exportovať",
-    "exportCSV": "Exportovať CSV",
     "exportLEDES": "Exportovať LEDES",
     "exportPDF": "Exportovať PDF",
     "failedToDelete": "Nepodarilo sa odstrániť položku",
@@ -214,7 +211,6 @@
     },
     "revertToDraft": "Vrátiť do konceptu",
     "running": "Beží",
-    "selectAll": "Vybrať všetko",
     "selectMatter": "Vyberte spis...",
     "selectMatterToStart": "Vyberte spis na spustenie merania",
     "selectedCount": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
@@ -237,7 +233,6 @@
     "timerActive": "Časovač beží",
     "timesheets": "Výkaz práce",
     "total": "Celkom",
-    "week": "Týždeň",
     "writeOff": "Odpísať"
   },
   "caseLaw": {
@@ -316,7 +311,6 @@
     "packDescription": "{count, plural, one {# nástroj} few {# nástroje} other {# nástrojov}} vybraných pre vašu prax. Nainštalujte jedným kliknutím alebo vyberte nižšie.",
     "packInstalled": "{count, plural, one {# nástroj nainštalovaný} few {# nástroje nainštalované} other {# nástrojov nainštalovaných}}",
     "packPartial": "Nainštalované {installed}, {failed} zlyhalo",
-    "recommended": "Odporúčané",
     "removed": "Tento nástroj už nie je dostupný.",
     "sectionOthers": "Ostatné",
     "sectionRecommended": "Odporúčané",
@@ -356,11 +350,9 @@
       "tracked": "Áno, so sledovaním"
     },
     "approval": {
-      "allow": "Povoliť",
       "allowInConversation": "Povoliť v tejto konverzácii",
       "allowOnce": "Povoliť raz",
       "alwaysAllow": "Vždy povoliť",
-      "approved": "Povolené",
       "denied": "Zamietnuté",
       "deny": "Zamietnuť",
       "externalMcpDescription": "Odošlú sa iba informácie potrebné pre tento dotaz.",
@@ -369,7 +361,6 @@
     "askAnything": "Opýtajte sa na čokoľvek",
     "askUser": {
       "custom": "Napísať vlastnú",
-      "default": "Predvolená",
       "edit": "Upraviť odpovede",
       "editWarning": "Opätovné spustenie zahodí nadväzujúce odpovede v tejto konverzácii.",
       "noAnswer": "Bez odpovede",
@@ -396,11 +387,6 @@
       "previewWaiting": "Čaká sa na obsah…"
     },
     "deleteThread": "Zmazať konverzáciu",
-    "documentView": {
-      "original": "Originál",
-      "simple": "Prijaté",
-      "trackedChanges": "Sledované zmeny"
-    },
     "editableFilePlaceholder": "Chatovať alebo upraviť {fileName}",
     "editableFilePlaceholderAction": "Chatovať alebo upraviť",
     "editorLoading": "Načítava sa editor…",
@@ -433,9 +419,7 @@
     "maxAttachmentsReached": "Maximálne {count} súborov na správu",
     "mention": {
       "category": {
-        "contacts": "Kontakty",
-        "entities": "V tomto spise",
-        "templates": "Vzory"
+        "entities": "V tomto spise"
       },
       "loadError": "Nepodarilo sa načítať entity"
     },
@@ -470,7 +454,6 @@
     "removeSuggestion": "(odstrániť)",
     "resend": "Odoslať znova",
     "resizeThread": "Zmeniť veľkosť konverzácie",
-    "send": "Odoslať správu",
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
     "sendErrorLoopDetected": "Odpoveď AI sa príliš opakovala. Skúste to znova s užšou požiadavkou.",
@@ -893,8 +876,7 @@
       "title": "Fakturačné údaje"
     },
     "columns": {
-      "phone": "Telefón",
-      "tags": "Štítky"
+      "phone": "Telefón"
     },
     "communication": {
       "addAddress": "Pridať adresu",
@@ -966,13 +948,10 @@
       "firstName": "Meno",
       "lastName": "Priezvisko",
       "middleName": "Stredné meno",
-      "originatingAttorney": "Hlavný kontakt",
       "paymentTermDays": "Splatnosť (dni)",
       "prefix": "Titul pred",
       "registrationNumber": "IČO",
-      "responsibleAttorney": "Zodpovedná osoba",
       "suffix": "Titul za",
-      "tags": "Štítky",
       "taxId": "DIČ"
     },
     "filterOrganizations": "Organizácie",
@@ -1128,7 +1107,6 @@
     "uploadDate": "Dátum nahratia",
     "uploadNewVersion": "Nahrať novú verziu",
     "uploadedBy": "Nahral",
-    "version": "Verzia",
     "versionHistory": "História verzií",
     "viewVersionHistory": "Zobraziť detail a históriu",
     "viewing": "Zobrazuje sa",
@@ -1224,12 +1202,10 @@
       "noResults": "Žiadne výsledky",
       "previous": "Predchádzajúci výskyt",
       "previousShortcut": "Predchádzajúci výskyt (Shift+Enter)",
-      "replace": "Nahradiť",
       "replaceAll": "Nahradiť všetko",
       "replaceCurrent": "Nahradiť aktuálny výskyt",
       "replacePlaceholder": "Text náhrady...",
       "replaceText": "Text náhrady",
-      "showReplace": "Nahradiť",
       "wholeWords": "Celé slová"
     },
     "finishEditing": "Ukončiť úpravy",
@@ -1376,27 +1352,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "Zručnosť „{name}“ bude odstránená z tohto pracovného priestoru.",
-      "deleteConfirmTitle": "Odstrániť zručnosť?",
       "deleteFile": "Vymazať súbor",
       "deleteFileConfirm": "Vymazať súbor? Túto akciu nie je možné vrátiť späť.",
       "description": "Nainštalujte balíky SKILL.md, ktoré do chatu pridajú špecializované postupy a zdroje iba na čítanie.",
       "disableSkill": "Vypnúť zručnosť",
       "disabled": "Vypnuté",
-      "discardChanges": "Zahodiť",
       "dropFile": "Presuňte sem SKILL.md alebo .zip",
       "editSkill": "Upraviť zručnosť",
-      "editTitle": "Upraviť zručnosť",
       "emptyDescription": "Nahrajte súbor SKILL.md, zazipovaný priečinok zručnosti alebo importujte verejnú URL zručnosti z GitHubu.",
       "emptyTitle": "Nainštalujte prvú zručnosť",
       "enableSkill": "Zapnúť zručnosť",
       "enabled": "Zapnuté",
       "fileExists": "Súbor s touto cestou už existuje",
       "filesHeading": "Súbory",
-      "formBody": "Pokyny",
       "formBodyHelp": "Pokyny vo formáte Markdown, ktoré agent prečíta pri spustení zručnosti.",
       "formDescription": "Popis",
       "formName": "Názov",
-      "formVersion": "Verzia",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Pridať súbor",
       "generateDraft": "Návrh zručnosti",
@@ -1426,23 +1397,17 @@
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Nový priečinok",
       "pdfPreviewSoon": "Náhľad PDF bude dostupný, keď budú podporované binárne zdroje zručností.",
-      "privateSection": "Vaše zručnosti",
-      "regenerate": "Vygenerovať znova",
       "renameFile": "Premenovať",
       "resources": "{count, plural, one {# zdroj} few {# zdroje} many {# zdroja} other {# zdrojov}}",
-      "scope": "Viditeľnosť",
       "scopePrivate": "Iba ja",
       "scopeTeam": "Všetci v tíme",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Vybraté: {name}",
       "sourceUpload": "Nahraté",
       "sourceUrl": "Verejná URL",
-      "teamSection": "Tímové zručnosti",
       "unsavedChanges": "Neuložené zmeny — zahodiť?",
       "uploadFile": "Nahrať súbor",
       "uploadHelp": "Použite súbor SKILL.md alebo priečinok .zip obsahujúci SKILL.md a voliteľné zdroje iba na čítanie.",
-      "uploadSkill": "Nahrať zručnosť",
-      "uploadTitle": "Nahrať zručnosť",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cesta/k/zrucnosti",
       "version": "Verzia: {version}"
     },
@@ -1470,13 +1435,11 @@
       "errorDescription": "Integráciu sa nepodarilo upraviť.",
       "errorTitle": "MCP zlyhalo",
       "mcpExplainer": "Integrácie pripájajú do chatu externé služby, s ktorými môže AI pracovať.",
-      "namePlaceholder": "Zobrazovaný názov",
       "needsReauth": "Vyžaduje opätovné pripojenie",
       "off": "Vypnuté",
       "on": "Zapnuté",
       "otherTitle": "Ostatné integrácie",
       "probe": "Overiť",
-      "recommendedBadge": "Odporúčané",
       "recommendedFor": "Odporúčané pre {jurisdictions}",
       "reconnect": "Pripojiť znova",
       "saveToken": "Uložiť token",
@@ -1517,7 +1480,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Pridať zručnosť",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1547,11 +1509,8 @@
       "commandLabel": "Lomkový príkaz (voliteľné)",
       "commandPlaceholder": "napr. zhrnúť",
       "createTitle": "Nová zručnosť",
-      "defaultBadge": "Predvolené",
       "deleteConfirmDescription": "Táto zručnosť bude natrvalo odstránená.",
-      "deleteConfirmTitle": "Odstrániť zručnosť?",
       "deleteShortcut": "Odstrániť zručnosť",
-      "editShortcut": "Upraviť zručnosť",
       "emptyDescription": "Vytvorte opakovane použiteľné zručnosti pre prácu, ktorú váš tím robí opakovane, od zhrnutí po pokyny na prvotné koncipovanie.",
       "emptyState": "Zatiaľ žiadne zručnosti. Pridajte prvú.",
       "emptyTitle": "Vytvorte prvú zručnosť",
@@ -1564,21 +1523,17 @@
       "form": {
         "command": "Skratka zručnosti",
         "commandHint": "Názov / zručnosti: iba malé písmená, číslice, pomlčky a podčiarkovníky",
-        "commandPlaceholder": "napr. summarize",
         "commandPrefix": "/",
         "description": "Popis",
         "descriptionPlaceholder": "Stručný popis zobrazený vo výbere",
         "name": "Názov",
         "namePlaceholder": "napr. Zhrnúť dokument",
-        "prompt": "Pokyny",
         "promptPlaceholder": "Pokyny vložené do editora chatu pri použití tejto zručnosti",
         "scope": "Viditeľnosť",
         "scopePrivate": "Iba ja",
         "scopeTeam": "Všetci v tíme"
       },
-      "privateSection": "Vaše zručnosti",
-      "shadowed": "Prekryté tímovou zručnosťou",
-      "teamSection": "Tímové zručnosti"
+      "shadowed": "Prekryté tímovou zručnosťou"
     }
   },
   "markdownEditor": {
@@ -2030,7 +1985,6 @@
     "untitled": "Úloha bez názvu"
   },
   "templates": {
-    "addCondition": "Pridať podmienku",
     "addItem": "Pridať položku",
     "addPart": "Pridať časť",
     "addTag": "Pridať štítok",
@@ -2111,7 +2065,6 @@
     "downloadAnyway": "Aj tak stiahnuť",
     "downloadDocx": "Stiahnuť DOCX",
     "downloadPdf": "Stiahnuť PDF",
-    "downloadReady": "Dokument pripravený",
     "dragAndDrop": "alebo presuňte sem",
     "dropToCreate": "Presuňte sem .docx na vytvorenie vzoru",
     "editCategory": "Upraviť kategóriu",
@@ -2297,7 +2250,6 @@
       "saveAsRecipe": "Uložiť ako recept",
       "scopeClause": "Vzorové ustanovenie",
       "scopeCondition": "Podmienka",
-      "scopeField": "Pole",
       "scopeLoop": "Slučka",
       "scopeTemplate": "Vzor",
       "showOnlyIf": "Zobraziť, len ak…",
@@ -2377,7 +2329,6 @@
       "save": "Uložiť",
       "saved": "Kľúč DeepL uložený",
       "savedDescription": "Preklady sú teraz k dispozícii.",
-      "saving": "Ukladá sa…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Preklad DeepL"
@@ -2393,10 +2344,7 @@
     "slugRequired": "Slug je povinný"
   },
   "workspaces": {
-    "active": "Aktívny",
     "archiveMatter": "Archivovať",
-    "archived": "Archivovaný",
-    "archivedBadge": "Archivované",
     "copyToMatter": {
       "copied": "Skopírované do spisu",
       "copyOption": "Kopírovať (ponechať originál)",
@@ -2601,8 +2549,6 @@
       "wasNamed": "pôvodne {name}"
     },
     "infosoud": {
-      "cancelled": "Zrušené",
-      "court": "Súd",
       "courtPlaceholder": "Vyhľadajte súd alebo kód",
       "courtsFailed": "Súdy z InfoSoudu sa nepodarilo načítať",
       "eventCount": "{count, plural, one {# udalosť} few {# udalosti} other {# udalostí}}",
@@ -2630,7 +2576,6 @@
       "hideColumn": "Skryť stĺpec",
       "readOnlyGrouping": "Toto zoskupenie je iba na čítanie",
       "selectPropertyHint": "Vyberte vlastnosť na zoskupenie v paneli nástrojov",
-      "unknown": "Neznámy",
       "uploadDocument": "Nahrať dokument",
       "usePropertyHint": "Použite Druh, Autor alebo vlastnosť s jednoduchým výberom"
     },
@@ -2638,9 +2583,7 @@
     "lead": "Vedúci",
     "leadEmpty": "Bez vedúceho",
     "leadPicker": {
-      "noMatchingMembers": "Žiadni zodpovedajúci členovia",
-      "placeholder": "Hľadať členov…",
-      "title": "Nastaviť vedúceho"
+      "noMatchingMembers": "Žiadni zodpovedajúci členovia"
     },
     "lockMatter": "Zamknúť",
     "matterInfo": "Informácie o spise",
@@ -2678,7 +2621,6 @@
       "recentActivity": "Nedávna aktivita",
       "timeAndTeam": "Čas a tím",
       "timeThisWeek": "Čas tento týždeň",
-      "title": "Prehľad",
       "totalDocuments": "Celkom dokumentov",
       "totalItems": "Položky",
       "totalThisWeek": "Celkom tento týždeň",
@@ -2719,7 +2661,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Prispôsobiť stránky pre tmavý režim",
-      "anonymizeSidebar": "Anonymizácia",
       "backToPeek": "Späť do náhľadu",
       "entitySidebar": "Detaily entity",
       "evidence": "Príloha",
@@ -2731,7 +2672,6 @@
       "previousPage": "Predchádzajúca strana",
       "resetZoom": "Obnoviť priblíženie",
       "showOriginal": "Zobraziť pôvodné stránky",
-      "toggleSidebar": "Prepnúť bočný panel",
       "unlock": "Odomknúť",
       "zoomIn": "Priblížiť",
       "zoomOut": "Oddialiť"
@@ -2767,13 +2707,11 @@
       "addOption": "Pridať možnosť",
       "addPromptForBetterResults": "Pridajte prompt pre lepšie výsledky",
       "addReadingSource": "pridať",
-      "aiExtraction": "AI extrakcia",
       "autoPromptFailed": "Nepodarilo sa vygenerovať prompt.",
       "bulk": {
         "addAnother": "Pridať ďalší stĺpec",
         "createFailed": "Stĺpce sa nepodarilo vytvoriť",
         "createMany": "Vytvoriť {count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov}}",
-        "createOne": "Vytvoriť stĺpec",
         "createdMany": "Vytvorené {count, plural, one {# stĺpec} few {# stĺpce} other {# stĺpcov}}",
         "createdOne": "Stĺpec vytvorený",
         "promptPlaceholder": "What should this column extract?",
@@ -2814,9 +2752,7 @@
       "extractionPlaceholder": "Popíšte, čo má nájsť. Pomocou @ odkážete na iný stĺpec.",
       "extractionScope": "Rozsah extrakcie",
       "file": "Súbor",
-      "flowExtraction": "AI extrakcia",
       "flowNoInputs": "žiadne vstupy",
-      "flowOutput": "Výstup",
       "ifNoMatchFound": "Ak sa nenašla zhoda",
       "inputs": "Vstupy",
       "inputsHelp": "Vyber stĺpce, z ktorých má AI čítať. Klikni na pridanie alebo odstránenie.",
@@ -2952,7 +2888,6 @@
       "hideColumn": "Skryť stĺpec",
       "layouts": {
         "calendar": "Kalendár",
-        "filesystem": "Zoznam",
         "grid": "Mriežka",
         "kanban": "Kanban",
         "list": "Zoznam",

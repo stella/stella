@@ -117,7 +117,6 @@
       "task": "المهمة",
       "taskCode": "رمز المهمة"
     },
-    "day": "اليوم",
     "decimalHours": "({hours} ساعة)",
     "deleteSelected": "حذف المحدد",
     "duration": "المدة",
@@ -138,8 +137,6 @@
       "markup": "هامش الزيادة (%)",
       "noExpenses": "لا توجد مصروفات لهذه الفترة"
     },
-    "export": "تصدير",
-    "exportCSV": "تصدير CSV",
     "exportLEDES": "تصدير LEDES",
     "exportPDF": "تصدير PDF",
     "failedToDelete": "تعذّر حذف الإدخال",
@@ -214,7 +211,6 @@
     },
     "revertToDraft": "الإعادة إلى مسودة",
     "running": "قيد التشغيل",
-    "selectAll": "تحديد الكل",
     "selectMatter": "اختر ملفًا...",
     "selectMatterToStart": "اختر ملفًا لبدء توقيت الوقت",
     "selectedCount": "{count, plural, zero {لا شيء محدد} one {محدد واحد} two {محددان} few {# محددة} many {# محددًا} other {# محدد}}",
@@ -237,7 +233,6 @@
     "timerActive": "المؤقّت قيد التشغيل",
     "timesheets": "سجلات الوقت",
     "total": "الإجمالي",
-    "week": "الأسبوع",
     "writeOff": "شطب"
   },
   "caseLaw": {
@@ -316,7 +311,6 @@
     "packDescription": "{count, plural, zero {لا أدوات} one {أداة واحدة} two {أداتان} few {# أدوات} many {# أداة} other {# أداة}} منسَّقة لممارستك. تثبيت بنقرة واحدة أو اختيار كل منها على حدة أدناه.",
     "packInstalled": "{count, plural, zero {لم تُثبَّت أدوات} one {تم تثبيت أداة واحدة} two {تم تثبيت أداتين} few {تم تثبيت # أدوات} many {تم تثبيت # أداة} other {تم تثبيت # أداة}}",
     "packPartial": "تم تثبيت {installed}، وفشل {failed}",
-    "recommended": "موصى به",
     "removed": "لم تعد هذه الأداة متاحة.",
     "sectionOthers": "أخرى",
     "sectionRecommended": "موصى به",
@@ -356,11 +350,9 @@
       "tracked": "نعم، مع التعقّب"
     },
     "approval": {
-      "allow": "سماح",
       "allowInConversation": "السماح في هذه المحادثة",
       "allowOnce": "السماح مرة واحدة",
       "alwaysAllow": "السماح دائماً",
-      "approved": "تمت الموافقة",
       "denied": "تم الرفض",
       "deny": "رفض",
       "externalMcpDescription": "لن يُرسَل سوى المعلومات اللازمة لاستدعاء هذه الأداة.",
@@ -369,7 +361,6 @@
     "askAnything": "اسأل عن أي شيء",
     "askUser": {
       "custom": "اكتب إجابتك الخاصة",
-      "default": "افتراضي",
       "edit": "تعديل الإجابات",
       "editWarning": "ستؤدي إعادة التشغيل إلى تجاهل الردود اللاحقة في هذه المحادثة.",
       "noAnswer": "لا إجابة",
@@ -396,11 +387,6 @@
       "previewWaiting": "في انتظار المحتوى…"
     },
     "deleteThread": "حذف المحادثة",
-    "documentView": {
-      "original": "الأصل",
-      "simple": "مقبول",
-      "trackedChanges": "التغييرات المتعقَّبة"
-    },
     "editableFilePlaceholder": "تحدّث عن {fileName} أو حرّره",
     "editableFilePlaceholderAction": "تحدّث عنه أو حرّره",
     "editorLoading": "جارٍ تحميل المحرّر…",
@@ -433,9 +419,7 @@
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mention": {
       "category": {
-        "contacts": "جهات الاتصال",
-        "entities": "في هذا الملف",
-        "templates": "القوالب"
+        "entities": "في هذا الملف"
       },
       "loadError": "تعذّر تحميل الكيانات"
     },
@@ -470,7 +454,6 @@
     "removeSuggestion": "(إزالة)",
     "resend": "إعادة الإرسال",
     "resizeThread": "تغيير حجم المحادثة",
-    "send": "إرسال الرسالة",
     "sendError": "حدثت مشكلة أثناء إرسال رسالتك. تواصل مع الدعم إذا استمرّ الخطأ.",
     "sendErrorAnonymizationBlocked": "تعذّر على stella تجهيل أحد المرفقات، لذا لم يُرسَل شيء. أزِل الملف أو أرسِل هذه الرسالة دون تجهيل.",
     "sendErrorLoopDetected": "تكرّر ردّ AI مرّات كثيرة جداً. حاول مجدداً بطلب أكثر تحديداً.",
@@ -893,8 +876,7 @@
       "title": "تفاصيل الفوترة"
     },
     "columns": {
-      "phone": "الهاتف",
-      "tags": "الأوسمة"
+      "phone": "الهاتف"
     },
     "communication": {
       "addAddress": "إضافة عنوان",
@@ -966,13 +948,10 @@
       "firstName": "الاسم الأول",
       "lastName": "اسم العائلة",
       "middleName": "الاسم الأوسط",
-      "originatingAttorney": "جهة الاتصال الرئيسية",
       "paymentTermDays": "شروط الدفع (بالأيام)",
       "prefix": "اللقب",
       "registrationNumber": "رقم التسجيل",
-      "responsibleAttorney": "الشخص المسؤول",
       "suffix": "اللاحقة",
-      "tags": "الأوسمة",
       "taxId": "الرقم الضريبي"
     },
     "filterOrganizations": "المؤسسات",
@@ -1128,7 +1107,6 @@
     "uploadDate": "تاريخ الرفع",
     "uploadNewVersion": "رفع إصدار جديد",
     "uploadedBy": "رُفِع بواسطة",
-    "version": "الإصدار",
     "versionHistory": "سجل الإصدارات",
     "viewVersionHistory": "إظهار التفاصيل والسجل",
     "viewing": "قيد العرض",
@@ -1224,12 +1202,10 @@
       "noResults": "لا توجد نتائج",
       "previous": "النتيجة السابقة",
       "previousShortcut": "النتيجة السابقة (Shift+Enter)",
-      "replace": "استبدال",
       "replaceAll": "استبدال الكل",
       "replaceCurrent": "استبدال النتيجة الحالية",
       "replacePlaceholder": "نص الاستبدال...",
       "replaceText": "نص الاستبدال",
-      "showReplace": "استبدال",
       "wholeWords": "الكلمات الكاملة"
     },
     "finishEditing": "إنهاء التعديل",
@@ -1376,27 +1352,22 @@
         "publish": "نشر المهارة"
       },
       "deleteConfirmDescription": "ستتم إزالة «{name}» من مساحة العمل هذه.",
-      "deleteConfirmTitle": "حذف المهارة؟",
       "deleteFile": "حذف الملف",
       "deleteFileConfirm": "حذف الملف؟ لا يمكن التراجع عن هذا الإجراء.",
       "description": "ثبّت حزم SKILL.md التي تضيف أساليب متخصصة وموارد للقراءة فقط إلى المحادثة.",
       "disableSkill": "تعطيل المهارة",
       "disabled": "مُعطَّلة",
-      "discardChanges": "تجاهل",
       "dropFile": "أفلِت ملف SKILL.md أو ملف .zip هنا",
       "editSkill": "تعديل المهارة",
-      "editTitle": "تعديل المهارة",
       "emptyDescription": "ارفع ملف SKILL.md، أو مجلد مهارة مضغوطاً، أو استورد رابط مهارة عامة من GitHub.",
       "emptyTitle": "ثبّت أول مهارة لك",
       "enableSkill": "تفعيل المهارة",
       "enabled": "مُفعَّلة",
       "fileExists": "يوجد ملف بهذا المسار بالفعل",
       "filesHeading": "الملفات",
-      "formBody": "التعليمات",
       "formBodyHelp": "تعليمات Markdown يقرأها الوكيل عند استدعاء المهارة.",
       "formDescription": "الوصف",
       "formName": "الاسم",
-      "formVersion": "الإصدار",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "إضافة ملف",
       "generateDraft": "مسودة المهارة",
@@ -1426,23 +1397,17 @@
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "مجلد جديد",
       "pdfPreviewSoon": "ستتوفر معاينة PDF بمجرد دعم موارد المهارات الثنائية.",
-      "privateSection": "مهاراتك",
-      "regenerate": "إعادة الإنشاء",
       "renameFile": "إعادة تسمية",
       "resources": "{count, plural, zero {لا موارد} one {مورد واحد} two {موردان} few {# موارد} many {# مورداً} other {# مورد}}",
-      "scope": "مدى الظهور",
       "scopePrivate": "أنا فقط",
       "scopeTeam": "الجميع في الفريق",
       "selectFileHint": "اختر ملفاً من القائمة لفتحه في لوحة المحرر على اليمين.",
       "selectedFile": "المُختار: {name}",
       "sourceUpload": "مرفوع",
       "sourceUrl": "رابط URL عام",
-      "teamSection": "مهارات الفريق",
       "unsavedChanges": "تغييرات غير محفوظة — هل تريد تجاهلها؟",
       "uploadFile": "رفع ملف",
       "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
-      "uploadSkill": "رفع مهارة",
-      "uploadTitle": "رفع مهارة",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"
     },
@@ -1470,13 +1435,11 @@
       "errorDescription": "تعذّر تحديث التكامل.",
       "errorTitle": "فشل MCP",
       "mcpExplainer": "تربط التكاملات الخدمات الخارجية بالمحادثة التي يمكن لـ AI العمل معها.",
-      "namePlaceholder": "الاسم المعروض",
       "needsReauth": "يلزم إعادة الاتصال",
       "off": "إيقاف",
       "on": "تشغيل",
       "otherTitle": "تكاملات أخرى",
       "probe": "فحص",
-      "recommendedBadge": "موصى به",
       "recommendedFor": "موصى به لـ {jurisdictions}",
       "reconnect": "إعادة الاتصال",
       "saveToken": "حفظ الرمز",
@@ -1517,7 +1480,6 @@
       }
     },
     "skills": {
-      "addShortcut": "إضافة مهارة",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1547,11 +1509,8 @@
       "commandLabel": "أمر المحادثة (اختياري)",
       "commandPlaceholder": "مثال: summarize",
       "createTitle": "مهارة جديدة",
-      "defaultBadge": "افتراضي",
       "deleteConfirmDescription": "ستتم إزالة هذه المهارة نهائياً.",
-      "deleteConfirmTitle": "حذف المهارة؟",
       "deleteShortcut": "حذف المهارة",
-      "editShortcut": "تعديل المهارة",
       "emptyDescription": "أنشئ مهارات قابلة لإعادة الاستخدام للأعمال التي يكررها فريقك، من الملخصات إلى تعليمات الصياغة الأولية.",
       "emptyState": "لا توجد مهارات بعد. أضف أول مهارة لك.",
       "emptyTitle": "أنشئ أول مهارة لك",
@@ -1564,21 +1523,17 @@
       "form": {
         "command": "اختصار المهارة",
         "commandHint": "اسم مهارة الـ /: حروف صغيرة وأرقام وشرطات وشرطات سفلية فقط",
-        "commandPlaceholder": "مثال: summarize",
         "commandPrefix": "/",
         "description": "الوصف",
         "descriptionPlaceholder": "وصف قصير يظهر في أداة الاختيار",
         "name": "الاسم",
         "namePlaceholder": "مثال: تلخيص المستند",
-        "prompt": "التعليمات",
         "promptPlaceholder": "تعليمات تُدرَج في مُحرّر المحادثة عند استخدام هذه المهارة",
         "scope": "مدى الظهور",
         "scopePrivate": "أنا فقط",
         "scopeTeam": "الجميع في الفريق"
       },
-      "privateSection": "مهاراتك",
-      "shadowed": "محجوبة بمهارة الفريق",
-      "teamSection": "مهارات الفريق"
+      "shadowed": "محجوبة بمهارة الفريق"
     }
   },
   "markdownEditor": {
@@ -2030,7 +1985,6 @@
     "untitled": "مهمة بلا عنوان"
   },
   "templates": {
-    "addCondition": "إضافة شرط",
     "addItem": "إضافة عنصر",
     "addPart": "إضافة جزء",
     "addTag": "إضافة وسم",
@@ -2111,7 +2065,6 @@
     "downloadAnyway": "التنزيل على أي حال",
     "downloadDocx": "تنزيل DOCX",
     "downloadPdf": "تنزيل PDF",
-    "downloadReady": "المستند جاهز",
     "dragAndDrop": "أو اسحب وأفلت",
     "dropToCreate": "أفلِت ملف ‎.docx لإنشاء قالب",
     "editCategory": "تعديل الفئة",
@@ -2297,7 +2250,6 @@
       "saveAsRecipe": "الحفظ كوصفة",
       "scopeClause": "خانة بند",
       "scopeCondition": "شرط",
-      "scopeField": "حقل",
       "scopeLoop": "حلقة",
       "scopeTemplate": "قالب",
       "showOnlyIf": "أظهِر فقط إذا…",
@@ -2377,7 +2329,6 @@
       "save": "حفظ",
       "saved": "تم حفظ مفتاح DeepL",
       "savedDescription": "الترجمات متاحة الآن.",
-      "saving": "جارٍ الحفظ…",
       "tierFree": "مجاني",
       "tierPro": "Pro",
       "title": "ترجمة DeepL"
@@ -2393,10 +2344,7 @@
     "slugRequired": "المعرّف مطلوب"
   },
   "workspaces": {
-    "active": "نشطة",
     "archiveMatter": "أرشفة",
-    "archived": "مؤرشفة",
-    "archivedBadge": "مؤرشفة",
     "copyToMatter": {
       "copied": "تم النسخ إلى الملف",
       "copyOption": "نسخ (مع الاحتفاظ بالأصل)",
@@ -2601,8 +2549,6 @@
       "wasNamed": "كان باسم {name}"
     },
     "infosoud": {
-      "cancelled": "ملغاة",
-      "court": "المحكمة",
       "courtPlaceholder": "ابحث عن محكمة أو رمز",
       "courtsFailed": "تعذّر تحميل محاكم InfoSoud",
       "eventCount": "{count, plural, zero {لا أحداث} one {حدث واحد} two {حدثان} few {# أحداث} many {# حدثًا} other {# حدث}}",
@@ -2630,7 +2576,6 @@
       "hideColumn": "إخفاء العمود",
       "readOnlyGrouping": "هذا التجميع للقراءة فقط",
       "selectPropertyHint": "اختر خاصية للتجميع بحسبها من شريط الأدوات",
-      "unknown": "غير معروف",
       "uploadDocument": "رفع مستند",
       "usePropertyHint": "استخدم النوع أو المؤلف أو خاصية أحادية التحديد"
     },
@@ -2638,9 +2583,7 @@
     "lead": "المسؤول الرئيسي",
     "leadEmpty": "لا يوجد مسؤول رئيسي",
     "leadPicker": {
-      "noMatchingMembers": "لا يوجد أعضاء مطابقون",
-      "placeholder": "البحث عن الأعضاء…",
-      "title": "تعيين مسؤول رئيسي"
+      "noMatchingMembers": "لا يوجد أعضاء مطابقون"
     },
     "lockMatter": "قفل",
     "matterInfo": "معلومات الملف",
@@ -2678,7 +2621,6 @@
       "recentActivity": "النشاط الأخير",
       "timeAndTeam": "الوقت والفريق",
       "timeThisWeek": "الوقت هذا الأسبوع",
-      "title": "نظرة عامة",
       "totalDocuments": "إجمالي المستندات",
       "totalItems": "العناصر",
       "totalThisWeek": "الإجمالي هذا الأسبوع",
@@ -2719,7 +2661,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "تهيئة الصفحات للوضع الداكن",
-      "anonymizeSidebar": "إخفاء الهوية",
       "backToPeek": "العودة إلى المعاينة",
       "entitySidebar": "تفاصيل الكيان",
       "evidence": "التبرير",
@@ -2731,7 +2672,6 @@
       "previousPage": "الصفحة السابقة",
       "resetZoom": "إعادة تعيين التكبير",
       "showOriginal": "عرض الصفحات الأصلية",
-      "toggleSidebar": "إظهار/إخفاء الشريط الجانبي",
       "unlock": "إلغاء القفل",
       "zoomIn": "تكبير",
       "zoomOut": "تصغير"
@@ -2767,13 +2707,11 @@
       "addOption": "إضافة خيار",
       "addPromptForBetterResults": "أضف موجِّهًا للحصول على نتائج أفضل",
       "addReadingSource": "إضافة",
-      "aiExtraction": "استخراج بالذكاء الاصطناعي",
       "autoPromptFailed": "تعذّر إنشاء موجِّه.",
       "bulk": {
         "addAnother": "إضافة عمود آخر",
         "createFailed": "تعذّر إنشاء الأعمدة",
         "createMany": "إنشاء {count} أعمدة",
-        "createOne": "إنشاء عمود",
         "createdMany": "تم إنشاء {count} أعمدة",
         "createdOne": "تم إنشاء العمود",
         "promptPlaceholder": "ما الذي يجب أن يستخرجه هذا العمود؟ نقِّحه في مربع حوار العمود لاستخدام / و@.",
@@ -2814,9 +2752,7 @@
       "extractionPlaceholder": "صِف ما تريد العثور عليه. اكتب @ للإشارة إلى عمود آخر.",
       "extractionScope": "نطاق الاستخراج",
       "file": "ملف",
-      "flowExtraction": "استخراج بالذكاء الاصطناعي",
       "flowNoInputs": "لا مدخلات",
-      "flowOutput": "المخرجات",
       "ifNoMatchFound": "إذا لم يُعثر على تطابق",
       "inputs": "المدخلات",
       "inputsHelp": "اختر الأعمدة التي يجب أن يقرأها الذكاء الاصطناعي. انقر للإضافة أو الإزالة.",
@@ -2952,7 +2888,6 @@
       "hideColumn": "إخفاء العمود",
       "layouts": {
         "calendar": "تقويم",
-        "filesystem": "قائمة",
         "grid": "شبكة",
         "kanban": "كانبان",
         "list": "قائمة",

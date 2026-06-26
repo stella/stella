@@ -117,7 +117,6 @@
       "task": "Aufgabe",
       "taskCode": "Aufgabencode"
     },
-    "day": "Tag",
     "decimalHours": "({hours} Std.)",
     "deleteSelected": "Auswahl löschen",
     "duration": "Dauer",
@@ -138,8 +137,6 @@
       "markup": "Aufschlag (%)",
       "noExpenses": "Keine Ausgaben für diesen Zeitraum"
     },
-    "export": "Exportieren",
-    "exportCSV": "Als CSV exportieren",
     "exportLEDES": "Als LEDES exportieren",
     "exportPDF": "Als PDF exportieren",
     "failedToDelete": "Eintrag konnte nicht gelöscht werden",
@@ -214,7 +211,6 @@
     },
     "revertToDraft": "In Entwurf zurückversetzen",
     "running": "Läuft",
-    "selectAll": "Alle auswählen",
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Wählen Sie eine Akte, um die Zeiterfassung zu starten",
     "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
@@ -237,7 +233,6 @@
     "timerActive": "Timer läuft",
     "timesheets": "Zeiterfassung",
     "total": "Gesamt",
-    "week": "Woche",
     "writeOff": "Abschreiben"
   },
   "caseLaw": {
@@ -316,7 +311,6 @@
     "packDescription": "{count, plural, one {# Tool} other {# Tools}}, ausgewählt für Ihre Praxis. Mit einem Klick installieren oder unten einzeln auswählen.",
     "packInstalled": "{count, plural, one {# Tool installiert} other {# Tools installiert}}",
     "packPartial": "{installed} installiert, {failed} fehlgeschlagen",
-    "recommended": "Empfohlen",
     "removed": "Dieses Tool ist nicht mehr verfügbar.",
     "sectionOthers": "Weitere",
     "sectionRecommended": "Empfohlen",
@@ -356,11 +350,9 @@
       "tracked": "Ja, mit Änderungsverfolgung"
     },
     "approval": {
-      "allow": "Erlauben",
       "allowInConversation": "In dieser Unterhaltung erlauben",
       "allowOnce": "Einmal erlauben",
       "alwaysAllow": "Immer erlauben",
-      "approved": "Genehmigt",
       "denied": "Abgelehnt",
       "deny": "Ablehnen",
       "externalMcpDescription": "Es werden nur die für diesen Tool-Aufruf erforderlichen Informationen gesendet.",
@@ -369,7 +361,6 @@
     "askAnything": "Beliebige Frage stellen",
     "askUser": {
       "custom": "Eigene Antwort",
-      "default": "Standard",
       "edit": "Antworten bearbeiten",
       "editWarning": "Bei der Neuausführung werden die nachfolgenden Antworten in diesem Gespräch verworfen.",
       "noAnswer": "Keine Antwort",
@@ -396,11 +387,6 @@
       "previewWaiting": "Warten auf Inhalt…"
     },
     "deleteThread": "Konversation löschen",
-    "documentView": {
-      "original": "Original",
-      "simple": "Akzeptiert",
-      "trackedChanges": "Änderungsverfolgung"
-    },
     "editableFilePlaceholder": "Chat über {fileName} oder bearbeiten",
     "editableFilePlaceholderAction": "Chatten oder bearbeiten",
     "editorLoading": "Editor wird geladen…",
@@ -433,9 +419,7 @@
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {
-        "contacts": "Kontakte",
-        "entities": "In dieser Akte",
-        "templates": "Vorlagen"
+        "entities": "In dieser Akte"
       },
       "loadError": "Entitäten konnten nicht geladen werden"
     },
@@ -470,7 +454,6 @@
     "removeSuggestion": "(entfernen)",
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",
-    "send": "Nachricht senden",
     "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entferne die Datei oder sende diese Nachricht ohne Anonymisierung.",
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuche es mit einer enger gefassten Anfrage erneut.",
@@ -893,8 +876,7 @@
       "title": "Rechnungsdaten"
     },
     "columns": {
-      "phone": "Telefon",
-      "tags": "Schlagwörter"
+      "phone": "Telefon"
     },
     "communication": {
       "addAddress": "Adresse hinzufügen",
@@ -966,13 +948,10 @@
       "firstName": "Vorname",
       "lastName": "Nachname",
       "middleName": "Zweiter Vorname",
-      "originatingAttorney": "Hauptkontakt",
       "paymentTermDays": "Zahlungsziel (Tage)",
       "prefix": "Titel (vorangestellt)",
       "registrationNumber": "Registernummer",
-      "responsibleAttorney": "Verantwortlicher Anwalt",
       "suffix": "Titel (nachgestellt)",
-      "tags": "Schlagwörter",
       "taxId": "Steuer-ID"
     },
     "filterOrganizations": "Organisationen",
@@ -1128,7 +1107,6 @@
     "uploadDate": "Hochladedatum",
     "uploadNewVersion": "Neue Version hochladen",
     "uploadedBy": "Hochgeladen von",
-    "version": "Version",
     "versionHistory": "Versionsverlauf",
     "viewVersionHistory": "Details und Verlauf anzeigen",
     "viewing": "Ansicht",
@@ -1224,12 +1202,10 @@
       "noResults": "Keine Ergebnisse",
       "previous": "Vorheriger Treffer",
       "previousShortcut": "Vorheriger Treffer (Shift+Enter)",
-      "replace": "Ersetzen",
       "replaceAll": "Alle ersetzen",
       "replaceCurrent": "Aktuellen Treffer ersetzen",
       "replacePlaceholder": "Ersatztext...",
       "replaceText": "Ersatztext",
-      "showReplace": "Ersetzen",
       "wholeWords": "Ganze Wörter"
     },
     "finishEditing": "Bearbeitung beenden",
@@ -1376,27 +1352,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "„{name}“ wird aus diesem Arbeitsbereich entfernt.",
-      "deleteConfirmTitle": "Skill löschen?",
       "deleteFile": "Datei löschen",
       "deleteFileConfirm": "Datei löschen? Dies kann nicht rückgängig gemacht werden.",
       "description": "Installiere SKILL.md-Pakete, die dem Chat spezialisierte Methoden und schreibgeschützte Ressourcen hinzufügen.",
       "disableSkill": "Skill deaktivieren",
       "disabled": "Deaktiviert",
-      "discardChanges": "Verwerfen",
       "dropFile": "SKILL.md oder .zip hier ablegen",
       "editSkill": "Skill bearbeiten",
-      "editTitle": "Skill bearbeiten",
       "emptyDescription": "Lade eine SKILL.md-Datei oder einen gezippten Skill-Ordner hoch oder importiere eine öffentliche GitHub-Skill-URL.",
       "emptyTitle": "Installiere deinen ersten Skill",
       "enableSkill": "Skill aktivieren",
       "enabled": "Aktiviert",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
       "filesHeading": "Dateien",
-      "formBody": "Anweisungen",
       "formBodyHelp": "Markdown-Anweisungen, die der Agent liest, wenn der Skill aufgerufen wird.",
       "formDescription": "Beschreibung",
       "formName": "Name",
-      "formVersion": "Version",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Datei hinzufügen",
       "generateDraft": "Skill entwerfen",
@@ -1426,23 +1397,17 @@
       "newFilePathPlaceholder": "ordner/notizen.md",
       "newFolder": "Neuer Ordner",
       "pdfPreviewSoon": "Die PDF-Vorschau wird verfügbar sein, sobald binäre Skill-Ressourcen unterstützt werden.",
-      "privateSection": "Deine Skills",
-      "regenerate": "Neu generieren",
       "renameFile": "Umbenennen",
       "resources": "{count, plural, one {# Ressource} other {# Ressourcen}}",
-      "scope": "Sichtbarkeit",
       "scopePrivate": "Nur ich",
       "scopeTeam": "Alle im Team",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Ausgewählt: {name}",
       "sourceUpload": "Hochgeladen",
       "sourceUrl": "Öffentliche URL",
-      "teamSection": "Team-Skills",
       "unsavedChanges": "Nicht gespeicherte Änderungen – verwerfen?",
       "uploadFile": "Datei hochladen",
       "uploadHelp": "Verwende eine SKILL.md-Datei oder einen .zip-Ordner mit SKILL.md und optionalen schreibgeschützten Ressourcen.",
-      "uploadSkill": "Skill hochladen",
-      "uploadTitle": "Skill hochladen",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/pfad/zum/skill",
       "version": "Version: {version}"
     },
@@ -1470,13 +1435,11 @@
       "errorDescription": "Die Integration konnte nicht aktualisiert werden.",
       "errorTitle": "MCP fehlgeschlagen",
       "mcpExplainer": "Integrationen verbinden externe Dienste mit dem Chat, mit denen die KI arbeiten kann.",
-      "namePlaceholder": "Anzeigename",
       "needsReauth": "Erneute Verbindung erforderlich",
       "off": "Aus",
       "on": "Ein",
       "otherTitle": "Weitere Integrationen",
       "probe": "Prüfen",
-      "recommendedBadge": "Empfohlen",
       "recommendedFor": "Empfohlen für {jurisdictions}",
       "reconnect": "Erneut verbinden",
       "saveToken": "Token speichern",
@@ -1517,7 +1480,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Skill hinzufügen",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1547,11 +1509,8 @@
       "commandLabel": "Schrägstrich-Befehl (optional)",
       "commandPlaceholder": "z. B. zusammenfassen",
       "createTitle": "Neuer Skill",
-      "defaultBadge": "Standard",
       "deleteConfirmDescription": "Dieser Skill wird dauerhaft entfernt.",
-      "deleteConfirmTitle": "Skill löschen?",
       "deleteShortcut": "Skill löschen",
-      "editShortcut": "Skill bearbeiten",
       "emptyDescription": "Erstellen Sie wiederverwendbare Skills für die wiederkehrende Arbeit Ihres Teams, von Zusammenfassungen bis hin zu Anweisungen für erste Entwürfe.",
       "emptyState": "Noch keine Skills. Fügen Sie den ersten hinzu.",
       "emptyTitle": "Ersten Skill erstellen",
@@ -1564,21 +1523,17 @@
       "form": {
         "command": "Skill-Kürzel",
         "commandHint": "Der / Skill-Name: nur Kleinbuchstaben, Zahlen, Bindestriche und Unterstriche",
-        "commandPlaceholder": "z. B. zusammenfassen",
         "commandPrefix": "/",
         "description": "Beschreibung",
         "descriptionPlaceholder": "Kurze Beschreibung, die in der Auswahl angezeigt wird",
         "name": "Name",
         "namePlaceholder": "z. B. Dokument zusammenfassen",
-        "prompt": "Anweisungen",
         "promptPlaceholder": "Anweisungen, die bei Verwendung dieses Skills in den Chat-Composer eingefügt werden",
         "scope": "Sichtbarkeit",
         "scopePrivate": "Nur ich",
         "scopeTeam": "Alle im Team"
       },
-      "privateSection": "Ihre Skills",
-      "shadowed": "Durch Team-Skill verdeckt",
-      "teamSection": "Team-Skills"
+      "shadowed": "Durch Team-Skill verdeckt"
     }
   },
   "markdownEditor": {
@@ -2030,7 +1985,6 @@
     "untitled": "Aufgabe ohne Titel"
   },
   "templates": {
-    "addCondition": "Bedingung hinzufügen",
     "addItem": "Element hinzufügen",
     "addPart": "Teil hinzufügen",
     "addTag": "Schlagwort hinzufügen",
@@ -2111,7 +2065,6 @@
     "downloadAnyway": "Trotzdem herunterladen",
     "downloadDocx": "DOCX herunterladen",
     "downloadPdf": "PDF herunterladen",
-    "downloadReady": "Dokument bereit",
     "dragAndDrop": "oder per Drag & Drop",
     "dropToCreate": "Ziehen Sie eine .docx-Datei hierher, um eine Vorlage zu erstellen",
     "editCategory": "Kategorie bearbeiten",
@@ -2297,7 +2250,6 @@
       "saveAsRecipe": "Als Rezept speichern",
       "scopeClause": "Klausel-Slot",
       "scopeCondition": "Bedingung",
-      "scopeField": "Feld",
       "scopeLoop": "Schleife",
       "scopeTemplate": "Vorlage",
       "showOnlyIf": "Nur anzeigen, wenn…",
@@ -2377,7 +2329,6 @@
       "save": "Speichern",
       "saved": "DeepL-Schlüssel gespeichert",
       "savedDescription": "Übersetzungen sind jetzt verfügbar.",
-      "saving": "Wird gespeichert…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-Übersetzung"
@@ -2393,10 +2344,7 @@
     "slugRequired": "Slug ist erforderlich"
   },
   "workspaces": {
-    "active": "Aktiv",
     "archiveMatter": "Archivieren",
-    "archived": "Archiviert",
-    "archivedBadge": "Archiviert",
     "copyToMatter": {
       "copied": "In Akte kopiert",
       "copyOption": "Kopieren (Original behalten)",
@@ -2601,8 +2549,6 @@
       "wasNamed": "war {name}"
     },
     "infosoud": {
-      "cancelled": "Aufgehoben",
-      "court": "Gericht",
       "courtPlaceholder": "Gericht oder Code suchen",
       "courtsFailed": "InfoSoud-Gerichte konnten nicht geladen werden",
       "eventCount": "{count, plural, one {# Ereignis} other {# Ereignisse}}",
@@ -2630,7 +2576,6 @@
       "hideColumn": "Spalte ausblenden",
       "readOnlyGrouping": "Diese Gruppierung ist schreibgeschützt",
       "selectPropertyHint": "Wählen Sie eine Eigenschaft zum Gruppieren in der Symbolleiste",
-      "unknown": "Unbekannt",
       "uploadDocument": "Dokument hochladen",
       "usePropertyHint": "Verwenden Sie Art, Autor oder eine Einfachauswahl-Eigenschaft"
     },
@@ -2638,9 +2583,7 @@
     "lead": "Lead",
     "leadEmpty": "Kein Lead",
     "leadPicker": {
-      "noMatchingMembers": "Keine passenden Mitglieder",
-      "placeholder": "Mitglieder suchen…",
-      "title": "Lead festlegen"
+      "noMatchingMembers": "Keine passenden Mitglieder"
     },
     "lockMatter": "Sperren",
     "matterInfo": "Akteninformationen",
@@ -2678,7 +2621,6 @@
       "recentActivity": "Letzte Aktivität",
       "timeAndTeam": "Zeit & Team",
       "timeThisWeek": "Zeit diese Woche",
-      "title": "Übersicht",
       "totalDocuments": "Dokumente gesamt",
       "totalItems": "Einträge",
       "totalThisWeek": "Gesamt diese Woche",
@@ -2719,7 +2661,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Seiten für Dunkelmodus anpassen",
-      "anonymizeSidebar": "Anonymisierung",
       "backToPeek": "Zurück zur Vorschau",
       "entitySidebar": "Entitätsdetails",
       "evidence": "Beweismittel",
@@ -2731,7 +2672,6 @@
       "previousPage": "Vorherige Seite",
       "resetZoom": "Zoom zurücksetzen",
       "showOriginal": "Originalseiten anzeigen",
-      "toggleSidebar": "Seitenleiste ein-/ausblenden",
       "unlock": "Entsperren",
       "zoomIn": "Vergrößern",
       "zoomOut": "Verkleinern"
@@ -2767,13 +2707,11 @@
       "addOption": "Option hinzufügen",
       "addPromptForBetterResults": "Fügen Sie einen Prompt für bessere Ergebnisse hinzu",
       "addReadingSource": "hinzufügen",
-      "aiExtraction": "KI-Extraktion",
       "autoPromptFailed": "Prompt konnte nicht generiert werden.",
       "bulk": {
         "addAnother": "Weitere Spalte hinzufügen",
         "createFailed": "Spalten konnten nicht erstellt werden",
         "createMany": "{count} Spalten erstellen",
-        "createOne": "Spalte erstellen",
         "createdMany": "{count} Spalten erstellt",
         "createdOne": "Spalte erstellt",
         "promptPlaceholder": "What should this column extract?",
@@ -2814,9 +2752,7 @@
       "extractionPlaceholder": "Beschreibe, was zu finden ist. Tippe @, um eine andere Spalte zu referenzieren.",
       "extractionScope": "Extraktionsumfang",
       "file": "Datei",
-      "flowExtraction": "KI-Extraktion",
       "flowNoInputs": "keine Eingaben",
-      "flowOutput": "Ausgabe",
       "ifNoMatchFound": "Wenn keine Übereinstimmung gefunden",
       "inputs": "Eingaben",
       "inputsHelp": "Wähle Spalten, die die KI lesen soll. Klick zum Hinzufügen oder Entfernen.",
@@ -2952,7 +2888,6 @@
       "hideColumn": "Spalte ausblenden",
       "layouts": {
         "calendar": "Kalender",
-        "filesystem": "Liste",
         "grid": "Raster",
         "kanban": "Kanban",
         "list": "Liste",

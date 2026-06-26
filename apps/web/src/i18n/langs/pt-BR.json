@@ -117,7 +117,6 @@
       "task": "Tarefa",
       "taskCode": "Código da tarefa"
     },
-    "day": "Dia",
     "decimalHours": "({hours}h)",
     "deleteSelected": "Excluir selecionado",
     "duration": "Duração",
@@ -138,8 +137,6 @@
       "markup": "Acréscimo (%)",
       "noExpenses": "Sem despesas neste período"
     },
-    "export": "Exportar",
-    "exportCSV": "Exportar CSV",
     "exportLEDES": "Exportar LEDES",
     "exportPDF": "Exportar PDF",
     "failedToDelete": "Falha ao excluir a entrada",
@@ -214,7 +211,6 @@
     },
     "revertToDraft": "Reverter para rascunho",
     "running": "Em execução",
-    "selectAll": "Selecionar tudo",
     "selectMatter": "Selecione um caso...",
     "selectMatterToStart": "Selecione um caso para começar a cronometrar",
     "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
@@ -237,7 +233,6 @@
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",
-    "week": "Semana",
     "writeOff": "Dar baixa"
   },
   "caseLaw": {
@@ -316,7 +311,6 @@
     "packDescription": "{count, plural, one {# ferramenta} other {# ferramentas}} selecionadas para sua prática. Instale com um clique ou escolha individualmente abaixo.",
     "packInstalled": "{count, plural, one {# ferramenta instalada} other {# ferramentas instaladas}}",
     "packPartial": "{installed} instaladas, {failed} com falha",
-    "recommended": "Recomendado",
     "removed": "Esta ferramenta não está mais disponível.",
     "sectionOthers": "Outros",
     "sectionRecommended": "Recomendados",
@@ -356,11 +350,9 @@
       "tracked": "Sim, com controle"
     },
     "approval": {
-      "allow": "Permitir",
       "allowInConversation": "Permitir nesta conversa",
       "allowOnce": "Permitir uma vez",
       "alwaysAllow": "Sempre permitir",
-      "approved": "Aprovado",
       "denied": "Negado",
       "deny": "Negar",
       "externalMcpDescription": "Só serão enviadas as informações necessárias para esta chamada de ferramenta.",
@@ -369,7 +361,6 @@
     "askAnything": "Pergunte qualquer coisa",
     "askUser": {
       "custom": "Escreva o seu próprio",
-      "default": "Padrão",
       "edit": "Editar respostas",
       "editWarning": "A reexecução descartará as respostas posteriores desta conversa.",
       "noAnswer": "Sem resposta",
@@ -396,11 +387,6 @@
       "previewWaiting": "Aguardando conteúdo…"
     },
     "deleteThread": "Excluir conversa",
-    "documentView": {
-      "original": "Original",
-      "simple": "Aceito",
-      "trackedChanges": "Controle de alterações"
-    },
     "editableFilePlaceholder": "Converse ou edite {fileName}",
     "editableFilePlaceholderAction": "Converse ou edite",
     "editorLoading": "Carregando editor…",
@@ -433,9 +419,7 @@
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mention": {
       "category": {
-        "contacts": "Contatos",
-        "entities": "Neste caso",
-        "templates": "Modelos"
+        "entities": "Neste caso"
       },
       "loadError": "Falha ao carregar entidades"
     },
@@ -470,7 +454,6 @@
     "removeSuggestion": "(remover)",
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",
-    "send": "Enviar mensagem",
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorLoopDetected": "A resposta da IA se repetiu muitas vezes. Tente novamente com uma solicitação mais específica.",
@@ -893,8 +876,7 @@
       "title": "Dados de faturamento"
     },
     "columns": {
-      "phone": "Telefone",
-      "tags": "Etiquetas"
+      "phone": "Telefone"
     },
     "communication": {
       "addAddress": "Adicionar endereço",
@@ -966,13 +948,10 @@
       "firstName": "Primeiro nome",
       "lastName": "Sobrenome",
       "middleName": "Nome do meio",
-      "originatingAttorney": "Contato principal",
       "paymentTermDays": "Condições de pagamento (dias)",
       "prefix": "Prefixo",
       "registrationNumber": "Número de registro",
-      "responsibleAttorney": "Pessoa responsável",
       "suffix": "Sufixo",
-      "tags": "Etiquetas",
       "taxId": "CPF/CNPJ"
     },
     "filterOrganizations": "Organizações",
@@ -1128,7 +1107,6 @@
     "uploadDate": "Data de upload",
     "uploadNewVersion": "Carregar nova versão",
     "uploadedBy": "Enviado por",
-    "version": "Versão",
     "versionHistory": "Histórico de versões",
     "viewVersionHistory": "Mostrar detalhes e histórico",
     "viewing": "Visualizando",
@@ -1224,12 +1202,10 @@
       "noResults": "Nenhum resultado",
       "previous": "Ocorrência anterior",
       "previousShortcut": "Ocorrência anterior (Shift+Enter)",
-      "replace": "Substituir",
       "replaceAll": "Substituir tudo",
       "replaceCurrent": "Substituir correspondência atual",
       "replacePlaceholder": "Texto de substituição...",
       "replaceText": "Texto de substituição",
-      "showReplace": "Substituir",
       "wholeWords": "Palavras inteiras"
     },
     "finishEditing": "Concluir a edição",
@@ -1376,27 +1352,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "“{name}” será removida deste espaço de trabalho.",
-      "deleteConfirmTitle": "Excluir habilidade?",
       "deleteFile": "Excluir arquivo",
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",
       "description": "Instale pacotes SKILL.md que adicionam métodos especializados e recursos somente leitura ao chat.",
       "disableSkill": "Desativar habilidade",
       "disabled": "Desativada",
-      "discardChanges": "Descartar",
       "dropFile": "Solte SKILL.md ou .zip aqui",
       "editSkill": "Editar habilidade",
-      "editTitle": "Editar habilidade",
       "emptyDescription": "Envie um arquivo SKILL.md, uma pasta de habilidade compactada ou importe uma URL pública de habilidade do GitHub.",
       "emptyTitle": "Instale sua primeira habilidade",
       "enableSkill": "Ativar habilidade",
       "enabled": "Ativada",
       "fileExists": "Já existe um arquivo com este caminho",
       "filesHeading": "Arquivos",
-      "formBody": "Instruções",
       "formBodyHelp": "Instruções em Markdown que o agente lê quando a habilidade é invocada.",
       "formDescription": "Descrição",
       "formName": "Nome",
-      "formVersion": "Versão",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Adicionar arquivo",
       "generateDraft": "Rascunhar habilidade",
@@ -1426,23 +1397,17 @@
       "newFilePathPlaceholder": "pasta/notes.md",
       "newFolder": "Nova pasta",
       "pdfPreviewSoon": "A pré-visualização de PDF ficará disponível assim que houver suporte a recursos binários de habilidades.",
-      "privateSection": "Suas habilidades",
-      "regenerate": "Regenerar",
       "renameFile": "Renomear",
       "resources": "{count, plural, one {# recurso} other {# recursos}}",
-      "scope": "Visibilidade",
       "scopePrivate": "Só eu",
       "scopeTeam": "Todos na equipe",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Selecionado: {name}",
       "sourceUpload": "Enviada",
       "sourceUrl": "URL pública",
-      "teamSection": "Habilidades da equipe",
       "unsavedChanges": "Alterações não salvas; descartar?",
       "uploadFile": "Carregar arquivo",
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
-      "uploadSkill": "Enviar habilidade",
-      "uploadTitle": "Enviar habilidade",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
     },
@@ -1470,13 +1435,11 @@
       "errorDescription": "Não foi possível atualizar a integração.",
       "errorTitle": "Falha MCP",
       "mcpExplainer": "As integrações conectam serviços externos ao chat com os quais a IA pode trabalhar.",
-      "namePlaceholder": "Nome de exibição",
       "needsReauth": "Precisa reconectar",
       "off": "Desligado",
       "on": "Ligado",
       "otherTitle": "Outras integrações",
       "probe": "Verificar",
-      "recommendedBadge": "Recomendado",
       "recommendedFor": "Recomendado para {jurisdictions}",
       "reconnect": "Reconectar",
       "saveToken": "Salvar token",
@@ -1517,7 +1480,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Adicionar habilidade",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1547,11 +1509,8 @@
       "commandLabel": "Comando com barra (opcional)",
       "commandPlaceholder": "p. ex. resumir",
       "createTitle": "Nova habilidade",
-      "defaultBadge": "Padrão",
       "deleteConfirmDescription": "Esta habilidade será removida permanentemente.",
-      "deleteConfirmTitle": "Excluir habilidade?",
       "deleteShortcut": "Excluir habilidade",
-      "editShortcut": "Editar habilidade",
       "emptyDescription": "Crie habilidades reutilizáveis para o trabalho que sua equipe repete, de resumos a instruções para uma primeira versão.",
       "emptyState": "Nenhuma habilidade ainda. Adicione a primeira.",
       "emptyTitle": "Crie sua primeira habilidade",
@@ -1564,21 +1523,17 @@
       "form": {
         "command": "Atalho de habilidade",
         "commandHint": "O nome / da habilidade: somente letras minúsculas, números, hifens e sublinhados",
-        "commandPlaceholder": "ex.: resumir",
         "commandPrefix": "/",
         "description": "Descrição",
         "descriptionPlaceholder": "Breve descrição mostrada no seletor",
         "name": "Nome",
         "namePlaceholder": "ex.: Resumir documento",
-        "prompt": "Instruções",
         "promptPlaceholder": "Instruções inseridas no compositor do chat quando esta habilidade é usada",
         "scope": "Visibilidade",
         "scopePrivate": "Só eu",
         "scopeTeam": "Todos na equipe"
       },
-      "privateSection": "Suas habilidades",
-      "shadowed": "Substituída por habilidade da equipe",
-      "teamSection": "Habilidades da equipe"
+      "shadowed": "Substituída por habilidade da equipe"
     }
   },
   "markdownEditor": {
@@ -2030,7 +1985,6 @@
     "untitled": "Tarefa sem título"
   },
   "templates": {
-    "addCondition": "Adicionar condição",
     "addItem": "Adicionar item",
     "addPart": "Adicionar parte",
     "addTag": "Adicionar etiqueta",
@@ -2111,7 +2065,6 @@
     "downloadAnyway": "Baixar mesmo assim",
     "downloadDocx": "Baixar DOCX",
     "downloadPdf": "Baixar PDF",
-    "downloadReady": "Documento pronto",
     "dragAndDrop": "ou arraste e solte",
     "dropToCreate": "Solte um arquivo .docx para criar um modelo",
     "editCategory": "Editar categoria",
@@ -2297,7 +2250,6 @@
       "saveAsRecipe": "Salvar como receita",
       "scopeClause": "Espaço de cláusula",
       "scopeCondition": "Condição",
-      "scopeField": "Campo",
       "scopeLoop": "Repetição",
       "scopeTemplate": "Modelo",
       "showOnlyIf": "Mostrar apenas se…",
@@ -2377,7 +2329,6 @@
       "save": "Salvar",
       "saved": "Chave do DeepL salva",
       "savedDescription": "As traduções agora estão disponíveis.",
-      "saving": "Salvando…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Tradução DeepL"
@@ -2393,10 +2344,7 @@
     "slugRequired": "O slug é obrigatório"
   },
   "workspaces": {
-    "active": "Ativo",
     "archiveMatter": "Arquivar",
-    "archived": "Arquivado",
-    "archivedBadge": "Arquivado",
     "copyToMatter": {
       "copied": "Copiado para o caso",
       "copyOption": "Copiar (manter original)",
@@ -2601,8 +2549,6 @@
       "wasNamed": "era {name}"
     },
     "infosoud": {
-      "cancelled": "Cancelado",
-      "court": "Tribunal",
       "courtPlaceholder": "Pesquisar tribunal ou código",
       "courtsFailed": "Não foi possível carregar os tribunais do InfoSoud",
       "eventCount": "{count, plural, one {# evento} many {# eventos} other {# eventos}}",
@@ -2630,7 +2576,6 @@
       "hideColumn": "Ocultar coluna",
       "readOnlyGrouping": "Este agrupamento é somente leitura",
       "selectPropertyHint": "Selecione uma propriedade para agrupar na barra de ferramentas",
-      "unknown": "Desconhecido",
       "uploadDocument": "Carregar documento",
       "usePropertyHint": "Use Tipo, Autor ou uma propriedade de seleção única"
     },
@@ -2638,9 +2583,7 @@
     "lead": "Responsável",
     "leadEmpty": "Sem responsável",
     "leadPicker": {
-      "noMatchingMembers": "Nenhum membro correspondente",
-      "placeholder": "Pesquisar membros…",
-      "title": "Definir responsável"
+      "noMatchingMembers": "Nenhum membro correspondente"
     },
     "lockMatter": "Bloquear",
     "matterInfo": "Informações do caso",
@@ -2678,7 +2621,6 @@
       "recentActivity": "Atividade recente",
       "timeAndTeam": "Tempo e equipe",
       "timeThisWeek": "Tempo esta semana",
-      "title": "Visão geral",
       "totalDocuments": "Total de documentos",
       "totalItems": "Itens",
       "totalThisWeek": "Total esta semana",
@@ -2719,7 +2661,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Ajustar páginas para modo escuro",
-      "anonymizeSidebar": "Anonimização",
       "backToPeek": "Voltar para prévia",
       "entitySidebar": "Detalhes da entidade",
       "evidence": "Justificativa",
@@ -2731,7 +2672,6 @@
       "previousPage": "Página anterior",
       "resetZoom": "Redefinir zoom",
       "showOriginal": "Mostrar páginas originais",
-      "toggleSidebar": "Alternar barra lateral",
       "unlock": "Desbloquear",
       "zoomIn": "Ampliar",
       "zoomOut": "Diminuir zoom"
@@ -2767,13 +2707,11 @@
       "addOption": "Adicionar opção",
       "addPromptForBetterResults": "Adicione um prompt para obter melhores resultados",
       "addReadingSource": "adicionar",
-      "aiExtraction": "Extração de IA",
       "autoPromptFailed": "Não foi possível gerar um prompt.",
       "bulk": {
         "addAnother": "Adicionar outra coluna",
         "createFailed": "Não foi possível criar as colunas",
         "createMany": "Criar {count} colunas",
-        "createOne": "Criar coluna",
         "createdMany": "{count} colunas criadas",
         "createdOne": "Coluna criada",
         "promptPlaceholder": "What should this column extract?",
@@ -2814,9 +2752,7 @@
       "extractionPlaceholder": "Descreva o que encontrar. Digite @ para fazer referência a outra coluna.",
       "extractionScope": "Escopo de extração",
       "file": "Arquivo",
-      "flowExtraction": "Extração de IA",
       "flowNoInputs": "sem entradas",
-      "flowOutput": "Saída",
       "ifNoMatchFound": "Se nenhuma correspondência for encontrada",
       "inputs": "Entradas",
       "inputsHelp": "Escolha as colunas que a IA deve ler. Clique para adicionar ou remover.",
@@ -2952,7 +2888,6 @@
       "hideColumn": "Ocultar coluna",
       "layouts": {
         "calendar": "Calendário",
-        "filesystem": "Lista",
         "grid": "Grade",
         "kanban": "Kanban",
         "list": "Lista",
