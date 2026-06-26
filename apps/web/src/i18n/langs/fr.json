@@ -659,6 +659,7 @@
   },
   "clauses": {
     "addVariant": "Ajouter une variante",
+    "aiStructureChanged": "La réécriture avec l’IA a modifié la structure de la clause et ne peut pas être affichée sous forme de modifications en ligne. Ajustez votre instruction et réessayez.",
     "allClauses": "Toutes les clauses",
     "backToList": "Retour aux clauses",
     "body": "Corps",

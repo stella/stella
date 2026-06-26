@@ -32,26 +32,55 @@ import {
   WandSparklesIcon,
   XIcon,
 } from "lucide-react";
+import type { Command as PMCommand } from "prosemirror-state";
 import { useTranslations } from "use-intl";
 
+import {
+  acceptAIEditRevision,
+  acceptAllChanges,
+  rejectAIEditRevision,
+  rejectAllChanges,
+} from "@stll/folio-core/prosemirror/commands/comments";
 import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 
-import { diffClauseBodies } from "./clause-diff";
-import { ClauseDiffView } from "./clause-diff-view";
+import {
+  buildTrackedChangeDoc,
+  hasAlignedClauseStructure,
+} from "./clause-ai-tracked-changes";
 import { ClauseDirectiveNode } from "./clause-directive-extension";
 import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor-tiptap";
 import "./clause-editor.css";
 import type { ClauseBody, ClauseParagraph } from "./clause-editor-types";
+import {
+  DELETION_MARK,
+  DeletionMark,
+  INSERTION_MARK,
+  InsertionMark,
+} from "./clause-tracked-change-marks";
 
 const isUsableEditor = (editor: Editor | null | undefined): editor is Editor =>
   editor !== null && editor !== undefined && !editor.isDestroyed;
+
+const hasPendingTrackedChanges = (editor: Editor): boolean => {
+  const { doc, schema } = editor.state;
+  const insertionMark = schema.marks[INSERTION_MARK];
+  const deletionMark = schema.marks[DELETION_MARK];
+
+  return (
+    (insertionMark !== undefined &&
+      doc.rangeHasMark(0, doc.content.size, insertionMark)) ||
+    (deletionMark !== undefined &&
+      doc.rangeHasMark(0, doc.content.size, deletionMark))
+  );
+};
 
 /** Stable identity of a body for detecting external resets vs. the editor's
  *  own round-tripped edits (text + formatting + directive kind/expression). */
@@ -74,12 +103,9 @@ type AiEditState =
   | { status: "idle" }
   | { status: "prompting"; instruction: string }
   | { status: "generating"; instruction: string; baseline: ClauseBody }
-  | {
-      status: "preview";
-      instruction: string;
-      baseline: ClauseBody;
-      revised: ClauseBody;
-    };
+  | { status: "reviewing"; instruction: string; baseline: ClauseBody };
+
+export type ClauseEditorReviewStatus = "resolved" | "pending";
 
 type ClauseEditorProps = {
   content: ClauseParagraph[];
@@ -90,6 +116,7 @@ type ClauseEditorProps = {
   /** Context passed to the AI refine assist (current, possibly unsaved values). */
   usageNotes?: string | undefined;
   title?: string;
+  onReviewStatusChange?: (status: ClauseEditorReviewStatus) => void;
 };
 
 export const ClauseEditor = ({
@@ -99,86 +126,44 @@ export const ClauseEditor = ({
   onBlur,
   usageNotes,
   title,
+  onReviewStatusChange,
 }: ClauseEditorProps) => {
   const t = useTranslations();
-  // AI edit is a preview-then-apply flow: generate a rewrite, show it as a diff,
-  // and mutate the clause only when the user accepts. The prompt stays editable
-  // so the user can regenerate against the original body.
   const [aiEdit, setAiEdit] = useState<AiEditState>({ status: "idle" });
+  const [hunkMenu, setHunkMenu] = useState<{
+    revisionId: number;
+    top: number;
+    left: number;
+  } | null>(null);
 
-  const runRewrite = async (instruction: string, baseline: ClauseBody) => {
-    const trimmed = instruction.trim();
-    if (trimmed === "") {
-      return;
-    }
-    setAiEdit({ status: "generating", instruction: trimmed, baseline });
-    const response = await api.clauses["ai-rewrite"].post({
-      body: baseline,
-      instruction: trimmed,
-      usageNotes: usageNotes ?? null,
-      title: title ?? null,
-    });
-    if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("ai.editWithAI"),
-        description: userErrorMessage(
-          response.error,
-          t("common.unexpectedError"),
-        ),
-      });
-      // Keep the prompt open with its text so the user can adjust and retry.
-      setAiEdit({ status: "prompting", instruction: trimmed });
-      return;
-    }
-    setAiEdit({
-      status: "preview",
-      instruction: trimmed,
-      baseline,
-      revised: response.data.body,
-    });
-  };
-
-  const submitAiEdit = () => {
-    if (aiEdit.status === "idle") {
-      return;
-    }
-    const baseline = aiEdit.status === "prompting" ? content : aiEdit.baseline;
-    void runRewrite(aiEdit.instruction, baseline);
-  };
-
-  const acceptAiEdit = () => {
-    if (aiEdit.status !== "preview") {
-      return;
-    }
-    onChange(aiEdit.revised);
-    setAiEdit({ status: "idle" });
-  };
+  const getAiState = useLatestCallback(() => aiEdit);
+  const getContent = useLatestCallback(() => content);
+  const emitChange = useLatestCallback(onChange);
+  const emitBlur = useLatestCallback((body: ClauseParagraph[]) =>
+    onBlur?.(body),
+  );
+  const emitReviewStatus = useLatestCallback(
+    (status: ClauseEditorReviewStatus) => onReviewStatusChange?.(status),
+  );
 
   const updateInstruction = (value: string) => {
     setAiEdit((prev) => {
       if (prev.status === "prompting") {
         return { status: "prompting", instruction: value };
       }
-      if (prev.status === "preview") {
+      if (prev.status === "reviewing") {
         return { ...prev, instruction: value };
       }
       return prev;
     });
   };
 
-  const toggleAiEdit = () => {
-    setAiEdit((prev) =>
-      prev.status === "idle"
-        ? { status: "prompting", instruction: "" }
-        : { status: "idle" },
-    );
-  };
   // Last body the editor itself emitted, so the reset effect can tell an
   // external content change (dialog reset, clause switch) from the round-trip
   // of the user's own keystroke and avoid clobbering the cursor.
-  const lastEmittedKeyRef = useRef<string | null>(null);
-  lastEmittedKeyRef.current ??= bodyKey(content);
+  const lastEmittedKeyRef = useRef(bodyKey(content));
+  const containerRef = useRef<HTMLDivElement>(null);
+  const rewriteRequestIdRef = useRef(0);
 
   const editor = useEditor({
     // Inline on an SSR'd page (unlike the old modal, which only mounted
@@ -199,19 +184,68 @@ export const ClauseEditor = ({
       // Tab / Shift-Tab nesting plus smart Backspace/Delete at list edges.
       ListKeymap,
       ClauseDirectiveNode,
+      InsertionMark,
+      DeletionMark,
       History,
       Placeholder.configure({
         placeholder: placeholder ?? "",
       }),
     ],
     content: clauseBodyToTipTap(content),
+    editorProps: {
+      handleClick: (view, position) => {
+        if (getAiState().status !== "reviewing") {
+          return false;
+        }
+        const resolvedPosition = view.state.doc.resolve(position);
+        const isTrackedChange = (mark: (typeof view.state.doc.marks)[number]) =>
+          mark.type.name === INSERTION_MARK || mark.type.name === DELETION_MARK;
+        const mark =
+          resolvedPosition.nodeBefore?.marks.find(isTrackedChange) ??
+          resolvedPosition.nodeAfter?.marks.find(isTrackedChange);
+        const revisionId = mark?.attrs["revisionId"];
+        if (typeof revisionId !== "number") {
+          setHunkMenu(null);
+          return false;
+        }
+        const coords = view.coordsAtPos(position);
+        const rect = containerRef.current?.getBoundingClientRect();
+        setHunkMenu({
+          revisionId,
+          top: coords.bottom - (rect?.top ?? 0),
+          left: coords.left - (rect?.left ?? 0),
+        });
+        return false;
+      },
+    },
     onUpdate: ({ editor: e }) => {
+      if (getAiState().status === "reviewing") {
+        if (hasPendingTrackedChanges(e)) {
+          return;
+        }
+
+        const resolvedBody = tipTapToClauseBody(e.getJSON());
+        const resolvedKey = bodyKey(resolvedBody);
+        const changed = resolvedKey !== lastEmittedKeyRef.current;
+        lastEmittedKeyRef.current = resolvedKey;
+        e.setEditable(true);
+        setHunkMenu(null);
+        setAiEdit({ status: "idle" });
+        emitReviewStatus("resolved");
+        if (changed) {
+          emitChange(resolvedBody);
+        }
+        return;
+      }
       const body = tipTapToClauseBody(e.getJSON());
       lastEmittedKeyRef.current = bodyKey(body);
-      onChange(body);
+      emitChange(body);
     },
     onBlur: ({ editor: e }) => {
-      onBlur?.(tipTapToClauseBody(e.getJSON()));
+      if (getAiState().status === "reviewing") {
+        return;
+      }
+      emitBlur(tipTapToClauseBody(e.getJSON()));
     },
   });
 
@@ -224,6 +258,20 @@ export const ClauseEditor = ({
     if (!isUsableEditor(editor)) {
       return undefined;
     }
+    const currentAiState = getAiState();
+    if (currentAiState.status === "reviewing") {
+      if (contentKey !== bodyKey(currentAiState.baseline)) {
+        setAiEdit({ status: "idle" });
+        emitReviewStatus("resolved");
+        editor.setEditable(true);
+        setHunkMenu(null);
+        editor.commands.setContent(clauseBodyToTipTap(content), {
+          emitUpdate: false,
+        });
+        lastEmittedKeyRef.current = contentKey;
+      }
+      return undefined;
+    }
     if (contentKey !== lastEmittedKeyRef.current) {
       editor.commands.setContent(clauseBodyToTipTap(content));
       lastEmittedKeyRef.current = contentKey;
@@ -231,6 +279,128 @@ export const ClauseEditor = ({
     return undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps -- editor is a stable ref; only re-sync when contentKey changes
   }, [contentKey]);
+
+  const runRewrite = async (instruction: string, baseline: ClauseBody) => {
+    const trimmed = instruction.trim();
+    if (trimmed === "") {
+      return;
+    }
+    const generatingState = {
+      status: "generating",
+      instruction: trimmed,
+      baseline,
+    } as const;
+    const requestId = rewriteRequestIdRef.current + 1;
+    rewriteRequestIdRef.current = requestId;
+    setAiEdit(generatingState);
+    const response = await api.clauses["ai-rewrite"].post({
+      body: baseline,
+      instruction: trimmed,
+      usageNotes: usageNotes ?? null,
+      title: title ?? null,
+    });
+
+    if (requestId !== rewriteRequestIdRef.current) {
+      return;
+    }
+    if (bodyKey(getContent()) !== bodyKey(baseline)) {
+      setAiEdit({ status: "idle" });
+      return;
+    }
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("ai.editWithAI"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      setAiEdit({ status: "prompting", instruction: trimmed });
+      return;
+    }
+    if (!isUsableEditor(editor)) {
+      setAiEdit({ status: "idle" });
+      return;
+    }
+
+    const rewritten = response.data.body;
+    if (!hasAlignedClauseStructure(baseline, rewritten)) {
+      stellaToast.add({
+        type: "error",
+        title: t("ai.editWithAI"),
+        description: t("clauses.aiStructureChanged"),
+      });
+      setAiEdit({ status: "prompting", instruction: trimmed });
+      return;
+    }
+
+    const { doc, revisionIds } = buildTrackedChangeDoc(baseline, rewritten);
+    if (revisionIds.length === 0) {
+      stellaToast.add({
+        type: "info",
+        title: t("ai.editWithAI"),
+        description: t("clauses.noChanges"),
+      });
+      setAiEdit({ status: "idle" });
+      return;
+    }
+
+    const reviewingState = {
+      status: "reviewing",
+      instruction: trimmed,
+      baseline,
+    } as const;
+    editor.commands.setContent(doc, { emitUpdate: false });
+    editor.setEditable(false);
+    setHunkMenu(null);
+    setAiEdit(reviewingState);
+    emitReviewStatus("pending");
+  };
+
+  const submitAiEdit = () => {
+    if (aiEdit.status === "idle" || aiEdit.status === "generating") {
+      return;
+    }
+    const baseline = aiEdit.status === "prompting" ? content : aiEdit.baseline;
+    if (aiEdit.status === "reviewing" && isUsableEditor(editor)) {
+      editor.commands.setContent(clauseBodyToTipTap(baseline), {
+        emitUpdate: false,
+      });
+      editor.setEditable(true);
+      setHunkMenu(null);
+      emitReviewStatus("resolved");
+    }
+    void runRewrite(aiEdit.instruction, baseline);
+  };
+
+  const runResolveCommand = (command: PMCommand) => {
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+    setHunkMenu(null);
+    editor.commands.command(({ state, dispatch }) => command(state, dispatch));
+  };
+
+  const acceptAll = () => runResolveCommand(acceptAllChanges());
+  const rejectAll = () => runResolveCommand(rejectAllChanges());
+  const acceptHunk = (revisionId: number) =>
+    runResolveCommand(acceptAIEditRevision(revisionId));
+  const rejectHunk = (revisionId: number) =>
+    runResolveCommand(rejectAIEditRevision(revisionId));
+
+  const toggleAiEdit = () => {
+    if (aiEdit.status === "idle") {
+      setAiEdit({ status: "prompting", instruction: "" });
+      return;
+    }
+    if (aiEdit.status === "reviewing") {
+      rejectAll();
+      return;
+    }
+    rewriteRequestIdRef.current += 1;
+    setAiEdit({ status: "idle" });
+  };
 
   const toggleBold = () => {
     if (!isUsableEditor(editor)) {
@@ -290,7 +460,7 @@ export const ClauseEditor = ({
 
   const canUndo = editorReady && editor.can().undo();
   const canRedo = editorReady && editor.can().redo();
-  const previewing = aiEdit.status === "preview";
+  const reviewing = aiEdit.status === "reviewing";
   const aiActive = aiEdit.status !== "idle";
 
   return (
@@ -304,12 +474,13 @@ export const ClauseEditor = ({
           e.stopPropagation();
         }
       }}
+      ref={containerRef}
     >
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 border-b px-1 py-0.5">
         <Button
           aria-label={t("folio.undo")}
-          disabled={!canUndo || previewing}
+          disabled={!canUndo || reviewing}
           onClick={undo}
           size="icon-xs"
           title={t("folio.undo")}
@@ -320,7 +491,7 @@ export const ClauseEditor = ({
         </Button>
         <Button
           aria-label={t("folio.redo")}
-          disabled={!canRedo || previewing}
+          disabled={!canRedo || reviewing}
           onClick={redo}
           size="icon-xs"
           title={t("folio.redo")}
@@ -335,7 +506,7 @@ export const ClauseEditor = ({
           className={
             editorReady && editor.isActive("bold") ? "bg-muted" : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={toggleBold}
           size="icon-xs"
           type="button"
@@ -348,7 +519,7 @@ export const ClauseEditor = ({
           className={
             editorReady && editor.isActive("italic") ? "bg-muted" : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={toggleItalic}
           size="icon-xs"
           type="button"
@@ -364,7 +535,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={() => toggleHeading(1)}
           size="icon-xs"
           type="button"
@@ -379,7 +550,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={() => toggleHeading(2)}
           size="icon-xs"
           type="button"
@@ -394,7 +565,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={() => toggleHeading(3)}
           size="icon-xs"
           type="button"
@@ -410,7 +581,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={toggleBulletList}
           size="icon-xs"
           type="button"
@@ -425,7 +596,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={toggleOrderedList}
           size="icon-xs"
           type="button"
@@ -448,17 +619,15 @@ export const ClauseEditor = ({
         </Button>
       </div>
 
-      {/* Editor area — hidden under an AI preview so the read-only diff can
-          take its place without tearing down the live editor instance. */}
-      <div className={cn(previewing && "hidden")}>
-        <EditorContent editor={editor} />
-      </div>
-      {aiEdit.status === "preview" ? (
-        <div className="px-3 py-2">
-          <ClauseDiffView
-            diffs={diffClauseBodies(aiEdit.baseline, aiEdit.revised)}
-          />
-        </div>
+      <EditorContent editor={editor} />
+
+      {hunkMenu && reviewing ? (
+        <HunkMenu
+          left={hunkMenu.left}
+          onAccept={() => acceptHunk(hunkMenu.revisionId)}
+          onReject={() => rejectHunk(hunkMenu.revisionId)}
+          top={hunkMenu.top}
+        />
       ) : null}
 
       <p
@@ -473,9 +642,10 @@ export const ClauseEditor = ({
       {aiEdit.status === "idle" ? null : (
         <AiEditBar
           instruction={aiEdit.instruction}
-          onAccept={acceptAiEdit}
-          onDiscard={() => setAiEdit({ status: "idle" })}
+          onAcceptAll={acceptAll}
+          onCancel={toggleAiEdit}
           onInstructionChange={updateInstruction}
+          onRejectAll={rejectAll}
           onSubmit={submitAiEdit}
           status={aiEdit.status}
         />
@@ -484,15 +654,55 @@ export const ClauseEditor = ({
   );
 };
 
+type HunkMenuProps = {
+  top: number;
+  left: number;
+  onAccept: () => void;
+  onReject: () => void;
+};
+
+const HunkMenu = ({ top, left, onAccept, onReject }: HunkMenuProps) => {
+  const t = useTranslations();
+
+  return (
+    <div
+      className="bg-popover absolute z-20 flex items-center gap-0.5 rounded-md border p-0.5 shadow-md"
+      style={{ top, left }}
+    >
+      <Button
+        aria-label={t("common.accept")}
+        onClick={onAccept}
+        size="icon-xs"
+        title={t("common.accept")}
+        type="button"
+        variant="ghost"
+      >
+        <CheckIcon className="size-3.5" />
+      </Button>
+      <Button
+        aria-label={t("docxReview.reject")}
+        onClick={onReject}
+        size="icon-xs"
+        title={t("docxReview.reject")}
+        type="button"
+        variant="ghost"
+      >
+        <XIcon className="size-3.5" />
+      </Button>
+    </div>
+  );
+};
+
 // ── AI edit bar ─────────────────────────────────────
 
 type AiEditBarProps = {
-  status: "prompting" | "generating" | "preview";
+  status: "prompting" | "generating" | "reviewing";
   instruction: string;
   onInstructionChange: (value: string) => void;
   onSubmit: () => void;
-  onAccept: () => void;
-  onDiscard: () => void;
+  onAcceptAll: () => void;
+  onRejectAll: () => void;
+  onCancel: () => void;
 };
 
 const AiEditBar = ({
@@ -500,12 +710,13 @@ const AiEditBar = ({
   instruction,
   onInstructionChange,
   onSubmit,
-  onAccept,
-  onDiscard,
+  onAcceptAll,
+  onRejectAll,
+  onCancel,
 }: AiEditBarProps) => {
   const t = useTranslations();
   const generating = status === "generating";
-  const previewing = status === "preview";
+  const reviewing = status === "reviewing";
 
   return (
     <div className="bg-popover absolute inset-x-0 bottom-2 z-10 mx-auto flex w-[min(92%,32rem)] flex-col gap-2 rounded-lg border p-2 shadow-lg">
@@ -527,24 +738,30 @@ const AiEditBar = ({
         />
       </div>
       <div className="flex items-center justify-end gap-2">
-        <Button onClick={onDiscard} size="sm" type="button" variant="ghost">
-          {previewing ? <XIcon className="size-3.5" /> : null}
-          {t("common.cancel")}
-        </Button>
+        {reviewing ? (
+          <Button onClick={onRejectAll} size="sm" type="button" variant="ghost">
+            <XIcon className="size-3.5" />
+            {t("docxReview.rejectAll")}
+          </Button>
+        ) : (
+          <Button onClick={onCancel} size="sm" type="button" variant="ghost">
+            {t("common.cancel")}
+          </Button>
+        )}
         <Button
           disabled={generating || instruction.trim() === ""}
           onClick={onSubmit}
           size="sm"
           type="button"
-          variant={previewing ? "ghost" : undefined}
+          variant={reviewing ? "ghost" : undefined}
         >
-          <AiEditSubmitIcon generating={generating} previewing={previewing} />
-          {previewing ? t("common.regenerate") : t("ai.editWithAI")}
+          <AiEditSubmitIcon generating={generating} reviewing={reviewing} />
+          {reviewing ? t("common.regenerate") : t("ai.editWithAI")}
         </Button>
-        {previewing ? (
-          <Button onClick={onAccept} size="sm" type="button">
+        {reviewing ? (
+          <Button onClick={onAcceptAll} size="sm" type="button">
             <CheckIcon className="size-3.5" />
-            {t("common.accept")}
+            {t("docxReview.acceptAll")}
           </Button>
         ) : null}
       </div>
@@ -554,15 +771,15 @@ const AiEditBar = ({
 
 const AiEditSubmitIcon = ({
   generating,
-  previewing,
+  reviewing,
 }: {
   generating: boolean;
-  previewing: boolean;
+  reviewing: boolean;
 }) => {
   if (generating) {
     return <Loader2Icon className="size-3.5 animate-spin" />;
   }
-  if (previewing) {
+  if (reviewing) {
     return <RotateCcwIcon className="size-3.5" />;
   }
   return <WandSparklesIcon className="size-3.5" />;

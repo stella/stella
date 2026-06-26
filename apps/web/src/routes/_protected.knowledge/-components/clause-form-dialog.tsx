@@ -27,7 +27,7 @@ import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
 import { toSafeId } from "@/lib/safe-id";
 
-import { ClauseEditor } from "./clause-editor";
+import { ClauseEditor, type ClauseEditorReviewStatus } from "./clause-editor";
 import type { ClauseParagraph } from "./clause-editor-types";
 
 // ── Types ────────────────────────────────────────────
@@ -117,9 +117,11 @@ const ClauseFormDialogBody = ({
     bodyParagraphs: initial?.bodyParagraphs ?? DEFAULT_BODY,
   }));
   const [saving, setSaving] = useState(false);
+  const [reviewStatus, setReviewStatus] =
+    useState<ClauseEditorReviewStatus>("resolved");
 
   const handleSave = async () => {
-    if (!form.title.trim()) {
+    if (!form.title.trim() || reviewStatus === "pending") {
       return;
     }
 
@@ -298,6 +300,7 @@ const ClauseFormDialogBody = ({
                 bodyParagraphs: paragraphs,
               }))
             }
+            onReviewStatusChange={setReviewStatus}
             title={form.title}
             usageNotes={form.usageNotes}
           />
@@ -326,7 +329,7 @@ const ClauseFormDialogBody = ({
           {t("common.cancel")}
         </DialogClose>
         <Button
-          disabled={saving || !form.title.trim()}
+          disabled={saving || !form.title.trim() || reviewStatus === "pending"}
           onClick={() => {
             void handleSave();
           }}

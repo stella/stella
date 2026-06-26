@@ -11,6 +11,7 @@ import type {
   ClauseParagraph,
   ClauseRun,
 } from "./clause-editor-types";
+import { DELETION_MARK } from "./clause-tracked-change-marks";
 
 const listNodeType = (kind: ClauseListKind): "bulletList" | "orderedList" =>
   kind === "bullet" ? "bulletList" : "orderedList";
@@ -55,9 +56,17 @@ const runsToInline = (runs: readonly ClauseRun[]): JSONContent[] =>
     return node;
   });
 
-const paragraphToNode = (p: ClauseParagraph): JSONContent => {
+export type ParagraphContentOverride = (
+  paragraph: ClauseParagraph,
+  index: number,
+) => JSONContent[] | null;
+
+const paragraphToNode = (
+  p: ClauseParagraph,
+  contentOverride?: JSONContent[] | null,
+): JSONContent => {
   const isHeading = p.style === "heading" && p.level !== undefined;
-  const content = runsToInline(p.runs ?? [{ text: p.text }]);
+  const content = contentOverride ?? runsToInline(p.runs ?? [{ text: p.text }]);
 
   if (isHeading) {
     return {
@@ -83,6 +92,7 @@ const buildList = (
   start: number,
   level: number,
   kind: ClauseListKind,
+  override?: ParagraphContentOverride,
 ): { node: JSONContent; consumed: number } => {
   const items: JSONContent[] = [];
   let i = start;
@@ -99,7 +109,7 @@ const buildList = (
     if (pLevel > level) {
       // A deeper item with no own-level parent: nest it under the last item,
       // or open a fresh item so the structure stays well-formed.
-      const child = buildList(body, i, pLevel, p.listKind);
+      const child = buildList(body, i, pLevel, p.listKind, override);
       const lastItem = items.at(-1);
       if (lastItem?.content) {
         lastItem.content.push(child.node);
@@ -112,12 +122,18 @@ const buildList = (
 
     // paragraphToNode ignores list props, so the item's inner paragraph is
     // just the paragraph itself; buildList owns the list/nesting structure.
-    const itemContent: JSONContent[] = [paragraphToNode(p)];
+    const itemContent: JSONContent[] = [paragraphToNode(p, override?.(p, i))];
     i += 1;
     // Pull any immediately-following deeper items into this item as a sub-list.
     const next = body[i];
     if (next?.listKind && listLevelOf(next) > level) {
-      const child = buildList(body, i, listLevelOf(next), next.listKind);
+      const child = buildList(
+        body,
+        i,
+        listLevelOf(next),
+        next.listKind,
+        override,
+      );
       itemContent.push(child.node);
       i += child.consumed;
     }
@@ -132,6 +148,7 @@ const buildList = (
 
 export const clauseBodyToTipTap = (
   body: readonly ClauseParagraph[],
+  override?: ParagraphContentOverride,
 ): JSONContent => {
   const content: JSONContent[] = [];
   let i = 0;
@@ -150,12 +167,12 @@ export const clauseBodyToTipTap = (
       continue;
     }
     if (p.listKind) {
-      const built = buildList(body, i, listLevelOf(p), p.listKind);
+      const built = buildList(body, i, listLevelOf(p), p.listKind, override);
       content.push(built.node);
       i += built.consumed;
       continue;
     }
-    content.push(paragraphToNode(p));
+    content.push(paragraphToNode(p, override?.(p, i)));
     i += 1;
   }
 
@@ -185,6 +202,10 @@ const nodeToParagraph = (node: JSONContent): ClauseParagraph => {
   const inlineContent = optionalArray(node.content);
   for (const child of inlineContent) {
     if (child.type === "text" && child.text) {
+      if (child.marks?.some((mark) => mark.type === DELETION_MARK)) {
+        continue;
+      }
+
       const bold = child.marks?.some((m) => m.type === "bold");
       const italic = child.marks?.some((m) => m.type === "italic");
 

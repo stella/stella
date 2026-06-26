@@ -659,6 +659,7 @@
   },
   "clauses": {
     "addVariant": "Változat hozzáadása",
+    "aiStructureChanged": "Az AI-val végzett átírás megváltoztatta a záradék szerkezetét, ezért nem jeleníthető meg beágyazott módosításként. Módosítsa az utasítást, és próbálja újra.",
     "allClauses": "Összes záradék",
     "backToList": "Vissza a záradékokhoz",
     "body": "Szövegtest",

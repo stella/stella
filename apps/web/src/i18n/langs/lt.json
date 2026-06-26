@@ -659,6 +659,7 @@
   },
   "clauses": {
     "addVariant": "Pridėti variantą",
+    "aiStructureChanged": "Redagavimas su DI pakeitė sąlygos struktūrą, todėl jo negalima parodyti kaip įterptųjų pakeitimų. Pakoreguokite nurodymą ir bandykite dar kartą.",
     "allClauses": "Visos sąlygos",
     "backToList": "Grįžti į sąlygų sąrašą",
     "body": "Turinys",

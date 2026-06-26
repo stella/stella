@@ -75,7 +75,10 @@ import { ClauseBody } from "@/routes/_protected.knowledge/-components/clause-bod
 import { diffClauseBodies } from "@/routes/_protected.knowledge/-components/clause-diff";
 import type { ParagraphDiff } from "@/routes/_protected.knowledge/-components/clause-diff";
 import { ClauseDiffView } from "@/routes/_protected.knowledge/-components/clause-diff-view";
-import { ClauseEditor } from "@/routes/_protected.knowledge/-components/clause-editor";
+import {
+  ClauseEditor,
+  type ClauseEditorReviewStatus,
+} from "@/routes/_protected.knowledge/-components/clause-editor";
 import type { ClauseParagraph } from "@/routes/_protected.knowledge/-components/clause-editor-types";
 import { useClauseNavStore } from "@/routes/_protected.knowledge/-components/clause-nav-store";
 import { LeaveConfirmDialog } from "@/routes/_protected.knowledge/-components/leave-confirm-dialog";
@@ -235,6 +238,8 @@ const DetailContent = ({
   // This tracks whether the head has un-versioned edits. A freshly loaded
   // clause is clean.
   const [dirtySinceVersion, setDirtySinceVersion] = useState(false);
+  const [reviewStatus, setReviewStatus] =
+    useState<ClauseEditorReviewStatus>("resolved");
 
   return (
     <div className="mx-auto w-full max-w-2xl p-6">
@@ -245,6 +250,7 @@ const DetailContent = ({
         clauseId={clauseId}
         detail={detail}
         dirtySinceVersion={dirtySinceVersion}
+        reviewStatus={reviewStatus}
         onBack={onBack}
         onDeleted={onDeleted}
         onRefresh={onRefresh}
@@ -293,6 +299,7 @@ const DetailContent = ({
             detail={detail}
             onBodyDirty={() => setDirtySinceVersion(true)}
             onRefresh={onRefresh}
+            onReviewStatusChange={setReviewStatus}
           />
           <ClauseUsageNotesField
             canEdit={canEdit}
@@ -332,6 +339,7 @@ const ClauseHeader = ({
   canEdit,
   canDelete,
   dirtySinceVersion,
+  reviewStatus,
   onBack,
   onDeleted,
   onRefresh,
@@ -343,6 +351,7 @@ const ClauseHeader = ({
   canEdit: boolean;
   canDelete: boolean;
   dirtySinceVersion: boolean;
+  reviewStatus: ClauseEditorReviewStatus;
   onBack: () => void;
   onDeleted: () => void;
   onRefresh: () => void;
@@ -361,6 +370,9 @@ const ClauseHeader = ({
   // Snapshot the current head body as a new version. The head is already
   // autosaved, so this only appends to history (no data is at risk).
   const saveVersion = useCallback(async () => {
+    if (reviewStatus === "pending") {
+      return false;
+    }
     setSavingVersion(true);
     const response = await api
       .clauses({ clauseId })
@@ -382,7 +394,7 @@ const ClauseHeader = ({
     onVersionSaved();
     onRefresh();
     return true;
-  }, [clauseId, detail.body, t, onVersionSaved, onRefresh]);
+  }, [clauseId, detail.body, reviewStatus, t, onVersionSaved, onRefresh]);
 
   const saveVersionAndLeave = useCallback(async () => {
     const ok = await saveVersion();
@@ -394,12 +406,22 @@ const ClauseHeader = ({
   // Un-versioned head edits don't block leaving (they're already saved); we
   // just offer to capture them as a version first.
   const handleBack = useCallback(() => {
+    if (reviewStatus === "pending") {
+      return;
+    }
     if (dirtySinceVersion) {
       setConfirmLeave(true);
       return;
     }
     onBack();
-  }, [dirtySinceVersion, onBack]);
+  }, [dirtySinceVersion, reviewStatus, onBack]);
+
+  const leaveWithoutVersion = useCallback(() => {
+    if (reviewStatus === "pending") {
+      return;
+    }
+    onBack();
+  }, [reviewStatus, onBack]);
 
   // Publish the open clause to the breadcrumb (Knowledge › Vzorová ustanovení ›
   // Name) and wire its list crumb back through the same unsaved-version guard
@@ -540,7 +562,9 @@ const ClauseHeader = ({
 
       {canEdit && (
         <Button
-          disabled={!dirtySinceVersion || savingVersion}
+          disabled={
+            !dirtySinceVersion || savingVersion || reviewStatus === "pending"
+          }
           onClick={() => {
             void saveVersion();
           }}
@@ -600,7 +624,7 @@ const ClauseHeader = ({
         secondary={{
           label: t("clauses.leaveWithoutVersion"),
           variant: "ghost",
-          onClick: onBack,
+          onClick: leaveWithoutVersion,
         }}
       />
     </div>
@@ -615,12 +639,14 @@ const ClauseBodyEditor = ({
   canEdit,
   onRefresh,
   onBodyDirty,
+  onReviewStatusChange,
 }: {
   detail: ClauseDetail;
   clauseId: string;
   canEdit: boolean;
   onRefresh: () => void;
   onBodyDirty: () => void;
+  onReviewStatusChange: (status: ClauseEditorReviewStatus) => void;
 }) => {
   const t = useTranslations();
 
@@ -674,6 +700,7 @@ const ClauseBodyEditor = ({
           onBodyDirty();
           debouncedSave(body);
         }}
+        onReviewStatusChange={onReviewStatusChange}
         title={detail.title}
         usageNotes={detail.usageNotes ?? undefined}
       />
