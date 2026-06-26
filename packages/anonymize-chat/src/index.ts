@@ -39,7 +39,6 @@ export const DEFAULT_CHAT_ANON_ENTITY_LABELS = [
   "registration number",
   "credit card number",
   "passport number",
-  "crypto",
   "monetary amount",
   "land parcel",
   "misc",
