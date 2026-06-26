@@ -274,7 +274,12 @@ describe("findSharedValueDuplicates", () => {
   const en: NestedMessages = {
     common: { save: "Save" },
     billing: { week: "Week", saveAlias: "Save" },
-    workspaces: { week: "Week", unique: "Timeline" },
+    workspaces: {
+      week: "Week",
+      unique: "Timeline",
+      calA: "Quarter",
+      calB: "Quarter",
+    },
     chat: { id: "OK" },
   };
 
@@ -300,6 +305,17 @@ describe("findSharedValueDuplicates", () => {
     );
     expect(keys).not.toContain("chat.id"); // "OK" is trivially identical
     expect(keys).not.toContain("workspaces.unique");
+  });
+
+  test("does not flag values duplicated within a single namespace", () => {
+    // "Quarter" is shared by workspaces.calA and workspaces.calB only; a value
+    // repeated inside one feature is not a cross-namespace "hoist to common.*"
+    // signal, so it must not be flagged.
+    const keys = findSharedValueDuplicates(en, emptyBaseline()).map(
+      (o) => o.key,
+    );
+    expect(keys).not.toContain("workspaces.calA");
+    expect(keys).not.toContain("workspaces.calB");
   });
 
   test("skips baseline-grandfathered shared values", () => {

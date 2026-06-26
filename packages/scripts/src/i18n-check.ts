@@ -356,11 +356,13 @@ export const findCommonDuplicates = (
 
 /**
  * Non-`common` en.json keys whose value is shared by two or more feature keys
- * (and is not already a `common.*` value, which `findCommonDuplicates` covers).
- * A term repeated across feature namespaces usually belongs in `common.*` so it
- * stays consistent and is translated once; this flags the duplication so it can
- * be hoisted and reused. Each offender carries the other keys it shares with.
- * Baseline grandfathers values that are intentionally duplicated.
+ * in DIFFERENT top-level namespaces (and is not already a `common.*` value,
+ * which `findCommonDuplicates` covers). A term repeated across feature
+ * namespaces usually belongs in `common.*` so it stays consistent and is
+ * translated once; this flags the duplication so it can be hoisted and reused.
+ * A value repeated only within one namespace is that feature's own concern and
+ * is left alone. Each offender carries the other keys it shares with. Baseline
+ * grandfathers values that are intentionally duplicated.
  */
 export const findSharedValueDuplicates = (
   source: NestedMessages,
@@ -394,6 +396,14 @@ export const findSharedValueDuplicates = (
 
   for (const keys of keysByValue.values()) {
     if (keys.length < 2) {
+      continue;
+    }
+    // Only flag values shared ACROSS feature namespaces (the "hoist to common.*"
+    // signal). A value repeated within a single top-level namespace is that
+    // feature's own business — hoisting it to common.* would not make sense — so
+    // skip groups that do not span at least two namespaces.
+    const namespaces = new Set(keys.map((key) => key.split(".")[0]));
+    if (namespaces.size < 2) {
       continue;
     }
     const sorted = keys.toSorted((a, b) => a.localeCompare(b));
