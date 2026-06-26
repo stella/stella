@@ -921,8 +921,12 @@ const previewReleaseSlugs = getChangelogReleases().map((release) => release.slug
       const target = document.getElementById(id);
       if (!target) return;
 
-      if (target instanceof HTMLDetailsElement) {
-        target.open = true;
+      let ancestor: HTMLElement | null = target;
+      while (ancestor) {
+        if (ancestor instanceof HTMLDetailsElement) {
+          ancestor.open = true;
+        }
+        ancestor = ancestor.parentElement;
       }
 
       target.scrollIntoView({ block: "start" });
