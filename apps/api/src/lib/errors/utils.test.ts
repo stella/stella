@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import {
   connectionErrorFields,
+  errorFingerprint,
   errorSystemFields,
 } from "@/api/lib/errors/utils";
 import { sanitizeLogAttributes } from "@/api/lib/observability/logger";
@@ -75,5 +76,70 @@ describe("connectionErrorFields", () => {
     expect(sanitizeLogAttributes({ "error.message": "x" })).not.toHaveProperty(
       "error.message",
     );
+  });
+});
+
+describe("errorFingerprint", () => {
+  test("extracts the class, stable code, and a code-location frame", () => {
+    const error = new TypeError("cannot read property 'x' of undefined");
+    const fingerprint = errorFingerprint(error);
+    expect(fingerprint["error.class"]).toBe("TypeError");
+    // No `.code` property, so the stable code falls back to the tag.
+    expect(fingerprint["error.code"]).toBe("TypeError");
+    // The top frame is a `file:line:col` location, never user content.
+    expect(fingerprint["error.frame"]).toMatch(/:\d+:\d+$/u);
+    expect(fingerprint["error.frame"]).not.toContain("(");
+  });
+
+  test("prefers a `.code` string when present", () => {
+    const error = Object.assign(new Error("socket hang up"), {
+      code: "ECONNRESET",
+    });
+    expect(errorFingerprint(error)["error.code"]).toBe("ECONNRESET");
+  });
+
+  test("surfaces the deepest cause's top frame", () => {
+    const root = new Error("root failure");
+    const wrapped = new Error("wrapped", { cause: root });
+    const fingerprint = errorFingerprint(wrapped);
+    expect(fingerprint["error.cause.frame"]).toMatch(/:\d+:\d+$/u);
+  });
+
+  test("never throws on a missing or non-standard stack", () => {
+    const noStack = new Error("boom");
+    delete noStack.stack;
+    expect(errorFingerprint(noStack)["error.frame"]).toBeUndefined();
+
+    const minified = new Error("boom");
+    minified.stack = "Error: boom\n    at <anonymous>";
+    expect(errorFingerprint(minified)["error.frame"]).toBeUndefined();
+  });
+
+  test("handles non-Error values", () => {
+    expect(errorFingerprint("boom")).toEqual({ "error.class": "UnknownError" });
+  });
+
+  // The fingerprint exists to survive the logger's PII redaction. If a
+  // future key starts matching /(?:body|content|email|...)/i, it would
+  // be silently dropped and 5xx would go dark again — this guards that.
+  test("every fingerprint key survives the logger attribute sanitizer", () => {
+    const error = new TypeError("cannot read property 'x' of undefined");
+    const fingerprint = errorFingerprint(error);
+    const sanitized = sanitizeLogAttributes(fingerprint);
+    for (const [key, value] of Object.entries(fingerprint)) {
+      expect(sanitized?.[key]).toBe(value);
+    }
+    expect(sanitized?.["log.attributes_dropped"]).toBeUndefined();
+  });
+
+  test("carries no message-bearing key (PII boundary)", () => {
+    const error = new Error("privileged: alice uploaded merger-secret.docx");
+    const fingerprint = errorFingerprint(error);
+    expect(fingerprint["error.message"]).toBeUndefined();
+    expect(fingerprint["error.msg"]).toBeUndefined();
+    expect(fingerprint["error.stack"]).toBeUndefined();
+    for (const value of Object.values(fingerprint)) {
+      expect(value).not.toContain("merger-secret");
+    }
   });
 });

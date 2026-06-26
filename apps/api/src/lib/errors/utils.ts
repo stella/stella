@@ -88,6 +88,91 @@ export const connectionErrorFields = (
 };
 
 /**
+ * Non-PII structural fingerprint for diagnosing 5xx without shipping
+ * any user data. Three signals, all code-level, never content:
+ *  - `error.class`: the constructor name (e.g. "Panic", "TypeError").
+ *  - `error.code`: a stable code — a `.code` string when present
+ *    (HandlerError code, ECONNRESET, …), otherwise the structural tag.
+ *  - `error.frame`: the top stack frame as `file:line:col`, plus the
+ *    deepest `.cause`'s top frame under `error.cause.frame`.
+ *
+ * A class name, error code, and `file:line:col` code location carry no
+ * client data, so they are safe at any sink. The attribute keys are
+ * chosen to NOT match the logger's PII redaction regex
+ * (`/(?:body|content|email|fileName|message|name|title)/i`), so they
+ * survive `sanitizeLogAttributes`. Stack parsing is fully defensive:
+ * `stack` may be undefined, multiline, or minified, and this never
+ * throws — a missing frame is simply omitted.
+ */
+export type ErrorFingerprint = Record<string, string>;
+
+// Matches the trailing `file:line:col` of a V8 stack frame, with or
+// without surrounding parens. `[^()\s]+` stops at the opening paren so
+// the captured location never includes the leading "(".
+const STACK_FRAME_PATTERN = /([^()\s]+:\d+:\d+)\)?\s*$/u;
+
+const topStackFrame = (error: Error): string | undefined => {
+  const { stack } = error;
+  if (typeof stack !== "string") {
+    return undefined;
+  }
+  for (const line of stack.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("at ")) {
+      continue;
+    }
+    const match = STACK_FRAME_PATTERN.exec(trimmed);
+    if (match) {
+      return match[1];
+    }
+  }
+  return undefined;
+};
+
+const stableErrorCode = (error: Error): string => {
+  if ("code" in error && typeof error.code === "string" && error.code) {
+    return error.code;
+  }
+  return errorTag(error);
+};
+
+const deepestCause = (error: Error): Error | undefined => {
+  const seen = new WeakSet<object>([error]);
+  let current: unknown = error.cause;
+  let deepest: Error | undefined;
+  let depth = 0;
+  while (current instanceof Error && depth < 5 && !seen.has(current)) {
+    seen.add(current);
+    deepest = current;
+    current = current.cause;
+    depth += 1;
+  }
+  return deepest;
+};
+
+export const errorFingerprint = (error: unknown): ErrorFingerprint => {
+  if (!(error instanceof Error)) {
+    return { "error.class": "UnknownError" };
+  }
+  const fingerprint: ErrorFingerprint = {
+    "error.class": error.constructor.name,
+    "error.code": stableErrorCode(error),
+  };
+  const frame = topStackFrame(error);
+  if (frame !== undefined) {
+    fingerprint["error.frame"] = frame;
+  }
+  const cause = deepestCause(error);
+  if (cause) {
+    const causeFrame = topStackFrame(cause);
+    if (causeFrame !== undefined) {
+      fingerprint["error.cause.frame"] = causeFrame;
+    }
+  }
+  return fingerprint;
+};
+
+/**
  * Surface an error in dev. Two sinks:
  *  1) `console.error` — the interactive dev terminal sees it now.
  *  2) `apps/api/.dev-logs/errors.jsonl` — headless tools (CI repro

@@ -252,6 +252,18 @@ const envApi = createEnv({
     USAGE_ENFORCEMENT_ENABLED: featureFlagSchema,
 
     /**
+     * Break-glass diagnostics. When true, 5xx responses additionally
+     * log the full `error.msg` and `error.stack` so a deployment can be
+     * made fully diagnosable by flipping one env var, no rebuild needed.
+     * Default false preserves the redacted-by-default behaviour: only
+     * the non-PII structural fingerprint (class, code, code-location
+     * frames) is logged. Enable transiently for an investigation, never
+     * as a standing default, since stacks/messages may carry client
+     * data.
+     */
+    DEBUG_UNREDACTED_ERRORS: featureFlagSchema,
+
+    /**
      * Deployment-owned usage-policy seed list. JSON array of
      * { key, displayName, monthlyUsageUnits, hostedPolicyRef? }.
      * Default is intentionally empty so public source does not

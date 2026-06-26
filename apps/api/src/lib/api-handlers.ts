@@ -32,7 +32,7 @@ import type {
   HandlerErrorCode,
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
+import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import { assertUsageAvailable } from "@/api/lib/usage";
@@ -696,6 +696,24 @@ const logAndCaptureSafeError = ({
       attributes[`${prefix}.type`] = errorTag(cause);
       cause = (cause as { cause?: unknown }).cause;
       depth++;
+    }
+  }
+
+  // 5xx are the un-diagnosable class: the message and stack are
+  // redacted from every sink, leaving only `error.type`. Attach a
+  // non-PII structural fingerprint (class, stable code, top
+  // `file:line:col` frames) under keys that survive the logger's PII
+  // redaction so a panic always carries a code location.
+  if (statusCode >= 500) {
+    Object.assign(attributes, errorFingerprint(error));
+
+    if (env.DEBUG_UNREDACTED_ERRORS && error instanceof Error) {
+      if (error.message) {
+        attributes["error.msg"] = error.message;
+      }
+      if (error.stack) {
+        attributes["error.stack"] = error.stack;
+      }
     }
   }
 
