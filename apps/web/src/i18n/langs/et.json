@@ -318,7 +318,7 @@
     },
     "setup": {
       "account": "Konto",
-      "apiKey": "API võti",
+      "apiKey": "API-võti",
       "none": "Seadistus puudub"
     },
     "toolNames": {
@@ -1317,7 +1317,7 @@
       "unavailable": "Viidatud sait ei luba turvalist eelvaadet. Kui tööriist tagastas dokumendi teksti, kuvatakse see siin; muul juhul avage originaal."
     },
     "facet": {
-      "anonymization": "Anonüümimine",
+      "anonymization": "Anonüümistamine",
       "previewInFullViewToast": "Eelvaade on siin põhivaade. Klõpsa minimeerimisnuppu, et näha seda metaandmete kõrval."
     },
     "hidePane": "Peida paneel",
@@ -1634,7 +1634,7 @@
       "active": "Aktiivne",
       "addProvider": "Lisa teenusepakkuja",
       "addProviderFirst": "Lisa esmalt teenusepakkuja",
-      "apiKey": "API võti",
+      "apiKey": "API-võti",
       "apiKeyConfiguredPlaceholder": "Seadistatud: {key}. Sisesta uus võti, et see asendada.",
       "apiKeyPlaceholder": "Sisestage oma API võti",
       "apiKeySaved": "Salvestatud võti {key}",
@@ -2202,7 +2202,7 @@
       "formulaNonNumberFields": "Pole arv: {fields}",
       "formulaNumbersOnlyHelp": "Arvutused kasutavad ainult arvuvälju; kuupäevi ja teksti ei saa kasutada.",
       "formulaUnknownFields": "Tundmatu väli: {fields}",
-      "insert": "Sisesta",
+      "insert": "Lisa",
       "insertAtCaret": "Sisesta kursori kohale",
       "insertConditionIntoTemplate": "Insert condition",
       "insertFormatDefault": "Vaikimisi",
@@ -2829,7 +2829,7 @@
       "wrapContent": "Murra tekst"
     },
     "tasksCount": "{count, plural, one {# agenda kirje} other {# agenda kirjet}}",
-    "team": "Tiim",
+    "team": "Meeskond",
     "tools": {
       "aiModel": "Tehisintellekti mudel",
       "manualInput": "Käsitsi"

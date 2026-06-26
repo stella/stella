@@ -30,7 +30,7 @@
     }
   },
   "appearance": {
-    "calendar": "التقويم",
+    "calendar": "تقويم",
     "calendarGregorian": "الميلادي",
     "calendarHijri": "الهجري (أم القرى)",
     "cool": "بارد",
@@ -113,7 +113,7 @@
       "labelPlaceholder": "بحث",
       "manageCodes": "إدارة الرموز",
       "noCodesYet": "لا توجد رموز فوترة بعد",
-      "task": "المهمة",
+      "task": "مهمة",
       "taskCode": "رمز المهمة"
     },
     "decimalHours": "({hours} ساعة)",
@@ -1331,7 +1331,7 @@
       "title": "سياق الملف"
     },
     "metadata": {
-      "author": "المؤلِّف",
+      "author": "المؤلف",
       "documentInfoHeading": "معلومات المستند",
       "matterColumnsHeading": "أعمدة الملف",
       "updatedAt": "آخر تحديث",
@@ -1546,10 +1546,10 @@
     "showRaw": "عرض المصدر الخام"
   },
   "navigation": {
-    "chat": "المحادثة",
+    "chat": "محادثة",
     "contacts": "جهات الاتصال",
     "knowledge": "المعرفة",
-    "myTodos": "مهامّي",
+    "myTodos": "مهامي",
     "pinned": "المثبّتة",
     "recents": "الأخيرة",
     "search": "بحث",
@@ -1571,7 +1571,7 @@
     "catalogueCommunityHeading": "أخرى",
     "catalogueContinueWithCount": "المتابعة بـ {count, plural, zero {# أداة} one {# أداة} two {# أداتين} few {# أدوات} many {# أداة} other {# أداة}}",
     "catalogueDetailAbout": "حول",
-    "catalogueDetailAuthor": "المؤلِّف",
+    "catalogueDetailAuthor": "المؤلف",
     "catalogueDetailCost": "التكلفة",
     "catalogueDetailJurisdictions": "الولايات القضائية",
     "catalogueDetailLicense": "الترخيص",
@@ -2259,7 +2259,7 @@
       "whoFills": "مَن يعبّئ هذا الحقل لاحقًا؟"
     },
     "tagPlaceholder": "اكتب وسمًا واضغط Enter",
-    "tags": "الوسوم",
+    "tags": "وسوم",
     "templateDeleted": "تم حذف القالب",
     "templateName": "اسم القالب",
     "templateNamePlaceholder": "مثال: عقد العمل",
@@ -2621,7 +2621,7 @@
     "parties": {
       "addParty": "إضافة طرف",
       "changeClient": "تغيير العميل",
-      "client": "العميل",
+      "client": "عميل",
       "noClient": "لم يُعيَّن أي عميل",
       "noParties": "لم تتم إضافة أي أطراف إلى هذا الملف.",
       "partyRoles": {

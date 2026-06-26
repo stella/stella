@@ -1737,7 +1737,7 @@
         "yearMonthSequential": "Metai-mėnuo / Nuoseklus (2026-02/001)",
         "yearSequential": "Metai / Nuoseklus (2026/001)"
       },
-      "title": "Bylų numeracija",
+      "title": "Bylų numeravimas",
       "tokenHelp": "Galimos žymos: '{'SEQ'}' (eilės numeris), '{'YYYY'}' (metai), '{'YY'}' (2 skaitmenų metai), '{'MM'}' (mėnuo)"
     },
     "members": {
@@ -1802,7 +1802,7 @@
     "updatedWithinOptions": {
       "day": "Šiandien",
       "month": "Per paskutines 30 dienų",
-      "week": "Per paskutines 7 dienas",
+      "week": "Paskutinės 7 dienos",
       "year": "Per paskutinius metus"
     }
   },
