@@ -135,7 +135,7 @@ function isIncrementalMeasureEligibleBlock(block: FlowBlock): boolean {
     return false;
   }
 
-  const paragraph = block as ParagraphBlock;
+  const paragraph: ParagraphBlock = block;
   if (
     paragraph.attrs?.listMarker ||
     paragraph.attrs?.contextualSpacing ||

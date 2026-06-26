@@ -15,6 +15,11 @@ import { findBodyPmSpans } from "../layout-bridge/findBodyPmSpans";
 import type { SelectionRect } from "../layout-bridge/selectionRects";
 import type { FlowBlock, Layout, Measure } from "../layout-engine/types";
 
+// `nodeType === TEXT_NODE` does not narrow a ChildNode to Text in TS, so guard
+// instead of casting.
+const isTextNode = (node: ChildNode | null | undefined): node is Text =>
+  node?.nodeType === Node.TEXT_NODE;
+
 export type ProjectableRange = { from: number; to: number };
 
 export type ProjectedRange<T extends ProjectableRange> = {
@@ -64,14 +69,14 @@ const domRectsForRange = (
       continue;
     }
     let textNode: Text | null = null;
-    if (spanEl.firstChild?.nodeType === Node.TEXT_NODE) {
-      textNode = spanEl.firstChild as Text;
+    if (isTextNode(spanEl.firstChild)) {
+      textNode = spanEl.firstChild;
     } else if (
       spanEl.firstChild instanceof HTMLElement &&
       spanEl.firstChild.tagName === "A" &&
-      spanEl.firstChild.firstChild?.nodeType === Node.TEXT_NODE
+      isTextNode(spanEl.firstChild.firstChild)
     ) {
-      textNode = spanEl.firstChild.firstChild as Text;
+      textNode = spanEl.firstChild.firstChild;
     }
     if (!textNode) {
       continue;
