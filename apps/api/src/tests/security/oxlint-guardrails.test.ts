@@ -372,6 +372,9 @@ describe("custom oxlint guardrails", () => {
     const protectedRouteSource = readRootFixture(
       "apps/web/src/routes/_protected.tsx",
     );
+    const sidebarUserMenuSource = readRootFixture(
+      "apps/web/src/components/sidebar-user-menu.tsx",
+    );
     const aiConfigQuerySource = readRootFixture(
       "apps/web/src/routes/_protected.organization/-ai-config-queries.ts",
     );
@@ -391,6 +394,8 @@ describe("custom oxlint guardrails", () => {
     expect(protectedRouteSource).toContain("AIAvailabilityProvider");
     expect(protectedRouteSource).toContain("AppSidebar");
     expect(protectedRouteSource).toContain("ChatMentionProviders");
+    expect(sidebarUserMenuSource).not.toContain("organizationOptions");
+    expect(sidebarUserMenuSource).toContain("organizationSummaryOptions");
     expect(aiConfigQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");
     expect(aiConfigQuerySource).toContain(
       "staleTime: ROUTE_QUERY_STALE_TIME_MS",

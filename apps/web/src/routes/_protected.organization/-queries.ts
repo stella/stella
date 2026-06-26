@@ -11,7 +11,31 @@ export const organizationKeys = {
     ...organizationKeys.all,
     organizationId,
   ],
+  summaries: ["organization", "summary"],
+  summary: (organizationId: string) => [
+    ...organizationKeys.summaries,
+    organizationId,
+  ],
 };
+
+export const organizationSummaryOptions = (organizationId: string) =>
+  queryOptions({
+    queryKey: organizationKeys.summary(organizationId),
+    queryFn: async () => {
+      const result = await authClient.organization.list();
+
+      if (result.error) {
+        throw toAuthClientError(result.error);
+      }
+
+      return (
+        result.data.find(
+          (organization) => organization.id === organizationId,
+        ) ?? null
+      );
+    },
+    staleTime: ROUTE_QUERY_STALE_TIME_MS,
+  });
 
 export const organizationOptions = (organizationId: string) =>
   queryOptions({
