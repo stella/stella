@@ -4,6 +4,7 @@ import type { APIRequestContext } from "@playwright/test";
 // (apps/web/src/lib/api.ts:19); mirror that here so paths read the
 // same way as the route definitions.
 const API_BASE_URL = `${process.env["E2E_API_URL"] ?? "http://localhost:3001"}/v1`;
+const API_REQUEST_TIMEOUT_MS = 30_000;
 
 type Json =
   | Record<string, unknown>
@@ -20,7 +21,9 @@ export const apiGet = async <T = unknown>(
   request: APIRequestContext,
   path: string,
 ): Promise<T> => {
-  const response = await request.get(url(path));
+  const response = await request.get(url(path), {
+    timeout: API_REQUEST_TIMEOUT_MS,
+  });
   if (!response.ok()) {
     throw new Error(
       `GET ${path} -> ${String(response.status())}: ${await response.text()}`,
@@ -33,7 +36,9 @@ export const apiStatus = async (
   request: APIRequestContext,
   path: string,
 ): Promise<number> => {
-  const response = await request.get(url(path));
+  const response = await request.get(url(path), {
+    timeout: API_REQUEST_TIMEOUT_MS,
+  });
   const status = response.status();
   await response.dispose();
   return status;
@@ -58,7 +63,10 @@ export const apiPut = async <T = unknown>(
     !Array.isArray(body)
       ? { ...body, queryKey: E2E_QUERY_KEY }
       : body;
-  const response = await request.put(url(path), { data });
+  const response = await request.put(url(path), {
+    data,
+    timeout: API_REQUEST_TIMEOUT_MS,
+  });
   if (!response.ok()) {
     throw new Error(
       `PUT ${path} -> ${String(response.status())}: ${await response.text()}`,
@@ -74,6 +82,7 @@ export const apiDelete = async (
 ): Promise<void> => {
   const response = await request.delete(url(path), {
     ...(invalidates ? { data: { queryKey: E2E_QUERY_KEY } } : {}),
+    timeout: API_REQUEST_TIMEOUT_MS,
   });
   if (!response.ok() && response.status() !== 404) {
     throw new Error(
@@ -89,6 +98,7 @@ export const apiUploadDocx = async (
   file: { name: string; mimeType: string; buffer: Buffer },
 ) => {
   const response = await request.post(url(`/entities/${workspaceId}/upload`), {
+    timeout: API_REQUEST_TIMEOUT_MS,
     multipart: {
       file: {
         name: file.name,
@@ -123,7 +133,9 @@ export const apiDownloadFileField = async (
     request,
     `/files/${workspaceId}/url/${fieldId}?purpose=download`,
   );
-  const response = await request.get(metadata.presignedUrl);
+  const response = await request.get(metadata.presignedUrl, {
+    timeout: API_REQUEST_TIMEOUT_MS,
+  });
   if (!response.ok()) {
     throw new Error(
       `GET presigned file ${fieldId} -> ${String(response.status())}: ${await response.text()}`,
