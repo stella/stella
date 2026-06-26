@@ -109,7 +109,10 @@ const makeResolver =
     if (operand.type === "kind") {
       return data["kind"];
     }
-    return data[operand.field];
+    if (operand.type === "builtin") {
+      return data[operand.field];
+    }
+    return undefined;
   };
 
 const negate = (child: ConditionNode): ConditionNode => ({

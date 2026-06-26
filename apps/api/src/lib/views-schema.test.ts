@@ -97,6 +97,36 @@ describe("parseViewLayoutSafe", () => {
     });
   });
 
+  test("drops a filter carrying a formula operand (no SQL transpilation)", () => {
+    // A formula operand is a valid AST node (it exists for template rules) but
+    // cannot compile to SQL, so a filter that smuggles one in is stripped.
+    const withFormula = {
+      version: 1,
+      type: "table",
+      filters: [
+        {
+          type: "group",
+          combinator: "and",
+          children: [
+            {
+              type: "compare",
+              left: { type: "formula", expr: "rent * 12" },
+              op: "lt",
+              right: { type: "literal", value: 100_000 },
+            },
+          ],
+        },
+      ],
+      sorts: [],
+      hiddenProperties: [],
+      columnOrder: ["name"],
+      columnPinning: [],
+    };
+
+    expect(parseViewLayout(withFormula).filters).toEqual([]);
+    expect(parseViewLayoutSafe(withFormula).filters).toEqual([]);
+  });
+
   test("falls back to a minimal layout for an unrecoverable value and never throws", () => {
     expect(parseViewLayoutSafe({ type: "garbage" })).toEqual({
       type: "filesystem",

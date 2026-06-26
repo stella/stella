@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { ConditionNode } from "@stll/conditions";
+
 import type { FieldMeta } from "@/api/handlers/docx/types";
 
 import { hasDerivedValueSource, hasLiveMarker } from "./save-document";
@@ -28,10 +30,24 @@ const compositeField = (path: string): FieldMeta => ({
 
 describe("hasDerivedValueSource", () => {
   test("is true only for genuinely marker-less derived fields", () => {
+    const conditionAst: ConditionNode = {
+      type: "group",
+      combinator: "and",
+      children: [
+        {
+          type: "compare",
+          left: { type: "formula", expr: "rent * 12" },
+          op: "lt",
+          right: { type: "literal", value: 100_000 },
+        },
+      ],
+    };
+
     expect(hasDerivedValueSource({ path: "a", formula: "x + 1" })).toBe(true);
     expect(hasDerivedValueSource({ path: "a", condition: "x == 1" })).toBe(
       true,
     );
+    expect(hasDerivedValueSource({ path: "a", conditionAst })).toBe(true);
     expect(hasDerivedValueSource({ path: "a", aiPrompt: "draft it" })).toBe(
       true,
     );

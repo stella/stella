@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 /**
  * Serializer for the no-code condition builder.
  *
@@ -46,6 +48,13 @@ const serializeOperand = (operand: Operand): string => {
   }
   if (operand.type === "path") {
     return operand.path;
+  }
+  // A `formula` operand has no `{{#if}}` surface syntax: a condition that uses
+  // one must persist as the AST (`conditionHasFormula` gates this at save), so
+  // reaching here is a caller routing the wrong condition through the string
+  // serializer. Fail fast rather than emit a silently-empty expression.
+  if (operand.type === "formula") {
+    panic("serializeCondition: formula operand requires AST storage");
   }
   // `property` / `builtin` / `kind` operands belong to the Table domain and
   // never appear in a template condition.

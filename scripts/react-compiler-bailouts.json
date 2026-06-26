@@ -20,6 +20,8 @@
   "apps/web/src/components/chat/needs-matter-card.tsx": 2,
   "apps/web/src/components/chat/prompt-slash-list.tsx": 0,
   "apps/web/src/components/chat/streamdown-mention-link.tsx": 0,
+  "apps/web/src/components/conditions/condition-builder.tsx": 0,
+  "apps/web/src/components/conditions/formula-editor.tsx": 0,
   "apps/web/src/components/contact-picker.tsx": 0,
   "apps/web/src/components/docx-preview-zoom.ts": 1,
   "apps/web/src/components/empty-screen.tsx": 0,

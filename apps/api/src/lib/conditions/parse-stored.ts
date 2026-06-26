@@ -8,7 +8,13 @@
  */
 import * as v from "valibot";
 
-import { type ConditionNode, conditionNodeSchema } from "@stll/conditions";
+import {
+  type ConditionNode,
+  conditionHasFormula,
+  conditionNodeSchema,
+} from "@stll/conditions";
 
 export const parseStoredCondition = (value: unknown): ConditionNode | null =>
-  v.is(conditionNodeSchema, value) ? value : null;
+  v.is(conditionNodeSchema, value) && !conditionHasFormula(value)
+    ? value
+    : null;

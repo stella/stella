@@ -349,6 +349,29 @@ describe("evaluateCondition", () => {
     expect(evaluateCondition("isUK", { country: "UK" }, conditions)).toBe(true);
   });
 
+  test("AST-backed named condition resolves a formula operand", () => {
+    // `rent * 12 < 100000` — no `{{#if}}` string form, so the rule lives as the
+    // AST `node` and the formula operand is computed against the fill bag.
+    const conditions: NamedCondition[] = [
+      {
+        name: "fitsBudget",
+        expression: "",
+        node: {
+          type: "compare",
+          left: { type: "formula", expr: "rent * 12" },
+          op: "lt",
+          right: { type: "literal", value: 100_000 },
+        },
+      },
+    ];
+    expect(evaluateCondition("fitsBudget", { rent: 8000 }, conditions)).toBe(
+      true,
+    );
+    expect(evaluateCondition("fitsBudget", { rent: 9000 }, conditions)).toBe(
+      false,
+    );
+  });
+
   test("circular named condition returns false", () => {
     const conditions: NamedCondition[] = [
       { name: "a", expression: "b" },

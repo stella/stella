@@ -61,6 +61,10 @@ export type LiteralValue = v.InferOutput<typeof literalValueSchema>;
  * except `literal` (which the evaluator resolves directly):
  *  - `property`/`builtin`/`kind` are the Table domain.
  *  - `path` is the DOCX template fill-bag surface.
+ *  - `formula` is an arithmetic expression over numeric fields
+ *    (e.g. `rent * 12`); only the JS-evaluated template domain
+ *    resolves it (SQL filters strip it at the boundary), so a
+ *    comparison can read `rent * 12 < 100000`.
  */
 export const operandSchema = v.variant("type", [
   v.strictObject({
@@ -75,6 +79,10 @@ export const operandSchema = v.variant("type", [
   v.strictObject({
     type: v.literal("path"),
     path: v.pipe(v.string(), v.minLength(1)),
+  }),
+  v.strictObject({
+    type: v.literal("formula"),
+    expr: v.pipe(v.string(), v.minLength(1)),
   }),
   v.strictObject({ type: v.literal("literal"), value: literalValueSchema }),
 ]);

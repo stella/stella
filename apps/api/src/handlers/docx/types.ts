@@ -1,6 +1,12 @@
 // Shared types for DOCX generation modes (b) and (c).
 
-import { isFieldPath } from "@stll/template-conditions";
+import * as v from "valibot";
+
+import {
+  type ConditionNode,
+  conditionNodeSchema,
+  isFieldPath,
+} from "@stll/template-conditions";
 
 import { BUSINESS_REGISTRY_SLUGS } from "@/api/lib/business-registries/dispatch";
 
@@ -427,6 +433,14 @@ export type FieldMeta = {
    */
   condition?: string | undefined;
   /**
+   * The canonical condition AST, set instead of {@link condition} when the rule
+   * uses a `formula` operand (e.g. `rent * 12 < 100000`) that the `{{#if}}`
+   * expression grammar cannot represent. Authoritative when present; the
+   * string {@link condition} is used otherwise. Same mutual-exclusivity and
+   * boolean-field constraints as {@link condition}.
+   */
+  conditionAst?: ConditionNode | undefined;
+  /**
    * Locale-aware rendering for a "date" {@link inputType} field: the
    * submitted ISO date (the date input's value) is formatted in this locale
    * and style before substitution — and before any AI step, so a field that
@@ -541,9 +555,11 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
   }
 
   // A condition field is a boolean derived by rule at fill time; like a
-  // formula it cannot also carry another value source.
+  // formula it cannot also carry another value source. The rule is held either
+  // as a `{{#if}}` string (`condition`) or, for formula-bearing rules, as the
+  // AST (`conditionAst`) — either form makes this a condition field.
   if (
-    value["condition"] !== undefined &&
+    (value["condition"] !== undefined || value["conditionAst"] !== undefined) &&
     (value["formula"] !== undefined ||
       value["aiPrompt"] !== undefined ||
       value["aiAdapt"] !== undefined ||
@@ -581,6 +597,8 @@ export const isFieldMeta = (value: unknown): value is FieldMeta => {
     (value["formula"] === undefined || typeof value["formula"] === "string") &&
     (value["condition"] === undefined ||
       typeof value["condition"] === "string") &&
+    (value["conditionAst"] === undefined ||
+      v.is(conditionNodeSchema, value["conditionAst"])) &&
     (value["dateFormat"] === undefined ||
       isFieldDateFormat(value["dateFormat"]))
   );
@@ -686,6 +704,9 @@ export type ResolvedField = {
    *  time, so the fill form renders no input (computed/derived); a plain
    *  boolean field without a condition is asked as a yes/no question instead. */
   condition?: string | undefined;
+  /** Mirrors {@link FieldMeta.conditionAst}: the AST-backed form for boolean
+   *  condition rules that cannot be represented by the string grammar. */
+  conditionAst?: ConditionNode | undefined;
   /** Mirrors {@link FieldMeta.dateFormat}: the fill form can preview how the
    *  entered date will render in the document's language. */
   dateFormat?: FieldDateFormat | undefined;

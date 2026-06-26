@@ -93,6 +93,10 @@ export type StudioActions = {
    *  multi-format lookup field, `formatKey` selects a non-default output
    *  (`{{path.key}}`); omit it to insert the default (`{{path}}`). */
   insertExistingField: (path: string, formatKey?: string) => void;
+  /** Insert (or wrap the selection in) a `{{#if expr}}…{{/if}}` block for an
+   *  existing condition's expression, so the open condition can be placed in
+   *  the document the same way a field marker is. */
+  insertExistingCondition: (expr: string) => void;
   /** Remove every {{path}} marker from the document and drop the field. */
   deleteField: (path: string) => void;
   /** Insert a saved recipe at the caret: loop recipes add the `{{#each}}`

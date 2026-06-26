@@ -40,14 +40,11 @@ import {
   SelectValue,
 } from "@stll/ui/components/select";
 
-import { DatePickerPopover } from "@/components/date-picker-popover";
-import type { TranslationKey } from "@/i18n/types";
-import type { WorkspaceProperty } from "@/lib/types";
-import { ConditionBuilder } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder";
+import { ConditionBuilder } from "@/components/conditions/condition-builder";
 import type {
   ConditionOperator,
   FieldOption,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
+} from "@/components/conditions/condition-builder-logic";
 import {
   buildLeaf,
   fieldForNode,
@@ -59,12 +56,16 @@ import {
   operatorLabelKey,
   operatorsFor,
   valueEditorFor,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
+} from "@/components/conditions/condition-builder-logic";
+import { DatePickerPopover } from "@/components/date-picker-popover";
+import type { TranslationKey } from "@/i18n/types";
+import type { WorkspaceProperty } from "@/lib/types";
 import type { FacetContext } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
 import {
   MultiSelectValue,
   SingleSelectValue,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values";
+import { filterCapabilities } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/filter-capabilities";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 
@@ -83,11 +84,25 @@ export const FilterChips = ({
 }: FilterChipsProps) => {
   const t = useTranslations();
   const fields = useFilterFields(properties);
+  // Which advanced-filter chip's editor is open. Set when a chip is created so
+  // it opens immediately (an unopened "1 rule" chip is otherwise a dead end).
+  const [openAdvancedIndex, setOpenAdvancedIndex] = useState<number | null>(
+    null,
+  );
 
   const replaceAt = (index: number, node: ConditionNode) => {
     onUpdate(filters.map((existing, i) => (i === index ? node : existing)));
   };
   const removeAt = (index: number) => {
+    setOpenAdvancedIndex((openIndex) => {
+      if (openIndex === null || openIndex < index) {
+        return openIndex;
+      }
+      if (openIndex === index) {
+        return null;
+      }
+      return openIndex - 1;
+    });
     onUpdate(filters.filter((_, i) => i !== index));
   };
   const append = (node: ConditionNode) => {
@@ -103,11 +118,17 @@ export const FilterChips = ({
     ? fields.filter((field) => field.operand.type !== "kind")
     : fields;
 
+  // The seeded group lands at the current end, so open the chip at that index.
+  const addAdvanced = () => {
+    setOpenAdvancedIndex(filters.length);
+    append(seededAdvancedGroup(pickerFields));
+  };
+
   if (filters.length === 0) {
     return (
       <AddFilterPicker
         fields={pickerFields}
-        onAddAdvanced={() => append(emptyAdvancedGroup())}
+        onAddAdvanced={addAdvanced}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
           <Button
@@ -138,7 +159,11 @@ export const FilterChips = ({
               key={index}
               node={node}
               onChange={(next) => replaceAt(index, next)}
+              onOpenChange={(nextOpen) =>
+                setOpenAdvancedIndex(nextOpen ? index : null)
+              }
               onRemove={() => removeAt(index)}
+              open={openAdvancedIndex === index}
             />
           );
         }
@@ -155,7 +180,7 @@ export const FilterChips = ({
       })}
       <AddFilterPicker
         fields={pickerFields}
-        onAddAdvanced={() => append(emptyAdvancedGroup())}
+        onAddAdvanced={addAdvanced}
         onAddField={(field) => append(leafFromField(field))}
         trigger={
           <Button
@@ -430,6 +455,8 @@ type AdvancedFilterChipProps = {
   node: GroupNode;
   fields: FieldOption[];
   facetContext?: FacetContext | undefined;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   onChange: (next: GroupNode) => void;
   onRemove: () => void;
 };
@@ -438,13 +465,15 @@ const AdvancedFilterChip = ({
   node,
   fields,
   facetContext,
+  open,
+  onOpenChange,
   onChange,
   onRemove,
 }: AdvancedFilterChipProps) => {
   const t = useTranslations();
 
   return (
-    <Popover>
+    <Popover onOpenChange={onOpenChange} open={open}>
       <PopoverTrigger
         render={
           <Button
@@ -464,11 +493,13 @@ const AdvancedFilterChip = ({
           })}
         </span>
       </PopoverTrigger>
-      <PopoverPopup align="start" className="w-[34rem] max-w-[90vw] p-3">
+      <PopoverPopup align="start" className="w-[44rem] max-w-[92vw] p-3">
         <ConditionBuilder
-          allowGroups
-          facetContext={facetContext}
-          fields={fields}
+          capabilities={filterCapabilities({
+            fields,
+            facetContext,
+            allowNesting: true,
+          })}
           onChange={onChange}
           value={node}
         />
@@ -642,11 +673,18 @@ const chipSummary = ({
 
 // ── Field catalogue ───────────────────────────────────────
 
-const emptyAdvancedGroup = (): GroupNode => ({
-  type: "group",
-  combinator: "and",
-  children: [],
-});
+// An advanced group seeds with one real condition row: an empty group is
+// pruned on save (`pruneStaleNode`), so it would never persist or render a
+// chip. Seeding the first available field mirrors Notion's "add a group, get a
+// first row" and gives the user something to edit immediately.
+const seededAdvancedGroup = (fields: FieldOption[]): GroupNode => {
+  const first = fields.at(0);
+  return {
+    type: "group",
+    combinator: "and",
+    children: first ? [leafFromField(first)] : [],
+  };
+};
 
 const fieldKey = (field: FieldOption): string => {
   if (field.operand.type === "property") {

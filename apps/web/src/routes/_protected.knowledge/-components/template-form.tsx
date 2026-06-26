@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
+import type { ConditionNode, Operand } from "@stll/conditions";
 import { evaluateCondition } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
@@ -87,6 +88,51 @@ type StructureError = DiscoverData["structureErrors"][number];
 const REQUIRED_MARKER = "*";
 
 type CompositePart = NonNullable<ResolvedField["parts"]>[number];
+
+const addFormulaFieldReferences = (
+  expr: string,
+  fields: readonly ResolvedField[],
+  referencedPaths: Set<string>,
+): void => {
+  for (const field of fields) {
+    if (expr.includes(field.path)) {
+      referencedPaths.add(field.path);
+    }
+  }
+};
+
+const addConditionOperandReferences = (
+  operand: Operand,
+  fields: readonly ResolvedField[],
+  referencedPaths: Set<string>,
+): void => {
+  if (operand.type === "path") {
+    referencedPaths.add(operand.path);
+    return;
+  }
+  if (operand.type === "formula") {
+    addFormulaFieldReferences(operand.expr, fields, referencedPaths);
+  }
+};
+
+const addConditionAstReferences = (
+  node: ConditionNode,
+  fields: readonly ResolvedField[],
+  referencedPaths: Set<string>,
+): void => {
+  if (node.type === "compare") {
+    addConditionOperandReferences(node.left, fields, referencedPaths);
+    addConditionOperandReferences(node.right, fields, referencedPaths);
+    return;
+  }
+  if (node.type === "predicate") {
+    addConditionOperandReferences(node.operand, fields, referencedPaths);
+    return;
+  }
+  for (const child of node.children) {
+    addConditionAstReferences(child, fields, referencedPaths);
+  }
+};
 
 /** The field's parts when it is composite (parts + format), else null. */
 const compositeParts = (field: ResolvedField): CompositePart[] | null =>
@@ -1490,6 +1536,9 @@ export const TemplateForm = ({
   // field derives from (formula, optionsFrom).
   const referencedPaths = new Set<string>();
   for (const condition of conditions) {
+    if (condition.node !== undefined) {
+      addConditionAstReferences(condition.node, allFields, referencedPaths);
+    }
     for (const f of allFields) {
       if (condition.expression.includes(f.path)) {
         referencedPaths.add(f.path);
@@ -1501,11 +1550,7 @@ export const TemplateForm = ({
       referencedPaths.add(f.optionsFrom);
     }
     if (f.formula !== undefined) {
-      for (const other of allFields) {
-        if (f.formula.includes(other.path)) {
-          referencedPaths.add(other.path);
-        }
-      }
+      addFormulaFieldReferences(f.formula, allFields, referencedPaths);
     }
   }
   const fields = allFields.filter(
@@ -1513,6 +1558,7 @@ export const TemplateForm = ({
       f.formula === undefined &&
       f.aiPrompt === undefined &&
       f.condition === undefined &&
+      f.conditionAst === undefined &&
       (f.count > 0 || f.inputType === "boolean" || referencedPaths.has(f.path)),
   );
   const [values, setValues] = useState<FormValues>(() => ({

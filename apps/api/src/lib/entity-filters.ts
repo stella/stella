@@ -140,6 +140,10 @@ const buildResolver =
         return PASS_THROUGH;
       case "path":
         return PASS_THROUGH;
+      // `formula` operands only evaluate in the JS template domain; they are
+      // stripped before reaching view filters, so this is a defensive no-match.
+      case "formula":
+        return PASS_THROUGH;
       default:
         return PASS_THROUGH;
     }
@@ -456,6 +460,12 @@ const compileBuiltinCompare = (
 };
 
 const compileCompare = (node: CompareNode): SQL | null => {
+  // `formula` operands have no SQL transpilation; skip the leaf rather than
+  // coerce it. They are stripped at the persistence boundary, so this is a
+  // belt-and-suspenders guard against a hand-crafted filter.
+  if (node.left.type === "formula" || node.right.type === "formula") {
+    return null;
+  }
   // The filter UI always compares a ref operand against a literal.
   const value = literalString(node.right);
   if (value === null) {

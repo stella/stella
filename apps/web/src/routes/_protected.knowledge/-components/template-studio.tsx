@@ -49,8 +49,16 @@ import type { EditorState, Transaction } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 import { useDebounce, useDebouncedCallback } from "use-debounce";
 import { useFormatter, useTranslations } from "use-intl";
+import * as v from "valibot";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
+import {
+  conditionHasFormula,
+  conditionNodeSchema,
+  type ConditionNode,
+  type GroupNode,
+  type Operand,
+} from "@stll/conditions";
 import {
   buildPositionalText,
   clearTemplateSlashMenu,
@@ -73,15 +81,11 @@ import type {
 } from "@stll/folio";
 import { displayLanguageName } from "@stll/locales";
 import {
-  evaluateNumericExpression,
   isFieldPath,
   renderDeterministicFieldValue,
   serializeCondition,
 } from "@stll/template-conditions";
-import type {
-  DeterministicFieldConfig,
-  GroupNode,
-} from "@stll/template-conditions";
+import type { DeterministicFieldConfig } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -124,6 +128,7 @@ import { cn } from "@stll/ui/lib/utils";
 import "@stll/folio/editor.css";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
+import { FormulaEditor } from "@/components/conditions/formula-editor";
 import { FacetBar } from "@/components/inspector/inspector-facet-bar";
 import { useInspectorStore } from "@/components/inspector/inspector-store";
 import { InspectorTabHeader } from "@/components/inspector/inspector-tab-header";
@@ -661,6 +666,8 @@ export const TemplateStudioPage = ({
       setFillPreview: (values) => actionsRef.current?.setFillPreview(values),
       insertExistingField: (path, formatKey) =>
         actionsRef.current?.insertExistingField(path, formatKey),
+      insertExistingCondition: (expr) =>
+        actionsRef.current?.insertExistingCondition(expr),
       deleteField: (path) => actionsRef.current?.deleteField(path),
       insertRecipe: (definition) =>
         actionsRef.current?.insertRecipe(definition),
@@ -1098,6 +1105,18 @@ export const TemplateStudioPage = ({
 
   const insertCondition = (range?: { from: number; to: number }) =>
     insertOrWrapBlock("{{#if condition}}", "{{/if}}", "condition", range, true);
+  // Place an already-defined condition by its expression (an empty expr falls
+  // back to the generic placeholder, matching a fresh insert).
+  const insertExistingCondition = (expr: string) => {
+    const conditionExpr = expr.trim() || "condition";
+    insertOrWrapBlock(
+      `{{#if ${conditionExpr}}}`,
+      "{{/if}}",
+      conditionExpr,
+      undefined,
+      true,
+    );
+  };
   const insertLoop = (range?: { from: number; to: number }) =>
     insertOrWrapBlock("{{#each items}}", "{{/each}}", "items", range, true);
   const insertClause = () => insertInline("{{@clause:Clause}}");
@@ -2362,7 +2381,7 @@ export const TemplateStudioPage = ({
   };
 
   actionsRef.current = {
-    toggleDirectives: () => setShowDirectives((v) => !v),
+    toggleDirectives: () => setShowDirectives((visible) => !visible),
     deleteField: (path) => {
       const view = editorViewRef.current;
       if (!view) {
@@ -2392,6 +2411,7 @@ export const TemplateStudioPage = ({
     },
     insertExistingField: (path, formatKey) =>
       insertExistingFieldAt(path, { formatKey }),
+    insertExistingCondition,
     setFieldRepeatable: (path, repeatable) =>
       repeatable ? makeFieldRepeatable(path) : unmakeFieldRepeatable(path),
     setFillPreview: (values) => {
@@ -3618,7 +3638,7 @@ const GestureSplitRow = ({
             aria-expanded={open}
             aria-label={reuseLabel}
             className="shrink-0"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setOpen((isOpen) => !isOpen)}
             onMouseDown={keepEditorFocus}
             size="icon-sm"
             title={reuseLabel}
@@ -4652,6 +4672,56 @@ const InsertExistingFieldItem = ({
   );
 };
 
+/** Primary footer action, contextual to the open detail: a placeholder field
+ *  inserts its marker, a condition (`#if`) inserts its block, and the overview
+ *  creates a new field. */
+const StudioPrimaryInsertButton = ({
+  actions,
+  selected,
+}: {
+  actions: StudioActions;
+  selected: DirectiveRange | null;
+}) => {
+  const t = useTranslations();
+  if (selected?.kind === "placeholder") {
+    return (
+      <Button
+        className="flex-1 justify-start"
+        onClick={() => actions.insertExistingField(selected.expr)}
+        size="sm"
+        variant="ghost"
+      >
+        <BracesIcon />
+        {t("templates.studio.insertIntoTemplate")}
+      </Button>
+    );
+  }
+  if (selected?.kind === "if") {
+    return (
+      <Button
+        className="flex-1 justify-start"
+        onClick={() => actions.insertExistingCondition(selected.expr)}
+        size="sm"
+        variant="ghost"
+      >
+        <BracesIcon />
+        {t("templates.studio.insertConditionIntoTemplate")}
+      </Button>
+    );
+  }
+  return (
+    <Button
+      className="flex-1 justify-start"
+      onClick={actions.insertField}
+      size="sm"
+      variant="ghost"
+    >
+      <PlusIcon />
+      {t("templates.studio.newField")}
+    </Button>
+  );
+};
+
 /** Document actions row — rendered in the inspector tab's top area; the page
  *  registers the handlers + UI state in the session store. */
 const StudioInsertRow = () => {
@@ -4660,9 +4730,6 @@ const StudioInsertRow = () => {
   const fields = useTemplateStudioStore((s) => s.fields);
   const selected = useTemplateStudioStore((s) => s.selected);
   const sessionTemplateId = useTemplateStudioStore((s) => s.templateId);
-  // When a field is open in detail view, the primary action becomes inserting
-  // that field's marker at the caret instead of creating a new field.
-  const openFieldPath = selected?.kind === "placeholder" ? selected.expr : null;
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -4715,27 +4782,7 @@ const StudioInsertRow = () => {
         TOOLBAR_ROW_HEIGHT,
       )}
     >
-      {openFieldPath === null ? (
-        <Button
-          className="flex-1 justify-start"
-          onClick={actions.insertField}
-          size="sm"
-          variant="ghost"
-        >
-          <PlusIcon />
-          {t("templates.studio.newField")}
-        </Button>
-      ) : (
-        <Button
-          className="flex-1 justify-start"
-          onClick={() => actions.insertExistingField(openFieldPath)}
-          size="sm"
-          variant="ghost"
-        >
-          <BracesIcon />
-          {t("templates.studio.insertIntoTemplate")}
-        </Button>
-      )}
+      <StudioPrimaryInsertButton actions={actions} selected={selected} />
       <Menu
         onOpenChange={(open) => {
           if (open) {
@@ -5258,10 +5305,15 @@ const booleanFieldForExpr = (
  *  *how* it resolves. */
 type ConditionSource =
   | { kind: "asked" }
-  | { kind: "rule"; expr: string }
+  | { kind: "rule"; expr: string; node?: ConditionNode }
   | { kind: "ai"; prompt: string };
 
 const conditionSourceOf = (field: StudioField): ConditionSource => {
+  // An AST is authoritative when set (formula rules have no `{{#if}}` string
+  // form, so they only ever round-trip as the AST).
+  if (field.conditionAst !== undefined) {
+    return { kind: "rule", expr: "", node: field.conditionAst };
+  }
   if (field.condition !== undefined && field.condition.trim() !== "") {
     return { kind: "rule", expr: field.condition };
   }
@@ -5273,6 +5325,86 @@ const conditionSourceOf = (field: StudioField): ConditionSource => {
 
 const isBooleanField = (field: StudioField): boolean =>
   field.inputType === "boolean";
+
+/** Seed a rule editor's working group from a derived source: an AST-backed rule
+ *  reopens with its own node (wrapped into a group when it is a leaf); anything
+ *  else starts from an empty single-row group. */
+const initialRuleGroup = (source: ConditionSource): GroupNode => {
+  if (source.kind === "rule" && source.node !== undefined) {
+    return source.node.type === "group"
+      ? source.node
+      : { type: "group", combinator: "and", children: [source.node] };
+  }
+  return emptyGroup();
+};
+
+const conditionHasLeaf = (node: ConditionNode): boolean => {
+  if (node.type === "group") {
+    return node.children.some(conditionHasLeaf);
+  }
+  return true;
+};
+
+const isBlankFormulaOperand = (operand: Operand): boolean =>
+  operand.type === "formula" && operand.expr.trim() === "";
+
+const isBlankLiteralOperand = (operand: Operand): boolean =>
+  operand.type === "literal" &&
+  typeof operand.value === "string" &&
+  operand.value.trim() === "";
+
+const hasBlankFormulaComparisonValue = (node: ConditionNode): boolean => {
+  if (node.type === "group") {
+    return node.children.some(hasBlankFormulaComparisonValue);
+  }
+  if (node.type === "predicate") {
+    return isBlankFormulaOperand(node.operand);
+  }
+  if (isBlankFormulaOperand(node.left) || isBlankFormulaOperand(node.right)) {
+    return true;
+  }
+  const comparesFormula =
+    node.left.type === "formula" || node.right.type === "formula";
+  return (
+    comparesFormula &&
+    (isBlankLiteralOperand(node.left) || isBlankLiteralOperand(node.right))
+  );
+};
+
+const isPersistableFormulaGroup = (group: GroupNode): boolean =>
+  v.is(conditionNodeSchema, group) && !hasBlankFormulaComparisonValue(group);
+
+/** Persist a built rule onto a condition-field, picking the storage form by
+ *  whether it contains a formula operand: a formula has no `{{#if}}` string
+ *  form, so it must persist as the AST; otherwise serialize to the string and
+ *  clear any stale AST. The two forms are mutually exclusive. */
+const persistRuleGroup = (
+  path: string,
+  group: GroupNode,
+  upsertField: (path: string, patch: Partial<StudioField>) => void,
+): void => {
+  if (conditionHasFormula(group)) {
+    if (!isPersistableFormulaGroup(group)) {
+      return;
+    }
+    upsertField(path, {
+      condition: undefined,
+      conditionAst: group,
+      aiPrompt: undefined,
+    });
+    return;
+  }
+  const expression = serializeCondition(group);
+  upsertField(path, {
+    condition: expression === "" ? undefined : expression,
+    conditionAst: undefined,
+    aiPrompt: undefined,
+  });
+};
+
+const canPersistRuleGroup = (group: GroupNode): boolean =>
+  conditionHasLeaf(group) &&
+  (!conditionHasFormula(group) || isPersistableFormulaGroup(group));
 
 /** One reusable condition the picker can insert: every boolean field (its bare
  *  path is the gate). Shown in plain language; inserting references it by path
@@ -5572,7 +5704,11 @@ const ConditionFieldEditor = ({
   const t = useTranslations();
   const upsertField = useTemplateStudioStore((s) => s.upsertField);
   const derived = conditionSourceOf(field);
-  const [group, setGroup] = useState<GroupNode>(emptyGroup);
+  // Seed from an existing AST rule so re-opening a formula (or any AST-backed)
+  // rule shows its rows; otherwise start empty.
+  const [group, setGroup] = useState<GroupNode>(() =>
+    initialRuleGroup(derived),
+  );
   // Clicking "Rule" with no expression yet keeps the derived source at "asked"
   // (no `condition` is written until Done), so track the picked tab locally to
   // reveal the right editor immediately.
@@ -5588,21 +5724,28 @@ const ConditionFieldEditor = ({
 
   const setAsked = () => {
     setPick("asked");
-    upsertField(field.path, { condition: undefined, aiPrompt: undefined });
+    upsertField(field.path, {
+      condition: undefined,
+      conditionAst: undefined,
+      aiPrompt: undefined,
+    });
   };
   const setAi = () => {
     setPick("ai");
     upsertField(field.path, {
       condition: undefined,
+      conditionAst: undefined,
       aiPrompt: field.aiPrompt ?? "",
     });
   };
   const applyRule = () => {
-    const expression = serializeCondition(group);
-    if (expression === "") {
+    if (!canPersistRuleGroup(group)) {
       return;
     }
-    upsertField(field.path, { condition: expression, aiPrompt: undefined });
+    persistRuleGroup(field.path, group, upsertField);
+    if (conditionHasFormula(group)) {
+      return;
+    }
     setGroup(emptyGroup());
   };
 
@@ -5677,7 +5820,12 @@ const ConditionFieldEditor = ({
             group={group}
             onChange={setGroup}
           />
-          <Button className="self-start" onClick={applyRule} size="sm">
+          <Button
+            className="self-start"
+            disabled={!canPersistRuleGroup(group)}
+            onClick={applyRule}
+            size="sm"
+          >
             {t("common.done")}
           </Button>
         </div>
@@ -5784,7 +5932,6 @@ const ConditionBuilder = ({
       ) : (
         <ConditionRuleBuilder fields={fields} onRewrite={onRewrite} />
       )}
-      <ConditionAdvanced expr={expr} fromKey={fromKey} onRewrite={onRewrite} />
     </div>
   );
 };
@@ -5959,16 +6106,26 @@ const ConditionRuleBuilder = ({
   // points the block at the field's path. The field is then in the reuse
   // picker and edit-once-propagates to every `{{#if path}}` referencing it.
   const apply = () => {
-    const expression = serializeCondition(group);
-    if (expression === "") {
+    const isFormula = conditionHasFormula(group);
+    if (isFormula && !canPersistRuleGroup(group)) {
       return;
     }
-    const label = labelForConditionExpr(expression, fields, (key) => t(key));
+    // A formula rule has no `{{#if}}` string form, so it can only be derived a
+    // label from the field name (not the humanized expression) and is persisted
+    // as the AST. Otherwise serialize as before.
+    const expression = isFormula ? "" : serializeCondition(group);
+    if (!isFormula && expression === "") {
+      return;
+    }
+    const label = isFormula
+      ? t("templates.studio.conditionRuleFallbackLabel")
+      : labelForConditionExpr(expression, fields, (key) => t(key));
     const path = freezeConditionPath(label, fields);
     upsertField(path, {
       inputType: "boolean",
       label,
-      condition: expression,
+      condition: isFormula ? undefined : expression,
+      conditionAst: isFormula ? group : undefined,
     });
     if (onRewrite(path)) {
       setGroup(emptyGroup());
@@ -6007,7 +6164,11 @@ const ConditionRuleBuilder = ({
         onChange={setGroup}
       />
       <div className="flex items-center gap-2">
-        <Button onClick={apply} size="sm">
+        <Button
+          disabled={!canPersistRuleGroup(group)}
+          onClick={apply}
+          size="sm"
+        >
           {t("common.done")}
         </Button>
         <Button
@@ -6022,114 +6183,6 @@ const ConditionRuleBuilder = ({
         </Button>
       </div>
     </section>
-  );
-};
-
-/** Power-user / reference path, collapsed by default: the raw expression
- *  editor for the block opener. */
-const ConditionAdvanced = ({
-  expr,
-  fromKey,
-  onRewrite,
-}: {
-  expr: string;
-  fromKey: string;
-  onRewrite: (next: string) => boolean;
-}) => {
-  const t = useTranslations();
-  const [open, setOpen] = useState(false);
-  return (
-    <section className="border-t pt-3">
-      <button
-        aria-expanded={open}
-        className="hover:bg-muted flex w-full items-center gap-1.5 rounded px-1.5 py-1 text-start text-xs"
-        onClick={() => setOpen((v) => !v)}
-        type="button"
-      >
-        {open ? (
-          <ChevronDownIcon className="text-muted-foreground size-3.5 shrink-0" />
-        ) : (
-          <DirectionalIcon
-            className="text-muted-foreground size-3.5 shrink-0"
-            icon={ChevronRightIcon}
-          />
-        )}
-        <span className="text-muted-foreground font-medium">
-          {t("templates.studio.conditionAdvanced")}
-        </span>
-      </button>
-      {open && (
-        <div className="mt-2 flex flex-col gap-3">
-          <ConditionExprEditor
-            expr={expr}
-            key={fromKey}
-            onRewrite={onRewrite}
-          />
-        </div>
-      )}
-    </section>
-  );
-};
-
-/** Click-to-edit condition expression: commits by rewriting the block
- *  opener's `{{#if …}}` text in the document. */
-const ConditionExprEditor = ({
-  expr,
-  onRewrite,
-}: {
-  expr: string;
-  onRewrite: (next: string) => boolean;
-}) => {
-  const t = useTranslations();
-  const [editing, setEditing] = useState(false);
-  const [value, setValue] = useState(expr);
-
-  const commit = () => {
-    if (value.trim() === expr) {
-      setEditing(false);
-      return;
-    }
-    if (onRewrite(value)) {
-      setEditing(false);
-      return;
-    }
-    stellaToast.add({
-      type: "error",
-      title: t("templates.studio.invalidExpression"),
-    });
-  };
-
-  if (!editing) {
-    return (
-      <button
-        className="hover:bg-muted/60 group flex w-full items-center gap-1.5 rounded border px-3 py-2 text-start"
-        onClick={() => setEditing(true)}
-        title={t("common.edit")}
-        type="button"
-      >
-        <code className="min-w-0 flex-1 truncate text-xs">{expr || "—"}</code>
-        <PencilIcon className="text-muted-foreground size-3 shrink-0 opacity-0 transition-opacity group-hover:opacity-100" />
-      </button>
-    );
-  }
-  return (
-    <Input
-      autoFocus
-      className="h-8 font-mono text-xs"
-      dir="ltr"
-      onBlur={commit}
-      onChange={(e) => setValue(e.currentTarget.value)}
-      onKeyDown={(e) => {
-        if (e.key === "Enter") {
-          commit();
-        }
-        if (e.key === "Escape") {
-          setValue(expr);
-          setEditing(false);
-        }
-      }}
-      value={value}
-    />
   );
 };
 
@@ -6387,7 +6440,7 @@ const FieldNavigator = ({
           <button
             aria-expanded={showUnused}
             className="hover:bg-muted text-muted-foreground flex w-full items-center gap-1.5 rounded-md px-2 py-1.5 text-start text-xs font-medium"
-            onClick={() => setShowUnused((v) => !v)}
+            onClick={() => setShowUnused((visible) => !visible)}
             type="button"
           >
             {showUnused ? (
@@ -6695,7 +6748,7 @@ const OutlineGroupRow = ({
             aria-expanded={open}
             aria-label={groupTitle}
             className="hover:bg-muted text-muted-foreground me-1 shrink-0 rounded p-0.5"
-            onClick={() => setOpen((v) => !v)}
+            onClick={() => setOpen((isOpen) => !isOpen)}
             type="button"
           >
             {open ? (
@@ -6750,30 +6803,6 @@ const FieldRowLabel = ({ label, path }: { label: string; path: string }) => {
   );
 };
 
-// Built-in formula functions are not field references; mirror the evaluator's
-// identifier grammar (compute.ts) so the "not a field" check matches what the
-// engine will actually resolve.
-const FORMULA_FUNCTIONS = new Set([
-  "min",
-  "max",
-  "round",
-  "abs",
-  "floor",
-  "ceil",
-]);
-const FORMULA_IDENT_RE = /[\p{L}_][\p{L}\p{N}_.]*(?:-[\p{L}\p{N}_.]+)*/gu;
-
-type FormulaEditorProps = {
-  currentPath: string;
-  fields: readonly StudioField[];
-  /** Document outline, to resolve each field's `{{#each}}` scope: a loop
-   *  formula is evaluated against the row, so same-row fields are referenced
-   *  by their row-relative path, not the full manifest path. */
-  outline: OutlineNode[];
-  value: string;
-  onChange: (formula: string) => void;
-};
-
 /** Same-scope fields a formula at `currentPath` may use as operands: number
  *  inputs (any order) and EARLIER formula fields (computed before this one in
  *  manifest order). Later formula fields and non-numeric text/date fields are
@@ -6799,296 +6828,54 @@ const formulaOperandFields = (
   );
 };
 
-// Math tokens the toolbar can insert. The glyph is what the author sees; the
-// token is the canonical operator the evaluator understands (so the stored
-// formula stays in `* / -` form, never the human × ÷ − glyphs).
-const FORMULA_OPERATOR_TOKENS: readonly { glyph: string; token: string }[] = [
-  { glyph: "+", token: "+" },
-  { glyph: "−", token: "-" },
-  { glyph: "×", token: "*" },
-  { glyph: "÷", token: "/" },
-  { glyph: "%", token: "%" },
-  { glyph: "(", token: "(" },
-  { glyph: ")", token: ")" },
-];
-const FORMULA_FUNCTION_TOKENS: readonly string[] = [
-  "min(",
-  "max(",
-  "round(",
-  "abs(",
-  "floor(",
-  "ceil(",
-];
+/** The name a field at `path` is referenced by inside a formula scoped at
+ *  `currentPath`: inside a `{{#each}}` the fill engine evaluates against the
+ *  row object, so same-row fields are named by their row-relative path (the
+ *  loop-container prefix stripped); at top level the full manifest path is
+ *  used. */
+const formulaRefName = (
+  outline: OutlineNode[],
+  currentPath: string,
+  path: string,
+): string => {
+  const scopeOf = (p: string): string | null =>
+    findEnclosingEachGroup(outline, p, null)?.expr.trim() || null;
+  const currentScope = scopeOf(currentPath);
+  return currentScope !== null && path.startsWith(`${currentScope}.`)
+    ? path.slice(currentScope.length + 1)
+    : path;
+};
 
-/** Formula value-source editor: the expression input, clickable chips of the
- *  number fields you can reference, a math-symbol toolbar, a live worked
- *  example with made-up values, a read-only chip preview of the expression,
- *  and warnings for names that are not fields or not numbers. */
-const FormulaEditor = ({
-  currentPath,
-  fields,
-  outline,
-  value,
-  onChange,
-}: FormulaEditorProps) => {
-  const t = useTranslations();
-  const inputRef = useRef<HTMLInputElement>(null);
-  // A field's enclosing `{{#each}}` container path, or null at top level.
+/** The in-scope numeric operands for a formula at `currentPath`, projected onto
+ *  the `{ path, label }` shape the shared FormulaEditor consumes. `path` is the
+ *  reference name the expression uses (row-relative inside a loop). */
+const formulaOperandRefFields = (
+  fields: readonly StudioField[],
+  outline: OutlineNode[],
+  currentPath: string,
+): { path: string; label: string }[] =>
+  formulaOperandFields(fields, outline, currentPath).map((f) => ({
+    path: formulaRefName(outline, currentPath, f.path),
+    label: f.label,
+  }));
+
+/** Every in-scope field a formula at `currentPath` may name, numeric or not, in
+ *  the `{ path, label }` shape — so the editor can tell a non-number reference
+ *  (a known field used where only numbers work) from an unknown one. */
+const formulaInScopeRefFields = (
+  fields: readonly StudioField[],
+  outline: OutlineNode[],
+  currentPath: string,
+): { path: string; label: string }[] => {
   const scopeOf = (path: string): string | null =>
     findEnclosingEachGroup(outline, path, null)?.expr.trim() || null;
   const currentScope = scopeOf(currentPath);
-  // The name a field is referenced by in the expression: inside a loop the fill
-  // engine evaluates against the row object, so same-row fields are named by
-  // their row-relative path (the loop-container prefix stripped); at top level
-  // the full manifest path is used.
-  const refName = (path: string): string =>
-    currentScope !== null && path.startsWith(`${currentScope}.`)
-      ? path.slice(currentScope.length + 1)
-      : path;
-  // Only same-scope fields are resolvable here: a loop formula sees only its
-  // own row, a top-level formula only top-level values.
-  const inScope = (path: string): boolean => scopeOf(path) === currentScope;
-  const numberFields = formulaOperandFields(fields, outline, currentPath);
-  const hasNonNumberFields = fields.some(
-    (f) =>
-      f.path !== currentPath &&
-      inScope(f.path) &&
-      f.inputType !== "number" &&
-      f.formula === undefined,
-  );
-  // Keyed by REFERENCE name (row-relative inside a loop) — what the expression
-  // and the evaluator actually use.
-  const fieldsByRef = new Map(
-    fields.filter((f) => inScope(f.path)).map((f) => [refName(f.path), f]),
-  );
-  const knownRefs = new Set(fieldsByRef.keys());
-  const numberRefs = new Set(numberFields.map((f) => refName(f.path)));
-  const referenced = [
-    ...new Set(
-      [...value.matchAll(FORMULA_IDENT_RE)]
-        .map((match) => match[0])
-        .filter((id) => !FORMULA_FUNCTIONS.has(id)),
-    ),
-  ];
-  const unknown = referenced.filter((name) => !knownRefs.has(name));
-  // Known fields referenced but not numbers: the evaluator coerces them to NaN.
-  const nonNumber = referenced.filter(
-    (name) => knownRefs.has(name) && !numberRefs.has(name),
-  );
-
-  const insertAtCaret = (token: string) => {
-    const input = inputRef.current;
-    // Append when the input is not focused/measurable; otherwise splice the
-    // token at the current selection so the caret position is respected.
-    if (input === null) {
-      onChange(`${value}${token}`);
-      return;
-    }
-    const start = input.selectionStart ?? value.length;
-    const end = input.selectionEnd ?? value.length;
-    onChange(`${value.slice(0, start)}${token}${value.slice(end)}`);
-  };
-
-  const appendField = (path: string) => {
-    const input = inputRef.current;
-    if (input === null) {
-      // No separator right after an opening operator/paren or on an empty
-      // expression; otherwise a space so adjacent names do not merge.
-      const needsSpace = value !== "" && !/[\s(+\-*/%,]$/u.test(value);
-      onChange(`${value}${needsSpace ? " " : ""}${path}`);
-      return;
-    }
-    const start = input.selectionStart ?? value.length;
-    const end = input.selectionEnd ?? value.length;
-    const before = value.slice(0, start);
-    const needsSpace = before !== "" && !/[\s(+\-*/%,]$/u.test(before);
-    onChange(`${before}${needsSpace ? " " : ""}${path}${value.slice(end)}`);
-  };
-
-  // Accept human multiplication/division glyphs as shorthand. `×`/`÷` are
-  // unambiguous (never part of an identifier), so map them directly. A bare
-  // `x` only becomes `*` when it sits between operand-ish characters (space,
-  // digit, closing paren on the left; space, digit, opening paren on the
-  // right) — single-char bounds keep this linear (no backtracking) and never
-  // rewrite the `x` inside an identifier like `taxRate` or `maxFee`.
-  const handleInputChange = (raw: string) => {
-    const canonical = raw
-      .replace(/×/gu, "*")
-      .replace(/÷/gu, "/")
-      .replace(/(?<lead>[\s\d)])x(?=[\s\d(])/gu, "$<lead>*");
-    onChange(canonical);
-  };
-
-  // Worked example: assign each referenced number field a distinct made-up
-  // integer (100, 200, 300…) keyed by its reference name, then evaluate the
-  // expression against that flat data object. The evaluator resolves exact keys.
-  const exampleFields = referenced
-    .filter((name) => numberRefs.has(name))
-    .map((name, index) => ({ path: name, value: (index + 1) * 100 }));
-  const exampleData: Record<string, number> = {};
-  for (const entry of exampleFields) {
-    exampleData[entry.path] = entry.value;
-  }
-  const exampleResult =
-    value.trim() === ""
-      ? undefined
-      : evaluateNumericExpression(value, exampleData);
-  const finiteExampleResult =
-    exampleResult !== undefined && Number.isFinite(exampleResult)
-      ? exampleResult
-      : undefined;
-
-  // Light tokenization for the read-only chip strip: identifier spans become
-  // chips, everything between them renders as muted inline mono text.
-  const previewTokens: { text: string; isField: boolean }[] = [];
-  let cursor = 0;
-  for (const match of value.matchAll(FORMULA_IDENT_RE)) {
-    const id = match[0];
-    const at = match.index;
-    if (at > cursor) {
-      previewTokens.push({ text: value.slice(cursor, at), isField: false });
-    }
-    previewTokens.push({ text: id, isField: knownRefs.has(id) });
-    cursor = at + id.length;
-  }
-  if (cursor < value.length) {
-    previewTokens.push({ text: value.slice(cursor), isField: false });
-  }
-
-  return (
-    <>
-      <Input
-        className="h-8 font-mono text-xs"
-        dir="ltr"
-        onChange={(e) => handleInputChange(e.target.value)}
-        placeholder={t("templates.fieldFormulaExpression")}
-        ref={inputRef}
-        value={value}
-      />
-      <div className="flex gap-1 overflow-x-auto pb-1">
-        {FORMULA_OPERATOR_TOKENS.map((op) => (
-          <Button
-            className="shrink-0 font-mono"
-            key={op.token}
-            onClick={() => insertAtCaret(op.token)}
-            size="xs"
-            type="button"
-            variant="outline"
-          >
-            {op.glyph}
-          </Button>
-        ))}
-        <span className="w-1 shrink-0" />
-        {FORMULA_FUNCTION_TOKENS.map((fn) => (
-          <Button
-            className="shrink-0 font-mono"
-            key={fn}
-            onClick={() => insertAtCaret(fn)}
-            size="xs"
-            type="button"
-            variant="outline"
-          >
-            {fn}
-          </Button>
-        ))}
-      </div>
-      {numberFields.length > 0 && (
-        <div className="flex gap-1 overflow-x-auto pb-1">
-          {numberFields.map((f) => (
-            <Button
-              className="shrink-0 font-mono"
-              key={f.path}
-              onClick={() => appendField(refName(f.path))}
-              size="xs"
-              title={f.label || refName(f.path)}
-              type="button"
-              variant="outline"
-            >
-              <HashIcon className="size-3 shrink-0" />
-              {refName(f.path)}
-            </Button>
-          ))}
-        </div>
-      )}
-      {hasNonNumberFields && (
-        <p className="text-muted-foreground text-xs">
-          {t("templates.studio.formulaNumbersOnlyHelp")}
-        </p>
-      )}
-      {previewTokens.length > 0 && (
-        <div
-          className="flex flex-wrap items-center gap-0.5 font-mono text-xs"
-          dir="ltr"
-        >
-          {previewTokens.map((tok, index) => (
-            <FormulaPreviewToken
-              isField={tok.isField}
-              key={index}
-              text={tok.text}
-            />
-          ))}
-        </div>
-      )}
-      {finiteExampleResult !== undefined && (
-        <p className="text-muted-foreground text-xs">
-          {t("templates.studio.formulaExampleLabel")}:{" "}
-          {exampleFields.map((entry, index) => {
-            const label = fieldsByRef.get(entry.path)?.label || entry.path;
-            return (
-              <span key={entry.path}>
-                {index > 0 && ", "}
-                {label} = {String(entry.value)}
-              </span>
-            );
-          })}
-          {exampleFields.length > 0 && " → "}
-          {/* Mirror the document exactly: the fill writes String(result), so
-              the preview shows the same raw value (no locale rounding) — the
-              author controls decimals with round(x, n). */}
-          <span className="text-foreground font-medium">
-            {String(finiteExampleResult)}
-          </span>
-        </p>
-      )}
-      {unknown.length > 0 && (
-        <p className="text-warning-foreground text-xs">
-          {t("templates.studio.formulaUnknownFields", {
-            fields: unknown.join(", "),
-          })}
-        </p>
-      )}
-      {nonNumber.length > 0 && (
-        <p className="text-warning-foreground text-xs">
-          {t("templates.studio.formulaNonNumberFields", {
-            fields: nonNumber.join(", "),
-          })}
-        </p>
-      )}
-      <p className="text-muted-foreground text-xs leading-relaxed">
-        {t("templates.fieldFormulaExpressionHint")}
-      </p>
-    </>
-  );
-};
-
-/** One token in the read-only formula preview strip: a known field path becomes
- *  an accent chip; everything else (operators, numbers, function names) renders
- *  as muted inline mono text. */
-const FormulaPreviewToken = ({
-  isField,
-  text,
-}: {
-  isField: boolean;
-  text: string;
-}) => {
-  if (isField) {
-    return (
-      <span className="bg-accent text-accent-foreground rounded px-1 py-0.5 font-mono text-xs">
-        {text}
-      </span>
-    );
-  }
-  return <span className="text-muted-foreground">{text}</span>;
+  return fields
+    .filter((f) => f.path !== currentPath && scopeOf(f.path) === currentScope)
+    .map((f) => ({
+      path: formulaRefName(outline, currentPath, f.path),
+      label: f.label,
+    }));
 };
 
 /** Mini-icons marking what a field can do: registry lookup, AI involvement,
@@ -7608,10 +7395,13 @@ const FieldFace = ({
           ) : null}
           {valueSource === "formula" ? (
             <FormulaEditor
-              currentPath={field.path}
-              fields={fields}
+              knownFields={formulaInScopeRefFields(fields, outline, field.path)}
+              numberFields={formulaOperandRefFields(
+                fields,
+                outline,
+                field.path,
+              )}
               onChange={(formula) => onUpdate({ formula })}
-              outline={outline}
               value={field.formula ?? ""}
             />
           ) : null}
@@ -7979,8 +7769,8 @@ const slugify = (text: string): string => {
   return slug.length > 0 ? slug : "field";
 };
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  typeof v === "object" && v !== null;
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 /** Read a non-negative integer attribute, or undefined when absent/invalid. */
 const parseBound = (value: unknown): number | undefined => {
@@ -8072,6 +7862,15 @@ const parseFields = (manifest: unknown): StudioField[] => {
       if (typeof raw["condition"] === "string" && inputType === "boolean") {
         field.condition = raw["condition"];
       }
+      // AST-backed condition rule (authoritative; the only form for rules that
+      // contain a formula operand). Validate against the canonical node schema
+      // so a malformed manifest entry is dropped rather than carried verbatim.
+      if (raw["conditionAst"] !== undefined && inputType === "boolean") {
+        const parsed = v.safeParse(conditionNodeSchema, raw["conditionAst"]);
+        if (parsed.success) {
+          field.conditionAst = parsed.output;
+        }
+      }
       if (typeof raw["hint"] === "string") {
         field.hint = raw["hint"];
       }
@@ -8154,6 +7953,7 @@ type ManifestField = {
   lookup?: EditableField["lookup"];
   formula?: string;
   condition?: string;
+  conditionAst?: ConditionNode;
   hint?: string;
   dateFormat?: EditableField["dateFormat"];
   validation?: FieldValidation;
@@ -8196,8 +7996,14 @@ const studioFieldToManifestField = (f: StudioField): ManifestField => {
     field.formula = formula;
     return field;
   }
-  // A boolean condition-field DERIVED by rule: the `condition` expression is
-  // mutually exclusive with the other value sources (backend-validated).
+  // A boolean condition-field DERIVED by rule. The AST is authoritative (the
+  // only form for a rule containing a formula operand); otherwise the
+  // `condition` expression. Both are mutually exclusive with the other value
+  // sources (backend-validated).
+  if (f.inputType === "boolean" && f.conditionAst !== undefined) {
+    field.conditionAst = f.conditionAst;
+    return field;
+  }
   const condition =
     f.inputType === "boolean" ? (f.condition?.trim() ?? "") : "";
   if (condition !== "") {
@@ -8322,6 +8128,7 @@ const buildRecipeDefinition = (
       formula: _formula,
       validation: _validation,
       condition: _condition,
+      conditionAst: _conditionAst,
       ...recipeField
     } = studioFieldToManifestField(field);
     return recipeField;

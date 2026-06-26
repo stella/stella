@@ -13,7 +13,7 @@ import {
 } from "@stll/ui/components/select";
 import { cn } from "@stll/ui/lib/utils";
 
-import type { FieldOption } from "@/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.logic";
+import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 import type { PropertyFacetCounts } from "@/routes/_protected.workspaces/$workspaceId/-queries/property-facets";
 import { propertyFacetsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/property-facets";

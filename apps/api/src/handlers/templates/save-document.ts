@@ -66,6 +66,7 @@ const collectDiscoveredPaths = (
 export const hasDerivedValueSource = (field: FieldMeta): boolean =>
   field.formula !== undefined ||
   field.condition !== undefined ||
+  field.conditionAst !== undefined ||
   field.aiPrompt !== undefined ||
   field.aiAdapt === true;
 
@@ -200,6 +201,7 @@ const saveTemplateDocument = createSafeRootHandler(
       lookup: sourceFieldByPath.get(f.path)?.lookup,
       formula: sourceFieldByPath.get(f.path)?.formula,
       condition: sourceFieldByPath.get(f.path)?.condition,
+      conditionAst: sourceFieldByPath.get(f.path)?.conditionAst,
       dateFormat: sourceFieldByPath.get(f.path)?.dateFormat,
     }));
 
