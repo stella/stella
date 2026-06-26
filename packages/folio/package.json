@@ -7,10 +7,11 @@
   "author": "STLL",
   "type": "module",
   "sideEffects": [
-    "*.css"
+    "**/*.css"
   ],
   "exports": {
     ".": "./src/index.ts",
+    "./core": "./src/core/index.ts",
     "./markdown": "./src/core/markdown/index.ts",
     "./server": "./src/server.ts",
     "./editor.css": "./src/styles/editor.css"
