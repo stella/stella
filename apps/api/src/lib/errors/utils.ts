@@ -17,7 +17,7 @@ export const errorTag = (error: unknown): string => {
     return error._tag;
   }
   if (error instanceof Error) {
-    return error.constructor.name;
+    return errorClassName(error);
   }
   return "UnknownError";
 };
@@ -36,23 +36,26 @@ export const errorSystemFields = (error: unknown): Record<string, string> => {
   if (!(error instanceof Error)) {
     return fields;
   }
-  if ("code" in error && typeof error.code === "string") {
-    fields["error.code"] = error.code;
+  const code = safeErrorCode(error);
+  if (code !== undefined) {
+    fields["error.code"] = code;
   }
-  if ("errno" in error && typeof error.errno === "number") {
-    fields["error.errno"] = String(error.errno);
+  const errno = safeErrorNumberProperty(error, "errno");
+  if (errno !== undefined) {
+    fields["error.errno"] = String(errno);
   }
-  if ("syscall" in error && typeof error.syscall === "string") {
-    fields["error.syscall"] = error.syscall;
+  const syscall = safeErrorStringProperty(error, "syscall");
+  if (syscall !== undefined) {
+    fields["error.syscall"] = syscall;
   }
-  if (error.cause !== undefined) {
-    fields["error.cause.type"] = errorTag(error.cause);
-    if (
-      error.cause instanceof Error &&
-      "code" in error.cause &&
-      typeof error.cause.code === "string"
-    ) {
-      fields["error.cause.code"] = error.cause.code;
+  const cause = safeErrorCause(error);
+  if (cause !== undefined) {
+    fields["error.cause.type"] = errorTag(cause);
+    if (cause instanceof Error) {
+      const causeCode = safeErrorCode(cause);
+      if (causeCode !== undefined) {
+        fields["error.cause.code"] = causeCode;
+      }
     }
   }
   return fields;
@@ -81,10 +84,265 @@ export const connectionErrorFields = (
   error: unknown,
 ): Record<string, string> => {
   const fields = errorSystemFields(error);
-  if (error instanceof Error && error.message) {
-    fields["error.msg"] = error.message;
+  if (error instanceof Error) {
+    const message = safeErrorMessage(error);
+    if (message !== undefined) {
+      fields["error.msg"] = message;
+    }
   }
   return fields;
+};
+
+const safeErrorStringProperty = (
+  error: Error,
+  key: string,
+): string | undefined => {
+  try {
+    if (!(key in error)) {
+      return undefined;
+    }
+    const value: unknown = Reflect.get(error, key);
+    if (typeof value === "string" && value) {
+      return value;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+};
+
+const safeErrorNumberProperty = (
+  error: Error,
+  key: string,
+): number | undefined => {
+  try {
+    if (!(key in error)) {
+      return undefined;
+    }
+    const value: unknown = Reflect.get(error, key);
+    if (typeof value === "number") {
+      return value;
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+};
+
+export const safeErrorCause = (error: Error): unknown => {
+  try {
+    return Reflect.get(error, "cause");
+  } catch {
+    return undefined;
+  }
+};
+
+const errorClassName = (error: Error): string => {
+  try {
+    const constructorValue: unknown = Reflect.get(error, "constructor");
+    if (typeof constructorValue !== "function") {
+      return "Error";
+    }
+    const name: unknown = Reflect.get(constructorValue, "name");
+    if (typeof name === "string" && name) {
+      return name;
+    }
+  } catch {
+    return "Error";
+  }
+  return "Error";
+};
+
+const safeErrorCode = (error: Error): string | undefined =>
+  safeErrorStringProperty(error, "code");
+
+const safeErrorMessage = (error: Error): string | undefined =>
+  safeErrorStringProperty(error, "message");
+
+const safeErrorStack = (error: Error): string | undefined =>
+  safeErrorStringProperty(error, "stack");
+
+/**
+ * Raw diagnostics for an explicitly enabled break-glass log path.
+ * This may include client data; never send it to analytics.
+ */
+export const unredactedErrorFields = (
+  error: unknown,
+): Record<string, string> => {
+  const fields: Record<string, string> = {};
+  if (!(error instanceof Error)) {
+    return fields;
+  }
+
+  const message = safeErrorMessage(error);
+  if (message !== undefined) {
+    fields["error.msg"] = message;
+  }
+  const stack = safeErrorStack(error);
+  if (stack !== undefined) {
+    fields["error.stack"] = stack;
+  }
+  return fields;
+};
+
+/**
+ * Non-PII structural fingerprint for diagnosing 5xx without shipping
+ * any user data. Three signals, all code-level, never content:
+ *  - `error.class`: the constructor name (e.g. "Panic", "TypeError").
+ *  - `error.code`: a stable code — a `.code` string when present
+ *    (HandlerError code, ECONNRESET, …), otherwise the structural tag.
+ *  - `error.frame`: the top stack frame as `file:line:col`, plus the
+ *    deepest `.cause`'s top frame under `error.cause.frame`.
+ *
+ * A class name, error code, and `file:line:col` code location carry no
+ * client data, so they are safe at any sink. The attribute keys are
+ * chosen to NOT match the logger's PII redaction regex
+ * (`/(?:body|content|email|fileName|message|name|title)/i`), so they
+ * survive `sanitizeLogAttributes`. Stack parsing is fully defensive:
+ * `stack` may be undefined, multiline, or minified. The message prefix
+ * is skipped before frame detection because user content may itself
+ * contain lines shaped like stack frames. This never throws; a missing
+ * frame is simply omitted.
+ */
+export type ErrorFingerprint = Record<string, string>;
+
+const STACK_FRAME_PREFIX = "at ";
+
+const isAsciiDigits = (value: string): boolean => {
+  if (!value) {
+    return false;
+  }
+  for (const char of value) {
+    if (char < "0" || char > "9") {
+      return false;
+    }
+  }
+  return true;
+};
+
+const hasWhitespace = (value: string): boolean => {
+  for (const char of value) {
+    if (char.trim() === "") {
+      return true;
+    }
+  }
+  return false;
+};
+
+const frameLocation = (line: string): string | undefined => {
+  const trimmedStart = line.trimStart();
+  if (trimmedStart === line || !trimmedStart.startsWith(STACK_FRAME_PREFIX)) {
+    return undefined;
+  }
+
+  const locationEnd = trimmedStart.endsWith(")")
+    ? trimmedStart.length - 1
+    : trimmedStart.length;
+  const columnSeparator = trimmedStart.lastIndexOf(":", locationEnd - 1);
+  if (columnSeparator === -1) {
+    return undefined;
+  }
+  const lineSeparator = trimmedStart.lastIndexOf(":", columnSeparator - 1);
+  if (lineSeparator === -1) {
+    return undefined;
+  }
+
+  const lineNumber = trimmedStart.slice(lineSeparator + 1, columnSeparator);
+  const columnNumber = trimmedStart.slice(columnSeparator + 1, locationEnd);
+  if (!isAsciiDigits(lineNumber) || !isAsciiDigits(columnNumber)) {
+    return undefined;
+  }
+
+  const openingParen = trimmedStart.lastIndexOf("(", lineSeparator);
+  const locationStart =
+    openingParen === -1 ? STACK_FRAME_PREFIX.length : openingParen + 1;
+  const location = trimmedStart.slice(locationStart, locationEnd);
+  if (!location || hasWhitespace(location)) {
+    return undefined;
+  }
+  return location;
+};
+
+const stackFrameLines = (error: Error, stack: string): string[] => {
+  const message = safeErrorMessage(error);
+  if (message === undefined) {
+    return [];
+  }
+
+  const lines = stack.split("\n");
+  const firstLine = lines.at(0);
+  if (firstLine === undefined) {
+    return [];
+  }
+
+  const messageLines = message.split("\n");
+  const firstMessageLine = messageLines.at(0);
+  if (firstMessageLine && !firstLine.endsWith(firstMessageLine)) {
+    return [];
+  }
+
+  return lines.slice(messageLines.length);
+};
+
+const topStackFrame = (error: Error): string | undefined => {
+  try {
+    const stack = safeErrorStack(error);
+    if (stack === undefined) {
+      return undefined;
+    }
+    for (const line of stackFrameLines(error, stack)) {
+      const location = frameLocation(line);
+      if (location) {
+        return location;
+      }
+    }
+  } catch {
+    return undefined;
+  }
+  return undefined;
+};
+
+const stableErrorCode = (error: Error): string =>
+  safeErrorCode(error) ?? errorTag(error);
+
+const deepestCause = (error: Error): Error | undefined => {
+  try {
+    const seen = new WeakSet<object>([error]);
+    let current = safeErrorCause(error);
+    let deepest: Error | undefined;
+    let depth = 0;
+    while (current instanceof Error && depth < 5 && !seen.has(current)) {
+      seen.add(current);
+      deepest = current;
+      current = safeErrorCause(current);
+      depth += 1;
+    }
+    return deepest;
+  } catch {
+    return undefined;
+  }
+};
+
+export const errorFingerprint = (error: unknown): ErrorFingerprint => {
+  if (!(error instanceof Error)) {
+    return { "error.class": "UnknownError" };
+  }
+  const fingerprint: ErrorFingerprint = {
+    "error.class": errorClassName(error),
+    "error.code": stableErrorCode(error),
+  };
+  const frame = topStackFrame(error);
+  if (frame !== undefined) {
+    fingerprint["error.frame"] = frame;
+  }
+  const cause = deepestCause(error);
+  if (cause) {
+    const causeFrame = topStackFrame(cause);
+    if (causeFrame !== undefined) {
+      fingerprint["error.cause.frame"] = causeFrame;
+    }
+  }
+  return fingerprint;
 };
 
 /**
@@ -149,12 +407,14 @@ type SerializedError = {
 
 const serializeError = (error: unknown): unknown => {
   if (error instanceof Error) {
+    const stack = safeErrorStack(error);
+    const cause = safeErrorCause(error);
     const out: SerializedError = {
-      name: error.constructor.name,
-      message: error.message,
-      ...(error.stack !== undefined && { stack: error.stack }),
+      name: errorClassName(error),
+      message: safeErrorMessage(error) ?? "",
+      ...(stack !== undefined && { stack }),
       ...(isTaggedError(error) && { tag: error._tag }),
-      ...(error.cause !== undefined && { cause: serializeError(error.cause) }),
+      ...(cause !== undefined && { cause: serializeError(cause) }),
     };
     return out;
   }

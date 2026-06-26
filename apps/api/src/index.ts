@@ -65,7 +65,11 @@ import { getAuth } from "@/api/lib/auth";
 import { assertMigrationsApplied } from "@/api/lib/db/assert-migrations-applied";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { httpError } from "@/api/lib/errors/http-error";
-import { errorTag } from "@/api/lib/errors/utils";
+import {
+  errorFingerprint,
+  errorTag,
+  unredactedErrorFields,
+} from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
@@ -237,6 +241,10 @@ const api = new Elysia()
       });
 
       if (statusCode >= 500) {
+        Object.assign(attributes, errorFingerprint(error));
+        if (env.DEBUG_UNREDACTED_ERRORS) {
+          Object.assign(attributes, unredactedErrorFields(error));
+        }
         logger.error("request.failed", attributes);
       } else {
         logger.warn("request.failed", attributes);

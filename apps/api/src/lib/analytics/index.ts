@@ -1,4 +1,8 @@
-import { errorTag, logDevError } from "@/api/lib/errors/utils";
+import {
+  errorFingerprint,
+  errorTag,
+  logDevError,
+} from "@/api/lib/errors/utils";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 
 import { getAnalytics } from "./client";
@@ -59,6 +63,12 @@ const captureErrorWithOptions = (
       },
     ],
     $exception_type: tag,
+    // Non-PII structural fingerprint (class, stable code, top
+    // `file:line:col` frames). The redaction contract above still
+    // forbids the message and stack; a code location and class name
+    // carry no client data, so they make the exception actionable in
+    // the dashboard without violating it.
+    ...errorFingerprint(error),
     ...options.context,
     ...(options.organizationId
       ? { organization_id: options.organizationId }
