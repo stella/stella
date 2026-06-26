@@ -10,6 +10,7 @@ import {
   isServerError,
   readStreamPrefix,
   streamPrefixHasError,
+  streamPrefixHasMeaningfulFrame,
 } from "@/api/scripts/post-deploy-smoke";
 
 describe("isServerError", () => {
@@ -148,14 +149,38 @@ describe("streamPrefixHasError", () => {
   });
 });
 
+describe("streamPrefixHasMeaningfulFrame", () => {
+  test("ignores opening frames and accepts assistant progress or finish", () => {
+    expect(streamPrefixHasMeaningfulFrame('data: {"type":"start"}\n\n')).toBe(
+      false,
+    );
+    expect(
+      streamPrefixHasMeaningfulFrame('data: {"type":"text-start"}\n\n'),
+    ).toBe(false);
+    expect(
+      streamPrefixHasMeaningfulFrame(
+        'data: {"type":"text-delta","delta":"hi"}\n\n',
+      ),
+    ).toBe(true);
+    expect(streamPrefixHasMeaningfulFrame('data: {"type":"finish"}\n\n')).toBe(
+      true,
+    );
+  });
+});
+
 describe("evaluateChatStreamPrefix", () => {
-  test("requires a data frame before accepting a stream", () => {
+  test("requires assistant progress before accepting a stream", () => {
     expect(evaluateChatStreamPrefix("").ok).toBe(false);
     expect(evaluateChatStreamPrefix("\n\n").ok).toBe(false);
     expect(evaluateChatStreamPrefix(": keepalive\n\n").ok).toBe(false);
     expect(evaluateChatStreamPrefix('data: {"type":"start"}\n\n').ok).toBe(
-      true,
+      false,
     );
+    expect(
+      evaluateChatStreamPrefix(
+        'data: {"type":"start"}\n\ndata: {"type":"text-delta","delta":"hi"}\n\n',
+      ).ok,
+    ).toBe(true);
     expect(evaluateChatStreamPrefix('data: {"type":"error"}\n\n').ok).toBe(
       false,
     );
@@ -163,18 +188,44 @@ describe("evaluateChatStreamPrefix", () => {
 });
 
 describe("readStreamPrefix", () => {
-  test("stops after the first decisive data frame", async () => {
+  test("keeps reading past opening frames and stops after assistant progress", async () => {
     const encoder = new TextEncoder();
     const response = new Response(
       new ReadableStream<Uint8Array>({
         start: (controller) => {
           controller.enqueue(encoder.encode('data: {"type":"start"}\n\n'));
+          controller.enqueue(encoder.encode('data: {"type":"text-start"}\n\n'));
+          controller.enqueue(
+            encoder.encode('data: {"type":"text-delta","delta":"hi"}\n\n'),
+          );
         },
       }),
     );
 
-    const prefix = await readStreamPrefix(response, { timeoutMs: 5 });
-    expect(prefix).toBe('data: {"type":"start"}\n\n');
+    const prefix = await readStreamPrefix(response, { timeoutMs: 50 });
+    expect(prefix).toBe(
+      'data: {"type":"start"}\n\ndata: {"type":"text-start"}\n\ndata: {"type":"text-delta","delta":"hi"}\n\n',
+    );
+  });
+
+  test("keeps reading past opening frames and stops on a later error", async () => {
+    const encoder = new TextEncoder();
+    const response = new Response(
+      new ReadableStream<Uint8Array>({
+        start: (controller) => {
+          controller.enqueue(encoder.encode('data: {"type":"start"}\n\n'));
+          controller.enqueue(
+            encoder.encode(
+              'data: {"type":"error","errorText":"provider failed"}\n\n',
+            ),
+          );
+        },
+      }),
+    );
+
+    const prefix = await readStreamPrefix(response, { timeoutMs: 50 });
+    expect(prefix).toContain('"type":"error"');
+    expect(evaluateChatStreamPrefix(prefix).ok).toBe(false);
   });
 
   test("rejects when a stream does not produce a prefix before the timeout", async () => {

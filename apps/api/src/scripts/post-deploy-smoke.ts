@@ -150,8 +150,61 @@ export const evaluateChatStreamContentType = (
 export const streamPrefixHasError = (prefix: string): boolean =>
   prefix.includes('"type":"error"');
 
+const MEANINGFUL_CHAT_STREAM_FRAME_TYPES = new Set([
+  "finish",
+  "text-delta",
+  "tool-input-available",
+  "tool-output-available",
+]);
+
+const parseStreamDataFrames = (prefix: string): unknown[] => {
+  const frames: unknown[] = [];
+  for (const line of prefix.split(/\r?\n/u)) {
+    if (!line.startsWith("data:")) {
+      continue;
+    }
+
+    const data = line.slice("data:".length).trim();
+    if (data.length === 0) {
+      continue;
+    }
+
+    try {
+      frames.push(JSON.parse(data));
+    } catch {
+      // The prefix can end mid-frame; a later read will complete it.
+    }
+  }
+  return frames;
+};
+
+const getStringFrameProperty = (
+  frame: unknown,
+  property: string,
+): string | null => {
+  if (typeof frame !== "object" || frame === null || !(property in frame)) {
+    return null;
+  }
+
+  const value = Reflect.get(frame, property);
+  return typeof value === "string" ? value : null;
+};
+
+const getStreamFrameType = (frame: unknown): string | null =>
+  getStringFrameProperty(frame, "type");
+
 const streamPrefixHasDataFrame = (prefix: string): boolean =>
-  prefix.startsWith("data:") || prefix.includes("\ndata:");
+  parseStreamDataFrames(prefix).length > 0;
+
+export const streamPrefixHasMeaningfulFrame = (prefix: string): boolean =>
+  parseStreamDataFrames(prefix).some((frame) => {
+    const type = getStreamFrameType(frame);
+    if (type === "text-delta") {
+      const delta = getStringFrameProperty(frame, "delta");
+      return delta !== null && delta.length > 0;
+    }
+    return type !== null && MEANINGFUL_CHAT_STREAM_FRAME_TYPES.has(type);
+  });
 
 export const evaluateChatStreamPrefix = (prefix: string): EvaluatedCheck => {
   if (!streamPrefixHasDataFrame(prefix)) {
@@ -170,10 +223,18 @@ export const evaluateChatStreamPrefix = (prefix: string): EvaluatedCheck => {
     };
   }
 
+  if (!streamPrefixHasMeaningfulFrame(prefix)) {
+    return {
+      name: "POST /v1/chat/ (stream)",
+      ok: false,
+      detail: "stream closed before assistant progress or finish",
+    };
+  }
+
   return {
     name: "POST /v1/chat/ (stream)",
     ok: true,
-    detail: "stream started without an error frame",
+    detail: "stream made assistant progress without an error frame",
   };
 };
 
@@ -335,7 +396,7 @@ export const readStreamPrefix = async (
         buffered += decoder.decode(value, { stream: true });
         if (
           streamPrefixHasError(buffered) ||
-          streamPrefixHasDataFrame(buffered)
+          streamPrefixHasMeaningfulFrame(buffered)
         ) {
           break;
         }
