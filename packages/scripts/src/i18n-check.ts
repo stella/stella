@@ -233,12 +233,39 @@ const ALLOWED_IDENTICAL = new Set<string>([
   "Markdown",
 ]);
 
+const stripIcuPlaceholders = (value: string): string => {
+  const literal: string[] = [];
+  let placeholder: string[] | null = null;
+
+  for (const char of value) {
+    if (placeholder) {
+      placeholder.push(char);
+      if (char === "}") {
+        placeholder = null;
+      }
+      continue;
+    }
+
+    if (char === "{") {
+      placeholder = [char];
+      continue;
+    }
+
+    literal.push(char);
+  }
+
+  if (placeholder) {
+    literal.push(...placeholder);
+  }
+
+  return literal.join("");
+};
+
 /** A value that is expected to read identically in every language. */
 const isTriviallyIdentical = (value: string): boolean => {
   const trimmed = value.trim();
   // Ignore ICU placeholders so "{n}" / "{value}%" count as letter-free.
-  // Pattern is linear: [^}] cannot match the closing }, so no backtracking.
-  const literal = trimmed.replace(/\{[^}]*\}/gu, "");
+  const literal = stripIcuPlaceholders(trimmed);
   // Exempt only language-neutral content: no letters (numbers, punctuation,
   // placeholder-only) or an explicit allowed token. Do NOT blanket-exempt by
   // length — short words like "To"/"as" are translatable.
