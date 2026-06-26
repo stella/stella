@@ -1292,8 +1292,7 @@ export default defineConfig({
     {
       // The legal-atlas-runner daemons are long-lived: an un-timed-out DB
       // await on a connection the server reaped silently hangs forever and
-      // wedges the worker until the cycle hard deadline force-exits it
-      // (tripping the prod utility-worker-no-tasks alarm on every restart).
+      // wedges the worker until external supervision restarts it.
       // All DB access must go through the timeout-wrapped handles in
       // apps/legal-atlas-runner/src/db.ts so no caller can build an unbounded
       // handle. That module is the only sanctioned importer of the raw pools.
@@ -1307,6 +1306,10 @@ export default defineConfig({
           "error",
           {
             paths: [
+              {
+                name: "zod",
+                message: "Use 'valibot' instead of 'zod'.",
+              },
               {
                 name: "@/api/db/root",
                 message:

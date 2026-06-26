@@ -5,10 +5,9 @@ import { sql } from "drizzle-orm";
  *
  * The runner daemons are long-lived: an un-timed-out DB await on a
  * pooled connection the server reaped silently hangs forever, wedging
- * the whole worker until the cycle hard deadline force-exits it (which
- * trips the prod `utility-worker-no-tasks` CloudWatch alarm on every
- * restart). Every DB operation here is wrapped in `withTimeout`, so a
- * dead connection rejects and the adapter loop retries instead.
+ * the whole worker until external supervision restarts it. Every DB
+ * operation here is wrapped in `withTimeout`, so a dead connection rejects
+ * and the adapter loop retries instead.
  *
  * `no-restricted-imports` (oxlint.config.ts) bans the raw `@/api/db/root`
  * pools and `createIngestionDb` elsewhere in this package, so this is the
@@ -84,10 +83,12 @@ export const createCaseLawSource = async (
 ): Promise<CaseLawSource | undefined> =>
   await withTimeout(
     async () => {
-      const [created] = await rootDb
-        .insert(caseLawSources)
-        .values({ ...input, config: {} })
-        .returning();
+      const created = (
+        await rootDb
+          .insert(caseLawSources)
+          .values({ ...input, config: {} })
+          .returning()
+      ).at(0);
       return created;
     },
     { label: "case-law-source-create", timeoutMs: rootQueryTimeoutMs },
