@@ -94,6 +94,15 @@ export const FilterChips = ({
     onUpdate(filters.map((existing, i) => (i === index ? node : existing)));
   };
   const removeAt = (index: number) => {
+    setOpenAdvancedIndex((openIndex) => {
+      if (openIndex === null || openIndex < index) {
+        return openIndex;
+      }
+      if (openIndex === index) {
+        return null;
+      }
+      return openIndex - 1;
+    });
     onUpdate(filters.filter((_, i) => i !== index));
   };
   const append = (node: ConditionNode) => {

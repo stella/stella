@@ -57,6 +57,7 @@ import {
   conditionNodeSchema,
   type ConditionNode,
   type GroupNode,
+  type Operand,
 } from "@stll/conditions";
 import {
   buildPositionalText,
@@ -5337,6 +5338,42 @@ const initialRuleGroup = (source: ConditionSource): GroupNode => {
   return emptyGroup();
 };
 
+const conditionHasLeaf = (node: ConditionNode): boolean => {
+  if (node.type === "group") {
+    return node.children.some(conditionHasLeaf);
+  }
+  return true;
+};
+
+const isBlankFormulaOperand = (operand: Operand): boolean =>
+  operand.type === "formula" && operand.expr.trim() === "";
+
+const isBlankLiteralOperand = (operand: Operand): boolean =>
+  operand.type === "literal" &&
+  typeof operand.value === "string" &&
+  operand.value.trim() === "";
+
+const hasBlankFormulaComparisonValue = (node: ConditionNode): boolean => {
+  if (node.type === "group") {
+    return node.children.some(hasBlankFormulaComparisonValue);
+  }
+  if (node.type === "predicate") {
+    return isBlankFormulaOperand(node.operand);
+  }
+  if (isBlankFormulaOperand(node.left) || isBlankFormulaOperand(node.right)) {
+    return true;
+  }
+  const comparesFormula =
+    node.left.type === "formula" || node.right.type === "formula";
+  return (
+    comparesFormula &&
+    (isBlankLiteralOperand(node.left) || isBlankLiteralOperand(node.right))
+  );
+};
+
+const isPersistableFormulaGroup = (group: GroupNode): boolean =>
+  v.is(conditionNodeSchema, group) && !hasBlankFormulaComparisonValue(group);
+
 /** Persist a built rule onto a condition-field, picking the storage form by
  *  whether it contains a formula operand: a formula has no `{{#if}}` string
  *  form, so it must persist as the AST; otherwise serialize to the string and
@@ -5347,7 +5384,7 @@ const persistRuleGroup = (
   upsertField: (path: string, patch: Partial<StudioField>) => void,
 ): void => {
   if (conditionHasFormula(group)) {
-    if (!v.is(conditionNodeSchema, group)) {
+    if (!isPersistableFormulaGroup(group)) {
       return;
     }
     upsertField(path, {
@@ -5366,7 +5403,8 @@ const persistRuleGroup = (
 };
 
 const canPersistRuleGroup = (group: GroupNode): boolean =>
-  !conditionHasFormula(group) || v.is(conditionNodeSchema, group);
+  conditionHasLeaf(group) &&
+  (!conditionHasFormula(group) || isPersistableFormulaGroup(group));
 
 /** One reusable condition the picker can insert: every boolean field (its bare
  *  path is the gate). Shown in plain language; inserting references it by path

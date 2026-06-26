@@ -144,7 +144,7 @@ export const parseViewLayout = (value: unknown): ViewLayout =>
 // and retry so a single legacy view can't fail the whole views response; fall
 // back to a minimal filesystem layout only if the row is otherwise unrecoverable.
 export const parseViewLayoutSafe = (value: unknown): ViewLayout => {
-  const direct = v.safeParse(viewLayoutSchema, value);
+  const direct = v.safeParse(viewLayoutSchema, withValidFilters(value));
   if (direct.success) {
     return direct.output;
   }

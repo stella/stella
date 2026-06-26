@@ -124,6 +124,7 @@ describe("parseViewLayoutSafe", () => {
     };
 
     expect(parseViewLayout(withFormula).filters).toEqual([]);
+    expect(parseViewLayoutSafe(withFormula).filters).toEqual([]);
   });
 
   test("falls back to a minimal layout for an unrecoverable value and never throws", () => {

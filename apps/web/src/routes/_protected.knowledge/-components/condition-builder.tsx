@@ -51,8 +51,9 @@ export const toRuleFields = (
     options: f.options,
   }));
 
-/** A fresh, empty rule group. The shared builder seeds its own first row, so an
- *  empty `children` list is the canonical starting point. */
+/** A fresh rule group. The shared builder renders existing children and only
+ *  adds rows on user action, so callers that need a seeded row must add it
+ *  before passing the group in. */
 export const emptyGroup = (): GroupNode => ({
   type: "group",
   combinator: "and",
