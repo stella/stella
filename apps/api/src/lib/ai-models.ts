@@ -1785,7 +1785,7 @@ export const getModelForRole = (
   // HandlerError instead so the request boundary returns 403 with
   // an actionable message.
   if (!hasInstanceProvider()) {
-    throw byokRoleNotConfiguredError(role);
+    throw aiProviderNotAvailableError(role);
   }
   const provider = getActiveProvider();
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
@@ -1802,13 +1802,15 @@ export const getModelForRole = (
   });
 };
 
-const byokRoleNotConfiguredError = (role: ModelRole): HandlerError =>
+const aiProviderNotAvailableError = (role?: ModelRole): HandlerError =>
   new HandlerError({
     status: 403,
-    message:
-      `AI is not available for the "${role}" role on this deployment. ` +
-      "Configure an organization-wide AI key (or include this role in " +
-      "the BYOK override list) in organization settings.",
+    message: role
+      ? `AI is not available for the "${role}" role on this deployment. ` +
+        "Configure an organization-wide AI key (or include this role in " +
+        "the BYOK override list) in organization settings."
+      : "AI is not available on this deployment. Configure an " +
+        "organization-wide AI key in organization settings.",
   });
 
 export const getModelInfoForRole = (
@@ -1826,6 +1828,9 @@ export const getModelInfoForRole = (
     };
   }
 
+  if (!hasInstanceProvider()) {
+    throw aiProviderNotAvailableError(role);
+  }
   const provider = getActiveProvider();
   return {
     keySource: "instance",
@@ -1851,6 +1856,9 @@ export const getModelInfoById = (
     };
   }
 
+  if (!override.provider && !hasInstanceProvider()) {
+    throw aiProviderNotAvailableError();
+  }
   const provider = override.provider ?? getActiveProvider();
   return {
     keySource: "instance",
@@ -1913,6 +1921,9 @@ export const getModelById = (
         allowServiceTierFallback,
       },
     );
+  }
+  if (!hasInstanceProvider()) {
+    throw aiProviderNotAvailableError(role);
   }
   const provider = getActiveProvider();
   return withInstrumentation(getInstanceFactory()(override.modelId), {
