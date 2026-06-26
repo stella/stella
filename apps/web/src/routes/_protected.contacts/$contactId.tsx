@@ -192,7 +192,7 @@ function ContactDetailPage() {
               variant="outline"
             >
               <PlusIcon className="size-4" />
-              {t("workspaces.newMatter")}
+              {t("common.newMatter")}
             </Button>
           )}
           {canDeleteContact && (

@@ -3320,7 +3320,7 @@ const SlashClausePreview = ({ clause }: { clause: SlashClause }) => {
         {clause.title}
       </p>
       <p className="text-muted-foreground">
-        {t("clauses.version", { version: String(clause.currentVersion) })}
+        {t("common.versionLabel", { version: String(clause.currentVersion) })}
       </p>
       <p className="text-muted-foreground leading-snug" dir="auto">
         {description && description.length > 0
@@ -6306,7 +6306,7 @@ const LinkedClauseCard = ({
         )}
         {link.clauseVersion && (
           <span>
-            {t("clauses.version", {
+            {t("common.versionLabel", {
               version: String(link.clauseVersion.version),
             })}
           </span>
@@ -7346,7 +7346,7 @@ const FieldFace = ({
                 variant={valueSource === "formula" ? "default" : "outline"}
               >
                 <SigmaIcon className="size-3.5" />
-                {t("templates.studio.formula")}
+                {t("common.formula")}
               </Button>
             </span>
           </div>

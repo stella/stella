@@ -457,7 +457,7 @@ export const AnonymizationDenyListCard = () => {
                 variant="outline"
               >
                 <UploadIcon className="size-3.5" />
-                {t("settings.organization.anonymization.importAction")}
+                {t("common.import")}
               </Button>
               <span className="text-muted-foreground text-xs">
                 {t("settings.organization.anonymization.importHint")}

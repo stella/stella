@@ -662,7 +662,7 @@ const TemplateRow = ({
       );
     }
     categorySubmenu.push({
-      label: t("templates.createCategory"),
+      label: t("common.createCategory"),
       icon: <PlusIcon />,
       separatorBefore: true,
       onClick: () => setCreateCategoryOpen(true),

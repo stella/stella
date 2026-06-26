@@ -24,7 +24,6 @@ type Messages = {
       "title": "Connect AI provider";
     };
     "refinePlaceholder": "How should the AI adjust the wording?";
-    "regenerate": "Regenerate";
   };
   "app": {
     "versionMismatch": {
@@ -120,7 +119,6 @@ type Messages = {
       "task": "Task";
       "taskCode": "Task code";
     };
-    "day": "Day";
     "decimalHours": "({hours}h)";
     "deleteSelected": "Delete selected";
     "duration": "Duration";
@@ -141,8 +139,6 @@ type Messages = {
       "markup": "Markup (%)";
       "noExpenses": "No expenses for this period";
     };
-    "export": "Export";
-    "exportCSV": "Export CSV";
     "exportLEDES": "Export LEDES";
     "exportPDF": "Export PDF";
     "failedToDelete": "Failed to delete entry";
@@ -217,7 +213,6 @@ type Messages = {
     };
     "revertToDraft": "Revert to draft";
     "running": "Running";
-    "selectAll": "Select all";
     "selectMatter": "Select a matter...";
     "selectMatterToStart": "Select a matter to start timing";
     "selectedCount": "{count, plural, one {# selected} other {# selected}}";
@@ -240,7 +235,6 @@ type Messages = {
     "timerActive": "Timer running";
     "timesheets": "Timesheets";
     "total": "Total";
-    "week": "Week";
     "writeOff": "Write off";
   };
   "caseLaw": {
@@ -319,7 +313,6 @@ type Messages = {
     "packDescription": "{count, plural, one {# tool} other {# tools}} curated for your practice. One-click install or pick individually below.";
     "packInstalled": "{count, plural, one {# tool installed} other {# tools installed}}";
     "packPartial": "Installed {installed}, {failed} failed";
-    "recommended": "Recommended";
     "removed": "This tool is no longer available.";
     "sectionOthers": "Others";
     "sectionRecommended": "Recommended";
@@ -359,11 +352,9 @@ type Messages = {
       "tracked": "Yes, tracked";
     };
     "approval": {
-      "allow": "Allow";
       "allowInConversation": "Allow in this conversation";
       "allowOnce": "Allow once";
       "alwaysAllow": "Always allow";
-      "approved": "Approved";
       "denied": "Denied";
       "deny": "Deny";
       "externalMcpDescription": "Only the information needed for this tool call will be sent.";
@@ -372,7 +363,6 @@ type Messages = {
     "askAnything": "Ask anything";
     "askUser": {
       "custom": "Write your own";
-      "default": "Default";
       "edit": "Edit answers";
       "editWarning": "Re-running will discard the downstream replies in this conversation.";
       "noAnswer": "No answer";
@@ -399,11 +389,6 @@ type Messages = {
       "previewWaiting": "Waiting for content…";
     };
     "deleteThread": "Delete conversation";
-    "documentView": {
-      "original": "Original";
-      "simple": "Accepted";
-      "trackedChanges": "Tracked changes";
-    };
     "editableFilePlaceholder": "Chat about or edit {fileName}";
     "editableFilePlaceholderAction": "Chat about or edit";
     "editorLoading": "Loading editor…";
@@ -436,9 +421,7 @@ type Messages = {
     "maxAttachmentsReached": "Maximum {count} files per message";
     "mention": {
       "category": {
-        "contacts": "Contacts";
         "entities": "In this matter";
-        "templates": "Templates";
       };
       "loadError": "Failed to load entities";
     };
@@ -473,7 +456,6 @@ type Messages = {
     "removeSuggestion": "(remove)";
     "resend": "Resend";
     "resizeThread": "Resize conversation";
-    "send": "Send message";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorLoopDetected": "The AI response repeated too many times. Try again with a narrower request.";
@@ -577,7 +559,6 @@ type Messages = {
     "backToList": "Back to clauses";
     "body": "Body";
     "categoryDeleteConfirm": "Clauses in this category will become uncategorized.";
-    "categoryName": "Category name";
     "categoryNamePlaceholder": "e.g. Confidentiality";
     "clauseCount": "{count, plural, one {# clause} other {# clauses}}";
     "clauseCreated": "Clause created";
@@ -589,20 +570,16 @@ type Messages = {
     "confirmDeleteClause": "This will permanently delete the clause and all its variants.";
     "confirmRestoreVersion": "This will set the clause body to this version, creating a new version. History is preserved.";
     "confirmUseAsMainBody": "This will replace the clause body with this variant, creating a new version. The variant stays.";
-    "createCategory": "New category";
     "createClause": "New clause";
     "createFailed": "Failed to create clause";
-    "deleteCategory": "Delete category";
     "deleteClause": "Delete clause";
     "deleteFailed": "Failed to delete";
     "descriptionPlaceholder": "Brief description of the clause";
-    "editCategory": "Edit category";
     "editClause": "Edit clause";
     "editVariant": "Edit variant";
     "export": "Export";
     "exportFailed": "Failed to export clauses";
     "formattingPreviewHint": "Numbering and styling here is a preview. The generated document applies its own list formatting, so don't type numbers by hand.";
-    "import": "Import";
     "importFailed": "Failed to import clauses";
     "importResult": "{created, plural, one {# created} other {# created}}, {skipped, plural, one {# skipped} other {# skipped}}";
     "importSuccess": "{count, plural, one {# clause imported} other {# clauses imported}}";
@@ -621,7 +598,6 @@ type Messages = {
     "noLinkedClauses": "No linked clauses";
     "noResults": "No clauses yet";
     "noVariants": "No variants";
-    "noVersions": "No version history";
     "outdatedVersion": "Update available";
     "restoreVersion": "Restore this version";
     "saveAsVersion": "Save as new version";
@@ -664,7 +640,6 @@ type Messages = {
     "variantPromoted": "Variant set as main body";
     "variantUpdated": "Variant updated";
     "variants": "Variants";
-    "version": "Version {version}";
     "versionCount": "{count, plural, one {# version} other {# versions}}";
     "versionRestored": "Version restored";
   };
@@ -702,6 +677,7 @@ type Messages = {
     "captions": "Captions";
     "caseLaw": "Case Law";
     "category": "Category";
+    "categoryName": "Category name";
     "changeColor": "Change color";
     "clauses": "Clauses";
     "clearDate": "Clear date";
@@ -721,12 +697,14 @@ type Messages = {
     "copy": "Copy";
     "copyLink": "Copy link";
     "country": "Country";
+    "createCategory": "New category";
     "createdAt": "Created at {date}";
     "currency": "Currency";
     "currentPage": "Current page";
     "date": "Date";
     "decline": "Decline";
     "delete": "Delete";
+    "deleteCategory": "Delete category";
     "deleteConfirmDescription": "Are you sure you want to delete \"{name}\"? This action cannot be undone.";
     "deletedCount": "{count, plural, one {# item} other {# items}} deleted";
     "description": "Description";
@@ -737,6 +715,7 @@ type Messages = {
     "duplicate": "Duplicate";
     "duplicated": "Duplicated";
     "edit": "Edit";
+    "editCategory": "Edit category";
     "edited": "Edited";
     "email": "Email";
     "empty": "Empty";
@@ -750,8 +729,10 @@ type Messages = {
     "error": "Error";
     "expenses": "Expenses";
     "filter": "Filter";
+    "formula": "Formula";
     "goBack": "Go back";
     "history": "History";
+    "import": "Import";
     "invite": "Invite";
     "invoices": "Invoices";
     "kind": "Kind";
@@ -798,13 +779,16 @@ type Messages = {
     "logTime": "Log time";
     "matter": "Matter";
     "matters": "Matters";
+    "members": "Members";
     "metadata": "Metadata";
     "moveDown": "Move down";
     "moveUp": "Move up";
     "name": "Name";
+    "newMatter": "New matter";
     "newRow": "New row";
     "next": "Next";
     "noResults": "No results";
+    "noVersions": "No version history";
     "none": "None";
     "notes": "Notes";
     "open": "Open";
@@ -818,10 +802,13 @@ type Messages = {
     "preview": "Preview";
     "previous": "Previous";
     "print": "Print";
+    "profile": "Profile";
     "properties": "Properties";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
+    "regenerate": "Regenerate";
     "remove": "Remove";
+    "removeMember": "Remove member";
     "rename": "Rename";
     "required": "Required";
     "reset": "Reset";
@@ -859,6 +846,8 @@ type Messages = {
     "urlIdentifierPlaceholder": "my-organization";
     "user": "User";
     "verify": "Verify";
+    "version": "Version";
+    "versionLabel": "Version {version}";
   };
   "consent": {
     "allow": "Allow";
@@ -896,7 +885,6 @@ type Messages = {
     };
     "columns": {
       "phone": "Phone";
-      "tags": "Tags";
     };
     "communication": {
       "addAddress": "Add address";
@@ -968,13 +956,10 @@ type Messages = {
       "firstName": "First name";
       "lastName": "Last name";
       "middleName": "Middle name";
-      "originatingAttorney": "Primary contact";
       "paymentTermDays": "Payment terms (days)";
       "prefix": "Prefix";
       "registrationNumber": "Registration number";
-      "responsibleAttorney": "Responsible person";
       "suffix": "Suffix";
-      "tags": "Tags";
       "taxId": "Tax ID";
     };
     "filterOrganizations": "Organizations";
@@ -1130,7 +1115,6 @@ type Messages = {
     "uploadDate": "Upload date";
     "uploadNewVersion": "Upload new version";
     "uploadedBy": "Uploaded by";
-    "version": "Version";
     "versionHistory": "Version history";
     "viewVersionHistory": "Show details & history";
     "viewing": "Viewing";
@@ -1226,12 +1210,10 @@ type Messages = {
       "noResults": "No results";
       "previous": "Previous match";
       "previousShortcut": "Previous match (Shift+Enter)";
-      "replace": "Replace";
       "replaceAll": "Replace all";
       "replaceCurrent": "Replace current match";
       "replacePlaceholder": "Replacement text...";
       "replaceText": "Replacement text";
-      "showReplace": "Replace";
       "wholeWords": "Whole words";
     };
     "finishEditing": "Finish editing";
@@ -1356,7 +1338,6 @@ type Messages = {
       "documentInfoHeading": "Document info";
       "matterColumnsHeading": "Matter columns";
       "updatedAt": "Updated";
-      "version": "Version";
       "versionCurrent": "v{version} (current)";
     };
     "openChat": "Open chat";
@@ -1378,27 +1359,22 @@ type Messages = {
         "publish": "Publish skill";
       };
       "deleteConfirmDescription": "\"{name}\" will be removed from this workspace.";
-      "deleteConfirmTitle": "Delete skill?";
       "deleteFile": "Delete file";
       "deleteFileConfirm": "Delete file? This cannot be undone.";
       "description": "Install SKILL.md packs that add specialist methods and read-only resources to chat.";
       "disableSkill": "Disable skill";
       "disabled": "Disabled";
-      "discardChanges": "Discard";
       "dropFile": "Drop SKILL.md or .zip here";
       "editSkill": "Edit skill";
-      "editTitle": "Edit skill";
       "emptyDescription": "Upload a SKILL.md file, a zipped skill folder, or import a public GitHub skill URL.";
       "emptyTitle": "Install your first skill";
       "enableSkill": "Enable skill";
       "enabled": "Enabled";
       "fileExists": "A file with this path already exists";
       "filesHeading": "Files";
-      "formBody": "Instructions";
       "formBodyHelp": "Markdown instructions the agent reads when the skill is invoked.";
       "formDescription": "Description";
       "formName": "Name";
-      "formVersion": "Version";
       "formVersionPlaceholder": "1.0.0";
       "generateAddResource": "Add file";
       "generateDraft": "Draft skill";
@@ -1428,23 +1404,17 @@ type Messages = {
       "newFilePathPlaceholder": "folder/notes.md";
       "newFolder": "New folder";
       "pdfPreviewSoon": "PDF preview will be available once binary skill resources are supported.";
-      "privateSection": "Your skills";
-      "regenerate": "Regenerate";
       "renameFile": "Rename";
       "resources": "{count, plural, one {# resource} other {# resources}}";
-      "scope": "Visibility";
       "scopePrivate": "Only me";
       "scopeTeam": "Everyone in the team";
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.";
       "selectedFile": "Selected: {name}";
       "sourceUpload": "Uploaded";
       "sourceUrl": "Public URL";
-      "teamSection": "Team skills";
       "unsavedChanges": "Unsaved changes — discard?";
       "uploadFile": "Upload file";
       "uploadHelp": "Use a SKILL.md file or a .zip folder containing SKILL.md and optional read-only resources.";
-      "uploadSkill": "Upload skill";
-      "uploadTitle": "Upload skill";
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill";
       "version": "Version: {version}";
     };
@@ -1472,13 +1442,11 @@ type Messages = {
       "errorDescription": "The integration could not be updated.";
       "errorTitle": "MCP failed";
       "mcpExplainer": "Integrations connect external services to the chat that the AI can work with.";
-      "namePlaceholder": "Display name";
       "needsReauth": "Needs reconnect";
       "off": "Off";
       "on": "On";
       "otherTitle": "Other integrations";
       "probe": "Probe";
-      "recommendedBadge": "Recommended";
       "recommendedFor": "Recommended for {jurisdictions}";
       "reconnect": "Reconnect";
       "saveToken": "Save token";
@@ -1519,7 +1487,6 @@ type Messages = {
       };
     };
     "skills": {
-      "addShortcut": "Add skill";
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1549,11 +1516,8 @@ type Messages = {
       "commandLabel": "Chat command (optional)";
       "commandPlaceholder": "e.g. summarize";
       "createTitle": "New skill";
-      "defaultBadge": "Default";
       "deleteConfirmDescription": "This skill will be permanently removed.";
-      "deleteConfirmTitle": "Delete skill?";
       "deleteShortcut": "Delete skill";
-      "editShortcut": "Edit skill";
       "emptyDescription": "Create reusable skills for the work your team repeats, from summaries to first-pass drafting instructions.";
       "emptyState": "No skills yet. Add your first one.";
       "emptyTitle": "Create your first skill";
@@ -1566,21 +1530,17 @@ type Messages = {
       "form": {
         "command": "Skill shortcut";
         "commandHint": "The / skill name: lowercase letters, numbers, hyphens, and underscores only";
-        "commandPlaceholder": "e.g. summarize";
         "commandPrefix": "/";
         "description": "Description";
         "descriptionPlaceholder": "Short description shown in the picker";
         "name": "Name";
         "namePlaceholder": "e.g. Summarise document";
-        "prompt": "Instructions";
         "promptPlaceholder": "Instructions inserted into the chat composer when this skill is used";
         "scope": "Visibility";
         "scopePrivate": "Only me";
         "scopeTeam": "Everyone in the team";
       };
-      "privateSection": "Your skills";
       "shadowed": "Shadowed by team skill";
-      "teamSection": "Team skills";
     };
   };
   "markdownEditor": {
@@ -1592,9 +1552,7 @@ type Messages = {
     "chat": "Chat";
     "contacts": "Contacts";
     "knowledge": "Knowledge";
-    "members": "Members";
     "myTodos": "My tasks";
-    "newMatter": "New matter";
     "pinned": "Pinned";
     "recents": "Recents";
     "search": "Search";
@@ -1792,7 +1750,6 @@ type Messages = {
       "confirmRoleChangeTitle": "Change role";
       "joined": "Joined";
       "noMembersFound": "No members found";
-      "removeMember": "Remove member";
       "typeEmailToConfirm": "Type {email} to confirm";
       "updateRole": "Update role";
     };
@@ -1890,7 +1847,6 @@ type Messages = {
       "preferredName": "Preferred name";
       "preferredNameDescription": "Used as the author for DOCX tracked changes and comments.";
       "preferredNamePlaceholder": "Your name";
-      "profile": "Profile";
       "profileDescription": "Manage your personal preferences";
       "sendOtpCode": "Send verification code";
       "timezone": "Timezone";
@@ -1912,7 +1868,6 @@ type Messages = {
         "description": "Curate the team-wide deny list of terms the anonymization pipeline always masks, and import a starter list from CSV, TXT, or JSON";
         "emptyState": "No team-wide terms yet. Add one above or import a list.";
         "entriesHeading": "Team-wide terms ({count})";
-        "importAction": "Import";
         "importHint": "CSV (canonical,label,variants), TXT (one per line), or JSON";
         "importParseError": "Couldn't read that file. Use CSV, TXT, or JSON.";
         "importSuccessToast": "Imported {count} terms.";
@@ -1928,7 +1883,6 @@ type Messages = {
       "pendingInvitations": "Pending invitations";
       "practiceJurisdictions": "Jurisdictions";
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.";
-      "profile": "Profile";
       "promptCaching": {
         "description": "When on, stella adds cache markers so repeated AI requests over the same document or thread cost ~10x less and finish faster. Cached prompts live with the AI provider for up to 5 minutes, scoped to your organization. Turning off stops stella from sending cache markers, but providers may still cache opportunistically — only a Zero Data Retention contract with the provider fully disables server-side caching.";
         "title": "Prompt caching";
@@ -2032,7 +1986,6 @@ type Messages = {
     "untitled": "Untitled task";
   };
   "templates": {
-    "addCondition": "Add condition";
     "addItem": "Add item";
     "addPart": "Add part";
     "addTag": "Add tag";
@@ -2042,7 +1995,6 @@ type Messages = {
     "browseFiles": "Browse files";
     "categoryDeleteConfirm": "This will remove the category. Templates in this category will become uncategorized.";
     "categoryDeleteFailed": "Failed to delete category";
-    "categoryName": "Category name";
     "categorySaveFailed": "Failed to save category";
     "checkErrors": "{count, plural, one {# error} other {# errors}}";
     "checkFailed": "Failed to check the template";
@@ -2065,7 +2017,6 @@ type Messages = {
     "conditionCount": "{count, plural, one {# condition} other {# conditions}}";
     "conditionField": "Field";
     "conditionFormulaPlaceholder": "Enter a formula…";
-    "conditionFormulaTitle": "Formula";
     "conditionMatch": "Match";
     "conditionNamePlaceholder": "Condition name (e.g. NPF)";
     "conditionOpAfter": "after";
@@ -2091,7 +2042,6 @@ type Messages = {
     "conditionsTitle": "Conditions";
     "configureFields": "Configure fields";
     "confirmDelete": "This will permanently delete the template.";
-    "createCategory": "New category";
     "createDocument": "Create document";
     "createDocumentAnyway": "Create anyway";
     "createInStudio": "Create in stella";
@@ -2100,7 +2050,6 @@ type Messages = {
     "dateChipPlus30Days": "In 30 days";
     "dateFormatStyle": "Date format";
     "dateRenderPreview": "In the document: {value}";
-    "deleteCategory": "Delete category";
     "deleteFailed": "Failed to delete template";
     "describeWhenToUse": "Describe when to use this";
     "directiveEach": "Loop: {expression}";
@@ -2114,10 +2063,8 @@ type Messages = {
     "downloadAnyway": "Download anyway";
     "downloadDocx": "Download DOCX";
     "downloadPdf": "Download PDF";
-    "downloadReady": "Document ready";
     "dragAndDrop": "or drag and drop";
     "dropToCreate": "Drop a .docx to create a template";
-    "editCategory": "Edit category";
     "editFields": "Edit fields";
     "emptyFieldsWarning": "{count, plural, one {# field is} other {# fields are}} still empty: {names}";
     "fieldCount": "{count, plural, one {# field} other {# fields}}";
@@ -2253,7 +2200,6 @@ type Messages = {
       "fillFormPreview": "How it appears in the fill form";
       "fillStale": "Unsaved changes — save to fill with the latest fields.";
       "filledByPerson": "Person";
-      "formula": "Formula";
       "formulaExampleLabel": "Example";
       "formulaNoFields": "Add a number field first to compute a formula.";
       "formulaNonNumberFields": "Not a number: {fields}";
@@ -2301,7 +2247,6 @@ type Messages = {
       "saveAsRecipe": "Save as recipe";
       "scopeClause": "Clause slot";
       "scopeCondition": "Condition";
-      "scopeField": "Field";
       "scopeLoop": "Loop";
       "scopeTemplate": "Template";
       "showOnlyIf": "Show only if…";
@@ -2348,8 +2293,6 @@ type Messages = {
     "validationOptionNotInSource": "Must be one of the values entered in {field}";
     "validationPattern": "Invalid format";
     "validationRequired": "This field is required";
-    "versionLabel": "Version {version}";
-    "versionsEmpty": "No version history";
     "viewVersion": "View";
     "whenNotToUse": "When not to use";
     "whenNotToUsePlaceholder": "When should this template be avoided?";
@@ -2381,7 +2324,6 @@ type Messages = {
       "save": "Save";
       "saved": "DeepL key saved";
       "savedDescription": "Translations are now available.";
-      "saving": "Saving…";
       "tierFree": "Free";
       "tierPro": "Pro";
       "title": "DeepL translation";
@@ -2397,10 +2339,7 @@ type Messages = {
     "slugRequired": "Slug is required";
   };
   "workspaces": {
-    "active": "Active";
     "archiveMatter": "Archive";
-    "archived": "Archived";
-    "archivedBadge": "Archived";
     "copyToMatter": {
       "copied": "Copied to Matter";
       "copyOption": "Copy (keep original)";
@@ -2524,7 +2463,6 @@ type Messages = {
       "moveToRoot": "Drop here to move to root level";
       "newSubfolder": "New subfolder";
       "noFilesYet": "No files yet";
-      "version": "Version";
     };
     "filters": {
       "chips": {
@@ -2565,7 +2503,6 @@ type Messages = {
         "lead": "Lead";
         "leadActive": "Lead";
         "leadInactive": "Set lead";
-        "members": "Members";
         "noLead": "No lead";
         "searchMembers": "Search members…";
       };
@@ -2595,7 +2532,6 @@ type Messages = {
       "moveToHint": "Type a path or pick from existing folders.";
       "moveToTitle": "Move to folder";
       "organized": "Files organized";
-      "regenerate": "Regenerate";
       "reset": "Reset to AI suggestions";
       "selectedOfTotal": "{selected, number} / {total, number}";
       "summaryToMove": "to move";
@@ -2605,8 +2541,6 @@ type Messages = {
       "wasNamed": "was {name}";
     };
     "infosoud": {
-      "cancelled": "Canceled";
-      "court": "Court";
       "courtPlaceholder": "Search court or code";
       "courtsFailed": "Could not load InfoSoud courts";
       "eventCount": "{count, plural, one {# event} other {# events}}";
@@ -2634,7 +2568,6 @@ type Messages = {
       "hideColumn": "Hide column";
       "readOnlyGrouping": "This grouping is read-only";
       "selectPropertyHint": "Select a property to group by in the toolbar";
-      "unknown": "Unknown";
       "uploadDocument": "Upload document";
       "usePropertyHint": "Use Kind, Author, or a single-select property";
     };
@@ -2643,8 +2576,6 @@ type Messages = {
     "leadEmpty": "No lead";
     "leadPicker": {
       "noMatchingMembers": "No matching members";
-      "placeholder": "Search members…";
-      "title": "Set lead";
     };
     "lockMatter": "Lock";
     "matterInfo": "Matter info";
@@ -2655,13 +2586,11 @@ type Messages = {
       "alreadyMember": "User is already a member";
       "cannotRemoveLast": "Cannot remove the last member";
       "noMembersFound": "No members found";
-      "removeMember": "Remove member";
       "removeMemberConfirm": "Remove this member from the matter?";
       "selectMember": "Select a member";
     };
     "newDocument": "New document";
     "newFolder": "New folder";
-    "newMatter": "New matter";
     "noDocuments": "No documents yet";
     "noFieldsToView": "This entity doesn't have any fields to view";
     "noGrouping": "No grouping";
@@ -2682,7 +2611,6 @@ type Messages = {
       "recentActivity": "Recent activity";
       "timeAndTeam": "Time & Team";
       "timeThisWeek": "Time this week";
-      "title": "Overview";
       "totalDocuments": "Total documents";
       "totalItems": "Items";
       "totalThisWeek": "Total this week";
@@ -2723,7 +2651,6 @@ type Messages = {
     };
     "pdf": {
       "adjustForDarkMode": "Adjust pages for dark mode";
-      "anonymizeSidebar": "Anonymization";
       "backToPeek": "Back to peek";
       "entitySidebar": "Entity details";
       "evidence": "Justification";
@@ -2735,7 +2662,6 @@ type Messages = {
       "previousPage": "Previous page";
       "resetZoom": "Reset zoom";
       "showOriginal": "Show original pages";
-      "toggleSidebar": "Toggle sidebar";
       "unlock": "Unlock";
       "zoomIn": "Zoom in";
       "zoomOut": "Zoom out";
@@ -2771,13 +2697,11 @@ type Messages = {
       "addOption": "Add option";
       "addPromptForBetterResults": "Add a prompt for better results";
       "addReadingSource": "add";
-      "aiExtraction": "AI extraction";
       "autoPromptFailed": "Couldn't generate a prompt.";
       "bulk": {
         "addAnother": "Add another column";
         "createFailed": "Couldn't create columns";
         "createMany": "Create {count} columns";
-        "createOne": "Create column";
         "createdMany": "Created {count} columns";
         "createdOne": "Column created";
         "promptPlaceholder": "What should this column extract? Refine in the column dialog to use / and @.";
@@ -2818,9 +2742,7 @@ type Messages = {
       "extractionPlaceholder": "Describe what to find. Type @ to reference another column.";
       "extractionScope": "Extraction scope";
       "file": "File";
-      "flowExtraction": "AI extraction";
       "flowNoInputs": "no inputs";
-      "flowOutput": "Output";
       "ifNoMatchFound": "If no match found";
       "inputs": "Inputs";
       "inputsHelp": "Pick the columns the AI should read. Click to add or remove.";
@@ -2879,7 +2801,6 @@ type Messages = {
     "referencePlaceholder": "e.g. 2024/001";
     "referenceTaken": "This reference number is already in use";
     "sections": {
-      "members": "Members";
       "parties": "Parties";
     };
     "table": {
@@ -2956,7 +2877,6 @@ type Messages = {
       "hideColumn": "Hide column";
       "layouts": {
         "calendar": "Calendar";
-        "filesystem": "List";
         "grid": "Grid";
         "kanban": "Kanban";
         "list": "List";

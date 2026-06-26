@@ -98,7 +98,7 @@ export const useTableColumns = ({
       meta: { muted: true },
       header: createMetadataHeader({
         icon: HashIcon,
-        label: t("workspaces.filesystem.version"),
+        label: t("common.version"),
         sortHint: "number",
       }),
       cell: renderVersionCell,

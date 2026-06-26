@@ -801,7 +801,7 @@ const AiEditBar = ({
           variant={previewing ? "ghost" : undefined}
         >
           <AiEditSubmitIcon generating={generating} previewing={previewing} />
-          {previewing ? t("ai.regenerate") : t("ai.editWithAI")}
+          {previewing ? t("common.regenerate") : t("ai.editWithAI")}
         </Button>
         {previewing ? (
           <Button onClick={onAccept} size="sm" type="button">

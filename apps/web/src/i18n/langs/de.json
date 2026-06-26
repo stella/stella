@@ -20,8 +20,7 @@
       "description": "Füge Provider-Zugangsdaten hinzu, um AI-Funktionen zu nutzen.",
       "title": "AI-Provider verbinden"
     },
-    "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?",
-    "regenerate": "Neu generieren"
+    "refinePlaceholder": "Wie soll die KI den Wortlaut anpassen?"
   },
   "app": {
     "versionMismatch": {
@@ -117,7 +116,6 @@
       "task": "Aufgabe",
       "taskCode": "Aufgabencode"
     },
-    "day": "Tag",
     "decimalHours": "({hours} Std.)",
     "deleteSelected": "Auswahl löschen",
     "duration": "Dauer",
@@ -138,8 +136,6 @@
       "markup": "Aufschlag (%)",
       "noExpenses": "Keine Ausgaben für diesen Zeitraum"
     },
-    "export": "Exportieren",
-    "exportCSV": "Als CSV exportieren",
     "exportLEDES": "Als LEDES exportieren",
     "exportPDF": "Als PDF exportieren",
     "failedToDelete": "Eintrag konnte nicht gelöscht werden",
@@ -214,7 +210,6 @@
     },
     "revertToDraft": "In Entwurf zurückversetzen",
     "running": "Läuft",
-    "selectAll": "Alle auswählen",
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Wählen Sie eine Akte, um die Zeiterfassung zu starten",
     "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
@@ -233,11 +228,10 @@
       "draft": "Entwurf",
       "written_off": "Abgeschrieben"
     },
-    "stopTimer": "Stopp",
+    "stopTimer": "Stoppen",
     "timerActive": "Timer läuft",
     "timesheets": "Zeiterfassung",
     "total": "Gesamt",
-    "week": "Woche",
     "writeOff": "Abschreiben"
   },
   "caseLaw": {
@@ -316,7 +310,6 @@
     "packDescription": "{count, plural, one {# Tool} other {# Tools}}, ausgewählt für Ihre Praxis. Mit einem Klick installieren oder unten einzeln auswählen.",
     "packInstalled": "{count, plural, one {# Tool installiert} other {# Tools installiert}}",
     "packPartial": "{installed} installiert, {failed} fehlgeschlagen",
-    "recommended": "Empfohlen",
     "removed": "Dieses Tool ist nicht mehr verfügbar.",
     "sectionOthers": "Weitere",
     "sectionRecommended": "Empfohlen",
@@ -356,11 +349,9 @@
       "tracked": "Ja, mit Änderungsverfolgung"
     },
     "approval": {
-      "allow": "Erlauben",
       "allowInConversation": "In dieser Unterhaltung erlauben",
       "allowOnce": "Einmal erlauben",
       "alwaysAllow": "Immer erlauben",
-      "approved": "Genehmigt",
       "denied": "Abgelehnt",
       "deny": "Ablehnen",
       "externalMcpDescription": "Es werden nur die für diesen Tool-Aufruf erforderlichen Informationen gesendet.",
@@ -369,7 +360,6 @@
     "askAnything": "Beliebige Frage stellen",
     "askUser": {
       "custom": "Eigene Antwort",
-      "default": "Standard",
       "edit": "Antworten bearbeiten",
       "editWarning": "Bei der Neuausführung werden die nachfolgenden Antworten in diesem Gespräch verworfen.",
       "noAnswer": "Keine Antwort",
@@ -396,11 +386,6 @@
       "previewWaiting": "Warten auf Inhalt…"
     },
     "deleteThread": "Konversation löschen",
-    "documentView": {
-      "original": "Original",
-      "simple": "Akzeptiert",
-      "trackedChanges": "Änderungsverfolgung"
-    },
     "editableFilePlaceholder": "Chat über {fileName} oder bearbeiten",
     "editableFilePlaceholderAction": "Chatten oder bearbeiten",
     "editorLoading": "Editor wird geladen…",
@@ -433,9 +418,7 @@
     "maxAttachmentsReached": "Maximal {count} Dateien pro Nachricht",
     "mention": {
       "category": {
-        "contacts": "Kontakte",
-        "entities": "In dieser Akte",
-        "templates": "Vorlagen"
+        "entities": "In dieser Akte"
       },
       "loadError": "Entitäten konnten nicht geladen werden"
     },
@@ -470,7 +453,6 @@
     "removeSuggestion": "(entfernen)",
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",
-    "send": "Nachricht senden",
     "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entferne die Datei oder sende diese Nachricht ohne Anonymisierung.",
     "sendErrorLoopDetected": "Die KI-Antwort hat sich zu oft wiederholt. Versuche es mit einer enger gefassten Anfrage erneut.",
@@ -574,7 +556,6 @@
     "backToList": "Zurück zu Klauseln",
     "body": "Inhalt",
     "categoryDeleteConfirm": "Klauseln in dieser Kategorie werden unkategorisiert.",
-    "categoryName": "Kategoriename",
     "categoryNamePlaceholder": "z.B. Vertraulichkeit",
     "clauseCount": "{count, plural, one {# Klausel} other {# Klauseln}}",
     "clauseCreated": "Klausel erstellt",
@@ -586,20 +567,16 @@
     "confirmDeleteClause": "Die Klausel und alle ihre Varianten werden endgültig gelöscht.",
     "confirmRestoreVersion": "Dadurch wird der Klauseltext auf diese Version gesetzt und eine neue Version erstellt. Die Historie bleibt erhalten.",
     "confirmUseAsMainBody": "Dadurch wird der Klauseltext durch diese Variante ersetzt und eine neue Version erstellt. Die Variante bleibt erhalten.",
-    "createCategory": "Neue Kategorie",
     "createClause": "Neue Klausel",
     "createFailed": "Klausel konnte nicht erstellt werden",
-    "deleteCategory": "Kategorie löschen",
     "deleteClause": "Klausel löschen",
     "deleteFailed": "Löschen fehlgeschlagen",
     "descriptionPlaceholder": "Kurze Beschreibung der Klausel",
-    "editCategory": "Kategorie bearbeiten",
     "editClause": "Klausel bearbeiten",
     "editVariant": "Variante bearbeiten",
     "export": "Exportieren",
     "exportFailed": "Export der Klauseln fehlgeschlagen",
     "formattingPreviewHint": "Nummerierung und Formatierung sind hier nur eine Vorschau. Das erzeugte Dokument wendet seine eigene Listenformatierung an, geben Sie Nummern daher nicht von Hand ein.",
-    "import": "Importieren",
     "importFailed": "Import der Klauseln fehlgeschlagen",
     "importResult": "{created, plural, one {# erstellt} other {# erstellt}}, {skipped, plural, one {# übersprungen} other {# übersprungen}}",
     "importSuccess": "{count, plural, one {# Klausel importiert} other {# Klauseln importiert}}",
@@ -618,7 +595,6 @@
     "noLinkedClauses": "Keine verknüpften Klauseln",
     "noResults": "Keine Klauseln gefunden",
     "noVariants": "Keine Varianten",
-    "noVersions": "Kein Versionsverlauf",
     "outdatedVersion": "Aktualisierung verfügbar",
     "restoreVersion": "Diese Version wiederherstellen",
     "saveAsVersion": "Als neue Version speichern",
@@ -661,7 +637,6 @@
     "variantPromoted": "Variante als Haupttext festgelegt",
     "variantUpdated": "Variante aktualisiert",
     "variants": "Varianten",
-    "version": "Version {version}",
     "versionCount": "{count, plural, one {# Version} other {# Versionen}}",
     "versionRestored": "Version wiederhergestellt"
   },
@@ -699,6 +674,7 @@
     "captions": "Untertitel",
     "caseLaw": "Rechtsprechung",
     "category": "Kategorie",
+    "categoryName": "Kategoriename",
     "changeColor": "Farbe ändern",
     "clauses": "Klauseln",
     "clearDate": "Datum löschen",
@@ -718,12 +694,14 @@
     "copy": "Kopieren",
     "copyLink": "Link kopieren",
     "country": "Land",
+    "createCategory": "Neue Kategorie",
     "createdAt": "Erstellt am {date}",
     "currency": "Währung",
     "currentPage": "Aktuelle Seite",
     "date": "Datum",
     "decline": "Ablehnen",
     "delete": "Löschen",
+    "deleteCategory": "Kategorie löschen",
     "deleteConfirmDescription": "Möchten Sie \"{name}\" wirklich löschen? Diese Aktion kann nicht rückgängig gemacht werden.",
     "deletedCount": "{count, plural, one {# Element} other {# Elemente}} gelöscht",
     "description": "Beschreibung",
@@ -734,6 +712,7 @@
     "duplicate": "Duplizieren",
     "duplicated": "Dupliziert",
     "edit": "Bearbeiten",
+    "editCategory": "Kategorie bearbeiten",
     "edited": "Bearbeitet",
     "email": "E-Mail",
     "empty": "Leer",
@@ -747,8 +726,10 @@
     "error": "Fehler",
     "expenses": "Ausgaben",
     "filter": "Filtern",
+    "formula": "Formel",
     "goBack": "Zurück",
     "history": "Verlauf",
+    "import": "Importieren",
     "invite": "Einladen",
     "invoices": "Rechnungen",
     "kind": "Art",
@@ -795,13 +776,16 @@
     "logTime": "Zeit erfassen",
     "matter": "Akte",
     "matters": "Akten",
+    "members": "Mitglieder",
     "metadata": "Metadaten",
     "moveDown": "Nach unten",
     "moveUp": "Nach oben",
     "name": "Name",
+    "newMatter": "Neue Akte",
     "newRow": "Neue Zeile",
     "next": "Weiter",
     "noResults": "Keine Ergebnisse",
+    "noVersions": "Kein Versionsverlauf",
     "none": "None",
     "notes": "Notizen",
     "open": "Öffnen",
@@ -815,10 +799,13 @@
     "preview": "Vorschau",
     "previous": "Zurück",
     "print": "Drucken",
+    "profile": "Profil",
     "properties": "Eigenschaften",
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "reference": "Referenz",
+    "regenerate": "Neu generieren",
     "remove": "Entfernen",
+    "removeMember": "Mitglied entfernen",
     "rename": "Umbenennen",
     "required": "Erforderlich",
     "reset": "Zurücksetzen",
@@ -855,7 +842,9 @@
     "urlIdentifier": "URL-Kennung",
     "urlIdentifierPlaceholder": "meine-organisation",
     "user": "Benutzer",
-    "verify": "Bestätigen"
+    "verify": "Bestätigen",
+    "version": "Version",
+    "versionLabel": "Version {version}"
   },
   "consent": {
     "allow": "Zulassen",
@@ -892,8 +881,7 @@
       "title": "Rechnungsdaten"
     },
     "columns": {
-      "phone": "Telefon",
-      "tags": "Schlagwörter"
+      "phone": "Telefon"
     },
     "communication": {
       "addAddress": "Adresse hinzufügen",
@@ -965,13 +953,10 @@
       "firstName": "Vorname",
       "lastName": "Nachname",
       "middleName": "Zweiter Vorname",
-      "originatingAttorney": "Hauptkontakt",
       "paymentTermDays": "Zahlungsziel (Tage)",
       "prefix": "Titel (vorangestellt)",
       "registrationNumber": "Registernummer",
-      "responsibleAttorney": "Verantwortlicher Anwalt",
       "suffix": "Titel (nachgestellt)",
-      "tags": "Schlagwörter",
       "taxId": "Steuer-ID"
     },
     "filterOrganizations": "Organisationen",
@@ -1127,7 +1112,6 @@
     "uploadDate": "Hochladedatum",
     "uploadNewVersion": "Neue Version hochladen",
     "uploadedBy": "Hochgeladen von",
-    "version": "Version",
     "versionHistory": "Versionsverlauf",
     "viewVersionHistory": "Details und Verlauf anzeigen",
     "viewing": "Ansicht",
@@ -1223,12 +1207,10 @@
       "noResults": "Keine Ergebnisse",
       "previous": "Vorheriger Treffer",
       "previousShortcut": "Vorheriger Treffer (Shift+Enter)",
-      "replace": "Ersetzen",
       "replaceAll": "Alle ersetzen",
       "replaceCurrent": "Aktuellen Treffer ersetzen",
       "replacePlaceholder": "Ersatztext...",
       "replaceText": "Ersatztext",
-      "showReplace": "Ersetzen",
       "wholeWords": "Ganze Wörter"
     },
     "finishEditing": "Bearbeitung beenden",
@@ -1353,7 +1335,6 @@
       "documentInfoHeading": "Dokumentinformationen",
       "matterColumnsHeading": "Aktenspalten",
       "updatedAt": "Aktualisiert",
-      "version": "Version",
       "versionCurrent": "v{version} (aktuell)"
     },
     "openChat": "Chat öffnen",
@@ -1375,27 +1356,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "„{name}“ wird aus diesem Arbeitsbereich entfernt.",
-      "deleteConfirmTitle": "Skill löschen?",
       "deleteFile": "Datei löschen",
       "deleteFileConfirm": "Datei löschen? Dies kann nicht rückgängig gemacht werden.",
       "description": "Installiere SKILL.md-Pakete, die dem Chat spezialisierte Methoden und schreibgeschützte Ressourcen hinzufügen.",
       "disableSkill": "Skill deaktivieren",
       "disabled": "Deaktiviert",
-      "discardChanges": "Verwerfen",
       "dropFile": "SKILL.md oder .zip hier ablegen",
       "editSkill": "Skill bearbeiten",
-      "editTitle": "Skill bearbeiten",
       "emptyDescription": "Lade eine SKILL.md-Datei oder einen gezippten Skill-Ordner hoch oder importiere eine öffentliche GitHub-Skill-URL.",
       "emptyTitle": "Installiere deinen ersten Skill",
       "enableSkill": "Skill aktivieren",
       "enabled": "Aktiviert",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
       "filesHeading": "Dateien",
-      "formBody": "Anweisungen",
       "formBodyHelp": "Markdown-Anweisungen, die der Agent liest, wenn der Skill aufgerufen wird.",
       "formDescription": "Beschreibung",
       "formName": "Name",
-      "formVersion": "Version",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Datei hinzufügen",
       "generateDraft": "Skill entwerfen",
@@ -1425,23 +1401,17 @@
       "newFilePathPlaceholder": "ordner/notizen.md",
       "newFolder": "Neuer Ordner",
       "pdfPreviewSoon": "Die PDF-Vorschau wird verfügbar sein, sobald binäre Skill-Ressourcen unterstützt werden.",
-      "privateSection": "Deine Skills",
-      "regenerate": "Neu generieren",
       "renameFile": "Umbenennen",
       "resources": "{count, plural, one {# Ressource} other {# Ressourcen}}",
-      "scope": "Sichtbarkeit",
       "scopePrivate": "Nur ich",
       "scopeTeam": "Alle im Team",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Ausgewählt: {name}",
       "sourceUpload": "Hochgeladen",
       "sourceUrl": "Öffentliche URL",
-      "teamSection": "Team-Skills",
       "unsavedChanges": "Nicht gespeicherte Änderungen – verwerfen?",
       "uploadFile": "Datei hochladen",
       "uploadHelp": "Verwende eine SKILL.md-Datei oder einen .zip-Ordner mit SKILL.md und optionalen schreibgeschützten Ressourcen.",
-      "uploadSkill": "Skill hochladen",
-      "uploadTitle": "Skill hochladen",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/pfad/zum/skill",
       "version": "Version: {version}"
     },
@@ -1469,13 +1439,11 @@
       "errorDescription": "Die Integration konnte nicht aktualisiert werden.",
       "errorTitle": "MCP fehlgeschlagen",
       "mcpExplainer": "Integrationen verbinden externe Dienste mit dem Chat, mit denen die KI arbeiten kann.",
-      "namePlaceholder": "Anzeigename",
       "needsReauth": "Erneute Verbindung erforderlich",
       "off": "Aus",
       "on": "Ein",
       "otherTitle": "Weitere Integrationen",
       "probe": "Prüfen",
-      "recommendedBadge": "Empfohlen",
       "recommendedFor": "Empfohlen für {jurisdictions}",
       "reconnect": "Erneut verbinden",
       "saveToken": "Token speichern",
@@ -1516,7 +1484,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Skill hinzufügen",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1546,11 +1513,8 @@
       "commandLabel": "Schrägstrich-Befehl (optional)",
       "commandPlaceholder": "z. B. zusammenfassen",
       "createTitle": "Neuer Skill",
-      "defaultBadge": "Standard",
       "deleteConfirmDescription": "Dieser Skill wird dauerhaft entfernt.",
-      "deleteConfirmTitle": "Skill löschen?",
       "deleteShortcut": "Skill löschen",
-      "editShortcut": "Skill bearbeiten",
       "emptyDescription": "Erstellen Sie wiederverwendbare Skills für die wiederkehrende Arbeit Ihres Teams, von Zusammenfassungen bis hin zu Anweisungen für erste Entwürfe.",
       "emptyState": "Noch keine Skills. Fügen Sie den ersten hinzu.",
       "emptyTitle": "Ersten Skill erstellen",
@@ -1563,21 +1527,17 @@
       "form": {
         "command": "Skill-Kürzel",
         "commandHint": "Der / Skill-Name: nur Kleinbuchstaben, Zahlen, Bindestriche und Unterstriche",
-        "commandPlaceholder": "z. B. zusammenfassen",
         "commandPrefix": "/",
         "description": "Beschreibung",
         "descriptionPlaceholder": "Kurze Beschreibung, die in der Auswahl angezeigt wird",
         "name": "Name",
         "namePlaceholder": "z. B. Dokument zusammenfassen",
-        "prompt": "Anweisungen",
         "promptPlaceholder": "Anweisungen, die bei Verwendung dieses Skills in den Chat-Composer eingefügt werden",
         "scope": "Sichtbarkeit",
         "scopePrivate": "Nur ich",
         "scopeTeam": "Alle im Team"
       },
-      "privateSection": "Ihre Skills",
-      "shadowed": "Durch Team-Skill verdeckt",
-      "teamSection": "Team-Skills"
+      "shadowed": "Durch Team-Skill verdeckt"
     }
   },
   "markdownEditor": {
@@ -1589,9 +1549,7 @@
     "chat": "Chat",
     "contacts": "Kontakte",
     "knowledge": "Wissen",
-    "members": "Mitglieder",
     "myTodos": "Meine Aufgaben",
-    "newMatter": "Neue Akte",
     "pinned": "Angeheftet",
     "recents": "Zuletzt verwendet",
     "search": "Suchen",
@@ -1789,7 +1747,6 @@
       "confirmRoleChangeTitle": "Rolle ändern",
       "joined": "Beigetreten",
       "noMembersFound": "Keine Mitglieder gefunden",
-      "removeMember": "Mitglied entfernen",
       "typeEmailToConfirm": "Geben Sie zur Bestätigung {email} ein",
       "updateRole": "Rolle aktualisieren"
     },
@@ -1887,7 +1844,6 @@
       "preferredName": "Bevorzugter Name",
       "preferredNameDescription": "Wird als Autor für DOCX-Änderungsverfolgung und Kommentare verwendet.",
       "preferredNamePlaceholder": "Ihr Name",
-      "profile": "Profil",
       "profileDescription": "Verwalten Sie Ihre persönlichen Einstellungen",
       "sendOtpCode": "Bestätigungscode senden",
       "timezone": "Zeitzone",
@@ -1909,7 +1865,6 @@
         "description": "Verwalten Sie die teamweite Sperrliste der Begriffe, die die Anonymisierungs-Pipeline immer maskiert, und importieren Sie eine Startliste aus CSV, TXT oder JSON.",
         "emptyState": "Noch keine teamweiten Begriffe. Fügen Sie oben einen hinzu oder importieren Sie eine Liste.",
         "entriesHeading": "Teamweite Begriffe ({count})",
-        "importAction": "Importieren",
         "importHint": "CSV (canonical,label,variants), TXT (eine pro Zeile) oder JSON",
         "importParseError": "Diese Datei konnte nicht gelesen werden. Verwenden Sie CSV, TXT oder JSON.",
         "importSuccessToast": "{count} Begriffe importiert.",
@@ -1925,7 +1880,6 @@
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Jurisdiktionen",
       "practiceJurisdictionsDescription": "Wählen Sie die für Sie relevanten Jurisdiktionen aus.",
-      "profile": "Profil",
       "promptCaching": {
         "description": "Wenn aktiviert, fügt stella Cache-Markierungen hinzu, sodass wiederholte KI-Anfragen über dasselbe Dokument oder denselben Thread ca. 10× weniger kosten und schneller abschließen. Zwischengespeicherte Prompts verbleiben bis zu 5 Minuten beim KI-Anbieter und sind auf Ihre Organisation beschränkt. Beim Deaktivieren sendet stella keine Cache-Markierungen mehr, Anbieter können jedoch weiterhin opportunistisch zwischenspeichern — nur ein Zero-Data-Retention-Vertrag mit dem Anbieter deaktiviert das serverseitige Caching vollständig.",
         "title": "Prompt-Caching",
@@ -2029,7 +1983,6 @@
     "untitled": "Aufgabe ohne Titel"
   },
   "templates": {
-    "addCondition": "Bedingung hinzufügen",
     "addItem": "Element hinzufügen",
     "addPart": "Teil hinzufügen",
     "addTag": "Schlagwort hinzufügen",
@@ -2039,7 +1992,6 @@
     "browseFiles": "Dateien durchsuchen",
     "categoryDeleteConfirm": "Die Kategorie wird entfernt. Vorlagen in dieser Kategorie werden unkategorisiert.",
     "categoryDeleteFailed": "Kategorie konnte nicht gelöscht werden",
-    "categoryName": "Kategoriename",
     "categorySaveFailed": "Kategorie konnte nicht gespeichert werden",
     "checkErrors": "{count, plural, one {# Fehler} other {# Fehler}}",
     "checkFailed": "Die Vorlage konnte nicht geprüft werden",
@@ -2062,7 +2014,6 @@
     "conditionCount": "{count, plural, one {# Bedingung} other {# Bedingungen}}",
     "conditionField": "Feld",
     "conditionFormulaPlaceholder": "Enter a formula…",
-    "conditionFormulaTitle": "Formula",
     "conditionMatch": "Übereinstimmung",
     "conditionNamePlaceholder": "Bedingungsname (z. B. NPF)",
     "conditionOpAfter": "nach",
@@ -2088,7 +2039,6 @@
     "conditionsTitle": "Bedingungen",
     "configureFields": "Felder konfigurieren",
     "confirmDelete": "Die Vorlage wird dauerhaft gelöscht.",
-    "createCategory": "Neue Kategorie",
     "createDocument": "Dokument erstellen",
     "createDocumentAnyway": "Trotzdem erstellen",
     "createInStudio": "In stella erstellen",
@@ -2097,7 +2047,6 @@
     "dateChipPlus30Days": "In 30 Tagen",
     "dateFormatStyle": "Datumsformat",
     "dateRenderPreview": "Im Dokument: {value}",
-    "deleteCategory": "Kategorie löschen",
     "deleteFailed": "Vorlage konnte nicht gelöscht werden",
     "describeWhenToUse": "Beschreiben Sie, wann dies verwendet wird",
     "directiveEach": "Schleife: {expression}",
@@ -2111,10 +2060,8 @@
     "downloadAnyway": "Trotzdem herunterladen",
     "downloadDocx": "DOCX herunterladen",
     "downloadPdf": "PDF herunterladen",
-    "downloadReady": "Dokument bereit",
     "dragAndDrop": "oder per Drag & Drop",
     "dropToCreate": "Ziehen Sie eine .docx-Datei hierher, um eine Vorlage zu erstellen",
-    "editCategory": "Kategorie bearbeiten",
     "editFields": "Felder bearbeiten",
     "emptyFieldsWarning": "{count, plural, one {# Feld ist noch leer} other {# Felder sind noch leer}}: {names}",
     "fieldCount": "{count, plural, one {# Feld} other {# Felder}}",
@@ -2250,7 +2197,6 @@
       "fillFormPreview": "So erscheint es im Formular",
       "fillStale": "Ungespeicherte Änderungen — speichern Sie, um mit den aktuellen Feldern auszufüllen.",
       "filledByPerson": "Person",
-      "formula": "Formel",
       "formulaExampleLabel": "Beispiel",
       "formulaNoFields": "Fügen Sie zuerst ein Zahlenfeld hinzu, damit die Formel etwas berechnen kann.",
       "formulaNonNumberFields": "Keine Zahl: {fields}",
@@ -2298,7 +2244,6 @@
       "saveAsRecipe": "Als Rezept speichern",
       "scopeClause": "Klausel-Slot",
       "scopeCondition": "Bedingung",
-      "scopeField": "Feld",
       "scopeLoop": "Schleife",
       "scopeTemplate": "Vorlage",
       "showOnlyIf": "Nur anzeigen, wenn…",
@@ -2345,8 +2290,6 @@
     "validationOptionNotInSource": "Muss einer der im Feld {field} eingegebenen Werte sein",
     "validationPattern": "Ungültiges Format",
     "validationRequired": "Dieses Feld ist erforderlich",
-    "versionLabel": "Version {version}",
-    "versionsEmpty": "Kein Versionsverlauf",
     "viewVersion": "Anzeigen",
     "whenNotToUse": "Wann nicht verwenden",
     "whenNotToUsePlaceholder": "Wann sollte diese Vorlage nicht verwendet werden?",
@@ -2378,7 +2321,6 @@
       "save": "Speichern",
       "saved": "DeepL-Schlüssel gespeichert",
       "savedDescription": "Übersetzungen sind jetzt verfügbar.",
-      "saving": "Wird gespeichert…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-Übersetzung"
@@ -2394,10 +2336,7 @@
     "slugRequired": "Slug ist erforderlich"
   },
   "workspaces": {
-    "active": "Aktiv",
     "archiveMatter": "Archivieren",
-    "archived": "Archiviert",
-    "archivedBadge": "Archiviert",
     "copyToMatter": {
       "copied": "In Akte kopiert",
       "copyOption": "Kopieren (Original behalten)",
@@ -2520,8 +2459,7 @@
       "lastUpdated": "Zuletzt aktualisiert",
       "moveToRoot": "Hier ablegen, um auf die oberste Ebene zu verschieben",
       "newSubfolder": "Neuer Unterordner",
-      "noFilesYet": "Noch keine Dateien",
-      "version": "Version"
+      "noFilesYet": "Noch keine Dateien"
     },
     "filters": {
       "chips": {
@@ -2562,7 +2500,6 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Lead festlegen",
-        "members": "Mitglieder",
         "noLead": "Kein Lead",
         "searchMembers": "Mitglieder suchen…"
       },
@@ -2592,7 +2529,6 @@
       "moveToHint": "Pfad eingeben oder einen bestehenden Ordner auswählen.",
       "moveToTitle": "In Ordner verschieben",
       "organized": "Dateien organisiert",
-      "regenerate": "Neu generieren",
       "reset": "Auf KI-Vorschläge zurücksetzen",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "zu verschieben",
@@ -2602,8 +2538,6 @@
       "wasNamed": "war {name}"
     },
     "infosoud": {
-      "cancelled": "Aufgehoben",
-      "court": "Gericht",
       "courtPlaceholder": "Gericht oder Code suchen",
       "courtsFailed": "InfoSoud-Gerichte konnten nicht geladen werden",
       "eventCount": "{count, plural, one {# Ereignis} other {# Ereignisse}}",
@@ -2631,7 +2565,6 @@
       "hideColumn": "Spalte ausblenden",
       "readOnlyGrouping": "Diese Gruppierung ist schreibgeschützt",
       "selectPropertyHint": "Wählen Sie eine Eigenschaft zum Gruppieren in der Symbolleiste",
-      "unknown": "Unbekannt",
       "uploadDocument": "Dokument hochladen",
       "usePropertyHint": "Verwenden Sie Art, Autor oder eine Einfachauswahl-Eigenschaft"
     },
@@ -2639,9 +2572,7 @@
     "lead": "Lead",
     "leadEmpty": "Kein Lead",
     "leadPicker": {
-      "noMatchingMembers": "Keine passenden Mitglieder",
-      "placeholder": "Mitglieder suchen…",
-      "title": "Lead festlegen"
+      "noMatchingMembers": "Keine passenden Mitglieder"
     },
     "lockMatter": "Sperren",
     "matterInfo": "Akteninformationen",
@@ -2652,13 +2583,11 @@
       "alreadyMember": "Benutzer ist bereits Mitglied",
       "cannotRemoveLast": "Das letzte Mitglied kann nicht entfernt werden",
       "noMembersFound": "Keine Mitglieder gefunden",
-      "removeMember": "Mitglied entfernen",
       "removeMemberConfirm": "Dieses Mitglied aus der Akte entfernen?",
       "selectMember": "Mitglied auswählen"
     },
     "newDocument": "Neues Dokument",
     "newFolder": "Neuer Ordner",
-    "newMatter": "Neue Akte",
     "noDocuments": "Noch keine Dokumente",
     "noFieldsToView": "Diese Entität hat keine Felder zum Anzeigen",
     "noGrouping": "Nicht gruppieren",
@@ -2679,7 +2608,6 @@
       "recentActivity": "Letzte Aktivität",
       "timeAndTeam": "Zeit & Team",
       "timeThisWeek": "Zeit diese Woche",
-      "title": "Übersicht",
       "totalDocuments": "Dokumente gesamt",
       "totalItems": "Einträge",
       "totalThisWeek": "Gesamt diese Woche",
@@ -2720,7 +2648,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Seiten für Dunkelmodus anpassen",
-      "anonymizeSidebar": "Anonymisierung",
       "backToPeek": "Zurück zur Vorschau",
       "entitySidebar": "Entitätsdetails",
       "evidence": "Beweismittel",
@@ -2732,7 +2659,6 @@
       "previousPage": "Vorherige Seite",
       "resetZoom": "Zoom zurücksetzen",
       "showOriginal": "Originalseiten anzeigen",
-      "toggleSidebar": "Seitenleiste ein-/ausblenden",
       "unlock": "Entsperren",
       "zoomIn": "Vergrößern",
       "zoomOut": "Verkleinern"
@@ -2768,13 +2694,11 @@
       "addOption": "Option hinzufügen",
       "addPromptForBetterResults": "Fügen Sie einen Prompt für bessere Ergebnisse hinzu",
       "addReadingSource": "hinzufügen",
-      "aiExtraction": "KI-Extraktion",
       "autoPromptFailed": "Prompt konnte nicht generiert werden.",
       "bulk": {
         "addAnother": "Weitere Spalte hinzufügen",
         "createFailed": "Spalten konnten nicht erstellt werden",
         "createMany": "{count} Spalten erstellen",
-        "createOne": "Spalte erstellen",
         "createdMany": "{count} Spalten erstellt",
         "createdOne": "Spalte erstellt",
         "promptPlaceholder": "What should this column extract?",
@@ -2815,9 +2739,7 @@
       "extractionPlaceholder": "Beschreibe, was zu finden ist. Tippe @, um eine andere Spalte zu referenzieren.",
       "extractionScope": "Extraktionsumfang",
       "file": "Datei",
-      "flowExtraction": "KI-Extraktion",
       "flowNoInputs": "keine Eingaben",
-      "flowOutput": "Ausgabe",
       "ifNoMatchFound": "Wenn keine Übereinstimmung gefunden",
       "inputs": "Eingaben",
       "inputsHelp": "Wähle Spalten, die die KI lesen soll. Klick zum Hinzufügen oder Entfernen.",
@@ -2876,7 +2798,6 @@
     "referencePlaceholder": "z. B. 2024/001",
     "referenceTaken": "Diese Referenznummer wird bereits verwendet",
     "sections": {
-      "members": "Mitglieder",
       "parties": "Parteien"
     },
     "table": {
@@ -2953,7 +2874,6 @@
       "hideColumn": "Spalte ausblenden",
       "layouts": {
         "calendar": "Kalender",
-        "filesystem": "Liste",
         "grid": "Raster",
         "kanban": "Kanban",
         "list": "Liste",

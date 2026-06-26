@@ -380,7 +380,7 @@ function ProfilePageBody() {
     <>
       <SettingsPageHeader
         description={t("settings.account.profileDescription")}
-        title={t("settings.account.profile")}
+        title={t("common.profile")}
       />
       <Frame>
         <FrameHeader>

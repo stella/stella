@@ -20,8 +20,7 @@
       "description": "أضِف بيانات اعتماد المزوّد لبدء استخدام ميزات AI.",
       "title": "ربط مزوّد AI"
     },
-    "refinePlaceholder": "كيف ينبغي أن يُعدّل الذكاء الاصطناعي الصياغة؟",
-    "regenerate": "إعادة الإنشاء"
+    "refinePlaceholder": "كيف ينبغي أن يُعدّل الذكاء الاصطناعي الصياغة؟"
   },
   "app": {
     "versionMismatch": {
@@ -31,7 +30,7 @@
     }
   },
   "appearance": {
-    "calendar": "التقويم",
+    "calendar": "تقويم",
     "calendarGregorian": "الميلادي",
     "calendarHijri": "الهجري (أم القرى)",
     "cool": "بارد",
@@ -114,10 +113,9 @@
       "labelPlaceholder": "بحث",
       "manageCodes": "إدارة الرموز",
       "noCodesYet": "لا توجد رموز فوترة بعد",
-      "task": "المهمة",
+      "task": "مهمة",
       "taskCode": "رمز المهمة"
     },
-    "day": "اليوم",
     "decimalHours": "({hours} ساعة)",
     "deleteSelected": "حذف المحدد",
     "duration": "المدة",
@@ -138,8 +136,6 @@
       "markup": "هامش الزيادة (%)",
       "noExpenses": "لا توجد مصروفات لهذه الفترة"
     },
-    "export": "تصدير",
-    "exportCSV": "تصدير CSV",
     "exportLEDES": "تصدير LEDES",
     "exportPDF": "تصدير PDF",
     "failedToDelete": "تعذّر حذف الإدخال",
@@ -214,7 +210,6 @@
     },
     "revertToDraft": "الإعادة إلى مسودة",
     "running": "قيد التشغيل",
-    "selectAll": "تحديد الكل",
     "selectMatter": "اختر ملفًا...",
     "selectMatterToStart": "اختر ملفًا لبدء توقيت الوقت",
     "selectedCount": "{count, plural, zero {لا شيء محدد} one {محدد واحد} two {محددان} few {# محددة} many {# محددًا} other {# محدد}}",
@@ -237,7 +232,6 @@
     "timerActive": "المؤقّت قيد التشغيل",
     "timesheets": "سجلات الوقت",
     "total": "الإجمالي",
-    "week": "الأسبوع",
     "writeOff": "شطب"
   },
   "caseLaw": {
@@ -316,7 +310,6 @@
     "packDescription": "{count, plural, zero {لا أدوات} one {أداة واحدة} two {أداتان} few {# أدوات} many {# أداة} other {# أداة}} منسَّقة لممارستك. تثبيت بنقرة واحدة أو اختيار كل منها على حدة أدناه.",
     "packInstalled": "{count, plural, zero {لم تُثبَّت أدوات} one {تم تثبيت أداة واحدة} two {تم تثبيت أداتين} few {تم تثبيت # أدوات} many {تم تثبيت # أداة} other {تم تثبيت # أداة}}",
     "packPartial": "تم تثبيت {installed}، وفشل {failed}",
-    "recommended": "موصى به",
     "removed": "لم تعد هذه الأداة متاحة.",
     "sectionOthers": "أخرى",
     "sectionRecommended": "موصى به",
@@ -356,11 +349,9 @@
       "tracked": "نعم، مع التعقّب"
     },
     "approval": {
-      "allow": "سماح",
       "allowInConversation": "السماح في هذه المحادثة",
       "allowOnce": "السماح مرة واحدة",
       "alwaysAllow": "السماح دائماً",
-      "approved": "تمت الموافقة",
       "denied": "تم الرفض",
       "deny": "رفض",
       "externalMcpDescription": "لن يُرسَل سوى المعلومات اللازمة لاستدعاء هذه الأداة.",
@@ -369,7 +360,6 @@
     "askAnything": "اسأل عن أي شيء",
     "askUser": {
       "custom": "اكتب إجابتك الخاصة",
-      "default": "افتراضي",
       "edit": "تعديل الإجابات",
       "editWarning": "ستؤدي إعادة التشغيل إلى تجاهل الردود اللاحقة في هذه المحادثة.",
       "noAnswer": "لا إجابة",
@@ -396,11 +386,6 @@
       "previewWaiting": "في انتظار المحتوى…"
     },
     "deleteThread": "حذف المحادثة",
-    "documentView": {
-      "original": "الأصل",
-      "simple": "مقبول",
-      "trackedChanges": "التغييرات المتعقَّبة"
-    },
     "editableFilePlaceholder": "تحدّث عن {fileName} أو حرّره",
     "editableFilePlaceholderAction": "تحدّث عنه أو حرّره",
     "editorLoading": "جارٍ تحميل المحرّر…",
@@ -433,9 +418,7 @@
     "maxAttachmentsReached": "بحدّ أقصى {count} ملفات لكل رسالة",
     "mention": {
       "category": {
-        "contacts": "جهات الاتصال",
-        "entities": "في هذا الملف",
-        "templates": "القوالب"
+        "entities": "في هذا الملف"
       },
       "loadError": "تعذّر تحميل الكيانات"
     },
@@ -470,7 +453,6 @@
     "removeSuggestion": "(إزالة)",
     "resend": "إعادة الإرسال",
     "resizeThread": "تغيير حجم المحادثة",
-    "send": "إرسال الرسالة",
     "sendError": "حدثت مشكلة أثناء إرسال رسالتك. تواصل مع الدعم إذا استمرّ الخطأ.",
     "sendErrorAnonymizationBlocked": "تعذّر على stella تجهيل أحد المرفقات، لذا لم يُرسَل شيء. أزِل الملف أو أرسِل هذه الرسالة دون تجهيل.",
     "sendErrorLoopDetected": "تكرّر ردّ AI مرّات كثيرة جداً. حاول مجدداً بطلب أكثر تحديداً.",
@@ -574,7 +556,6 @@
     "backToList": "العودة إلى البنود",
     "body": "النص",
     "categoryDeleteConfirm": "ستصبح البنود في هذه الفئة غير مصنّفة.",
-    "categoryName": "اسم الفئة",
     "categoryNamePlaceholder": "مثال: السرّية",
     "clauseCount": "{count, plural, zero {لا توجد بنود} one {بند واحد} two {بندان} few {# بنود} many {# بندًا} other {# بند}}",
     "clauseCreated": "تم إنشاء البند",
@@ -586,20 +567,16 @@
     "confirmDeleteClause": "سيؤدّي هذا إلى حذف البند وجميع صيغه نهائيًا.",
     "confirmRestoreVersion": "سيؤدي هذا إلى تعيين نص البند إلى هذا الإصدار، مع إنشاء إصدار جديد. ويُحفظ السجلّ.",
     "confirmUseAsMainBody": "سيؤدي هذا إلى استبدال نص البند بهذه الصيغة، مع إنشاء إصدار جديد. وتبقى الصيغة كما هي.",
-    "createCategory": "فئة جديدة",
     "createClause": "بند جديد",
     "createFailed": "تعذّر إنشاء البند",
-    "deleteCategory": "حذف الفئة",
     "deleteClause": "حذف البند",
     "deleteFailed": "تعذّر الحذف",
     "descriptionPlaceholder": "وصف موجز للبند",
-    "editCategory": "تعديل الفئة",
     "editClause": "تعديل البند",
     "editVariant": "تعديل الصيغة",
     "export": "تصدير",
     "exportFailed": "تعذّر تصدير البنود",
     "formattingPreviewHint": "الترقيم والتنسيق هنا مجرد معاينة. يطبّق المستند المُنشأ تنسيق القوائم الخاص به، لذا لا تكتب الأرقام يدويًا.",
-    "import": "استيراد",
     "importFailed": "تعذّر استيراد البنود",
     "importResult": "{created, plural, zero {لم يُنشأ شيء} one {أُنشئ واحد} two {أُنشئ اثنان} few {أُنشئت #} many {أُنشئ #} other {أُنشئ #}}، {skipped, plural, zero {لم يُتخطَّ شيء} one {تم تخطّي واحد} two {تم تخطّي اثنين} few {تم تخطّي #} many {تم تخطّي #} other {تم تخطّي #}}",
     "importSuccess": "{count, plural, zero {لم يُستورد أي بند} one {تم استيراد بند واحد} two {تم استيراد بندين} few {تم استيراد # بنود} many {تم استيراد # بندًا} other {تم استيراد # بند}}",
@@ -618,7 +595,6 @@
     "noLinkedClauses": "لا توجد بنود مرتبطة",
     "noResults": "لا توجد بنود بعد",
     "noVariants": "لا توجد صيغ",
-    "noVersions": "لا يوجد سجل إصدارات",
     "outdatedVersion": "يتوفّر تحديث",
     "restoreVersion": "استعادة هذا الإصدار",
     "saveAsVersion": "الحفظ كإصدار جديد",
@@ -661,7 +637,6 @@
     "variantPromoted": "تم تعيين الصيغة كنص رئيسي",
     "variantUpdated": "تم تحديث الصيغة",
     "variants": "الصيغ",
-    "version": "الإصدار {version}",
     "versionCount": "{count, plural, zero {# إصدار} one {إصدار واحد} two {إصداران} few {# إصدارات} many {# إصدارًا} other {# إصدار}}",
     "versionRestored": "تمت استعادة الإصدار"
   },
@@ -699,6 +674,7 @@
     "captions": "التسميات التوضيحية",
     "caseLaw": "السوابق القضائية",
     "category": "الفئة",
+    "categoryName": "اسم الفئة",
     "changeColor": "تغيير اللون",
     "clauses": "البنود",
     "clearDate": "مسح التاريخ",
@@ -718,12 +694,14 @@
     "copy": "نسخ",
     "copyLink": "نسخ الرابط",
     "country": "الدولة",
+    "createCategory": "فئة جديدة",
     "createdAt": "أُنشئ في {date}",
     "currency": "العملة",
     "currentPage": "الصفحة الحالية",
     "date": "التاريخ",
     "decline": "رفض",
     "delete": "حذف",
+    "deleteCategory": "حذف الفئة",
     "deleteConfirmDescription": "هل أنت متأكد من رغبتك في حذف «{name}»؟ لا يمكن التراجع عن هذا الإجراء.",
     "deletedCount": "{count, plural, zero {تم حذف أي عنصر} one {تم حذف عنصر واحد} two {تم حذف عنصرين} few {تم حذف # عناصر} many {تم حذف # عنصرًا} other {تم حذف # عنصر}}",
     "description": "الوصف",
@@ -734,6 +712,7 @@
     "duplicate": "تكرار",
     "duplicated": "تم التكرار",
     "edit": "تعديل",
+    "editCategory": "تعديل الفئة",
     "edited": "مُعدَّل",
     "email": "البريد الإلكتروني",
     "empty": "فارغ",
@@ -747,8 +726,10 @@
     "error": "خطأ",
     "expenses": "المصروفات",
     "filter": "تصفية",
+    "formula": "صيغة حسابية",
     "goBack": "رجوع",
     "history": "السجل",
+    "import": "استيراد",
     "invite": "دعوة",
     "invoices": "الفواتير",
     "kind": "النوع",
@@ -795,13 +776,16 @@
     "logTime": "تسجيل الوقت",
     "matter": "ملف",
     "matters": "الملفات",
+    "members": "الأعضاء",
     "metadata": "البيانات الوصفية",
     "moveDown": "نقل لأسفل",
     "moveUp": "نقل لأعلى",
     "name": "الاسم",
+    "newMatter": "ملف جديد",
     "newRow": "صف جديد",
     "next": "التالي",
     "noResults": "لا توجد نتائج",
+    "noVersions": "لا يوجد سجل إصدارات",
     "none": "None",
     "notes": "الملاحظات",
     "open": "فتح",
@@ -815,10 +799,13 @@
     "preview": "معاينة",
     "previous": "السابق",
     "print": "طباعة",
+    "profile": "الملف الشخصي",
     "properties": "الخصائص",
     "reconnecting": "جارٍ إعادة الاتصال…",
     "reference": "المرجع",
+    "regenerate": "إعادة الإنشاء",
     "remove": "إزالة",
+    "removeMember": "إزالة العضو",
     "rename": "إعادة تسمية",
     "required": "مطلوب",
     "reset": "إعادة تعيين",
@@ -855,7 +842,9 @@
     "urlIdentifier": "المعرّف",
     "urlIdentifierPlaceholder": "my-organization",
     "user": "المستخدم",
-    "verify": "تحقّق"
+    "verify": "تحقّق",
+    "version": "الإصدار",
+    "versionLabel": "الإصدار {version}"
   },
   "consent": {
     "allow": "السماح",
@@ -892,8 +881,7 @@
       "title": "تفاصيل الفوترة"
     },
     "columns": {
-      "phone": "الهاتف",
-      "tags": "الأوسمة"
+      "phone": "الهاتف"
     },
     "communication": {
       "addAddress": "إضافة عنوان",
@@ -965,13 +953,10 @@
       "firstName": "الاسم الأول",
       "lastName": "اسم العائلة",
       "middleName": "الاسم الأوسط",
-      "originatingAttorney": "جهة الاتصال الرئيسية",
       "paymentTermDays": "شروط الدفع (بالأيام)",
       "prefix": "اللقب",
       "registrationNumber": "رقم التسجيل",
-      "responsibleAttorney": "الشخص المسؤول",
       "suffix": "اللاحقة",
-      "tags": "الأوسمة",
       "taxId": "الرقم الضريبي"
     },
     "filterOrganizations": "المؤسسات",
@@ -1127,7 +1112,6 @@
     "uploadDate": "تاريخ الرفع",
     "uploadNewVersion": "رفع إصدار جديد",
     "uploadedBy": "رُفِع بواسطة",
-    "version": "الإصدار",
     "versionHistory": "سجل الإصدارات",
     "viewVersionHistory": "إظهار التفاصيل والسجل",
     "viewing": "قيد العرض",
@@ -1223,12 +1207,10 @@
       "noResults": "لا توجد نتائج",
       "previous": "النتيجة السابقة",
       "previousShortcut": "النتيجة السابقة (Shift+Enter)",
-      "replace": "استبدال",
       "replaceAll": "استبدال الكل",
       "replaceCurrent": "استبدال النتيجة الحالية",
       "replacePlaceholder": "نص الاستبدال...",
       "replaceText": "نص الاستبدال",
-      "showReplace": "استبدال",
       "wholeWords": "الكلمات الكاملة"
     },
     "finishEditing": "إنهاء التعديل",
@@ -1349,11 +1331,10 @@
       "title": "سياق الملف"
     },
     "metadata": {
-      "author": "المؤلِّف",
+      "author": "المؤلف",
       "documentInfoHeading": "معلومات المستند",
       "matterColumnsHeading": "أعمدة الملف",
       "updatedAt": "آخر تحديث",
-      "version": "الإصدار",
       "versionCurrent": "الإصدار {version} (الحالي)"
     },
     "openChat": "فتح المحادثة",
@@ -1375,27 +1356,22 @@
         "publish": "نشر المهارة"
       },
       "deleteConfirmDescription": "ستتم إزالة «{name}» من مساحة العمل هذه.",
-      "deleteConfirmTitle": "حذف المهارة؟",
       "deleteFile": "حذف الملف",
       "deleteFileConfirm": "حذف الملف؟ لا يمكن التراجع عن هذا الإجراء.",
       "description": "ثبّت حزم SKILL.md التي تضيف أساليب متخصصة وموارد للقراءة فقط إلى المحادثة.",
       "disableSkill": "تعطيل المهارة",
       "disabled": "مُعطَّلة",
-      "discardChanges": "تجاهل",
       "dropFile": "أفلِت ملف SKILL.md أو ملف .zip هنا",
       "editSkill": "تعديل المهارة",
-      "editTitle": "تعديل المهارة",
       "emptyDescription": "ارفع ملف SKILL.md، أو مجلد مهارة مضغوطاً، أو استورد رابط مهارة عامة من GitHub.",
       "emptyTitle": "ثبّت أول مهارة لك",
       "enableSkill": "تفعيل المهارة",
       "enabled": "مُفعَّلة",
       "fileExists": "يوجد ملف بهذا المسار بالفعل",
       "filesHeading": "الملفات",
-      "formBody": "التعليمات",
       "formBodyHelp": "تعليمات Markdown يقرأها الوكيل عند استدعاء المهارة.",
       "formDescription": "الوصف",
       "formName": "الاسم",
-      "formVersion": "الإصدار",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "إضافة ملف",
       "generateDraft": "مسودة المهارة",
@@ -1425,23 +1401,17 @@
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "مجلد جديد",
       "pdfPreviewSoon": "ستتوفر معاينة PDF بمجرد دعم موارد المهارات الثنائية.",
-      "privateSection": "مهاراتك",
-      "regenerate": "إعادة الإنشاء",
       "renameFile": "إعادة تسمية",
       "resources": "{count, plural, zero {لا موارد} one {مورد واحد} two {موردان} few {# موارد} many {# مورداً} other {# مورد}}",
-      "scope": "مدى الظهور",
       "scopePrivate": "أنا فقط",
       "scopeTeam": "الجميع في الفريق",
       "selectFileHint": "اختر ملفاً من القائمة لفتحه في لوحة المحرر على اليمين.",
       "selectedFile": "المُختار: {name}",
       "sourceUpload": "مرفوع",
       "sourceUrl": "رابط URL عام",
-      "teamSection": "مهارات الفريق",
       "unsavedChanges": "تغييرات غير محفوظة — هل تريد تجاهلها؟",
       "uploadFile": "رفع ملف",
       "uploadHelp": "استخدم ملف SKILL.md أو مجلد .zip يتضمن SKILL.md وموارد اختيارية للقراءة فقط.",
-      "uploadSkill": "رفع مهارة",
-      "uploadTitle": "رفع مهارة",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/path/to/skill",
       "version": "الإصدار: {version}"
     },
@@ -1469,13 +1439,11 @@
       "errorDescription": "تعذّر تحديث التكامل.",
       "errorTitle": "فشل MCP",
       "mcpExplainer": "تربط التكاملات الخدمات الخارجية بالمحادثة التي يمكن لـ AI العمل معها.",
-      "namePlaceholder": "الاسم المعروض",
       "needsReauth": "يلزم إعادة الاتصال",
       "off": "إيقاف",
       "on": "تشغيل",
       "otherTitle": "تكاملات أخرى",
       "probe": "فحص",
-      "recommendedBadge": "موصى به",
       "recommendedFor": "موصى به لـ {jurisdictions}",
       "reconnect": "إعادة الاتصال",
       "saveToken": "حفظ الرمز",
@@ -1516,7 +1484,6 @@
       }
     },
     "skills": {
-      "addShortcut": "إضافة مهارة",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1546,11 +1513,8 @@
       "commandLabel": "أمر المحادثة (اختياري)",
       "commandPlaceholder": "مثال: summarize",
       "createTitle": "مهارة جديدة",
-      "defaultBadge": "افتراضي",
       "deleteConfirmDescription": "ستتم إزالة هذه المهارة نهائياً.",
-      "deleteConfirmTitle": "حذف المهارة؟",
       "deleteShortcut": "حذف المهارة",
-      "editShortcut": "تعديل المهارة",
       "emptyDescription": "أنشئ مهارات قابلة لإعادة الاستخدام للأعمال التي يكررها فريقك، من الملخصات إلى تعليمات الصياغة الأولية.",
       "emptyState": "لا توجد مهارات بعد. أضف أول مهارة لك.",
       "emptyTitle": "أنشئ أول مهارة لك",
@@ -1563,21 +1527,17 @@
       "form": {
         "command": "اختصار المهارة",
         "commandHint": "اسم مهارة الـ /: حروف صغيرة وأرقام وشرطات وشرطات سفلية فقط",
-        "commandPlaceholder": "مثال: summarize",
         "commandPrefix": "/",
         "description": "الوصف",
         "descriptionPlaceholder": "وصف قصير يظهر في أداة الاختيار",
         "name": "الاسم",
         "namePlaceholder": "مثال: تلخيص المستند",
-        "prompt": "التعليمات",
         "promptPlaceholder": "تعليمات تُدرَج في مُحرّر المحادثة عند استخدام هذه المهارة",
         "scope": "مدى الظهور",
         "scopePrivate": "أنا فقط",
         "scopeTeam": "الجميع في الفريق"
       },
-      "privateSection": "مهاراتك",
-      "shadowed": "محجوبة بمهارة الفريق",
-      "teamSection": "مهارات الفريق"
+      "shadowed": "محجوبة بمهارة الفريق"
     }
   },
   "markdownEditor": {
@@ -1586,12 +1546,10 @@
     "showRaw": "عرض المصدر الخام"
   },
   "navigation": {
-    "chat": "المحادثة",
+    "chat": "محادثة",
     "contacts": "جهات الاتصال",
     "knowledge": "المعرفة",
-    "members": "الأعضاء",
-    "myTodos": "مهامّي",
-    "newMatter": "ملف جديد",
+    "myTodos": "مهامي",
     "pinned": "المثبّتة",
     "recents": "الأخيرة",
     "search": "بحث",
@@ -1613,7 +1571,7 @@
     "catalogueCommunityHeading": "أخرى",
     "catalogueContinueWithCount": "المتابعة بـ {count, plural, zero {# أداة} one {# أداة} two {# أداتين} few {# أدوات} many {# أداة} other {# أداة}}",
     "catalogueDetailAbout": "حول",
-    "catalogueDetailAuthor": "المؤلِّف",
+    "catalogueDetailAuthor": "المؤلف",
     "catalogueDetailCost": "التكلفة",
     "catalogueDetailJurisdictions": "الولايات القضائية",
     "catalogueDetailLicense": "الترخيص",
@@ -1789,7 +1747,6 @@
       "confirmRoleChangeTitle": "تغيير الدور",
       "joined": "تاريخ الانضمام",
       "noMembersFound": "لم يُعثر على أعضاء",
-      "removeMember": "إزالة العضو",
       "typeEmailToConfirm": "اكتب {email} للتأكيد",
       "updateRole": "تحديث الدور"
     },
@@ -1887,7 +1844,6 @@
       "preferredName": "الاسم المفضّل",
       "preferredNameDescription": "يُستخدَم كمؤلِّف للتغييرات المتعقَّبة والتعليقات في DOCX.",
       "preferredNamePlaceholder": "اسمك",
-      "profile": "الملف الشخصي",
       "profileDescription": "إدارة تفضيلاتك الشخصية",
       "sendOtpCode": "إرسال رمز التحقق",
       "timezone": "المنطقة الزمنية",
@@ -1909,7 +1865,6 @@
         "description": "أدِر قائمة الحظر على مستوى الفريق للمصطلحات التي يخفيها مسار إخفاء الهوية دائمًا، واستورد قائمة بداية من CSV أو TXT أو JSON",
         "emptyState": "لا توجد مصطلحات على مستوى الفريق بعد. أضف واحدًا أعلاه أو استورد قائمة.",
         "entriesHeading": "مصطلحات على مستوى الفريق ({count})",
-        "importAction": "استيراد",
         "importHint": "‏CSV (canonical,label,variants)، أو TXT (واحد في كل سطر)، أو JSON",
         "importParseError": "تعذّرت قراءة ذلك الملف. استخدم CSV أو TXT أو JSON.",
         "importSuccessToast": "تم استيراد {count} مصطلحًا.",
@@ -1925,7 +1880,6 @@
       "pendingInvitations": "الدعوات المعلَّقة",
       "practiceJurisdictions": "الولايات القضائية",
       "practiceJurisdictionsDescription": "اختر الولايات القضائية ذات الصلة بك.",
-      "profile": "الملف الشخصي",
       "promptCaching": {
         "description": "عند التفعيل، تضيف stella علامات تخزين مؤقت بحيث تكلّف طلبات الذكاء الاصطناعي المتكررة على المستند أو السلسلة نفسها أقل بنحو 10 أضعاف وتنتهي أسرع. تبقى المطالبات المخزَّنة مؤقتًا لدى مزوّد الذكاء الاصطناعي لمدة تصل إلى 5 دقائق، ضمن نطاق مؤسستك. يؤدي التعطيل إلى إيقاف stella عن إرسال علامات التخزين المؤقت، لكن قد يستمر المزوّدون في التخزين المؤقت انتهازيًا — فقط عقد عدم الاحتفاظ بالبيانات (Zero Data Retention) مع المزوّد يعطّل التخزين المؤقت على جانب الخادم بالكامل.",
         "title": "التخزين المؤقت للمطالبات",
@@ -2029,7 +1983,6 @@
     "untitled": "مهمة بلا عنوان"
   },
   "templates": {
-    "addCondition": "إضافة شرط",
     "addItem": "إضافة عنصر",
     "addPart": "إضافة جزء",
     "addTag": "إضافة وسم",
@@ -2039,7 +1992,6 @@
     "browseFiles": "تصفّح الملفات",
     "categoryDeleteConfirm": "سيؤدي هذا إلى إزالة الفئة. ستصبح القوالب الموجودة في هذه الفئة غير مصنّفة.",
     "categoryDeleteFailed": "تعذّر حذف الفئة",
-    "categoryName": "اسم الفئة",
     "categorySaveFailed": "تعذّر حفظ الفئة",
     "checkErrors": "{count, plural, zero {# خطأ} one {خطأ واحد} two {خطآن} few {# أخطاء} many {# خطأً} other {# خطأ}}",
     "checkFailed": "تعذّر فحص القالب",
@@ -2062,7 +2014,6 @@
     "conditionCount": "{count, plural, zero {# شرط} one {شرط واحد} two {شرطان} few {# شروط} many {# شرطًا} other {# شرط}}",
     "conditionField": "الحقل",
     "conditionFormulaPlaceholder": "Enter a formula…",
-    "conditionFormulaTitle": "Formula",
     "conditionMatch": "المطابقة",
     "conditionNamePlaceholder": "اسم الشرط (مثل NPF)",
     "conditionOpAfter": "بعد",
@@ -2088,7 +2039,6 @@
     "conditionsTitle": "الشروط",
     "configureFields": "تهيئة الحقول",
     "confirmDelete": "سيؤدي هذا إلى حذف القالب نهائياً.",
-    "createCategory": "فئة جديدة",
     "createDocument": "إنشاء مستند",
     "createDocumentAnyway": "الإنشاء على أي حال",
     "createInStudio": "الإنشاء في stella",
@@ -2097,7 +2047,6 @@
     "dateChipPlus30Days": "خلال 30 يومًا",
     "dateFormatStyle": "تنسيق التاريخ",
     "dateRenderPreview": "في المستند: {value}",
-    "deleteCategory": "حذف الفئة",
     "deleteFailed": "تعذّر حذف القالب",
     "describeWhenToUse": "صِف متى يُستخدَم هذا",
     "directiveEach": "حلقة: {expression}",
@@ -2111,10 +2060,8 @@
     "downloadAnyway": "التنزيل على أي حال",
     "downloadDocx": "تنزيل DOCX",
     "downloadPdf": "تنزيل PDF",
-    "downloadReady": "المستند جاهز",
     "dragAndDrop": "أو اسحب وأفلت",
     "dropToCreate": "أفلِت ملف ‎.docx لإنشاء قالب",
-    "editCategory": "تعديل الفئة",
     "editFields": "تعديل الحقول",
     "emptyFieldsWarning": "{count, plural, zero {لا يزال # حقل فارغًا} one {لا يزال حقل واحد فارغًا} two {لا يزال حقلان فارغين} few {لا تزال # حقول فارغة} many {لا يزال # حقلًا فارغًا} other {لا يزال # حقل فارغًا}}: {names}",
     "fieldCount": "{count, plural, zero {# حقل} one {حقل واحد} two {حقلان} few {# حقول} many {# حقلاً} other {# حقل}}",
@@ -2250,7 +2197,6 @@
       "fillFormPreview": "كيف يظهر في نموذج التعبئة",
       "fillStale": "تغييرات غير محفوظة — احفظ للتعبئة بأحدث الحقول.",
       "filledByPerson": "شخص",
-      "formula": "صيغة حسابية",
       "formulaExampleLabel": "مثال",
       "formulaNoFields": "أضِف أولاً حقلاً رقمياً حتى يكون للمعادلة ما تحسبه.",
       "formulaNonNumberFields": "ليس رقمًا: {fields}",
@@ -2298,7 +2244,6 @@
       "saveAsRecipe": "الحفظ كوصفة",
       "scopeClause": "خانة بند",
       "scopeCondition": "شرط",
-      "scopeField": "حقل",
       "scopeLoop": "حلقة",
       "scopeTemplate": "قالب",
       "showOnlyIf": "أظهِر فقط إذا…",
@@ -2314,7 +2259,7 @@
       "whoFills": "مَن يعبّئ هذا الحقل لاحقًا؟"
     },
     "tagPlaceholder": "اكتب وسمًا واضغط Enter",
-    "tags": "الوسوم",
+    "tags": "وسوم",
     "templateDeleted": "تم حذف القالب",
     "templateName": "اسم القالب",
     "templateNamePlaceholder": "مثال: عقد العمل",
@@ -2345,8 +2290,6 @@
     "validationOptionNotInSource": "يجب أن يكون أحد القيم المُدخَلة في {field}",
     "validationPattern": "تنسيق غير صالح",
     "validationRequired": "هذا الحقل مطلوب",
-    "versionLabel": "الإصدار {version}",
-    "versionsEmpty": "لا يوجد سجل إصدارات",
     "viewVersion": "عرض",
     "whenNotToUse": "متى لا يُستخدَم",
     "whenNotToUsePlaceholder": "متى ينبغي تجنّب هذا القالب؟",
@@ -2378,7 +2321,6 @@
       "save": "حفظ",
       "saved": "تم حفظ مفتاح DeepL",
       "savedDescription": "الترجمات متاحة الآن.",
-      "saving": "جارٍ الحفظ…",
       "tierFree": "مجاني",
       "tierPro": "Pro",
       "title": "ترجمة DeepL"
@@ -2394,10 +2336,7 @@
     "slugRequired": "المعرّف مطلوب"
   },
   "workspaces": {
-    "active": "نشطة",
     "archiveMatter": "أرشفة",
-    "archived": "مؤرشفة",
-    "archivedBadge": "مؤرشفة",
     "copyToMatter": {
       "copied": "تم النسخ إلى الملف",
       "copyOption": "نسخ (مع الاحتفاظ بالأصل)",
@@ -2520,8 +2459,7 @@
       "lastUpdated": "آخر تحديث",
       "moveToRoot": "أفلِت هنا للنقل إلى المستوى الجذر",
       "newSubfolder": "مجلد فرعي جديد",
-      "noFilesYet": "لا توجد ملفات بعد",
-      "version": "الإصدار"
+      "noFilesYet": "لا توجد ملفات بعد"
     },
     "filters": {
       "chips": {
@@ -2562,7 +2500,6 @@
         "lead": "المسؤول الرئيسي",
         "leadActive": "المسؤول الرئيسي",
         "leadInactive": "تعيين مسؤول رئيسي",
-        "members": "الأعضاء",
         "noLead": "لا يوجد مسؤول رئيسي",
         "searchMembers": "البحث عن الأعضاء…"
       },
@@ -2592,7 +2529,6 @@
       "moveToHint": "اكتب مسارًا أو اختر من المجلدات الموجودة.",
       "moveToTitle": "نقل إلى مجلد",
       "organized": "تم تنظيم الملفات",
-      "regenerate": "إعادة الإنشاء",
       "reset": "إعادة التعيين إلى اقتراحات AI",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "للنقل",
@@ -2602,8 +2538,6 @@
       "wasNamed": "كان باسم {name}"
     },
     "infosoud": {
-      "cancelled": "ملغاة",
-      "court": "المحكمة",
       "courtPlaceholder": "ابحث عن محكمة أو رمز",
       "courtsFailed": "تعذّر تحميل محاكم InfoSoud",
       "eventCount": "{count, plural, zero {لا أحداث} one {حدث واحد} two {حدثان} few {# أحداث} many {# حدثًا} other {# حدث}}",
@@ -2631,7 +2565,6 @@
       "hideColumn": "إخفاء العمود",
       "readOnlyGrouping": "هذا التجميع للقراءة فقط",
       "selectPropertyHint": "اختر خاصية للتجميع بحسبها من شريط الأدوات",
-      "unknown": "غير معروف",
       "uploadDocument": "رفع مستند",
       "usePropertyHint": "استخدم النوع أو المؤلف أو خاصية أحادية التحديد"
     },
@@ -2639,9 +2572,7 @@
     "lead": "المسؤول الرئيسي",
     "leadEmpty": "لا يوجد مسؤول رئيسي",
     "leadPicker": {
-      "noMatchingMembers": "لا يوجد أعضاء مطابقون",
-      "placeholder": "البحث عن الأعضاء…",
-      "title": "تعيين مسؤول رئيسي"
+      "noMatchingMembers": "لا يوجد أعضاء مطابقون"
     },
     "lockMatter": "قفل",
     "matterInfo": "معلومات الملف",
@@ -2652,13 +2583,11 @@
       "alreadyMember": "المستخدم عضو بالفعل",
       "cannotRemoveLast": "لا يمكن إزالة العضو الأخير",
       "noMembersFound": "لم يُعثر على أعضاء",
-      "removeMember": "إزالة العضو",
       "removeMemberConfirm": "هل تريد إزالة هذا العضو من الملف؟",
       "selectMember": "اختر عضوًا"
     },
     "newDocument": "مستند جديد",
     "newFolder": "مجلد جديد",
-    "newMatter": "ملف جديد",
     "noDocuments": "لا توجد مستندات بعد",
     "noFieldsToView": "لا يحتوي هذا الكيان على أي حقول للعرض",
     "noGrouping": "بلا تجميع",
@@ -2679,7 +2608,6 @@
       "recentActivity": "النشاط الأخير",
       "timeAndTeam": "الوقت والفريق",
       "timeThisWeek": "الوقت هذا الأسبوع",
-      "title": "نظرة عامة",
       "totalDocuments": "إجمالي المستندات",
       "totalItems": "العناصر",
       "totalThisWeek": "الإجمالي هذا الأسبوع",
@@ -2693,7 +2621,7 @@
     "parties": {
       "addParty": "إضافة طرف",
       "changeClient": "تغيير العميل",
-      "client": "العميل",
+      "client": "عميل",
       "noClient": "لم يُعيَّن أي عميل",
       "noParties": "لم تتم إضافة أي أطراف إلى هذا الملف.",
       "partyRoles": {
@@ -2720,7 +2648,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "تهيئة الصفحات للوضع الداكن",
-      "anonymizeSidebar": "إخفاء الهوية",
       "backToPeek": "العودة إلى المعاينة",
       "entitySidebar": "تفاصيل الكيان",
       "evidence": "التبرير",
@@ -2732,7 +2659,6 @@
       "previousPage": "الصفحة السابقة",
       "resetZoom": "إعادة تعيين التكبير",
       "showOriginal": "عرض الصفحات الأصلية",
-      "toggleSidebar": "إظهار/إخفاء الشريط الجانبي",
       "unlock": "إلغاء القفل",
       "zoomIn": "تكبير",
       "zoomOut": "تصغير"
@@ -2768,13 +2694,11 @@
       "addOption": "إضافة خيار",
       "addPromptForBetterResults": "أضف موجِّهًا للحصول على نتائج أفضل",
       "addReadingSource": "إضافة",
-      "aiExtraction": "استخراج بالذكاء الاصطناعي",
       "autoPromptFailed": "تعذّر إنشاء موجِّه.",
       "bulk": {
         "addAnother": "إضافة عمود آخر",
         "createFailed": "تعذّر إنشاء الأعمدة",
         "createMany": "إنشاء {count} أعمدة",
-        "createOne": "إنشاء عمود",
         "createdMany": "تم إنشاء {count} أعمدة",
         "createdOne": "تم إنشاء العمود",
         "promptPlaceholder": "ما الذي يجب أن يستخرجه هذا العمود؟ نقِّحه في مربع حوار العمود لاستخدام / و@.",
@@ -2815,9 +2739,7 @@
       "extractionPlaceholder": "صِف ما تريد العثور عليه. اكتب @ للإشارة إلى عمود آخر.",
       "extractionScope": "نطاق الاستخراج",
       "file": "ملف",
-      "flowExtraction": "استخراج بالذكاء الاصطناعي",
       "flowNoInputs": "لا مدخلات",
-      "flowOutput": "المخرجات",
       "ifNoMatchFound": "إذا لم يُعثر على تطابق",
       "inputs": "المدخلات",
       "inputsHelp": "اختر الأعمدة التي يجب أن يقرأها الذكاء الاصطناعي. انقر للإضافة أو الإزالة.",
@@ -2876,7 +2798,6 @@
     "referencePlaceholder": "مثال: 2024/001",
     "referenceTaken": "هذا الرقم المرجعي مستخدَم بالفعل",
     "sections": {
-      "members": "الأعضاء",
       "parties": "الأطراف"
     },
     "table": {
@@ -2953,7 +2874,6 @@
       "hideColumn": "إخفاء العمود",
       "layouts": {
         "calendar": "تقويم",
-        "filesystem": "قائمة",
         "grid": "شبكة",
         "kanban": "كانبان",
         "list": "قائمة",

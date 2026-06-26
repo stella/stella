@@ -20,8 +20,7 @@
       "description": "Lisa teenusepakkuja pääsuandmed, et hakata AI-funktsioone kasutama.",
       "title": "Ühenda AI teenusepakkuja"
     },
-    "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?",
-    "regenerate": "Genereeri uuesti"
+    "refinePlaceholder": "Kuidas peaks AI sõnastust kohandama?"
   },
   "app": {
     "versionMismatch": {
@@ -117,7 +116,6 @@
       "task": "Ülesanne",
       "taskCode": "Ülesandekood"
     },
-    "day": "Päev",
     "decimalHours": "({hours} h)",
     "deleteSelected": "Kustuta valitud",
     "duration": "Kestus",
@@ -138,8 +136,6 @@
       "markup": "Juurdehindlus (%)",
       "noExpenses": "Selle perioodi kulusid pole"
     },
-    "export": "Ekspordi",
-    "exportCSV": "Ekspordi CSV",
     "exportLEDES": "Ekspordi LEDES",
     "exportPDF": "Ekspordi PDF",
     "failedToDelete": "Kande kustutamine ebaõnnestus",
@@ -214,7 +210,6 @@
     },
     "revertToDraft": "Tagasta mustandiks",
     "running": "Käib",
-    "selectAll": "Vali kõik",
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
     "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
@@ -237,7 +232,6 @@
     "timerActive": "Taimer käib",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",
-    "week": "Nädal",
     "writeOff": "Mahakandmine"
   },
   "caseLaw": {
@@ -316,7 +310,6 @@
     "packDescription": "{count, plural, one {# tööriist} other {# tööriista}} teie praksiseks valitud. Installige ühe klõpsuga või valige allpool eraldi.",
     "packInstalled": "{count, plural, one {# tööriist installitud} other {# tööriista installitud}}",
     "packPartial": "{installed} installitud, {failed} ebaõnnestus",
-    "recommended": "Soovitatud",
     "removed": "See tööriist pole enam saadaval.",
     "sectionOthers": "Muud",
     "sectionRecommended": "Soovitatud",
@@ -325,7 +318,7 @@
     },
     "setup": {
       "account": "Konto",
-      "apiKey": "API võti",
+      "apiKey": "API-võti",
       "none": "Seadistus puudub"
     },
     "toolNames": {
@@ -356,11 +349,9 @@
       "tracked": "Jah, jälgituna"
     },
     "approval": {
-      "allow": "Luba",
       "allowInConversation": "Luba selles vestluses",
       "allowOnce": "Luba üks kord",
       "alwaysAllow": "Luba alati",
-      "approved": "Lubatud",
       "denied": "Keelatud",
       "deny": "Keela",
       "externalMcpDescription": "Saadetakse ainult selle tööriistakutse jaoks vajalik teave.",
@@ -369,7 +360,6 @@
     "askAnything": "Küsi mida tahes",
     "askUser": {
       "custom": "Kirjuta oma",
-      "default": "Vaikimisi",
       "edit": "Muuda vastuseid",
       "editWarning": "Uuesti käivitamine kustutab selle vestluse järgnevad vastused.",
       "noAnswer": "Vastus puudub",
@@ -396,11 +386,6 @@
       "previewWaiting": "Sisu ootamine…"
     },
     "deleteThread": "Kustuta vestlus",
-    "documentView": {
-      "original": "Originaal",
-      "simple": "Aktsepteeritud",
-      "trackedChanges": "Muudatuste jälgimine"
-    },
     "editableFilePlaceholder": "Vestle või muuda: {fileName}",
     "editableFilePlaceholderAction": "Vestle või muuda",
     "editorLoading": "Redaktori laadimine…",
@@ -433,9 +418,7 @@
     "maxAttachmentsReached": "Maksimaalselt {count} faili sõnumi kohta",
     "mention": {
       "category": {
-        "contacts": "Kontaktid",
-        "entities": "Selles toimikus",
-        "templates": "Mallid"
+        "entities": "Selles toimikus"
       },
       "loadError": "Üksuste laadimine ebaõnnestus"
     },
@@ -470,7 +453,6 @@
     "removeSuggestion": "(eemalda)",
     "resend": "Saada uuesti",
     "resizeThread": "Muuda vestluse suurust",
-    "send": "Saada sõnum",
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorLoopDetected": "AI vastus kordus liiga palju. Proovi uuesti kitsama päringuga.",
@@ -574,7 +556,6 @@
     "backToList": "Tagasi klauslite juurde",
     "body": "Sisu",
     "categoryDeleteConfirm": "Selle kategooria klauslid muutuvad kategoriseerimata.",
-    "categoryName": "Kategooria nimi",
     "categoryNamePlaceholder": "nt Konfidentsiaalsus",
     "clauseCount": "{count, plural, one {# klausel} other {# klauslit}}",
     "clauseCreated": "Klausel loodud",
@@ -586,20 +567,16 @@
     "confirmDeleteClause": "See kustutab klausli ja kõik selle variandid jäädavalt.",
     "confirmRestoreVersion": "See seab klausli sisu sellele versioonile ja loob uue versiooni. Ajalugu säilib.",
     "confirmUseAsMainBody": "See asendab klausli sisu selle variandiga ja loob uue versiooni. Variant säilib.",
-    "createCategory": "Uus kategooria",
     "createClause": "Uus klausel",
     "createFailed": "Klausli loomine ebaõnnestus",
-    "deleteCategory": "Kustuta kategooria",
     "deleteClause": "Kustuta klausel",
     "deleteFailed": "Kustutamine ebaõnnestus",
     "descriptionPlaceholder": "Klausli lühikirjeldus",
-    "editCategory": "Muuda kategooriat",
     "editClause": "Muuda klauslit",
     "editVariant": "Muuda varianti",
     "export": "Ekspordi",
     "exportFailed": "Klauslite eksportimine ebaõnnestus",
     "formattingPreviewHint": "Nummerdus ja vormindus on siin eelvaade. Loodud dokument rakendab oma loendivormingu, seega ära sisesta numbreid käsitsi.",
-    "import": "Impordi",
     "importFailed": "Klauslite importimine ebaõnnestus",
     "importResult": "{created, plural, one {# loodud} other {# loodud}}, {skipped, plural, one {# vahele jäetud} other {# vahele jäetud}}",
     "importSuccess": "{count, plural, one {# klausel imporditud} other {# klauslit imporditud}}",
@@ -618,7 +595,6 @@
     "noLinkedClauses": "Seotud klausleid pole",
     "noResults": "Klausleid pole veel",
     "noVariants": "Variante pole",
-    "noVersions": "Versiooniajalogu pole",
     "outdatedVersion": "Uuendus saadaval",
     "restoreVersion": "Taasta see versioon",
     "saveAsVersion": "Salvesta uue versioonina",
@@ -661,7 +637,6 @@
     "variantPromoted": "Variant määratud põhisisuks",
     "variantUpdated": "Variant uuendatud",
     "variants": "Variandid",
-    "version": "Versioon {version}",
     "versionCount": "{count, plural, one {# versioon} other {# versiooni}}",
     "versionRestored": "Versioon taastatud"
   },
@@ -699,6 +674,7 @@
     "captions": "Subtiitrid",
     "caseLaw": "Kohtupraktika",
     "category": "Kategooria",
+    "categoryName": "Kategooria nimi",
     "changeColor": "Muuda värvi",
     "clauses": "Klauslid",
     "clearDate": "Tühjenda kuupäev",
@@ -718,12 +694,14 @@
     "copy": "Kopeeri",
     "copyLink": "Kopeeri link",
     "country": "Riik",
+    "createCategory": "Uus kategooria",
     "createdAt": "Loodud {date}",
     "currency": "Valuuta",
     "currentPage": "Praegune lehekülg",
     "date": "Kuupäev",
     "decline": "Keeldu",
     "delete": "Kustuta",
+    "deleteCategory": "Kustuta kategooria",
     "deleteConfirmDescription": "Kas olete kindel, et soovite kustutada \"{name}\"? Seda toimingut ei saa tagasi võtta.",
     "deletedCount": "{count, plural, one {# üksus} other {# üksust}} kustutatud",
     "description": "Kirjeldus",
@@ -734,6 +712,7 @@
     "duplicate": "Dubleeri",
     "duplicated": "Dubleeritud",
     "edit": "Muuda",
+    "editCategory": "Muuda kategooriat",
     "edited": "Muudetud",
     "email": "E-post",
     "empty": "Tühi",
@@ -747,8 +726,10 @@
     "error": "Viga",
     "expenses": "Kulud",
     "filter": "Filter",
+    "formula": "Valem",
     "goBack": "Mine tagasi",
     "history": "Ajalugu",
+    "import": "Impordi",
     "invite": "Kutsu",
     "invoices": "Arved",
     "kind": "Liik",
@@ -795,13 +776,16 @@
     "logTime": "Salvesta aeg",
     "matter": "Toimik",
     "matters": "Toimikud",
+    "members": "Liikmed",
     "metadata": "Metaandmed",
     "moveDown": "Liiguta alla",
     "moveUp": "Liiguta üles",
     "name": "Nimi",
+    "newMatter": "Uus toimik",
     "newRow": "Uus rida",
     "next": "Edasi",
     "noResults": "Tulemused puuduvad",
+    "noVersions": "Versiooniajalogu pole",
     "none": "None",
     "notes": "Märkused",
     "open": "Ava",
@@ -815,10 +799,13 @@
     "preview": "Eelvaade",
     "previous": "Eelmine",
     "print": "Prindi",
+    "profile": "Profiil",
     "properties": "Omadused",
     "reconnecting": "Taasühendamine…",
     "reference": "Viide",
+    "regenerate": "Genereeri uuesti",
     "remove": "Eemalda",
+    "removeMember": "Eemalda liige",
     "rename": "Nimeta ümber",
     "required": "Kohustuslik",
     "reset": "Lähtesta",
@@ -855,7 +842,9 @@
     "urlIdentifier": "Lühitunnus",
     "urlIdentifierPlaceholder": "minu-organisatsioon",
     "user": "Kasutaja",
-    "verify": "Kinnita"
+    "verify": "Kinnita",
+    "version": "Versioon",
+    "versionLabel": "Versioon {version}"
   },
   "consent": {
     "allow": "Luba",
@@ -892,8 +881,7 @@
       "title": "Arveldusandmed"
     },
     "columns": {
-      "phone": "Telefon",
-      "tags": "Sildid"
+      "phone": "Telefon"
     },
     "communication": {
       "addAddress": "Lisa aadress",
@@ -965,13 +953,10 @@
       "firstName": "Eesnimi",
       "lastName": "Perekonnanimi",
       "middleName": "Keskmine nimi",
-      "originatingAttorney": "Peamine kontakt",
       "paymentTermDays": "Maksetähtaeg (päevad)",
       "prefix": "Eesliide",
       "registrationNumber": "Registrikood",
-      "responsibleAttorney": "Vastutav advokaat",
       "suffix": "Järelliide",
-      "tags": "Sildid",
       "taxId": "KMKR number"
     },
     "filterOrganizations": "Organisatsioonid",
@@ -1127,7 +1112,6 @@
     "uploadDate": "Üleslaadimise kuupäev",
     "uploadNewVersion": "Laadi üles uus versioon",
     "uploadedBy": "Üles laadinud",
-    "version": "Versioon",
     "versionHistory": "Versiooniajalugu",
     "viewVersionHistory": "Kuva üksikasjad ja ajalugu",
     "viewing": "Vaatamisel",
@@ -1223,12 +1207,10 @@
       "noResults": "Tulemusi pole",
       "previous": "Eelmine vaste",
       "previousShortcut": "Eelmine vaste (Shift+Enter)",
-      "replace": "Asenda",
       "replaceAll": "Asenda kõik",
       "replaceCurrent": "Asenda praegune vaste",
       "replacePlaceholder": "Asendustekst…",
       "replaceText": "Asendustekst",
-      "showReplace": "Asenda",
       "wholeWords": "Terved sõnad"
     },
     "finishEditing": "Lõpeta muutmine",
@@ -1335,7 +1317,7 @@
       "unavailable": "Viidatud sait ei luba turvalist eelvaadet. Kui tööriist tagastas dokumendi teksti, kuvatakse see siin; muul juhul avage originaal."
     },
     "facet": {
-      "anonymization": "Anonüümimine",
+      "anonymization": "Anonüümistamine",
       "previewInFullViewToast": "Eelvaade on siin põhivaade. Klõpsa minimeerimisnuppu, et näha seda metaandmete kõrval."
     },
     "hidePane": "Peida paneel",
@@ -1353,7 +1335,6 @@
       "documentInfoHeading": "Dokumendi teave",
       "matterColumnsHeading": "Toimiku veerud",
       "updatedAt": "Uuendatud",
-      "version": "Versioon",
       "versionCurrent": "v{version} (praegune)"
     },
     "openChat": "Ava vestlus",
@@ -1375,27 +1356,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "„{name}” eemaldatakse sellest tööruumist.",
-      "deleteConfirmTitle": "Kas kustutada oskus?",
       "deleteFile": "Kustuta fail",
       "deleteFileConfirm": "Kas kustutada fail? Seda ei saa tagasi võtta.",
       "description": "Paigalda SKILL.md-paketid, mis lisavad vestlusele erimeetodeid ja kirjutuskaitstud ressursse.",
       "disableSkill": "Keela oskus",
       "disabled": "Keelatud",
-      "discardChanges": "Loobu",
       "dropFile": "Lohista SKILL.md või .zip siia",
       "editSkill": "Muuda oskust",
-      "editTitle": "Muuda oskust",
       "emptyDescription": "Laadi üles SKILL.md-fail, pakitud oskuse kaust või impordi avalik GitHubi oskuse URL.",
       "emptyTitle": "Paigalda esimene oskus",
       "enableSkill": "Luba oskus",
       "enabled": "Lubatud",
       "fileExists": "Selle teega fail on juba olemas",
       "filesHeading": "Failid",
-      "formBody": "Juhised",
       "formBodyHelp": "Markdown-juhised, mida agent loeb oskuse käivitamisel.",
       "formDescription": "Kirjeldus",
       "formName": "Nimi",
-      "formVersion": "Versioon",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Lisa fail",
       "generateDraft": "Koosta oskuse mustand",
@@ -1425,23 +1401,17 @@
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Uus kaust",
       "pdfPreviewSoon": "PDF eelvaade muutub saadavaks, kui binaarseid oskuseressursse hakatakse toetama.",
-      "privateSection": "Sinu oskused",
-      "regenerate": "Genereeri uuesti",
       "renameFile": "Nimeta ümber",
       "resources": "{count, plural, one {# ressurss} other {# ressurssi}}",
-      "scope": "Nähtavus",
       "scopePrivate": "Ainult mina",
       "scopeTeam": "Kõik meeskonnas",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Valitud: {name}",
       "sourceUpload": "Üles laaditud",
       "sourceUrl": "Avalik URL",
-      "teamSection": "Tiimi oskused",
       "unsavedChanges": "Salvestamata muudatused — kas loobuda?",
       "uploadFile": "Laadi fail üles",
       "uploadHelp": "Kasuta SKILL.md-faili või .zip-kausta, mis sisaldab faili SKILL.md ja valikulisi kirjutuskaitstud ressursse.",
-      "uploadSkill": "Laadi oskus üles",
-      "uploadTitle": "Laadi oskus üles",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/tee/oskuseni",
       "version": "Versioon: {version}"
     },
@@ -1469,13 +1439,11 @@
       "errorDescription": "Integratsiooni ei saanud uuendada.",
       "errorTitle": "MCP ebaõnnestus",
       "mcpExplainer": "Integratsioonid ühendavad vestlusega väliseid teenuseid, millega tehisintellekt saab töötada.",
-      "namePlaceholder": "Kuvatav nimi",
       "needsReauth": "Vajab taasühendamist",
       "off": "Väljas",
       "on": "Sees",
       "otherTitle": "Muud integratsioonid",
       "probe": "Kontrolli",
-      "recommendedBadge": "Soovitatud",
       "recommendedFor": "Soovitatud: {jurisdictions}",
       "reconnect": "Ühenda uuesti",
       "saveToken": "Salvesta token",
@@ -1516,7 +1484,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Lisa oskus",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1546,11 +1513,8 @@
       "commandLabel": "Kaldkriipsu käsk (valikuline)",
       "commandPlaceholder": "nt kokku võtta",
       "createTitle": "Uus oskus",
-      "defaultBadge": "Vaikimisi",
       "deleteConfirmDescription": "See oskus eemaldatakse jäädavalt.",
-      "deleteConfirmTitle": "Kustutada oskus?",
       "deleteShortcut": "Kustuta oskus",
-      "editShortcut": "Muuda oskust",
       "emptyDescription": "Loo taaskasutatavad oskused tööks, mida su tiim kordab, alates kokkuvõtetest kuni esmase koostamise juhisteni.",
       "emptyState": "Oskusi veel pole. Lisage esimene.",
       "emptyTitle": "Looge esimene oskus",
@@ -1563,21 +1527,17 @@
       "form": {
         "command": "Oskuse otsetee",
         "commandHint": "/ oskuse nimi: ainult väiketähed, numbrid, sidekriipsud ja allkriipsud",
-        "commandPlaceholder": "nt kokku-võtta",
         "commandPrefix": "/",
         "description": "Kirjeldus",
         "descriptionPlaceholder": "Lühikirjeldus, mis kuvatakse valijas",
         "name": "Nimi",
         "namePlaceholder": "nt Võta dokument kokku",
-        "prompt": "Juhised",
         "promptPlaceholder": "Juhised, mis lisatakse vestluse koostajasse selle oskuse kasutamisel",
         "scope": "Nähtavus",
         "scopePrivate": "Ainult mina",
         "scopeTeam": "Kõik meeskonnas"
       },
-      "privateSection": "Teie oskused",
-      "shadowed": "Meeskonna oskus varjutab",
-      "teamSection": "Meeskonna oskused"
+      "shadowed": "Meeskonna oskus varjutab"
     }
   },
   "markdownEditor": {
@@ -1589,9 +1549,7 @@
     "chat": "Vestlus",
     "contacts": "Kontaktid",
     "knowledge": "Teadmus",
-    "members": "Liikmed",
     "myTodos": "Minu ülesanded",
-    "newMatter": "Uus toimik",
     "pinned": "Kinnitatud",
     "recents": "Hiljutised",
     "search": "Otsing",
@@ -1676,7 +1634,7 @@
       "active": "Aktiivne",
       "addProvider": "Lisa teenusepakkuja",
       "addProviderFirst": "Lisa esmalt teenusepakkuja",
-      "apiKey": "API võti",
+      "apiKey": "API-võti",
       "apiKeyConfiguredPlaceholder": "Seadistatud: {key}. Sisesta uus võti, et see asendada.",
       "apiKeyPlaceholder": "Sisestage oma API võti",
       "apiKeySaved": "Salvestatud võti {key}",
@@ -1789,7 +1747,6 @@
       "confirmRoleChangeTitle": "Muuda rolli",
       "joined": "Liitunud",
       "noMembersFound": "Liikmeid ei leitud",
-      "removeMember": "Eemalda liige",
       "typeEmailToConfirm": "Kinnitamiseks tippige {email}",
       "updateRole": "Uuenda roll"
     },
@@ -1887,7 +1844,6 @@
       "preferredName": "Eelistatud nimi",
       "preferredNameDescription": "Kasutatakse autorina DOCX-i jälitatud muudatustes ja kommentaarides.",
       "preferredNamePlaceholder": "Teie nimi",
-      "profile": "Profiil",
       "profileDescription": "Hallake oma isiklikke eelistusi",
       "sendOtpCode": "Saada kinnituskood",
       "timezone": "Ajavöönd",
@@ -1909,7 +1865,6 @@
         "description": "Hallake meeskonnaülest keelduloendit, mida anonüümimise konveier alati maskeerib, ja importige algusloend CSV-, TXT- või JSON-failist.",
         "emptyState": "Meeskonnaüleseid termineid pole veel. Lisage üks ülal või importige loend.",
         "entriesHeading": "Meeskonnaülesed terminid ({count})",
-        "importAction": "Impordi",
         "importHint": "CSV (canonical,label,variants), TXT (üks rea kohta) või JSON",
         "importParseError": "Faili ei õnnestunud lugeda. Kasutage CSV-, TXT- või JSON-vormingut.",
         "importSuccessToast": "Imporditud {count} terminit.",
@@ -1925,7 +1880,6 @@
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Jurisdiktsioonid",
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
-      "profile": "Profiil",
       "promptCaching": {
         "description": "Sisselülitamisel lisab stella vahemälu markerid, et korduvad AI-päringud sama dokumendi või lõime kohta maksaksid ~10× vähem ja lõpeksid kiiremini. Vahemällu salvestatud promptid jäävad AI teenusepakkuja juurde kuni 5 minutiks ning on piiratud teie organisatsiooniga. Väljalülitamisel ei saada stella enam vahemälu markereid, kuid teenusepakkujad võivad endiselt oportunistlikult vahemällu salvestada — ainult Zero Data Retention leping teenusepakkujaga lülitab serveripoolse vahemälu täielikult välja.",
         "title": "Promptide vahemällu salvestamine",
@@ -2029,7 +1983,6 @@
     "untitled": "Pealkirjata ülesanne"
   },
   "templates": {
-    "addCondition": "Lisa tingimus",
     "addItem": "Lisa element",
     "addPart": "Lisa osa",
     "addTag": "Lisa silt",
@@ -2039,7 +1992,6 @@
     "browseFiles": "Sirvi faile",
     "categoryDeleteConfirm": "See eemaldab kategooria. Selles kategoorias olevad mallid muutuvad kategoriseerimata.",
     "categoryDeleteFailed": "Kategooria kustutamine ebaõnnestus",
-    "categoryName": "Kategooria nimi",
     "categorySaveFailed": "Kategooria salvestamine ebaõnnestus",
     "checkErrors": "{count, plural, one {# viga} other {# viga}}",
     "checkFailed": "Malli kontrollimine ebaõnnestus",
@@ -2062,7 +2014,6 @@
     "conditionCount": "{count, plural, one {# tingimus} other {# tingimust}}",
     "conditionField": "Väli",
     "conditionFormulaPlaceholder": "Enter a formula…",
-    "conditionFormulaTitle": "Formula",
     "conditionMatch": "Vastavus",
     "conditionNamePlaceholder": "Tingimuse nimi (nt NPF)",
     "conditionOpAfter": "pärast",
@@ -2088,7 +2039,6 @@
     "conditionsTitle": "Tingimused",
     "configureFields": "Seadista väljad",
     "confirmDelete": "See kustutab malli jäädavalt.",
-    "createCategory": "Uus kategooria",
     "createDocument": "Loo dokument",
     "createDocumentAnyway": "Loo ikkagi",
     "createInStudio": "Loo stellas",
@@ -2097,7 +2047,6 @@
     "dateChipPlus30Days": "30 päeva pärast",
     "dateFormatStyle": "Kuupäeva vorming",
     "dateRenderPreview": "Dokumendis: {value}",
-    "deleteCategory": "Kustuta kategooria",
     "deleteFailed": "Malli kustutamine ebaõnnestus",
     "describeWhenToUse": "Kirjelda, millal seda kasutada",
     "directiveEach": "Tsükkel: {expression}",
@@ -2111,10 +2060,8 @@
     "downloadAnyway": "Laadi ikkagi alla",
     "downloadDocx": "Laadi alla DOCX",
     "downloadPdf": "Laadi alla PDF",
-    "downloadReady": "Dokument on valmis",
     "dragAndDrop": "või lohistage siia",
     "dropToCreate": "Lohistage .docx fail siia, et luua mall",
-    "editCategory": "Muuda kategooriat",
     "editFields": "Muuda välju",
     "emptyFieldsWarning": "{count, plural, one {# väli on veel täitmata} other {# välja on veel täitmata}}: {names}",
     "fieldCount": "{count, plural, one {# väli} other {# välja}}",
@@ -2250,13 +2197,12 @@
       "fillFormPreview": "Nii kuvatakse see vormis",
       "fillStale": "Salvestamata muudatused — salvestage, et täita uusimate väljadega.",
       "filledByPerson": "Isik",
-      "formula": "Valem",
       "formulaExampleLabel": "Näide",
       "formulaNoFields": "Lisage esmalt arvuväli, et valemil oleks midagi arvutada.",
       "formulaNonNumberFields": "Pole arv: {fields}",
       "formulaNumbersOnlyHelp": "Arvutused kasutavad ainult arvuvälju; kuupäevi ja teksti ei saa kasutada.",
       "formulaUnknownFields": "Tundmatu väli: {fields}",
-      "insert": "Sisesta",
+      "insert": "Lisa",
       "insertAtCaret": "Sisesta kursori kohale",
       "insertConditionIntoTemplate": "Insert condition",
       "insertFormatDefault": "Vaikimisi",
@@ -2298,7 +2244,6 @@
       "saveAsRecipe": "Salvesta retseptina",
       "scopeClause": "Klausli koht",
       "scopeCondition": "Tingimus",
-      "scopeField": "Väli",
       "scopeLoop": "Tsükkel",
       "scopeTemplate": "Mall",
       "showOnlyIf": "Kuva ainult siis, kui…",
@@ -2345,8 +2290,6 @@
     "validationOptionNotInSource": "Peab olema üks väljale {field} sisestatud väärtustest",
     "validationPattern": "Vigane vorming",
     "validationRequired": "See väli on kohustuslik",
-    "versionLabel": "Versioon {version}",
-    "versionsEmpty": "Versiooniajalogu pole",
     "viewVersion": "Vaata",
     "whenNotToUse": "Millal mitte kasutada",
     "whenNotToUsePlaceholder": "Millal tuleks seda malli vältida?",
@@ -2378,7 +2321,6 @@
       "save": "Salvesta",
       "saved": "DeepL-i võti salvestatud",
       "savedDescription": "Tõlked on nüüd saadaval.",
-      "saving": "Salvestan…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-i tõlge"
@@ -2394,10 +2336,7 @@
     "slugRequired": "Slug on kohustuslik"
   },
   "workspaces": {
-    "active": "Aktiivne",
     "archiveMatter": "Arhiveeri",
-    "archived": "Arhiveeritud",
-    "archivedBadge": "Arhiveeritud",
     "copyToMatter": {
       "copied": "Kopeeritud toimikusse",
       "copyOption": "Kopeeri (säilita originaal)",
@@ -2520,8 +2459,7 @@
       "lastUpdated": "Viimati uuendatud",
       "moveToRoot": "Lohistage siia, et liigutada juuretasemele",
       "newSubfolder": "Uus alamkaust",
-      "noFilesYet": "Faile pole veel",
-      "version": "Versioon"
+      "noFilesYet": "Faile pole veel"
     },
     "filters": {
       "chips": {
@@ -2562,7 +2500,6 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Määra vastutaja",
-        "members": "Liikmed",
         "noLead": "Vastutajat pole",
         "searchMembers": "Otsi liikmeid…"
       },
@@ -2592,7 +2529,6 @@
       "moveToHint": "Sisestage tee või valige olemasolev kaust.",
       "moveToTitle": "Teisalda kausta",
       "organized": "Failid korraldatud",
-      "regenerate": "Genereeri uuesti",
       "reset": "Taasta AI soovitused",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "teisaldada",
@@ -2602,8 +2538,6 @@
       "wasNamed": "varem {name}"
     },
     "infosoud": {
-      "cancelled": "Tühistatud",
-      "court": "Kohus",
       "courtPlaceholder": "Otsi kohut või koodi",
       "courtsFailed": "InfoSoudi kohtuid ei õnnestunud laadida",
       "eventCount": "{count, plural, one {# sündmus} other {# sündmust}}",
@@ -2631,7 +2565,6 @@
       "hideColumn": "Peida veerg",
       "readOnlyGrouping": "See rühmitus on ainult lugemiseks",
       "selectPropertyHint": "Valige tööriistaribal omadus, mille järgi rühmitada",
-      "unknown": "Teadmata",
       "uploadDocument": "Laadi üles dokument",
       "usePropertyHint": "Kasutage liiki, autorit või ühekordse valiku omadust"
     },
@@ -2639,9 +2572,7 @@
     "lead": "Vastutaja",
     "leadEmpty": "Vastutajat pole",
     "leadPicker": {
-      "noMatchingMembers": "Sobivaid liikmeid pole",
-      "placeholder": "Otsi liikmeid…",
-      "title": "Määra vastutaja"
+      "noMatchingMembers": "Sobivaid liikmeid pole"
     },
     "lockMatter": "Lukusta",
     "matterInfo": "Toimiku andmed",
@@ -2652,13 +2583,11 @@
       "alreadyMember": "Kasutaja on juba liige",
       "cannotRemoveLast": "Viimast liiget ei saa eemaldada",
       "noMembersFound": "Liikmeid ei leitud",
-      "removeMember": "Eemalda liige",
       "removeMemberConfirm": "Kas eemaldada see liige toimikust?",
       "selectMember": "Vali liige"
     },
     "newDocument": "Uus dokument",
     "newFolder": "Uus kaust",
-    "newMatter": "Uus toimik",
     "noDocuments": "Dokumente pole veel",
     "noFieldsToView": "Sellel kirjel pole välju, mida kuvada",
     "noGrouping": "Ära rühmita",
@@ -2679,7 +2608,6 @@
       "recentActivity": "Viimane tegevus",
       "timeAndTeam": "Aeg ja meeskond",
       "timeThisWeek": "Aeg sel nädalal",
-      "title": "Ülevaade",
       "totalDocuments": "Dokumente kokku",
       "totalItems": "Elemendid",
       "totalThisWeek": "Kokku sel nädalal",
@@ -2720,7 +2648,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Kohanda lehekülgi tumedale režiimile",
-      "anonymizeSidebar": "Anonüümimine",
       "backToPeek": "Tagasi sirvimisrežiimi",
       "entitySidebar": "Entiteedi üksikasjad",
       "evidence": "Tõend",
@@ -2732,7 +2659,6 @@
       "previousPage": "Eelmine leht",
       "resetZoom": "Lähtesta suum",
       "showOriginal": "Kuva originaalleheküljed",
-      "toggleSidebar": "Lülita külgriba sisse/välja",
       "unlock": "Ava lukk",
       "zoomIn": "Suumi sisse",
       "zoomOut": "Suumi välja"
@@ -2768,13 +2694,11 @@
       "addOption": "Lisa valik",
       "addPromptForBetterResults": "Lisage paremaks tulemuseks päring",
       "addReadingSource": "lisa",
-      "aiExtraction": "AI-väljavõte",
       "autoPromptFailed": "Viipa ei õnnestunud luua.",
       "bulk": {
         "addAnother": "Lisa veel veerg",
         "createFailed": "Veergude loomine ebaõnnestus",
         "createMany": "Loo {count} veergu",
-        "createOne": "Loo veerg",
         "createdMany": "Loodi {count} veergu",
         "createdOne": "Veerg loodud",
         "promptPlaceholder": "What should this column extract?",
@@ -2815,9 +2739,7 @@
       "extractionPlaceholder": "Kirjelda, mida otsida. Teise veeru viitamiseks tipi @.",
       "extractionScope": "Ekstraktsiooni ulatus",
       "file": "Fail",
-      "flowExtraction": "AI ekstraktsioon",
       "flowNoInputs": "sisendeid pole",
-      "flowOutput": "Väljund",
       "ifNoMatchFound": "Kui vastet ei leitud",
       "inputs": "Sisendid",
       "inputsHelp": "Vali veerud, mida AI peab lugema. Klõpsa, et lisada või eemaldada.",
@@ -2876,7 +2798,6 @@
     "referencePlaceholder": "nt 2024/001",
     "referenceTaken": "See viitenumber on juba kasutusel",
     "sections": {
-      "members": "Liikmed",
       "parties": "Osapooled"
     },
     "table": {
@@ -2908,7 +2829,7 @@
       "wrapContent": "Murra tekst"
     },
     "tasksCount": "{count, plural, one {# agenda kirje} other {# agenda kirjet}}",
-    "team": "Tiim",
+    "team": "Meeskond",
     "tools": {
       "aiModel": "Tehisintellekti mudel",
       "manualInput": "Käsitsi"
@@ -2953,7 +2874,6 @@
       "hideColumn": "Peida veerg",
       "layouts": {
         "calendar": "Kalender",
-        "filesystem": "Loend",
         "grid": "Ruudustik",
         "kanban": "Kanban",
         "list": "Loend",

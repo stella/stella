@@ -391,7 +391,7 @@ const CreateMatterDialogBody = ({
   return (
     <DialogPopup className="max-w-md">
       <DialogHeader>
-        <DialogTitle>{t("workspaces.newMatter")}</DialogTitle>
+        <DialogTitle>{t("common.newMatter")}</DialogTitle>
       </DialogHeader>
       <DialogPanel className="flex flex-col gap-5">
         <OwnerTypeToggle onChange={setOwnerType} value={ownerType} />
@@ -498,9 +498,7 @@ const CreateMatterDialogBody = ({
 
         {ownerType === "client" && (
           <section className="space-y-3">
-            <h3 className="text-sm font-medium">
-              {t("workspaces.sections.members")}
-            </h3>
+            <h3 className="text-sm font-medium">{t("common.members")}</h3>
 
             {(() => {
               if (hasAdditionalOrganizationMembers) {
@@ -593,7 +591,7 @@ const CreateMatterDialogBody = ({
                             ),
                           );
                         }}
-                        removeLabel={t("workspaces.members.removeMember")}
+                        removeLabel={t("common.removeMember")}
                       />
                     ))}
                   </div>
@@ -616,7 +614,7 @@ const CreateMatterDialogBody = ({
                           current.filter((userId) => userId !== member.userId),
                         );
                       }}
-                      removeLabel={t("workspaces.members.removeMember")}
+                      removeLabel={t("common.removeMember")}
                     />
                   ))}
                 </div>

@@ -382,9 +382,7 @@ export const FormulaCell = ({
       <PopoverPopup align="start" className="w-80" side="bottom">
         <div className="flex flex-col gap-2 p-2">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-xs font-medium">
-              {t("templates.conditionFormulaTitle")}
-            </span>
+            <span className="text-xs font-medium">{t("common.formula")}</span>
             <Button
               onClick={() => {
                 onUseField();

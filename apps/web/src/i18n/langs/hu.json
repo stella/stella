@@ -20,8 +20,7 @@
       "description": "Adj hozzá szolgáltatói hitelesítési adatokat az AI-funkciók használatához.",
       "title": "AI-szolgáltató csatlakoztatása"
     },
-    "refinePlaceholder": "Hogyan igazítsa az AI a megfogalmazást?",
-    "regenerate": "Újragenerálás"
+    "refinePlaceholder": "Hogyan igazítsa az AI a megfogalmazást?"
   },
   "app": {
     "versionMismatch": {
@@ -117,7 +116,6 @@
       "task": "Feladat",
       "taskCode": "Feladatkód"
     },
-    "day": "Nap",
     "decimalHours": "({hours} ó)",
     "deleteSelected": "Kijelöltek törlése",
     "duration": "Időtartam",
@@ -138,8 +136,6 @@
       "markup": "Felár (%)",
       "noExpenses": "Erre az időszakra nincs kiadás"
     },
-    "export": "Exportálás",
-    "exportCSV": "Exportálás CSV-be",
     "exportLEDES": "Exportálás LEDES-be",
     "exportPDF": "Exportálás PDF-be",
     "failedToDelete": "A bejegyzés törlése sikertelen",
@@ -214,7 +210,6 @@
     },
     "revertToDraft": "Visszaállítás tervezetre",
     "running": "Fut",
-    "selectAll": "Összes kijelölése",
     "selectMatter": "Válasszon ügyet...",
     "selectMatterToStart": "Válasszon ügyet az időmérés indításához",
     "selectedCount": "{count, plural, one {# kijelölve} other {# kijelölve}}",
@@ -237,7 +232,6 @@
     "timerActive": "Időmérő fut",
     "timesheets": "Munkaidő-nyilvántartás",
     "total": "Összesen",
-    "week": "Hét",
     "writeOff": "Leírás"
   },
   "caseLaw": {
@@ -316,7 +310,6 @@
     "packDescription": "{count, plural, one {# eszköz} other {# eszköz}} a praxisához válogatva. Egy kattintással telepíthető vagy alább egyenként kiválasztható.",
     "packInstalled": "{count, plural, one {# eszköz telepítve} other {# eszköz telepítve}}",
     "packPartial": "{installed} telepítve, {failed} sikertelen",
-    "recommended": "Ajánlott",
     "removed": "Ez az eszköz már nem érhető el.",
     "sectionOthers": "Egyéb",
     "sectionRecommended": "Ajánlott",
@@ -356,11 +349,9 @@
       "tracked": "Igen, követett változásként"
     },
     "approval": {
-      "allow": "Engedélyezés",
       "allowInConversation": "Engedélyezés ebben a beszélgetésben",
       "allowOnce": "Engedélyezés egyszer",
       "alwaysAllow": "Mindig engedélyezés",
-      "approved": "Engedélyezve",
       "denied": "Elutasítva",
       "deny": "Elutasítás",
       "externalMcpDescription": "Csak az ehhez az eszközhíváshoz szükséges információ kerül elküldésre.",
@@ -369,7 +360,6 @@
     "askAnything": "Kérdezzen bármit",
     "askUser": {
       "custom": "Saját válasz",
-      "default": "Alapértelmezett",
       "edit": "Válaszok szerkesztése",
       "editWarning": "Az újrafuttatás elveti a beszélgetés következő válaszait.",
       "noAnswer": "Nincs válasz",
@@ -396,11 +386,6 @@
       "previewWaiting": "Várakozás a tartalomra…"
     },
     "deleteThread": "Beszélgetés törlése",
-    "documentView": {
-      "original": "Eredeti",
-      "simple": "Elfogadott",
-      "trackedChanges": "Változáskövetés"
-    },
     "editableFilePlaceholder": "Csevegés vagy szerkesztés: {fileName}",
     "editableFilePlaceholderAction": "Csevegés vagy szerkesztés",
     "editorLoading": "Szerkesztő betöltése…",
@@ -433,9 +418,7 @@
     "maxAttachmentsReached": "Üzenetenként legfeljebb {count} fájl",
     "mention": {
       "category": {
-        "contacts": "Névjegyek",
-        "entities": "Ebben az ügyben",
-        "templates": "Sablonok"
+        "entities": "Ebben az ügyben"
       },
       "loadError": "Az entitások betöltése sikertelen"
     },
@@ -470,7 +453,6 @@
     "removeSuggestion": "(eltávolítás)",
     "resend": "Újraküldés",
     "resizeThread": "Beszélgetés méretezése",
-    "send": "Üzenet küldése",
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",
     "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsd el a fájlt, vagy küldd el az üzenetet anonimizálás nélkül.",
     "sendErrorLoopDetected": "Az AI-válasz túl sokszor ismétlődött. Próbáld újra szűkebb kéréssel.",
@@ -574,7 +556,6 @@
     "backToList": "Vissza a záradékokhoz",
     "body": "Szövegtest",
     "categoryDeleteConfirm": "Az ebbe a kategóriába tartozó záradékok kategória nélkülivé válnak.",
-    "categoryName": "Kategória neve",
     "categoryNamePlaceholder": "pl. Titoktartás",
     "clauseCount": "{count, plural, one {# záradék} other {# záradék}}",
     "clauseCreated": "Záradék létrehozva",
@@ -586,20 +567,16 @@
     "confirmDeleteClause": "Ezzel véglegesen törlődik a záradék és az összes változata.",
     "confirmRestoreVersion": "Ez a kikötés szövegét erre a verzióra állítja, és új verziót hoz létre. Az előzmények megmaradnak.",
     "confirmUseAsMainBody": "Ez a kikötés szövegét lecseréli erre a változatra, és új verziót hoz létre. A változat megmarad.",
-    "createCategory": "Új kategória",
     "createClause": "Új záradék",
     "createFailed": "A záradék létrehozása nem sikerült",
-    "deleteCategory": "Kategória törlése",
     "deleteClause": "Záradék törlése",
     "deleteFailed": "A törlés nem sikerült",
     "descriptionPlaceholder": "A záradék rövid leírása",
-    "editCategory": "Kategória szerkesztése",
     "editClause": "Záradék szerkesztése",
     "editVariant": "Változat szerkesztése",
     "export": "Exportálás",
     "exportFailed": "A záradékok exportálása nem sikerült",
     "formattingPreviewHint": "A számozás és a formázás itt csak előnézet. A létrehozott dokumentum saját listaformázást alkalmaz, ezért ne írja be kézzel a számokat.",
-    "import": "Importálás",
     "importFailed": "A záradékok importálása nem sikerült",
     "importResult": "{created, plural, one {# létrehozva} other {# létrehozva}}, {skipped, plural, one {# kihagyva} other {# kihagyva}}",
     "importSuccess": "{count, plural, one {# záradék importálva} other {# záradék importálva}}",
@@ -618,7 +595,6 @@
     "noLinkedClauses": "Nincs csatolt záradék",
     "noResults": "Még nincsenek záradékok",
     "noVariants": "Nincs változat",
-    "noVersions": "Nincs verzióelőzmény",
     "outdatedVersion": "Frissítés elérhető",
     "restoreVersion": "Verzió visszaállítása",
     "saveAsVersion": "Mentés új verzióként",
@@ -661,7 +637,6 @@
     "variantPromoted": "Változat fő szövegként beállítva",
     "variantUpdated": "Változat frissítve",
     "variants": "Változatok",
-    "version": "{version}. verzió",
     "versionCount": "{count, plural, one {# verzió} other {# verzió}}",
     "versionRestored": "Verzió visszaállítva"
   },
@@ -699,6 +674,7 @@
     "captions": "Feliratok",
     "caseLaw": "Joggyakorlat",
     "category": "Kategória",
+    "categoryName": "Kategória neve",
     "changeColor": "Szín módosítása",
     "clauses": "Záradékok",
     "clearDate": "Dátum törlése",
@@ -718,12 +694,14 @@
     "copy": "Másolás",
     "copyLink": "Hivatkozás másolása",
     "country": "Ország",
+    "createCategory": "Új kategória",
     "createdAt": "Létrehozva: {date}",
     "currency": "Pénznem",
     "currentPage": "Aktuális oldal",
     "date": "Dátum",
     "decline": "Elutasítás",
     "delete": "Törlés",
+    "deleteCategory": "Kategória törlése",
     "deleteConfirmDescription": "Biztosan törölni szeretné a következőt: „{name}“? Ez a művelet nem vonható vissza.",
     "deletedCount": "{count, plural, one {# elem} other {# elem}} törölve",
     "description": "Leírás",
@@ -734,6 +712,7 @@
     "duplicate": "Másolás",
     "duplicated": "Duplikálva",
     "edit": "Szerkesztés",
+    "editCategory": "Kategória szerkesztése",
     "edited": "Szerkesztve",
     "email": "E-mail",
     "empty": "Üres",
@@ -747,8 +726,10 @@
     "error": "Hiba",
     "expenses": "Kiadások",
     "filter": "Szűrő",
+    "formula": "Képlet",
     "goBack": "Vissza",
     "history": "Előzmények",
+    "import": "Importálás",
     "invite": "Meghívás",
     "invoices": "Számlák",
     "kind": "Fajta",
@@ -795,13 +776,16 @@
     "logTime": "Idő rögzítése",
     "matter": "Ügy",
     "matters": "Ügyek",
+    "members": "Tagok",
     "metadata": "Metaadatok",
     "moveDown": "Mozgatás le",
     "moveUp": "Mozgatás fel",
     "name": "Név",
+    "newMatter": "Új ügy",
     "newRow": "Új sor",
     "next": "Tovább",
     "noResults": "Nincs találat",
+    "noVersions": "Nincs verzióelőzmény",
     "none": "None",
     "notes": "Megjegyzések",
     "open": "Megnyitás",
@@ -815,10 +799,13 @@
     "preview": "Előnézet",
     "previous": "Előző",
     "print": "Nyomtatás",
+    "profile": "Profil",
     "properties": "Tulajdonságok",
     "reconnecting": "Újracsatlakozás…",
     "reference": "Hivatkozás",
+    "regenerate": "Újragenerálás",
     "remove": "Eltávolítás",
+    "removeMember": "Tag eltávolítása",
     "rename": "Átnevezés",
     "required": "Kötelező",
     "reset": "Visszaállítás",
@@ -855,7 +842,9 @@
     "urlIdentifier": "Azonosító (slug)",
     "urlIdentifierPlaceholder": "szervezetem",
     "user": "Felhasználó",
-    "verify": "Ellenőrzés"
+    "verify": "Ellenőrzés",
+    "version": "Verzió",
+    "versionLabel": "{version}. verzió"
   },
   "consent": {
     "allow": "Engedélyezés",
@@ -892,8 +881,7 @@
       "title": "Számlázási adatok"
     },
     "columns": {
-      "phone": "Telefon",
-      "tags": "Címkék"
+      "phone": "Telefon"
     },
     "communication": {
       "addAddress": "Cím hozzáadása",
@@ -965,13 +953,10 @@
       "firstName": "Keresztnév",
       "lastName": "Vezetéknév",
       "middleName": "Középső név",
-      "originatingAttorney": "Elsődleges kapcsolattartó",
       "paymentTermDays": "Fizetési határidő (nap)",
       "prefix": "Előtag",
       "registrationNumber": "Cégjegyzékszám",
-      "responsibleAttorney": "Felelős ügyvéd",
       "suffix": "Utótag",
-      "tags": "Címkék",
       "taxId": "Adószám"
     },
     "filterOrganizations": "Szervezetek",
@@ -1127,7 +1112,6 @@
     "uploadDate": "Feltöltés dátuma",
     "uploadNewVersion": "Új verzió feltöltése",
     "uploadedBy": "Feltöltötte",
-    "version": "Verzió",
     "versionHistory": "Verzióelőzmények",
     "viewVersionHistory": "Részletek és előzmények megjelenítése",
     "viewing": "Megtekintés",
@@ -1223,12 +1207,10 @@
       "noResults": "Nincs találat",
       "previous": "Előző találat",
       "previousShortcut": "Előző találat (Shift+Enter)",
-      "replace": "Csere",
       "replaceAll": "Összes cseréje",
       "replaceCurrent": "Jelenlegi találat cseréje",
       "replacePlaceholder": "Csereszöveg…",
       "replaceText": "Csereszöveg",
-      "showReplace": "Csere",
       "wholeWords": "Csak ép szavak"
     },
     "finishEditing": "Szerkesztés befejezése",
@@ -1353,7 +1335,6 @@
       "documentInfoHeading": "Dokumentumadatok",
       "matterColumnsHeading": "Ügyoszlopok",
       "updatedAt": "Frissítve",
-      "version": "Verzió",
       "versionCurrent": "v{version} (aktuális)"
     },
     "openChat": "Chat megnyitása",
@@ -1375,27 +1356,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "A(z) „{name}” eltávolításra kerül ebből a munkaterületből.",
-      "deleteConfirmTitle": "Törlöd a készséget?",
       "deleteFile": "Fájl törlése",
       "deleteFileConfirm": "Törlöd a fájlt? Ez nem vonható vissza.",
       "description": "Telepíts SKILL.md-csomagokat, amelyek speciális módszereket és csak olvasható erőforrásokat adnak a chathez.",
       "disableSkill": "Készség kikapcsolása",
       "disabled": "Kikapcsolva",
-      "discardChanges": "Elvetés",
       "dropFile": "Húzd ide a SKILL.md vagy .zip fájlt",
       "editSkill": "Készség szerkesztése",
-      "editTitle": "Készség szerkesztése",
       "emptyDescription": "Tölts fel egy SKILL.md fájlt, egy tömörített készségmappát, vagy importálj egy nyilvános GitHub-készség URL-t.",
       "emptyTitle": "Telepítsd az első készségedet",
       "enableSkill": "Készség bekapcsolása",
       "enabled": "Bekapcsolva",
       "fileExists": "Ezen az útvonalon már létezik fájl",
       "filesHeading": "Fájlok",
-      "formBody": "Utasítások",
       "formBodyHelp": "Markdown utasítások, amelyeket az ügynök a készség meghívásakor olvas.",
       "formDescription": "Leírás",
       "formName": "Név",
-      "formVersion": "Verzió",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Fájl hozzáadása",
       "generateDraft": "Készségvázlat",
@@ -1425,23 +1401,17 @@
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Új mappa",
       "pdfPreviewSoon": "A PDF-előnézet a bináris skillerőforrások támogatásával válik elérhetővé.",
-      "privateSection": "Saját készségek",
-      "regenerate": "Újragenerálás",
       "renameFile": "Átnevezés",
       "resources": "{count, plural, one {# erőforrás} other {# erőforrás}}",
-      "scope": "Láthatóság",
       "scopePrivate": "Csak én",
       "scopeTeam": "Mindenki a csapatban",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Kiválasztva: {name}",
       "sourceUpload": "Feltöltve",
       "sourceUrl": "Nyilvános URL",
-      "teamSection": "Csapatkészségek",
       "unsavedChanges": "Nem mentett módosítások – elveti?",
       "uploadFile": "Fájl feltöltése",
       "uploadHelp": "Használj SKILL.md fájlt vagy olyan .zip mappát, amely SKILL.md fájlt és opcionális csak olvasható erőforrásokat tartalmaz.",
-      "uploadSkill": "Készség feltöltése",
-      "uploadTitle": "Készség feltöltése",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/utvonal/keszseghez",
       "version": "Verzió: {version}"
     },
@@ -1469,13 +1439,11 @@
       "errorDescription": "Az integrációt nem sikerült frissíteni.",
       "errorTitle": "MCP sikertelen",
       "mcpExplainer": "Az integrációk külső szolgáltatásokat kapcsolnak a chathez, amelyekkel az MI dolgozhat.",
-      "namePlaceholder": "Megjelenítési név",
       "needsReauth": "Újracsatlakozás szükséges",
       "off": "Ki",
       "on": "Be",
       "otherTitle": "További integrációk",
       "probe": "Ellenőrzés",
-      "recommendedBadge": "Ajánlott",
       "recommendedFor": "Ajánlott: {jurisdictions}",
       "reconnect": "Újracsatlakozás",
       "saveToken": "Token mentése",
@@ -1516,7 +1484,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Készség hozzáadása",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1546,11 +1513,8 @@
       "commandLabel": "Perjeles parancs (nem kötelező)",
       "commandPlaceholder": "pl. összefoglalás",
       "createTitle": "Új készség",
-      "defaultBadge": "Alapértelmezett",
       "deleteConfirmDescription": "Ez a készség véglegesen törlődik.",
-      "deleteConfirmTitle": "Készség törlése?",
       "deleteShortcut": "Készség törlése",
-      "editShortcut": "Készség szerkesztése",
       "emptyDescription": "Hozzon létre újrahasználható készségeket a csapata ismétlődő munkáihoz, az összefoglalóktól az első fogalmazványok elkészítéséig.",
       "emptyState": "Még nincsenek készségek. Adja hozzá az elsőt.",
       "emptyTitle": "Első készség létrehozása",
@@ -1563,21 +1527,17 @@
       "form": {
         "command": "Készség parancsikon",
         "commandHint": "A / készség neve: csak kisbetűk, számok, kötőjelek és aláhúzások",
-        "commandPlaceholder": "pl. osszefoglalas",
         "commandPrefix": "/",
         "description": "Leírás",
         "descriptionPlaceholder": "A választóban megjelenő rövid leírás",
         "name": "Név",
         "namePlaceholder": "pl. Dokumentum összefoglalása",
-        "prompt": "Utasítások",
         "promptPlaceholder": "A chat szerkesztőjébe beszúrt utasítások a készség használatakor",
         "scope": "Láthatóság",
         "scopePrivate": "Csak én",
         "scopeTeam": "A csapat minden tagja"
       },
-      "privateSection": "Saját készségek",
-      "shadowed": "A csapat készsége felülírja",
-      "teamSection": "Csapat készségei"
+      "shadowed": "A csapat készsége felülírja"
     }
   },
   "markdownEditor": {
@@ -1589,9 +1549,7 @@
     "chat": "Csevegés",
     "contacts": "Kapcsolatok",
     "knowledge": "Tudásbázis",
-    "members": "Tagok",
     "myTodos": "Feladataim",
-    "newMatter": "Új ügy",
     "pinned": "Rögzített",
     "recents": "Legutóbbiak",
     "search": "Keresés",
@@ -1610,7 +1568,7 @@
     "aiTitle": "Kapcsolja össze MI-szolgáltatóját",
     "catalogueAlwaysOn": "Mindig aktív",
     "catalogueClearSearch": "Keresés törlése",
-    "catalogueCommunityHeading": "Egyebek",
+    "catalogueCommunityHeading": "Egyéb",
     "catalogueContinueWithCount": "{count, plural, one {Folytatás # eszközzel} other {Folytatás # eszközzel}}",
     "catalogueDetailAbout": "Leírás",
     "catalogueDetailAuthor": "Szerző",
@@ -1789,7 +1747,6 @@
       "confirmRoleChangeTitle": "Szerepkör módosítása",
       "joined": "Csatlakozott",
       "noMembersFound": "Nincsenek tagok",
-      "removeMember": "Tag eltávolítása",
       "typeEmailToConfirm": "A megerősítéshez írja be ezt: {email}",
       "updateRole": "Szerepkör frissítése"
     },
@@ -1887,7 +1844,6 @@
       "preferredName": "Választott név",
       "preferredNameDescription": "A DOCX-fájlok követett módosításainál és megjegyzéseinél szerzőként jelenik meg.",
       "preferredNamePlaceholder": "Az Ön neve",
-      "profile": "Profil",
       "profileDescription": "Személyes beállítások kezelése",
       "sendOtpCode": "Ellenőrző kód küldése",
       "timezone": "Időzóna",
@@ -1909,7 +1865,6 @@
         "description": "Kezelje a csapatszintű tiltólistát: kifejezések, amelyeket az anonimizáló folyamat mindig maszkol. Importálja a kezdő listát CSV, TXT vagy JSON fájlból.",
         "emptyState": "Még nincsenek csapatszintű kifejezések. Adjon hozzá fent egyet, vagy importáljon listát.",
         "entriesHeading": "Csapatszintű kifejezések ({count})",
-        "importAction": "Importálás",
         "importHint": "CSV (canonical,label,variants), TXT (soronként egy) vagy JSON",
         "importParseError": "Nem sikerült olvasni a fájlt. Használjon CSV-t, TXT-t vagy JSON-t.",
         "importSuccessToast": "{count} kifejezés importálva.",
@@ -1925,7 +1880,6 @@
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
-      "profile": "Profil",
       "promptCaching": {
         "description": "Bekapcsolva a stella gyorsítótár-jelzőket ad hozzá, így az ugyanazon dokumentumra vagy szálra vonatkozó ismételt MI-kérések ~10× kevesebbe kerülnek és gyorsabban befejeződnek. A gyorsítótárazott promptok legfeljebb 5 percig maradnak az MI-szolgáltatónál, a szervezetére korlátozva. Kikapcsolás esetén a stella nem küld többé gyorsítótár-jelzőket, de a szolgáltatók továbbra is opportunista módon gyorsítótárazhatnak — csak az MI-szolgáltatóval kötött Zero Data Retention szerződés tiltja le teljesen a szerveroldali gyorsítótárazást.",
         "title": "Prompt gyorsítótárazás",
@@ -2029,7 +1983,6 @@
     "untitled": "Névtelen feladat"
   },
   "templates": {
-    "addCondition": "Feltétel hozzáadása",
     "addItem": "Elem hozzáadása",
     "addPart": "Rész hozzáadása",
     "addTag": "Címke hozzáadása",
@@ -2039,7 +1992,6 @@
     "browseFiles": "Fájlok tallózása",
     "categoryDeleteConfirm": "Ezzel a kategória törlődik. Az ide tartozó sablonok kategória nélkülivé válnak.",
     "categoryDeleteFailed": "A kategória törlése nem sikerült",
-    "categoryName": "Kategória neve",
     "categorySaveFailed": "A kategória mentése nem sikerült",
     "checkErrors": "{count, plural, one {# hiba} other {# hiba}}",
     "checkFailed": "A sablon ellenőrzése nem sikerült",
@@ -2062,7 +2014,6 @@
     "conditionCount": "{count, plural, one {# feltétel} other {# feltétel}}",
     "conditionField": "Mező",
     "conditionFormulaPlaceholder": "Enter a formula…",
-    "conditionFormulaTitle": "Formula",
     "conditionMatch": "Egyezés",
     "conditionNamePlaceholder": "Feltétel neve (pl. NPF)",
     "conditionOpAfter": "után",
@@ -2088,7 +2039,6 @@
     "conditionsTitle": "Feltételek",
     "configureFields": "Mezők beállítása",
     "confirmDelete": "A sablon véglegesen törlődik.",
-    "createCategory": "Új kategória",
     "createDocument": "Dokumentum létrehozása",
     "createDocumentAnyway": "Létrehozás így is",
     "createInStudio": "Létrehozás a stellában",
@@ -2097,7 +2047,6 @@
     "dateChipPlus30Days": "30 nap múlva",
     "dateFormatStyle": "Dátumformátum",
     "dateRenderPreview": "A dokumentumban: {value}",
-    "deleteCategory": "Kategória törlése",
     "deleteFailed": "Nem sikerült törölni a sablont",
     "describeWhenToUse": "Írja le, mikor használandó ez",
     "directiveEach": "Ciklus: {expression}",
@@ -2111,10 +2060,8 @@
     "downloadAnyway": "Letöltés így is",
     "downloadDocx": "Letöltés DOCX-ként",
     "downloadPdf": "Letöltés PDF-ként",
-    "downloadReady": "Dokumentum kész",
     "dragAndDrop": "vagy húzza ide",
     "dropToCreate": "Húzzon ide egy .docx fájlt sablon létrehozásához",
-    "editCategory": "Kategória szerkesztése",
     "editFields": "Mezők szerkesztése",
     "emptyFieldsWarning": "{count, plural, one {# mező még üres} other {# mező még üres}}: {names}",
     "fieldCount": "{count, plural, one {# mező} other {# mező}}",
@@ -2250,7 +2197,6 @@
       "fillFormPreview": "Így jelenik meg az űrlapon",
       "fillStale": "Mentetlen módosítások — mentsen, hogy a legfrissebb mezőkkel töltse ki.",
       "filledByPerson": "Személy",
-      "formula": "Képlet",
       "formulaExampleLabel": "Példa",
       "formulaNoFields": "Először adjon hozzá egy számmezőt, hogy a képletnek legyen mit kiszámítania.",
       "formulaNonNumberFields": "Nem szám: {fields}",
@@ -2298,7 +2244,6 @@
       "saveAsRecipe": "Mentés receptként",
       "scopeClause": "Kikötéshely",
       "scopeCondition": "Feltétel",
-      "scopeField": "Mező",
       "scopeLoop": "Ciklus",
       "scopeTemplate": "Sablon",
       "showOnlyIf": "Csak akkor jelenjen meg, ha…",
@@ -2345,8 +2290,6 @@
     "validationOptionNotInSource": "A(z) {field} mezőben megadott értékek egyike lehet",
     "validationPattern": "Érvénytelen formátum",
     "validationRequired": "Ez a mező kötelező",
-    "versionLabel": "{version}. verzió",
-    "versionsEmpty": "Nincs verzióelőzmény",
     "viewVersion": "Megtekintés",
     "whenNotToUse": "Mikor ne használja",
     "whenNotToUsePlaceholder": "Mikor kerülendő ez a sablon?",
@@ -2378,7 +2321,6 @@
       "save": "Mentés",
       "saved": "DeepL-kulcs mentve",
       "savedDescription": "A fordítások mostantól elérhetők.",
-      "saving": "Mentés…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL-fordítás"
@@ -2394,10 +2336,7 @@
     "slugRequired": "A slug kötelező"
   },
   "workspaces": {
-    "active": "Aktív",
     "archiveMatter": "Archiválás",
-    "archived": "Archivált",
-    "archivedBadge": "Archivált",
     "copyToMatter": {
       "copied": "Másolva az ügyiratba",
       "copyOption": "Másolás (eredeti megtartása)",
@@ -2455,7 +2394,7 @@
       "currencyPlaceholder": "pl. USD, EUR",
       "editFieldValue": "Mezőérték szerkesztése",
       "errored": "Hiba",
-      "fieldValueLabel": "Mezőérték",
+      "fieldValueLabel": "Mező értéke",
       "fieldValuePlaceholder": "Adja meg a mezőértéket",
       "formatNotSupported": "Formátum nem támogatott",
       "numberLabel": "Érték",
@@ -2520,8 +2459,7 @@
       "lastUpdated": "Utoljára frissítve",
       "moveToRoot": "Húzza ide a gyökérszintre helyezéshez",
       "newSubfolder": "Új almappa",
-      "noFilesYet": "Még nincsenek fájlok",
-      "version": "Verzió"
+      "noFilesYet": "Még nincsenek fájlok"
     },
     "filters": {
       "chips": {
@@ -2562,7 +2500,6 @@
         "lead": "Felelős",
         "leadActive": "Felelős",
         "leadInactive": "Felelős beállítása",
-        "members": "Tagok",
         "noLead": "Nincs felelős",
         "searchMembers": "Tagok keresése…"
       },
@@ -2592,7 +2529,6 @@
       "moveToHint": "Adjon meg egy elérési utat, vagy válasszon meglévő mappát.",
       "moveToTitle": "Áthelyezés mappába",
       "organized": "Fájlok rendezve",
-      "regenerate": "Újragenerálás",
       "reset": "Vissza az AI-javaslatokhoz",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "áthelyezésre",
@@ -2602,8 +2538,6 @@
       "wasNamed": "korábban {name}"
     },
     "infosoud": {
-      "cancelled": "Törölve",
-      "court": "Bíróság",
       "courtPlaceholder": "Bíróság vagy kód keresése",
       "courtsFailed": "Nem sikerült betölteni az InfoSoud bíróságait",
       "eventCount": "{count, plural, one {# esemény} other {# esemény}}",
@@ -2631,7 +2565,6 @@
       "hideColumn": "Oszlop elrejtése",
       "readOnlyGrouping": "Ez a csoportosítás csak olvasható",
       "selectPropertyHint": "Válasszon egy tulajdonságot a csoportosításhoz az eszköztáron",
-      "unknown": "Ismeretlen",
       "uploadDocument": "Dokumentum feltöltése",
       "usePropertyHint": "Használjon Típust, Szerzőt vagy egyszeres választás tulajdonságot"
     },
@@ -2639,9 +2572,7 @@
     "lead": "Felelős",
     "leadEmpty": "Nincs felelős",
     "leadPicker": {
-      "noMatchingMembers": "Nincs megfelelő tag",
-      "placeholder": "Tagok keresése…",
-      "title": "Felelős beállítása"
+      "noMatchingMembers": "Nincs megfelelő tag"
     },
     "lockMatter": "Zárolás",
     "matterInfo": "Ügy adatai",
@@ -2652,13 +2583,11 @@
       "alreadyMember": "A felhasználó már tag",
       "cannotRemoveLast": "Az utolsó tag nem távolítható el",
       "noMembersFound": "Nem található tag",
-      "removeMember": "Tag eltávolítása",
       "removeMemberConfirm": "Eltávolítja ezt a tagot az ügyből?",
       "selectMember": "Tag kiválasztása"
     },
     "newDocument": "Új dokumentum",
     "newFolder": "Új mappa",
-    "newMatter": "Új ügy",
     "noDocuments": "Még nincsenek dokumentumok",
     "noFieldsToView": "Ennek az entitásnak nincsenek megjeleníthető mezői",
     "noGrouping": "Ne csoportosítson",
@@ -2679,7 +2608,6 @@
       "recentActivity": "Legutóbbi tevékenység",
       "timeAndTeam": "Idő és csapat",
       "timeThisWeek": "Idő ezen a héten",
-      "title": "Áttekintés",
       "totalDocuments": "Összes dokumentum",
       "totalItems": "Elemek",
       "totalThisWeek": "Összesen ezen a héten",
@@ -2720,7 +2648,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Oldalak igazítása sötét módhoz",
-      "anonymizeSidebar": "Anonimizálás",
       "backToPeek": "Vissza a betekintéshez",
       "entitySidebar": "Entitás részletei",
       "evidence": "Bizonyíték",
@@ -2732,7 +2659,6 @@
       "previousPage": "Előző oldal",
       "resetZoom": "Nagyítás visszaállítása",
       "showOriginal": "Eredeti oldalak megjelenítése",
-      "toggleSidebar": "Oldalsáv váltása",
       "unlock": "Feloldás",
       "zoomIn": "Nagyítás",
       "zoomOut": "Kicsinyítés"
@@ -2768,13 +2694,11 @@
       "addOption": "Opció hozzáadása",
       "addPromptForBetterResults": "Adjon hozzá promptot a jobb eredményekért",
       "addReadingSource": "hozzáadás",
-      "aiExtraction": "AI-kivonatolás",
       "autoPromptFailed": "Nem sikerült promptot generálni.",
       "bulk": {
         "addAnother": "Másik oszlop hozzáadása",
         "createFailed": "Nem sikerült létrehozni az oszlopokat",
         "createMany": "{count} oszlop létrehozása",
-        "createOne": "Oszlop létrehozása",
         "createdMany": "{count} oszlop létrehozva",
         "createdOne": "Oszlop létrehozva",
         "promptPlaceholder": "What should this column extract?",
@@ -2815,9 +2739,7 @@
       "extractionPlaceholder": "Írja le, mit keressen. A @ beírásával hivatkozhat egy másik oszlopra.",
       "extractionScope": "Kinyerés hatóköre",
       "file": "Fájl",
-      "flowExtraction": "AI kinyerés",
       "flowNoInputs": "nincs bemenet",
-      "flowOutput": "Kimenet",
       "ifNoMatchFound": "Ha nincs találat",
       "inputs": "Bemenetek",
       "inputsHelp": "Válaszd ki, mely oszlopokat olvassa az AI. Kattints hozzáadáshoz/eltávolításhoz.",
@@ -2876,7 +2798,6 @@
     "referencePlaceholder": "pl. 2024/001",
     "referenceTaken": "Ez a hivatkozási szám már használatban van",
     "sections": {
-      "members": "Tagok",
       "parties": "Felek"
     },
     "table": {
@@ -2953,7 +2874,6 @@
       "hideColumn": "Oszlop elrejtése",
       "layouts": {
         "calendar": "Naptár",
-        "filesystem": "Lista",
         "grid": "Rács",
         "kanban": "Kanban",
         "list": "Lista",

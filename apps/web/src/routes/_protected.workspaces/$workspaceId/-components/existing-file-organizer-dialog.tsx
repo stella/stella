@@ -812,7 +812,7 @@ const UserInstructionsSection = ({
             variant="outline"
           >
             <RotateCcwIcon className="size-3.5" />
-            {t("workspaces.importOrganizer.regenerate")}
+            {t("common.regenerate")}
           </Button>
         )}
       </div>

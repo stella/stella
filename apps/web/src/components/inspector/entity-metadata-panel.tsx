@@ -339,10 +339,7 @@ const EntityMetadataContent = ({
             label={t("inspector.metadata.author")}
             value={authorLabel}
           />
-          <ReadOnlyRow
-            label={t("inspector.metadata.version")}
-            value={versionLabel}
-          />
+          <ReadOnlyRow label={t("common.version")} value={versionLabel} />
           {updatedAtIso !== null && (
             <ReadOnlyRow
               label={t("inspector.metadata.updatedAt")}

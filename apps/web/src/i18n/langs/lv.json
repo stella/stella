@@ -20,8 +20,7 @@
       "description": "Pievienojiet pakalpojumu sniedzēja piekļuves datus, lai sāktu izmantot AI funkcijas.",
       "title": "Pievienot AI pakalpojumu sniedzēju"
     },
-    "refinePlaceholder": "Kā AI jāpielāgo formulējums?",
-    "regenerate": "Ģenerēt vēlreiz"
+    "refinePlaceholder": "Kā AI jāpielāgo formulējums?"
   },
   "app": {
     "versionMismatch": {
@@ -117,7 +116,6 @@
       "task": "Uzdevums",
       "taskCode": "Uzdevuma kods"
     },
-    "day": "Diena",
     "decimalHours": "({hours}st.)",
     "deleteSelected": "Dzēst atlasītos",
     "duration": "Ilgums",
@@ -138,8 +136,6 @@
       "markup": "Uzcenojums (%)",
       "noExpenses": "Nav izdevumu šajā periodā"
     },
-    "export": "Eksportēt",
-    "exportCSV": "Eksportēt CSV",
     "exportLEDES": "Eksportēt LEDES",
     "exportPDF": "Eksportēt PDF",
     "failedToDelete": "Neizdevās dzēst ierakstu",
@@ -214,7 +210,6 @@
     },
     "revertToDraft": "Atgriezt kā melnrakstu",
     "running": "Darbojas",
-    "selectAll": "Atlasīt visus",
     "selectMatter": "Izvēlieties lietu...",
     "selectMatterToStart": "Atlasiet lietu, lai sāktu laika uzskaiti",
     "selectedCount": "{count, plural, zero {# atlasīti} one {# atlasīts} other {# atlasīti}}",
@@ -237,7 +232,6 @@
     "timerActive": "Taimeris darbojas",
     "timesheets": "Darba laika uzskaite",
     "total": "Kopā",
-    "week": "Nedēļa",
     "writeOff": "Norakstīt"
   },
   "caseLaw": {
@@ -316,7 +310,6 @@
     "packDescription": "{count, plural, zero {# rīku} one {# rīks} other {# rīki}} jūsu praksei. Instalējiet ar vienu klikšķi vai izvēlieties zemāk individuāli.",
     "packInstalled": "{count, plural, zero {# rīku instalēts} one {# rīks instalēts} other {# rīki instalēti}}",
     "packPartial": "{installed} instalēti, {failed} neizdevās",
-    "recommended": "Ieteicams",
     "removed": "Šis rīks vairs nav pieejams.",
     "sectionOthers": "Citi",
     "sectionRecommended": "Ieteiktie",
@@ -356,11 +349,9 @@
       "tracked": "Jā, ar izsekošanu"
     },
     "approval": {
-      "allow": "Atļaut",
       "allowInConversation": "Atļaut šajā sarunā",
       "allowOnce": "Atļaut vienreiz",
       "alwaysAllow": "Vienmēr atļaut",
-      "approved": "Apstiprināts",
       "denied": "Noraidīts",
       "deny": "Noraidīt",
       "externalMcpDescription": "Tiks nosūtīta tikai šim rīka izsaukumam nepieciešamā informācija.",
@@ -369,7 +360,6 @@
     "askAnything": "Jautājiet jebko",
     "askUser": {
       "custom": "Rakstīt savu",
-      "default": "Noklusējuma",
       "edit": "Rediģēt atbildes",
       "editWarning": "Atkārtota palaišana izmetīs šīs sarunas turpmākās atbildes.",
       "noAnswer": "Nav atbildes",
@@ -396,11 +386,6 @@
       "previewWaiting": "Gaida saturu…"
     },
     "deleteThread": "Dzēst sarunu",
-    "documentView": {
-      "original": "Oriģināls",
-      "simple": "Pieņemts",
-      "trackedChanges": "Izmaiņu izsekošana"
-    },
     "editableFilePlaceholder": "Tērzēt par {fileName} vai rediģēt",
     "editableFilePlaceholderAction": "Tērzēt vai rediģēt",
     "editorLoading": "Ielādē redaktoru…",
@@ -433,9 +418,7 @@
     "maxAttachmentsReached": "Maksimāli {count} faili vienā ziņojumā",
     "mention": {
       "category": {
-        "contacts": "Kontakti",
-        "entities": "Šajā lietā",
-        "templates": "Veidnes"
+        "entities": "Šajā lietā"
       },
       "loadError": "Neizdevās ielādēt entītijas"
     },
@@ -470,7 +453,6 @@
     "removeSuggestion": "(noņemt)",
     "resend": "Nosūtīt vēlreiz",
     "resizeThread": "Mainīt sarunas izmēru",
-    "send": "Nosūtīt ziņu",
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
     "sendErrorLoopDetected": "AI atbilde atkārtojās pārāk daudz reižu. Mēģiniet vēlreiz ar šaurāku pieprasījumu.",
@@ -574,7 +556,6 @@
     "backToList": "Atpakaļ uz klauzulu sarakstu",
     "body": "Saturs",
     "categoryDeleteConfirm": "Šīs kategorijas klauzulas kļūs nekategorizētas.",
-    "categoryName": "Kategorijas nosaukums",
     "categoryNamePlaceholder": "piem. Konfidencialitāte",
     "clauseCount": "{count, plural, zero {# klauzulu} one {# klauzula} other {# klauzulas}}",
     "clauseCreated": "Klauzula izveidota",
@@ -586,20 +567,16 @@
     "confirmDeleteClause": "Tas neatgriezeniski dzēsīs klauzulu un visus tās variantus.",
     "confirmRestoreVersion": "Tādējādi klauzulas saturs tiks iestatīts uz šo versiju un tiks izveidota jauna versija. Vēsture tiek saglabāta.",
     "confirmUseAsMainBody": "Tādējādi klauzulas saturs tiks aizstāts ar šo variantu un tiks izveidota jauna versija. Variants tiek saglabāts.",
-    "createCategory": "Jauna kategorija",
     "createClause": "Jauna klauzula",
     "createFailed": "Neizdevās izveidot klauzulu",
-    "deleteCategory": "Dzēst kategoriju",
     "deleteClause": "Dzēst klauzulu",
     "deleteFailed": "Neizdevās dzēst",
     "descriptionPlaceholder": "Īss klauzulas apraksts",
-    "editCategory": "Rediģēt kategoriju",
     "editClause": "Rediģēt klauzulu",
     "editVariant": "Rediģēt variantu",
     "export": "Eksportēt",
     "exportFailed": "Neizdevās eksportēt klauzulas",
     "formattingPreviewHint": "Numerācija un formatējums šeit ir priekšskatījums. Ģenerētais dokuments piemēro savu sarakstu formatējumu, tāpēc neievadiet numurus manuāli.",
-    "import": "Importēt",
     "importFailed": "Neizdevās importēt klauzulas",
     "importResult": "{created, plural, zero {# izveidotu} one {# izveidota} other {# izveidotas}}, {skipped, plural, zero {# izlaisto} one {# izlaista} other {# izlaistas}}",
     "importSuccess": "{count, plural, zero {# klauzulu importētas} one {# klauzula importēta} other {# klauzulas importētas}}",
@@ -618,7 +595,6 @@
     "noLinkedClauses": "Nav saistītu klauzulu",
     "noResults": "Klauzulu vēl nav",
     "noVariants": "Nav variantu",
-    "noVersions": "Nav versiju vēstures",
     "outdatedVersion": "Pieejams atjauninājums",
     "restoreVersion": "Atjaunot šo versiju",
     "saveAsVersion": "Saglabāt kā jaunu versiju",
@@ -661,7 +637,6 @@
     "variantPromoted": "Variants iestatīts kā galvenais saturs",
     "variantUpdated": "Variants atjaunināts",
     "variants": "Varianti",
-    "version": "{version}. versija",
     "versionCount": "{count, plural, zero {# versiju} one {# versija} other {# versijas}}",
     "versionRestored": "Versija atjaunota"
   },
@@ -699,6 +674,7 @@
     "captions": "Subtitri",
     "caseLaw": "Tiesu prakse",
     "category": "Kategorija",
+    "categoryName": "Kategorijas nosaukums",
     "changeColor": "Mainīt krāsu",
     "clauses": "Klauzulas",
     "clearDate": "Notīrīt datumu",
@@ -718,12 +694,14 @@
     "copy": "Kopēt",
     "copyLink": "Kopēt saiti",
     "country": "Valsts",
+    "createCategory": "Jauna kategorija",
     "createdAt": "Izveidots {date}",
     "currency": "Valūta",
     "currentPage": "Pašreizējā lapa",
     "date": "Datums",
     "decline": "Noraidīt",
     "delete": "Dzēst",
+    "deleteCategory": "Dzēst kategoriju",
     "deleteConfirmDescription": "Vai tiešām vēlaties dzēst \"{name}\"? Šo darbību nevar atsaukt.",
     "deletedCount": "{count, plural, zero {# vienumu dzēsts} one {# vienums dzēsts} other {# vienumi dzēsti}}",
     "description": "Apraksts",
@@ -734,6 +712,7 @@
     "duplicate": "Dublēt",
     "duplicated": "Dublēts",
     "edit": "Rediģēt",
+    "editCategory": "Rediģēt kategoriju",
     "edited": "Rediģēts",
     "email": "E-pasts",
     "empty": "Tukšs",
@@ -747,8 +726,10 @@
     "error": "Kļūda",
     "expenses": "Izdevumi",
     "filter": "Filtrs",
+    "formula": "Formula",
     "goBack": "Atpakaļ",
     "history": "Vēsture",
+    "import": "Importēt",
     "invite": "Uzaicināt",
     "invoices": "Rēķini",
     "kind": "Veids",
@@ -795,13 +776,16 @@
     "logTime": "Reģistrēt laiku",
     "matter": "Lieta",
     "matters": "Lietas",
+    "members": "Dalībnieki",
     "metadata": "Metadati",
     "moveDown": "Pārvietot lejup",
     "moveUp": "Pārvietot augšup",
     "name": "Nosaukums",
+    "newMatter": "Jauna lieta",
     "newRow": "Jauna rinda",
     "next": "Tālāk",
     "noResults": "Nav rezultātu",
+    "noVersions": "Nav versiju vēstures",
     "none": "None",
     "notes": "Piezīmes",
     "open": "Atvērt",
@@ -815,10 +799,13 @@
     "preview": "Priekšskatījums",
     "previous": "Iepriekšējais",
     "print": "Drukāt",
+    "profile": "Profils",
     "properties": "Rekvizīti",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
+    "regenerate": "Ģenerēt vēlreiz",
     "remove": "Noņemt",
+    "removeMember": "Noņemt dalībnieku",
     "rename": "Pārdēvēt",
     "required": "Obligāts",
     "reset": "Atiestatīt",
@@ -855,7 +842,9 @@
     "urlIdentifier": "Identifikators",
     "urlIdentifierPlaceholder": "mana-organizacija",
     "user": "Lietotājs",
-    "verify": "Verificēt"
+    "verify": "Verificēt",
+    "version": "Versija",
+    "versionLabel": "{version}. versija"
   },
   "consent": {
     "allow": "Atļaut",
@@ -892,8 +881,7 @@
       "title": "Norēķinu dati"
     },
     "columns": {
-      "phone": "Tālrunis",
-      "tags": "Birkas"
+      "phone": "Tālrunis"
     },
     "communication": {
       "addAddress": "Pievienot adresi",
@@ -965,13 +953,10 @@
       "firstName": "Vārds",
       "lastName": "Uzvārds",
       "middleName": "Otrais vārds",
-      "originatingAttorney": "Galvenā kontaktpersona",
       "paymentTermDays": "Apmaksas termiņš (dienas)",
       "prefix": "Priedēklis",
       "registrationNumber": "Reģistrācijas numurs",
-      "responsibleAttorney": "Atbildīgais advokāts",
       "suffix": "Piedēklis",
-      "tags": "Birkas",
       "taxId": "PVN numurs"
     },
     "filterOrganizations": "Organizācijas",
@@ -1127,7 +1112,6 @@
     "uploadDate": "Augšupielādes datums",
     "uploadNewVersion": "Augšupielādēt jaunu versiju",
     "uploadedBy": "Augšupielādēja",
-    "version": "Versija",
     "versionHistory": "Versiju vēsture",
     "viewVersionHistory": "Rādīt informāciju un vēsturi",
     "viewing": "Skata",
@@ -1223,12 +1207,10 @@
       "noResults": "Nav rezultātu",
       "previous": "Iepriekšējā atbilstība",
       "previousShortcut": "Iepriekšējā atbilstība (Shift+Enter)",
-      "replace": "Aizstāt",
       "replaceAll": "Aizstāt visu",
       "replaceCurrent": "Aizstāt pašreizējo atbilstību",
       "replacePlaceholder": "Aizstājējteksts…",
       "replaceText": "Aizstājējteksts",
-      "showReplace": "Aizstāt",
       "wholeWords": "Veseli vārdi"
     },
     "finishEditing": "Beigt rediģēšanu",
@@ -1353,7 +1335,6 @@
       "documentInfoHeading": "Dokumenta informācija",
       "matterColumnsHeading": "Lietas kolonnas",
       "updatedAt": "Atjaunināts",
-      "version": "Versija",
       "versionCurrent": "v{version} (pašreizējā)"
     },
     "openChat": "Atvērt tērzēšanu",
@@ -1375,27 +1356,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "„{name}“ tiks noņemta no šīs darbvietas.",
-      "deleteConfirmTitle": "Dzēst prasmi?",
       "deleteFile": "Dzēst failu",
       "deleteFileConfirm": "Dzēst failu? Šo darbību nevar atsaukt.",
       "description": "Instalējiet SKILL.md pakas, kas tērzēšanai pievieno specializētas metodes un tikai lasāmus resursus.",
       "disableSkill": "Atspējot prasmi",
       "disabled": "Atspējota",
-      "discardChanges": "Atmest",
       "dropFile": "Nometiet SKILL.md vai .zip šeit",
       "editSkill": "Rediģēt prasmi",
-      "editTitle": "Rediģēt prasmi",
       "emptyDescription": "Augšupielādējiet SKILL.md failu, saspiestu prasmes mapi vai importējiet publisku GitHub prasmes URL.",
       "emptyTitle": "Instalējiet pirmo prasmi",
       "enableSkill": "Iespējot prasmi",
       "enabled": "Iespējota",
       "fileExists": "Fails ar šādu ceļu jau pastāv",
       "filesHeading": "Faili",
-      "formBody": "Norādījumi",
       "formBodyHelp": "Markdown norādījumi, ko aģents nolasa, kad prasme tiek izsaukta.",
       "formDescription": "Apraksts",
       "formName": "Nosaukums",
-      "formVersion": "Versija",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Pievienot failu",
       "generateDraft": "Sagatavot prasmi",
@@ -1425,23 +1401,17 @@
       "newFilePathPlaceholder": "folder/notes.md",
       "newFolder": "Jauna mape",
       "pdfPreviewSoon": "PDF priekšskatījums būs pieejams, tiklīdz tiks atbalstīti binārie prasmju resursi.",
-      "privateSection": "Jūsu prasmes",
-      "regenerate": "Ģenerēt no jauna",
       "renameFile": "Pārdēvēt",
       "resources": "{count, plural, zero {# resursu} one {# resurss} other {# resursi}}",
-      "scope": "Redzamība",
       "scopePrivate": "Tikai es",
       "scopeTeam": "Visi komandā",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Atlasīts: {name}",
       "sourceUpload": "Augšupielādēts",
       "sourceUrl": "Publisks URL",
-      "teamSection": "Komandas prasmes",
       "unsavedChanges": "Nesaglabātas izmaiņas — atmest?",
       "uploadFile": "Augšupielādēt failu",
       "uploadHelp": "Izmantojiet SKILL.md failu vai .zip mapi ar SKILL.md un izvēles tikai lasāmiem resursiem.",
-      "uploadSkill": "Augšupielādēt prasmi",
-      "uploadTitle": "Augšupielādēt prasmi",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/cels/uz/prasmi",
       "version": "Versija: {version}"
     },
@@ -1469,13 +1439,11 @@
       "errorDescription": "Integrāciju neizdevās atjaunināt.",
       "errorTitle": "MCP neizdevās",
       "mcpExplainer": "Integrācijas pievieno čatam ārējus pakalpojumus, ar kuriem var strādāt MI.",
-      "namePlaceholder": "Rādāmais nosaukums",
       "needsReauth": "Nepieciešama atkārtota pievienošana",
       "off": "Izslēgts",
       "on": "Ieslēgts",
       "otherTitle": "Citas integrācijas",
       "probe": "Pārbaudīt",
-      "recommendedBadge": "Ieteicams",
       "recommendedFor": "Ieteicams: {jurisdictions}",
       "reconnect": "Pievienot vēlreiz",
       "saveToken": "Saglabāt tokenu",
@@ -1516,7 +1484,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Pievienot prasmi",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1546,11 +1513,8 @@
       "commandLabel": "Slīpsvītras komanda (nav obligāta)",
       "commandPlaceholder": "piem. apkopot",
       "createTitle": "Jauna prasme",
-      "defaultBadge": "Noklusējums",
       "deleteConfirmDescription": "Šī prasme tiks neatgriezeniski noņemta.",
-      "deleteConfirmTitle": "Dzēst prasmi?",
       "deleteShortcut": "Dzēst prasmi",
-      "editShortcut": "Rediģēt prasmi",
       "emptyDescription": "Izveidojiet atkārtoti izmantojamas prasmes darbam, ko jūsu komanda atkārto, sākot no kopsavilkumiem līdz pirmā uzmetuma sagatavošanas norādījumiem.",
       "emptyState": "Prasmju vēl nav. Pievienojiet pirmo.",
       "emptyTitle": "Izveidojiet pirmo prasmi",
@@ -1563,21 +1527,17 @@
       "form": {
         "command": "Prasmes saīsne",
         "commandHint": "/ prasmes nosaukums: tikai mazie burti, cipari, defises un pasvītras",
-        "commandPlaceholder": "piem., summarize",
         "commandPrefix": "/",
         "description": "Apraksts",
         "descriptionPlaceholder": "Īss apraksts, kas redzams atlasītājā",
         "name": "Nosaukums",
         "namePlaceholder": "piem., Apkopot dokumentu",
-        "prompt": "Instrukcijas",
         "promptPlaceholder": "Instrukcijas, kas tiek ievietotas čata rakstīšanas laukā, izmantojot šo prasmi",
         "scope": "Redzamība",
         "scopePrivate": "Tikai es",
         "scopeTeam": "Visi komandā"
       },
-      "privateSection": "Jūsu prasmes",
-      "shadowed": "Aizstāts ar komandas prasmi",
-      "teamSection": "Komandas prasmes"
+      "shadowed": "Aizstāts ar komandas prasmi"
     }
   },
   "markdownEditor": {
@@ -1589,9 +1549,7 @@
     "chat": "Tērzēšana",
     "contacts": "Kontakti",
     "knowledge": "Zināšanas",
-    "members": "Dalībnieki",
     "myTodos": "Mani uzdevumi",
-    "newMatter": "Jauna lieta",
     "pinned": "Piesprausts",
     "recents": "Nesenie",
     "search": "Meklēt",
@@ -1789,7 +1747,6 @@
       "confirmRoleChangeTitle": "Mainīt lomu",
       "joined": "Pievienojās",
       "noMembersFound": "Dalībnieki nav atrasti",
-      "removeMember": "Noņemt dalībnieku",
       "typeEmailToConfirm": "Ierakstiet {email}, lai apstiprinātu",
       "updateRole": "Atjaunināt lomu"
     },
@@ -1887,7 +1844,6 @@
       "preferredName": "Vēlamais vārds",
       "preferredNameDescription": "Tiek izmantots kā autors DOCX izsekotajām izmaiņām un komentāriem.",
       "preferredNamePlaceholder": "Jūsu vārds",
-      "profile": "Profils",
       "profileDescription": "Pārvaldiet savas personīgās preferences",
       "sendOtpCode": "Nosūtīt apstiprinājuma kodu",
       "timezone": "Laika josla",
@@ -1909,7 +1865,6 @@
         "description": "Pārvaldiet komandas mēroga aizlieguma sarakstu ar terminiem, kurus anonimizācijas process vienmēr maskē, un importējiet sākotnējo sarakstu no CSV, TXT vai JSON.",
         "emptyState": "Komandas terminu vēl nav. Pievienojiet vienu augstāk vai importējiet sarakstu.",
         "entriesHeading": "Komandas termini ({count})",
-        "importAction": "Importēt",
         "importHint": "CSV (canonical,label,variants), TXT (viens rindiņā) vai JSON",
         "importParseError": "Failu nevarēja nolasīt. Izmantojiet CSV, TXT vai JSON.",
         "importSuccessToast": "Importēti {count} termini.",
@@ -1925,7 +1880,6 @@
       "pendingInvitations": "Gaidošie uzaicinājumi",
       "practiceJurisdictions": "Jurisdikcijas",
       "practiceJurisdictionsDescription": "Atlasiet jums atbilstošās jurisdikcijas.",
-      "profile": "Profils",
       "promptCaching": {
         "description": "Ja ieslēgts, stella pievieno kešatmiņas iezīmes, lai atkārtoti MI pieprasījumi par to pašu dokumentu vai sarunu izmaksātu ~10× lētāk un beigtos ātrāk. Kešotie pieprasījumi paliek pie MI pakalpojumu sniedzēja līdz 5 minūtēm un ir ierobežoti uz jūsu organizāciju. Izslēdzot stella vairs nesūta kešatmiņas iezīmes, taču pakalpojumu sniedzēji joprojām var kešot oportūnistiski — tikai Zero Data Retention līgums ar pakalpojumu sniedzēju pilnībā izslēdz servera puses kešošanu.",
         "title": "Uzvedņu kešošana",
@@ -2029,7 +1983,6 @@
     "untitled": "Uzdevums bez nosaukuma"
   },
   "templates": {
-    "addCondition": "Pievienot nosacījumu",
     "addItem": "Pievienot vienību",
     "addPart": "Pievienot daļu",
     "addTag": "Pievienot birku",
@@ -2039,7 +1992,6 @@
     "browseFiles": "Pārlūkot failus",
     "categoryDeleteConfirm": "Kategorija tiks noņemta. Veidnes šajā kategorijā kļūs nekategorizētas.",
     "categoryDeleteFailed": "Neizdevās dzēst kategoriju",
-    "categoryName": "Kategorijas nosaukums",
     "categorySaveFailed": "Neizdevās saglabāt kategoriju",
     "checkErrors": "{count, plural, zero {# kļūdu} one {# kļūda} other {# kļūdas}}",
     "checkFailed": "Neizdevās pārbaudīt veidni",
@@ -2062,7 +2014,6 @@
     "conditionCount": "{count, plural, zero {# nosacījumu} one {# nosacījums} other {# nosacījumi}}",
     "conditionField": "Lauks",
     "conditionFormulaPlaceholder": "Enter a formula…",
-    "conditionFormulaTitle": "Formula",
     "conditionMatch": "Atbilstība",
     "conditionNamePlaceholder": "Nosacījuma nosaukums (piem., NPF)",
     "conditionOpAfter": "pēc",
@@ -2088,7 +2039,6 @@
     "conditionsTitle": "Nosacījumi",
     "configureFields": "Konfigurēt laukus",
     "confirmDelete": "Veidne tiks neatgriezeniski dzēsta.",
-    "createCategory": "Jauna kategorija",
     "createDocument": "Izveidot dokumentu",
     "createDocumentAnyway": "Tomēr izveidot",
     "createInStudio": "Izveidot ar stella",
@@ -2097,7 +2047,6 @@
     "dateChipPlus30Days": "Pēc 30 dienām",
     "dateFormatStyle": "Datuma formāts",
     "dateRenderPreview": "Dokumentā: {value}",
-    "deleteCategory": "Dzēst kategoriju",
     "deleteFailed": "Neizdevās dzēst veidni",
     "describeWhenToUse": "Aprakstiet, kad to izmantot",
     "directiveEach": "Cikls: {expression}",
@@ -2111,10 +2060,8 @@
     "downloadAnyway": "Tomēr lejupielādēt",
     "downloadDocx": "Lejupielādēt DOCX",
     "downloadPdf": "Lejupielādēt PDF",
-    "downloadReady": "Dokuments gatavs",
     "dragAndDrop": "vai velciet un nometiet",
     "dropToCreate": "Velciet .docx failu, lai izveidotu veidni",
-    "editCategory": "Rediģēt kategoriju",
     "editFields": "Rediģēt laukus",
     "emptyFieldsWarning": "{count, plural, zero {# lauku joprojām ir tukši} one {# lauks joprojām ir tukšs} other {# lauki joprojām ir tukši}}: {names}",
     "fieldCount": "{count, plural, zero {# lauku} one {# lauks} other {# lauki}}",
@@ -2250,7 +2197,6 @@
       "fillFormPreview": "Tā tas izskatīsies formā",
       "fillStale": "Nesaglabātas izmaiņas — saglabājiet, lai aizpildītu jaunākos laukus.",
       "filledByPerson": "Persona",
-      "formula": "Formula",
       "formulaExampleLabel": "Piemērs",
       "formulaNoFields": "Vispirms pievienojiet skaitlisku lauku, lai formulai būtu ko aprēķināt.",
       "formulaNonNumberFields": "Nav skaitlis: {fields}",
@@ -2298,7 +2244,6 @@
       "saveAsRecipe": "Saglabāt kā recepti",
       "scopeClause": "Klauzulas vieta",
       "scopeCondition": "Nosacījums",
-      "scopeField": "Lauks",
       "scopeLoop": "Cikls",
       "scopeTemplate": "Veidne",
       "showOnlyIf": "Rādīt tikai tad, ja…",
@@ -2345,8 +2290,6 @@
     "validationOptionNotInSource": "Jābūt vienai no laukā {field} ievadītajām vērtībām",
     "validationPattern": "Nederīgs formāts",
     "validationRequired": "Šis lauks ir obligāts",
-    "versionLabel": "{version}. versija",
-    "versionsEmpty": "Nav versiju vēstures",
     "viewVersion": "Skatīt",
     "whenNotToUse": "Kad neizmantot",
     "whenNotToUsePlaceholder": "Kad no šīs veidnes izvairīties?",
@@ -2378,7 +2321,6 @@
       "save": "Saglabāt",
       "saved": "DeepL atslēga saglabāta",
       "savedDescription": "Tulkojumi tagad ir pieejami.",
-      "saving": "Notiek saglabāšana…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "DeepL tulkošana"
@@ -2394,10 +2336,7 @@
     "slugRequired": "Slug ir obligāts"
   },
   "workspaces": {
-    "active": "Aktīvs",
     "archiveMatter": "Arhivēt",
-    "archived": "Arhivēts",
-    "archivedBadge": "Arhivēta",
     "copyToMatter": {
       "copied": "Nokopēts lietā",
       "copyOption": "Kopēt (saglabāt oriģinālu)",
@@ -2520,8 +2459,7 @@
       "lastUpdated": "Pēdējoreiz atjaunināts",
       "moveToRoot": "Nometiet šeit, lai pārvietotu uz saknes līmeni",
       "newSubfolder": "Jauna apakšmape",
-      "noFilesYet": "Failu pagaidām nav",
-      "version": "Versija"
+      "noFilesYet": "Failu pagaidām nav"
     },
     "filters": {
       "chips": {
@@ -2562,7 +2500,6 @@
         "lead": "Lead",
         "leadActive": "Lead",
         "leadInactive": "Iestatīt vadītāju",
-        "members": "Dalībnieki",
         "noLead": "Nav atbildīgā",
         "searchMembers": "Meklēt dalībniekus…"
       },
@@ -2592,7 +2529,6 @@
       "moveToHint": "Ievadiet ceļu vai izvēlieties esošu mapi.",
       "moveToTitle": "Pārvietot uz mapi",
       "organized": "Faili sakārtoti",
-      "regenerate": "Ģenerēt vēlreiz",
       "reset": "Atjaunot MI ieteikumus",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "pārvietot",
@@ -2602,8 +2538,6 @@
       "wasNamed": "iepriekš {name}"
     },
     "infosoud": {
-      "cancelled": "Atcelts",
-      "court": "Tiesa",
       "courtPlaceholder": "Meklēt tiesu vai kodu",
       "courtsFailed": "Neizdevās ielādēt InfoSoud tiesas",
       "eventCount": "{count, plural, zero {# notikumu} one {# notikums} other {# notikumi}}",
@@ -2627,11 +2561,10 @@
     "justification": "Pamatojums:",
     "kanban": {
       "deleteAll": "Dzēst visus",
-      "deleteAllConfirm": "Dzēst visus {count} vienumus slejā \"{column}\"?",
-      "hideColumn": "Paslēpt sleju",
+      "deleteAllConfirm": "Dzēst visus {count} vienumus kolonnā \"{column}\"?",
+      "hideColumn": "Paslēpt kolonnu",
       "readOnlyGrouping": "Šis grupējums ir tikai lasāms",
       "selectPropertyHint": "Rīkjoslā izvēlieties rekvizītu grupēšanai",
-      "unknown": "Nezināms",
       "uploadDocument": "Augšupielādēt dokumentu",
       "usePropertyHint": "Izmantojiet Veids, Autors vai vienas izvēles rekvizītu"
     },
@@ -2639,9 +2572,7 @@
     "lead": "Atbildīgais",
     "leadEmpty": "Nav atbildīgā",
     "leadPicker": {
-      "noMatchingMembers": "Nav atbilstošu dalībnieku",
-      "placeholder": "Meklēt dalībniekus…",
-      "title": "Iestatīt atbildīgo"
+      "noMatchingMembers": "Nav atbilstošu dalībnieku"
     },
     "lockMatter": "Bloķēt",
     "matterInfo": "Lietas informācija",
@@ -2652,13 +2583,11 @@
       "alreadyMember": "Lietotājs jau ir dalībnieks",
       "cannotRemoveLast": "Nevar noņemt pēdējo dalībnieku",
       "noMembersFound": "Dalībnieki nav atrasti",
-      "removeMember": "Noņemt dalībnieku",
       "removeMemberConfirm": "Vai noņemt šo dalībnieku no lietas?",
       "selectMember": "Izvēlēties dalībnieku"
     },
     "newDocument": "Jauns dokuments",
     "newFolder": "Jauna mape",
-    "newMatter": "Jauna lieta",
     "noDocuments": "Dokumentu vēl nav",
     "noFieldsToView": "Šim ierakstam nav lauku apskatei",
     "noGrouping": "Negrupēt",
@@ -2679,7 +2608,6 @@
       "recentActivity": "Pēdējā aktivitāte",
       "timeAndTeam": "Laiks un komanda",
       "timeThisWeek": "Laiks šonedēļ",
-      "title": "Pārskats",
       "totalDocuments": "Dokumenti kopā",
       "totalItems": "Vienumi",
       "totalThisWeek": "Kopā šonedēļ",
@@ -2720,7 +2648,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Pielāgot lapas tumšajam režīmam",
-      "anonymizeSidebar": "Anonimizācija",
       "backToPeek": "Atgriezties priekšskatījumā",
       "entitySidebar": "Vienības informācija",
       "evidence": "Pierādījums",
@@ -2732,7 +2659,6 @@
       "previousPage": "Iepriekšējā lappuse",
       "resetZoom": "Atiestatīt tālummaiņu",
       "showOriginal": "Rādīt oriģinālās lapas",
-      "toggleSidebar": "Pārslēgt sānjoslu",
       "unlock": "Atbloķēt",
       "zoomIn": "Tuvināt",
       "zoomOut": "Tālināt"
@@ -2768,17 +2694,15 @@
       "addOption": "Pievienot opciju",
       "addPromptForBetterResults": "Pievienojiet uzvedni labākiem rezultātiem",
       "addReadingSource": "pievienot",
-      "aiExtraction": "AI izgūšana",
       "autoPromptFailed": "Neizdevās izveidot uzvedni.",
       "bulk": {
-        "addAnother": "Pievienot vēl vienu sleju",
-        "createFailed": "Neizdevās izveidot slejas",
-        "createMany": "{count, plural, zero {Izveidot # sleju} one {Izveidot # sleju} other {Izveidot # slejas}}",
-        "createOne": "Izveidot sleju",
-        "createdMany": "{count, plural, zero {Izveidotas # slejas} one {Izveidota # sleja} other {Izveidotas # slejas}}",
-        "createdOne": "Sleja izveidota",
+        "addAnother": "Pievienot vēl vienu kolonnu",
+        "createFailed": "Neizdevās izveidot kolonnas",
+        "createMany": "{count, plural, zero {Izveidot # kolonnu} one {Izveidot # kolonnu} other {Izveidot # kolonnas}}",
+        "createdMany": "{count, plural, zero {Izveidotas # kolonnas} one {Izveidota # kolonna} other {Izveidotas # kolonnas}}",
+        "createdOne": "Kolonna izveidota",
         "promptPlaceholder": "What should this column extract?",
-        "title": "Pievienot slejas"
+        "title": "Pievienot kolonnas"
       },
       "chipManual": "Manual",
       "chipMulti": "Birkas",
@@ -2802,7 +2726,7 @@
       "deleteProperty": "Dzēst rekvizītu",
       "deletePropertyConfirmDescription": "Vai tiešām vēlaties dzēst rekvizītu \"{propertyName}\"? Šo darbību nevar atsaukt.",
       "documentsLabel": "Dokumenti",
-      "editColumn": "Rediģēt sleju",
+      "editColumn": "Rediģēt kolonnu",
       "editConditions": "Rediģēt nosacījumus",
       "editConditionsDescription": "Iestatiet nosacījumus, kad šis rekvizīts tiks ģenerēts.",
       "editConditionsWhen": "Only run extraction when …",
@@ -2812,12 +2736,10 @@
       "extractionInstruction": "Norādījumi AI",
       "extractionInstructionHelp": "Tiek palaists vēlreiz, kad mainās avota dokumenti vai atsauces uz kolonnām.",
       "extractionInstructionPlaceholder": "Piemērs: atrodiet līguma izbeigšanas datumu. Atgrieziet tikai datumu.",
-      "extractionPlaceholder": "Aprakstiet, ko meklēt. Ierakstiet @, lai atsauktos uz citu sleju.",
+      "extractionPlaceholder": "Aprakstiet, ko meklēt. Ierakstiet @, lai atsauktos uz citu kolonnu.",
       "extractionScope": "Izvilkšanas tvērums",
       "file": "Fails",
-      "flowExtraction": "AI izvilkšana",
       "flowNoInputs": "nav ievades",
-      "flowOutput": "Izvade",
       "ifNoMatchFound": "Ja atbilstība nav atrasta",
       "inputs": "Ievades",
       "inputsHelp": "Izvēlies kolonnas, ko AI lasīt. Klikšķini, lai pievienotu vai noņemtu.",
@@ -2845,7 +2767,7 @@
       "previewUnsupported": "Priekšskatījums šim dokumenta tipam nav atbalstīts.",
       "readingFrom": "Reading from",
       "referencesItself": "Rekvizīts atsaucas pats uz sevi caur citiem rekvizītiem",
-      "rerunColumn": "Palaist sleju vēlreiz",
+      "rerunColumn": "Palaist kolonnu vēlreiz",
       "resultType": "Rezultāta tips",
       "returnsLabel": "Returns",
       "scopeFile": "Pašreizējais fails",
@@ -2876,7 +2798,6 @@
     "referencePlaceholder": "piem. 2024/001",
     "referenceTaken": "Šis atsauces numurs jau tiek izmantots",
     "sections": {
-      "members": "Dalībnieki",
       "parties": "Puses"
     },
     "table": {
@@ -2950,10 +2871,9 @@
       "filtersWithCount": "{count, plural, one {# filter} other {# filters}}",
       "groupBy": "Grupēt pēc:",
       "groupItemCount": "{count, plural, one {# item} other {# items}}",
-      "hideColumn": "Slēpt kolonnu",
+      "hideColumn": "Paslēpt kolonnu",
       "layouts": {
         "calendar": "Kalendārs",
-        "filesystem": "Saraksts",
         "grid": "Režģis",
         "kanban": "Kanban",
         "list": "Saraksts",

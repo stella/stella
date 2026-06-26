@@ -20,8 +20,7 @@
       "description": "Adicione credenciais de provedor para começar a usar recursos de IA.",
       "title": "Conectar provedor de IA"
     },
-    "refinePlaceholder": "Como a IA deve ajustar a redação?",
-    "regenerate": "Regenerar"
+    "refinePlaceholder": "Como a IA deve ajustar a redação?"
   },
   "app": {
     "versionMismatch": {
@@ -117,7 +116,6 @@
       "task": "Tarefa",
       "taskCode": "Código da tarefa"
     },
-    "day": "Dia",
     "decimalHours": "({hours}h)",
     "deleteSelected": "Excluir selecionado",
     "duration": "Duração",
@@ -138,8 +136,6 @@
       "markup": "Acréscimo (%)",
       "noExpenses": "Sem despesas neste período"
     },
-    "export": "Exportar",
-    "exportCSV": "Exportar CSV",
     "exportLEDES": "Exportar LEDES",
     "exportPDF": "Exportar PDF",
     "failedToDelete": "Falha ao excluir a entrada",
@@ -214,7 +210,6 @@
     },
     "revertToDraft": "Reverter para rascunho",
     "running": "Em execução",
-    "selectAll": "Selecionar tudo",
     "selectMatter": "Selecione um caso...",
     "selectMatterToStart": "Selecione um caso para começar a cronometrar",
     "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
@@ -237,7 +232,6 @@
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",
-    "week": "Semana",
     "writeOff": "Dar baixa"
   },
   "caseLaw": {
@@ -316,7 +310,6 @@
     "packDescription": "{count, plural, one {# ferramenta} other {# ferramentas}} selecionadas para sua prática. Instale com um clique ou escolha individualmente abaixo.",
     "packInstalled": "{count, plural, one {# ferramenta instalada} other {# ferramentas instaladas}}",
     "packPartial": "{installed} instaladas, {failed} com falha",
-    "recommended": "Recomendado",
     "removed": "Esta ferramenta não está mais disponível.",
     "sectionOthers": "Outros",
     "sectionRecommended": "Recomendados",
@@ -356,11 +349,9 @@
       "tracked": "Sim, com controle"
     },
     "approval": {
-      "allow": "Permitir",
       "allowInConversation": "Permitir nesta conversa",
       "allowOnce": "Permitir uma vez",
       "alwaysAllow": "Sempre permitir",
-      "approved": "Aprovado",
       "denied": "Negado",
       "deny": "Negar",
       "externalMcpDescription": "Só serão enviadas as informações necessárias para esta chamada de ferramenta.",
@@ -369,7 +360,6 @@
     "askAnything": "Pergunte qualquer coisa",
     "askUser": {
       "custom": "Escreva o seu próprio",
-      "default": "Padrão",
       "edit": "Editar respostas",
       "editWarning": "A reexecução descartará as respostas posteriores desta conversa.",
       "noAnswer": "Sem resposta",
@@ -396,11 +386,6 @@
       "previewWaiting": "Aguardando conteúdo…"
     },
     "deleteThread": "Excluir conversa",
-    "documentView": {
-      "original": "Original",
-      "simple": "Aceito",
-      "trackedChanges": "Controle de alterações"
-    },
     "editableFilePlaceholder": "Converse ou edite {fileName}",
     "editableFilePlaceholderAction": "Converse ou edite",
     "editorLoading": "Carregando editor…",
@@ -433,9 +418,7 @@
     "maxAttachmentsReached": "Máximo de arquivos {count} por mensagem",
     "mention": {
       "category": {
-        "contacts": "Contatos",
-        "entities": "Neste caso",
-        "templates": "Modelos"
+        "entities": "Neste caso"
       },
       "loadError": "Falha ao carregar entidades"
     },
@@ -470,7 +453,6 @@
     "removeSuggestion": "(remover)",
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",
-    "send": "Enviar mensagem",
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorLoopDetected": "A resposta da IA se repetiu muitas vezes. Tente novamente com uma solicitação mais específica.",
@@ -574,7 +556,6 @@
     "backToList": "Voltar às cláusulas",
     "body": "Corpo",
     "categoryDeleteConfirm": "As cláusulas desta categoria ficarão sem categoria.",
-    "categoryName": "Nome da categoria",
     "categoryNamePlaceholder": "ex.: Confidencialidade",
     "clauseCount": "{count, plural, one {# cláusula} many {# cláusulas} other {# cláusulas}}",
     "clauseCreated": "Cláusula criada",
@@ -586,20 +567,16 @@
     "confirmDeleteClause": "Isto excluirá permanentemente a cláusula e todas as suas variantes.",
     "confirmRestoreVersion": "Isso definirá o corpo da cláusula para esta versão, criando uma nova versão. O histórico é preservado.",
     "confirmUseAsMainBody": "Isso substituirá o corpo da cláusula por esta variante, criando uma nova versão. A variante permanece.",
-    "createCategory": "Nova categoria",
     "createClause": "Nova cláusula",
     "createFailed": "Falha ao criar cláusula",
-    "deleteCategory": "Excluir categoria",
     "deleteClause": "Excluir cláusula",
     "deleteFailed": "Falha ao excluir",
     "descriptionPlaceholder": "Breve descrição da cláusula",
-    "editCategory": "Editar categoria",
     "editClause": "Editar cláusula",
     "editVariant": "Editar variante",
     "export": "Exportar",
     "exportFailed": "Falha ao exportar cláusulas",
     "formattingPreviewHint": "A numeração e a formatação aqui são uma prévia. O documento gerado aplica sua própria formatação de lista, então não digite os números manualmente.",
-    "import": "Importar",
     "importFailed": "Falha ao importar cláusulas",
     "importResult": "{created, plural, one {# criada} many {# criadas} other {# criadas}}, {skipped, plural, one {# ignorada} many {# ignoradas} other {# ignoradas}}",
     "importSuccess": "{count, plural, one {# cláusula importada} many {# cláusulas importadas} other {# cláusulas importadas}}",
@@ -618,7 +595,6 @@
     "noLinkedClauses": "Nenhuma cláusula vinculada",
     "noResults": "Ainda não há cláusulas",
     "noVariants": "Sem variantes",
-    "noVersions": "Sem histórico de versões",
     "outdatedVersion": "Atualização disponível",
     "restoreVersion": "Restaurar esta versão",
     "saveAsVersion": "Salvar como nova versão",
@@ -661,7 +637,6 @@
     "variantPromoted": "Variante definida como corpo principal",
     "variantUpdated": "Variante atualizada",
     "variants": "Variantes",
-    "version": "Versão {version}",
     "versionCount": "{count, plural, one {# versão} many {# versões} other {# versões}}",
     "versionRestored": "Versão restaurada"
   },
@@ -699,6 +674,7 @@
     "captions": "Legendas",
     "caseLaw": "Jurisprudência",
     "category": "Categoria",
+    "categoryName": "Nome da categoria",
     "changeColor": "Mudar cor",
     "clauses": "Cláusulas",
     "clearDate": "Limpar data",
@@ -718,12 +694,14 @@
     "copy": "Copiar",
     "copyLink": "Copiar link",
     "country": "País",
+    "createCategory": "Nova categoria",
     "createdAt": "Criado em {date}",
     "currency": "Moeda",
     "currentPage": "Página atual",
     "date": "Data",
     "decline": "Recusar",
     "delete": "Excluir",
+    "deleteCategory": "Excluir categoria",
     "deleteConfirmDescription": "Tem certeza de que deseja excluir \"{name}\"? Esta ação não pode ser desfeita.",
     "deletedCount": "{count, plural, one {# item excluído} many {# itens excluídos} other {# itens excluídos}}",
     "description": "Descrição",
@@ -734,6 +712,7 @@
     "duplicate": "Duplicar",
     "duplicated": "Duplicado",
     "edit": "Editar",
+    "editCategory": "Editar categoria",
     "edited": "Editado",
     "email": "E-mail",
     "empty": "Vazio",
@@ -747,8 +726,10 @@
     "error": "Erro",
     "expenses": "Despesas",
     "filter": "Filtro",
+    "formula": "Fórmula",
     "goBack": "Voltar",
     "history": "Histórico",
+    "import": "Importar",
     "invite": "Convidar",
     "invoices": "Faturas",
     "kind": "Tipo",
@@ -795,13 +776,16 @@
     "logTime": "Registrar tempo",
     "matter": "Caso",
     "matters": "Casos",
+    "members": "Membros",
     "metadata": "Metadados",
     "moveDown": "Mover para baixo",
     "moveUp": "Mover para cima",
     "name": "Nome",
+    "newMatter": "Novo caso",
     "newRow": "Nova linha",
     "next": "Próximo",
     "noResults": "Nenhum resultado",
+    "noVersions": "Sem histórico de versões",
     "none": "None",
     "notes": "Notas",
     "open": "Abrir",
@@ -815,10 +799,13 @@
     "preview": "Visualização",
     "previous": "Anterior",
     "print": "Imprimir",
+    "profile": "Perfil",
     "properties": "Propriedades",
     "reconnecting": "Reconectando…",
     "reference": "Referência",
+    "regenerate": "Regenerar",
     "remove": "Remover",
+    "removeMember": "Remover membro",
     "rename": "Renomear",
     "required": "Obrigatório",
     "reset": "Redefinir",
@@ -855,7 +842,9 @@
     "urlIdentifier": "Slug",
     "urlIdentifierPlaceholder": "minha-organização",
     "user": "Usuário",
-    "verify": "Verificar"
+    "verify": "Verificar",
+    "version": "Versão",
+    "versionLabel": "Versão {version}"
   },
   "consent": {
     "allow": "Permitir",
@@ -892,8 +881,7 @@
       "title": "Dados de faturamento"
     },
     "columns": {
-      "phone": "Telefone",
-      "tags": "Etiquetas"
+      "phone": "Telefone"
     },
     "communication": {
       "addAddress": "Adicionar endereço",
@@ -965,13 +953,10 @@
       "firstName": "Primeiro nome",
       "lastName": "Sobrenome",
       "middleName": "Nome do meio",
-      "originatingAttorney": "Contato principal",
       "paymentTermDays": "Condições de pagamento (dias)",
       "prefix": "Prefixo",
       "registrationNumber": "Número de registro",
-      "responsibleAttorney": "Pessoa responsável",
       "suffix": "Sufixo",
-      "tags": "Etiquetas",
       "taxId": "CPF/CNPJ"
     },
     "filterOrganizations": "Organizações",
@@ -1127,7 +1112,6 @@
     "uploadDate": "Data de upload",
     "uploadNewVersion": "Carregar nova versão",
     "uploadedBy": "Enviado por",
-    "version": "Versão",
     "versionHistory": "Histórico de versões",
     "viewVersionHistory": "Mostrar detalhes e histórico",
     "viewing": "Visualizando",
@@ -1223,12 +1207,10 @@
       "noResults": "Nenhum resultado",
       "previous": "Ocorrência anterior",
       "previousShortcut": "Ocorrência anterior (Shift+Enter)",
-      "replace": "Substituir",
       "replaceAll": "Substituir tudo",
       "replaceCurrent": "Substituir correspondência atual",
       "replacePlaceholder": "Texto de substituição...",
       "replaceText": "Texto de substituição",
-      "showReplace": "Substituir",
       "wholeWords": "Palavras inteiras"
     },
     "finishEditing": "Concluir a edição",
@@ -1353,7 +1335,6 @@
       "documentInfoHeading": "Informações do documento",
       "matterColumnsHeading": "Colunas de caso",
       "updatedAt": "Atualizado",
-      "version": "Versão",
       "versionCurrent": "v{version} (atual)"
     },
     "openChat": "Abrir bate-papo",
@@ -1375,27 +1356,22 @@
         "publish": "Publish skill"
       },
       "deleteConfirmDescription": "“{name}” será removida deste espaço de trabalho.",
-      "deleteConfirmTitle": "Excluir habilidade?",
       "deleteFile": "Excluir arquivo",
       "deleteFileConfirm": "Excluir arquivo? Isso não pode ser desfeito.",
       "description": "Instale pacotes SKILL.md que adicionam métodos especializados e recursos somente leitura ao chat.",
       "disableSkill": "Desativar habilidade",
       "disabled": "Desativada",
-      "discardChanges": "Descartar",
       "dropFile": "Solte SKILL.md ou .zip aqui",
       "editSkill": "Editar habilidade",
-      "editTitle": "Editar habilidade",
       "emptyDescription": "Envie um arquivo SKILL.md, uma pasta de habilidade compactada ou importe uma URL pública de habilidade do GitHub.",
       "emptyTitle": "Instale sua primeira habilidade",
       "enableSkill": "Ativar habilidade",
       "enabled": "Ativada",
       "fileExists": "Já existe um arquivo com este caminho",
       "filesHeading": "Arquivos",
-      "formBody": "Instruções",
       "formBodyHelp": "Instruções em Markdown que o agente lê quando a habilidade é invocada.",
       "formDescription": "Descrição",
       "formName": "Nome",
-      "formVersion": "Versão",
       "formVersionPlaceholder": "1.0.0",
       "generateAddResource": "Adicionar arquivo",
       "generateDraft": "Rascunhar habilidade",
@@ -1425,23 +1401,17 @@
       "newFilePathPlaceholder": "pasta/notes.md",
       "newFolder": "Nova pasta",
       "pdfPreviewSoon": "A pré-visualização de PDF ficará disponível assim que houver suporte a recursos binários de habilidades.",
-      "privateSection": "Suas habilidades",
-      "regenerate": "Regenerar",
       "renameFile": "Renomear",
       "resources": "{count, plural, one {# recurso} other {# recursos}}",
-      "scope": "Visibilidade",
       "scopePrivate": "Só eu",
       "scopeTeam": "Todos na equipe",
       "selectFileHint": "Select a file from the list to open it in the editor panel on the right.",
       "selectedFile": "Selecionado: {name}",
       "sourceUpload": "Enviada",
       "sourceUrl": "URL pública",
-      "teamSection": "Habilidades da equipe",
       "unsavedChanges": "Alterações não salvas; descartar?",
       "uploadFile": "Carregar arquivo",
       "uploadHelp": "Use um arquivo SKILL.md ou uma pasta .zip contendo SKILL.md e recursos opcionais somente leitura.",
-      "uploadSkill": "Enviar habilidade",
-      "uploadTitle": "Enviar habilidade",
       "urlPlaceholder": "https://github.com/org/repo/tree/main/caminho/para/habilidade",
       "version": "Versão: {version}"
     },
@@ -1469,13 +1439,11 @@
       "errorDescription": "Não foi possível atualizar a integração.",
       "errorTitle": "Falha MCP",
       "mcpExplainer": "As integrações conectam serviços externos ao chat com os quais a IA pode trabalhar.",
-      "namePlaceholder": "Nome de exibição",
       "needsReauth": "Precisa reconectar",
       "off": "Desligado",
       "on": "Ligado",
       "otherTitle": "Outras integrações",
       "probe": "Verificar",
-      "recommendedBadge": "Recomendado",
       "recommendedFor": "Recomendado para {jurisdictions}",
       "reconnect": "Reconectar",
       "saveToken": "Salvar token",
@@ -1516,7 +1484,6 @@
       }
     },
     "skills": {
-      "addShortcut": "Adicionar habilidade",
       "blueprintGallery": {
         "cards": {
           "answerFromSources": {
@@ -1546,11 +1513,8 @@
       "commandLabel": "Comando com barra (opcional)",
       "commandPlaceholder": "p. ex. resumir",
       "createTitle": "Nova habilidade",
-      "defaultBadge": "Padrão",
       "deleteConfirmDescription": "Esta habilidade será removida permanentemente.",
-      "deleteConfirmTitle": "Excluir habilidade?",
       "deleteShortcut": "Excluir habilidade",
-      "editShortcut": "Editar habilidade",
       "emptyDescription": "Crie habilidades reutilizáveis para o trabalho que sua equipe repete, de resumos a instruções para uma primeira versão.",
       "emptyState": "Nenhuma habilidade ainda. Adicione a primeira.",
       "emptyTitle": "Crie sua primeira habilidade",
@@ -1563,21 +1527,17 @@
       "form": {
         "command": "Atalho de habilidade",
         "commandHint": "O nome / da habilidade: somente letras minúsculas, números, hifens e sublinhados",
-        "commandPlaceholder": "ex.: resumir",
         "commandPrefix": "/",
         "description": "Descrição",
         "descriptionPlaceholder": "Breve descrição mostrada no seletor",
         "name": "Nome",
         "namePlaceholder": "ex.: Resumir documento",
-        "prompt": "Instruções",
         "promptPlaceholder": "Instruções inseridas no compositor do chat quando esta habilidade é usada",
         "scope": "Visibilidade",
         "scopePrivate": "Só eu",
         "scopeTeam": "Todos na equipe"
       },
-      "privateSection": "Suas habilidades",
-      "shadowed": "Substituída por habilidade da equipe",
-      "teamSection": "Habilidades da equipe"
+      "shadowed": "Substituída por habilidade da equipe"
     }
   },
   "markdownEditor": {
@@ -1589,9 +1549,7 @@
     "chat": "Bate-papo",
     "contacts": "Contatos",
     "knowledge": "Conhecimento",
-    "members": "Membros",
     "myTodos": "Minhas tarefas",
-    "newMatter": "Novo caso",
     "pinned": "Fixado",
     "recents": "Recentes",
     "search": "Pesquisar",
@@ -1789,7 +1747,6 @@
       "confirmRoleChangeTitle": "Mudar função",
       "joined": "Ingressou",
       "noMembersFound": "Nenhum membro encontrado",
-      "removeMember": "Remover membro",
       "typeEmailToConfirm": "Digite {email} para confirmar",
       "updateRole": "Atualizar função"
     },
@@ -1887,7 +1844,6 @@
       "preferredName": "Nome preferido",
       "preferredNameDescription": "Usado como autor de alterações e comentários rastreados em DOCX.",
       "preferredNamePlaceholder": "Seu nome",
-      "profile": "Perfil",
       "profileDescription": "Gerencie suas preferências pessoais",
       "sendOtpCode": "Enviar código de verificação",
       "timezone": "Fuso horário",
@@ -1909,7 +1865,6 @@
         "description": "Gerencie a lista global da equipe com os termos que o pipeline de anonimização sempre mascara e importe uma lista inicial em CSV, TXT ou JSON.",
         "emptyState": "Ainda não há termos da equipe. Adicione um acima ou importe uma lista.",
         "entriesHeading": "Termos da equipe ({count})",
-        "importAction": "Importar",
         "importHint": "CSV (canonical,label,variants), TXT (um por linha) ou JSON",
         "importParseError": "Não foi possível ler o arquivo. Use CSV, TXT ou JSON.",
         "importSuccessToast": "{count} termos importados.",
@@ -1925,7 +1880,6 @@
       "pendingInvitations": "Convites pendentes",
       "practiceJurisdictions": "Jurisdições",
       "practiceJurisdictionsDescription": "Selecione as jurisdições relevantes para você.",
-      "profile": "Perfil",
       "promptCaching": {
         "description": "Quando ativado, a stella adiciona marcadores de cache para que solicitações de IA repetidas sobre o mesmo documento ou thread custem ~10× menos e terminem mais rápido. Os prompts em cache permanecem com o provedor de IA por até 5 minutos, restritos à sua organização. Ao desativar, a stella para de enviar marcadores de cache, mas os provedores ainda podem cachear oportunisticamente — apenas um contrato Zero Data Retention com o provedor desativa totalmente o cache do lado do servidor.",
         "title": "Cache de prompts",
@@ -2029,7 +1983,6 @@
     "untitled": "Tarefa sem título"
   },
   "templates": {
-    "addCondition": "Adicionar condição",
     "addItem": "Adicionar item",
     "addPart": "Adicionar parte",
     "addTag": "Adicionar etiqueta",
@@ -2039,7 +1992,6 @@
     "browseFiles": "Navegar pelos arquivos",
     "categoryDeleteConfirm": "Isso removerá a categoria. Os modelos nesta categoria não serão categorizados.",
     "categoryDeleteFailed": "Falha ao excluir categoria",
-    "categoryName": "Nome da categoria",
     "categorySaveFailed": "Falha ao salvar categoria",
     "checkErrors": "{count, plural, one {# erro} many {# erros} other {# erros}}",
     "checkFailed": "Falha ao verificar o modelo",
@@ -2062,7 +2014,6 @@
     "conditionCount": "{count, plural, one {# condição} other {# condições}}",
     "conditionField": "Campo",
     "conditionFormulaPlaceholder": "Enter a formula…",
-    "conditionFormulaTitle": "Formula",
     "conditionMatch": "Correspondência",
     "conditionNamePlaceholder": "Nome da condição (ex.: NPF)",
     "conditionOpAfter": "depois de",
@@ -2088,7 +2039,6 @@
     "conditionsTitle": "Condições",
     "configureFields": "Configurar campos",
     "confirmDelete": "Isso excluirá permanentemente o modelo.",
-    "createCategory": "Nova categoria",
     "createDocument": "Criar documento",
     "createDocumentAnyway": "Criar mesmo assim",
     "createInStudio": "Criar no stella",
@@ -2097,7 +2047,6 @@
     "dateChipPlus30Days": "Em 30 dias",
     "dateFormatStyle": "Formato de data",
     "dateRenderPreview": "No documento: {value}",
-    "deleteCategory": "Excluir categoria",
     "deleteFailed": "Falha ao excluir modelo",
     "describeWhenToUse": "Descreva quando usar isto",
     "directiveEach": "Repetição: {expression}",
@@ -2111,10 +2060,8 @@
     "downloadAnyway": "Baixar mesmo assim",
     "downloadDocx": "Baixar DOCX",
     "downloadPdf": "Baixar PDF",
-    "downloadReady": "Documento pronto",
     "dragAndDrop": "ou arraste e solte",
     "dropToCreate": "Solte um arquivo .docx para criar um modelo",
-    "editCategory": "Editar categoria",
     "editFields": "Editar campos",
     "emptyFieldsWarning": "{count, plural, one {# campo ainda está vazio} other {# campos ainda estão vazios}}: {names}",
     "fieldCount": "{count, plural, one {# campo} many {# campos} other {# campos}}",
@@ -2250,7 +2197,6 @@
       "fillFormPreview": "Como aparece no formulário",
       "fillStale": "Alterações não salvas — salve para preencher com os campos mais recentes.",
       "filledByPerson": "Pessoa",
-      "formula": "Fórmula",
       "formulaExampleLabel": "Exemplo",
       "formulaNoFields": "Adicione primeiro um campo numérico para a fórmula ter o que calcular.",
       "formulaNonNumberFields": "Não é um número: {fields}",
@@ -2298,7 +2244,6 @@
       "saveAsRecipe": "Salvar como receita",
       "scopeClause": "Espaço de cláusula",
       "scopeCondition": "Condição",
-      "scopeField": "Campo",
       "scopeLoop": "Repetição",
       "scopeTemplate": "Modelo",
       "showOnlyIf": "Mostrar apenas se…",
@@ -2345,8 +2290,6 @@
     "validationOptionNotInSource": "Deve ser um dos valores inseridos em {field}",
     "validationPattern": "Formato inválido",
     "validationRequired": "Este campo é obrigatório",
-    "versionLabel": "Versão {version}",
-    "versionsEmpty": "Sem histórico de versões",
     "viewVersion": "Ver",
     "whenNotToUse": "Quando não usar",
     "whenNotToUsePlaceholder": "Quando este modelo deve ser evitado?",
@@ -2378,7 +2321,6 @@
       "save": "Salvar",
       "saved": "Chave do DeepL salva",
       "savedDescription": "As traduções agora estão disponíveis.",
-      "saving": "Salvando…",
       "tierFree": "Free",
       "tierPro": "Pro",
       "title": "Tradução DeepL"
@@ -2394,10 +2336,7 @@
     "slugRequired": "O slug é obrigatório"
   },
   "workspaces": {
-    "active": "Ativo",
     "archiveMatter": "Arquivar",
-    "archived": "Arquivado",
-    "archivedBadge": "Arquivado",
     "copyToMatter": {
       "copied": "Copiado para o caso",
       "copyOption": "Copiar (manter original)",
@@ -2520,8 +2459,7 @@
       "lastUpdated": "Última atualização",
       "moveToRoot": "Solte aqui para passar para o nível raiz",
       "newSubfolder": "Nova subpasta",
-      "noFilesYet": "Nenhum arquivo ainda",
-      "version": "Versão"
+      "noFilesYet": "Nenhum arquivo ainda"
     },
     "filters": {
       "chips": {
@@ -2562,7 +2500,6 @@
         "lead": "Responsável",
         "leadActive": "Responsável",
         "leadInactive": "Definir responsável",
-        "members": "Membros",
         "noLead": "Sem responsável",
         "searchMembers": "Pesquisar membros…"
       },
@@ -2592,7 +2529,6 @@
       "moveToHint": "Digite um caminho ou escolha uma das pastas existentes.",
       "moveToTitle": "Mover para pasta",
       "organized": "Arquivos organizados",
-      "regenerate": "Regenerar",
       "reset": "Redefinir para sugestões de IA",
       "selectedOfTotal": "{selected, number} / {total, number}",
       "summaryToMove": "para mover",
@@ -2602,8 +2538,6 @@
       "wasNamed": "era {name}"
     },
     "infosoud": {
-      "cancelled": "Cancelado",
-      "court": "Tribunal",
       "courtPlaceholder": "Pesquisar tribunal ou código",
       "courtsFailed": "Não foi possível carregar os tribunais do InfoSoud",
       "eventCount": "{count, plural, one {# evento} many {# eventos} other {# eventos}}",
@@ -2631,7 +2565,6 @@
       "hideColumn": "Ocultar coluna",
       "readOnlyGrouping": "Este agrupamento é somente leitura",
       "selectPropertyHint": "Selecione uma propriedade para agrupar na barra de ferramentas",
-      "unknown": "Desconhecido",
       "uploadDocument": "Carregar documento",
       "usePropertyHint": "Use Tipo, Autor ou uma propriedade de seleção única"
     },
@@ -2639,9 +2572,7 @@
     "lead": "Responsável",
     "leadEmpty": "Sem responsável",
     "leadPicker": {
-      "noMatchingMembers": "Nenhum membro correspondente",
-      "placeholder": "Pesquisar membros…",
-      "title": "Definir responsável"
+      "noMatchingMembers": "Nenhum membro correspondente"
     },
     "lockMatter": "Bloquear",
     "matterInfo": "Informações do caso",
@@ -2652,13 +2583,11 @@
       "alreadyMember": "O usuário já é membro",
       "cannotRemoveLast": "Não é possível remover o último membro",
       "noMembersFound": "Nenhum membro encontrado",
-      "removeMember": "Remover membro",
       "removeMemberConfirm": "Remover este membro do caso?",
       "selectMember": "Selecione um membro"
     },
     "newDocument": "Novo documento",
     "newFolder": "Nova pasta",
-    "newMatter": "Novo caso",
     "noDocuments": "Ainda não há documentos",
     "noFieldsToView": "Esta entidade não tem campos para visualizar",
     "noGrouping": "Sem agrupamento",
@@ -2679,7 +2608,6 @@
       "recentActivity": "Atividade recente",
       "timeAndTeam": "Tempo e equipe",
       "timeThisWeek": "Tempo esta semana",
-      "title": "Visão geral",
       "totalDocuments": "Total de documentos",
       "totalItems": "Itens",
       "totalThisWeek": "Total esta semana",
@@ -2720,7 +2648,6 @@
     },
     "pdf": {
       "adjustForDarkMode": "Ajustar páginas para modo escuro",
-      "anonymizeSidebar": "Anonimização",
       "backToPeek": "Voltar para prévia",
       "entitySidebar": "Detalhes da entidade",
       "evidence": "Justificativa",
@@ -2732,7 +2659,6 @@
       "previousPage": "Página anterior",
       "resetZoom": "Redefinir zoom",
       "showOriginal": "Mostrar páginas originais",
-      "toggleSidebar": "Alternar barra lateral",
       "unlock": "Desbloquear",
       "zoomIn": "Ampliar",
       "zoomOut": "Diminuir zoom"
@@ -2768,13 +2694,11 @@
       "addOption": "Adicionar opção",
       "addPromptForBetterResults": "Adicione um prompt para obter melhores resultados",
       "addReadingSource": "adicionar",
-      "aiExtraction": "Extração de IA",
       "autoPromptFailed": "Não foi possível gerar um prompt.",
       "bulk": {
         "addAnother": "Adicionar outra coluna",
         "createFailed": "Não foi possível criar as colunas",
         "createMany": "Criar {count} colunas",
-        "createOne": "Criar coluna",
         "createdMany": "{count} colunas criadas",
         "createdOne": "Coluna criada",
         "promptPlaceholder": "What should this column extract?",
@@ -2815,9 +2739,7 @@
       "extractionPlaceholder": "Descreva o que encontrar. Digite @ para fazer referência a outra coluna.",
       "extractionScope": "Escopo de extração",
       "file": "Arquivo",
-      "flowExtraction": "Extração de IA",
       "flowNoInputs": "sem entradas",
-      "flowOutput": "Saída",
       "ifNoMatchFound": "Se nenhuma correspondência for encontrada",
       "inputs": "Entradas",
       "inputsHelp": "Escolha as colunas que a IA deve ler. Clique para adicionar ou remover.",
@@ -2876,7 +2798,6 @@
     "referencePlaceholder": "por exemplo 2024/001",
     "referenceTaken": "Este número de referência já está em uso",
     "sections": {
-      "members": "Membros",
       "parties": "Partes"
     },
     "table": {
@@ -2953,7 +2874,6 @@
       "hideColumn": "Ocultar coluna",
       "layouts": {
         "calendar": "Calendário",
-        "filesystem": "Lista",
         "grid": "Grade",
         "kanban": "Kanban",
         "list": "Lista",

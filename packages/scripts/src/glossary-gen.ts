@@ -102,6 +102,9 @@ export type PtBrTerm = {
 export type Glossary = {
   verbs: Term[];
   legalConcepts: Term[];
+  // UI nouns that exist only to carry terminology rules (e.g. a `forbidden`
+  // rendering); not tabulated in TERMINOLOGY.md, consumed by i18n-lint only.
+  nouns: Term[];
   ptBR: PtBrTerm[];
 };
 
@@ -246,11 +249,19 @@ export const parseGlossary = (json: string): Glossary => {
     return panic("glossary.json must have `verbs`, `legalConcepts`, `ptBR`");
   }
 
+  // `nouns` is optional, but a present-yet-malformed value must fail loudly
+  // rather than silently disabling its terminology rules.
+  const rawNouns = parsed["nouns"];
+  if (rawNouns !== undefined && !Array.isArray(rawNouns)) {
+    return panic("glossary.json: `nouns` must be an array when present");
+  }
+
   return {
     verbs: parsed["verbs"].map((v: unknown) => parseTerm(v, "verbs")),
     legalConcepts: parsed["legalConcepts"].map((v: unknown) =>
       parseTerm(v, "legalConcepts"),
     ),
+    nouns: (rawNouns ?? []).map((v: unknown) => parseTerm(v, "nouns")),
     ptBR: parsed["ptBR"].map((v: unknown) => parsePtBrTerm(v)),
   };
 };

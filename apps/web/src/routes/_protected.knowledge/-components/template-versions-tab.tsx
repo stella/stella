@@ -118,7 +118,7 @@ export const TemplateVersionsTab = ({
   if (versions.length === 0) {
     return (
       <p className="text-muted-foreground mt-4 py-4 text-center text-sm">
-        {t("templates.versionsEmpty")}
+        {t("common.noVersions")}
       </p>
     );
   }
@@ -152,7 +152,7 @@ export const TemplateVersionsTab = ({
               </span>
             }
             summarize={buildSummarize(version.id)}
-            title={t("templates.versionLabel", {
+            title={t("common.versionLabel", {
               version: String(version.version),
             })}
           />

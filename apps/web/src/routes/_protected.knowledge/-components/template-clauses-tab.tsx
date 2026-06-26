@@ -314,7 +314,7 @@ const LinkedClauseRow = ({
             )}
             {link.clauseVersion && (
               <span>
-                {t("clauses.version", {
+                {t("common.versionLabel", {
                   version: String(link.clauseVersion.version),
                 })}
               </span>

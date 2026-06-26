@@ -132,7 +132,7 @@ export const ClauseImportDialog = ({
     <Dialog onOpenChange={handleClose} open={open}>
       <DialogPopup className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>{t("clauses.import")}</DialogTitle>
+          <DialogTitle>{t("common.import")}</DialogTitle>
         </DialogHeader>
         <DialogPanel className="grid gap-4">
           <div className="flex flex-col items-center gap-3 rounded-lg border-2 border-dashed p-6">
@@ -189,7 +189,7 @@ export const ClauseImportDialog = ({
                 void handleImport();
               }}
             >
-              {importing ? t("clauses.importing") : t("clauses.import")}
+              {importing ? t("clauses.importing") : t("common.import")}
             </Button>
           )}
         </DialogFooter>

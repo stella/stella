@@ -38,6 +38,156 @@
     "workspaces.properties.optionsLabel",
     "workspaces.views.filter"
   ],
+  "duplicateValues": [
+    "account.sessions.currentSession",
+    "app.versionMismatch.dismiss",
+    "appearance.calendar",
+    "auth.continueWithEmail",
+    "billing.codes.active",
+    "billing.codes.codeLabelField",
+    "billing.codes.task",
+    "billing.expenses.categories.expert_witness",
+    "billing.expenses.categories.other",
+    "billing.invoices.dueDate",
+    "billing.invoices.statuses.paid",
+    "billing.selectedCount",
+    "billing.stopTimer",
+    "caseLaw.analysis.categories.reasoning",
+    "caseLaw.analyzing",
+    "catalogue.cost.free",
+    "catalogue.cost.paid",
+    "catalogue.filter.skills",
+    "catalogue.packPartial",
+    "catalogue.sectionOthers",
+    "catalogue.setup.account",
+    "catalogue.setup.apiKey",
+    "chat.approval.deny",
+    "chat.createDocument.continue",
+    "chat.createDocument.created",
+    "chat.landing.prompts",
+    "chat.stopResponse",
+    "chat.suggestionStatus.rejected",
+    "chat.toolCall.field",
+    "clauses.body",
+    "consent.deny",
+    "contacts.customFields.value",
+    "contacts.customFields.valuePlaceholder",
+    "contacts.emailTypes.other",
+    "contacts.emailTypes.personal",
+    "contacts.phoneTypes.other",
+    "contacts.search",
+    "docxReview.applyTracked",
+    "docxReview.severityHigh",
+    "docxReview.severityLow",
+    "docxReview.severityMedium",
+    "docxReview.statusAccepted",
+    "docxReview.statusRejected",
+    "docxReview.wordShortcutPlaceholder",
+    "errors.failedToDeleteTemplate",
+    "errors.failedToSaveTemplate",
+    "fileDetail.current",
+    "fileDetail.label",
+    "fileDetail.redlinePreview",
+    "filters.contains",
+    "filters.eq",
+    "filters.neq",
+    "inspector.anonymization.deleteAction",
+    "inspector.anonymization.labelPickerAriaLabel",
+    "inspector.anonymization.labelPickerEmpty",
+    "inspector.anonymization.labelPickerPlaceholder",
+    "inspector.facet.anonymization",
+    "inspector.metadata.author",
+    "inspector.metadata.updatedAt",
+    "knowledge.agentSkills.newFolder",
+    "knowledge.sections.prompts.title",
+    "knowledge.sections.templates.title",
+    "navigation.chat",
+    "navigation.myTodos",
+    "navigation.templates",
+    "onboarding.catalogueCommunityHeading",
+    "onboarding.catalogueDetailAuthor",
+    "onboarding.catalogueDetailJurisdictions",
+    "onboarding.cataloguePartial",
+    "onboarding.continue",
+    "onboarding.stepDesktop",
+    "onboarding.stepOrganization",
+    "organization.aiConfig.active",
+    "organization.aiConfig.apiKey",
+    "organization.aiConfig.defaultModelOption",
+    "organization.aiConfig.roles.chat",
+    "organization.aiConfig.roles.reasoning",
+    "organization.aiConfig.title",
+    "organization.invitations.statuses.accepted",
+    "organization.invitations.statuses.rejected",
+    "organization.matterNumber.description",
+    "organization.matterNumber.title",
+    "organization.members.noMembersFound",
+    "search.dateFrom",
+    "search.dateTo",
+    "search.kinds.chat",
+    "search.kinds.task",
+    "search.updatedWithin",
+    "search.updatedWithinOptions.month",
+    "search.updatedWithinOptions.week",
+    "selfhost.dismissUpdate",
+    "settings.account.desktop",
+    "settings.account.title",
+    "settings.account.wordEditShortcutPlaceholder",
+    "settings.organization.ai",
+    "settings.organization.anonymization.deleteAction",
+    "settings.organization.anonymization.labelPickerAriaLabel",
+    "settings.organization.anonymization.labelPickerEmpty",
+    "settings.organization.anonymization.labelPickerPlaceholder",
+    "settings.organization.anonymization.title",
+    "settings.organization.matterNumbering",
+    "settings.organization.matterNumberingDescription",
+    "settings.organization.practiceJurisdictions",
+    "settings.organization.usageStatusActive",
+    "settings.organization.usageStatusCancelled",
+    "success.documentCreated",
+    "tasks.dueDate",
+    "tasks.myTasksTitle",
+    "tasks.priorityValues.high",
+    "tasks.priorityValues.low",
+    "tasks.priorityValues.medium",
+    "tasks.statusValues.cancelled",
+    "templates.conditionField",
+    "templates.conditionOpContains",
+    "templates.conditionOpIs",
+    "templates.conditionOpIsNot",
+    "templates.conditionOpNotEquals",
+    "templates.conditionValue",
+    "templates.createDocument",
+    "templates.deleteFailed",
+    "templates.discovering",
+    "templates.fieldLabel",
+    "templates.previewSectionBody",
+    "templates.saveFailed",
+    "templates.studio.insertFormatDefault",
+    "templates.studio.slashEmpty",
+    "templates.tags",
+    "translate.settings.apiKeyLabel",
+    "translate.settings.tierFree",
+    "workspaces.fields.fieldValueLabel",
+    "workspaces.fields.numberLabel",
+    "workspaces.filesystem.author",
+    "workspaces.filters.date.last30d",
+    "workspaces.filters.date.last7d",
+    "workspaces.filters.from",
+    "workspaces.filters.noMatches",
+    "workspaces.filters.to",
+    "workspaces.members.noMembersFound",
+    "workspaces.newFolder",
+    "workspaces.ownerType.personal",
+    "workspaces.parties.partyRoles.expert_witness",
+    "workspaces.parties.partyRoles.other",
+    "workspaces.parties.personalLabel",
+    "workspaces.parties.searchContacts",
+    "workspaces.properties.chipMulti",
+    "workspaces.team",
+    "workspaces.views.fieldsSelected",
+    "workspaces.views.layouts.calendar"
+  ],
   "identicalToSource": {
     "appearance.flexoki": [
       "ar",
@@ -126,17 +276,8 @@
     "catalogue.configuration": [
       "fr"
     ],
-    "chat.documentView.original": [
-      "de",
-      "es",
-      "fr",
-      "pt-BR"
-    ],
     "chat.folioCitationFallback": [
       "es",
-      "fr"
-    ],
-    "chat.mention.category.contacts": [
       "fr"
     ],
     "chat.pageNumber": [
@@ -151,10 +292,6 @@
     "clauses.variant": [
       "et",
       "sk"
-    ],
-    "clauses.version": [
-      "de",
-      "fr"
     ],
     "common.actions": [
       "fr"
@@ -198,6 +335,9 @@
     ],
     "common.filter": [
       "et"
+    ],
+    "common.formula": [
+      "lv"
     ],
     "common.metadata": [
       "cs"
@@ -279,6 +419,14 @@
     "common.urlIdentifierPlaceholder": [
       "ar"
     ],
+    "common.version": [
+      "de",
+      "fr"
+    ],
+    "common.versionLabel": [
+      "de",
+      "fr"
+    ],
     "contacts.communication.emailPlaceholder": [
       "ar",
       "de"
@@ -356,10 +504,6 @@
       "hu",
       "pl",
       "pt-BR"
-    ],
-    "fileDetail.version": [
-      "de",
-      "fr"
     ],
     "filters.contains_all": [
       "de",
@@ -538,10 +682,6 @@
       "fr",
       "pt-BR"
     ],
-    "inspector.metadata.version": [
-      "de",
-      "fr"
-    ],
     "knowledge.agentSkills.coaching.publish": [
       "cs",
       "de",
@@ -555,18 +695,11 @@
       "pt-BR",
       "sk"
     ],
-    "knowledge.agentSkills.formBody": [
-      "fr"
-    ],
     "knowledge.agentSkills.formDescription": [
       "fr"
     ],
     "knowledge.agentSkills.formName": [
       "de"
-    ],
-    "knowledge.agentSkills.formVersion": [
-      "de",
-      "fr"
     ],
     "knowledge.agentSkills.howItRuns": [
       "cs",
@@ -853,9 +986,6 @@
     "knowledge.skills.form.name": [
       "de"
     ],
-    "knowledge.skills.form.prompt": [
-      "fr"
-    ],
     "markdownEditor.rawLabel": [
       "cs",
       "de",
@@ -1044,19 +1174,6 @@
       "pt-BR",
       "sk"
     ],
-    "templates.conditionFormulaTitle": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "templates.conditionOperator": [
       "de",
       "pl"
@@ -1141,9 +1258,6 @@
     "templates.studio.filledByPerson": [
       "de"
     ],
-    "templates.studio.formula": [
-      "lv"
-    ],
     "templates.studio.insertConditionIntoTemplate": [
       "ar",
       "de",
@@ -1161,10 +1275,6 @@
       "fr"
     ],
     "templates.studio.scopeCondition": [
-      "fr"
-    ],
-    "templates.versionLabel": [
-      "de",
       "fr"
     ],
     "translate.settings.apiKeyPlaceholder": [
@@ -1209,10 +1319,6 @@
       "sk"
     ],
     "workspaces.files.defaultPropertyName": [
-      "fr"
-    ],
-    "workspaces.filesystem.version": [
-      "de",
       "fr"
     ],
     "workspaces.filters.chips.lead": [

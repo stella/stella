@@ -186,16 +186,20 @@ export const syncMessages = (
  * Baseline that grandfathers known debt so the gate stays green while
  * catching NEW regressions. `identicalToSource` maps a key to the locales
  * allowed to hold the English value; `duplicatesCommon` lists feature keys
- * allowed to repeat a `common.*` value. Burn these down over time.
+ * allowed to repeat a `common.*` value; `duplicateValues` lists feature keys
+ * allowed to share a value with another feature key (instead of hoisting the
+ * term to `common.*`). Burn these down over time.
  */
 export type CheckBaseline = {
   identicalToSource: Record<string, string[]>;
   duplicatesCommon: string[];
+  duplicateValues: string[];
 };
 
 export const emptyBaseline = (): CheckBaseline => ({
   identicalToSource: {},
   duplicatesCommon: [],
+  duplicateValues: [],
 });
 
 const HAS_LETTER = /\p{L}/u;
@@ -350,6 +354,70 @@ export const findCommonDuplicates = (
   return offenders.toSorted((a, b) => a.key.localeCompare(b.key));
 };
 
+/**
+ * Non-`common` en.json keys whose value is shared by two or more feature keys
+ * in DIFFERENT top-level namespaces (and is not already a `common.*` value,
+ * which `findCommonDuplicates` covers). A term repeated across feature
+ * namespaces usually belongs in `common.*` so it stays consistent and is
+ * translated once; this flags the duplication so it can be hoisted and reused.
+ * A value repeated only within one namespace is that feature's own concern and
+ * is left alone. Each offender carries the other keys it shares with. Baseline
+ * grandfathers values that are intentionally duplicated.
+ */
+export const findSharedValueDuplicates = (
+  source: NestedMessages,
+  baseline: CheckBaseline,
+): { key: string; shares: string[] }[] => {
+  const commonByValue = buildCommonValueMap(source);
+  const keysByValue = new Map<string, string[]>();
+
+  for (const key of flattenKeys(source)) {
+    if (key.startsWith("common.")) {
+      continue;
+    }
+    const value = getNestedValue(source, key);
+    if (
+      typeof value !== "string" ||
+      isTriviallyIdentical(value) ||
+      commonByValue.has(value)
+    ) {
+      continue;
+    }
+    const group = keysByValue.get(value);
+    if (group) {
+      group.push(key);
+    } else {
+      keysByValue.set(value, [key]);
+    }
+  }
+
+  const allow = new Set(baseline.duplicateValues);
+  const offenders: { key: string; shares: string[] }[] = [];
+
+  for (const keys of keysByValue.values()) {
+    if (keys.length < 2) {
+      continue;
+    }
+    // Only flag values shared ACROSS feature namespaces (the "hoist to common.*"
+    // signal). A value repeated within a single top-level namespace is that
+    // feature's own business — hoisting it to common.* would not make sense — so
+    // skip groups that do not span at least two namespaces.
+    const namespaces = new Set(keys.map((key) => key.split(".")[0]));
+    if (namespaces.size < 2) {
+      continue;
+    }
+    const sorted = keys.toSorted((a, b) => a.localeCompare(b));
+    for (const key of sorted) {
+      if (allow.has(key)) {
+        continue;
+      }
+      offenders.push({ key, shares: sorted.filter((other) => other !== key) });
+    }
+  }
+
+  return offenders.toSorted((a, b) => a.key.localeCompare(b.key));
+};
+
 // --- CLI ---
 
 if (import.meta.main) {
@@ -413,8 +481,13 @@ if (import.meta.main) {
       enMessages,
       emptyBaseline(),
     ).map((o) => o.key);
+    const duplicateValues = findSharedValueDuplicates(
+      enMessages,
+      emptyBaseline(),
+    ).map((o) => o.key);
     const next: CheckBaseline = {
       duplicatesCommon: duplicatesCommon.toSorted(),
+      duplicateValues: duplicateValues.toSorted(),
       identicalToSource: Object.fromEntries(
         Object.entries(identicalToSource)
           .map(([k, v]) => [k, v.toSorted()] as const)
@@ -427,7 +500,7 @@ if (import.meta.main) {
       0,
     );
     console.log(
-      `Wrote ${baselinePath}\n  ${Object.keys(identicalToSource).length} untranslated keys (${localeCount} locale entries), ${duplicatesCommon.length} common-duplicate keys grandfathered.`,
+      `Wrote ${baselinePath}\n  ${Object.keys(identicalToSource).length} untranslated keys (${localeCount} locale entries), ${duplicatesCommon.length} common-duplicate keys, ${duplicateValues.length} shared-value keys grandfathered.`,
     );
     process.exit(0);
   }
@@ -458,6 +531,21 @@ if (import.meta.main) {
       for (const { key, reuse } of duplicates) {
         console.log(
           `  = duplicate of ${reuse}: ${key} (reuse it, or baseline it)`,
+        );
+      }
+    }
+  }
+
+  // en.json: feature keys whose value is shared across feature namespaces.
+  // A repeated term usually belongs in common.* so it is translated once.
+  if (!shouldSync) {
+    const shared = findSharedValueDuplicates(enMessages, baseline);
+    if (shared.length > 0) {
+      hasIssues = true;
+      console.log(`\n${path.resolve(langsDir, "en.json")}:`);
+      for (const { key, shares } of shared) {
+        console.log(
+          `  = shared value: ${key} (also ${shares.join(", ")}): consider moving the term to common.* and reusing it, or baseline it`,
         );
       }
     }

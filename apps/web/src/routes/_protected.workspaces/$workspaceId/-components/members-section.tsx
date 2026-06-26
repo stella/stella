@@ -62,7 +62,7 @@ export const MembersSection = ({ workspaceId }: MembersSectionProps) => {
         )}
       >
         <h3 className="text-muted-foreground text-sm font-medium">
-          {t("workspaces.sections.members")}
+          {t("common.members")}
         </h3>
         {canUpdate && (
           <AddMemberDialog
@@ -177,7 +177,7 @@ const MemberRow = ({
           <DialogTrigger
             render={
               <Button
-                aria-label={t("workspaces.members.removeMember")}
+                aria-label={t("common.removeMember")}
                 className="ms-auto"
                 size="icon-xs"
                 variant="ghost"
@@ -188,7 +188,7 @@ const MemberRow = ({
           </DialogTrigger>
           <DialogPopup>
             <DialogHeader>
-              <DialogTitle>{t("workspaces.members.removeMember")}</DialogTitle>
+              <DialogTitle>{t("common.removeMember")}</DialogTitle>
               <DialogDescription>
                 {t("workspaces.members.removeMemberConfirm")}
               </DialogDescription>
@@ -202,7 +202,7 @@ const MemberRow = ({
                 onClick={handleRemove}
                 variant="destructive"
               >
-                {t("workspaces.members.removeMember")}
+                {t("common.removeMember")}
               </Button>
             </DialogFooter>
           </DialogPopup>
