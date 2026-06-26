@@ -44,12 +44,22 @@ const isForbidden = (specifier: string): boolean => {
 
 type ReactImport = { importer: string; specifier: string };
 
+// Strip block and line comments before the raw-text scan so a comment that
+// mentions an import (`from "react"` in prose) cannot trip it. The AST-based
+// no-react-in-core rule is authoritative; this keeps the defence-in-depth scan
+// from false-firing on benign comments. The line-comment pattern keeps the
+// character before `//` so it does not eat a `:` from a `https://` URL.
+const stripComments = (source: string): string =>
+  source
+    .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
+    .replaceAll(/(?<lead>^|[^:])\/\/[^\n]*/gmu, "$<lead>");
+
 const reactImportsForSource = (
   filePath: string,
   source: string,
 ): ReactImport[] => {
   const found: ReactImport[] = [];
-  for (const match of source.matchAll(IMPORT_REGEX)) {
+  for (const match of stripComments(source).matchAll(IMPORT_REGEX)) {
     const specifier =
       match.groups?.["fromSpec"] ??
       match.groups?.["importSpec"] ??
@@ -157,5 +167,18 @@ describe("folio React-free core — synthetic fixtures", () => {
       'import { resolveColor } from "./colorResolver";',
     );
     expect(violations).toEqual([]);
+  });
+
+  test("a comment that mentions a react import is ignored", () => {
+    const lineComment = reactImportsForSource(
+      importer,
+      '// this module used to import from "react";\nconst x = 1;',
+    );
+    const blockComment = reactImportsForSource(
+      importer,
+      '/* historically: import { useState } from "react" */\nconst y = 2;',
+    );
+    expect(lineComment).toEqual([]);
+    expect(blockComment).toEqual([]);
   });
 });

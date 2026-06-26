@@ -34,7 +34,7 @@ const pageDimToPx = (
   twips: number | null | undefined,
   fallbackPx: number,
 ): number =>
-  twips !== null && twips !== undefined && twips !== 0
+  twips !== null && twips !== undefined && twips > 0
     ? twipsToPixels(twips)
     : fallbackPx;
 

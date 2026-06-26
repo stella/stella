@@ -225,8 +225,14 @@ const CORE_PREFIX = "packages/folio/src/core/";
 
 const FORBIDDEN_IN_CORE = ["react", "react-dom", "@stll/ui"];
 
-const isCoreFile = (importerPath: string): boolean =>
-  importerPath.replaceAll("\\", "/").includes(CORE_PREFIX);
+const isCoreFile = (importerPath: string): boolean => {
+  const normalized = importerPath.replaceAll("\\", "/");
+  // Anchor on a path separator (or the string start) so a directory that merely
+  // contains the prefix as a substring cannot false-match.
+  return (
+    normalized.startsWith(CORE_PREFIX) || normalized.includes(`/${CORE_PREFIX}`)
+  );
+};
 
 const isForbiddenInCore = (specifier: string): boolean => {
   for (const pkg of FORBIDDEN_IN_CORE) {
