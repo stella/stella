@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { SectionBreakBlock } from "../core/layout-engine/types";
-import type { HeaderFooterContent } from "../core/layout-painter/renderPage";
+import type { SectionBreakBlock } from "../layout-engine/types";
+import type { HeaderFooterContent } from "../layout-painter/renderPage";
 import {
   computeEffectiveHeaderFooterMargins,
   computeFirstPageHeaderFooterMarginExtender,

@@ -1,8 +1,5 @@
-import type {
-  PageMargins,
-  SectionBreakBlock,
-} from "../core/layout-engine/types";
-import type { HeaderFooterContent } from "../core/layout-painter/renderPage";
+import type { PageMargins, SectionBreakBlock } from "../layout-engine/types";
+import type { HeaderFooterContent } from "../layout-painter/renderPage";
 
 /**
  * Floor on the body content area, in pixels. Header/footer overflow can

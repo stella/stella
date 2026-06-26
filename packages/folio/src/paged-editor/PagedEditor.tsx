@@ -135,6 +135,39 @@ import type {
   RenderPageOptions,
   FootnoteRenderItem,
 } from "../core/layout-painter/renderPage";
+import {
+  computeFirstPageHeaderFooterMarginExtender,
+  computeHeaderFooterMarginExtender,
+  extendSectionBreakMargins,
+} from "../core/paged-layout/headerFooterMargins";
+import {
+  mergeDirtyRanges,
+  tryBuildIncrementalMeasures,
+} from "../core/paged-layout/incrementalMeasure";
+import type { DirtyRange } from "../core/paged-layout/incrementalMeasure";
+// Selection sync
+import { LayoutSelectionGate } from "../core/paged-layout/LayoutSelectionGate";
+import {
+  collectRunFontsAtPmPositions,
+  measureContentLeft,
+  projectRangesToRects,
+} from "../core/paged-layout/rangeProjection";
+import { isReadOnlyEditKey } from "../core/paged-layout/readOnlyEditAttempt";
+import { getPageScrollTarget } from "../core/paged-layout/scrollNavigation";
+import {
+  PAGES_CONTAINER_CLASS,
+  scrollPagesToPmPosition,
+} from "../core/paged-layout/scrollToPmPosition";
+import { computePerBlockMeasureInputs } from "../core/paged-layout/sectionBlockWidths";
+import {
+  DEFAULT_PAGE_HEIGHT_PX,
+  getMargins,
+  getPageSize,
+  twipsToPixels,
+} from "../core/paged-layout/sectionGeometry";
+import { resizeColumnPair } from "../core/paged-layout/tableColumnResize";
+import { tableInsertButtonOffset } from "../core/paged-layout/tableInsertButtonGeometry";
+import { getTransactionDirtyRange } from "../core/paged-layout/transactionDirtyRange";
 // Table commands (for quick-action insert buttons)
 import { addRowBelow, addColumnRight } from "../core/prosemirror";
 import {
@@ -187,11 +220,6 @@ import type { AnonymizationRectGroup } from "./AnonymizationRectsOverlay";
 import { AutocompleteCaretOverlay } from "./AutocompleteCaretOverlay";
 import type { AutocompleteCaretRect } from "./AutocompleteCaretOverlay";
 import {
-  computeFirstPageHeaderFooterMarginExtender,
-  computeHeaderFooterMarginExtender,
-  extendSectionBreakMargins,
-} from "./headerFooterMargins";
-import {
   createHiddenEditorState,
   HiddenProseMirror,
 } from "./HiddenProseMirror";
@@ -202,37 +230,9 @@ import type {
 } from "./HiddenProseMirror";
 import { ImageSelectionOverlay } from "./ImageSelectionOverlay";
 import type { ImageSelectionInfo } from "./ImageSelectionOverlay";
-import {
-  mergeDirtyRanges,
-  tryBuildIncrementalMeasures,
-} from "./incrementalMeasure";
-import type { DirtyRange } from "./incrementalMeasure";
-// Selection sync
-import { LayoutSelectionGate } from "./LayoutSelectionGate";
-import {
-  collectRunFontsAtPmPositions,
-  measureContentLeft,
-  projectRangesToRects,
-} from "./rangeProjection";
-import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
-import { getPageScrollTarget } from "./scrollNavigation";
-import {
-  PAGES_CONTAINER_CLASS,
-  scrollPagesToPmPosition,
-} from "./scrollToPmPosition";
-import { computePerBlockMeasureInputs } from "./sectionBlockWidths";
-import {
-  DEFAULT_PAGE_HEIGHT_PX,
-  getMargins,
-  getPageSize,
-  twipsToPixels,
-} from "./sectionGeometry";
 import { SelectionOverlay } from "./SelectionOverlay";
-import { resizeColumnPair } from "./tableColumnResize";
-import { tableInsertButtonOffset } from "./tableInsertButtonGeometry";
 import { TemplateDirectivesOverlay } from "./TemplateDirectivesOverlay";
 import type { DirectiveRectGroup } from "./TemplateDirectivesOverlay";
-import { getTransactionDirtyRange } from "./transactionDirtyRange";
 import { useDragAutoScroll } from "./useDragAutoScroll";
 // Visual line navigation hook
 import { useVisualLineNavigation } from "./useVisualLineNavigation";

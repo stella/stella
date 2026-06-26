@@ -11,9 +11,9 @@
  * (initial paint, off-screen pages).
  */
 
-import { findBodyPmSpans } from "../core/layout-bridge/findBodyPmSpans";
-import type { SelectionRect } from "../core/layout-bridge/selectionRects";
-import type { FlowBlock, Layout, Measure } from "../core/layout-engine/types";
+import { findBodyPmSpans } from "../layout-bridge/findBodyPmSpans";
+import type { SelectionRect } from "../layout-bridge/selectionRects";
+import type { FlowBlock, Layout, Measure } from "../layout-engine/types";
 
 export type ProjectableRange = { from: number; to: number };
 
@@ -233,7 +233,7 @@ export const projectRangesToRects = async <T extends ProjectableRange>(
 
   if (fallback.length > 0 && layout && blocks.length > 0) {
     const { selectionToRects } =
-      await import("../core/layout-bridge/selectionRects");
+      await import("../layout-bridge/selectionRects");
     for (const range of fallback) {
       const rects = selectionToRects(
         layout,

@@ -81,11 +81,11 @@ export {
   setAISuggestionsMeta,
   setFocusedSuggestionMeta,
 } from "./core/prosemirror/plugins/aiSuggestionDecorations";
-export { scrollFolioPositionIntoView } from "./paged-editor/scrollToPmPosition";
+export { scrollFolioPositionIntoView } from "./core/paged-layout/scrollToPmPosition";
 export {
   getFolioCaretViewportRect,
   getFolioSelectionViewportRect,
-} from "./paged-editor/selectionViewportRect";
+} from "./core/paged-layout/selectionViewportRect";
 export {
   createAICitationDecorationsPlugin,
   setAICitationsMeta,

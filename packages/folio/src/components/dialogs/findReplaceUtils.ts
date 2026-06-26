@@ -5,6 +5,7 @@
  * Extracted from FindReplaceDialog.tsx.
  */
 
+import { prefersReducedMotionBehavior } from "../../core/paged-layout/scrollNavigation";
 import type {
   BlockContent,
   Hyperlink,
@@ -16,7 +17,6 @@ import type {
   Run,
 } from "../../core/types/content";
 import type { Document } from "../../core/types/document";
-import { prefersReducedMotionBehavior } from "../../paged-editor/scrollNavigation";
 
 // ============================================================================
 // TYPES

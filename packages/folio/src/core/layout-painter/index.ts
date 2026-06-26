@@ -7,7 +7,6 @@
 
 import { panic } from "better-result";
 
-import { prefersReducedMotionBehavior } from "../../paged-editor/scrollNavigation";
 import type {
   Layout,
   Page,
@@ -15,6 +14,7 @@ import type {
   FlowBlock,
   Measure,
 } from "../layout-engine/types";
+import { prefersReducedMotionBehavior } from "../paged-layout/scrollNavigation";
 import { createDefaultRegistry } from "./registry/modules";
 import type { FeatureRegistry } from "./registry/registry";
 import { renderFragment, FRAGMENT_CLASS_NAMES } from "./renderFragment";

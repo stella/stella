@@ -2,7 +2,7 @@ import type {
   FlowBlock,
   Measure,
   ParagraphBlock,
-} from "../core/layout-engine/types";
+} from "../layout-engine/types";
 
 export type DirtyRange = {
   from: number;

@@ -1,5 +1,5 @@
-import type { PageMargins } from "../core/layout-engine/types";
-import type { SectionProperties } from "../core/types/document";
+import type { PageMargins } from "../layout-engine/types";
+import type { SectionProperties } from "../types/document";
 
 export const DEFAULT_PAGE_WIDTH_PX = 816;
 export const DEFAULT_PAGE_HEIGHT_PX = 1056;
@@ -23,7 +23,8 @@ export const twipsToPixels = (twips: number): number =>
 export const twipsToPxOr = (
   twips: number | null | undefined,
   fallbackPx: number,
-): number => (twips != null ? twipsToPixels(twips) : fallbackPx);
+): number =>
+  twips !== null && twips !== undefined ? twipsToPixels(twips) : fallbackPx;
 
 export const getPageSize = (
   sectionProps: SectionProperties | null | undefined,
