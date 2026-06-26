@@ -7346,7 +7346,7 @@ const FieldFace = ({
                 variant={valueSource === "formula" ? "default" : "outline"}
               >
                 <SigmaIcon className="size-3.5" />
-                {t("templates.studio.formula")}
+                {t("common.formula")}
               </Button>
             </span>
           </div>

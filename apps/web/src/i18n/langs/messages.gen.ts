@@ -750,6 +750,7 @@ type Messages = {
     "error": "Error";
     "expenses": "Expenses";
     "filter": "Filter";
+    "formula": "Formula";
     "goBack": "Go back";
     "history": "History";
     "invite": "Invite";
@@ -2065,7 +2066,6 @@ type Messages = {
     "conditionCount": "{count, plural, one {# condition} other {# conditions}}";
     "conditionField": "Field";
     "conditionFormulaPlaceholder": "Enter a formula…";
-    "conditionFormulaTitle": "Formula";
     "conditionMatch": "Match";
     "conditionNamePlaceholder": "Condition name (e.g. NPF)";
     "conditionOpAfter": "after";
@@ -2253,7 +2253,6 @@ type Messages = {
       "fillFormPreview": "How it appears in the fill form";
       "fillStale": "Unsaved changes — save to fill with the latest fields.";
       "filledByPerson": "Person";
-      "formula": "Formula";
       "formulaExampleLabel": "Example";
       "formulaNoFields": "Add a number field first to compute a formula.";
       "formulaNonNumberFields": "Not a number: {fields}";

@@ -541,6 +541,9 @@
     "common.filter": [
       "et"
     ],
+    "common.formula": [
+      "lv"
+    ],
     "common.metadata": [
       "cs"
     ],
@@ -1386,19 +1389,6 @@
       "pt-BR",
       "sk"
     ],
-    "templates.conditionFormulaTitle": [
-      "ar",
-      "de",
-      "es",
-      "et",
-      "fr",
-      "hu",
-      "lt",
-      "lv",
-      "pl",
-      "pt-BR",
-      "sk"
-    ],
     "templates.conditionOperator": [
       "de",
       "pl"
@@ -1482,9 +1472,6 @@
     ],
     "templates.studio.filledByPerson": [
       "de"
-    ],
-    "templates.studio.formula": [
-      "lv"
     ],
     "templates.studio.insertConditionIntoTemplate": [
       "ar",
