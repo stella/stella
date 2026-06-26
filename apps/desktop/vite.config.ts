@@ -17,6 +17,7 @@ export default defineConfig({
       input: {
         main: "src/mainview/index.html",
         "takeover-dialog": "src/mainview/takeover-dialog.html",
+        "selfhost-connect-dialog": "src/mainview/selfhost-connect-dialog.html",
       },
     },
   },

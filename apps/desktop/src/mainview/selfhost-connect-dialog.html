@@ -78,9 +78,10 @@
         direction: ltr;
         display: block;
         font-size: 12px;
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
+        line-height: 1.4;
+        overflow-wrap: anywhere;
+        -webkit-user-select: text;
+        user-select: text;
       }
       .actions {
         display: flex;

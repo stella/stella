@@ -488,6 +488,35 @@ mod tests {
   }
 
   #[tokio::test]
+  async fn open_docx_rejects_self_host_origin_with_unapproved_api() {
+    let state = test_state();
+    {
+      let mut manager = state.manager.lock().await;
+      manager.trust_self_host_connection_for_test(
+        "https://web-production.example".to_string(),
+        "https://api-production.example".to_string(),
+      );
+    }
+
+    // The origin is trusted, but the payload targets a different API than the
+    // one approved for this connection, so it must be rejected before any
+    // download is attempted.
+    let app = build_router(state);
+    let request = Request::builder()
+      .method("POST")
+      .uri("/v1/open-docx")
+      .header("origin", "https://web-production.example")
+      .header("content-type", "application/json")
+      .body(Body::from(
+        serde_json::to_vec(&open_docx_body("e8400e29-1d4a-4716-8a3a-2c83de7ab2e6"))
+          .unwrap(),
+      ))
+      .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+  }
+
+  #[tokio::test]
   async fn open_docx_rejects_disallowed_origin() {
     let app = build_router(test_state());
     let request = Request::builder()

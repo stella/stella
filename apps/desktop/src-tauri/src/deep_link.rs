@@ -40,11 +40,20 @@ fn normalize_and_validate_api_base_url(value: &str) -> Result<String, String> {
     .map_err(|_| "Invalid desktop edit API URL.".to_string())
 }
 
-fn set_self_host_connect_sender(sender: tokio::sync::oneshot::Sender<bool>) {
+/// Reserves the approval channel for a single in-flight prompt. Returns the
+/// sender back to the caller when a prompt is already pending so concurrent
+/// `self-host/connect` deep links cannot cancel each other's approval.
+fn try_reserve_self_host_connect_sender(
+  sender: tokio::sync::oneshot::Sender<bool>,
+) -> Result<(), tokio::sync::oneshot::Sender<bool>> {
   let mut guard = SELF_HOST_CONNECT_SENDER
     .lock()
     .unwrap_or_else(|e| e.into_inner());
+  if guard.is_some() {
+    return Err(sender);
+  }
   *guard = Some(sender);
+  Ok(())
 }
 
 pub fn set_self_host_connect_response(approved: bool) {
@@ -229,15 +238,21 @@ async fn show_self_host_connect_dialog(
 ) -> Result<bool, String> {
   use tauri::Manager;
 
+  let (sender, receiver) = tokio::sync::oneshot::channel();
+  if try_reserve_self_host_connect_sender(sender).is_err() {
+    return Err("A self-host connection dialog is already open.".to_string());
+  }
+
+  // Defensive: a stale dialog window without a reserved sender should never
+  // happen (we close it on every exit path), but bail rather than stack a
+  // second window over it.
   if app_handle
     .get_webview_window("selfhost-connect-dialog")
     .is_some()
   {
+    set_self_host_connect_response(false);
     return Err("A self-host connection dialog is already open.".to_string());
   }
-
-  let (sender, receiver) = tokio::sync::oneshot::channel();
-  set_self_host_connect_sender(sender);
 
   let hash = format!(
     "webOrigin={}&apiBaseUrl={}",

@@ -43,8 +43,11 @@ fn is_allowed_user_trusted_url(parsed: &reqwest::Url) -> bool {
 }
 
 fn normalize_url_origin(parsed: &reqwest::Url) -> Result<String, String> {
+  // `host()` (unlike `host_str()`) keeps the brackets around IPv6 literals, so
+  // debug loopback origins like `http://[::1]:3000` round-trip and still match
+  // the browser-sent `Origin` header.
   let host = parsed
-    .host_str()
+    .host()
     .ok_or_else(|| "Self-host URL must include a host.".to_string())?;
   let port = parsed
     .port()

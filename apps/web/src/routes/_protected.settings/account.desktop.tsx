@@ -105,7 +105,7 @@ function DesktopPage() {
           </div>
         </FramePanel>
       </Frame>
-      {env.VITE_SELFHOST && (
+      {env.VITE_SELFHOST && env.VITE_FEATURE_DESKTOP_EDITING && (
         <Frame>
           <FramePanel>
             <div className="flex flex-col gap-4 p-1">
