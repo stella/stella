@@ -21,8 +21,8 @@ import type { CSSProperties } from "react";
 
 import type { AISuggestion } from "../core/ai-suggestions/types";
 import type { SelectionRect } from "../core/layout-bridge/selectionRects";
+import type { ProjectedRunFont } from "../core/paged-layout/rangeProjection";
 import { AI_SUGGESTION_SEVERITY_CLASS } from "../core/prosemirror/plugins/aiSuggestionDecorations";
-import type { ProjectedRunFont } from "./rangeProjection";
 
 export type AISuggestionRectGroup = {
   suggestion: AISuggestion;

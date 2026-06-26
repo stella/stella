@@ -2,7 +2,7 @@ import type {
   FlowBlock,
   Measure,
   ParagraphBlock,
-} from "../core/layout-engine/types";
+} from "../layout-engine/types";
 
 export type DirtyRange = {
   from: number;
@@ -135,7 +135,7 @@ function isIncrementalMeasureEligibleBlock(block: FlowBlock): boolean {
     return false;
   }
 
-  const paragraph = block as ParagraphBlock;
+  const paragraph: ParagraphBlock = block;
   if (
     paragraph.attrs?.listMarker ||
     paragraph.attrs?.contextualSpacing ||

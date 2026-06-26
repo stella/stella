@@ -1,21 +1,18 @@
-export { DocxEditor } from "./components/DocxEditor";
-export type {
-  DocxEditorCollaboration,
-  DocxEditorProps,
-  DocxEditorRef,
-} from "./components/DocxEditor.props";
-export type { EditorMode } from "./components/hooks/useEditorMode";
-export {
-  FormattingBar,
-  type FormattingBarProps,
-} from "./components/FormattingBar";
+// Headless public API for `@stll/folio/core`.
+//
+// Everything reachable from this entry is framework-neutral (the
+// `no-react-in-core` lint rule enforces it), so non-React adapters (a Vue
+// adapter, a Tauri shell, a Rust core) can build on the editor core without
+// pulling React or @stll/ui into their import graph. The root `@stll/folio`
+// entry re-exports all of this and adds the React components on top.
+
 export {
   createEmptyDocument,
   type CreateEmptyDocumentOptions,
-} from "./core/utils/createDocument";
-export { createDocx } from "./core/docx/rezip";
-export type { Document } from "./core/types/document";
-export type { DocxCompatibility } from "./core/docx/compatibility";
+} from "./utils/createDocument";
+export { createDocx } from "./docx/rezip";
+export type { Document } from "./types/document";
+export type { DocxCompatibility } from "./docx/compatibility";
 export {
   deriveBlockId,
   getFolioParaIdFromBlockId,
@@ -23,11 +20,11 @@ export {
   isSequentialFolioBlockId,
   type DeriveBlockIdInput,
   type FolioBlockId,
-} from "./core/types/block-id";
+} from "./types/block-id";
 
-// AI suggestion primitives — types, conflict resolution, apply, and
-// the prosemirror decoration plugin. The bar/panel UI itself lives in
-// apps/web; folio only ships the headless pieces.
+// AI suggestion primitives — types, conflict resolution, apply, and the
+// prosemirror decoration plugin. The bar/panel UI itself lives in apps/web;
+// folio only ships the headless pieces.
 export {
   DEFAULT_AI_SUGGESTION_PRESETS,
   type AICitation,
@@ -40,11 +37,8 @@ export {
   type AISuggestionStatus,
   type AIBarStatus,
   type AIGenerateInput,
-} from "./core/ai-suggestions/types";
-export {
-  applySuggestions,
-  type ApplyResult,
-} from "./core/ai-suggestions/apply";
+} from "./ai-suggestions/types";
+export { applySuggestions, type ApplyResult } from "./ai-suggestions/apply";
 export {
   applyFolioAIEditOperations,
   createFolioAIEditSnapshot,
@@ -67,50 +61,50 @@ export {
   type FolioAIEditSkippedOperation,
   type FolioAIEditSnapshot,
   type FolioAISignatureParty,
-} from "./core/ai-edits";
+} from "./ai-edits";
 export {
   resolveSuggestionAnchor,
   isSuggestionStale,
   type ResolvedAnchor,
-} from "./core/ai-suggestions/conflict";
+} from "./ai-suggestions/conflict";
 export {
   buildPositionalText,
   type PositionalText,
-} from "./core/ai-suggestions/text-positions";
+} from "./ai-suggestions/text-positions";
 export {
   setAISuggestionsMeta,
   setFocusedSuggestionMeta,
-} from "./core/prosemirror/plugins/aiSuggestionDecorations";
-export { scrollFolioPositionIntoView } from "./core/paged-layout/scrollToPmPosition";
+} from "./prosemirror/plugins/aiSuggestionDecorations";
+export { scrollFolioPositionIntoView } from "./paged-layout/scrollToPmPosition";
 export {
   getFolioCaretViewportRect,
   getFolioSelectionViewportRect,
-} from "./core/paged-layout/selectionViewportRect";
+} from "./paged-layout/selectionViewportRect";
 export {
   createAICitationDecorationsPlugin,
   setAICitationsMeta,
   setActiveCitationMeta,
   type AICitationRange,
-} from "./core/prosemirror/plugins/aiCitationDecorations";
+} from "./prosemirror/plugins/aiCitationDecorations";
 export {
   anonymizationDecorationsKey,
   getAnonymizationMatches,
   setAnonymizationTermsMeta,
   type AnonymizationMatch,
   type AnonymizationTerm,
-} from "./core/prosemirror/plugins/anonymizationDecorations";
+} from "./prosemirror/plugins/anonymizationDecorations";
 export {
   getTemplateDirectives,
   scanDirectives,
   type DirectiveKind,
   type DirectiveRange,
-} from "./core/prosemirror/plugins/templateDirectives";
+} from "./prosemirror/plugins/templateDirectives";
 export {
   setTemplatePreviewValues,
   type TemplatePreviewSpan,
   type TemplatePreviewValue,
   type TemplatePreviewValues,
-} from "./core/prosemirror/plugins/templatePreviewValues";
+} from "./prosemirror/plugins/templatePreviewValues";
 export {
   clearTemplateSlashMenu,
   consumeTemplateSlashQuery,
@@ -119,7 +113,7 @@ export {
   templateSlashMenuKey,
   type TemplateSlashMenuKeyAction,
   type TemplateSlashMenuState,
-} from "./core/prosemirror/plugins/templateSlashMenu";
+} from "./prosemirror/plugins/templateSlashMenu";
 export {
   acceptAutocompleteSuggestion,
   acceptAutocompleteWord,
@@ -139,12 +133,7 @@ export {
   type AutocompleteTriggerCheck,
   type AutocompleteTriggerOptions,
   type AutocompleteTriggerSkipReason,
-} from "./core/prosemirror/plugins/autocompleteSuggestion";
-export {
-  AutocompleteCaretOverlay,
-  type AutocompleteCaretOverlayProps,
-  type AutocompleteCaretRect,
-} from "./paged-editor/AutocompleteCaretOverlay";
+} from "./prosemirror/plugins/autocompleteSuggestion";
 
 // DOCX-document ↔ Markdown bridge (also available at `@stll/folio/markdown`).
 export {
@@ -155,4 +144,4 @@ export {
   type ImageRef,
   type MarkdownOptions,
   type MarkdownResult,
-} from "./core/markdown";
+} from "./markdown";

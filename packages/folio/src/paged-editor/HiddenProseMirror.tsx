@@ -46,6 +46,8 @@ import {
   recordHiddenEditorStateCreate,
   type HiddenEditorStateReason,
 } from "../core/layout-engine/layoutInstrumentation";
+import { suppressHiddenEditorScrollToSelection } from "../core/paged-layout/hiddenEditorScroll";
+import { isReadOnlyEditKey } from "../core/paged-layout/readOnlyEditAttempt";
 import { toProseDoc, createEmptyDoc } from "../core/prosemirror/conversion";
 import { fromProseDoc } from "../core/prosemirror/conversion/fromProseDoc";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
@@ -53,8 +55,6 @@ import { ensureParaIdsInState } from "../core/prosemirror/extensions/features/Pa
 import { createDocumentStylesPlugin } from "../core/prosemirror/plugins/documentStyles";
 import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
-import { suppressHiddenEditorScrollToSelection } from "./hiddenEditorScroll";
-import { isReadOnlyEditKey } from "./readOnlyEditAttempt";
 // Import ProseMirror CSS
 import "prosemirror-view/style/prosemirror.css";
 

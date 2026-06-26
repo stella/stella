@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { FlowBlock, ParagraphBlock } from "../core/layout-engine/types";
+import type { FlowBlock, ParagraphBlock } from "../layout-engine/types";
 import {
   computePerBlockMeasureInputs,
   computePerBlockWidths,

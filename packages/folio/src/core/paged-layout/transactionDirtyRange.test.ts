@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { EditorState } from "prosemirror-state";
 
-import { schema } from "../core/prosemirror/schema";
+import { schema } from "../prosemirror/schema";
 import { getTransactionDirtyRange } from "./transactionDirtyRange";
 
 describe("getTransactionDirtyRange", () => {

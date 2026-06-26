@@ -561,6 +561,18 @@ export default defineConfig({
       },
     },
     {
+      // Folio core is the headless, framework-neutral core. Forbid React,
+      // react-dom, and @stll/ui (type-only imports included) anywhere under
+      // core/, so adapters (React today; Vue / a Tauri shell / a Rust core
+      // tomorrow) can all sit on one shared core. See
+      // `.oxlint-plugins/folio-layer-boundaries.ts` and the matching test at
+      // `packages/folio/src/core/__tests__/react-free-core.test.ts`.
+      files: ["packages/folio/src/core/**/*.{ts,tsx}"],
+      rules: {
+        "folio-layer-boundaries/no-react-in-core": "error",
+      },
+    },
+    {
       // Drizzle schema files are guarded by check-migrations.sh, which
       // requires a new migration on any byte-level change. Keep regex
       // flags off here so adding the rule globally doesn't force an

@@ -1,6 +1,6 @@
-import { collectSectionConfigs } from "../core/layout-engine";
-import type { SectionLayoutConfig } from "../core/layout-engine";
-import type { ColumnLayout, FlowBlock } from "../core/layout-engine/types";
+import { collectSectionConfigs } from "../layout-engine";
+import type { SectionLayoutConfig } from "../layout-engine";
+import type { ColumnLayout, FlowBlock } from "../layout-engine/types";
 
 type ComputePerBlockMeasureInput = {
   blocks: FlowBlock[];

@@ -19,8 +19,8 @@ import type { EditorView } from "prosemirror-view";
 import {
   findBodyPmAnchor,
   findBodyPmAnchors,
-} from "../core/layout-bridge/findBodyPmSpans";
-import { findPageShellForPmPos } from "../core/layout-painter/renderPage";
+} from "../layout-bridge/findBodyPmSpans";
+import { findPageShellForPmPos } from "../layout-painter/renderPage";
 import {
   isValidPmScrollPosition,
   prefersReducedMotionBehavior,

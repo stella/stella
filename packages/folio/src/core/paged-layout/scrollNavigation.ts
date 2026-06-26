@@ -1,4 +1,4 @@
-import type { Layout } from "../core/layout-engine/types";
+import type { Layout } from "../layout-engine/types";
 
 export type PageScrollTarget =
   | {

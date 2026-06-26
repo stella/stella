@@ -2,7 +2,7 @@
  * Formatting to CSS Converter
  *
  * Converts OOXML formatting objects (TextFormatting, ParagraphFormatting)
- * to React CSSProperties for rendering.
+ * to CSS style properties for rendering.
  *
  * Handles ALL formatting properties:
  * - Font: family, size, weight, style
@@ -12,7 +12,7 @@
  * - Paragraph: alignment, line-height, margins, padding, borders, background
  */
 
-import type { CSSProperties } from "react";
+import type { Properties } from "csstype";
 
 import type { ColorValue } from "../types/colors";
 import type {
@@ -36,6 +36,13 @@ import {
   formatPx,
   halfPointsToPoints,
 } from "./units";
+
+// React's `CSSProperties` is `csstype.Properties` plus a custom-property index
+// signature and a handful of React-only additions. folio core stays
+// framework-neutral, so it depends on csstype directly; this alias keeps the
+// rest of the module untouched and its output assignable to React's `style`
+// prop in the adapter layer.
+type CSSProperties = Properties<string | number>;
 
 /**
  * Convert TextFormatting to CSS properties for a run/span

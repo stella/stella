@@ -27,8 +27,8 @@
 import React, { useEffect, useRef } from "react";
 
 import type { SelectionRect } from "../core/layout-bridge/selectionRects";
+import { prefersReducedMotionBehavior } from "../core/paged-layout/scrollNavigation";
 import { slugAnonymizationLabel } from "../core/prosemirror/plugins/anonymizationDecorations";
-import { prefersReducedMotionBehavior } from "./scrollNavigation";
 
 export type AnonymizationRectGroup = {
   /** Same shape as SelectionOverlay — adjusted into container space. */

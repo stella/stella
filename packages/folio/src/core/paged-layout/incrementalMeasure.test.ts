@@ -5,7 +5,7 @@ import type {
   FlowBlock,
   Measure,
   ParagraphBlock,
-} from "../core/layout-engine/types";
+} from "../layout-engine/types";
 import {
   findDirtyBlockIndexes,
   mergeDirtyRanges,

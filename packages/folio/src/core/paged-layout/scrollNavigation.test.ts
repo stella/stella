@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Layout } from "../core/layout-engine/types";
+import type { Layout } from "../layout-engine/types";
 import {
   getPageScrollTarget,
   isValidPmScrollPosition,

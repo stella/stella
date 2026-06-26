@@ -1,5 +1,5 @@
-import type { PageMargins } from "../core/layout-engine/types";
-import type { SectionProperties } from "../core/types/document";
+import type { PageMargins } from "../layout-engine/types";
+import type { SectionProperties } from "../types/document";
 
 export const DEFAULT_PAGE_WIDTH_PX = 816;
 export const DEFAULT_PAGE_HEIGHT_PX = 1056;
@@ -23,18 +23,26 @@ export const twipsToPixels = (twips: number): number =>
 export const twipsToPxOr = (
   twips: number | null | undefined,
   fallbackPx: number,
-): number => (twips != null ? twipsToPixels(twips) : fallbackPx);
+): number =>
+  twips !== null && twips !== undefined ? twipsToPixels(twips) : fallbackPx;
+
+/**
+ * Convert a page-dimension twip value to px. Page dimensions must be positive:
+ * a literal 0 is malformed and, like an absent value, uses the fallback.
+ */
+const pageDimToPx = (
+  twips: number | null | undefined,
+  fallbackPx: number,
+): number =>
+  twips !== null && twips !== undefined && twips > 0
+    ? twipsToPixels(twips)
+    : fallbackPx;
 
 export const getPageSize = (
   sectionProps: SectionProperties | null | undefined,
 ): { w: number; h: number } => ({
-  // Page size is defensive: a literal 0 is malformed and falls back to Letter.
-  w: sectionProps?.pageWidth
-    ? twipsToPixels(sectionProps.pageWidth)
-    : DEFAULT_PAGE_WIDTH_PX,
-  h: sectionProps?.pageHeight
-    ? twipsToPixels(sectionProps.pageHeight)
-    : DEFAULT_PAGE_HEIGHT_PX,
+  w: pageDimToPx(sectionProps?.pageWidth, DEFAULT_PAGE_WIDTH_PX),
+  h: pageDimToPx(sectionProps?.pageHeight, DEFAULT_PAGE_HEIGHT_PX),
 });
 
 export const getMargins = (
