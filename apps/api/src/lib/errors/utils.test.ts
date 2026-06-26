@@ -152,6 +152,22 @@ describe("errorFingerprint", () => {
     }
   });
 
+  test("does not parse indented multiline message content as a stack frame", () => {
+    const error = new Error("privileged\n    at merger-secret.docx:12:34");
+    error.stack = [
+      "Error: privileged",
+      "    at merger-secret.docx:12:34",
+      "    at safeFrame (/repo/apps/api/src/lib/errors/utils.test.ts:123:45)",
+    ].join("\n");
+    const fingerprint = errorFingerprint(error);
+    expect(fingerprint["error.frame"]).toBe(
+      "/repo/apps/api/src/lib/errors/utils.test.ts:123:45",
+    );
+    for (const value of Object.values(fingerprint)) {
+      expect(value).not.toContain("merger-secret");
+    }
+  });
+
   test("never throws on hostile Error accessors", () => {
     const error = new Error("boom");
     Object.defineProperties(error, {

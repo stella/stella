@@ -199,8 +199,10 @@ export const unredactedErrorFields = (
  * chosen to NOT match the logger's PII redaction regex
  * (`/(?:body|content|email|fileName|message|name|title)/i`), so they
  * survive `sanitizeLogAttributes`. Stack parsing is fully defensive:
- * `stack` may be undefined, multiline, or minified, and this never
- * throws — a missing frame is simply omitted.
+ * `stack` may be undefined, multiline, or minified. The message prefix
+ * is skipped before frame detection because user content may itself
+ * contain lines shaped like stack frames. This never throws; a missing
+ * frame is simply omitted.
  */
 export type ErrorFingerprint = Record<string, string>;
 
@@ -261,13 +263,34 @@ const frameLocation = (line: string): string | undefined => {
   return location;
 };
 
+const stackFrameLines = (error: Error, stack: string): string[] => {
+  const message = safeErrorMessage(error);
+  if (message === undefined) {
+    return [];
+  }
+
+  const lines = stack.split("\n");
+  const firstLine = lines.at(0);
+  if (firstLine === undefined) {
+    return [];
+  }
+
+  const messageLines = message.split("\n");
+  const firstMessageLine = messageLines.at(0);
+  if (firstMessageLine && !firstLine.endsWith(firstMessageLine)) {
+    return [];
+  }
+
+  return lines.slice(messageLines.length);
+};
+
 const topStackFrame = (error: Error): string | undefined => {
   try {
     const stack = safeErrorStack(error);
     if (stack === undefined) {
       return undefined;
     }
-    for (const line of stack.split("\n")) {
+    for (const line of stackFrameLines(error, stack)) {
       const location = frameLocation(line);
       if (location) {
         return location;
