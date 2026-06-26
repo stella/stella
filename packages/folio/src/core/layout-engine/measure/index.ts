@@ -16,6 +16,10 @@ export {
   measureTextWidth,
   measureText,
   measureRun,
+  canvasMeasureProvider,
+  getMeasureProvider,
+  setMeasureProvider,
+  resetMeasureProvider,
   findCharacterAtX,
   getXForCharacter,
   twipsToPx,
@@ -28,6 +32,7 @@ export {
   type FontMetrics,
   type TextMeasurement,
   type RunMeasurement,
+  type MeasureProvider,
 } from "./measureContainer";
 
 export {

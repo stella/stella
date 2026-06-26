@@ -131,6 +131,18 @@ export type RunMeasurement = {
   metrics: FontMetrics;
 };
 
+/**
+ * Swappable text-measurement backend. The canvas implementation is the default;
+ * a Rust/WASM or headless provider can be installed via `setMeasureProvider`
+ * without the layout engine importing canvas directly.
+ */
+export type MeasureProvider = {
+  getFontMetrics: (style: FontStyle) => FontMetrics;
+  measureTextWidth: (text: string, style: FontStyle) => number;
+  measureText: (text: string, style: FontStyle) => TextMeasurement;
+  measureRun: (text: string, style: FontStyle) => RunMeasurement;
+};
+
 // Cached canvas context for text measurement
 let canvasContext: CanvasRenderingContext2D | null = null;
 
@@ -261,7 +273,7 @@ export function buildFontString(style: FontStyle): string {
  * Uses Canvas TextMetrics API when available for precise metrics,
  * falls back to ratio-based approximations.
  */
-export function getFontMetrics(style: FontStyle): FontMetrics {
+function canvasGetFontMetrics(style: FontStyle): FontMetrics {
   const fontSize = style.fontSize ?? DEFAULT_FONT_SIZE;
   const fontFamily = style.fontFamily ?? DEFAULT_FONT_FAMILY;
   const bold = style.bold ?? false;
@@ -345,7 +357,7 @@ export function getFontMetrics(style: FontStyle): FontMetrics {
  * @param style - Font styling properties
  * @returns Width in pixels
  */
-export function measureTextWidth(text: string, style: FontStyle): number {
+function canvasMeasureTextWidth(text: string, style: FontStyle): number {
   if (!text) {
     return 0;
   }
@@ -475,7 +487,7 @@ function measureMixedScriptWidth(
     const fontFamily = segment.isCjk
       ? style.eastAsiaFontFamily
       : style.fontFamily;
-    glyphWidth += measureTextWidth(
+    glyphWidth += canvasMeasureTextWidth(
       segment.text,
       glyphAdvanceStyle(style, fontFamily),
     );
@@ -535,9 +547,9 @@ function prefetchBinarySearchProbes(
 /**
  * Measure text and return full metrics
  */
-export function measureText(text: string, style: FontStyle): TextMeasurement {
-  const width = measureTextWidth(text, style);
-  const metrics = getFontMetrics(style);
+function canvasMeasureText(text: string, style: FontStyle): TextMeasurement {
+  const width = canvasMeasureTextWidth(text, style);
+  const metrics = canvasGetFontMetrics(style);
 
   return {
     width,
@@ -554,8 +566,8 @@ export function measureText(text: string, style: FontStyle): TextMeasurement {
  * @param style - Font styling properties
  * @returns Run measurement with width and per-character widths
  */
-export function measureRun(text: string, style: FontStyle): RunMeasurement {
-  const metrics = getFontMetrics(style);
+function canvasMeasureRun(text: string, style: FontStyle): RunMeasurement {
+  const metrics = canvasGetFontMetrics(style);
 
   if (!text) {
     return {
@@ -616,6 +628,40 @@ export function measureRun(text: string, style: FontStyle): RunMeasurement {
     metrics,
   };
 }
+
+/**
+ * Default provider backed by the canvas measurement functions above.
+ */
+export const canvasMeasureProvider: MeasureProvider = {
+  getFontMetrics: canvasGetFontMetrics,
+  measureTextWidth: canvasMeasureTextWidth,
+  measureText: canvasMeasureText,
+  measureRun: canvasMeasureRun,
+};
+
+let activeMeasureProvider: MeasureProvider = canvasMeasureProvider;
+
+export const getMeasureProvider = (): MeasureProvider => activeMeasureProvider;
+
+export const setMeasureProvider = (provider: MeasureProvider): void => {
+  activeMeasureProvider = provider;
+};
+
+export const resetMeasureProvider = (): void => {
+  activeMeasureProvider = canvasMeasureProvider;
+};
+
+export const getFontMetrics = (style: FontStyle): FontMetrics =>
+  activeMeasureProvider.getFontMetrics(style);
+
+export const measureTextWidth = (text: string, style: FontStyle): number =>
+  activeMeasureProvider.measureTextWidth(text, style);
+
+export const measureText = (text: string, style: FontStyle): TextMeasurement =>
+  activeMeasureProvider.measureText(text, style);
+
+export const measureRun = (text: string, style: FontStyle): RunMeasurement =>
+  activeMeasureProvider.measureRun(text, style);
 
 function applyTextTransform(text: string, style: FontStyle): string {
   if (style.textTransform === "uppercase") {
