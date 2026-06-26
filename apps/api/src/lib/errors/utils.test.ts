@@ -1,9 +1,11 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
   connectionErrorFields,
   errorFingerprint,
   errorSystemFields,
+  unredactedErrorFields,
 } from "@/api/lib/errors/utils";
 import { sanitizeLogAttributes } from "@/api/lib/observability/logger";
 
@@ -42,6 +44,25 @@ describe("errorSystemFields", () => {
 
   test("handles non-Error values", () => {
     expect(errorSystemFields("boom")).toEqual({ "error.type": "UnknownError" });
+  });
+
+  test("never throws on hostile system-field accessors", () => {
+    const error = new Error("boom");
+    Object.defineProperties(error, {
+      cause: {
+        get: () => panic("cause getter failed"),
+      },
+      code: {
+        get: () => panic("code getter failed"),
+      },
+      errno: {
+        get: () => panic("errno getter failed"),
+      },
+      syscall: {
+        get: () => panic("syscall getter failed"),
+      },
+    });
+    expect(errorSystemFields(error)).toEqual({ "error.type": "Error" });
   });
 });
 
@@ -115,6 +136,44 @@ describe("errorFingerprint", () => {
     expect(errorFingerprint(minified)["error.frame"]).toBeUndefined();
   });
 
+  test("does not parse multiline message content as a stack frame", () => {
+    const error = new Error("privileged\nat merger-secret.docx:12:34");
+    error.stack = [
+      "Error: privileged",
+      "at merger-secret.docx:12:34",
+      "    at safeFrame (/repo/apps/api/src/lib/errors/utils.test.ts:123:45)",
+    ].join("\n");
+    const fingerprint = errorFingerprint(error);
+    expect(fingerprint["error.frame"]).toBe(
+      "/repo/apps/api/src/lib/errors/utils.test.ts:123:45",
+    );
+    for (const value of Object.values(fingerprint)) {
+      expect(value).not.toContain("merger-secret");
+    }
+  });
+
+  test("never throws on hostile Error accessors", () => {
+    const error = new Error("boom");
+    Object.defineProperties(error, {
+      cause: {
+        get: () => panic("cause getter failed"),
+      },
+      code: {
+        get: () => panic("code getter failed"),
+      },
+      constructor: {
+        get: () => panic("constructor getter failed"),
+      },
+      stack: {
+        get: () => panic("stack getter failed"),
+      },
+    });
+    expect(errorFingerprint(error)).toEqual({
+      "error.class": "Error",
+      "error.code": "Error",
+    });
+  });
+
   test("handles non-Error values", () => {
     expect(errorFingerprint("boom")).toEqual({ "error.class": "UnknownError" });
   });
@@ -141,5 +200,29 @@ describe("errorFingerprint", () => {
     for (const value of Object.values(fingerprint)) {
       expect(value).not.toContain("merger-secret");
     }
+  });
+});
+
+describe("unredactedErrorFields", () => {
+  test("returns raw message and stack for break-glass logging only", () => {
+    const error = new Error("privileged: alice uploaded merger-secret.docx");
+    error.stack = "Error: privileged\n    at frame (/repo/app.ts:1:2)";
+    expect(unredactedErrorFields(error)).toEqual({
+      "error.msg": "privileged: alice uploaded merger-secret.docx",
+      "error.stack": "Error: privileged\n    at frame (/repo/app.ts:1:2)",
+    });
+  });
+
+  test("never throws on hostile message or stack accessors", () => {
+    const error = new Error("boom");
+    Object.defineProperties(error, {
+      message: {
+        get: () => panic("message getter failed"),
+      },
+      stack: {
+        get: () => panic("stack getter failed"),
+      },
+    });
+    expect(unredactedErrorFields(error)).toEqual({});
   });
 });

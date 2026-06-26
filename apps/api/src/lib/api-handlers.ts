@@ -32,7 +32,12 @@ import type {
   HandlerErrorCode,
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
-import { errorFingerprint, errorTag } from "@/api/lib/errors/utils";
+import {
+  errorFingerprint,
+  errorTag,
+  safeErrorCause,
+  unredactedErrorFields,
+} from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import { assertUsageAvailable } from "@/api/lib/usage";
@@ -650,12 +655,22 @@ type LogAndCaptureSafeErrorProps = {
 };
 
 const getErrorStatusCode = (error: Error): number | undefined => {
-  if ("statusCode" in error && typeof error.statusCode === "number") {
-    return error.statusCode;
-  }
+  try {
+    if ("statusCode" in error) {
+      const statusCode: unknown = Reflect.get(error, "statusCode");
+      if (typeof statusCode === "number") {
+        return statusCode;
+      }
+    }
 
-  if ("status" in error && typeof error.status === "number") {
-    return error.status;
+    if ("status" in error) {
+      const statusValue: unknown = Reflect.get(error, "status");
+      if (typeof statusValue === "number") {
+        return statusValue;
+      }
+    }
+  } catch {
+    return undefined;
   }
 
   return undefined;
@@ -688,13 +703,13 @@ const logAndCaptureSafeError = ({
     // (generator-result re-throws, AI SDK over fetch errors,
     // etc.) don't hide the underlying failure type.
     const seen = new WeakSet<object>([error]);
-    let cause: unknown = (error as { cause?: unknown }).cause;
+    let cause = safeErrorCause(error);
     let depth = 1;
     while (cause instanceof Error && depth <= 3 && !seen.has(cause)) {
       seen.add(cause);
       const prefix = depth === 1 ? "error.cause" : `error.cause${depth}`;
       attributes[`${prefix}.type`] = errorTag(cause);
-      cause = (cause as { cause?: unknown }).cause;
+      cause = safeErrorCause(cause);
       depth++;
     }
   }
@@ -707,13 +722,8 @@ const logAndCaptureSafeError = ({
   if (statusCode >= 500) {
     Object.assign(attributes, errorFingerprint(error));
 
-    if (env.DEBUG_UNREDACTED_ERRORS && error instanceof Error) {
-      if (error.message) {
-        attributes["error.msg"] = error.message;
-      }
-      if (error.stack) {
-        attributes["error.stack"] = error.stack;
-      }
+    if (env.DEBUG_UNREDACTED_ERRORS) {
+      Object.assign(attributes, unredactedErrorFields(error));
     }
   }
 
