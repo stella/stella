@@ -193,9 +193,12 @@ docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml pull
 docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml up -d
 ```
 
-Pin a specific release or use your own registry by setting `STELLA_API_IMAGE`
-(e.g. `STELLA_API_IMAGE=ghcr.io/stella/stella-api:v0.5.2`). Keep `--build` if you
-prefer to build from source instead.
+The default tag is `:latest` (advanced only on stable releases). **For
+production, pin an explicit version** by setting `STELLA_API_IMAGE` (e.g.
+`STELLA_API_IMAGE=ghcr.io/stella/stella-api:v0.5.2`) so upgrades are deliberate
+— migrations are manual (`bun run db:migrate`), so always run them against the
+new version **before** `up -d` to avoid a newer API hitting an older schema.
+Keep `--build` if you prefer to build from source instead.
 
 To use a different env file, set `STELLA_API_ENV_FILE` in that file:
 
