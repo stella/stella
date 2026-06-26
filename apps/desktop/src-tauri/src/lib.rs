@@ -293,6 +293,7 @@ pub fn run() {
       commands::retry_session,
       commands::respond_to_takeover,
       commands::takeover_dialog_respond,
+      commands::self_host_connect_dialog_respond,
       commands::copy_diagnostics,
       commands::email_support,
       commands::reveal_support_root,

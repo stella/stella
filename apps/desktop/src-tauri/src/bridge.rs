@@ -1,6 +1,6 @@
 use axum::{
   Json, Router,
-  extract::State,
+  extract::{Query, State},
   http::{HeaderMap, HeaderValue, Method, StatusCode},
   response::IntoResponse,
   routing::{get, post},
@@ -21,14 +21,20 @@ const BIND_RETRY_MAX_BACKOFF: Duration = Duration::from_secs(30);
 #[derive(Clone)]
 pub struct BridgeState {
   pub manager: Arc<Mutex<SessionManager>>,
-  pub allowed_origins: HashSet<String>,
+  pub static_allowed_origins: HashSet<String>,
   pub bridge_port: u16,
 }
 
-fn is_allowed_origin(state: &BridgeState, origin: Option<&str>) -> bool {
-  origin
-    .map(|o| state.allowed_origins.contains(o))
-    .unwrap_or(false)
+async fn is_allowed_origin(state: &BridgeState, origin: Option<&str>) -> bool {
+  let Some(origin) = origin else {
+    return false;
+  };
+  if state.static_allowed_origins.contains(origin) {
+    return true;
+  }
+
+  let manager = state.manager.lock().await;
+  manager.is_trusted_self_host_origin(origin)
 }
 
 fn cors_headers(origin: Option<&str>, allowed: bool) -> HeaderMap {
@@ -81,8 +87,9 @@ async fn health(
 ) -> impl IntoResponse {
   let origin = get_origin(&headers);
   let origin_ref = origin.as_deref();
+  let allowed = is_allowed_origin(&state, origin_ref).await;
 
-  if origin_ref.is_some() && !is_allowed_origin(&state, origin_ref) {
+  if origin_ref.is_some() && !allowed {
     return json_response(
       StatusCode::FORBIDDEN,
       serde_json::json!({ "message": "Desktop bridge origin is not allowed." }),
@@ -101,7 +108,49 @@ async fn health(
       "capabilities": BRIDGE_CAPABILITIES,
     }),
     origin_ref,
-    is_allowed_origin(&state, origin_ref),
+    allowed,
+  )
+  .into_response()
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SelfHostConnectionQuery {
+  api_base_url: String,
+}
+
+async fn self_host_connection(
+  State(state): State<BridgeState>,
+  headers: HeaderMap,
+  Query(query): Query<SelfHostConnectionQuery>,
+) -> impl IntoResponse {
+  let origin = get_origin(&headers);
+  let origin_ref = origin.as_deref();
+  let allowed = is_allowed_origin(&state, origin_ref).await;
+
+  if origin_ref.is_none() || !allowed {
+    return json_response(
+      StatusCode::FORBIDDEN,
+      serde_json::json!({ "message": "Desktop bridge origin is not allowed." }),
+      origin_ref,
+      false,
+    )
+    .into_response();
+  }
+
+  let trusted = {
+    let manager = state.manager.lock().await;
+    manager.is_trusted_self_host_connection(
+      origin_ref.unwrap_or_default(),
+      &query.api_base_url,
+    )
+  };
+
+  json_response(
+    StatusCode::OK,
+    serde_json::json!({ "trusted": trusted }),
+    origin_ref,
+    true,
   )
   .into_response()
 }
@@ -113,8 +162,9 @@ async fn open_docx(
 ) -> impl IntoResponse {
   let origin = get_origin(&headers);
   let origin_ref = origin.as_deref();
+  let allowed = is_allowed_origin(&state, origin_ref).await;
 
-  if !is_allowed_origin(&state, origin_ref) {
+  if !allowed {
     return json_response(
       StatusCode::FORBIDDEN,
       serde_json::json!({
@@ -133,7 +183,7 @@ async fn open_docx(
         StatusCode::BAD_REQUEST,
         serde_json::json!({ "message": "Invalid open-docx payload" }),
         origin_ref,
-        true,
+        allowed,
       )
       .into_response();
     }
@@ -144,7 +194,7 @@ async fn open_docx(
       StatusCode::BAD_REQUEST,
       serde_json::json!({ "message": "Invalid open-docx payload" }),
       origin_ref,
-      true,
+      allowed,
     )
     .into_response();
   }
@@ -169,7 +219,7 @@ async fn open_docx(
         StatusCode::INTERNAL_SERVER_ERROR,
         serde_json::json!({ "message": e }),
         origin_ref,
-        true,
+        allowed,
       )
       .into_response();
     }
@@ -196,13 +246,13 @@ async fn open_docx(
       }
 
       let body = serde_json::to_value(result_data).unwrap_or_default();
-      json_response(StatusCode::OK, body, origin_ref, true).into_response()
+      json_response(StatusCode::OK, body, origin_ref, allowed).into_response()
     }
     Err(message) => json_response(
       StatusCode::INTERNAL_SERVER_ERROR,
       serde_json::json!({ "message": message }),
       origin_ref,
-      true,
+      allowed,
     )
     .into_response(),
   }
@@ -214,7 +264,7 @@ async fn not_found(
 ) -> impl IntoResponse {
   let origin = get_origin(&headers);
   let origin_ref = origin.as_deref();
-  let allowed = is_allowed_origin(&state, origin_ref);
+  let allowed = is_allowed_origin(&state, origin_ref).await;
 
   json_response(
     StatusCode::NOT_FOUND,
@@ -228,6 +278,7 @@ async fn not_found(
 fn build_router(state: BridgeState) -> Router {
   Router::new()
     .route("/health", get(health))
+    .route("/v1/self-host-connection", get(self_host_connection))
     .route("/v1/open-docx", post(open_docx))
     .fallback(not_found)
     .layer(axum::middleware::from_fn_with_state(
@@ -239,7 +290,7 @@ fn build_router(state: BridgeState) -> Router {
           let headers = req.headers().clone();
           let origin = get_origin(&headers);
           let origin_ref = origin.as_deref();
-          let allowed = is_allowed_origin(&state, origin_ref);
+          let allowed = is_allowed_origin(&state, origin_ref).await;
 
           return Ok::<_, std::convert::Infallible>(
             (StatusCode::NO_CONTENT, cors_headers(origin_ref, allowed)).into_response(),
@@ -253,12 +304,12 @@ fn build_router(state: BridgeState) -> Router {
 
 pub async fn start_bridge(
   bridge_port: u16,
-  allowed_origins: HashSet<String>,
+  static_allowed_origins: HashSet<String>,
   manager: Arc<Mutex<SessionManager>>,
 ) {
   let state = BridgeState {
     manager,
-    allowed_origins,
+    static_allowed_origins,
     bridge_port,
   };
 
@@ -302,7 +353,7 @@ mod tests {
     allowed.insert("http://localhost:3000".to_string());
     BridgeState {
       manager: Arc::new(Mutex::new(SessionManager::new())),
-      allowed_origins: allowed,
+      static_allowed_origins: allowed,
       bridge_port: 0,
     }
   }
@@ -348,6 +399,40 @@ mod tests {
       value["capabilities"],
       serde_json::json!(BRIDGE_CAPABILITIES)
     );
+  }
+
+  #[tokio::test]
+  async fn self_host_connection_accepts_trusted_origin() {
+    let state = test_state();
+    {
+      let mut manager = state.manager.lock().await;
+      manager.trust_self_host_connection_for_test(
+        "https://web-production.example".to_string(),
+        "https://api-production.example".to_string(),
+      );
+    }
+
+    let app = build_router(state);
+    let request = Request::builder()
+      .method("GET")
+      .uri("/v1/self-host-connection?apiBaseUrl=https%3A%2F%2Fapi-production.example")
+      .header("origin", "https://web-production.example")
+      .body(Body::empty())
+      .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+      response
+        .headers()
+        .get("access-control-allow-origin")
+        .unwrap(),
+      "https://web-production.example"
+    );
+
+    let body = to_bytes(response.into_body(), 65_536).await.unwrap();
+    let value: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(value["trusted"], serde_json::json!(true));
   }
 
   async fn post_open_docx(state: BridgeState, body: serde_json::Value) -> StatusCode {

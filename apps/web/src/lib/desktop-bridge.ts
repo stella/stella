@@ -1,5 +1,6 @@
 import { env } from "@/env";
 import { api } from "@/lib/api";
+import { buildSelfHostConnectDeepLink } from "@/lib/desktop-self-host-link.logic";
 import { FetchBoundaryError, toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 
@@ -8,6 +9,8 @@ const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
 const DESKTOP_HANDOFF_POLL_INTERVAL_MS = 750;
 const DESKTOP_BRIDGE_START_POLL_INTERVAL_MS = 1000;
 const DESKTOP_BRIDGE_START_TIMEOUT_MS = 6000;
+const DESKTOP_SELF_HOST_CONNECT_POLL_INTERVAL_MS = 750;
+const DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS = 120_000;
 const MIN_DESKTOP_BRIDGE_VERSION = 3;
 
 export class DesktopBridgeUnavailableError extends Error {
@@ -72,6 +75,10 @@ type BridgeHealth = {
   bridgeVersion?: number;
 };
 
+type SelfHostConnectionStatus = {
+  trusted: boolean;
+};
+
 const isBridgeResponse = (value: unknown): value is BridgeResponse =>
   typeof value === "object" && value !== null;
 
@@ -79,6 +86,14 @@ const isBridgeHealth = (value: unknown): value is BridgeHealth =>
   typeof value === "object" &&
   value !== null &&
   (!("bridgeVersion" in value) || typeof value.bridgeVersion === "number");
+
+const isSelfHostConnectionStatus = (
+  value: unknown,
+): value is SelfHostConnectionStatus =>
+  typeof value === "object" &&
+  value !== null &&
+  "trusted" in value &&
+  typeof value.trusted === "boolean";
 
 const parseBridgeResponse = async (response: Response) => {
   try {
@@ -226,6 +241,19 @@ const launchDesktopEditHandoff = (deepLinkUrl: string) => {
   window.location.href = deepLinkUrl;
 };
 
+const launchSelfHostConnect = ({
+  apiBaseUrl,
+  webOrigin,
+}: {
+  apiBaseUrl: string;
+  webOrigin: string;
+}) => {
+  window.location.href = buildSelfHostConnectDeepLink({
+    apiBaseUrl,
+    webOrigin,
+  });
+};
+
 const wait = async (milliseconds: number) => {
   await new Promise<void>((resolve) => {
     setTimeout(resolve, milliseconds);
@@ -284,6 +312,64 @@ const waitForDesktopEditHandoffOpened = async ({
  */
 export const isDesktopBridgeReachable = async (): Promise<boolean> =>
   (await readBridgeHealth(500)) !== null;
+
+const readSelfHostedDesktopConnection = async ({
+  apiBaseUrl,
+}: {
+  apiBaseUrl: string;
+}): Promise<SelfHostConnectionStatus | null> => {
+  const params = new URLSearchParams({ apiBaseUrl });
+
+  try {
+    const response = await fetch(
+      `${DESKTOP_BRIDGE_URL}/v1/self-host-connection?${params.toString()}`,
+      {
+        method: "GET",
+        signal: AbortSignal.timeout(1000),
+      },
+    );
+    if (!response.ok) {
+      return null;
+    }
+
+    const payload: unknown = await response.json();
+    return isSelfHostConnectionStatus(payload) ? payload : null;
+  } catch {
+    return null;
+  }
+};
+
+export const connectSelfHostedDesktop = async ({
+  apiBaseUrl,
+  webOrigin,
+}: {
+  apiBaseUrl: string;
+  webOrigin: string;
+}) => {
+  launchSelfHostConnect({ apiBaseUrl, webOrigin });
+
+  const deadline = Date.now() + DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS;
+  while (Date.now() < deadline) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential approval polling: user approval updates the local desktop trust store asynchronously
+    const status = await readSelfHostedDesktopConnection({ apiBaseUrl });
+    if (status?.trusted) {
+      return;
+    }
+
+    // oxlint-disable-next-line no-await-in-loop -- sequential approval polling: must wait before probing the local bridge again
+    await wait(
+      Math.max(
+        0,
+        Math.min(
+          DESKTOP_SELF_HOST_CONNECT_POLL_INTERVAL_MS,
+          deadline - Date.now(),
+        ),
+      ),
+    );
+  }
+
+  throw new DesktopBridgeUnavailableError();
+};
 
 const openDocxViaBridge = async ({
   apiBaseUrl,

@@ -1,7 +1,7 @@
 {
   "identifier": "default",
   "description": "Default capabilities for stella desktop",
-  "windows": ["main", "takeover-dialog"],
+  "windows": ["main", "takeover-dialog", "selfhost-connect-dialog"],
   "permissions": [
     "core:default",
     "autostart:allow-enable",

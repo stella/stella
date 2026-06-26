@@ -39,6 +39,8 @@ before building from source:
 VITE_API_URL="https://api.stella.example.com"
 VITE_PUBLIC_APP_URL="https://stella.example.com"
 VITE_SELFHOST="true"
+# Optional: enable "Edit in Desktop" for self-hosted DOCX editing.
+VITE_FEATURE_DESKTOP_EDITING="true"
 ```
 
 `VITE_API_URL` must point at the public API, aligned with `BETTER_AUTH_URL` on
@@ -74,6 +76,7 @@ docker build -f apps/web/Dockerfile \
   --build-arg PUBLIC_API_URL=https://api.stella.example.com \
   --build-arg PUBLIC_APP_URL=https://stella.example.com \
   --build-arg VITE_SELFHOST=true \
+  --build-arg VITE_FEATURE_DESKTOP_EDITING=true \
   -t stella-web:local .
 
 docker run --detach \
@@ -132,6 +135,8 @@ TRANSACTIONAL_EMAIL_FROM="noreply@example.com"
 GOTENBERG_URL="http://gotenberg:3000"
 GOTENBERG_USERNAME="replace-with-a-username"
 GOTENBERG_PASSWORD="replace-with-a-password"
+# Optional: enable desktop edit session endpoints.
+FEATURE_DESKTOP_EDITING="true"
 ```
 
 The self-host Compose file starts the stock `gotenberg/gotenberg:8` container
@@ -148,6 +153,15 @@ Do not expose Gotenberg to the public internet. Gotenberg's installation guide
 recommends treating it like a database: keep it behind your firewall. The
 self-host Compose file intentionally does not publish a `ports` entry for the
 Gotenberg service.
+
+## Desktop editing
+
+Self-hosted installs can use the signed stella desktop app without rebuilding
+it. Enable `FEATURE_DESKTOP_EDITING="true"` on the API and
+`VITE_FEATURE_DESKTOP_EDITING="true"` in the web build. Users then install
+stella desktop, open **Settings → Account → Desktop** in the self-hosted web
+app, and click **Connect**. The desktop app shows a local approval prompt and
+stores the exact trusted web/API origin before accepting DOCX edit handoffs.
 
 ## Database migrations
 

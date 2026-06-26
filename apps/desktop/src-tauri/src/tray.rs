@@ -310,6 +310,7 @@ mod tests {
       notification_preferences: DesktopNotificationPreferences::default(),
       running_since: "2026-01-01T00:00:00Z".into(),
       sessions,
+      trusted_self_host_connections: Vec::new(),
       update: DesktopUpdateSnapshot::default(),
     }
   }

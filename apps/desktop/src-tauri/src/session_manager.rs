@@ -157,6 +157,7 @@ pub struct SessionManager {
   cleanup_paths: HashSet<String>,
   linked_account: Option<LinkedAccountSnapshot>,
   notification_preferences: DesktopNotificationPreferences,
+  trusted_self_host_connections: Vec<TrustedSelfHostConnection>,
   update: DesktopUpdateSnapshot,
   running_since: String,
   bridge_port: u16,
@@ -348,6 +349,7 @@ impl SessionManager {
       cleanup_paths: HashSet::new(),
       linked_account: None,
       notification_preferences: DesktopNotificationPreferences::default(),
+      trusted_self_host_connections: Vec::new(),
       update: DesktopUpdateSnapshot::default(),
       running_since: chrono_now(),
       bridge_port,
@@ -371,6 +373,7 @@ impl SessionManager {
     if let Some(prefs) = store.notification_preferences {
       self.notification_preferences = prefs;
     }
+    self.trusted_self_host_connections = store.trusted_self_host_connections;
     self.store_load_issue = store.load_issue;
 
     if self.store_load_issue.is_some() {
@@ -472,6 +475,7 @@ impl SessionManager {
       notification_preferences: self.notification_preferences.clone(),
       running_since: self.running_since.clone(),
       sessions,
+      trusted_self_host_connections: self.trusted_self_host_connections.clone(),
       update: self.update.clone(),
     }
   }
@@ -772,6 +776,89 @@ impl SessionManager {
     self.persist_sessions().await;
     self.emit_state_change();
     self.get_snapshot()
+  }
+
+  pub fn is_trusted_self_host_origin(&self, origin: &str) -> bool {
+    self
+      .trusted_self_host_connections
+      .iter()
+      .any(|connection| connection.web_origin == origin)
+  }
+
+  pub fn is_trusted_self_host_api_base_url(&self, api_base_url: &str) -> bool {
+    let normalized_api_base_url = normalize_api_base_url(api_base_url);
+    self
+      .trusted_self_host_connections
+      .iter()
+      .any(|connection| connection.api_base_url == normalized_api_base_url)
+  }
+
+  pub fn is_trusted_self_host_connection(
+    &self,
+    web_origin: &str,
+    api_base_url: &str,
+  ) -> bool {
+    let normalized_api_base_url = normalize_api_base_url(api_base_url);
+    self.trusted_self_host_connections.iter().any(|connection| {
+      connection.web_origin == web_origin
+        && connection.api_base_url == normalized_api_base_url
+    })
+  }
+
+  pub async fn trust_self_host_connection(
+    &mut self,
+    web_origin: String,
+    api_base_url: String,
+  ) -> AppSnapshot {
+    self.upsert_trusted_self_host_connection(web_origin, api_base_url, chrono_now());
+    self.persist_sessions().await;
+    self.emit_state_change();
+    self.get_snapshot()
+  }
+
+  #[cfg(test)]
+  pub fn trust_self_host_connection_for_test(
+    &mut self,
+    web_origin: String,
+    api_base_url: String,
+  ) {
+    self.upsert_trusted_self_host_connection(
+      web_origin,
+      api_base_url,
+      "2026-01-01T00:00:00Z".to_string(),
+    );
+  }
+
+  fn upsert_trusted_self_host_connection(
+    &mut self,
+    web_origin: String,
+    api_base_url: String,
+    trusted_at: String,
+  ) {
+    let normalized_api_base_url = normalize_api_base_url(&api_base_url);
+    if let Some(connection) =
+      self
+        .trusted_self_host_connections
+        .iter_mut()
+        .find(|connection| {
+          connection.web_origin == web_origin
+            && connection.api_base_url == normalized_api_base_url
+        })
+    {
+      connection.trusted_at = trusted_at;
+      return;
+    }
+
+    self
+      .trusted_self_host_connections
+      .push(TrustedSelfHostConnection {
+        api_base_url: normalized_api_base_url,
+        trusted_at,
+        web_origin,
+      });
+    self
+      .trusted_self_host_connections
+      .sort_by(|a, b| a.web_origin.cmp(&b.web_origin));
   }
 
   pub async fn persist_sessions_public(&self) {
@@ -1716,6 +1803,7 @@ impl SessionManager {
       &self.linked_account,
       &self.notification_preferences,
       &persisted,
+      &self.trusted_self_host_connections,
     )
     .await
     {

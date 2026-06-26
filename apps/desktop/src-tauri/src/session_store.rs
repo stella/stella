@@ -4,6 +4,7 @@ use tokio::fs;
 
 use crate::types::{
   DesktopNotificationPreferences, LinkedAccountSnapshot, SessionStatus,
+  TrustedSelfHostConnection,
 };
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -35,6 +36,8 @@ pub struct SessionStorePayload {
   pub linked_account: Option<LinkedAccountSnapshot>,
   pub notification_preferences: Option<DesktopNotificationPreferences>,
   pub sessions: Vec<PersistedDesktopSession>,
+  #[serde(default)]
+  pub trusted_self_host_connections: Vec<TrustedSelfHostConnection>,
 }
 
 #[derive(Debug)]
@@ -48,6 +51,7 @@ pub struct LoadedSessionStore {
   pub linked_account: Option<LinkedAccountSnapshot>,
   pub notification_preferences: Option<DesktopNotificationPreferences>,
   pub sessions: Vec<PersistedDesktopSession>,
+  pub trusted_self_host_connections: Vec<TrustedSelfHostConnection>,
   pub load_issue: Option<StoreLoadIssue>,
 }
 
@@ -57,6 +61,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
     linked_account: None,
     notification_preferences: None,
     sessions: Vec::new(),
+    trusted_self_host_connections: Vec::new(),
     load_issue: None,
   };
 
@@ -77,6 +82,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
       linked_account: payload.linked_account,
       notification_preferences: payload.notification_preferences,
       sessions: payload.sessions,
+      trusted_self_host_connections: payload.trusted_self_host_connections,
       load_issue: None,
     },
     Err(_) => LoadedSessionStore {
@@ -92,6 +98,7 @@ pub async fn persist_session_store(
   linked_account: &Option<LinkedAccountSnapshot>,
   notification_preferences: &DesktopNotificationPreferences,
   sessions: &[PersistedDesktopSession],
+  trusted_self_host_connections: &[TrustedSelfHostConnection],
 ) -> Result<(), String> {
   if let Some(parent) = store_path.parent() {
     fs::create_dir_all(parent)
@@ -104,6 +111,7 @@ pub async fn persist_session_store(
     linked_account: linked_account.clone(),
     notification_preferences: Some(notification_preferences.clone()),
     sessions: sessions.to_vec(),
+    trusted_self_host_connections: trusted_self_host_connections.to_vec(),
   };
 
   let json = serde_json::to_string_pretty(&payload)
@@ -170,6 +178,11 @@ mod tests {
       }),
       notification_preferences: Some(DesktopNotificationPreferences::default()),
       sessions: vec![make_session()],
+      trusted_self_host_connections: vec![TrustedSelfHostConnection {
+        api_base_url: "https://api.selfhost.example".into(),
+        trusted_at: "2026-01-01T00:00:00Z".into(),
+        web_origin: "https://selfhost.example".into(),
+      }],
     }
   }
 
@@ -193,6 +206,10 @@ mod tests {
     assert_eq!(deserialized.sessions[0].id, "sess-1");
     assert_eq!(deserialized.sessions[0].status, SessionStatus::Ready);
     assert_eq!(deserialized.cleanup_paths, vec!["/tmp/old.docx"]);
+    assert_eq!(
+      deserialized.trusted_self_host_connections[0].web_origin,
+      "https://selfhost.example"
+    );
     assert!(deserialized.linked_account.is_some());
     assert_eq!(
       deserialized.linked_account.unwrap().email,
@@ -245,6 +262,11 @@ mod tests {
       &linked,
       &prefs,
       &[session],
+      &[TrustedSelfHostConnection {
+        api_base_url: "https://api.selfhost.example".into(),
+        trusted_at: "2026-04-25T00:00:00Z".into(),
+        web_origin: "https://selfhost.example".into(),
+      }],
     )
     .await
     .unwrap();
@@ -254,6 +276,10 @@ mod tests {
     assert_eq!(loaded.sessions.len(), 1);
     assert_eq!(loaded.sessions[0].file_name, "contract.docx");
     assert_eq!(loaded.cleanup_paths, vec!["/tmp/cleanup.docx"]);
+    assert_eq!(
+      loaded.trusted_self_host_connections[0].api_base_url,
+      "https://api.selfhost.example"
+    );
     assert_eq!(loaded.linked_account.unwrap().email, "test@test.com");
 
     let _ = fs::remove_file(&path).await;
