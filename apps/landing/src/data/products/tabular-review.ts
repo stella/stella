@@ -10,8 +10,8 @@ export const tabularReview: Product = {
   summary:
     "Ask questions across a whole document set and get structured answers back as a matter-scoped table — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
   hero: {
-    type: "placeholder",
-    note: "Review table: 12 contracts × 5 columns, cells populated",
+    type: "preview",
+    key: "review-grid",
     aspect: "16 / 10",
   },
   quickAnswer: {
