@@ -312,6 +312,7 @@ const createAuth = () => {
       organization({
         ac,
         roles,
+        membershipLimit: LIMITS.organizationMembersCount,
         organizationHooks: {
           async afterRemoveMember({ member, organization: org }) {
             await rootDb.transaction(

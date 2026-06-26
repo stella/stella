@@ -364,8 +364,16 @@ describe("custom oxlint guardrails", () => {
   });
 
   test("protected shell chrome queries stay non-critical and route-fresh", () => {
+    const authSource = readRootFixture("apps/api/src/lib/auth.ts");
+    const limitsSource = readRootFixture("apps/api/src/lib/limits.ts");
+    const organizationConstsSource = readRootFixture(
+      "apps/web/src/routes/_protected.organization/-consts.ts",
+    );
     const protectedRouteSource = readRootFixture(
       "apps/web/src/routes/_protected.tsx",
+    );
+    const sidebarUserMenuSource = readRootFixture(
+      "apps/web/src/components/sidebar-user-menu.tsx",
     );
     const aiConfigQuerySource = readRootFixture(
       "apps/web/src/routes/_protected.organization/-ai-config-queries.ts",
@@ -386,12 +394,24 @@ describe("custom oxlint guardrails", () => {
     expect(protectedRouteSource).toContain("AIAvailabilityProvider");
     expect(protectedRouteSource).toContain("AppSidebar");
     expect(protectedRouteSource).toContain("ChatMentionProviders");
+    expect(sidebarUserMenuSource).not.toContain("organizationOptions");
+    expect(sidebarUserMenuSource).toContain("organizationSummaryOptions");
     expect(aiConfigQuerySource).toContain("ROUTE_QUERY_STALE_TIME_MS");
     expect(aiConfigQuerySource).toContain(
       "staleTime: ROUTE_QUERY_STALE_TIME_MS",
     );
     expect(organizationQuerySource).toContain(
       "staleTime: ROUTE_QUERY_STALE_TIME_MS",
+    );
+    expect(limitsSource).toContain("organizationMembersCount: 500");
+    expect(authSource).toContain(
+      "membershipLimit: LIMITS.organizationMembersCount",
+    );
+    expect(organizationConstsSource).toContain(
+      "ORGANIZATION_MEMBERS_LIMIT = 500",
+    );
+    expect(organizationQuerySource).toContain(
+      "membersLimit: ORGANIZATION_MEMBERS_LIMIT",
     );
     expect(workspacesQuerySource).toContain("workspacesNavigationOptions");
     expect(workspacesQuerySource).toContain(

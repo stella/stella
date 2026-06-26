@@ -237,7 +237,7 @@ jobs:
       - name: Install Playwright browser
         run: cd apps/web && bunx playwright install --with-deps chromium
 
-      - name: Run staging smoke
+      - name: Run staging web smoke
         run: bun --filter @stll/web test:e2e:staging
         env:
           E2E_WEB_URL: https://staging.stll.app
@@ -246,6 +246,13 @@ jobs:
           # Block the smoke until staging actually serves this commit,
           # so it doesn't race the ECS task rollover.
           EXPECTED_COMMIT: ${{ github.sha }}
+
+      - name: Run staging API chat smoke
+        if: ${{ !cancelled() }}
+        run: bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"
+        env:
+          E2E_API_URL: https://api-staging.stll.app
+          SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
 
       - name: Upload Playwright report
         if: failure()

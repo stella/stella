@@ -133,6 +133,8 @@ export const LIMITS = {
   contactsPageSizeMax: 100,
   contactRelationshipsCount: 50,
   workspaceContactsCount: 100,
+  /** Better Auth organization member cap and full-org read bound. */
+  organizationMembersCount: 500,
   workspaceMembersCount: 500,
   practiceJurisdictionsPerOrganization: 12,
   entityNameMaxLength: 255,

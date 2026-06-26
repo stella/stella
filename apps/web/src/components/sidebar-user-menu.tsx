@@ -44,7 +44,7 @@ import {
   useI18nStore,
 } from "@/i18n/i18n-store";
 import { getInitials } from "@/lib/get-initials";
-import { organizationOptions } from "@/routes/_protected.organization/-queries";
+import { organizationSummaryOptions } from "@/routes/_protected.organization/-queries";
 
 const CHANGELOG_URL = "https://stll.app/changelog";
 const isDev = import.meta.env.DEV;
@@ -71,7 +71,7 @@ export function SidebarUserMenu({ user }: SidebarUserMenuProps) {
   const lang = useI18nStore((s) => s.lang);
   const setLang = useI18nStore((s) => s.setLang);
   const { data: organization } = useChromeQuery(
-    organizationOptions(user.activeOrganizationId),
+    organizationSummaryOptions(user.activeOrganizationId),
   );
 
   const displayName = user.name ?? user.email;
