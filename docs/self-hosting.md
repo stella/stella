@@ -185,6 +185,18 @@ separately as described above.
 docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml up -d --build
 ```
 
+By default the API service pulls the prebuilt multi-arch (amd64/arm64) image
+published to GHCR on each release, so you can skip building from source:
+
+```bash
+docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml pull
+docker compose --env-file apps/api/.env -f docker-compose.selfhost.yml up -d
+```
+
+Pin a specific release or use your own registry by setting `STELLA_API_IMAGE`
+(e.g. `STELLA_API_IMAGE=ghcr.io/stella/stella-api:v0.5.2`). Keep `--build` if you
+prefer to build from source instead.
+
 To use a different env file, set `STELLA_API_ENV_FILE` in that file:
 
 ```bash
