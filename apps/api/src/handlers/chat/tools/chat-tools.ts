@@ -108,7 +108,11 @@ type GetChatToolsProps = {
    * intern) sees no template tools.
    */
   memberRole: keyof typeof roles;
-  orgAIConfig?: OrgAIConfig | null;
+  // Required (not optional): the template tools eagerly resolve an AI model for
+  // usage metering, which needs the org's BYOK config on deployments without a
+  // platform provider. A missing value silently falls back and fails there, so
+  // every caller must thread it through explicitly.
+  orgAIConfig: OrgAIConfig | null;
   threadId: SafeId<"chatThread">;
   excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
   userId: SafeId<"user">;

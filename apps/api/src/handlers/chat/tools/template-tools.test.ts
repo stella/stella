@@ -36,6 +36,7 @@ const stubSafeDb = (() => {
 describe("createTemplateTools", () => {
   test("registers list, describe and fill template tools", () => {
     const tools = createTemplateTools({
+      orgAIConfig: null,
       scopedDb: stubScopedDb([]),
       safeDb: stubSafeDb,
       organizationId: orgId,
@@ -52,6 +53,7 @@ describe("createTemplateTools", () => {
       { id: "t2", name: "Power of Attorney", fieldCount: 7 },
     ];
     const tools = createTemplateTools({
+      orgAIConfig: null,
       scopedDb: stubScopedDb(rows),
       safeDb: stubSafeDb,
       organizationId: orgId,

@@ -254,6 +254,7 @@ const sendMessage = createSafeRootHandler(
     const validationTools = getChatTools({
       organizationId: session.activeOrganizationId,
       memberRole: memberRole.role,
+      orgAIConfig,
       refRegistry,
       safeDb,
       scopedDb,

@@ -673,6 +673,27 @@ type AIAnalyticsCallbacks = {
   captureError: (error: unknown) => void;
 };
 
+/**
+ * Pre-resolving the model for analytics is only an enrichment: every consumer
+ * of `resolvedModelInfo` falls back to the live step's provider/model. So a
+ * resolution failure — e.g. no provider configured for the role on a BYOK-only
+ * deployment — must degrade to null rather than throw, because these callbacks
+ * are constructed eagerly while building chat tools, before any model is used.
+ */
+const safeResolveModelInfoForRole = (
+  modelRole: ModelRole | undefined,
+  orgAIConfig: OrgAIConfig | null | undefined,
+): ReturnType<typeof getModelInfoForRole> | null => {
+  if (!modelRole) {
+    return null;
+  }
+  try {
+    return getModelInfoForRole(modelRole, orgAIConfig);
+  } catch {
+    return null;
+  }
+};
+
 export const createAIAnalyticsCallbacks = ({
   analytics = getAnalytics(),
   captureContent = env.POSTHOG_LOCAL_DEBUG_AI_CONTENT,
@@ -686,9 +707,10 @@ export const createAIAnalyticsCallbacks = ({
   const distinctId = debugEnabled
     ? (config.distinctId ?? `local-debug:${config.feature}`)
     : SERVER_DISTINCT_ID;
-  const resolvedModelInfo = config.modelRole
-    ? getModelInfoForRole(config.modelRole, config.orgAIConfig)
-    : null;
+  const resolvedModelInfo = safeResolveModelInfoForRole(
+    config.modelRole,
+    config.orgAIConfig,
+  );
   let hasCapturedGenerationError = false;
 
   const onStepStart: NonNullable<
