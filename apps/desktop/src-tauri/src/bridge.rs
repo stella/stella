@@ -199,6 +199,35 @@ async fn open_docx(
     .into_response();
   }
 
+  // A dynamically trusted self-host origin is approved as an exact
+  // web-origin/API pair. Static origins ship with the build and are always
+  // allowed, but a self-host origin must not download/sync against an API it
+  // was never approved for, so re-check the connection against the payload's
+  // `apiBaseUrl`.
+  let is_static_origin = state
+    .static_allowed_origins
+    .contains(origin_ref.unwrap_or_default());
+  if !is_static_origin {
+    let trusted_connection = {
+      let manager = state.manager.lock().await;
+      manager.is_trusted_self_host_connection(
+        origin_ref.unwrap_or_default(),
+        &request.api_base_url,
+      )
+    };
+    if !trusted_connection {
+      return json_response(
+        StatusCode::FORBIDDEN,
+        serde_json::json!({
+            "message": "Desktop bridge only accepts requests from allowed stella origins."
+        }),
+        origin_ref,
+        false,
+      )
+      .into_response();
+    }
+  }
+
   // Clone the HTTP client while briefly holding the lock, then download
   // outside the lock to avoid blocking health checks during network I/O.
   let http_client = {

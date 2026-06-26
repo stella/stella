@@ -227,6 +227,15 @@ async fn show_self_host_connect_dialog(
   web_origin: &str,
   api_base_url: &str,
 ) -> Result<bool, String> {
+  use tauri::Manager;
+
+  if app_handle
+    .get_webview_window("selfhost-connect-dialog")
+    .is_some()
+  {
+    return Err("A self-host connection dialog is already open.".to_string());
+  }
+
   let (sender, receiver) = tokio::sync::oneshot::channel();
   set_self_host_connect_sender(sender);
 
@@ -254,14 +263,23 @@ async fn show_self_host_connect_dialog(
   match builder.build() {
     Ok(window) => {
       let _ = window.set_focus();
-      match tokio::time::timeout(SELF_HOST_CONNECT_APPROVAL_TIMEOUT, receiver).await {
-        Ok(Ok(approved)) => Ok(approved),
-        Ok(Err(_)) => Ok(false),
+      let outcome = match tokio::time::timeout(
+        SELF_HOST_CONNECT_APPROVAL_TIMEOUT,
+        receiver,
+      )
+      .await
+      {
+        Ok(Ok(approved)) => approved,
+        Ok(Err(_)) => false,
         Err(_) => {
           set_self_host_connect_response(false);
-          Ok(false)
+          false
         }
-      }
+      };
+      // The dialog closes itself once the user responds; close it explicitly so
+      // a timeout or dropped sender does not leave a ghost window behind.
+      let _ = window.close();
+      Ok(outcome)
     }
     Err(error) => {
       set_self_host_connect_response(false);
@@ -273,15 +291,20 @@ async fn show_self_host_connect_dialog(
 }
 
 fn percent_encode(value: &str) -> String {
-  value
-    .bytes()
-    .flat_map(|byte| match byte {
+  use std::fmt::Write;
+
+  let mut encoded = String::with_capacity(value.len());
+  for byte in value.bytes() {
+    match byte {
       b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'.' | b'_' | b'~' => {
-        vec![byte as char]
+        encoded.push(byte as char);
       }
-      _ => format!("%{byte:02X}").chars().collect(),
-    })
-    .collect()
+      _ => {
+        let _ = write!(encoded, "%{byte:02X}");
+      }
+    }
+  }
+  encoded
 }
 
 #[derive(serde::Serialize)]
