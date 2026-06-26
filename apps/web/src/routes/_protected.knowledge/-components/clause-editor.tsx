@@ -14,6 +14,7 @@ import {
 import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
+import type { Command as PMCommand } from "@tiptap/pm/state";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor, JSONContent } from "@tiptap/react";
 import {
@@ -34,6 +35,13 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
+import {
+  acceptAIEditRevision,
+  acceptAllChanges,
+  diffWordSegments,
+  rejectAIEditRevision,
+  rejectAllChanges,
+} from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
@@ -43,8 +51,6 @@ import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 
-import { diffClauseBodies } from "./clause-diff";
-import { ClauseDiffView } from "./clause-diff-view";
 import {
   CLAUSE_DIRECTIVE_NODE,
   ClauseDirectiveNode,
@@ -57,6 +63,12 @@ import type {
   ClauseParagraph,
   ClauseRun,
 } from "./clause-editor-types";
+import {
+  DELETION_MARK,
+  DeletionMark,
+  INSERTION_MARK,
+  InsertionMark,
+} from "./clause-tracked-change-marks";
 
 const listNodeType = (kind: ClauseListKind): "bulletList" | "orderedList" =>
   kind === "bullet" ? "bulletList" : "orderedList";
@@ -104,9 +116,23 @@ const runsToInline = (runs: readonly ClauseRun[]): JSONContent[] =>
     return node;
   });
 
-const paragraphToNode = (p: ClauseParagraph): JSONContent => {
+/**
+ * Override a paragraph's inline content by body index. Returns replacement
+ * inline nodes (e.g. tracked-change runs) or `null` to fall back to the
+ * paragraph's own runs. Lets the tracked-change builder reuse the exact same
+ * structure walk instead of re-deriving list/heading nesting.
+ */
+type ParagraphContentOverride = (
+  paragraph: ClauseParagraph,
+  index: number,
+) => JSONContent[] | null;
+
+const paragraphToNode = (
+  p: ClauseParagraph,
+  contentOverride?: JSONContent[] | null,
+): JSONContent => {
   const isHeading = p.style === "heading" && p.level !== undefined;
-  const content = runsToInline(p.runs ?? [{ text: p.text }]);
+  const content = contentOverride ?? runsToInline(p.runs ?? [{ text: p.text }]);
 
   if (isHeading) {
     return {
@@ -132,6 +158,7 @@ const buildList = (
   start: number,
   level: number,
   kind: ClauseListKind,
+  override?: ParagraphContentOverride,
 ): { node: JSONContent; consumed: number } => {
   const items: JSONContent[] = [];
   let i = start;
@@ -148,7 +175,7 @@ const buildList = (
     if (pLevel > level) {
       // A deeper item with no own-level parent: nest it under the last item,
       // or open a fresh item so the structure stays well-formed.
-      const child = buildList(body, i, pLevel, p.listKind);
+      const child = buildList(body, i, pLevel, p.listKind, override);
       const lastItem = items.at(-1);
       if (lastItem?.content) {
         lastItem.content.push(child.node);
@@ -161,12 +188,18 @@ const buildList = (
 
     // paragraphToNode ignores list props, so the item's inner paragraph is
     // just the paragraph itself; buildList owns the list/nesting structure.
-    const itemContent: JSONContent[] = [paragraphToNode(p)];
+    const itemContent: JSONContent[] = [paragraphToNode(p, override?.(p, i))];
     i += 1;
     // Pull any immediately-following deeper items into this item as a sub-list.
     const next = body[i];
     if (next?.listKind && listLevelOf(next) > level) {
-      const child = buildList(body, i, listLevelOf(next), next.listKind);
+      const child = buildList(
+        body,
+        i,
+        listLevelOf(next),
+        next.listKind,
+        override,
+      );
       itemContent.push(child.node);
       i += child.consumed;
     }
@@ -181,6 +214,7 @@ const buildList = (
 
 export const clauseBodyToTipTap = (
   body: readonly ClauseParagraph[],
+  override?: ParagraphContentOverride,
 ): JSONContent => {
   const content: JSONContent[] = [];
   let i = 0;
@@ -199,12 +233,12 @@ export const clauseBodyToTipTap = (
       continue;
     }
     if (p.listKind) {
-      const built = buildList(body, i, listLevelOf(p), p.listKind);
+      const built = buildList(body, i, listLevelOf(p), p.listKind, override);
       content.push(built.node);
       i += built.consumed;
       continue;
     }
-    content.push(paragraphToNode(p));
+    content.push(paragraphToNode(p, override?.(p, i)));
     i += 1;
   }
 
@@ -233,6 +267,12 @@ const nodeToParagraph = (node: JSONContent): ClauseParagraph => {
 
   for (const child of node.content ?? []) {
     if (child.type === "text" && child.text) {
+      // Safety net: never serialize text still wrapped in a deletion mark, even
+      // if a save somehow fires with unresolved tracked changes pending.
+      if (child.marks?.some((m) => m.type === DELETION_MARK)) {
+        continue;
+      }
+
       const bold = child.marks?.some((m) => m.type === "bold");
       const italic = child.marks?.some((m) => m.type === "italic");
 
@@ -331,18 +371,125 @@ const bodyKey = (body: readonly ClauseParagraph[]): string =>
     )
     .join("\u0000");
 
+// ── AI tracked changes ──────────────────────────────
+
+// The suggesting author for AI edits. Accept/reject match by revisionId, so
+// this is only carried for rendering/attribution, never for resolution.
+const TRACKED_AUTHOR = "ai";
+
+// Monotonic revision ids for a session. Folio's resolver matches changes by
+// this id; uniqueness across edits is all that matters.
+let nextRevisionId = Math.floor(Date.now());
+
+/**
+ * Inline nodes for one changed paragraph: equal runs as plain text, removed
+ * runs carrying the deletion mark, added runs carrying the insertion mark — all
+ * sharing one revisionId so the paragraph's edit accepts/rejects as a unit.
+ */
+const buildTrackedInline = (
+  oldText: string,
+  newText: string,
+  revisionId: number,
+  date: string,
+): JSONContent[] => {
+  const nodes: JSONContent[] = [];
+  for (const segment of diffWordSegments(oldText, newText)) {
+    if (segment.text === "") {
+      continue;
+    }
+    if (segment.type === "equal") {
+      nodes.push({ type: "text", text: segment.text });
+      continue;
+    }
+    nodes.push({
+      type: "text",
+      text: segment.text,
+      marks: [
+        {
+          type: segment.type === "ins" ? INSERTION_MARK : DELETION_MARK,
+          attrs: { revisionId, author: TRACKED_AUTHOR, date },
+        },
+      ],
+    });
+  }
+  return nodes;
+};
+
+type TrackedChangeDoc = { doc: JSONContent; revisionIds: number[] };
+
+/**
+ * Build a TipTap doc that renders the AI revision as inline tracked changes.
+ * `rewrite.ts` returns an index-aligned body (same length/structure, only prose
+ * text swapped), so a paragraph changed iff its text differs at the same index;
+ * the structure walk is reused via `clauseBodyToTipTap`'s content override.
+ */
+export const buildTrackedChangeDoc = (
+  baseline: readonly ClauseParagraph[],
+  revised: readonly ClauseParagraph[],
+): TrackedChangeDoc => {
+  const date = new Date().toISOString();
+  const revisionIds: number[] = [];
+  const idByIndex = new Map<number, number>();
+
+  const count = Math.min(baseline.length, revised.length);
+  for (let i = 0; i < count; i++) {
+    const before = baseline[i];
+    const after = revised[i];
+    if (!before || !after || before.isDirective || after.isDirective) {
+      continue;
+    }
+    if (before.text === after.text) {
+      continue;
+    }
+    const id = nextRevisionId++;
+    idByIndex.set(i, id);
+    revisionIds.push(id);
+  }
+
+  const override: ParagraphContentOverride = (paragraph, index) => {
+    const id = idByIndex.get(index);
+    if (id === undefined) {
+      return null;
+    }
+    return buildTrackedInline(
+      baseline[index]?.text ?? "",
+      paragraph.text,
+      id,
+      date,
+    );
+  };
+
+  return { doc: clauseBodyToTipTap(revised, override), revisionIds };
+};
+
+/** Whether the doc still holds any unresolved AI tracked-change mark. */
+const hasPendingTrackedChanges = (editor: Editor): boolean => {
+  let pending = false;
+  editor.state.doc.descendants((node) => {
+    if (pending) {
+      return false;
+    }
+    if (
+      node.isText &&
+      node.marks.some(
+        (m) => m.type.name === INSERTION_MARK || m.type.name === DELETION_MARK,
+      )
+    ) {
+      pending = true;
+      return false;
+    }
+    return true;
+  });
+  return pending;
+};
+
 // ── Editor Component ────────────────────────────────
 
 type AiEditState =
   | { status: "idle" }
   | { status: "prompting"; instruction: string }
   | { status: "generating"; instruction: string; baseline: ClauseBody }
-  | {
-      status: "preview";
-      instruction: string;
-      baseline: ClauseBody;
-      revised: ClauseBody;
-    };
+  | { status: "reviewing"; instruction: string; baseline: ClauseBody };
 
 type ClauseEditorProps = {
   content: ClauseParagraph[];
@@ -364,10 +511,165 @@ export const ClauseEditor = ({
   title,
 }: ClauseEditorProps) => {
   const t = useTranslations();
-  // AI edit is a preview-then-apply flow: generate a rewrite, show it as a diff,
-  // and mutate the clause only when the user accepts. The prompt stays editable
-  // so the user can regenerate against the original body.
+  // AI edit is a generate-then-review flow: a rewrite lands inline as tracked
+  // changes (insertion/deletion marks) and the clause is mutated only as the
+  // user accepts/rejects each change. The prompt stays editable so the user can
+  // regenerate against the original body.
   const [aiEdit, setAiEdit] = useState<AiEditState>({ status: "idle" });
+  const [hunkMenu, setHunkMenu] = useState<{
+    revisionId: number;
+    top: number;
+    left: number;
+  } | null>(null);
+
+  // Read inside the editor's stable onUpdate/onBlur/handleClick closures, which
+  // capture the first render. Refs keep them reading the live values.
+  const aiStateRef = useRef<AiEditState>(aiEdit);
+  aiStateRef.current = aiEdit;
+  const onChangeRef = useRef(onChange);
+  onChangeRef.current = onChange;
+  const onBlurRef = useRef(onBlur);
+  onBlurRef.current = onBlur;
+
+  const updateInstruction = (value: string) => {
+    setAiEdit((prev) => {
+      if (prev.status === "prompting") {
+        return { status: "prompting", instruction: value };
+      }
+      if (prev.status === "reviewing") {
+        return { ...prev, instruction: value };
+      }
+      return prev;
+    });
+  };
+  // Last body the editor itself emitted, so the reset effect can tell an
+  // external content change (dialog reset, clause switch) from the round-trip
+  // of the user's own keystroke and avoid clobbering the cursor.
+  const lastEmittedKeyRef = useRef(bodyKey(content));
+  // Anchor for positioning the inline accept/reject menu over a tracked change.
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  const editor = useEditor({
+    // Inline on an SSR'd page (unlike the old modal, which only mounted
+    // client-side): defer editor creation to the client so the server and
+    // client DOM agree. Without this, the hydration mismatch corrupts
+    // ProseMirror's DOM<->position mapping and text selection stops working.
+    immediatelyRender: false,
+    extensions: [
+      Document,
+      Paragraph,
+      Text,
+      Bold,
+      Italic,
+      Heading.configure({ levels: [1, 2, 3] }),
+      BulletList,
+      OrderedList,
+      ListItem,
+      // Tab / Shift-Tab nesting plus smart Backspace/Delete at list edges.
+      ListKeymap,
+      ClauseDirectiveNode,
+      // Tracked-change marks for AI edits; resolved by the shared folio
+      // accept/reject commands.
+      InsertionMark,
+      DeletionMark,
+      History,
+      Placeholder.configure({
+        placeholder: placeholder ?? "",
+      }),
+    ],
+    content: clauseBodyToTipTap(content),
+    editorProps: {
+      // While reviewing, clicking a tracked change opens its accept/reject menu.
+      handleClick: (view, pos) => {
+        if (aiStateRef.current.status !== "reviewing") {
+          return false;
+        }
+        const $pos = view.state.doc.resolve(pos);
+        const marks = [
+          ...($pos.nodeBefore?.marks ?? []),
+          ...($pos.nodeAfter?.marks ?? []),
+        ];
+        const mark = marks.find(
+          (m) =>
+            m.type.name === INSERTION_MARK || m.type.name === DELETION_MARK,
+        );
+        const revisionId = mark?.attrs["revisionId"];
+        if (typeof revisionId !== "number") {
+          setHunkMenu(null);
+          return false;
+        }
+        const coords = view.coordsAtPos(pos);
+        const rect = containerRef.current?.getBoundingClientRect();
+        setHunkMenu({
+          revisionId,
+          top: coords.bottom - (rect?.top ?? 0),
+          left: coords.left - (rect?.left ?? 0),
+        });
+        return false;
+      },
+    },
+    onUpdate: ({ editor: e }) => {
+      // While reviewing, suppress autosave until every AI change is resolved —
+      // a doc with pending marks would serialise both struck and inserted text.
+      if (aiStateRef.current.status === "reviewing") {
+        if (hasPendingTrackedChanges(e)) {
+          return;
+        }
+        const resolved = tipTapToClauseBody(e.getJSON());
+        const key = bodyKey(resolved);
+        // Reject-all returns to baseline; skip the emit so cancelling an AI edit
+        // doesn't mark the clause dirty or trigger an autosave.
+        const changed = key !== lastEmittedKeyRef.current;
+        lastEmittedKeyRef.current = key;
+        e.setEditable(true);
+        setHunkMenu(null);
+        setAiEdit({ status: "idle" });
+        if (changed) {
+          onChangeRef.current(resolved);
+        }
+        return;
+      }
+      const body = tipTapToClauseBody(e.getJSON());
+      lastEmittedKeyRef.current = bodyKey(body);
+      onChangeRef.current(body);
+    },
+    onBlur: ({ editor: e }) => {
+      if (aiStateRef.current.status === "reviewing") {
+        return;
+      }
+      onBlurRef.current?.(tipTapToClauseBody(e.getJSON()));
+    },
+  });
+
+  // Re-seed the editor only on an external content change (not on the user's
+  // own edits, whose key we already recorded above).
+  const contentKey = bodyKey(content);
+  const editorReady = isUsableEditor(editor);
+
+  useExternalSyncEffect(() => {
+    if (!isUsableEditor(editor)) {
+      return undefined;
+    }
+    // Mid-review, keep the pending tracked changes in place — unless the parent
+    // switched to a different clause, in which case discard the review and load
+    // the new content so the editor never stays stuck on the old clause.
+    if (aiStateRef.current.status === "reviewing") {
+      if (contentKey !== bodyKey(aiStateRef.current.baseline)) {
+        setAiEdit({ status: "idle" });
+        editor.setEditable(true);
+        setHunkMenu(null);
+        editor.commands.setContent(clauseBodyToTipTap(content));
+        lastEmittedKeyRef.current = contentKey;
+      }
+      return undefined;
+    }
+    if (contentKey !== lastEmittedKeyRef.current) {
+      editor.commands.setContent(clauseBodyToTipTap(content));
+      lastEmittedKeyRef.current = contentKey;
+    }
+    return undefined;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- editor is a stable ref; only re-sync when contentKey changes
+  }, [contentKey]);
 
   const runRewrite = async (instruction: string, baseline: ClauseBody) => {
     const trimmed = instruction.trim();
@@ -394,105 +696,88 @@ export const ClauseEditor = ({
       setAiEdit({ status: "prompting", instruction: trimmed });
       return;
     }
-    setAiEdit({
-      status: "preview",
+    if (!isUsableEditor(editor)) {
+      return;
+    }
+    // The index-aligned diff assumes the rewrite preserves the paragraph/directive
+    // structure. An LLM can drift (add/drop a paragraph, flip a directive); bail to
+    // the prompt instead of rendering a misaligned diff.
+    const rewritten = response.data.body;
+    const isStructurallyAligned =
+      baseline.length === rewritten.length &&
+      baseline.every(
+        (p, idx) =>
+          Boolean(p.isDirective) === Boolean(rewritten[idx]?.isDirective),
+      );
+    if (!isStructurallyAligned) {
+      stellaToast.add({
+        type: "error",
+        title: t("ai.editWithAI"),
+        description: t("clauses.aiStructureChanged"),
+      });
+      setAiEdit({ status: "prompting", instruction: trimmed });
+      return;
+    }
+    const { doc, revisionIds } = buildTrackedChangeDoc(baseline, rewritten);
+    if (revisionIds.length === 0) {
+      stellaToast.add({
+        type: "info",
+        title: t("ai.editWithAI"),
+        description: t("clauses.noChanges"),
+      });
+      setAiEdit({ status: "idle" });
+      return;
+    }
+    // Set the ref before applying so the suppression in onUpdate is in effect
+    // even though setContent fires synchronously, before the state commits.
+    aiStateRef.current = {
+      status: "reviewing",
       instruction: trimmed,
       baseline,
-      revised: response.data.body,
-    });
+    };
+    editor.commands.setContent(doc, { emitUpdate: false });
+    editor.setEditable(false);
+    setHunkMenu(null);
+    setAiEdit({ status: "reviewing", instruction: trimmed, baseline });
   };
 
   const submitAiEdit = () => {
-    if (aiEdit.status === "idle") {
+    if (aiEdit.status === "idle" || aiEdit.status === "generating") {
       return;
     }
     const baseline = aiEdit.status === "prompting" ? content : aiEdit.baseline;
     void runRewrite(aiEdit.instruction, baseline);
   };
 
-  const acceptAiEdit = () => {
-    if (aiEdit.status !== "preview") {
+  // Run a schema-agnostic folio tracked-change command. onUpdate finalises the
+  // review (re-enables editing, emits the body) once no changes remain.
+  const runResolveCommand = (command: PMCommand) => {
+    if (!isUsableEditor(editor)) {
       return;
     }
-    onChange(aiEdit.revised);
-    setAiEdit({ status: "idle" });
+    setHunkMenu(null);
+    editor.commands.command(({ state, dispatch }) => command(state, dispatch));
   };
 
-  const updateInstruction = (value: string) => {
-    setAiEdit((prev) => {
-      if (prev.status === "prompting") {
-        return { status: "prompting", instruction: value };
-      }
-      if (prev.status === "preview") {
-        return { ...prev, instruction: value };
-      }
-      return prev;
-    });
-  };
+  const acceptAll = () => runResolveCommand(acceptAllChanges());
+  const rejectAll = () => runResolveCommand(rejectAllChanges());
+  const acceptHunk = (revisionId: number) =>
+    runResolveCommand(acceptAIEditRevision(revisionId));
+  const rejectHunk = (revisionId: number) =>
+    runResolveCommand(rejectAIEditRevision(revisionId));
 
   const toggleAiEdit = () => {
-    setAiEdit((prev) =>
-      prev.status === "idle"
-        ? { status: "prompting", instruction: "" }
-        : { status: "idle" },
-    );
+    if (aiEdit.status === "idle") {
+      setAiEdit({ status: "prompting", instruction: "" });
+      return;
+    }
+    // Closing while reviewing discards the suggestion (revert to baseline).
+    if (aiEdit.status === "reviewing") {
+      rejectAll();
+      return;
+    }
+    setAiEdit({ status: "idle" });
   };
-  // Last body the editor itself emitted, so the reset effect can tell an
-  // external content change (dialog reset, clause switch) from the round-trip
-  // of the user's own keystroke and avoid clobbering the cursor.
-  const lastEmittedKeyRef = useRef(bodyKey(content));
-
-  const editor = useEditor({
-    // Inline on an SSR'd page (unlike the old modal, which only mounted
-    // client-side): defer editor creation to the client so the server and
-    // client DOM agree. Without this, the hydration mismatch corrupts
-    // ProseMirror's DOM<->position mapping and text selection stops working.
-    immediatelyRender: false,
-    extensions: [
-      Document,
-      Paragraph,
-      Text,
-      Bold,
-      Italic,
-      Heading.configure({ levels: [1, 2, 3] }),
-      BulletList,
-      OrderedList,
-      ListItem,
-      // Tab / Shift-Tab nesting plus smart Backspace/Delete at list edges.
-      ListKeymap,
-      ClauseDirectiveNode,
-      History,
-      Placeholder.configure({
-        placeholder: placeholder ?? "",
-      }),
-    ],
-    content: clauseBodyToTipTap(content),
-    onUpdate: ({ editor: e }) => {
-      const body = tipTapToClauseBody(e.getJSON());
-      lastEmittedKeyRef.current = bodyKey(body);
-      onChange(body);
-    },
-    onBlur: ({ editor: e }) => {
-      onBlur?.(tipTapToClauseBody(e.getJSON()));
-    },
-  });
-
-  // Re-seed the editor only on an external content change (not on the user's
-  // own edits, whose key we already recorded above).
-  const contentKey = bodyKey(content);
-  const editorReady = isUsableEditor(editor);
-
-  useExternalSyncEffect(() => {
-    if (!isUsableEditor(editor)) {
-      return undefined;
-    }
-    if (contentKey !== lastEmittedKeyRef.current) {
-      editor.commands.setContent(clauseBodyToTipTap(content));
-      lastEmittedKeyRef.current = contentKey;
-    }
-    return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- editor is a stable ref; only re-sync when contentKey changes
-  }, [contentKey]);
 
   const toggleBold = () => {
     if (!isUsableEditor(editor)) {
@@ -552,7 +837,7 @@ export const ClauseEditor = ({
 
   const canUndo = editorReady && editor.can().undo();
   const canRedo = editorReady && editor.can().redo();
-  const previewing = aiEdit.status === "preview";
+  const reviewing = aiEdit.status === "reviewing";
   const aiActive = aiEdit.status !== "idle";
 
   return (
@@ -566,12 +851,13 @@ export const ClauseEditor = ({
           e.stopPropagation();
         }
       }}
+      ref={containerRef}
     >
       {/* Toolbar */}
       <div className="flex items-center gap-0.5 border-b px-1 py-0.5">
         <Button
           aria-label={t("folio.undo")}
-          disabled={!canUndo || previewing}
+          disabled={!canUndo || reviewing}
           onClick={undo}
           size="icon-xs"
           title={t("folio.undo")}
@@ -582,7 +868,7 @@ export const ClauseEditor = ({
         </Button>
         <Button
           aria-label={t("folio.redo")}
-          disabled={!canRedo || previewing}
+          disabled={!canRedo || reviewing}
           onClick={redo}
           size="icon-xs"
           title={t("folio.redo")}
@@ -597,7 +883,7 @@ export const ClauseEditor = ({
           className={
             editorReady && editor.isActive("bold") ? "bg-muted" : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={toggleBold}
           size="icon-xs"
           type="button"
@@ -610,7 +896,7 @@ export const ClauseEditor = ({
           className={
             editorReady && editor.isActive("italic") ? "bg-muted" : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={toggleItalic}
           size="icon-xs"
           type="button"
@@ -626,7 +912,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={() => toggleHeading(1)}
           size="icon-xs"
           type="button"
@@ -641,7 +927,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={() => toggleHeading(2)}
           size="icon-xs"
           type="button"
@@ -656,7 +942,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={() => toggleHeading(3)}
           size="icon-xs"
           type="button"
@@ -672,7 +958,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={toggleBulletList}
           size="icon-xs"
           type="button"
@@ -687,7 +973,7 @@ export const ClauseEditor = ({
               ? "bg-muted"
               : undefined
           }
-          disabled={!editorReady || previewing}
+          disabled={!editorReady || reviewing}
           onClick={toggleOrderedList}
           size="icon-xs"
           type="button"
@@ -710,17 +996,17 @@ export const ClauseEditor = ({
         </Button>
       </div>
 
-      {/* Editor area — hidden under an AI preview so the read-only diff can
-          take its place without tearing down the live editor instance. */}
-      <div className={cn(previewing && "hidden")}>
-        <EditorContent editor={editor} />
-      </div>
-      {aiEdit.status === "preview" ? (
-        <div className="px-3 py-2">
-          <ClauseDiffView
-            diffs={diffClauseBodies(aiEdit.baseline, aiEdit.revised)}
-          />
-        </div>
+      {/* Editor area stays mounted during review; AI edits render inline as
+          tracked changes rather than in a separate read-only diff pane. */}
+      <EditorContent editor={editor} />
+
+      {hunkMenu && reviewing ? (
+        <HunkMenu
+          onAccept={() => acceptHunk(hunkMenu.revisionId)}
+          onReject={() => rejectHunk(hunkMenu.revisionId)}
+          top={hunkMenu.top}
+          left={hunkMenu.left}
+        />
       ) : null}
 
       <p
@@ -735,9 +1021,10 @@ export const ClauseEditor = ({
       {aiEdit.status === "idle" ? null : (
         <AiEditBar
           instruction={aiEdit.instruction}
-          onAccept={acceptAiEdit}
-          onDiscard={() => setAiEdit({ status: "idle" })}
+          onAcceptAll={acceptAll}
+          onCancel={toggleAiEdit}
           onInstructionChange={updateInstruction}
+          onRejectAll={rejectAll}
           onSubmit={submitAiEdit}
           status={aiEdit.status}
         />
@@ -746,15 +1033,56 @@ export const ClauseEditor = ({
   );
 };
 
+// ── Inline accept/reject menu for one tracked change ────
+
+type HunkMenuProps = {
+  top: number;
+  left: number;
+  onAccept: () => void;
+  onReject: () => void;
+};
+
+const HunkMenu = ({ top, left, onAccept, onReject }: HunkMenuProps) => {
+  const t = useTranslations();
+  return (
+    <div
+      className="bg-popover absolute z-20 flex items-center gap-0.5 rounded-md border p-0.5 shadow-md"
+      style={{ top, left }}
+    >
+      <Button
+        aria-label={t("common.accept")}
+        onClick={onAccept}
+        size="icon-xs"
+        title={t("common.accept")}
+        type="button"
+        variant="ghost"
+      >
+        <CheckIcon className="size-3.5" />
+      </Button>
+      <Button
+        aria-label={t("docxReview.reject")}
+        onClick={onReject}
+        size="icon-xs"
+        title={t("docxReview.reject")}
+        type="button"
+        variant="ghost"
+      >
+        <XIcon className="size-3.5" />
+      </Button>
+    </div>
+  );
+};
+
 // ── AI edit bar ─────────────────────────────────────
 
 type AiEditBarProps = {
-  status: "prompting" | "generating" | "preview";
+  status: "prompting" | "generating" | "reviewing";
   instruction: string;
   onInstructionChange: (value: string) => void;
   onSubmit: () => void;
-  onAccept: () => void;
-  onDiscard: () => void;
+  onAcceptAll: () => void;
+  onRejectAll: () => void;
+  onCancel: () => void;
 };
 
 const AiEditBar = ({
@@ -762,12 +1090,13 @@ const AiEditBar = ({
   instruction,
   onInstructionChange,
   onSubmit,
-  onAccept,
-  onDiscard,
+  onAcceptAll,
+  onRejectAll,
+  onCancel,
 }: AiEditBarProps) => {
   const t = useTranslations();
   const generating = status === "generating";
-  const previewing = status === "preview";
+  const reviewing = status === "reviewing";
 
   return (
     <div className="bg-popover absolute inset-x-0 bottom-2 z-10 mx-auto flex w-[min(92%,32rem)] flex-col gap-2 rounded-lg border p-2 shadow-lg">
@@ -789,24 +1118,30 @@ const AiEditBar = ({
         />
       </div>
       <div className="flex items-center justify-end gap-2">
-        <Button onClick={onDiscard} size="sm" type="button" variant="ghost">
-          {previewing ? <XIcon className="size-3.5" /> : null}
-          {t("common.cancel")}
-        </Button>
+        {reviewing ? (
+          <Button onClick={onRejectAll} size="sm" type="button" variant="ghost">
+            <XIcon className="size-3.5" />
+            {t("docxReview.rejectAll")}
+          </Button>
+        ) : (
+          <Button onClick={onCancel} size="sm" type="button" variant="ghost">
+            {t("common.cancel")}
+          </Button>
+        )}
         <Button
           disabled={generating || instruction.trim() === ""}
           onClick={onSubmit}
           size="sm"
           type="button"
-          variant={previewing ? "ghost" : undefined}
+          variant={reviewing ? "ghost" : undefined}
         >
-          <AiEditSubmitIcon generating={generating} previewing={previewing} />
-          {previewing ? t("common.regenerate") : t("ai.editWithAI")}
+          <AiEditSubmitIcon generating={generating} reviewing={reviewing} />
+          {reviewing ? t("common.regenerate") : t("ai.editWithAI")}
         </Button>
-        {previewing ? (
-          <Button onClick={onAccept} size="sm" type="button">
+        {reviewing ? (
+          <Button onClick={onAcceptAll} size="sm" type="button">
             <CheckIcon className="size-3.5" />
-            {t("common.accept")}
+            {t("docxReview.acceptAll")}
           </Button>
         ) : null}
       </div>
@@ -816,15 +1151,15 @@ const AiEditBar = ({
 
 const AiEditSubmitIcon = ({
   generating,
-  previewing,
+  reviewing,
 }: {
   generating: boolean;
-  previewing: boolean;
+  reviewing: boolean;
 }) => {
   if (generating) {
     return <Loader2Icon className="size-3.5 animate-spin" />;
   }
-  if (previewing) {
+  if (reviewing) {
     return <RotateCcwIcon className="size-3.5" />;
   }
   return <WandSparklesIcon className="size-3.5" />;

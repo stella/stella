@@ -68,6 +68,19 @@ export {
   type FolioAIEditSnapshot,
   type FolioAISignatureParty,
 } from "./core/ai-edits";
+// Tracked-change resolution commands. Schema-agnostic ProseMirror commands —
+// they operate on the `insertion`/`deletion` marks by name + revisionId, so any
+// editor whose schema carries those marks (e.g. the clauses TipTap editor) can
+// accept/reject AI tracked changes without the DOCX editor.
+export {
+  acceptChange,
+  rejectChange,
+  acceptAllChanges,
+  rejectAllChanges,
+  acceptAIEditRevision,
+  rejectAIEditRevision,
+  findAIEditRevisionRange,
+} from "./core/prosemirror/commands/comments";
 export {
   resolveSuggestionAnchor,
   isSuggestionStale,

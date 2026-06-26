@@ -1,8 +1,34 @@
 import { describe, expect, test } from "bun:test";
 
 import { CLAUSE_DIRECTIVE_NODE } from "./clause-directive-node";
-import { clauseBodyToTipTap, tipTapToClauseBody } from "./clause-editor";
+import {
+  buildTrackedChangeDoc,
+  clauseBodyToTipTap,
+  tipTapToClauseBody,
+} from "./clause-editor";
 import type { ClauseParagraph } from "./clause-editor-types";
+
+/** Collect every text node in a doc with the tracked-change mark on it (if any). */
+const trackedRuns = (
+  node: {
+    type?: string;
+    text?: string;
+    marks?: { type: string }[];
+    content?: unknown[];
+  },
+  out: { text: string; mark: string | null }[] = [],
+): { text: string; mark: string | null }[] => {
+  if (node.type === "text" && typeof node.text === "string") {
+    const mark = node.marks?.find(
+      (m) => m.type === "insertion" || m.type === "deletion",
+    );
+    out.push({ text: node.text, mark: mark?.type ?? null });
+  }
+  for (const child of (node.content ?? []) as (typeof node)[]) {
+    trackedRuns(child, out);
+  }
+  return out;
+};
 
 const directive = (
   directiveKind: NonNullable<ClauseParagraph["directiveKind"]>,
@@ -159,5 +185,109 @@ describe("clause body ⇄ TipTap round-trip", () => {
       { text: "Body first" },
       directive("if", "x"),
     ]);
+  });
+});
+
+describe("buildTrackedChangeDoc", () => {
+  test("only changed paragraphs carry tracked-change marks", () => {
+    const baseline: ClauseParagraph[] = [
+      { text: "The seller shall indemnify the buyer." },
+      { text: "This stays the same." },
+    ];
+    const revised: ClauseParagraph[] = [
+      { text: "Each party shall indemnify the other." },
+      { text: "This stays the same." },
+    ];
+
+    const { doc, revisionIds } = buildTrackedChangeDoc(baseline, revised);
+    expect(revisionIds).toHaveLength(1);
+
+    const runs = trackedRuns(doc);
+    // The unchanged paragraph contributes only unmarked text.
+    expect(runs.some((r) => r.text.includes("stays the same") && r.mark)).toBe(
+      false,
+    );
+    // The changed paragraph contributes both a deletion and an insertion.
+    expect(runs.some((r) => r.mark === "deletion")).toBe(true);
+    expect(runs.some((r) => r.mark === "insertion")).toBe(true);
+  });
+
+  test("a paragraph's change shares one revisionId across its segments", () => {
+    const { doc, revisionIds } = buildTrackedChangeDoc(
+      [{ text: "alpha beta gamma" }],
+      [{ text: "alpha delta gamma" }],
+    );
+    expect(revisionIds).toHaveLength(1);
+
+    const findMarkedIds = (
+      node: {
+        type?: string;
+        marks?: { type: string; attrs?: { revisionId?: number } }[];
+        content?: unknown[];
+      },
+      ids = new Set<number>(),
+    ): Set<number> => {
+      for (const m of node.marks ?? []) {
+        if (
+          (m.type === "insertion" || m.type === "deletion") &&
+          typeof m.attrs?.revisionId === "number"
+        ) {
+          ids.add(m.attrs.revisionId);
+        }
+      }
+      for (const child of (node.content ?? []) as (typeof node)[]) {
+        findMarkedIds(child, ids);
+      }
+      return ids;
+    };
+    // del + ins of one paragraph edit resolve as a single unit.
+    expect(findMarkedIds(doc).size).toBe(1);
+  });
+
+  test("directives are never marked and don't shift the index alignment", () => {
+    const baseline: ClauseParagraph[] = [
+      directive("if", "x"),
+      { text: "Original wording here." },
+      directive("endif", ""),
+    ];
+    const revised: ClauseParagraph[] = [
+      directive("if", "x"),
+      { text: "Replaced wording here." },
+      directive("endif", ""),
+    ];
+
+    const { doc, revisionIds } = buildTrackedChangeDoc(baseline, revised);
+    expect(revisionIds).toHaveLength(1);
+
+    const directiveNodes =
+      doc.content?.filter((n) => n.type === CLAUSE_DIRECTIVE_NODE) ?? [];
+    expect(directiveNodes).toHaveLength(2);
+    // The marked text lands on the paragraph between the directives, not on them.
+    const runs = trackedRuns(doc);
+    expect(runs.some((r) => r.mark === "insertion")).toBe(true);
+  });
+
+  test("a changed paragraph inside a list is marked (index maps through nesting)", () => {
+    const baseline: ClauseParagraph[] = [
+      { text: "Lead in." },
+      { text: "first item", listKind: "bullet", listLevel: 0 },
+      { text: "second item", listKind: "bullet", listLevel: 0 },
+    ];
+    const revised: ClauseParagraph[] = [
+      { text: "Lead in." },
+      { text: "first item", listKind: "bullet", listLevel: 0 },
+      { text: "second item revised", listKind: "bullet", listLevel: 0 },
+    ];
+
+    const { doc, revisionIds } = buildTrackedChangeDoc(baseline, revised);
+    expect(revisionIds).toHaveLength(1);
+    const runs = trackedRuns(doc);
+    // "revised" was added inside the second list item.
+    expect(
+      runs.some((r) => r.mark === "insertion" && r.text.includes("revised")),
+    ).toBe(true);
+    expect(
+      runs.some((r) => r.mark !== null && r.text.includes("Lead in")),
+    ).toBe(false);
   });
 });

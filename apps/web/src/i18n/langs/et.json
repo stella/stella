@@ -552,6 +552,7 @@
   },
   "clauses": {
     "addVariant": "Lisa variant",
+    "aiStructureChanged": "Muutmine AI-ga muutis klausli struktuuri ja seda ei saa kuvada tekstisiseste muudatustena. Kohanda juhist ja proovi uuesti.",
     "allClauses": "Kõik klauslid",
     "backToList": "Tagasi klauslite juurde",
     "body": "Sisu",

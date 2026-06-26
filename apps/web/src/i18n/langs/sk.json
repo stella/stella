@@ -552,6 +552,7 @@
   },
   "clauses": {
     "addVariant": "Pridať variant",
+    "aiStructureChanged": "Úprava pomocou AI zmenila štruktúru ustanovenia a nemožno ju zobraziť ako vložené zmeny. Upravte pokyn a skúste to znova.",
     "allClauses": "Všetky ustanovenia",
     "backToList": "Späť na zoznam ustanovení",
     "body": "Obsah",

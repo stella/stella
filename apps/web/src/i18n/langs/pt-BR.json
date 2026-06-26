@@ -552,6 +552,7 @@
   },
   "clauses": {
     "addVariant": "Adicionar variante",
+    "aiStructureChanged": "A reescrita com IA alterou a estrutura da cláusula e não pode ser exibida como alterações em linha. Ajuste sua instrução e tente novamente.",
     "allClauses": "Todas as cláusulas",
     "backToList": "Voltar às cláusulas",
     "body": "Corpo",
