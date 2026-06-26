@@ -10,7 +10,7 @@ import {
   controlCapabilities,
   dataStackCapabilities,
 } from "../data/capabilities";
-import { getChangelogReleases } from "../lib/changelog";
+import { getLatestFeatureRelease } from "../lib/changelog";
 import { getTranslations } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
 
@@ -18,7 +18,7 @@ const rawLocale = Astro.currentLocale ?? defaultLocale;
 const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 
-const latestRelease = getChangelogReleases().at(0);
+const latestRelease = getLatestFeatureRelease();
 
 const appUrl = "https://my.stll.app";
 const discordUrl = "https://discord.gg/8dZjmVFjTK";
@@ -81,7 +81,7 @@ const selfHostingDocsUrl =
           class="header-cta inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium whitespace-nowrap"
           style="background: var(--primary); color: var(--primary-foreground)"
         >
-          {t("nav.startFree")}
+          {t("common.startFree")}
         </a>
       </div>
     </nav>
@@ -180,7 +180,7 @@ const selfHostingDocsUrl =
             style="background: var(--primary); color: var(--primary-foreground)"
             class="group inline-flex h-11 items-center gap-2 rounded-[0.85rem] px-6 text-sm font-medium shadow-sm transition-[opacity,transform] hover:-translate-y-0.5 hover:opacity-90 whitespace-nowrap"
           >
-            {t("hero.startFree")}
+            {t("common.startFree")}
             <span
               aria-hidden="true"
               class="transition-transform rtl:-scale-x-100 ltr:group-hover:translate-x-0.5 rtl:group-hover:-translate-x-0.5">→</span

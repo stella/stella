@@ -4,10 +4,12 @@
     "copy": "Copiar instrucción",
     "label": "Pregunta a una IA sobre stella"
   },
+  "common": {
+    "startFree": "Empezar gratis"
+  },
   "hero": {
     "badge": "Lanzamos sorprendentemente rápido",
     "selfHost": "Autoalojar",
-    "startFree": "Empezar gratis",
     "subtitle": "Asuntos, documentos y revisión, además de jurisprudencia, registros mercantiles y un agente de IA.",
     "subtitle2": "Gratis de usar, abierto de inspeccionar, tuyo para conservar.",
     "titleLine1": "Espacio de trabajo legal.",
@@ -20,7 +22,6 @@
     "blog": "Blog",
     "changelog": "Novedades",
     "product": "Producto",
-    "security": "Seguridad",
-    "startFree": "Empezar gratis"
+    "security": "Seguridad"
   }
 }

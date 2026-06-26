@@ -7,10 +7,12 @@ type Messages = {
     "copy": "Copy prompt";
     "label": "Ask AI about stella";
   };
+  "common": {
+    "startFree": "Start free";
+  };
   "hero": {
     "badge": "We ship weirdly fast";
     "selfHost": "Self-host";
-    "startFree": "Start free";
     "subtitle": "Matters, documents, and review, plus case law, company registries, and an AI agent.";
     "subtitle2": "Free to use, open to inspect, yours to keep.";
     "titleLine1": "Legal workspace.";
@@ -24,7 +26,6 @@ type Messages = {
     "changelog": "Changelog";
     "product": "Product";
     "security": "Security";
-    "startFree": "Start free";
   };
 };
 
