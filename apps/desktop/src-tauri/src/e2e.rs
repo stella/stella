@@ -23,11 +23,19 @@ use crate::types::{BRIDGE_CAPABILITIES, BRIDGE_VERSION};
 const ALLOWED_ORIGIN: &str = "http://localhost:3000";
 const DISALLOWED_ORIGIN: &str = "https://evil.example";
 
+/// Serializes the claim-a-port / spawn / become-ready window across tests.
+/// `cargo test` runs these concurrently, and the bound port is only known after
+/// a throwaway probe is dropped; holding this lock until the server answers
+/// `/health` means no two tests are ever in that gap at once, so they cannot
+/// race for the same loopback port.
+static SPAWN_GUARD: Mutex<()> = Mutex::const_new(());
+
 /// A bridge server bound to an ephemeral loopback port for the lifetime of a
 /// test, plus a handle to the [`SessionManager`] backing it so a test can seed
 /// trust state before driving requests.
 struct TestBridge {
   base_url: String,
+  port: u16,
   manager: Arc<Mutex<SessionManager>>,
 }
 
@@ -84,8 +92,11 @@ async fn spawn_test_bridge_with_origins(
   static_allowed_origins: HashSet<String>,
 ) -> TestBridge {
   // Drive the real production entry point (bind + serve) rather than a test-only
-  // router so the harness exercises the same code path the app runs. Bind a
-  // throwaway socket to claim a free loopback port, then hand it to start_bridge.
+  // router so the harness exercises the same code path the app runs. Hold
+  // SPAWN_GUARD across claim/spawn/ready so concurrent tests can't take the same
+  // port during the probe-drop -> start_bridge-rebind gap.
+  let _spawn_guard = SPAWN_GUARD.lock().await;
+
   let port = free_loopback_port().await;
   let manager = Arc::new(Mutex::new(SessionManager::new()));
 
@@ -93,6 +104,7 @@ async fn spawn_test_bridge_with_origins(
 
   let bridge = TestBridge {
     base_url: format!("http://127.0.0.1:{port}"),
+    port,
     manager,
   };
   bridge.wait_until_ready().await;
@@ -148,6 +160,7 @@ async fn health_reports_bridge_contract_over_real_socket() {
 
   let body: serde_json::Value = response.json().await.unwrap();
   assert_eq!(body["ok"], serde_json::json!(true));
+  assert_eq!(body["bridgePort"], serde_json::json!(bridge.port));
   assert_eq!(body["bridgeVersion"], serde_json::json!(BRIDGE_VERSION));
   assert_eq!(body["capabilities"], serde_json::json!(BRIDGE_CAPABILITIES));
 }
