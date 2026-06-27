@@ -864,9 +864,6 @@
             "location": "packages/folio/src/components/useFolioComments.ts#17"
           },
           {
-            "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
-          },
-          {
             "location": "packages/folio/src/hooks/useHistory.ts#11"
           },
           {
@@ -1066,6 +1063,12 @@
           },
           {
             "location": "apps/web/src/components/chat-pasted-text-node.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/condition-builder.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/formula-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#1"
@@ -2241,6 +2244,12 @@
             "location": "apps/api/src/handlers/docx/ai-field-generator.ts#13"
           },
           {
+            "location": "apps/api/src/handlers/docx/template-manifest.ts#16"
+          },
+          {
+            "location": "apps/api/src/handlers/docx/types.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#6"
           },
           {
@@ -2308,6 +2317,9 @@
           },
           {
             "location": "apps/api/src/mcp/template-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"
           },
           {
             "location": "apps/collab/src/env.ts#2"
@@ -2380,6 +2392,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#30"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#52"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/tools.tsx#6"
@@ -2691,9 +2706,6 @@
             "location": "packages/folio/src/components/useFolioComments.ts#17"
           },
           {
-            "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
-          },
-          {
             "location": "packages/folio/src/hooks/useHistory.ts#11"
           },
           {
@@ -2893,6 +2905,12 @@
           },
           {
             "location": "apps/web/src/components/chat-pasted-text-node.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/condition-builder.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/formula-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#1"
@@ -5459,9 +5477,6 @@
             "location": "packages/folio/src/components/useFolioComments.ts#17"
           },
           {
-            "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
-          },
-          {
             "location": "packages/folio/src/hooks/useHistory.ts#11"
           },
           {
@@ -5661,6 +5676,12 @@
           },
           {
             "location": "apps/web/src/components/chat-pasted-text-node.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/condition-builder.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/formula-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#1"
@@ -7838,9 +7859,6 @@
             "location": "packages/folio/src/components/useFolioComments.ts#17"
           },
           {
-            "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
-          },
-          {
             "location": "packages/folio/src/hooks/useHistory.ts#11"
           },
           {
@@ -8040,6 +8058,12 @@
           },
           {
             "location": "apps/web/src/components/chat-pasted-text-node.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/condition-builder.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/formula-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#1"
@@ -12978,9 +13002,6 @@
             "location": "packages/folio/src/components/useFolioComments.ts#17"
           },
           {
-            "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
-          },
-          {
             "location": "packages/folio/src/hooks/useHistory.ts#11"
           },
           {
@@ -13180,6 +13201,12 @@
           },
           {
             "location": "apps/web/src/components/chat-pasted-text-node.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/condition-builder.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/formula-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#1"
@@ -15550,6 +15577,9 @@
             "location": "apps/api/src/handlers/docx/patch-template.ts#11"
           },
           {
+            "location": "apps/api/src/handlers/docx/template-manifest.ts#13"
+          },
+          {
             "location": "apps/api/src/handlers/entities/check-stamp.ts#1"
           },
           {
@@ -16390,6 +16420,9 @@
             "location": "apps/api/src/lib/account-deletion-cleanup-queue.ts#1"
           },
           {
+            "location": "apps/api/src/lib/ai-models-no-provider.scenario.ts#1"
+          },
+          {
             "location": "apps/api/src/lib/ai-models.ts#45"
           },
           {
@@ -16576,10 +16609,16 @@
             "location": "apps/api/src/mcp/tool-utils.ts#3"
           },
           {
+            "location": "apps/api/src/scripts/post-deploy-smoke.ts#25"
+          },
+          {
             "location": "apps/api/src/scripts/prepare-spa-template.ts#1"
           },
           {
             "location": "apps/collab/src/server.ts#3"
+          },
+          {
+            "location": "apps/legal-atlas-runner/src/env.ts#1"
           },
           {
             "location": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts#20"
@@ -16771,6 +16810,9 @@
             "location": "packages/skills/src/loader.ts#1"
           },
           {
+            "location": "packages/template-conditions/src/condition-builder.ts#1"
+          },
+          {
             "location": "packages/template-conditions/src/markers.ts#19"
           },
           {
@@ -16790,6 +16832,9 @@
           },
           {
             "location": "apps/web/src/components/chat-editor-provider.tsx#23"
+          },
+          {
+            "location": "apps/web/src/components/conditions/formula-editor.tsx#3"
           },
           {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#15"
@@ -17405,6 +17450,56 @@
       "scope": "required",
       "type": "library",
       "version": "0.4.6"
+    },
+    {
+      "authors": [
+        {
+          "name": "Fredrik Nicol <fredrik.nicol@gmail.com>"
+        }
+      ],
+      "bom-ref": "pkg:npm/csstype@3.2.3",
+      "description": "Strict TypeScript and Flow types for style based on MDN data",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/csstype/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/csstype/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
+          }
+        ]
+      },
+      "group": "",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "csstype",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/csstype/package.json"
+        }
+      ],
+      "purl": "pkg:npm/csstype@3.2.3",
+      "scope": "required",
+      "type": "library",
+      "version": "3.2.3"
     },
     {
       "bom-ref": "pkg:npm/diff@8.0.4",
@@ -18668,6 +18763,12 @@
             "location": "apps/api/src/lib/infosoud/agenda-import.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/backfill-statement-timeout.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/backfill-statement-timeout.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/legal-search/corpus-index-provider.ts#1"
           },
           {
@@ -18768,6 +18869,9 @@
           },
           {
             "location": "apps/api/src/scripts/resolve-citations.ts#18"
+          },
+          {
+            "location": "apps/legal-atlas-runner/src/db.ts#1"
           },
           {
             "location": "apps/legal-atlas-runner/src/runners/case-law-corpus-storage-backfill.ts#1"
@@ -20513,7 +20617,7 @@
             "location": "apps/api/src/handlers/docx/patch-template.ts#12"
           },
           {
-            "location": "apps/api/src/handlers/docx/template-manifest.ts#13"
+            "location": "apps/api/src/handlers/docx/template-manifest.ts#14"
           },
           {
             "location": "apps/api/src/handlers/files/xlsx-preprocess.ts#1"
@@ -20702,6 +20806,12 @@
           },
           {
             "location": "apps/web/src/components/chat-pasted-text-node.tsx#11"
+          },
+          {
+            "location": "apps/web/src/components/conditions/condition-builder.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/conditions/formula-editor.tsx#4"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#5"
@@ -20896,9 +21006,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#9"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/condition-builder.tsx#1"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/fill-clauses-section.tsx#4"
           },
           {
@@ -21035,9 +21142,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#15"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#5"
@@ -22465,6 +22569,9 @@
             "location": "packages/folio/src/core/layout-bridge/wrapEditorViewAsSurface.ts#13"
           },
           {
+            "location": "packages/folio/src/core/paged-layout/transactionDirtyRange.ts#1"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/commands/comments.ts#8"
           },
           {
@@ -22609,9 +22716,6 @@
             "location": "packages/folio/src/core/prosemirror/selectionState.ts#8"
           },
           {
-            "location": "packages/folio/src/paged-editor/transactionDirtyRange.ts#1"
-          },
-          {
             "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#16"
           },
           {
@@ -22754,13 +22858,13 @@
         ],
         "occurrences": [
           {
+            "location": "packages/folio/src/core/paged-layout/transactionDirtyRange.ts#2"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/extensions/features/ParagraphChangeTrackerExtension.ts#16"
           },
           {
             "location": "packages/folio/src/core/prosemirror/extensions/features/ParagraphChangeTrackerExtension.ts#17"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/transactionDirtyRange.ts#2"
           }
         ]
       },
@@ -22838,6 +22942,12 @@
             "location": "packages/folio/src/core/layout-bridge/wrapEditorViewAsSurface.ts#14"
           },
           {
+            "location": "packages/folio/src/core/paged-layout/scrollToPmPosition.ts#17"
+          },
+          {
+            "location": "packages/folio/src/core/paged-layout/selectionViewportRect.ts#15"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/extensions/features/ImagePasteExtension.ts#9"
           },
           {
@@ -22866,12 +22976,6 @@
           },
           {
             "location": "packages/folio/src/core/prosemirror/plugins/templatePreviewValues.ts#21"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/scrollToPmPosition.ts#17"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/selectionViewportRect.ts#15"
           },
           {
             "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#17"
@@ -23396,9 +23500,6 @@
             "location": "packages/folio/src/components/useFolioComments.ts#17"
           },
           {
-            "location": "packages/folio/src/core/utils/formatToStyle.ts#15"
-          },
-          {
             "location": "packages/folio/src/hooks/useHistory.ts#11"
           },
           {
@@ -23598,6 +23699,12 @@
           },
           {
             "location": "apps/web/src/components/chat-pasted-text-node.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/condition-builder.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/conditions/formula-editor.tsx#1"
           },
           {
             "location": "apps/web/src/components/contact-picker.tsx#1"
@@ -24746,7 +24853,7 @@
             "location": "apps/api/src/handlers/docx/run-map.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/docx/template-manifest.ts#14"
+            "location": "apps/api/src/handlers/docx/template-manifest.ts#15"
           },
           {
             "location": "apps/api/src/handlers/docx/validate-ooxml.ts#9"
@@ -25323,6 +25430,12 @@
             "location": "apps/web/src/components/chat-pasted-text-node.tsx#12"
           },
           {
+            "location": "apps/web/src/components/conditions/condition-builder.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/conditions/formula-editor.tsx#5"
+          },
+          {
             "location": "apps/web/src/components/contact-picker.tsx#7"
           },
           {
@@ -25542,9 +25655,6 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/condition-builder.tsx#2"
-          },
-          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/fill-clauses-section.tsx#5"
           },
           {
@@ -25750,9 +25860,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#17"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-builder.tsx#2"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values.tsx#4"
@@ -26346,6 +26453,12 @@
             "location": "apps/api/src/handlers/docx/ai-field-generator.ts#13"
           },
           {
+            "location": "apps/api/src/handlers/docx/template-manifest.ts#16"
+          },
+          {
+            "location": "apps/api/src/handlers/docx/types.ts#3"
+          },
+          {
             "location": "apps/api/src/handlers/entities/organize-suggestions.ts#6"
           },
           {
@@ -26413,6 +26526,9 @@
           },
           {
             "location": "apps/api/src/mcp/template-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"
           },
           {
             "location": "apps/collab/src/env.ts#2"
@@ -26485,6 +26601,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/index.tsx#30"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#52"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/tools.tsx#6"
