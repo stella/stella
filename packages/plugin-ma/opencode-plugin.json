@@ -1,0 +1,11 @@
+{
+  "name": "@stll/plugin-ma",
+  "version": "1.0.0",
+  "displayName": "M&A Practice Plugin",
+  "category": "practice-area",
+  "permissions": { "required": ["template:create", "entity:read", "entity:write"] },
+  "agents": ["ma-deal-lead", "ma-due-diligence", "ma-spa-drafter", "ma-closing-checklist"],
+  "skills": ["ma-precedent-search", "ma-redline-comparison", "ma-regulatory-filing"],
+  "tools": ["ma-precedent-search", "ma-clause-library", "ma-deal-tracker", "ma-signature-coordinator"],
+  "knowledgeIntegrations": { "templates": ["ma-spa", "ma-nda", "ma-loi"], "clauses": ["ma-indemnity", "ma-earnout", "ma-reps-warranties"], "skills": ["intake-to-draft", "check-against-rules"] }
+}
