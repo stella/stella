@@ -163,6 +163,10 @@ const envApi = createEnv({
 
     // Launch feature flags. Keep default-off; deployment must opt in.
     FEATURE_CHAT: featureFlagSchema,
+    USE_OPENCODE_CHAT: featureFlagSchema,
+
+    // opencode sidecar base URL (only used when USE_OPENCODE_CHAT=true)
+    OPENCODE_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
     FEATURE_USAGE: featureFlagSchema,
     FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
     FEATURE_CASE_LAW: featureFlagSchema,
