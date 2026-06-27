@@ -81,12 +81,21 @@ const stateToDocument = (
 export const createHiddenEditorApi = (
   deps: HiddenEditorApiDeps,
 ): HiddenEditorApi => {
+  // Skip dispatching while the view is being destroyed. Every dispatching
+  // method routes through this so the framework-agnostic API is self-sufficient
+  // rather than relying on the host view's dispatchTransaction backstop.
+  const dispatchTr = (view: EditorView, tr: Transaction): void => {
+    if (!deps.isDestroying()) {
+      view.dispatch(tr);
+    }
+  };
+
   const setSelection = (anchor: number, head?: number): void => {
     const view = deps.getView();
     if (!view) {
       return;
     }
-    const { state, dispatch } = view;
+    const { state } = view;
     const docEnd = state.doc.content.size;
     const clampedAnchor = Math.max(0, Math.min(anchor, docEnd));
     const clampedHead =
@@ -97,7 +106,7 @@ export const createHiddenEditorApi = (
       head === undefined
         ? Selection.near($anchor)
         : TextSelection.between($anchor, $head);
-    dispatch(state.tr.setSelection(selection));
+    dispatchTr(view, state.tr.setSelection(selection));
   };
 
   return {
@@ -133,8 +142,8 @@ export const createHiddenEditorApi = (
 
     dispatch: (tr: Transaction) => {
       const view = deps.getView();
-      if (view && !deps.isDestroying()) {
-        view.dispatch(tr);
+      if (view) {
+        dispatchTr(view, tr);
       }
     },
 
@@ -143,7 +152,7 @@ export const createHiddenEditorApi = (
       if (!view) {
         return false;
       }
-      return command(view.state, view.dispatch, view);
+      return command(view.state, (tr) => dispatchTr(view, tr), view);
     },
 
     undo: () => {
@@ -151,7 +160,7 @@ export const createHiddenEditorApi = (
       if (!view) {
         return false;
       }
-      return undo(view.state, view.dispatch);
+      return undo(view.state, (tr) => dispatchTr(view, tr));
     },
 
     redo: () => {
@@ -159,7 +168,7 @@ export const createHiddenEditorApi = (
       if (!view) {
         return false;
       }
-      return redo(view.state, view.dispatch);
+      return redo(view.state, (tr) => dispatchTr(view, tr));
     },
 
     canUndo: () => {
@@ -185,10 +194,10 @@ export const createHiddenEditorApi = (
       if (!view) {
         return;
       }
-      const { state, dispatch } = view;
+      const { state } = view;
       try {
         const selection = NodeSelection.create(state.doc, pos);
-        dispatch(state.tr.setSelection(selection));
+        dispatchTr(view, state.tr.setSelection(selection));
       } catch {
         // Fallback to text selection if NodeSelection fails
         setSelection(pos);
@@ -200,14 +209,14 @@ export const createHiddenEditorApi = (
       if (!view) {
         return;
       }
-      const { state, dispatch } = view;
+      const { state } = view;
       try {
         const cellSel = CellSelection.create(
           state.doc,
           anchorCellPos,
           headCellPos,
         );
-        dispatch(state.tr.setSelection(cellSel));
+        dispatchTr(view, state.tr.setSelection(cellSel));
       } catch {
         // Fallback to text selection if positions aren't valid for CellSelection
         setSelection(anchorCellPos, headCellPos);

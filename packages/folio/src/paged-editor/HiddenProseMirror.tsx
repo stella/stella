@@ -18,6 +18,7 @@
 import {
   useRef,
   useEffect,
+  useLayoutEffect,
   useCallback,
   useImperativeHandle,
   useState,
@@ -366,8 +367,10 @@ export function HiddenProseMirror(
 
   // Completes a previously-requested-but-deferred creation once the async
   // collaboration modules load. Idempotent and gated by `requested` inside the
-  // manager, so it never eagerly creates a view nobody asked for.
-  useEffect(() => {
+  // manager, so it never eagerly creates a view nobody asked for. Runs in the
+  // layout phase (like the former create trigger) so the view exists before the
+  // passive awareness effect above subscribes to remote selections.
+  useLayoutEffect(() => {
     managerRef.current?.retryViewCreation();
   }, [collaborationModules]);
 
