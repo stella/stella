@@ -26,21 +26,15 @@ import {
 import type { CSSProperties, Ref } from "react";
 
 import { panic } from "better-result";
-import { undo, redo } from "prosemirror-history";
 import type { Transaction, Command, Plugin } from "prosemirror-state";
-import {
-  EditorState,
-  NodeSelection,
-  Selection,
-  TextSelection,
-} from "prosemirror-state";
-import { CellSelection } from "prosemirror-tables";
+import { EditorState } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import type { DirectEditorProps } from "prosemirror-view";
 import type * as YProseMirror from "y-prosemirror";
 import type { Doc as YDoc, XmlFragment } from "yjs";
 import type * as Yjs from "yjs";
 
+import { createHiddenEditorApi } from "../core/controller/hiddenEditorApi";
 import {
   recordHiddenEditorPhase,
   recordHiddenEditorStateCreate,
@@ -49,7 +43,6 @@ import {
 import { suppressHiddenEditorScrollToSelection } from "../core/paged-layout/hiddenEditorScroll";
 import { isReadOnlyEditKey } from "../core/paged-layout/readOnlyEditAttempt";
 import { toProseDoc, createEmptyDoc } from "../core/prosemirror/conversion";
-import { fromProseDoc } from "../core/prosemirror/conversion/fromProseDoc";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
 import { ensureParaIdsInState } from "../core/prosemirror/extensions/features/ParaIdAllocatorExtension";
 import { createDocumentStylesPlugin } from "../core/prosemirror/plugins/documentStyles";
@@ -481,21 +474,6 @@ export function createHiddenEditorState(
   return state;
 }
 
-/**
- * Convert PM state to Document
- */
-function stateToDocument(
-  state: EditorState,
-  originalDoc: Document | null,
-): Document | null {
-  if (!originalDoc) {
-    return null;
-  }
-
-  // fromProseDoc preserves the base document structure when provided
-  return fromProseDoc(state.doc, originalDoc);
-}
-
 function getDocumentIdentity(doc: Document | null): string {
   if (!doc) {
     return "empty";
@@ -909,138 +887,12 @@ export function HiddenProseMirror(
 
   useImperativeHandle(
     ref,
-    () => ({
-      getState() {
-        return viewRef.current?.state ?? null;
-      },
-
-      getView() {
-        return viewRef.current ?? null;
-      },
-
-      getDocument() {
-        if (!viewRef.current) {
-          return null;
-        }
-        return stateToDocument(viewRef.current.state, documentRef.current);
-      },
-
-      focus() {
-        viewRef.current?.focus();
-      },
-
-      blur() {
-        const dom = viewRef.current?.dom;
-        if (viewRef.current?.hasFocus() && dom instanceof HTMLElement) {
-          dom.blur();
-        }
-      },
-
-      isFocused() {
-        return viewRef.current?.hasFocus() ?? false;
-      },
-
-      dispatch(tr: Transaction) {
-        if (viewRef.current && !isDestroyingRef.current) {
-          viewRef.current.dispatch(tr);
-        }
-      },
-
-      executeCommand(command: Command) {
-        if (!viewRef.current) {
-          return false;
-        }
-        return command(
-          viewRef.current.state,
-          viewRef.current.dispatch,
-          viewRef.current,
-        );
-      },
-
-      undo() {
-        if (!viewRef.current) {
-          return false;
-        }
-        return undo(viewRef.current.state, viewRef.current.dispatch);
-      },
-
-      redo() {
-        if (!viewRef.current) {
-          return false;
-        }
-        return redo(viewRef.current.state, viewRef.current.dispatch);
-      },
-
-      canUndo() {
-        if (!viewRef.current) {
-          return false;
-        }
-        return undo(viewRef.current.state);
-      },
-
-      canRedo() {
-        if (!viewRef.current) {
-          return false;
-        }
-        return redo(viewRef.current.state);
-      },
-
-      setSelection(anchor: number, head?: number) {
-        if (!viewRef.current) {
-          return;
-        }
-        const { state, dispatch } = viewRef.current;
-        const docEnd = state.doc.content.size;
-        const clampedAnchor = Math.max(0, Math.min(anchor, docEnd));
-        const clampedHead =
-          head === undefined
-            ? clampedAnchor
-            : Math.max(0, Math.min(head, docEnd));
-        const $anchor = state.doc.resolve(clampedAnchor);
-        const $head = state.doc.resolve(clampedHead);
-        const selection =
-          head === undefined
-            ? Selection.near($anchor)
-            : TextSelection.between($anchor, $head);
-        dispatch(state.tr.setSelection(selection));
-      },
-
-      setNodeSelection(pos: number) {
-        if (!viewRef.current) {
-          return;
-        }
-        const { state, dispatch } = viewRef.current;
-        try {
-          const selection = NodeSelection.create(state.doc, pos);
-          dispatch(state.tr.setSelection(selection));
-        } catch {
-          // Fallback to text selection if NodeSelection fails
-          this.setSelection(pos);
-        }
-      },
-
-      setCellSelection(anchorCellPos: number, headCellPos: number) {
-        if (!viewRef.current) {
-          return;
-        }
-        const { state, dispatch } = viewRef.current;
-        try {
-          const cellSel = CellSelection.create(
-            state.doc,
-            anchorCellPos,
-            headCellPos,
-          );
-          dispatch(state.tr.setSelection(cellSel));
-        } catch {
-          // Fallback to text selection if positions aren't valid for CellSelection
-          this.setSelection(anchorCellPos, headCellPos);
-        }
-      },
-
-      scrollToSelection() {
-        // No-op for hidden editor - visual scrolling handled by PagedEditor
-      },
-    }),
+    () =>
+      createHiddenEditorApi({
+        getView: () => viewRef.current,
+        getDocumentContext: () => documentRef.current,
+        isDestroying: () => isDestroyingRef.current,
+      }),
     [],
   );
 
