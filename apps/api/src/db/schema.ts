@@ -4379,6 +4379,28 @@ export const hostedUsageWebhookEvents = p.pgTable(
   ],
 );
 
+export const workspacePlugins = p.pgTable(
+  "workspace_plugins",
+  {
+    workspaceId: safeWorkspaceId("workspace_id")
+      .notNull()
+      .references(() => workspaces.id, { onDelete: "cascade" }),
+    pluginId: p.text("plugin_id").notNull(),
+    version: p.text().notNull(),
+    config: jsonb().$type<Record<string, unknown>>().default({}),
+    enabled: p.boolean().notNull().default(true),
+    installedAt: p.timestamp("installed_at").notNull().defaultNow(),
+    installedBy: safeUuid<"user">("installed_by")
+      .notNull()
+      .references(() => user.id, { onDelete: "restrict" }),
+  },
+  (table) => [
+    p.primaryKey({ columns: [table.workspaceId, table.pluginId] }),
+    p.index("workspace_plugins_workspace_id_idx").on(table.workspaceId),
+    ...wsPolicies(),
+  ],
+)
+
 // -- Relations --
 
 export const relations = defineRelations(
