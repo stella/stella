@@ -65,6 +65,13 @@ export type DocxEditorProps = {
   documentBuffer?: DocxInput | null;
   /** Pre-parsed document (alternative to documentBuffer) */
   document?: Document | null;
+  /**
+   * Stable identity of the loaded document (same across internal edits, distinct
+   * per loaded file, e.g. a file/document id). Used to distinguish a genuine
+   * external load from an edited document round-tripped back through state.
+   * Falls back to a document-metadata signature when omitted.
+   */
+  documentKey?: string;
   /** Callback when document is saved */
   onSave?: (buffer: ArrayBuffer) => void;
   /** Author name used for comments and track changes */

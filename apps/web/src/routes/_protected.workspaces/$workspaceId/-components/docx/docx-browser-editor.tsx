@@ -1481,6 +1481,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             autoOpenReviewSidebar={false}
             className="folio-docx-preview folio-peek h-full"
             documentBuffer={editorBuffer}
+            documentKey={previewIdentity}
             initialZoom={targetZoom}
             mode={isUnlocked ? editorMode : "viewing"}
             onModeChange={(mode) => {

@@ -436,6 +436,7 @@ export function DocxEditor({
   ref,
   documentBuffer,
   document: initialDocument,
+  documentKey,
   onSave,
   author = "User",
   onChange,
@@ -3411,6 +3412,7 @@ export function DocxEditor({
                     <PagedEditor
                       ref={pagedEditorRef}
                       document={history.state}
+                      {...(documentKey !== undefined ? { documentKey } : {})}
                       theme={history.state.package.theme || theme || null}
                       sectionProperties={effectiveSectionProperties ?? null}
                       headerContent={headerContent}

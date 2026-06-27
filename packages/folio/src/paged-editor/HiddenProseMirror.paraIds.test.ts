@@ -48,25 +48,21 @@ describe("createHiddenEditorState collaborative paraId allocation", () => {
     const ydoc = new yjs.Doc();
     const yXmlFragment = ydoc.get("prosemirror", yjs.XmlFragment);
 
-    const state = createHiddenEditorState(
-      docWithoutParaIds(),
-      null,
-      undefined,
-      [],
-      { shouldSeed: true, yXmlFragment },
+    const state = createHiddenEditorState({
+      document: docWithoutParaIds(),
+      styles: null,
+      collaboration: { shouldSeed: true, yXmlFragment },
       collaborationModules,
-    );
+    });
 
     expect(collectParaIds(state)[0]).toMatch(/^[0-9A-F]{8}$/u);
 
-    const reloaded = createHiddenEditorState(
-      null,
-      null,
-      undefined,
-      [],
-      { shouldSeed: false, yXmlFragment },
+    const reloaded = createHiddenEditorState({
+      document: null,
+      styles: null,
+      collaboration: { shouldSeed: false, yXmlFragment },
       collaborationModules,
-    );
+    });
     expect(collectParaIds(reloaded)[0]).toMatch(/^[0-9A-F]{8}$/u);
   });
 
@@ -78,25 +74,21 @@ describe("createHiddenEditorState collaborative paraId allocation", () => {
       yXmlFragment,
     );
 
-    const state = createHiddenEditorState(
-      null,
-      null,
-      undefined,
-      [],
-      { shouldSeed: false, yXmlFragment },
+    const state = createHiddenEditorState({
+      document: null,
+      styles: null,
+      collaboration: { shouldSeed: false, yXmlFragment },
       collaborationModules,
-    );
+    });
 
     expect(collectParaIds(state)[0]).toMatch(/^[0-9A-F]{8}$/u);
 
-    const reloaded = createHiddenEditorState(
-      null,
-      null,
-      undefined,
-      [],
-      { shouldSeed: false, yXmlFragment },
+    const reloaded = createHiddenEditorState({
+      document: null,
+      styles: null,
+      collaboration: { shouldSeed: false, yXmlFragment },
       collaborationModules,
-    );
+    });
     expect(collectParaIds(reloaded)[0]).toMatch(/^[0-9A-F]{8}$/u);
   });
 });

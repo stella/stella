@@ -19,11 +19,12 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useImperativeHandle,
 } from "react";
 import type { CSSProperties, Ref } from "react";
-import { createPortal, flushSync } from "react-dom";
+import { createPortal } from "react-dom";
 
 import type { Mark, Node as PMNode } from "prosemirror-model";
 import { NodeSelection, TextSelection } from "prosemirror-state";
@@ -36,6 +37,11 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import type { AISuggestion } from "../core/ai-suggestions/types";
+import {
+  browserClock,
+  createLayoutScheduler,
+  type LayoutScheduler,
+} from "../core/controller/layoutScheduler";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
 import { buildBookmarkText } from "../core/fields/bookmarkText";
@@ -141,10 +147,7 @@ import {
   computeHeaderFooterMarginExtender,
   extendSectionBreakMargins,
 } from "../core/paged-layout/headerFooterMargins";
-import {
-  mergeDirtyRanges,
-  tryBuildIncrementalMeasures,
-} from "../core/paged-layout/incrementalMeasure";
+import { tryBuildIncrementalMeasures } from "../core/paged-layout/incrementalMeasure";
 import type { DirtyRange } from "../core/paged-layout/incrementalMeasure";
 // Selection sync
 import { LayoutSelectionGate } from "../core/paged-layout/LayoutSelectionGate";
@@ -245,6 +248,12 @@ import { useVisualLineNavigation } from "./useVisualLineNavigation";
 export type PagedEditorProps = {
   /** The document to edit. */
   document: Document | null;
+  /**
+   * Stable identity of the loaded document (same across internal edits, distinct
+   * per loaded file), used to distinguish a genuine external load from an
+   * edited document passed back. Falls back to a metadata signature when omitted.
+   */
+  documentKey?: string;
   /** Document styles for style resolution. */
   styles?: StyleDefinitions | null;
   /** Theme for styling. */
@@ -1038,14 +1047,6 @@ type LayoutInputSignatureOptions = {
   theme: Theme | null | undefined;
 };
 
-type PendingLayoutRequest = {
-  dirtyRange: DirtyRange | null;
-  firstScheduledAt: number;
-  rafId: number | null;
-  state: EditorState;
-  timerId: number | null;
-};
-
 const getPageOverlayOffset = (pagesContainer: HTMLDivElement, zoom: number) => {
   const overlay = pagesContainer.parentElement?.querySelector(
     '[data-testid="selection-overlay"]',
@@ -1783,6 +1784,7 @@ export function PagedEditor(
   const {
     ref,
     document,
+    documentKey,
     styles,
     theme: _theme,
     sectionProperties,
@@ -1883,6 +1885,9 @@ export function PagedEditor(
   const [layout, setLayout] = useState<Layout | null>(null);
   const [blocks, setBlocks] = useState<FlowBlock[]>([]);
   const [measures, setMeasures] = useState<Measure[]>([]);
+  // Reactive "has the hidden editor been requested" signal. The manager owns
+  // the actual view creation imperatively (via ensureView); this flag only
+  // drives the pre-hidden initial-layout coordination below.
   const [shouldCreateHiddenEditorView, setShouldCreateHiddenEditorView] =
     useState(() => collaboration !== undefined);
   const shouldFocusHiddenEditorOnReadyRef = useRef(collaboration !== undefined);
@@ -2025,27 +2030,32 @@ export function PagedEditor(
   } | null>(null);
 
   const ensureHiddenEditorView = useCallback(
-    ({ focus = true, sync = false }: EnsureHiddenEditorViewOptions = {}) => {
+    ({ focus = true }: EnsureHiddenEditorViewOptions = {}) => {
       if (focus) {
         shouldFocusHiddenEditorOnReadyRef.current = true;
       } else if (
-        !shouldCreateHiddenEditorView &&
+        !hiddenPMRef.current?.isViewRequested() &&
         !hiddenPMRef.current?.getView()
       ) {
         shouldFocusHiddenEditorOnReadyRef.current = false;
       }
 
-      if (sync) {
-        flushSync(() => {
-          setShouldCreateHiddenEditorView(true);
-        });
-        return;
-      }
-
+      // Creation is synchronous now, so the former `sync`/flushSync path is
+      // gone; the `sync` option is accepted (and ignored) for call-site compat.
       setShouldCreateHiddenEditorView(true);
+      hiddenPMRef.current?.ensureView();
     },
-    [shouldCreateHiddenEditorView],
+    [],
   );
+
+  // Eagerly request the hidden editor when collaborating (matches the former
+  // `shouldCreateHiddenEditorView` initial-true for collaboration); the manager
+  // defers the actual creation until the collaboration modules load.
+  useLayoutEffect(() => {
+    if (collaboration !== undefined) {
+      hiddenPMRef.current?.ensureView();
+    }
+  }, [collaboration]);
 
   const queueHiddenEditorSelection = useCallback(
     (selection: PendingHiddenEditorSelection) => {
@@ -3120,12 +3130,19 @@ export function PagedEditor(
   // Coalesced Layout (rAF throttle)
   // =========================================================================
 
-  /**
-   * Ref holding the latest pending transaction layout request. Rapid typing
-   * updates this request in place so only the final state in the short
-   * coalescing window triggers an interactive layout pass.
-   */
-  const pendingLayoutRef = useRef<PendingLayoutRequest | null>(null);
+  // The "when to lay out" policy (coalesce a typing burst into one pass, with a
+  // latency cap) lives in the framework-agnostic layout scheduler; this adapter
+  // just feeds it transactions and points it at runLayoutPipeline.
+  const layoutSchedulerRef = useRef<LayoutScheduler<EditorState> | null>(null);
+  if (layoutSchedulerRef.current === null) {
+    layoutSchedulerRef.current = createLayoutScheduler<EditorState>({
+      runLayout: (state, options) =>
+        runLayoutPipelineRef.current(state, options),
+      debounceMs: TRANSACTION_LAYOUT_DEBOUNCE_MS,
+      maxDelayMs: TRANSACTION_LAYOUT_MAX_DELAY_MS,
+      clock: browserClock,
+    });
+  }
   const documentChangeNotifyTimerRef = useRef<number | null>(null);
 
   const flushDocumentChangeNotification = useCallback(() => {
@@ -3151,96 +3168,19 @@ export function PagedEditor(
     }, DOCUMENT_CHANGE_NOTIFY_DELAY);
   }, [flushDocumentChangeNotification]);
 
-  const flushPendingLayout = useCallback(() => {
-    const pending = pendingLayoutRef.current;
-    if (!pending || pending.rafId !== null) {
-      return;
-    }
-
-    pending.timerId = null;
-    pending.rafId = requestAnimationFrame(() => {
-      const latest = pendingLayoutRef.current;
-      pendingLayoutRef.current = null;
-      if (!latest) {
-        return;
-      }
-
-      const layoutOptions: {
-        dirtyRange?: DirtyRange;
-        forceFull?: boolean;
-        reason: LayoutRunReason;
-      } = { reason: "transaction" };
-      if (latest.dirtyRange) {
-        layoutOptions.dirtyRange = latest.dirtyRange;
-      }
-      runLayoutPipeline(latest.state, layoutOptions);
-    });
-  }, [runLayoutPipeline]);
-
-  const armPendingLayoutTimer = useCallback(
-    (pending: PendingLayoutRequest) => {
-      if (pending.rafId !== null) {
-        return;
-      }
-      if (pending.timerId !== null) {
-        window.clearTimeout(pending.timerId);
-      }
-
-      const elapsedMs = performance.now() - pending.firstScheduledAt;
-      const delayMs =
-        elapsedMs >= TRANSACTION_LAYOUT_MAX_DELAY_MS
-          ? 0
-          : Math.min(
-              TRANSACTION_LAYOUT_DEBOUNCE_MS,
-              TRANSACTION_LAYOUT_MAX_DELAY_MS - elapsedMs,
-            );
-
-      pending.timerId = window.setTimeout(flushPendingLayout, delayMs);
-    },
-    [flushPendingLayout],
-  );
-
-  /**
-   * Schedule a layout pipeline run after a short coalescing window.
-   * If more transactions arrive before the timer fires, the pending state
-   * is replaced so rapid typing paints once for the burst while still
-   * enforcing a max latency from the first edit.
-   */
+  // Thin adapter over the framework-agnostic scheduler. Repeated calls in the
+  // coalescing window merge dirty ranges and paint once for the burst.
   const scheduleLayout = useCallback(
     (state: EditorState, dirtyRange: DirtyRange | null) => {
-      const pending = pendingLayoutRef.current;
-      if (pending) {
-        pending.state = state;
-        pending.dirtyRange = mergeDirtyRanges(pending.dirtyRange, dirtyRange);
-        armPendingLayoutTimer(pending);
-        return;
-      }
-
-      const nextPending: PendingLayoutRequest = {
-        dirtyRange,
-        firstScheduledAt: performance.now(),
-        rafId: null,
-        state,
-        timerId: null,
-      };
-      pendingLayoutRef.current = nextPending;
-      armPendingLayoutTimer(nextPending);
+      layoutSchedulerRef.current?.schedule(state, dirtyRange);
     },
-    [armPendingLayoutTimer],
+    [],
   );
 
-  // Clean up pending rAF on unmount
+  // Clean up the pending layout pass and the doc-change timer on unmount.
   useEffect(
     () => () => {
-      if (pendingLayoutRef.current) {
-        if (pendingLayoutRef.current.timerId !== null) {
-          window.clearTimeout(pendingLayoutRef.current.timerId);
-        }
-        if (pendingLayoutRef.current.rafId !== null) {
-          cancelAnimationFrame(pendingLayoutRef.current.rafId);
-        }
-        pendingLayoutRef.current = null;
-      }
+      layoutSchedulerRef.current?.dispose();
       if (documentChangeNotifyTimerRef.current !== null) {
         window.clearTimeout(documentChangeNotifyTimerRef.current);
         documentChangeNotifyTimerRef.current = null;
@@ -6467,15 +6407,14 @@ export function PagedEditor(
       return undefined;
     }
 
-    const initialState = createHiddenEditorState(
+    const initialState = createHiddenEditorState({
       document,
       styles,
-      extensionManager,
+      manager: extensionManager,
       externalPlugins,
-      undefined,
-      null,
-      "mount",
-    );
+      collaborationModules: null,
+      reason: "mount",
+    });
     precomputedInitialDocumentRef.current = document;
     setPrecomputedInitialState(initialState);
     anonymizationMatchesRef.current =
@@ -7064,8 +7003,8 @@ export function PagedEditor(
       <HiddenProseMirror
         ref={hiddenPMRef}
         document={document}
+        {...(documentKey !== undefined ? { documentKey } : {})}
         widthPx={contentWidth}
-        deferViewCreation={!shouldCreateHiddenEditorView}
         precomputedInitialState={validPrecomputedInitialState}
         readOnly={readOnly}
         onTransaction={handleTransaction}
