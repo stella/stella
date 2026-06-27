@@ -85,11 +85,18 @@ const resolveRelative = (importerPath: string, specifier: string): string => {
 
 const isAllowedEngineTarget = (stripped: string): boolean =>
   stripped.endsWith("/layout-engine/types") ||
-  stripped.endsWith("/layout-engine/measure/measureTypes");
+  stripped === "layout-engine/types" ||
+  stripped.endsWith("/layout-engine/measure/measureTypes") ||
+  stripped === "layout-engine/measure/measureTypes";
 
 const resolvesIntoBehaviorDir = (stripped: string): boolean => {
   for (const dir of FORBIDDEN_BEHAVIOR_DIRS) {
-    if (stripped.includes(`/${dir}/`) || stripped.endsWith(`/${dir}`)) {
+    if (
+      stripped === dir ||
+      stripped.includes(`/${dir}/`) ||
+      stripped.endsWith(`/${dir}`) ||
+      stripped.startsWith(`${dir}/`)
+    ) {
       return true;
     }
   }

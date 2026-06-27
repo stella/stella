@@ -310,13 +310,14 @@ const isForbiddenModelPackage = (specifier: string): boolean => {
 // Any other relative reach into `layout-engine/` pulls engine behavior.
 const isAllowedModelEngineTarget = (stripped: string): boolean =>
   stripped.endsWith("/layout-engine/types") ||
-  stripped.endsWith("layout-engine/types") ||
+  stripped === "layout-engine/types" ||
   stripped.endsWith("/layout-engine/measure/measureTypes") ||
-  stripped.endsWith("layout-engine/measure/measureTypes");
+  stripped === "layout-engine/measure/measureTypes";
 
 const resolvesIntoBehaviorDir = (stripped: string): boolean => {
   for (const dir of FORBIDDEN_MODEL_BEHAVIOR_DIRS) {
     if (
+      stripped === dir ||
       stripped.includes(`/${dir}/`) ||
       stripped.endsWith(`/${dir}`) ||
       stripped.startsWith(`${dir}/`)

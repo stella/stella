@@ -30,12 +30,13 @@ import { performance } from "node:perf_hooks";
 
 import {
   clearAllCaches,
+  measureTextWidth,
   setFolioMeasurementFlags,
   setTextCacheSize,
 } from "../src/core/layout-engine/measure";
 import { handleMeasureRequest } from "../src/core/layout-engine/measure/font-metrics.worker";
 import {
-  measureTextWidth,
+  installCanvasMeasureProvider,
   resetCanvasContext,
 } from "../src/core/layout-engine/measure/measureContainer";
 import {
@@ -279,6 +280,10 @@ function runScenario(label: string, enableWorker: boolean): number {
   drainDeferredQueue();
   return pass("pass 2 (warm cache)", runs);
 }
+
+// This script measures directly (no React editor), so install the canvas
+// MeasureProvider before any measurement runs.
+installCanvasMeasureProvider();
 
 console.log("=== folio measureTextWidth benchmark ===");
 console.log("fixture: 500 pages * 40 lines = 20,000 runs");

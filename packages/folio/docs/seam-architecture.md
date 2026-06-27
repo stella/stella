@@ -160,13 +160,13 @@ chain) or layout drifts — a sub-problem of Seam 5.
 ## Incremental layout & async transport (desktop)
 
 Don't re-serialize the whole `Document` per keystroke. Model the
-controller↔engine contract as a stateful `LayoutSession` (holds cached measures
-
-- previous layout, fed dirty ranges). Make its methods **async-tolerant**
-  (promise-returning) from the start: in the browser a WASM/worker call is
-  effectively in-process, but on desktop the engine may live across a Tauri IPC or
-  napi boundary, or off the UI thread. An async interface preserves that option at
-  no cost to the JS path.
+controller↔engine contract as a stateful `LayoutSession` (which holds cached
+measures and the previous layout, fed dirty ranges). Make its methods
+**async-tolerant** (promise-returning) from the start: in the browser a
+WASM/worker call is effectively in-process, but on desktop the engine may live
+across a Tauri IPC or napi boundary, or off the UI thread. An async interface
+preserves that option at
+no cost to the JS path.
 
 ## Multi-format substrate (docx, pptx, …)
 
