@@ -70,6 +70,12 @@ export type DesktopUpdateSnapshot = {
   updateReady: boolean;
 };
 
+export type TrustedSelfHostConnection = {
+  apiBaseUrl: string;
+  trustedAt: string;
+  webOrigin: string;
+};
+
 export type AppSnapshot = {
   bridgePort: number;
   /**
@@ -91,6 +97,7 @@ export type AppSnapshot = {
   notificationPreferences: DesktopNotificationPreferences;
   runningSince: string;
   sessions: SessionSnapshot[];
+  trustedSelfHostConnections: TrustedSelfHostConnection[];
   update: DesktopUpdateSnapshot;
 };
 
@@ -125,6 +132,7 @@ export const isAppSnapshot = (value: unknown): value is AppSnapshot => {
     isStringArray(value["capabilities"]) &&
     typeof value["runningSince"] === "string" &&
     Array.isArray(value["sessions"]) &&
+    Array.isArray(value["trustedSelfHostConnections"]) &&
     isRecord(value["notificationPreferences"]) &&
     isRecord(value["update"])
   );

@@ -32,6 +32,11 @@ Packaged builds should set these environment variables before building:
 
 Runtime bridge configuration:
 
+- Signed release builds can trust a self-hosted Stella instance at runtime:
+  open **Settings → Account → Desktop** in the web app and approve the
+  self-host connection prompt in stella desktop. This is the normal path for
+  one-click hosted deployments.
+
 - `STELLA_DESKTOP_ALLOWED_ORIGINS`
   - Comma-separated exact web origins allowed to call the privileged localhost bridge
   - Read at runtime; appended to the built-in defaults (loopback + hosted SPA)

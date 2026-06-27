@@ -690,6 +690,7 @@ type Messages = {
     "compact": "Compact";
     "confirm": "Confirm";
     "confirmAction": "Are you sure?";
+    "connect": "Connect";
     "connectionLost": "Connection lost";
     "connectionLostDescription": "We lost the connection to the server. Retrying automatically.";
     "convertTo": "Convert to";
@@ -1428,7 +1429,6 @@ type Messages = {
         "oauth2": "OAuth 2.0";
       };
       "bearerTokenDescription": "This server uses a bearer token. Paste the token from the provider to finish connecting.";
-      "connect": "Connect";
       "connectedToast": "MCP connected";
       "connectedWithLastUsed": "Connected · last used {time}";
       "description": "Manage the integrations that can add tools to chat. Tokens are stored per user.";
@@ -1842,6 +1842,8 @@ type Messages = {
       "desktopDownloadOtherMac": "On Windows? Download for Windows";
       "desktopDownloadOtherWindows": "Or get the .msi installer for IT-managed deployments";
       "desktopDownloadWindows": "Download for Windows";
+      "desktopSelfHostDescription": "Trust this stella URL in the signed desktop app so documents from this install can open locally.";
+      "desktopSelfHostTitle": "Self-hosted desktop editing";
       "enterOtp": "Verification code";
       "otpSentSuccess": "Verification code sent to your email.";
       "preferredName": "Preferred name";

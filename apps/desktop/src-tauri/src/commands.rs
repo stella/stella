@@ -80,6 +80,16 @@ pub async fn takeover_dialog_respond(
 }
 
 #[tauri::command]
+pub async fn self_host_connect_dialog_respond(
+  approved: bool,
+  window: tauri::WebviewWindow,
+) -> Result<(), String> {
+  crate::deep_link::set_self_host_connect_response(approved);
+  let _ = window.close();
+  Ok(())
+}
+
+#[tauri::command]
 pub async fn respond_to_takeover(
   session_id: String,
   approved: bool,

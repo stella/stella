@@ -108,19 +108,27 @@ impl Default for DesktopUpdateSnapshot {
   }
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct TrustedSelfHostConnection {
+  pub api_base_url: String,
+  pub trusted_at: String,
+  pub web_origin: String,
+}
+
 /// Monotonic integer the web app uses to feature-detect the
 /// bridge protocol it's talking to. Increment by 1 every time a
 /// new bridge endpoint or backwards-compatible field is added so
 /// the web side can gate features on `snapshot.bridgeVersion >= N`
 /// without coupling to the desktop's literal app version.
-pub const BRIDGE_VERSION: u32 = 6;
+pub const BRIDGE_VERSION: u32 = 7;
 
 /// Feature flags advertised to the web app. Add a string here
 /// whenever a new capability lands on the bridge so the web app
 /// can check for it explicitly (e.g. `caps.includes("docx.v2")`).
 /// Strictly additive — never remove a string once shipped or older
 /// web builds will assume the capability is gone and degrade.
-pub const BRIDGE_CAPABILITIES: &[&str] = &[];
+pub const BRIDGE_CAPABILITIES: &[&str] = &["self-host.connect"];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
@@ -134,6 +142,7 @@ pub struct AppSnapshot {
   pub notification_preferences: DesktopNotificationPreferences,
   pub running_since: String,
   pub sessions: Vec<SessionSnapshot>,
+  pub trusted_self_host_connections: Vec<TrustedSelfHostConnection>,
   pub update: DesktopUpdateSnapshot,
 }
 
@@ -292,6 +301,11 @@ mod tests {
         status: SessionStatus::Ready,
         takeover_detected: false,
         workspace_id: "ws-1".into(),
+      }],
+      trusted_self_host_connections: vec![TrustedSelfHostConnection {
+        api_base_url: "https://api.selfhost.example".into(),
+        trusted_at: "2026-01-01T00:00:00Z".into(),
+        web_origin: "https://selfhost.example".into(),
       }],
       update: DesktopUpdateSnapshot::default(),
     };
