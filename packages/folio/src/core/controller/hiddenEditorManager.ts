@@ -204,15 +204,28 @@ const HIDDEN_EDITOR_ATTRIBUTES = {
  * When an ExtensionManager is provided, it supplies the schema and plugins.
  * Otherwise falls back to the default singleton schema with no extension plugins.
  */
+export type CreateHiddenEditorStateOptions = {
+  document: Document | null;
+  styles?: StyleDefinitions | null | undefined;
+  manager?: ExtensionManager | undefined;
+  externalPlugins?: Plugin[] | undefined;
+  collaboration?: HiddenProseMirrorCollaboration | undefined;
+  collaborationModules?: CollaborationModules | null | undefined;
+  reason?: HiddenEditorStateReason | undefined;
+};
+
 export function createHiddenEditorState(
-  document: Document | null,
-  styles: StyleDefinitions | null | undefined,
-  manager?: ExtensionManager,
-  externalPlugins: Plugin[] = [],
-  collaboration?: HiddenProseMirrorCollaboration,
-  collaborationModules?: CollaborationModules | null,
-  reason: HiddenEditorStateReason = "mount",
+  options: CreateHiddenEditorStateOptions,
 ): EditorState {
+  const {
+    document,
+    styles,
+    manager,
+    externalPlugins = [],
+    collaboration,
+    collaborationModules,
+    reason = "mount",
+  } = options;
   recordHiddenEditorStateCreate(reason);
 
   const activeSchema = manager?.getSchema() ?? schema;
@@ -431,15 +444,15 @@ export const createHiddenEditorManager = (
     const initialState =
       precomputedInitialState && !collaboration
         ? precomputedInitialState
-        : createHiddenEditorState(
+        : createHiddenEditorState({
             document,
             styles,
-            extensionManager,
+            manager: extensionManager,
             externalPlugins,
             collaboration,
             collaborationModules,
-            "mount",
-          );
+            reason: "mount",
+          });
 
     const editorProps: DirectEditorProps = {
       state: initialState,
@@ -603,15 +616,15 @@ export const createHiddenEditorManager = (
     lastCollaborationFragment = currentCollaborationFragment;
 
     // Create new state from document
-    const newState = createHiddenEditorState(
+    const newState = createHiddenEditorState({
       document,
-      deps.getStyles(),
-      deps.getExtensionManager(),
-      deps.getExternalPlugins(),
+      styles: deps.getStyles(),
+      manager: deps.getExtensionManager(),
+      externalPlugins: deps.getExternalPlugins(),
       collaboration,
       collaborationModules,
-      "external-document",
-    );
+      reason: "external-document",
+    });
     const updateStartedAt = performance.now();
     view.updateState(newState);
     recordHiddenEditorPhase(

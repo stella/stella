@@ -6407,15 +6407,14 @@ export function PagedEditor(
       return undefined;
     }
 
-    const initialState = createHiddenEditorState(
+    const initialState = createHiddenEditorState({
       document,
       styles,
-      extensionManager,
+      manager: extensionManager,
       externalPlugins,
-      undefined,
-      null,
-      "mount",
-    );
+      collaborationModules: null,
+      reason: "mount",
+    });
     precomputedInitialDocumentRef.current = document;
     setPrecomputedInitialState(initialState);
     anonymizationMatchesRef.current =
