@@ -277,6 +277,15 @@ async fn show_self_host_connect_dialog(
 
   match builder.build() {
     Ok(window) => {
+      // Closing the dialog with the OS window control bypasses the
+      // Cancel/Connect commands, so release the reserved approval sender on
+      // destroy. Otherwise the slot stays reserved until the timeout and every
+      // retry fails as "already open".
+      window.on_window_event(|event| {
+        if matches!(event, tauri::WindowEvent::Destroyed) {
+          set_self_host_connect_response(false);
+        }
+      });
       let _ = window.set_focus();
       let outcome = match tokio::time::timeout(
         SELF_HOST_CONNECT_APPROVAL_TIMEOUT,
