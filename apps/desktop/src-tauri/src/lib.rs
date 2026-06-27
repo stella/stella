@@ -2,6 +2,8 @@ mod bridge;
 mod commands;
 mod config;
 mod deep_link;
+#[cfg(test)]
+mod e2e;
 mod i18n;
 mod keychain;
 mod session_manager;
