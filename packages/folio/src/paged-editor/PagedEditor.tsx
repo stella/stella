@@ -141,11 +141,12 @@ import {
   computeHeaderFooterMarginExtender,
   extendSectionBreakMargins,
 } from "../core/paged-layout/headerFooterMargins";
-import {
-  mergeDirtyRanges,
-  tryBuildIncrementalMeasures,
-} from "../core/paged-layout/incrementalMeasure";
+import { tryBuildIncrementalMeasures } from "../core/paged-layout/incrementalMeasure";
 import type { DirtyRange } from "../core/paged-layout/incrementalMeasure";
+import {
+  createLayoutScheduler,
+  type LayoutScheduler,
+} from "../core/controller/layoutScheduler";
 // Selection sync
 import { LayoutSelectionGate } from "../core/paged-layout/LayoutSelectionGate";
 import {
@@ -1036,14 +1037,6 @@ type LayoutInputSignatureOptions = {
   sectionProperties: SectionProperties | null | undefined;
   styles: StyleDefinitions | null | undefined;
   theme: Theme | null | undefined;
-};
-
-type PendingLayoutRequest = {
-  dirtyRange: DirtyRange | null;
-  firstScheduledAt: number;
-  rafId: number | null;
-  state: EditorState;
-  timerId: number | null;
 };
 
 const getPageOverlayOffset = (pagesContainer: HTMLDivElement, zoom: number) => {
@@ -3120,12 +3113,18 @@ export function PagedEditor(
   // Coalesced Layout (rAF throttle)
   // =========================================================================
 
-  /**
-   * Ref holding the latest pending transaction layout request. Rapid typing
-   * updates this request in place so only the final state in the short
-   * coalescing window triggers an interactive layout pass.
-   */
-  const pendingLayoutRef = useRef<PendingLayoutRequest | null>(null);
+  // The "when to lay out" policy (coalesce a typing burst into one pass, with a
+  // latency cap) lives in the framework-agnostic layout scheduler; this adapter
+  // just feeds it transactions and points it at runLayoutPipeline.
+  const layoutSchedulerRef = useRef<LayoutScheduler<EditorState> | null>(null);
+  if (layoutSchedulerRef.current === null) {
+    layoutSchedulerRef.current = createLayoutScheduler<EditorState>({
+      runLayout: (state, options) =>
+        runLayoutPipelineRef.current(state, options),
+      debounceMs: TRANSACTION_LAYOUT_DEBOUNCE_MS,
+      maxDelayMs: TRANSACTION_LAYOUT_MAX_DELAY_MS,
+    });
+  }
   const documentChangeNotifyTimerRef = useRef<number | null>(null);
 
   const flushDocumentChangeNotification = useCallback(() => {
@@ -3151,96 +3150,19 @@ export function PagedEditor(
     }, DOCUMENT_CHANGE_NOTIFY_DELAY);
   }, [flushDocumentChangeNotification]);
 
-  const flushPendingLayout = useCallback(() => {
-    const pending = pendingLayoutRef.current;
-    if (!pending || pending.rafId !== null) {
-      return;
-    }
-
-    pending.timerId = null;
-    pending.rafId = requestAnimationFrame(() => {
-      const latest = pendingLayoutRef.current;
-      pendingLayoutRef.current = null;
-      if (!latest) {
-        return;
-      }
-
-      const layoutOptions: {
-        dirtyRange?: DirtyRange;
-        forceFull?: boolean;
-        reason: LayoutRunReason;
-      } = { reason: "transaction" };
-      if (latest.dirtyRange) {
-        layoutOptions.dirtyRange = latest.dirtyRange;
-      }
-      runLayoutPipeline(latest.state, layoutOptions);
-    });
-  }, [runLayoutPipeline]);
-
-  const armPendingLayoutTimer = useCallback(
-    (pending: PendingLayoutRequest) => {
-      if (pending.rafId !== null) {
-        return;
-      }
-      if (pending.timerId !== null) {
-        window.clearTimeout(pending.timerId);
-      }
-
-      const elapsedMs = performance.now() - pending.firstScheduledAt;
-      const delayMs =
-        elapsedMs >= TRANSACTION_LAYOUT_MAX_DELAY_MS
-          ? 0
-          : Math.min(
-              TRANSACTION_LAYOUT_DEBOUNCE_MS,
-              TRANSACTION_LAYOUT_MAX_DELAY_MS - elapsedMs,
-            );
-
-      pending.timerId = window.setTimeout(flushPendingLayout, delayMs);
-    },
-    [flushPendingLayout],
-  );
-
-  /**
-   * Schedule a layout pipeline run after a short coalescing window.
-   * If more transactions arrive before the timer fires, the pending state
-   * is replaced so rapid typing paints once for the burst while still
-   * enforcing a max latency from the first edit.
-   */
+  // Thin adapter over the framework-agnostic scheduler. Repeated calls in the
+  // coalescing window merge dirty ranges and paint once for the burst.
   const scheduleLayout = useCallback(
     (state: EditorState, dirtyRange: DirtyRange | null) => {
-      const pending = pendingLayoutRef.current;
-      if (pending) {
-        pending.state = state;
-        pending.dirtyRange = mergeDirtyRanges(pending.dirtyRange, dirtyRange);
-        armPendingLayoutTimer(pending);
-        return;
-      }
-
-      const nextPending: PendingLayoutRequest = {
-        dirtyRange,
-        firstScheduledAt: performance.now(),
-        rafId: null,
-        state,
-        timerId: null,
-      };
-      pendingLayoutRef.current = nextPending;
-      armPendingLayoutTimer(nextPending);
+      layoutSchedulerRef.current?.schedule(state, dirtyRange);
     },
-    [armPendingLayoutTimer],
+    [],
   );
 
-  // Clean up pending rAF on unmount
+  // Clean up the pending layout pass and the doc-change timer on unmount.
   useEffect(
     () => () => {
-      if (pendingLayoutRef.current) {
-        if (pendingLayoutRef.current.timerId !== null) {
-          window.clearTimeout(pendingLayoutRef.current.timerId);
-        }
-        if (pendingLayoutRef.current.rafId !== null) {
-          cancelAnimationFrame(pendingLayoutRef.current.rafId);
-        }
-        pendingLayoutRef.current = null;
-      }
+      layoutSchedulerRef.current?.dispose();
       if (documentChangeNotifyTimerRef.current !== null) {
         window.clearTimeout(documentChangeNotifyTimerRef.current);
         documentChangeNotifyTimerRef.current = null;
