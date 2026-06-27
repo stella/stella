@@ -786,7 +786,14 @@ impl SessionManager {
   }
 
   pub fn is_trusted_self_host_api_base_url(&self, api_base_url: &str) -> bool {
-    let normalized_api_base_url = normalize_api_base_url(api_base_url);
+    // Approval stores the API via the full self-host normalizer, so the lookup
+    // must canonicalize the same way (default ports, host case) or a valid
+    // connection reads back as untrusted.
+    let Ok(normalized_api_base_url) =
+      config::normalize_self_host_api_base_url(api_base_url)
+    else {
+      return false;
+    };
     self
       .trusted_self_host_connections
       .iter()
@@ -798,7 +805,11 @@ impl SessionManager {
     web_origin: &str,
     api_base_url: &str,
   ) -> bool {
-    let normalized_api_base_url = normalize_api_base_url(api_base_url);
+    let Ok(normalized_api_base_url) =
+      config::normalize_self_host_api_base_url(api_base_url)
+    else {
+      return false;
+    };
     self.trusted_self_host_connections.iter().any(|connection| {
       connection.web_origin == web_origin
         && connection.api_base_url == normalized_api_base_url
@@ -2282,5 +2293,28 @@ mod tests {
     assert_eq!(sanitize_path_segment(""), "session");
     assert_eq!(sanitize_path_segment("."), "session");
     assert_eq!(sanitize_path_segment("   "), "session");
+  }
+
+  #[test]
+  fn trust_lookup_canonicalizes_api_base_url_like_approval() {
+    let mut manager = SessionManager::new();
+    manager.trust_self_host_connection_for_test(
+      "https://web.example".to_string(),
+      "https://api.example".to_string(),
+    );
+
+    // A lookup using a canonical-equivalent form (explicit default port,
+    // uppercase host, trailing slash) must still match the stored connection.
+    assert!(manager.is_trusted_self_host_connection(
+      "https://web.example",
+      "https://API.example:443/",
+    ));
+    assert!(manager.is_trusted_self_host_api_base_url("https://API.example:443/"));
+    assert!(
+      !manager.is_trusted_self_host_connection(
+        "https://web.example",
+        "https://other.example"
+      )
+    );
   }
 }
