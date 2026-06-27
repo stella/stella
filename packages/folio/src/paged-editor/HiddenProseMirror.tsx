@@ -18,7 +18,6 @@
 import {
   useRef,
   useEffect,
-  useLayoutEffect,
   useCallback,
   useImperativeHandle,
   useState,
@@ -86,8 +85,6 @@ export type HiddenProseMirrorProps = {
   theme?: Theme | null;
   /** Width in pixels (should match document content width) */
   widthPx?: number;
-  /** Delay EditorView creation while the visible editor performs first layout. */
-  deferViewCreation?: boolean;
   /** Whether the editor is read-only */
   readOnly?: boolean;
   /** Callback when document changes via transaction */
@@ -116,6 +113,10 @@ export type HiddenProseMirrorProps = {
 };
 
 export type HiddenProseMirrorRef = {
+  /** Request the off-screen EditorView (idempotent; creates it when possible). */
+  ensureView: () => void;
+  /** Whether view creation has been requested. */
+  isViewRequested: () => boolean;
   /** Get the ProseMirror EditorState */
   getState: () => EditorState | null;
   /** Get the ProseMirror EditorView */
@@ -204,7 +205,6 @@ export function HiddenProseMirror(
     styles,
     theme: _theme,
     widthPx = 612, // Default Letter width at 72dpi
-    deferViewCreation = false,
     readOnly = false,
     onTransaction,
     onSelectionChange,
@@ -234,7 +234,6 @@ export function HiddenProseMirror(
   const stylesRef = useRef(styles);
   const extensionManagerRef = useRef(extensionManager);
   const externalPluginsRef = useRef(externalPlugins);
-  const deferViewCreationRef = useRef(deferViewCreation);
   const precomputedInitialStateRef = useRef(precomputedInitialState);
   const collaborationRef = useRef(collaboration);
   const collaborationModulesRef = useRef(collaborationModules);
@@ -254,7 +253,6 @@ export function HiddenProseMirror(
   stylesRef.current = styles;
   extensionManagerRef.current = extensionManager;
   externalPluginsRef.current = externalPlugins;
-  deferViewCreationRef.current = deferViewCreation;
   precomputedInitialStateRef.current = precomputedInitialState;
   onTransactionRef.current = onTransaction;
   onSelectionChangeRef.current = onSelectionChange;
@@ -286,7 +284,6 @@ export function HiddenProseMirror(
       getCollaborationModules: () => collaborationModulesRef.current,
       getPrecomputedInitialState: () => precomputedInitialStateRef.current,
       getReadOnly: () => readOnlyRef.current,
-      getDeferViewCreation: () => deferViewCreationRef.current,
       getDocumentContext: () => documentRef.current,
       onTransaction: (transaction, newState) =>
         onTransactionRef.current?.(transaction, newState),
@@ -335,12 +332,6 @@ export function HiddenProseMirror(
   // EditorView Lifecycle
   // ========================================================================
 
-  // Stable wrapper so the create-trigger effect keeps `createView` in its
-  // dependency array; the view-creation body lives in the manager.
-  const createView = useCallback(() => {
-    managerRef.current?.createView();
-  }, []);
-
   useEffect(() => {
     const awareness = collaboration?.awareness;
     if (!awareness || !managerRef.current?.getView() || !collaborationModules) {
@@ -373,18 +364,12 @@ export function HiddenProseMirror(
     managerRef.current?.destroyView();
   }, []);
 
-  useLayoutEffect(() => {
-    if (deferViewCreation) {
-      return;
-    }
-    if (managerRef.current?.getView()) {
-      return;
-    }
-    if (collaboration && !collaborationModules) {
-      return;
-    }
-    createView();
-  }, [collaboration, collaborationModules, createView, deferViewCreation]);
+  // Completes a previously-requested-but-deferred creation once the async
+  // collaboration modules load. Idempotent and gated by `requested` inside the
+  // manager, so it never eagerly creates a view nobody asked for.
+  useEffect(() => {
+    managerRef.current?.retryViewCreation();
+  }, [collaborationModules]);
 
   useEffect(() => () => destroyView(), [destroyView]);
 

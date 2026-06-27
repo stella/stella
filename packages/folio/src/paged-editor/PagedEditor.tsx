@@ -19,11 +19,12 @@ import React, {
   useState,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useImperativeHandle,
 } from "react";
 import type { CSSProperties, Ref } from "react";
-import { createPortal, flushSync } from "react-dom";
+import { createPortal } from "react-dom";
 
 import type { Mark, Node as PMNode } from "prosemirror-model";
 import { NodeSelection, TextSelection } from "prosemirror-state";
@@ -1877,6 +1878,9 @@ export function PagedEditor(
   const [layout, setLayout] = useState<Layout | null>(null);
   const [blocks, setBlocks] = useState<FlowBlock[]>([]);
   const [measures, setMeasures] = useState<Measure[]>([]);
+  // Reactive "has the hidden editor been requested" signal. The manager owns
+  // the actual view creation imperatively (via ensureView); this flag only
+  // drives the pre-hidden initial-layout coordination below.
   const [shouldCreateHiddenEditorView, setShouldCreateHiddenEditorView] =
     useState(() => collaboration !== undefined);
   const shouldFocusHiddenEditorOnReadyRef = useRef(collaboration !== undefined);
@@ -2019,27 +2023,32 @@ export function PagedEditor(
   } | null>(null);
 
   const ensureHiddenEditorView = useCallback(
-    ({ focus = true, sync = false }: EnsureHiddenEditorViewOptions = {}) => {
+    ({ focus = true }: EnsureHiddenEditorViewOptions = {}) => {
       if (focus) {
         shouldFocusHiddenEditorOnReadyRef.current = true;
       } else if (
-        !shouldCreateHiddenEditorView &&
+        !hiddenPMRef.current?.isViewRequested() &&
         !hiddenPMRef.current?.getView()
       ) {
         shouldFocusHiddenEditorOnReadyRef.current = false;
       }
 
-      if (sync) {
-        flushSync(() => {
-          setShouldCreateHiddenEditorView(true);
-        });
-        return;
-      }
-
+      // Creation is synchronous now, so the former `sync`/flushSync path is
+      // gone; the `sync` option is accepted (and ignored) for call-site compat.
       setShouldCreateHiddenEditorView(true);
+      hiddenPMRef.current?.ensureView();
     },
-    [shouldCreateHiddenEditorView],
+    [],
   );
+
+  // Eagerly request the hidden editor when collaborating (matches the former
+  // `shouldCreateHiddenEditorView` initial-true for collaboration); the manager
+  // defers the actual creation until the collaboration modules load.
+  useLayoutEffect(() => {
+    if (collaboration !== undefined) {
+      hiddenPMRef.current?.ensureView();
+    }
+  }, [collaboration]);
 
   const queueHiddenEditorSelection = useCallback(
     (selection: PendingHiddenEditorSelection) => {
@@ -6989,7 +6998,6 @@ export function PagedEditor(
         ref={hiddenPMRef}
         document={document}
         widthPx={contentWidth}
-        deferViewCreation={!shouldCreateHiddenEditorView}
         precomputedInitialState={validPrecomputedInitialState}
         readOnly={readOnly}
         onTransaction={handleTransaction}

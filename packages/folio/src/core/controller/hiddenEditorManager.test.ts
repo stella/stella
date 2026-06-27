@@ -40,7 +40,6 @@ const makeDeps = (
     getCollaborationModules: () => null,
     getPrecomputedInitialState: () => null,
     getReadOnly: () => false,
-    getDeferViewCreation: () => false,
     getDocumentContext: () => null,
     onTransaction: (_transaction: Transaction, _newState: EditorState) => {
       spies["onTransaction"].calls += 1;
@@ -80,19 +79,21 @@ describe("createHiddenEditorManager", () => {
     expect(manager.isInitialized()).toBe(false);
   });
 
-  test("createView is a no-op without a host (no view, stays uninitialized)", () => {
+  test("ensureView marks requested but creates nothing without a host", () => {
     const { deps, spies } = makeDeps({ getHost: () => null });
     const manager = createHiddenEditorManager(deps);
-    manager.createView();
+    manager.ensureView();
+    expect(manager.isViewRequested()).toBe(true);
     expect(manager.getView()).toBeNull();
     expect(manager.isInitialized()).toBe(false);
     expect(spies["onEditorViewReady"].calls).toBe(0);
   });
 
-  test("createView is a no-op while view creation is deferred", () => {
-    const { deps, spies } = makeDeps({ getDeferViewCreation: () => true });
+  test("retryViewCreation does nothing until creation is requested", () => {
+    const { deps, spies } = makeDeps({ getHost: () => null });
     const manager = createHiddenEditorManager(deps);
-    manager.createView();
+    manager.retryViewCreation();
+    expect(manager.isViewRequested()).toBe(false);
     expect(manager.getView()).toBeNull();
     expect(spies["onEditorViewReady"].calls).toBe(0);
   });

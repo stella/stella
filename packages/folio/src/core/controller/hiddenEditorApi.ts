@@ -17,6 +17,10 @@ import { fromProseDoc } from "../prosemirror/conversion/fromProseDoc";
 import type { Document } from "../types/document";
 
 export type HiddenEditorApi = {
+  /** Request the off-screen EditorView (idempotent; creates it when possible). */
+  ensureView: () => void;
+  /** Whether view creation has been requested. */
+  isViewRequested: () => boolean;
   /** Get the ProseMirror EditorState */
   getState: () => EditorState | null;
   /** Get the ProseMirror EditorView */
@@ -55,6 +59,8 @@ export type HiddenEditorApiDeps = {
   getView: () => EditorView | null;
   getDocumentContext: () => Document | null;
   isDestroying: () => boolean;
+  ensureView: () => void;
+  isViewRequested: () => boolean;
 };
 
 /**
@@ -95,6 +101,10 @@ export const createHiddenEditorApi = (
   };
 
   return {
+    ensureView: deps.ensureView,
+
+    isViewRequested: deps.isViewRequested,
+
     getState: () => deps.getView()?.state ?? null,
 
     getView: () => deps.getView() ?? null,

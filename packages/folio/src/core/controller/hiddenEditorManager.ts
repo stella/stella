@@ -353,7 +353,6 @@ export type HiddenEditorManagerDeps = {
   getCollaborationModules: () => CollaborationModules | null;
   getPrecomputedInitialState: () => EditorState | null | undefined;
   getReadOnly: () => boolean;
-  getDeferViewCreation: () => boolean;
   /** Document context for the API's `getDocument` (PM state -> Document). */
   getDocumentContext: () => Document | null;
   onTransaction: (transaction: Transaction, newState: EditorState) => void;
@@ -368,7 +367,11 @@ export type HiddenEditorManagerDeps = {
 };
 
 export type HiddenEditorManager = {
-  createView: () => void;
+  /** Request the view (sets the requested flag, then attempts creation). */
+  ensureView: () => void;
+  /** Re-attempt a previously-requested-but-deferred creation (no-op otherwise). */
+  retryViewCreation: () => void;
+  isViewRequested: () => boolean;
   destroyView: () => void;
   syncExternalDocument: () => void;
   syncEditable: () => void;
@@ -382,6 +385,9 @@ export const createHiddenEditorManager = (
 ): HiddenEditorManager => {
   let view: EditorView | null = null;
   let isDestroying = false;
+  // The React adapter requests the view explicitly (first interaction) or
+  // eagerly (collaboration); creation only proceeds once requested.
+  let requested = false;
   // Track if we've initialized - first render needs to set up state.
   let isInitialized = false;
   // Track the document identity to detect truly external changes vs changes
@@ -389,12 +395,12 @@ export const createHiddenEditorManager = (
   let lastDocumentId: string | null = null;
   let lastCollaborationFragment: XmlFragment | null = null;
 
-  const createView = (): void => {
-    if (deps.getDeferViewCreation()) {
+  const tryCreate = (): void => {
+    if (!requested || view !== null || isDestroying) {
       return;
     }
     const host = deps.getHost();
-    if (!host || isDestroying) {
+    if (!host) {
       return;
     }
     const collaboration = deps.getCollaboration();
@@ -517,6 +523,19 @@ export const createHiddenEditorManager = (
     deps.onEditorViewReady(view);
   };
 
+  const ensureView = (): void => {
+    requested = true;
+    tryCreate();
+  };
+
+  // Completes a previously-requested creation once a gate clears (e.g. the
+  // async collaboration modules finish loading); a no-op until requested.
+  const retryViewCreation = (): void => {
+    tryCreate();
+  };
+
+  const isViewRequested = (): boolean => requested;
+
   const destroyView = (): void => {
     if (view && !isDestroying) {
       isDestroying = true;
@@ -604,10 +623,14 @@ export const createHiddenEditorManager = (
     getView: () => view,
     getDocumentContext: deps.getDocumentContext,
     isDestroying: () => isDestroying,
+    ensureView,
+    isViewRequested,
   });
 
   return {
-    createView,
+    ensureView,
+    retryViewCreation,
+    isViewRequested,
     destroyView,
     syncExternalDocument,
     syncEditable,
