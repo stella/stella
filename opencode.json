@@ -1,5 +1,12 @@
 {
-  "agents": [],
+  "agents": [
+    ".opencode/agents/case-law-researcher.md",
+    ".opencode/agents/template-designer.md",
+    ".opencode/agents/entity-manager.md",
+    ".opencode/agents/document-reviewer.md",
+    ".opencode/agents/contract-analyzer.md",
+    ".opencode/agents/compliance-checker.md"
+  ],
   "plugins": [".opencode/plugins/workspace-loader.ts"],
   "mcpServers": {
     "stella": {
