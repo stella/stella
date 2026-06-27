@@ -395,6 +395,7 @@ export function HiddenProseMirror(
     managerRef.current?.syncExternalDocument();
   }, [
     document,
+    documentKey,
     styles,
     extensionManager,
     externalPlugins,
