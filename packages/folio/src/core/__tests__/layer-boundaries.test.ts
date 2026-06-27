@@ -72,13 +72,16 @@ const layerOfPath = (absolutePath: string): Layer | null => {
 const IMPORT_REGEX =
   /\bfrom\s*["'](?<fromSpec>[^"']+)["']|\bimport\s*["'](?<importSpec>[^"']+)["']|\bimport\s*\(\s*["'](?<dynImportSpec>[^"']+)["']\s*\)/gu;
 
-// Strip block and line comments before the raw-text scan so an import mentioned
-// in a comment cannot trip it. The line-comment pattern keeps the character
-// before `//` so it does not eat a `:` from a `https://` URL.
+// Strip block comments and whole-line `//` comments before the raw-text scan so
+// an import mentioned in prose cannot trip it. Only full-line comments are
+// stripped (not trailing/mid-line `//`), so a `//` inside a string or regex
+// literal on a code line is never mistaken for a comment and the rest of that
+// line is preserved. The AST-based `no-upstream-import` rule remains the
+// authoritative check.
 const stripComments = (source: string): string =>
   source
     .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
-    .replaceAll(/(?<lead>^|[^:])\/\/[^\n]*/gmu, "$<lead>");
+    .replaceAll(/^[ \t]*\/\/[^\n]*/gmu, "");
 
 type EdgeViolation = {
   importer: string;
