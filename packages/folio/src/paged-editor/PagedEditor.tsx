@@ -42,6 +42,7 @@ import {
   createLayoutScheduler,
   type LayoutScheduler,
 } from "../core/controller/layoutScheduler";
+import { createLayoutSession } from "../core/controller/layoutSession";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
 import { buildBookmarkText } from "../core/fields/bookmarkText";
@@ -1893,11 +1894,7 @@ export function PagedEditor(
   const shouldFocusHiddenEditorOnReadyRef = useRef(collaboration !== undefined);
   const [precomputedInitialState, setPrecomputedInitialState] =
     useState<EditorState | null>(null);
-  const layoutArtifactsRef = useRef<{
-    blocks: FlowBlock[];
-    blockWidths: number[];
-    measures: Measure[];
-  } | null>(null);
+  const layoutSessionRef = useRef(createLayoutSession());
   const precomputedInitialStateRef = useRef<EditorState | null>(null);
   const precomputedInitialDocumentRef = useRef<Document | null>(null);
   const preHiddenInitialLayoutDoneRef = useRef(false);
@@ -1906,9 +1903,6 @@ export function PagedEditor(
   const queuedInputBeforeHiddenEditorRef = useRef<QueuedHiddenEditorInput[]>(
     [],
   );
-  const lastLayoutEditorStateRef = useRef<EditorState | null>(null);
-  const lastLaidOutPmDocRef = useRef<EditorState["doc"] | null>(null);
-  const lastLayoutUsedLoadedFontsRef = useRef(false);
   const pendingInitialFontReadyLayoutRef = useRef(false);
   const suppressFontReadyUntilRef = useRef(0);
   const [isFocused, setIsFocused] = useState(false);
@@ -1952,14 +1946,10 @@ export function PagedEditor(
   // Template fill preview — the hidden editor's plugin keeps marker↔value
   // entries in sync; the layout pipeline substitutes them into the flow
   // blocks so the painted pages reflow as if the values were the text.
-  // `templatePreviewRef` mirrors the latest plugin state (change detection),
-  // `lastLaidOutTemplatePreviewRef` records what the last pipeline run
-  // actually substituted.
+  // `templatePreviewRef` mirrors the latest plugin state (change detection);
+  // the layout session's `lastTemplatePreview` records what the last pipeline
+  // run actually substituted.
   const templatePreviewRef = useRef<{
-    entries: readonly TemplatePreviewEntry[];
-    mode: TemplatePreviewValues["mode"];
-  }>({ entries: EMPTY_TEMPLATE_PREVIEW_ENTRIES, mode: "plain" });
-  const lastLaidOutTemplatePreviewRef = useRef<{
     entries: readonly TemplatePreviewEntry[];
     mode: TemplatePreviewValues["mode"];
   }>({ entries: EMPTY_TEMPLATE_PREVIEW_ENTRIES, mode: "plain" });
@@ -2354,7 +2344,7 @@ export function PagedEditor(
             mode: previewMode,
           });
         }
-        lastLaidOutTemplatePreviewRef.current = {
+        layoutSessionRef.current.lastTemplatePreview = {
           entries: previewEntries,
           mode: previewMode,
         };
@@ -2565,11 +2555,14 @@ export function PagedEditor(
         });
         let blockWidths = blockMeasureInputs.widths;
         const incrementalResult =
-          options.dirtyRange && !options.forceFull && layoutArtifactsRef.current
+          options.dirtyRange &&
+          !options.forceFull &&
+          layoutSessionRef.current.artifacts
             ? tryBuildIncrementalMeasures({
-                previousBlocks: layoutArtifactsRef.current.blocks,
-                previousMeasures: layoutArtifactsRef.current.measures,
-                previousBlockWidths: layoutArtifactsRef.current.blockWidths,
+                previousBlocks: layoutSessionRef.current.artifacts.blocks,
+                previousMeasures: layoutSessionRef.current.artifacts.measures,
+                previousBlockWidths:
+                  layoutSessionRef.current.artifacts.blockWidths,
                 nextBlocks: newBlocks,
                 nextBlockWidths: blockWidths,
                 dirtyRange: options.dirtyRange,
@@ -2582,7 +2575,7 @@ export function PagedEditor(
             pageHeight: blockMeasureInputs.pageHeights,
             marginBottom: blockMeasureInputs.marginBottoms,
           });
-        layoutArtifactsRef.current = {
+        layoutSessionRef.current.artifacts = {
           blocks: newBlocks,
           blockWidths,
           measures: newMeasures,
@@ -2777,7 +2770,7 @@ export function PagedEditor(
               values,
             );
             relayoutWithCurrentMeasures(layoutOptsUsed);
-            layoutArtifactsRef.current = {
+            layoutSessionRef.current.artifacts = {
               blocks: newBlocks,
               blockWidths,
               measures: newMeasures,
@@ -2920,7 +2913,7 @@ export function PagedEditor(
                 marginBottom: blockMeasureInputs.marginBottoms,
               },
             );
-            layoutArtifactsRef.current = {
+            layoutSessionRef.current.artifacts = {
               blocks: newBlocks,
               blockWidths,
               measures: newMeasures,
@@ -2936,9 +2929,9 @@ export function PagedEditor(
         }
 
         setLayout(newLayout);
-        lastLayoutEditorStateRef.current = state;
-        lastLaidOutPmDocRef.current = state.doc;
-        lastLayoutUsedLoadedFontsRef.current = documentFontsAreLoaded();
+        layoutSessionRef.current.lastEditorState = state;
+        layoutSessionRef.current.lastPmDoc = state.doc;
+        layoutSessionRef.current.usedLoadedFonts = documentFontsAreLoaded();
         recordLayoutComplete(reason);
         recordPhaseDuration("layout-document", phaseStartedAt);
 
@@ -6444,7 +6437,7 @@ export function PagedEditor(
       updateAnonymizationOverlay();
       updateDirectivesOverlay();
       if (fontsLoaded) {
-        lastLayoutUsedLoadedFontsRef.current = true;
+        layoutSessionRef.current.usedLoadedFonts = true;
         suppressFontReadyUntilRef.current =
           performance.now() + INITIAL_FONT_READY_SUPPRESSION_MS;
       }
@@ -6517,12 +6510,12 @@ export function PagedEditor(
         });
       };
 
-      if (lastLaidOutPmDocRef.current?.eq(view.state.doc)) {
+      if (layoutSessionRef.current.lastPmDoc?.eq(view.state.doc)) {
         // The doc is already laid out, but the painted pages may carry a
         // fill preview the fresh view's plugin no longer holds (or vice
         // versa) — the substituted values live in the flow blocks, so a
         // mismatch needs a pipeline re-run, not just overlay repaints.
-        const lastPreview = lastLaidOutTemplatePreviewRef.current;
+        const lastPreview = layoutSessionRef.current.lastTemplatePreview;
         if (
           templatePreviewRef.current.mode !== lastPreview.mode ||
           templatePreviewDirtyRange(
@@ -6565,7 +6558,7 @@ export function PagedEditor(
         clearAllCaches();
         runInitialLayout(currentView);
         if (fontsLoaded) {
-          lastLayoutUsedLoadedFontsRef.current = true;
+          layoutSessionRef.current.usedLoadedFonts = true;
           suppressFontReadyUntilRef.current =
             performance.now() + INITIAL_FONT_READY_SUPPRESSION_MS;
         }
@@ -6631,7 +6624,7 @@ export function PagedEditor(
 
         try {
           const positions = computeAnchorPositions(
-            lastLayoutEditorStateRef.current,
+            layoutSessionRef.current.lastEditorState,
             layout,
             blocks,
             measures,
@@ -6682,14 +6675,14 @@ export function PagedEditor(
       if (performance.now() < suppressFontReadyUntilRef.current) {
         return;
       }
-      lastLayoutUsedLoadedFontsRef.current = false;
+      layoutSessionRef.current.usedLoadedFonts = false;
     };
 
     const handleFontsLoaded = () => {
       if (
         pendingInitialFontReadyLayoutRef.current ||
         performance.now() < suppressFontReadyUntilRef.current ||
-        lastLayoutUsedLoadedFontsRef.current
+        layoutSessionRef.current.usedLoadedFonts
       ) {
         return;
       }
@@ -6735,7 +6728,7 @@ export function PagedEditor(
       lastLayoutInputSignatureRef.current = layoutInputSignature;
       if (
         !layoutInputsChanged &&
-        view.state.doc === lastLaidOutPmDocRef.current
+        view.state.doc === layoutSessionRef.current.lastPmDoc
       ) {
         return;
       }
