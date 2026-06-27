@@ -48,6 +48,7 @@ const createOpenAIOrgAIConfig = (): OrgAIConfig => ({
 const createMiddlewareContext = (
   deferred: Promise<unknown>[] = [],
 ): ChatMiddlewareContext => ({
+  activity: "chat",
   requestId: "request_1",
   streamId: "stream_1",
   runId: "run_1",
