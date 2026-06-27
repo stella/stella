@@ -1816,6 +1816,11 @@ export function PagedEditor(
 
   // State
   const [layout, setLayout] = useState<Layout | null>(null);
+  // Mirror `layout` in a ref so the layout pipeline reads the latest page-count
+  // estimate without `layout` in runLayoutPipeline's deps (which would recreate
+  // the callback every layout run and re-fire the effects keyed on its identity).
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
   const [blocks, setBlocks] = useState<FlowBlock[]>([]);
   const [measures, setMeasures] = useState<Measure[]>([]);
   // Reactive "has the hidden editor been requested" signal. The manager owns
@@ -2248,7 +2253,7 @@ export function PagedEditor(
           document,
           defaultTabStop,
           styles,
-          layout,
+          layout: layoutRef.current,
           hfPMs: hfPMsRef.current,
           painter: painterRef.current,
           pagesContainer: pagesContainerRef.current,

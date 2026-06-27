@@ -76,7 +76,11 @@ import type {
   Watermark,
 } from "../types/document";
 import { getDocumentWatermark } from "../watermark";
-import type { LayoutSession } from "./layoutSession";
+import type {
+  LayoutArtifacts,
+  LayoutSession,
+  LayoutTemplatePreview,
+} from "./layoutSession";
 
 function pageMarginsEqual(left: PageMargins, right: PageMargins): boolean {
   return (
@@ -213,6 +217,8 @@ export function runLayoutPipeline<THfPMs>(
     emptyTemplatePreviewEntries: EMPTY_TEMPLATE_PREVIEW_ENTRIES,
   } = deps;
   const outcome: LayoutOutcome = {};
+  let pendingArtifacts: LayoutArtifacts;
+  let pendingTemplatePreview: LayoutTemplatePreview;
   // Composition root for text measurement: install the canvas backend
   // before any layout/measure runs. Idempotent; the engine measures
   // through the pure provider seam, which throws until a backend is set.
@@ -260,7 +266,7 @@ export function runLayoutPipeline<THfPMs>(
         mode: previewMode,
       });
     }
-    session.lastTemplatePreview = {
+    pendingTemplatePreview = {
       entries: previewEntries,
       mode: previewMode,
     };
@@ -490,7 +496,7 @@ export function runLayoutPipeline<THfPMs>(
         pageHeight: blockMeasureInputs.pageHeights,
         marginBottom: blockMeasureInputs.marginBottoms,
       });
-    session.artifacts = {
+    pendingArtifacts = {
       blocks: newBlocks,
       blockWidths,
       measures: newMeasures,
@@ -688,7 +694,7 @@ export function runLayoutPipeline<THfPMs>(
           values,
         );
         relayoutWithCurrentMeasures(layoutOptsUsed);
-        session.artifacts = {
+        pendingArtifacts = {
           blocks: newBlocks,
           blockWidths,
           measures: newMeasures,
@@ -827,7 +833,7 @@ export function runLayoutPipeline<THfPMs>(
             marginBottom: blockMeasureInputs.marginBottoms,
           },
         );
-        session.artifacts = {
+        pendingArtifacts = {
           blocks: newBlocks,
           blockWidths,
           measures: newMeasures,
@@ -843,10 +849,6 @@ export function runLayoutPipeline<THfPMs>(
     }
 
     outcome.layout = newLayout;
-    session.lastEditorState = state;
-    session.lastPmDoc = state.doc;
-    session.usedLoadedFonts = documentFontsAreLoaded();
-    recordLayoutComplete(reason);
     recordPhaseDuration("layout-document", phaseStartedAt);
 
     // Step 4: Paint to DOM
@@ -980,6 +982,17 @@ export function runLayoutPipeline<THfPMs>(
       renderPages(newLayout.pages, pagesContainer, renderOpts);
       recordPhaseDuration("render-pages", phaseStartedAt);
     }
+
+    // Commit the session memory only after layout AND paint have succeeded. A
+    // paint throw is caught below and keeps the previous visible layout; marking
+    // the doc as laid out here would make the next run skip a needed rerun and
+    // leave stale pages.
+    session.artifacts = pendingArtifacts;
+    session.lastTemplatePreview = pendingTemplatePreview;
+    session.lastEditorState = state;
+    session.lastPmDoc = state.doc;
+    session.usedLoadedFonts = documentFontsAreLoaded();
+    recordLayoutComplete(reason);
   } catch (error) {
     const invalidHighlights = describeInvalidHighlightMarks(state.doc);
     recordLayoutError(
