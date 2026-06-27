@@ -9,7 +9,7 @@ import getThreads from "@/api/handlers/chat/get-threads";
 import resolveFileThread from "@/api/handlers/chat/resolve-file-thread";
 import resolveTemplateThread from "@/api/handlers/chat/resolve-template-thread";
 import rotateTemplateThread from "@/api/handlers/chat/rotate-template-thread";
-import sendMessage from "@/api/handlers/chat/send-message";
+import agentProxy from "@/api/handlers/chat/agent-proxy";
 import updateThread from "@/api/handlers/chat/update-thread";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
 
@@ -17,9 +17,9 @@ export const chatRoute = new Elysia({ prefix: "/chat" })
   .use(workspaceAccessMacro)
   .use(permissionMacro)
   .guard({ validateAuth: true })
-  .post("/", sendMessage.handler, {
-    body: sendMessage.config.body,
-    permissions: sendMessage.config.permissions,
+  .post("/", agentProxy.handler, {
+    body: agentProxy.config.body,
+    permissions: agentProxy.config.permissions,
   })
   .post("/workspaces/:workspaceId/file-thread", resolveFileThread.handler, {
     body: resolveFileThread.config.body,
