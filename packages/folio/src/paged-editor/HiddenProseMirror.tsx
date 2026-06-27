@@ -375,14 +375,15 @@ export function HiddenProseMirror(
     managerRef.current?.destroyView();
   }, []);
 
-  // Completes a previously-requested-but-deferred creation once the async
-  // collaboration modules load. Idempotent and gated by `requested` inside the
+  // Completes a previously-requested-but-deferred creation once a gate clears:
+  // the async collaboration modules load, OR collaboration is cleared entirely
+  // (both unblock tryCreate). Idempotent and gated by `requested` inside the
   // manager, so it never eagerly creates a view nobody asked for. Runs in the
   // layout phase (like the former create trigger) so the view exists before the
   // passive awareness effect above subscribes to remote selections.
   useLayoutEffect(() => {
     managerRef.current?.retryViewCreation();
-  }, [collaborationModules]);
+  }, [collaboration, collaborationModules]);
 
   useEffect(() => () => destroyView(), [destroyView]);
 
