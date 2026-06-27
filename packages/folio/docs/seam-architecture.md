@@ -196,25 +196,33 @@ Each phase ships in the monorepo, CI-checked. P1–P4 are pure TS refactors that
 also improve the current product (testability, clarity); you can stop after any
 phase with a strictly better codebase.
 
-- **P0 (done):** React-free core (`no-react-in-core` rule + arch test), headless
-  `@stll/folio/core` entry, `paged-layout` moved into core.
-- **P1 — model seam:** carve pure data types into a clear boundary.
-- **P2 — invert measurement (next, highest leverage):** generalize the worker
-  protocol into `MeasureProvider`; move canvas behind `canvasMeasureProvider`;
-  make `layout-engine` pure (no canvas/DOM). Headless-testable, Rust-ready.
-- **P3 — split the bridge:** pure `Document→FlowBlocks` → engine; DOM hit-test →
-  render-dom.
-- **P4 — extract the headless `controller`:** pull orchestration out of
-  `paged-editor`; the React adapter becomes a thin wrapper (proves the seam).
-- **P5 — package the boundaries:** the package split, now meaningful (clean
-  interfaces, not reach-ins). Standalone-repo extraction happens here.
+- **P0 (done, #884):** React-free core (`no-react-in-core` rule + arch test),
+  headless `@stll/folio/core` entry, `paged-layout` moved into core.
+- **P1 (done, #887) — model seam:** `core/model.ts` lingua-franca barrel + the
+  `model-is-pure-data` lint rule. Physical `types/`→`model/` relocation (~246
+  imports) deferred to P5.
+- **P2 (done, #887) — measurement seam:** `MeasureProvider` (P2a) + the layout
+  engine's import graph made canvas-free (P2b). Headless-testable, Rust-ready.
+- **P4 (next) — extract the headless `controller`:** pull orchestration (layout
+  loop, incremental measure, hidden PM view, selection/scroll) out of
+  `paged-editor` into a framework-agnostic controller with an imperative API +
+  events. The React adapter becomes a thin wrapper. This is the Vue/desktop
+  linchpin and is self-contained.
+- **P5 — package the boundaries (incl. the bridge split):** form the `engine` /
+  `document` / `render-dom` packages and dissolve `layout-bridge` into them. The
+  bridge split (originally "P3") folds in here: the bridge is a cohesive
+  PM→FlowBlocks→measure cluster, so cleanly separating its pure-compute,
+  PM-conversion, and DOM pieces only works once those three packages exist as
+  homes — doing it earlier would mean throwaway intermediate dirs. The
+  standalone-repo extraction also happens here.
 - **P6 — `@folio/vue`:** small if P4–P5 are right.
 - **P7 — Rust port (profiled):** `docx` I/O first (no font stack), then layout
   (with a Rust measure provider).
 
 ## Status
 
-P0 complete (merged in #884). P2 is the recommended next move: it makes the
-layout engine genuinely pure, which is simultaneously the precondition for the
-Rust port and a quality win today, and it de-risks the plan by proving the
-hardest seam first on a small surface.
+P0, P1, and P2 are merged (#884, #886, #887): the React-free core, the model
+seam, and the fully-inverted measurement seam are in. **P4 (the headless
+controller) is next** — it's self-contained and is the Vue/desktop enabler. The
+bridge split folded into P5 (see P5 above) because cleanly separating that
+cluster requires the engine/document/render-dom package homes that P5 creates.
