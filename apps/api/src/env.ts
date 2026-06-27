@@ -167,6 +167,10 @@ const envApi = createEnv({
 
     // opencode sidecar base URL (only used when USE_OPENCODE_CHAT=true)
     OPENCODE_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
+
+    // Daytona sandbox for untrusted plugin tool execution
+    DAYTONA_API_KEY: v.optional(v.string()),
+    DAYTONA_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
     FEATURE_USAGE: featureFlagSchema,
     FEATURE_KNOWLEDGE_TEMPLATES: featureFlagSchema,
     FEATURE_CASE_LAW: featureFlagSchema,
