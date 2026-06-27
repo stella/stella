@@ -10,8 +10,8 @@ export const workspace: Product = {
   summary:
     "A web app that brings matters, documents, Word .docx editing, review, research, chat, and knowledge tools together. A desktop app bridges local Office editing, and a stella MCP server exposes your matters, documents, and case law.",
   hero: {
-    type: "placeholder",
-    note: "Web app: a matter open with its documents, a review tab, and chat side by side",
+    type: "preview",
+    key: "workspace",
     aspect: "16 / 10",
   },
   quickAnswer: {

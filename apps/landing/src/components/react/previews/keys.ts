@@ -3,6 +3,12 @@
 // mock UI rendered from components + tokens — there are no screenshots to keep in
 // sync. New preview = add a key here + a case in ProductPreview (exhaustive).
 //
-// These live in the landing for now; the intent is to lift this module into a
-// shared @stll/previews package the app can also consume.
-export type ProductPreviewKey = "review-grid";
+// review-grid renders the real app FieldValue/skeleton via @stll/workspace-ui
+// (drift-proof). The rest are token-adaptive lookalikes modeled on the app UI.
+export type ProductPreviewKey =
+  | "review-grid"
+  | "case-law-reader"
+  | "anonymization"
+  | "agent-answer"
+  | "template-editor"
+  | "workspace";

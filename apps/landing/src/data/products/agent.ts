@@ -10,8 +10,8 @@ export const agent: Product = {
   summary:
     "Chat with your matters, documents, registries, and connected tools in one place. The agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.",
   hero: {
-    type: "placeholder",
-    note: "Agent chat in a matter: a reply with an inline citation and an approval prompt for a registry lookup",
+    type: "preview",
+    key: "agent-answer",
     aspect: "16 / 10",
   },
   quickAnswer: {

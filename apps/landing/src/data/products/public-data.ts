@@ -10,8 +10,8 @@ export const publicData: Product = {
   summary:
     "Case law and company registries from official public sources, collected and structure-parsed by stella's Legal Atlas stack. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.",
   hero: {
-    type: "placeholder",
-    note: "Public data: case-law reader and a company-registry lookup side by side",
+    type: "preview",
+    key: "case-law-reader",
     aspect: "16 / 10",
   },
   quickAnswer: {

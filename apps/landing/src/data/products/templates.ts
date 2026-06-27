@@ -11,8 +11,8 @@ export const templates: Product = {
   summary:
     "Define a template once with fields and conditional clauses, then fill it in by hand or let stella draft it from a matter's data. Produce a document into the matter and keep editing it. Repeat work starts from a known-good base instead of a blank page.",
   hero: {
-    type: "placeholder",
-    note: "Template editor: a template with fields and conditional clauses assembling a draft",
+    type: "preview",
+    key: "template-editor",
     aspect: "16 / 10",
   },
   quickAnswer: {

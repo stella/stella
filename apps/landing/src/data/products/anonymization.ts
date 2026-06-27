@@ -10,8 +10,8 @@ export const anonymization: Product = {
   summary:
     "WASM-backed anonymization tooling for legal AI workflows. It helps prepare material for AI without exposing names, entities, or identifying details, integrated through chat and document review. This is actively being built: more is coming soon.",
   hero: {
-    type: "placeholder",
-    note: "Future seeded screenshot: a document with identifying details prepared for AI, integrated into review (capture once the feature ships)",
+    type: "preview",
+    key: "anonymization",
     aspect: "16 / 10",
   },
   quickAnswer: {
