@@ -43,12 +43,14 @@ impl TestBridge {
   async fn wait_until_ready(&self) {
     let client = Self::client();
     for _ in 0..100 {
-      if client.get(self.url("/health")).send().await.is_ok() {
+      if let Ok(response) = client.get(self.url("/health")).send().await
+        && response.status().is_success()
+      {
         return;
       }
       tokio::time::sleep(Duration::from_millis(20)).await;
     }
-    panic!("test bridge never accepted a connection");
+    panic!("test bridge never served a healthy response");
   }
 
   /// GET `/v1/self-host-connection` for a web origin / API pair, returning the
@@ -95,7 +97,11 @@ async fn spawn_test_bridge_with_origins(
 
   let router = build_router(state);
   tokio::spawn(async move {
-    let _ = axum::serve(listener, router).await;
+    // Route failures through tracing like start_bridge does (the crate forbids
+    // print_stderr) so a server-side error is not silently swallowed.
+    if let Err(error) = axum::serve(listener, router).await {
+      tracing::error!(error = %error, "test bridge server error");
+    }
   });
 
   let bridge = TestBridge {
