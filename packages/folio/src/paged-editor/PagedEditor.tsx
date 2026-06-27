@@ -2554,15 +2554,13 @@ export function PagedEditor(
           finalConfig: bodyLayoutConfig,
         });
         let blockWidths = blockMeasureInputs.widths;
+        const previousArtifacts = layoutSessionRef.current.artifacts;
         const incrementalResult =
-          options.dirtyRange &&
-          !options.forceFull &&
-          layoutSessionRef.current.artifacts
+          options.dirtyRange && !options.forceFull && previousArtifacts
             ? tryBuildIncrementalMeasures({
-                previousBlocks: layoutSessionRef.current.artifacts.blocks,
-                previousMeasures: layoutSessionRef.current.artifacts.measures,
-                previousBlockWidths:
-                  layoutSessionRef.current.artifacts.blockWidths,
+                previousBlocks: previousArtifacts.blocks,
+                previousMeasures: previousArtifacts.measures,
+                previousBlockWidths: previousArtifacts.blockWidths,
                 nextBlocks: newBlocks,
                 nextBlockWidths: blockWidths,
                 dirtyRange: options.dirtyRange,
