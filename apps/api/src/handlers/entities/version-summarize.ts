@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { loadEntityVersionDiffSources } from "@/api/handlers/entities/version-diff-sources";
 import { summarizeVersionDiff } from "@/api/lib/ai-change-summary";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -52,7 +52,7 @@ const versionSummarize = createSafeHandler(
     // Identical versions: nothing to summarize, skip the model call.
     let summary: string | null = null;
     if (segments.length > 0) {
-      const aiAnalytics = createAIAnalyticsCallbacks({
+      const aiAnalytics = createTanStackAIAnalyticsCallbacks({
         usageMetering: {
           actionType: "chat",
           organizationId,

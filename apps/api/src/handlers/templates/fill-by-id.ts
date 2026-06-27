@@ -27,7 +27,7 @@ import type { RichPatchValue } from "@/api/handlers/docx/types";
 import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { recordTemplateUse } from "@/api/handlers/templates/record-use";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
@@ -230,7 +230,7 @@ const fillByIdHandler = async function* ({
   }
 
   if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId,

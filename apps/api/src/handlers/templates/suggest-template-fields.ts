@@ -5,21 +5,19 @@
  * the document from the returned suggestions.
  *
  * Uses the same structured-output pattern as workflow generation
- * (`streamText` + `Output.object`). A failure or unavailable model yields an
+ * (`generateTanStackObjectForRole`). A failure or unavailable model yields an
  * empty list so the caller can fall back to plain `{{marker}}` discovery.
  */
 
-import { Output, streamText } from "ai";
 import * as v from "valibot";
 
 import { isFieldPath } from "@stll/template-conditions";
 
 import type { FieldSuggestion } from "@/api/handlers/docx/apply-field-suggestions";
-import { getModelForRole } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const SUGGEST_TIMEOUT_MS = 45_000;
 
@@ -100,27 +98,25 @@ export const suggestTemplateFields = async ({
   instructions?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
-  aiAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
+  aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
 }): Promise<SuggestedTemplateField[]> => {
   try {
-    const result = streamText({
-      abortSignal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
-      messages: [
-        { role: "user", content: buildPrompt(documentText, instructions) },
-      ],
-      model: getModelForRole("fast", orgAIConfig, {
+    const { suggestions } = await generateTanStackObjectForRole({
+      role: "fast",
+      orgAIConfig,
+      organizationId,
+      analytics: aiAnalytics,
+      caching: resolveCaching({
         promptCachingEnabled: false,
+        role: "fast",
         scopeKey: organizationId,
-        organizationId,
-        serviceTier: "standard",
-      }),
-      output: Output.object({
-        schema: strictOutputSchema(fieldSuggestionsSchema),
       }),
       system: SYSTEM_PROMPT,
-      ...aiAnalytics.stepCallbacks,
+      prompt: buildPrompt(documentText, instructions),
+      outputSchema: fieldSuggestionsSchema,
+      abortSignal: AbortSignal.timeout(SUGGEST_TIMEOUT_MS),
+      serviceTier: "standard",
     });
-    const { suggestions } = await result.output;
     // The schema models "absent" as null (OpenAI strict mode); FieldSuggestion
     // uses optional members.
     return suggestions.flatMap((s) => {

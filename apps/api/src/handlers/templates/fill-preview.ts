@@ -23,7 +23,7 @@ import { resolveClauseSlots } from "@/api/handlers/docx/resolve-clause-slots";
 import { readManifest } from "@/api/handlers/docx/template-manifest";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -168,7 +168,7 @@ const fillPreviewHandler = async function* ({
   }
 
   if (manifest && (hasAiDraftFields || hasAiAdaptFields)) {
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId,

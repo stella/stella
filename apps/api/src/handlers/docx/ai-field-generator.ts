@@ -9,9 +9,14 @@
  * so callers leave AI fields unfilled rather than erroring.
  */
 
-import { generateText, Output, stepCountIs, streamText } from "ai";
+import { chat, maxIterations } from "@tanstack/ai";
+import type { ModelMessage } from "@tanstack/ai";
 import * as v from "valibot";
 
+import {
+  chatToolMapToArray,
+  type ChatToolMap,
+} from "@/api/handlers/chat/tools/chat-tool-types";
 import type { AiOccurrenceAdapter } from "@/api/handlers/docx/adapt-ai-fields";
 import {
   maybeSkillTools,
@@ -20,26 +25,135 @@ import {
 } from "@/api/handlers/docx/ai-skill-tools";
 import type { AiConditionDecider } from "@/api/handlers/docx/resolve-ai-conditions";
 import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
-import { getModelForRole, hasInstanceProvider } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { resolveCaching } from "@/api/lib/ai-config";
+import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  abortControllerFromSignal,
+  mergeGenerationOptions,
+  resolveTanStackTextModel,
+  systemPromptsPatch,
+} from "@/api/lib/tanstack-ai-generate";
+import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
+import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 
 /**
  * Usage-metering + analytics callbacks wired into every nested fill
  * generation. Optional so callers that cannot supply metering context
- * (or do not need it) keep working; when present, the AI SDK step
- * callbacks record a consumption ledger row per model step and
+ * (or do not need it) keep working; when present, the analytics
+ * middleware records a consumption ledger row per model step and
  * `captureError` reports a swallowed model failure.
  */
-type AiFieldAnalytics = ReturnType<typeof createAIAnalyticsCallbacks>;
+type AiFieldAnalytics = ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
 
 const AI_FIELD_TIMEOUT_MS = 20_000;
 const AI_FIELD_MAX_TOKENS = 800;
 // One step to (optionally) call load-skill, one to draft the value. Bounded so
 // a skill-referencing prompt cannot loop the model indefinitely.
 const SKILL_TOOL_MAX_STEPS = 4;
+
+/**
+ * Shared TanStack `chat()` setup for the one-shot field generators: resolves the
+ * fast-role model, disables prompt caching (these calls are not cache-shared),
+ * threads analytics middleware, and attaches the optional skill tool loop. Skill
+ * refs need the agentic loop (load-skill then draft), so these calls go through
+ * `chat()` directly rather than the tool-free `generateTanStack*ForRole` helpers.
+ */
+type FieldChatInput = {
+  abortSignal: AbortSignal;
+  aiAnalytics: AiFieldAnalytics | undefined;
+  maxOutputTokens: number;
+  orgAIConfig: OrgAIConfig | null;
+  organizationId: SafeId<"organization">;
+  prompt: string;
+  skillTools: ChatToolMap | undefined;
+  system: string | undefined;
+};
+
+type ResolvedFieldChat = {
+  abortController: AbortController;
+  caching: ReturnType<typeof resolveCaching>;
+  messages: ModelMessage[];
+  model: ReturnType<typeof resolveTanStackTextModel>;
+};
+
+const resolveFieldChat = ({
+  abortSignal,
+  orgAIConfig,
+  organizationId,
+  prompt,
+}: FieldChatInput): ResolvedFieldChat => ({
+  abortController: abortControllerFromSignal(abortSignal),
+  caching: resolveCaching({
+    promptCachingEnabled: false,
+    role: "fast",
+    scopeKey: organizationId,
+  }),
+  messages: [{ role: "user", content: prompt }],
+  model: resolveTanStackTextModel({
+    role: "fast",
+    orgAIConfig,
+    organizationId,
+  }),
+});
+
+const generateFieldText = async (input: FieldChatInput): Promise<string> => {
+  const { abortController, caching, messages, model } = resolveFieldChat(input);
+  return await chat({
+    adapter: model.adapter,
+    messages,
+    stream: false,
+    abortController,
+    ...systemPromptsPatch({ caching, model, system: input.system }),
+    modelOptions: mergeGenerationOptions({
+      caching,
+      model,
+      maxOutputTokens: input.maxOutputTokens,
+      serviceTier: "standard",
+      temperature: undefined,
+    }),
+    ...(input.aiAnalytics
+      ? { middleware: [input.aiAnalytics.middleware] }
+      : {}),
+    ...(input.skillTools
+      ? {
+          tools: chatToolMapToArray(input.skillTools),
+          agentLoopStrategy: maxIterations(SKILL_TOOL_MAX_STEPS),
+        }
+      : {}),
+  });
+};
+
+const generateFieldObject = async <TSchema extends v.GenericSchema>(
+  input: FieldChatInput & { outputSchema: TSchema },
+): Promise<v.InferOutput<TSchema>> => {
+  const { abortController, caching, messages, model } = resolveFieldChat(input);
+  const output = await chat({
+    adapter: model.adapter,
+    messages,
+    outputSchema: toTanStackValibotSchema(input.outputSchema),
+    abortController,
+    ...systemPromptsPatch({ caching, model, system: input.system }),
+    modelOptions: mergeGenerationOptions({
+      caching,
+      model,
+      maxOutputTokens: input.maxOutputTokens,
+      serviceTier: "standard",
+      temperature: undefined,
+    }),
+    ...(input.aiAnalytics
+      ? { middleware: [input.aiAnalytics.middleware] }
+      : {}),
+    ...(input.skillTools
+      ? {
+          tools: chatToolMapToArray(input.skillTools),
+          agentLoopStrategy: maxIterations(SKILL_TOOL_MAX_STEPS),
+        }
+      : {}),
+  });
+  return v.parse(input.outputSchema, output);
+};
 
 export const buildAiFieldGenerator = ({
   orgAIConfig,
@@ -56,7 +170,7 @@ export const buildAiFieldGenerator = ({
 }): AiFieldGenerator | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
-  if (!orgAIConfig && !hasInstanceProvider()) {
+  if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return undefined;
   }
   return async ({ prompt, values, documentText }) => {
@@ -68,29 +182,20 @@ export const buildAiFieldGenerator = ({
         documentText !== undefined && documentText.trim() !== ""
           ? `\nDocument:\n${documentText}\n`
           : "";
-      const { text } = await generateText({
+      const text = await generateFieldText({
         abortSignal: AbortSignal.timeout(AI_FIELD_TIMEOUT_MS),
+        aiAnalytics,
         maxOutputTokens: AI_FIELD_MAX_TOKENS,
-        model: getModelForRole("fast", orgAIConfig, {
-          promptCachingEnabled: false,
-          scopeKey: organizationId,
-          organizationId,
-          serviceTier: "standard",
-        }),
-        ...(skillTools
-          ? {
-              tools: skillTools,
-              stopWhen: stepCountIs(SKILL_TOOL_MAX_STEPS),
-              system: SKILL_REF_GENERATOR_GUIDANCE,
-            }
-          : {}),
+        orgAIConfig,
+        organizationId,
         prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
 ${documentSection}
 Known details (JSON):
 ${JSON.stringify(values)}
 
 Reply with only the text for this field — no preamble, no quotes, no markdown.`,
-        ...aiAnalytics?.stepCallbacks,
+        skillTools,
+        system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
       });
       const trimmed = text.trim();
       return trimmed.length > 0 ? trimmed : undefined;
@@ -131,40 +236,28 @@ export const buildAiConditionDecider = ({
 }): AiConditionDecider | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
-  if (!orgAIConfig && !hasInstanceProvider()) {
+  if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return undefined;
   }
   return async ({ prompt, values }) => {
     try {
       const skillTools = maybeSkillTools(prompt, skillContext);
-      const result = streamText({
+      const { decision } = await generateFieldObject({
         abortSignal: AbortSignal.timeout(AI_CONDITION_TIMEOUT_MS),
+        aiAnalytics,
         maxOutputTokens: AI_CONDITION_MAX_TOKENS,
-        model: getModelForRole("fast", orgAIConfig, {
-          promptCachingEnabled: false,
-          scopeKey: organizationId,
-          organizationId,
-          serviceTier: "standard",
-        }),
-        ...(skillTools
-          ? {
-              tools: skillTools,
-              stopWhen: stepCountIs(SKILL_TOOL_MAX_STEPS),
-              system: SKILL_REF_GENERATOR_GUIDANCE,
-            }
-          : {}),
-        output: Output.object({
-          schema: strictOutputSchema(conditionDecisionSchema),
-        }),
+        orgAIConfig,
+        organizationId,
+        outputSchema: conditionDecisionSchema,
         prompt: `You are deciding one yes/no condition of a legal document. Question: ${prompt}
 
 Known details (JSON):
 ${JSON.stringify(values)}
 
 Decide true (yes) or false (no) for this condition.`,
-        ...aiAnalytics?.stepCallbacks,
+        skillTools,
+        system: skillTools ? SKILL_REF_GENERATOR_GUIDANCE : undefined,
       });
-      const { decision } = await result.output;
       return decision;
     } catch (error) {
       aiAnalytics?.captureError(error);
@@ -177,7 +270,7 @@ const AI_ADAPT_TIMEOUT_MS = 30_000;
 const AI_ADAPT_MAX_TOKENS = 2000;
 
 // strictObject (no optional members): OpenAI strict structured output rejects
-// plain objects and optional properties (see strictOutputSchema).
+// plain objects and optional properties.
 const occurrenceRenderingsSchema = v.strictObject({
   renderings: v.array(v.string()),
 });
@@ -244,34 +337,25 @@ export const buildAiOccurrenceAdapter = ({
 }): AiOccurrenceAdapter | undefined => {
   // Resolve via org BYOK or the deployment's instance provider; skip (leave AI
   // fields unfilled) only when neither can supply a model.
-  if (!orgAIConfig && !hasInstanceProvider()) {
+  if (!orgAIConfig && !hasTanStackInstanceProvider()) {
     return undefined;
   }
   return async (input) => {
     try {
       const skillTools = maybeSkillTools(input.prompt ?? "", skillContext);
-      const result = streamText({
+      const { renderings } = await generateFieldObject({
         abortSignal: AbortSignal.timeout(AI_ADAPT_TIMEOUT_MS),
+        aiAnalytics,
         maxOutputTokens: AI_ADAPT_MAX_TOKENS,
-        model: getModelForRole("fast", orgAIConfig, {
-          promptCachingEnabled: false,
-          scopeKey: organizationId,
-          organizationId,
-          serviceTier: "standard",
-        }),
-        ...(skillTools
-          ? { tools: skillTools, stopWhen: stepCountIs(SKILL_TOOL_MAX_STEPS) }
-          : {}),
-        output: Output.object({
-          schema: strictOutputSchema(occurrenceRenderingsSchema),
-        }),
+        orgAIConfig,
+        organizationId,
+        outputSchema: occurrenceRenderingsSchema,
         prompt: buildAdaptPrompt(input, documentLanguages),
+        skillTools,
         system: skillTools
           ? `${ADAPT_SYSTEM_PROMPT} ${SKILL_REF_GENERATOR_GUIDANCE}`
           : ADAPT_SYSTEM_PROMPT,
-        ...aiAnalytics?.stepCallbacks,
       });
-      const { renderings } = await result.output;
       if (renderings.length !== input.occurrences.length) {
         return undefined;
       }

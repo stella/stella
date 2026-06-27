@@ -3,9 +3,14 @@ import { and, desc, eq, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages } from "@/api/db/schema";
-import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import {
+  getChatAttachmentUrl,
+  isChatAttachmentPart,
+  normalizePersistedChatMessageContent,
+} from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatMessageRole,
+  ChatPart,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import { parseUserFileId } from "@/api/handlers/user-files/types";
@@ -17,8 +22,6 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
-
-type ChatPart = ReturnType<typeof normalizeLegacyToolInputs>[number];
 
 export type ClientMessage = {
   id: SafeId<"chatMessage">;
@@ -37,12 +40,14 @@ export const attachPlaceholders = (
   placeholderById: Map<string, string>,
 ): ChatPart[] =>
   parts.map((part) => {
-    if (part.type !== "file") {
+    if (!isChatAttachmentPart(part)) {
       return part;
     }
-    const fileId = parseUserFileId(part.url);
+    const fileId = parseUserFileId(getChatAttachmentUrl(part));
     const placeholder = fileId ? placeholderById.get(fileId) : undefined;
-    return placeholder ? { ...part, placeholder } : part;
+    return placeholder
+      ? { ...part, metadata: { ...part.metadata, placeholder } }
+      : part;
   });
 
 // The cursor is the boundary message id alone. loadChatMessagePage resolves
@@ -147,7 +152,7 @@ export const loadChatMessagePage = async ({
         id: row.id,
         role: row.role,
         parts: attachPlaceholders(
-          normalizeLegacyToolInputs(row.content.data),
+          normalizePersistedChatMessageContent(row.content).parts,
           placeholderById,
         ),
       })),
@@ -170,11 +175,12 @@ const loadPlaceholders = async ({
   await Result.gen(async function* () {
     const referencedFileIds = new Set<SafeId<"userFile">>();
     for (const row of rows) {
-      for (const part of row.content.data) {
-        if (part.type !== "file") {
+      for (const part of normalizePersistedChatMessageContent(row.content)
+        .parts) {
+        if (!isChatAttachmentPart(part)) {
           continue;
         }
-        const fileId = parseUserFileId(part.url);
+        const fileId = parseUserFileId(getChatAttachmentUrl(part));
         if (fileId) {
           referencedFileIds.add(fileId);
         }

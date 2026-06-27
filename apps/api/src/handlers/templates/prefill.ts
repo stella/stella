@@ -1,4 +1,3 @@
-import { Output, streamText } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
@@ -17,10 +16,8 @@ import type {
   PrefillSuggestion,
   PrefillTarget,
 } from "@/api/handlers/templates/prefill-fields";
-import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -32,6 +29,8 @@ import { FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import { parsePickedEntityIdsJson } from "@/api/lib/safe-id-boundaries";
 import { extractFileText } from "@/api/lib/search/extract-content";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const MAX_PASTED_TEXT_CHARS = 100_000;
@@ -60,7 +59,7 @@ const prefillBodySchema = t.Object({
 });
 
 // strictObject + nullable-required members: OpenAI strict structured output
-// rejects plain objects and optional properties (see strictOutputSchema).
+// rejects plain objects and optional properties.
 const prefillOutputSchema = v.strictObject({
   fields: v.array(
     v.strictObject({
@@ -129,26 +128,28 @@ const extractFieldValues = async ({
   sources: readonly PrefillSource[];
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
-  aiAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
+  aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   timezone: string;
 }): Promise<PrefillSuggestion[]> => {
-  const result = streamText({
-    abortSignal: AbortSignal.timeout(PREFILL_TIMEOUT_MS),
-    messages: [{ role: "user", content: buildPrompt(targets, sources) }],
-    model: getModelForRole("fast", orgAIConfig, {
+  const { fields } = await generateTanStackObjectForRole({
+    role: "fast",
+    orgAIConfig,
+    organizationId,
+    analytics: aiAnalytics,
+    caching: resolveCaching({
       promptCachingEnabled: false,
+      role: "fast",
       scopeKey: organizationId,
-      organizationId,
-      serviceTier: "standard",
     }),
-    output: Output.object({ schema: strictOutputSchema(prefillOutputSchema) }),
     // Anchor relative dates in the sources ("as of today", deadlines) to the
     // user's calendar day (not UTC), so "today" near midnight resolves to the
     // date the user is actually on.
     system: `${SYSTEM_PROMPT}\nToday is ${formatDateInTimeZone({ timezone })}.`,
-    ...aiAnalytics.stepCallbacks,
+    prompt: buildPrompt(targets, sources),
+    outputSchema: prefillOutputSchema,
+    abortSignal: AbortSignal.timeout(PREFILL_TIMEOUT_MS),
+    serviceTier: "standard",
   });
-  const { fields } = await result.output;
   return mapPrefillResults(targets, fields);
 };
 
@@ -180,7 +181,10 @@ const prefillTemplate = createSafeRootHandler(
   }) {
     const organizationId = session.activeOrganizationId;
 
-    yield* requireAIAvailable(orgAIConfig);
+    yield* requireTanStackAIAvailableForRole({
+      orgConfig: orgAIConfig,
+      role: "fast",
+    });
 
     const template = yield* Result.await(
       safeDb((tx) =>
@@ -341,7 +345,7 @@ const prefillTemplate = createSafeRootHandler(
       return Result.ok({ fields: [] });
     }
 
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId,

@@ -111,6 +111,7 @@ import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, FILE_SIZE_LIMITS } from "@/api/lib/limits";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { getS3 } from "@/api/lib/s3";
+import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import {
   requireTanStackAIAvailableForRole,

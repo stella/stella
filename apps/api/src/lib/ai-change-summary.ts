@@ -3,17 +3,16 @@
  * the template Studio history and the entity (.docx file) version
  * panel; both resolve version content server-side and pass only the
  * computed diff text here. Uses the same structured-output plumbing
- * as `suggest-template-fields` (streamText + Output.object).
+ * as `suggest-template-fields` (generateTanStackObjectForRole).
  */
 
-import { Output, streamText } from "ai";
 import * as v from "valibot";
 
-import { getModelForRole } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import type { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { resolveCaching } from "@/api/lib/ai-config";
+import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 const SUMMARY_TIMEOUT_MS = 30_000;
 
@@ -32,7 +31,7 @@ type SummarizeVersionDiffOptions = {
   diffText: string;
   orgAIConfig: OrgAIConfig | null;
   organizationId: SafeId<"organization">;
-  aiAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
+  aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
 };
 
 /** Throws on model failure; callers wrap with Result.tryPromise. */
@@ -42,27 +41,22 @@ export const summarizeVersionDiff = async ({
   organizationId,
   aiAnalytics,
 }: SummarizeVersionDiffOptions): Promise<string> => {
-  const result = streamText({
-    abortSignal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
-    messages: [
-      {
-        role: "user",
-        content: `Diff between the previous and the new version ("+ " added, "- " removed, "@@" unchanged lines elided):\n\n${diffText}`,
-      },
-    ],
-    model: getModelForRole("fast", orgAIConfig, {
+  const { summary } = await generateTanStackObjectForRole({
+    role: "fast",
+    orgAIConfig,
+    organizationId,
+    analytics: aiAnalytics,
+    caching: resolveCaching({
       promptCachingEnabled: false,
+      role: "fast",
       scopeKey: organizationId,
-      organizationId,
-      serviceTier: "standard",
-    }),
-    output: Output.object({
-      schema: strictOutputSchema(changeSummarySchema),
     }),
     system: SYSTEM_PROMPT,
-    ...aiAnalytics.stepCallbacks,
+    prompt: `Diff between the previous and the new version ("+ " added, "- " removed, "@@" unchanged lines elided):\n\n${diffText}`,
+    outputSchema: changeSummarySchema,
+    serviceTier: "standard",
+    abortSignal: AbortSignal.timeout(SUMMARY_TIMEOUT_MS),
   });
 
-  const { summary } = await result.output;
   return summary;
 };

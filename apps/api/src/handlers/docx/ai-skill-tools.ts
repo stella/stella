@@ -14,10 +14,9 @@
  * can adopt the same `maybeSkillTools` seam later without changing this module.
  */
 
-import type { ToolSet } from "ai";
-
 import type { SafeDb } from "@/api/db";
 import { getChatSkillMetadata } from "@/api/handlers/chat/skills";
+import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
 import type { SafeId } from "@/api/lib/branded-types";
 
@@ -44,7 +43,7 @@ export type SkillToolsContext = {
 export const maybeSkillTools = (
   prompt: string,
   ctx: SkillToolsContext | undefined,
-): ToolSet | undefined => {
+): ChatToolMap | undefined => {
   if (ctx === undefined || !SKILL_REF_RE.test(prompt)) {
     return undefined;
   }
