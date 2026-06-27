@@ -35,9 +35,22 @@ const ENGINE_PREFIX = "packages/folio/src/core/layout-engine/";
 
 type Layer = "painter" | "bridge" | "engine";
 
-const matchesLayerPrefix = (normalizedPath: string, prefix: string): boolean =>
-  normalizedPath.includes(prefix) ||
-  normalizedPath.endsWith(prefix.slice(0, -1));
+const matchesLayerPrefix = (
+  normalizedPath: string,
+  prefix: string,
+): boolean => {
+  // Anchor on a path separator (or the string start) so a directory that merely
+  // contains the prefix as a substring cannot false-match, mirroring isCoreFile.
+  // `bare` is the prefix without its trailing slash, for the barrel-target case
+  // (an import resolving to the layer directory itself).
+  const bare = prefix.slice(0, -1);
+  return (
+    normalizedPath.startsWith(prefix) ||
+    normalizedPath.includes(`/${prefix}`) ||
+    normalizedPath.endsWith(`/${bare}`) ||
+    normalizedPath === bare
+  );
+};
 
 const layerOf = (absolutePath: string): Layer | null => {
   const normalized = absolutePath.replaceAll("\\", "/");

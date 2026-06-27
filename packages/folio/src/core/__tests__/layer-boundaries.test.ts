@@ -65,13 +65,23 @@ const layerOfPath = (absolutePath: string): Layer | null => {
 };
 
 // Match the specifier of every static import/export, bare side-effect import
-// (`import "../setup"`), and dynamic import (`import("../setup")`). The
-// literal `from ` elsewhere in the file (e.g. inside comments) is filtered
-// later by the
-// `specifier.startsWith(".")` check — only relative paths are checked. The
-// regex itself uses bounded character classes to keep matching linear.
+// (`import "../setup"`), and dynamic import (`import("../setup")`). Comments are
+// stripped first (see stripComments), so a relative path mentioned in prose
+// cannot false-fire; the regex uses bounded character classes to keep matching
+// linear.
 const IMPORT_REGEX =
   /\bfrom\s*["'](?<fromSpec>[^"']+)["']|\bimport\s*["'](?<importSpec>[^"']+)["']|\bimport\s*\(\s*["'](?<dynImportSpec>[^"']+)["']\s*\)/gu;
+
+// Strip block comments and whole-line `//` comments before the raw-text scan so
+// an import mentioned in prose cannot trip it. Only full-line comments are
+// stripped (not trailing/mid-line `//`), so a `//` inside a string or regex
+// literal on a code line is never mistaken for a comment and the rest of that
+// line is preserved. The AST-based `no-upstream-import` rule remains the
+// authoritative check.
+const stripComments = (source: string): string =>
+  source
+    .replaceAll(/\/\*[\s\S]*?\*\//gu, "")
+    .replaceAll(/^[ \t]*\/\/[^\n]*/gmu, "");
 
 type EdgeViolation = {
   importer: string;
@@ -94,7 +104,7 @@ const violationsForSource = (
     return [];
   }
   const violations: EdgeViolation[] = [];
-  for (const match of source.matchAll(IMPORT_REGEX)) {
+  for (const match of stripComments(source).matchAll(IMPORT_REGEX)) {
     const specifier =
       match.groups?.["fromSpec"] ??
       match.groups?.["importSpec"] ??
@@ -338,5 +348,19 @@ describe("folio layer-boundaries — synthetic violation fixtures", () => {
     expect(
       classifyEdge(fromLayer ?? "painter", toLayer ?? "bridge", resolved),
     ).toBe("layout-painter must not import from layout-bridge");
+  });
+
+  test("an import mentioned in a comment is ignored", () => {
+    const importer = resolve(CORE_DIR, "layout-painter/renderPage.ts");
+    const lineComment = violationsForSource(
+      importer,
+      '// historically: import { x } from "../layout-bridge/measuring";\nconst x = 1;',
+    );
+    const blockComment = violationsForSource(
+      importer,
+      '/* import { x } from "../layout-bridge/measuring" */\nconst y = 2;',
+    );
+    expect(lineComment).toEqual([]);
+    expect(blockComment).toEqual([]);
   });
 });
