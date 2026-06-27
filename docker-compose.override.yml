@@ -1,0 +1,9 @@
+services:
+  opencode-auth:
+    image: nginx:alpine
+    volumes:
+      - ./nginx-opencode.conf:/etc/nginx/nginx.conf:ro
+    ports:
+      - "4096:4096"
+    depends_on:
+      - opencode
