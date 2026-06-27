@@ -8,7 +8,8 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { layoutDocument } from "./index";
-import { clearAllCaches, resetCanvasContext } from "./measure";
+import { clearAllCaches } from "./measure";
+import { resetCanvasContext } from "./measure/measureContainer";
 import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
 import type {
   FlowBlock,

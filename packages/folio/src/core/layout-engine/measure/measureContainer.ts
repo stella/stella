@@ -1,8 +1,13 @@
 /**
- * Measurement container for text layout
+ * Canvas-backed text measurement (the default MeasureProvider).
  *
- * Uses HTML5 Canvas API to measure text runs and calculate typography metrics.
- * Canvas-based measurement is more accurate and performant than DOM-based approaches.
+ * Uses the HTML5 Canvas API to measure text runs and calculate typography
+ * metrics. Canvas-based measurement is more accurate and performant than
+ * DOM-based approaches. This module touches canvas/`document`/the worker, so it
+ * lives off the layout engine's import path: the engine measures through the
+ * pure `measureProvider.ts` seam, and a composition root installs this backend
+ * via `installCanvasMeasureProvider()` (the React editor and the bun test
+ * preload do so).
  *
  * Typography conventions (matching Word behavior):
  * - ascent ≈ fontSize * 0.8 (baseline to top)
@@ -13,14 +18,11 @@
 
 import { panic } from "better-result";
 
-import { resolveFontFamily } from "../../utils/fontResolver";
-import { DOCX_BOLD_FONT_WEIGHT } from "../../utils/fontWeights";
 import {
   hasCjk,
   isCjkCodePoint,
   segmentByScript,
 } from "../../utils/scriptSegments";
-import type { RunFormatting } from "../types";
 import {
   getCachedFontMetrics,
   getCachedTextWidth,
@@ -28,120 +30,31 @@ import {
   setCachedFontMetrics,
   setCachedTextWidth,
 } from "./cache";
+import {
+  buildFontString,
+  DEFAULT_FONT_FAMILY,
+  DEFAULT_FONT_SIZE,
+  getResolvedData,
+  ptToPx,
+} from "./measureHelpers";
+import { setMeasureProvider } from "./measureProvider";
+import type { MeasureProvider } from "./measureProvider";
+import type {
+  FontMetrics,
+  FontStyle,
+  RunMeasurement,
+  TextMeasurement,
+} from "./measureTypes";
 import { canPrefetchMeasurement, prefetchMeasurement } from "./measureWorker";
 import {
   countCodePoints,
   WORKER_FONT_FINGERPRINT_TEXT,
 } from "./measureWorkerProtocol";
 
-// Constants for OOXML unit conversions
-const TWIPS_PER_INCH = 1440;
-const PX_PER_INCH = 96; // Standard CSS/DOM DPI
-const TWIPS_PER_PX = TWIPS_PER_INCH / PX_PER_INCH; // 15 twips per pixel
-
-// Default typography values
-const DEFAULT_FONT_SIZE = 11; // 11pt (Word 2007+ default)
-const DEFAULT_FONT_FAMILY = "Calibri";
+// Default typography ratios
 const DEFAULT_LINE_HEIGHT_MULTIPLIER = 1; // OOXML spec default: single spacing (line=240)
 const DEFAULT_ASCENT_RATIO = 0.8;
 const DEFAULT_DESCENT_RATIO = 0.2;
-
-/**
- * Font styling properties for measurement
- */
-export type FontStyle = {
-  fontFamily?: string;
-  /**
-   * East-Asian font for CJK code points. When set, `measureTextWidth` /
-   * `measureRun` measure CJK code points with this font and the rest with
-   * `fontFamily`, matching the painter's per-script span split so wrapping
-   * and click positioning stay in sync.
-   */
-  eastAsiaFontFamily?: string;
-  fontSize?: number; // in points
-  bold?: boolean;
-  italic?: boolean;
-  letterSpacing?: number; // in pixels
-  textTransform?: "uppercase";
-  fontVariant?: "small-caps";
-  horizontalScale?: number;
-};
-
-/**
- * Build a measurement `FontStyle` from a run's formatting. Single source of
- * truth for run → FontStyle so every measurement path (layout line-breaking,
- * click-to-position, selection rects) carries the same fields — notably
- * `eastAsiaFontFamily`, which must reach the measurer for CJK click/selection
- * offsets to match what was wrapped and painted. Callers pass their own family
- * and size fallbacks for runs that declare neither.
- */
-export function buildRunFontStyle(
-  run: RunFormatting,
-  fallbackFontFamily: string,
-  fallbackFontSize: number,
-): FontStyle {
-  return {
-    fontFamily: run.fontFamily ?? fallbackFontFamily,
-    ...(run.eastAsiaFontFamily !== undefined
-      ? { eastAsiaFontFamily: run.eastAsiaFontFamily }
-      : {}),
-    fontSize: run.fontSize ?? fallbackFontSize,
-    ...(run.bold !== undefined ? { bold: run.bold } : {}),
-    ...(run.italic !== undefined ? { italic: run.italic } : {}),
-    ...(run.letterSpacing !== undefined
-      ? { letterSpacing: run.letterSpacing }
-      : {}),
-    ...(run.allCaps ? { textTransform: "uppercase" as const } : {}),
-    ...(run.smallCaps ? { fontVariant: "small-caps" as const } : {}),
-    ...(run.horizontalScale !== undefined
-      ? { horizontalScale: run.horizontalScale }
-      : {}),
-  };
-}
-
-/**
- * Typography metrics for a font
- */
-export type FontMetrics = {
-  fontSize: number;
-  ascent: number;
-  descent: number;
-  lineHeight: number;
-  fontFamily: string;
-  /** OS/2 single-line ratio for OOXML line spacing calculation */
-  singleLineRatio: number;
-};
-
-/**
- * Result of measuring a text string
- */
-export type TextMeasurement = {
-  width: number;
-  height: number;
-  ascent: number;
-  descent: number;
-};
-
-/**
- * Result of measuring a run of text
- */
-export type RunMeasurement = {
-  width: number;
-  charWidths: number[]; // Width of each character for click positioning
-  metrics: FontMetrics;
-};
-
-/**
- * Swappable text-measurement backend. The canvas implementation is the default;
- * a Rust/WASM or headless provider can be installed via `setMeasureProvider`
- * without the layout engine importing canvas directly.
- */
-export type MeasureProvider = {
-  getFontMetrics: (style: FontStyle) => FontMetrics;
-  measureTextWidth: (text: string, style: FontStyle) => number;
-  measureText: (text: string, style: FontStyle) => TextMeasurement;
-  measureRun: (text: string, style: FontStyle) => RunMeasurement;
-};
 
 // Cached canvas context for text measurement
 let canvasContext: CanvasRenderingContext2D | null = null;
@@ -194,77 +107,6 @@ function getWorkerFontFingerprintWidth(
   const width = ctx.measureText(WORKER_FONT_FINGERPRINT_TEXT).width;
   workerFontFingerprintCache.set(font, { generation, width });
   return width;
-}
-
-/** Cached resolved font data (CSS fallback + single-line ratio) */
-type ResolvedFontCache = {
-  cssFallback: string;
-  singleLineRatio: number;
-};
-
-/** Cache for resolved font data */
-const fontResolvedCache = new Map<string, ResolvedFontCache>();
-
-/**
- * Get the resolved font data for a font family, with caching.
- */
-function getResolvedData(fontFamily: string): ResolvedFontCache {
-  let cached = fontResolvedCache.get(fontFamily);
-  if (cached === undefined) {
-    const resolved = resolveFontFamily(fontFamily);
-    cached = {
-      cssFallback: resolved.cssFallback,
-      singleLineRatio: resolved.singleLineRatio,
-    };
-    fontResolvedCache.set(fontFamily, cached);
-  }
-  return cached;
-}
-
-/**
- * Get the CSS fallback string for a font family, with caching.
- */
-function getResolvedFallback(fontFamily: string): string {
-  return getResolvedData(fontFamily).cssFallback;
-}
-
-/**
- * Build a CSS font string from styling properties
- *
- * Font sizes are in points and need to be converted to pixels for canvas.
- * 1pt = 96/72 px ≈ 1.333px at standard web DPI.
- *
- * Uses the font resolver to get category-appropriate fallback stacks
- * (serif fonts get serif fallbacks, sans-serif get sans-serif, etc.)
- * matching the same stacks used in rendering for consistent measurements.
- *
- * @example
- * buildFontString({ fontFamily: "Arial", fontSize: 12, bold: true })
- * // Returns: "800 16px Arial, Arimo, Helvetica, sans-serif" (12pt = 16px)
- */
-export function buildFontString(style: FontStyle): string {
-  const parts: string[] = [];
-
-  if (style.italic) {
-    parts.push("italic");
-  }
-  if (style.fontVariant) {
-    parts.push(style.fontVariant);
-  }
-  if (style.bold) {
-    parts.push(DOCX_BOLD_FONT_WEIGHT);
-  }
-
-  // Convert points to pixels for canvas measurement
-  const fontSizePt = style.fontSize ?? DEFAULT_FONT_SIZE;
-  const fontSizePx = ptToPx(fontSizePt);
-  parts.push(`${fontSizePx}px`);
-
-  // Use the font resolver for category-appropriate fallback stacks
-  const fontFamily = style.fontFamily ?? DEFAULT_FONT_FAMILY;
-  parts.push(getResolvedFallback(fontFamily));
-
-  return parts.join(" ");
 }
 
 /**
@@ -639,29 +481,15 @@ export const canvasMeasureProvider: MeasureProvider = {
   measureRun: canvasMeasureRun,
 };
 
-let activeMeasureProvider: MeasureProvider = canvasMeasureProvider;
-
-export const getMeasureProvider = (): MeasureProvider => activeMeasureProvider;
-
-export const setMeasureProvider = (provider: MeasureProvider): void => {
-  activeMeasureProvider = provider;
+/**
+ * Install the canvas backend as the active MeasureProvider. Called once at each
+ * composition root (the React editor's layout pipeline and the bun test
+ * preload) before any layout runs. Explicit call, not a module side effect, so
+ * importing this module never silently swaps the active provider.
+ */
+export const installCanvasMeasureProvider = (): void => {
+  setMeasureProvider(canvasMeasureProvider);
 };
-
-export const resetMeasureProvider = (): void => {
-  activeMeasureProvider = canvasMeasureProvider;
-};
-
-export const getFontMetrics = (style: FontStyle): FontMetrics =>
-  activeMeasureProvider.getFontMetrics(style);
-
-export const measureTextWidth = (text: string, style: FontStyle): number =>
-  activeMeasureProvider.measureTextWidth(text, style);
-
-export const measureText = (text: string, style: FontStyle): TextMeasurement =>
-  activeMeasureProvider.measureText(text, style);
-
-export const measureRun = (text: string, style: FontStyle): RunMeasurement =>
-  activeMeasureProvider.measureRun(text, style);
 
 function applyTextTransform(text: string, style: FontStyle): string {
   if (style.textTransform === "uppercase") {
@@ -672,106 +500,4 @@ function applyTextTransform(text: string, style: FontStyle): string {
 
 function getHorizontalScaleFactor(style: FontStyle): number {
   return (style.horizontalScale ?? 100) / 100;
-}
-
-/**
- * Find the character offset at a given X position within a text run
- *
- * @param x - X position relative to run start
- * @param charWidths - Per-character widths from measureRun
- * @returns Character offset (0-based index)
- */
-export function findCharacterAtX(x: number, charWidths: number[]): number {
-  if (charWidths.length === 0) {
-    return 0;
-  }
-  if (x <= 0) {
-    return 0;
-  }
-
-  let accumulatedWidth = 0;
-
-  for (let i = 0; i < charWidths.length; i++) {
-    // SAFETY: i < charWidths.length in for loop
-    const charWidth = charWidths[i]!;
-    const charMidpoint = accumulatedWidth + charWidth / 2;
-
-    // If x is before the midpoint, the cursor is at this character
-    if (x <= charMidpoint) {
-      return i;
-    }
-
-    accumulatedWidth += charWidth;
-  }
-
-  // X is past all characters, return position after last character
-  return charWidths.length;
-}
-
-/**
- * Get the X position of a character offset within a text run
- *
- * @param offset - Character offset (0-based index)
- * @param charWidths - Per-character widths from measureRun
- * @returns X position in pixels
- */
-export function getXForCharacter(offset: number, charWidths: number[]): number {
-  if (offset <= 0 || charWidths.length === 0) {
-    return 0;
-  }
-
-  const clampedOffset = Math.min(offset, charWidths.length);
-  let x = 0;
-
-  for (let i = 0; i < clampedOffset; i++) {
-    // SAFETY: i < clampedOffset <= charWidths.length
-    x += charWidths[i]!;
-  }
-
-  return x;
-}
-
-// Unit conversion utilities
-
-/**
- * Convert twips to pixels
- */
-export function twipsToPx(twips: number): number {
-  return twips / TWIPS_PER_PX;
-}
-
-/**
- * Convert pixels to twips
- */
-export function pxToTwips(px: number): number {
-  return Math.round(px * TWIPS_PER_PX);
-}
-
-/**
- * Convert points to pixels
- */
-export function ptToPx(pt: number): number {
-  return (pt * PX_PER_INCH) / 72;
-}
-
-/**
- * Convert pixels to points
- */
-export function pxToPt(px: number): number {
-  return (px * 72) / PX_PER_INCH;
-}
-
-/**
- * Convert OOXML half-points to pixels
- * OOXML font sizes are in half-points (24 = 12pt)
- */
-export function halfPtToPx(halfPt: number): number {
-  return ptToPx(halfPt / 2);
-}
-
-/**
- * Convert pixels to OOXML half-points
- */
-export function pxToHalfPt(px: number): number {
-  return pxToPt(px) * 2;
 }

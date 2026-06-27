@@ -14,11 +14,17 @@
 export {
   getCanvasContext,
   resetCanvasContext,
-  buildFontString,
+} from "../../layout-engine/measure/measureContainer";
+
+export {
   getFontMetrics,
   measureTextWidth,
   measureText,
   measureRun,
+} from "../../layout-engine/measure/measureProvider";
+
+export {
+  buildFontString,
   findCharacterAtX,
   getXForCharacter,
   twipsToPx,
@@ -27,11 +33,14 @@ export {
   pxToPt,
   halfPtToPx,
   pxToHalfPt,
-  type FontStyle,
-  type FontMetrics,
-  type TextMeasurement,
-  type RunMeasurement,
-} from "../../layout-engine/measure/measureContainer";
+} from "../../layout-engine/measure/measureHelpers";
+
+export type {
+  FontStyle,
+  FontMetrics,
+  TextMeasurement,
+  RunMeasurement,
+} from "../../layout-engine/measure/measureTypes";
 
 export {
   measureParagraph,

@@ -14,7 +14,8 @@ import {
   getCachedTextWidth,
 } from "./cache";
 import { setFolioMeasurementFlags } from "./featureFlags";
-import { measureTextWidth, resetCanvasContext } from "./measureContainer";
+import { resetCanvasContext } from "./measureContainer";
+import { measureTextWidth } from "./measureProvider";
 import {
   __disposeMeasureProxyForTests,
   __flushMeasureQueueForTests,

@@ -6,11 +6,8 @@
 
 import { describe, expect, test } from "bun:test";
 
-import {
-  buildRunFontStyle,
-  measureRun,
-  measureTextWidth,
-} from "../measureContainer";
+import { buildRunFontStyle } from "../measureHelpers";
+import { measureRun, measureTextWidth } from "../measureProvider";
 import type { FakeCharWidth } from "./fakeTextMeasure";
 import { withFakeTextMeasure } from "./fakeTextMeasure";
 

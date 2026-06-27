@@ -1,0 +1,6 @@
+[test]
+# Install the canvas MeasureProvider before any layout/measure test runs. The
+# layout engine measures through a pure provider seam whose default throws
+# until a backend is installed at a composition root (the React editor does
+# this at runtime).
+preload = ["./test/installMeasureProvider.preload.ts"]

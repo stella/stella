@@ -11,11 +11,9 @@
 import { getHeaderRowsHeight } from "../layout-engine/index";
 import { measuredLineContentOffset } from "../layout-engine/lineFlow";
 import { measureParagraph } from "../layout-engine/measure";
-import {
-  buildRunFontStyle,
-  measureRun,
-} from "../layout-engine/measure/measureContainer";
-import type { FontStyle } from "../layout-engine/measure/measureContainer";
+import { buildRunFontStyle } from "../layout-engine/measure/measureHelpers";
+import { measureRun } from "../layout-engine/measure/measureProvider";
+import type { FontStyle } from "../layout-engine/measure/measureTypes";
 import {
   buildTableCellFloatingZones,
   getTableCellContentWidth,

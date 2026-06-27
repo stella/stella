@@ -34,14 +34,13 @@ import {
   type FloatingLineSegmentZone,
 } from "./floatingZones";
 import { getListMarkerInlineWidth } from "./listMarkerWidth";
+import { buildRunFontStyle, ptToPx } from "./measureHelpers";
 import {
-  buildRunFontStyle,
-  measureTextWidth,
-  measureRun,
   getFontMetrics,
-  ptToPx,
-} from "./measureContainer";
-import type { FontStyle, FontMetrics } from "./measureContainer";
+  measureRun,
+  measureTextWidth,
+} from "./measureProvider";
+import type { FontMetrics, FontStyle } from "./measureTypes";
 
 export { clampFloatingWrapMargins } from "./clampFloatingWrapMargins";
 export type { FloatingImageZone } from "./floatingZones";

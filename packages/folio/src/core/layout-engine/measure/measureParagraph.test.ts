@@ -6,16 +6,13 @@ import {
   withFakeTextMeasure,
 } from "./__tests__/fakeTextMeasure";
 import { hashParagraphBlock } from "./cache";
-import {
-  buildFontString,
-  getFontMetrics,
-  measureTextWidth,
-} from "./measureContainer";
+import { buildFontString } from "./measureHelpers";
 import {
   clampFloatingWrapMargins,
   getRunCharWidths,
   measureParagraph,
 } from "./measureParagraph";
+import { getFontMetrics, measureTextWidth } from "./measureProvider";
 
 const PT_TO_PX = 96 / 72;
 
