@@ -14,10 +14,10 @@ import {
 } from "../layout-engine/lineFlow";
 import {
   buildRunFontStyle,
-  measureRun,
   findCharacterAtX as findCharAtX,
-} from "../layout-engine/measure/measureContainer";
-import type { FontStyle } from "../layout-engine/measure/measureContainer";
+} from "../layout-engine/measure/measureHelpers";
+import { measureRun } from "../layout-engine/measure/measureProvider";
+import type { FontStyle } from "../layout-engine/measure/measureTypes";
 import type {
   ParagraphBlock,
   ParagraphFragment,

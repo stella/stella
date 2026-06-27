@@ -19,9 +19,9 @@ import { buildTableRowBreakInfo, snapRowBreak } from "./tableRowBreak";
 import {
   bandFragmentX,
   bandTopContentY,
-  floatingTextBoxReservesBand,
   isPageFrameRelativeAnchor,
 } from "./textBoxFlow";
+import { floatingTextBoxReservesBand } from "./types";
 import type {
   FlowBlock,
   Measure,

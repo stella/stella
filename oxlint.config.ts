@@ -573,6 +573,22 @@ export default defineConfig({
       },
     },
     {
+      // Folio model seam (Seam 2). The model type layer is pure data — the
+      // behavior-free lingua franca the engine, painter, bridge, ProseMirror
+      // integration, and adapters all sit on. Forbid it from importing
+      // ProseMirror, DOM render, React, @stll/ui, or engine behavior. See
+      // `.oxlint-plugins/folio-layer-boundaries.ts` and the matching test at
+      // `packages/folio/src/core/__tests__/model-purity.test.ts`.
+      files: [
+        "packages/folio/src/core/types/**/*.ts",
+        "packages/folio/src/core/layout-engine/types.ts",
+        "packages/folio/src/core/layout-engine/measure/measureTypes.ts",
+      ],
+      rules: {
+        "folio-layer-boundaries/model-is-pure-data": "error",
+      },
+    },
+    {
       // Drizzle schema files are guarded by check-migrations.sh, which
       // requires a new migration on any byte-level change. Keep regex
       // flags off here so adding the rule globally doesn't force an

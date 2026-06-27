@@ -111,6 +111,7 @@ import {
   measureBlocks,
   measureSingleBlockWithoutFloatingZones,
 } from "../core/layout-engine/measure/measureBlocks";
+import { installCanvasMeasureProvider } from "../core/layout-engine/measure/measureContainer";
 import type {
   Layout,
   FlowBlock,
@@ -2293,6 +2294,10 @@ export function PagedEditor(
         reason?: LayoutRunReason;
       } = {},
     ) => {
+      // Composition root for text measurement: install the canvas backend
+      // before any layout/measure runs. Idempotent; the engine measures
+      // through the pure provider seam, which throws until a backend is set.
+      installCanvasMeasureProvider();
       const reason = options.reason ?? "manual";
       const recordPhaseDuration = (
         phase: LayoutPhase,

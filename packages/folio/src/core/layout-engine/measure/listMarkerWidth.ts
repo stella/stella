@@ -14,8 +14,9 @@
  * the first line's available width.
  */
 import type { ParagraphBlock, TextRun } from "../types";
-import { measureTextWidth, ptToPx } from "./measureContainer";
-import type { FontStyle } from "./measureContainer";
+import { ptToPx } from "./measureHelpers";
+import { measureTextWidth } from "./measureProvider";
+import type { FontStyle } from "./measureTypes";
 
 const DEFAULT_FONT_FAMILY = "Calibri";
 const DEFAULT_FONT_SIZE = 11;

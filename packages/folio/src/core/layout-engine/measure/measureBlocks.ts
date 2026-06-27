@@ -2,12 +2,8 @@ import {
   recordMeasureBlock,
   recordMeasureBlockError,
 } from "../layoutInstrumentation";
-import {
-  bandTopContentY,
-  floatingTextBoxReservesBand,
-  isPageFrameRelativeAnchor,
-} from "../textBoxFlow";
-import { DEFAULT_TEXTBOX_MARGINS } from "../types";
+import { bandTopContentY, isPageFrameRelativeAnchor } from "../textBoxFlow";
+import { DEFAULT_TEXTBOX_MARGINS, floatingTextBoxReservesBand } from "../types";
 import type {
   FlowBlock,
   ImageBlock,

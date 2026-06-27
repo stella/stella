@@ -9,13 +9,18 @@
  */
 
 export {
-  getCanvasContext,
-  resetCanvasContext,
-  buildFontString,
   getFontMetrics,
   measureTextWidth,
   measureText,
   measureRun,
+  getMeasureProvider,
+  setMeasureProvider,
+  resetMeasureProvider,
+  type MeasureProvider,
+} from "./measureProvider";
+
+export {
+  buildFontString,
   findCharacterAtX,
   getXForCharacter,
   twipsToPx,
@@ -24,11 +29,14 @@ export {
   pxToPt,
   halfPtToPx,
   pxToHalfPt,
-  type FontStyle,
-  type FontMetrics,
-  type TextMeasurement,
-  type RunMeasurement,
-} from "./measureContainer";
+} from "./measureHelpers";
+
+export type {
+  FontStyle,
+  FontMetrics,
+  TextMeasurement,
+  RunMeasurement,
+} from "./measureTypes";
 
 export {
   measureParagraph,
