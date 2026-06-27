@@ -33,12 +33,16 @@ export type SchedulerClock = {
   now: () => number;
 };
 
+// The browser implementation of the injected clock. window.setTimeout is typed
+// to return a number (vs Node's Timeout); window is referenced only inside these
+// methods (call-time), so importing the scheduler in a non-browser host is safe
+// — that host passes its own SchedulerClock.
 export const browserClock: SchedulerClock = {
-  requestFrame: (callback) => requestAnimationFrame(callback),
-  cancelFrame: (id) => cancelAnimationFrame(id),
+  requestFrame: (callback) => window.requestAnimationFrame(callback),
+  cancelFrame: (id) => window.cancelAnimationFrame(id),
   setTimer: (callback, delayMs) => window.setTimeout(callback, delayMs),
   clearTimer: (id) => window.clearTimeout(id),
-  now: () => performance.now(),
+  now: () => window.performance.now(),
 };
 
 export type LayoutSchedulerConfig<TState> = {
@@ -47,8 +51,12 @@ export type LayoutSchedulerConfig<TState> = {
   debounceMs: number;
   /** Hard cap on latency from the first edit in a burst. */
   maxDelayMs: number;
-  /** Defaults to the browser rAF/timer clock. */
-  clock?: SchedulerClock;
+  /**
+   * Timing source. Pass `browserClock` in the browser; a host injects its own
+   * for desktop/headless. Required (no browser default) so the scheduler never
+   * silently depends on `window`.
+   */
+  clock: SchedulerClock;
 };
 
 export type LayoutScheduler<TState> = {
@@ -73,7 +81,7 @@ type PendingLayoutRequest<TState> = {
 export const createLayoutScheduler = <TState>(
   config: LayoutSchedulerConfig<TState>,
 ): LayoutScheduler<TState> => {
-  const clock = config.clock ?? browserClock;
+  const clock = config.clock;
   let pending: PendingLayoutRequest<TState> | null = null;
 
   const flushPending = (): void => {

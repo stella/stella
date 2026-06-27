@@ -36,6 +36,11 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import type { AISuggestion } from "../core/ai-suggestions/types";
+import {
+  browserClock,
+  createLayoutScheduler,
+  type LayoutScheduler,
+} from "../core/controller/layoutScheduler";
 import { getFootnoteText } from "../core/docx/footnoteParser";
 import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
 import { buildBookmarkText } from "../core/fields/bookmarkText";
@@ -143,10 +148,6 @@ import {
 } from "../core/paged-layout/headerFooterMargins";
 import { tryBuildIncrementalMeasures } from "../core/paged-layout/incrementalMeasure";
 import type { DirtyRange } from "../core/paged-layout/incrementalMeasure";
-import {
-  createLayoutScheduler,
-  type LayoutScheduler,
-} from "../core/controller/layoutScheduler";
 // Selection sync
 import { LayoutSelectionGate } from "../core/paged-layout/LayoutSelectionGate";
 import {
@@ -3123,6 +3124,7 @@ export function PagedEditor(
         runLayoutPipelineRef.current(state, options),
       debounceMs: TRANSACTION_LAYOUT_DEBOUNCE_MS,
       maxDelayMs: TRANSACTION_LAYOUT_MAX_DELAY_MS,
+      clock: browserClock,
     });
   }
   const documentChangeNotifyTimerRef = useRef<number | null>(null);
