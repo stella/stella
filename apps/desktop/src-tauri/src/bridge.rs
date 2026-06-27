@@ -304,7 +304,7 @@ async fn not_found(
   .into_response()
 }
 
-pub(crate) fn build_router(state: BridgeState) -> Router {
+fn build_router(state: BridgeState) -> Router {
   Router::new()
     .route("/health", get(health))
     .route("/v1/self-host-connection", get(self_host_connection))

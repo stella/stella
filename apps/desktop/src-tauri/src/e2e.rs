@@ -16,7 +16,7 @@ use std::time::Duration;
 
 use tokio::sync::Mutex;
 
-use crate::bridge::{BridgeState, build_router};
+use crate::bridge::start_bridge;
 use crate::session_manager::SessionManager;
 use crate::types::{BRIDGE_CAPABILITIES, BRIDGE_VERSION};
 
@@ -83,33 +83,27 @@ async fn spawn_test_bridge() -> TestBridge {
 async fn spawn_test_bridge_with_origins(
   static_allowed_origins: HashSet<String>,
 ) -> TestBridge {
-  let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
-    .await
-    .expect("bind loopback test socket");
-  let addr = listener.local_addr().expect("resolve bound address");
-
+  // Drive the real production entry point (bind + serve) rather than a test-only
+  // router so the harness exercises the same code path the app runs. Bind a
+  // throwaway socket to claim a free loopback port, then hand it to start_bridge.
+  let port = free_loopback_port().await;
   let manager = Arc::new(Mutex::new(SessionManager::new()));
-  let state = BridgeState {
-    manager: manager.clone(),
-    static_allowed_origins,
-    bridge_port: addr.port(),
-  };
 
-  let router = build_router(state);
-  tokio::spawn(async move {
-    // Route failures through tracing like start_bridge does (the crate forbids
-    // print_stderr) so a server-side error is not silently swallowed.
-    if let Err(error) = axum::serve(listener, router).await {
-      tracing::error!(error = %error, "test bridge server error");
-    }
-  });
+  tokio::spawn(start_bridge(port, static_allowed_origins, manager.clone()));
 
   let bridge = TestBridge {
-    base_url: format!("http://127.0.0.1:{}", addr.port()),
+    base_url: format!("http://127.0.0.1:{port}"),
     manager,
   };
   bridge.wait_until_ready().await;
   bridge
+}
+
+async fn free_loopback_port() -> u16 {
+  let listener = tokio::net::TcpListener::bind(("127.0.0.1", 0))
+    .await
+    .expect("bind probe socket");
+  listener.local_addr().expect("resolve probe address").port()
 }
 
 fn open_docx_body(session_id: &str) -> serde_json::Value {
