@@ -26,41 +26,36 @@ import {
 import type { CSSProperties, Ref } from "react";
 
 import { panic } from "better-result";
-import type { Transaction, Command, Plugin } from "prosemirror-state";
-import { EditorState } from "prosemirror-state";
-import { EditorView } from "prosemirror-view";
-import type { DirectEditorProps } from "prosemirror-view";
-import type * as YProseMirror from "y-prosemirror";
-import type { Doc as YDoc, XmlFragment } from "yjs";
-import type * as Yjs from "yjs";
+import type {
+  Transaction,
+  Command,
+  Plugin,
+  EditorState,
+} from "prosemirror-state";
+import type { EditorView } from "prosemirror-view";
 
-import { createHiddenEditorApi } from "../core/controller/hiddenEditorApi";
 import {
-  recordHiddenEditorPhase,
-  recordHiddenEditorStateCreate,
-  type HiddenEditorStateReason,
-} from "../core/layout-engine/layoutInstrumentation";
-import { suppressHiddenEditorScrollToSelection } from "../core/paged-layout/hiddenEditorScroll";
-import { isReadOnlyEditKey } from "../core/paged-layout/readOnlyEditAttempt";
-import { toProseDoc, createEmptyDoc } from "../core/prosemirror/conversion";
+  collectRemoteSelections,
+  createHiddenEditorManager,
+  type CollaborationModules,
+  type HiddenEditorManager,
+  type HiddenProseMirrorCollaboration,
+  type HiddenProseMirrorRemoteSelection,
+} from "../core/controller/hiddenEditorManager";
 import type { ExtensionManager } from "../core/prosemirror/extensions/ExtensionManager";
-import { ensureParaIdsInState } from "../core/prosemirror/extensions/features/ParaIdAllocatorExtension";
-import { createDocumentStylesPlugin } from "../core/prosemirror/plugins/documentStyles";
-import { schema } from "../core/prosemirror/schema";
 import type { Document, Theme, StyleDefinitions } from "../core/types/document";
 // Import ProseMirror CSS
 import "prosemirror-view/style/prosemirror.css";
 
 import "../core/prosemirror/editor.css";
 
-const EMPTY_EXTERNAL_PLUGINS: Plugin[] = [];
+export type {
+  HiddenProseMirrorCollaboration,
+  HiddenProseMirrorRemoteSelection,
+} from "../core/controller/hiddenEditorManager";
+export { createHiddenEditorState } from "../core/controller/hiddenEditorManager";
 
-type YProseMirrorModule = typeof YProseMirror;
-type YjsModule = typeof Yjs;
-type CollaborationModules = {
-  yProseMirror: YProseMirrorModule;
-  yjs: YjsModule;
-};
+const EMPTY_EXTERNAL_PLUGINS: Plugin[] = [];
 
 let collaborationModulesPromise: Promise<CollaborationModules> | null = null;
 
@@ -120,28 +115,6 @@ export type HiddenProseMirrorProps = {
   onReadOnlyEditAttempt?: () => void;
 };
 
-export type HiddenProseMirrorCollaboration = {
-  awareness?: CollaborationAwareness | undefined;
-  onSeeded?: (() => void) | undefined;
-  shouldSeed?: boolean | undefined;
-  yXmlFragment: XmlFragment;
-};
-
-export type HiddenProseMirrorRemoteSelection = {
-  anchor: number;
-  clientId: number;
-  color: string;
-  head: number;
-  name: string;
-};
-
-type CollaborationAwareness = {
-  clientID: number;
-  getStates: () => Map<number, unknown>;
-  off: (event: "change" | "update", handler: () => void) => void;
-  on: (event: "change" | "update", handler: () => void) => void;
-};
-
 export type HiddenProseMirrorRef = {
   /** Get the ProseMirror EditorState */
   getState: () => EditorState | null;
@@ -175,129 +148,6 @@ export type HiddenProseMirrorRef = {
   setCellSelection: (anchorCellPos: number, headCellPos: number) => void;
   /** Scroll the PM view to selection (no-op since hidden) */
   scrollToSelection: () => void;
-};
-
-type YSyncState = {
-  binding: {
-    mapping: Parameters<
-      YProseMirrorModule["relativePositionToAbsolutePosition"]
-    >[3];
-  };
-  doc: YDoc;
-  type: XmlFragment;
-};
-
-type AwarenessCursor = {
-  anchor: Record<string, unknown>;
-  head: Record<string, unknown>;
-};
-
-type AwarenessUser = {
-  color: string;
-  name: string;
-};
-
-const isObjectRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" && value !== null;
-
-const isYSyncState = (value: unknown, yjs: YjsModule): value is YSyncState => {
-  if (!isObjectRecord(value)) {
-    return false;
-  }
-  const binding = value["binding"];
-  return (
-    value["doc"] instanceof yjs.Doc &&
-    value["type"] instanceof yjs.XmlFragment &&
-    isObjectRecord(binding) &&
-    binding["mapping"] instanceof Map
-  );
-};
-
-const readAwarenessCursor = (state: unknown): AwarenessCursor | null => {
-  if (!isObjectRecord(state)) {
-    return null;
-  }
-  const cursor = state["cursor"];
-  if (!isObjectRecord(cursor)) {
-    return null;
-  }
-  const anchor = cursor["anchor"];
-  const head = cursor["head"];
-  if (!isObjectRecord(anchor) || !isObjectRecord(head)) {
-    return null;
-  }
-  return { anchor, head };
-};
-
-const readAwarenessUser = (state: unknown, clientId: number): AwarenessUser => {
-  if (!isObjectRecord(state) || !isObjectRecord(state["user"])) {
-    return {
-      color: "var(--doc-image-selection)",
-      name: `User ${clientId}`,
-    };
-  }
-
-  const user = state["user"];
-  return {
-    color:
-      typeof user["color"] === "string"
-        ? user["color"]
-        : "var(--doc-image-selection)",
-    name: typeof user["name"] === "string" ? user["name"] : `User ${clientId}`,
-  };
-};
-
-const collectRemoteSelections = (
-  state: EditorState,
-  awareness: CollaborationAwareness,
-  collaborationModules: CollaborationModules,
-): HiddenProseMirrorRemoteSelection[] => {
-  const syncState: unknown =
-    collaborationModules.yProseMirror.ySyncPluginKey.getState(state);
-  if (!isYSyncState(syncState, collaborationModules.yjs)) {
-    return [];
-  }
-
-  const selections: HiddenProseMirrorRemoteSelection[] = [];
-  for (const [clientId, remoteState] of awareness.getStates()) {
-    if (clientId === awareness.clientID) {
-      continue;
-    }
-
-    const cursor = readAwarenessCursor(remoteState);
-    if (cursor === null) {
-      continue;
-    }
-
-    const anchor =
-      collaborationModules.yProseMirror.relativePositionToAbsolutePosition(
-        syncState.doc,
-        syncState.type,
-        collaborationModules.yjs.createRelativePositionFromJSON(cursor.anchor),
-        syncState.binding.mapping,
-      );
-    const head =
-      collaborationModules.yProseMirror.relativePositionToAbsolutePosition(
-        syncState.doc,
-        syncState.type,
-        collaborationModules.yjs.createRelativePositionFromJSON(cursor.head),
-        syncState.binding.mapping,
-      );
-    if (anchor === null || head === null) {
-      continue;
-    }
-
-    const user = readAwarenessUser(remoteState, clientId);
-    selections.push({
-      anchor,
-      clientId,
-      color: user.color,
-      head,
-      name: user.name,
-    });
-  }
-
-  return selections;
 };
 
 // ============================================================================
@@ -338,166 +188,6 @@ const HIDDEN_HOST_STYLES: CSSProperties = {
   // Don't use visibility:hidden - the editor must remain focusable.
 };
 
-const HIDDEN_EDITOR_ATTRIBUTES = {
-  "aria-label": "Document content",
-  "aria-multiline": "true",
-  autocapitalize: "off",
-  autocomplete: "off",
-  autocorrect: "off",
-  role: "textbox",
-  spellcheck: "false",
-  translate: "no",
-};
-
-// ============================================================================
-// HELPER FUNCTIONS
-// ============================================================================
-
-/**
- * Create ProseMirror state from document
- *
- * When an ExtensionManager is provided, it supplies the schema and plugins.
- * Otherwise falls back to the default singleton schema with no extension plugins.
- */
-export function createHiddenEditorState(
-  document: Document | null,
-  styles: StyleDefinitions | null | undefined,
-  manager?: ExtensionManager,
-  externalPlugins: Plugin[] = [],
-  collaboration?: HiddenProseMirrorCollaboration,
-  collaborationModules?: CollaborationModules | null,
-  reason: HiddenEditorStateReason = "mount",
-): EditorState {
-  recordHiddenEditorStateCreate(reason);
-
-  const activeSchema = manager?.getSchema() ?? schema;
-  let localDoc = createEmptyDoc();
-  if (document) {
-    const startedAt = performance.now();
-    localDoc =
-      styles === undefined || styles === null
-        ? toProseDoc(document)
-        : toProseDoc(document, { styles });
-    recordHiddenEditorPhase(
-      reason,
-      "to-prose-doc",
-      performance.now() - startedAt,
-    );
-  }
-
-  // Expose the document's styles to style-aware commands (e.g. the Enter
-  // handler's `w:next` switch from heading to body text). Same resolver for
-  // collab and non-collab paths.
-  const styleResolverPlugin = createDocumentStylesPlugin(
-    styles ?? document?.package.styles,
-  );
-  const plugins: Plugin[] = [
-    ...externalPlugins,
-    ...(manager?.getPlugins() ?? []),
-    styleResolverPlugin,
-  ];
-
-  if (collaboration) {
-    if (!collaborationModules) {
-      panic(
-        "Collaboration modules must be loaded before creating collaborative editor state.",
-      );
-    }
-
-    if (collaboration.shouldSeed && collaboration.yXmlFragment.length === 0) {
-      const seedState = ensureParaIdsInState(
-        EditorState.create({
-          doc: localDoc,
-          schema: activeSchema,
-          plugins,
-        }),
-      );
-      collaborationModules.yProseMirror.prosemirrorToYXmlFragment(
-        seedState.doc,
-        collaboration.yXmlFragment,
-      );
-      collaboration.onSeeded?.();
-    }
-
-    let { doc } = collaborationModules.yProseMirror.initProseMirrorDoc(
-      collaboration.yXmlFragment,
-      activeSchema,
-    );
-
-    const initializedState = ensureParaIdsInState(
-      EditorState.create({
-        doc,
-        schema: activeSchema,
-        plugins,
-      }),
-    );
-    if (!initializedState.doc.eq(doc)) {
-      collaborationModules.yProseMirror.prosemirrorToYXmlFragment(
-        initializedState.doc,
-        collaboration.yXmlFragment,
-      );
-      ({ doc } = collaborationModules.yProseMirror.initProseMirrorDoc(
-        collaboration.yXmlFragment,
-        activeSchema,
-      ));
-    }
-
-    const startedAt = performance.now();
-    const state = ensureParaIdsInState(
-      EditorState.create({
-        doc,
-        schema: activeSchema,
-        plugins,
-      }),
-    );
-    recordHiddenEditorPhase(
-      reason,
-      "editor-state",
-      performance.now() - startedAt,
-    );
-    return state;
-  }
-
-  const startedAt = performance.now();
-  const state = ensureParaIdsInState(
-    EditorState.create({
-      doc: localDoc,
-      schema: activeSchema,
-      plugins,
-    }),
-  );
-  recordHiddenEditorPhase(
-    reason,
-    "editor-state",
-    performance.now() - startedAt,
-  );
-  return state;
-}
-
-function getDocumentIdentity(doc: Document | null): string {
-  if (!doc) {
-    return "empty";
-  }
-  // Use the document's package id or a hash of its structure.
-  // For simplicity, compare based on whether it has different metadata.
-  const meta = doc.package.properties;
-  const created = meta?.created ? String(meta.created) : "";
-  const modified = meta?.modified ? String(meta.modified) : "";
-  const title = meta?.title ?? "";
-  return `${created}-${modified}-${title}`;
-}
-
-function syncHiddenEditorAccessibility(
-  view: EditorView,
-  readOnly: boolean,
-): void {
-  const { dom } = view;
-  if (!dom.hasAttribute("tabindex")) {
-    dom.tabIndex = 0;
-  }
-  dom.setAttribute("aria-readonly", readOnly ? "true" : "false");
-}
-
 // ============================================================================
 // COMPONENT
 // ============================================================================
@@ -537,18 +227,17 @@ export function HiddenProseMirror(
 
   // Refs
   const hostRef = useRef<HTMLDivElement>(null);
-  const viewRef = useRef<EditorView | null>(null);
+  // Manager-input refs: the framework-agnostic view manager reads these via
+  // accessor functions, so it always sees the current render's value.
   const readOnlyRef = useRef(readOnly);
   const documentRef = useRef(document);
+  const stylesRef = useRef(styles);
+  const extensionManagerRef = useRef(extensionManager);
+  const externalPluginsRef = useRef(externalPlugins);
+  const deferViewCreationRef = useRef(deferViewCreation);
+  const precomputedInitialStateRef = useRef(precomputedInitialState);
   const collaborationRef = useRef(collaboration);
   const collaborationModulesRef = useRef(collaborationModules);
-  const isDestroyingRef = useRef(false);
-  // Track the document identity to detect truly external changes
-  // vs changes that originated from editing (which get passed back through props)
-  const lastDocumentIdRef = useRef<string | null>(null);
-  const lastCollaborationFragmentRef = useRef<XmlFragment | null>(null);
-  // Track if we've initialized - first render needs to set up state
-  const isInitializedRef = useRef(false);
 
   // Store callbacks in refs to avoid dependency array issues that cause infinite loops
   // when the parent component passes unstable callback references
@@ -562,6 +251,11 @@ export function HiddenProseMirror(
 
   // Keep refs in sync
   readOnlyRef.current = readOnly;
+  stylesRef.current = styles;
+  extensionManagerRef.current = extensionManager;
+  externalPluginsRef.current = externalPlugins;
+  deferViewCreationRef.current = deferViewCreation;
+  precomputedInitialStateRef.current = precomputedInitialState;
   onTransactionRef.current = onTransaction;
   onSelectionChangeRef.current = onSelectionChange;
   onEditorViewReadyRef.current = onEditorViewReady;
@@ -574,6 +268,37 @@ export function HiddenProseMirror(
 
   // Keep document ref in sync
   documentRef.current = document;
+
+  // The off-screen EditorView lifecycle (create/destroy, editorProps, and the
+  // external-document / editable sync) lives in the framework-agnostic manager;
+  // this component keeps the input refs and its effects (which decide *when* to
+  // act) and drives the manager through its methods. Created once, like the
+  // layout scheduler in PagedEditor.
+  const managerRef = useRef<HiddenEditorManager | null>(null);
+  if (managerRef.current === null) {
+    managerRef.current = createHiddenEditorManager({
+      getHost: () => hostRef.current,
+      getDocument: () => documentRef.current,
+      getStyles: () => stylesRef.current,
+      getExtensionManager: () => extensionManagerRef.current,
+      getExternalPlugins: () => externalPluginsRef.current,
+      getCollaboration: () => collaborationRef.current,
+      getCollaborationModules: () => collaborationModulesRef.current,
+      getPrecomputedInitialState: () => precomputedInitialStateRef.current,
+      getReadOnly: () => readOnlyRef.current,
+      getDeferViewCreation: () => deferViewCreationRef.current,
+      getDocumentContext: () => documentRef.current,
+      onTransaction: (transaction, newState) =>
+        onTransactionRef.current?.(transaction, newState),
+      onSelectionChange: (state) => onSelectionChangeRef.current?.(state),
+      onKeyDown: (view, event) => onKeyDownRef.current?.(view, event) ?? false,
+      onReadOnlyEditAttempt: () => onReadOnlyEditAttemptRef.current?.(),
+      onEditorViewReady: (view) => onEditorViewReadyRef.current?.(view),
+      onEditorViewDestroy: () => onEditorViewDestroyRef.current?.(),
+      onRemoteSelectionsChange: (selections) =>
+        onRemoteSelectionsChangeRef.current?.(selections),
+    });
+  }
 
   useEffect(() => {
     if (!hasCollaboration) {
@@ -610,156 +335,26 @@ export function HiddenProseMirror(
   // EditorView Lifecycle
   // ========================================================================
 
-  /**
-   * Create EditorView with proper dispatch handling
-   * Uses refs for callbacks to avoid infinite re-render loops
-   */
+  // Stable wrapper so the create-trigger effect keeps `createView` in its
+  // dependency array; the view-creation body lives in the manager.
   const createView = useCallback(() => {
-    if (deferViewCreation) {
-      return;
-    }
-    if (!hostRef.current || isDestroyingRef.current) {
-      return;
-    }
-    if (collaboration && !collaborationModules) {
-      return;
-    }
-
-    const initialState =
-      precomputedInitialState && !collaboration
-        ? precomputedInitialState
-        : createHiddenEditorState(
-            document,
-            styles,
-            extensionManager,
-            externalPlugins,
-            collaboration,
-            collaborationModules,
-            "mount",
-          );
-
-    const editorProps: DirectEditorProps = {
-      state: initialState,
-      attributes: HIDDEN_EDITOR_ATTRIBUTES,
-      editable: () => !readOnlyRef.current,
-      dispatchTransaction: (transaction: Transaction) => {
-        if (!viewRef.current || isDestroyingRef.current) {
-          return;
-        }
-
-        if (readOnlyRef.current && transaction.docChanged) {
-          onReadOnlyEditAttemptRef.current?.();
-          return;
-        }
-
-        const newState = viewRef.current.state.apply(transaction);
-        viewRef.current.updateState(newState);
-
-        // Notify about transaction (use ref to avoid dependency issues)
-        onTransactionRef.current?.(transaction, newState);
-
-        // Notify about selection changes (use ref to avoid dependency issues)
-        if (transaction.selectionSet || transaction.docChanged) {
-          onSelectionChangeRef.current?.(newState);
-        }
-
-        const currentCollaboration = collaborationRef.current;
-        const currentCollaborationModules = collaborationModulesRef.current;
-        if (currentCollaboration?.awareness && currentCollaborationModules) {
-          onRemoteSelectionsChangeRef.current?.(
-            collectRemoteSelections(
-              newState,
-              currentCollaboration.awareness,
-              currentCollaborationModules,
-            ),
-          );
-        }
-      },
-      // Intercept key events before ProseMirror processes them
-      handleKeyDown: (view: EditorView, event: KeyboardEvent): boolean => {
-        if (readOnlyRef.current && isReadOnlyEditKey(event)) {
-          onReadOnlyEditAttemptRef.current?.();
-          event.preventDefault();
-          return true;
-        }
-
-        return onKeyDownRef.current?.(view, event) ?? false;
-      },
-      handleScrollToSelection: suppressHiddenEditorScrollToSelection,
-      // Prevent focus handling from interfering with visual layer
-      handleDOMEvents: {
-        focus: () => false,
-        blur: () => false,
-        beforeinput: (_view, event) => {
-          if (!readOnlyRef.current) {
-            return false;
-          }
-          onReadOnlyEditAttemptRef.current?.();
-          event.preventDefault();
-          return true;
-        },
-        paste: (_view, event) => {
-          if (!readOnlyRef.current) {
-            return false;
-          }
-          onReadOnlyEditAttemptRef.current?.();
-          event.preventDefault();
-          return true;
-        },
-        drop: (_view, event) => {
-          if (!readOnlyRef.current) {
-            return false;
-          }
-          onReadOnlyEditAttemptRef.current?.();
-          event.preventDefault();
-          return true;
-        },
-      },
-    };
-
-    const viewStartedAt = performance.now();
-    viewRef.current = new EditorView(hostRef.current, editorProps);
-    recordHiddenEditorPhase(
-      "mount",
-      "editor-view",
-      performance.now() - viewStartedAt,
-    );
-    syncHiddenEditorAccessibility(viewRef.current, readOnlyRef.current);
-    isInitializedRef.current = true;
-    lastDocumentIdRef.current = getDocumentIdentity(document);
-    lastCollaborationFragmentRef.current = collaboration?.yXmlFragment ?? null;
-
-    // Notify that view is ready (use ref to avoid dependency issues)
-    onEditorViewReadyRef.current?.(viewRef.current);
-  }, [
-    document,
-    styles,
-    externalPlugins,
-    collaboration,
-    collaborationModules,
-    extensionManager,
-    deferViewCreation,
-    precomputedInitialState,
-    // Callbacks removed from dependencies - accessed via refs
-  ]);
+    managerRef.current?.createView();
+  }, []);
 
   useEffect(() => {
     const awareness = collaboration?.awareness;
-    if (!awareness || !viewRef.current || !collaborationModules) {
+    if (!awareness || !managerRef.current?.getView() || !collaborationModules) {
       onRemoteSelectionsChangeRef.current?.([]);
       return undefined;
     }
 
     const publishRemoteSelections = () => {
-      if (!viewRef.current) {
+      const view = managerRef.current?.getView();
+      if (!view) {
         return;
       }
       onRemoteSelectionsChangeRef.current?.(
-        collectRemoteSelections(
-          viewRef.current.state,
-          awareness,
-          collaborationModules,
-        ),
+        collectRemoteSelections(view.state, awareness, collaborationModules),
       );
     };
 
@@ -772,27 +367,17 @@ export function HiddenProseMirror(
     };
   }, [collaboration?.awareness, collaborationModules]);
 
-  /**
-   * Destroy EditorView
-   */
+  // Stable wrapper so the unmount effect keeps `destroyView` in its dependency
+  // array; the teardown body lives in the manager.
   const destroyView = useCallback(() => {
-    if (viewRef.current && !isDestroyingRef.current) {
-      isDestroyingRef.current = true;
-
-      // Use ref to avoid dependency issues
-      onEditorViewDestroyRef.current?.();
-
-      viewRef.current.destroy();
-      viewRef.current = null;
-      isDestroyingRef.current = false;
-    }
+    managerRef.current?.destroyView();
   }, []);
 
   useLayoutEffect(() => {
     if (deferViewCreation) {
       return;
     }
-    if (viewRef.current || isDestroyingRef.current) {
+    if (managerRef.current?.getView()) {
       return;
     }
     if (collaboration && !collaborationModules) {
@@ -803,65 +388,12 @@ export function HiddenProseMirror(
 
   useEffect(() => () => destroyView(), [destroyView]);
 
-  // Update state when document changes externally (e.g., loading a new file)
+  // Update state when document changes externally (e.g., loading a new file).
   // This should NOT run when the document prop changes due to internal edits
-  // being passed back through the parent component's state
+  // being passed back through the parent component's state; the manager owns
+  // the external-vs-internal comparison.
   useEffect(() => {
-    if (!viewRef.current || isDestroyingRef.current) {
-      return;
-    }
-    if (collaboration && !collaborationModules) {
-      return;
-    }
-
-    const currentDocId = getDocumentIdentity(document);
-    const currentCollaborationFragment = collaboration?.yXmlFragment ?? null;
-    const collaborationSourceChanged =
-      currentCollaborationFragment !== lastCollaborationFragmentRef.current;
-
-    if (collaboration && !collaborationSourceChanged) {
-      return;
-    }
-
-    // Skip if this is the same document (likely passed back after internal edit)
-    // Only reset state if:
-    // 1. Not yet initialized (first mount)
-    // 2. Document identity changed (truly external change like loading a new file)
-    // 3. Collaboration starts/stops or switches sessions
-    if (
-      isInitializedRef.current &&
-      currentDocId === lastDocumentIdRef.current &&
-      !collaborationSourceChanged
-    ) {
-      return;
-    }
-
-    // Update tracking refs
-    isInitializedRef.current = true;
-    lastDocumentIdRef.current = currentDocId;
-    lastCollaborationFragmentRef.current = currentCollaborationFragment;
-
-    // Create new state from document
-    const newState = createHiddenEditorState(
-      document,
-      styles,
-      extensionManager,
-      externalPlugins,
-      collaboration,
-      collaborationModules,
-      "external-document",
-    );
-    const updateStartedAt = performance.now();
-    viewRef.current.updateState(newState);
-    recordHiddenEditorPhase(
-      "external-document",
-      "update-state",
-      performance.now() - updateStartedAt,
-    );
-    syncHiddenEditorAccessibility(viewRef.current, readOnlyRef.current);
-
-    // Use ref to avoid infinite loop when callback is unstable
-    onSelectionChangeRef.current?.(newState);
+    managerRef.current?.syncExternalDocument();
   }, [
     document,
     styles,
@@ -870,31 +402,17 @@ export function HiddenProseMirror(
     collaboration,
     collaborationModules,
   ]);
-  // NOTE: onSelectionChange removed from dependencies - accessed via ref to prevent infinite loops
 
   // Update editable state
   useEffect(() => {
-    if (!viewRef.current) {
-      return;
-    }
-    // EditorView calls editable() dynamically; ARIA state needs explicit sync.
-    syncHiddenEditorAccessibility(viewRef.current, readOnly);
+    managerRef.current?.syncEditable();
   }, [readOnly]);
 
   // ========================================================================
   // Imperative Handle
   // ========================================================================
 
-  useImperativeHandle(
-    ref,
-    () =>
-      createHiddenEditorApi({
-        getView: () => viewRef.current,
-        getDocumentContext: () => documentRef.current,
-        isDestroying: () => isDestroyingRef.current,
-      }),
-    [],
-  );
+  useImperativeHandle(ref, () => managerRef.current!.api, []);
 
   if (hasCollaboration && collaborationModulesError) {
     let detail = "unknown error";
