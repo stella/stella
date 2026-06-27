@@ -23,6 +23,7 @@
     "@stll/catalogue": "workspace:*",
     "@stll/locales": "workspace:*",
     "@stll/ui": "workspace:*",
+    "@stll/workspace-ui": "workspace:*",
     "@tailwindcss/vite": "catalog:",
     "astro": "^7.1.3",
     "react": "catalog:react19",
