@@ -3320,6 +3320,11 @@ export const chatThreads = p.pgTable(
       .boolean("used_anonymization")
       .notNull()
       .default(false),
+    /**
+     * opencode session ID for this thread, set when USE_OPENCODE_CHAT
+     * is active. Null until the first opencode-powered message sends.
+     */
+    opencodeSessionId: p.text("opencode_session_id"),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p
       .timestamp("updated_at")
