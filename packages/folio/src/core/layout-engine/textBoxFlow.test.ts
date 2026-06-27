@@ -7,11 +7,13 @@ import { describe, expect, test } from "bun:test";
 import {
   bandFragmentX,
   bandTopContentY,
+  isPageFrameRelativeAnchor,
+} from "./textBoxFlow";
+import {
   floatingTextBoxReservesBand,
   floatingTextBoxWrapsText,
   isFloatingTextBoxBlock,
-  isPageFrameRelativeAnchor,
-} from "./textBoxFlow";
+} from "./types";
 
 describe("isFloatingTextBoxBlock", () => {
   test("recognizes displayMode='float' as floating", () => {

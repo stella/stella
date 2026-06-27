@@ -130,7 +130,8 @@ type RuleContext = {
       | "bridgeToPainter"
       | "engineToPainter"
       | "engineToBridge"
-      | "reactInCore";
+      | "reactInCore"
+      | "modelImpureData";
   }) => void;
 };
 
@@ -258,6 +259,111 @@ const checkReactFreeCore = (
   context.report({ node: importNode, messageId: "reactInCore" });
 };
 
+// ---------------------------------------------------------------------------
+// Model-is-pure-data seam (Seam 2).
+//
+// The model layer is folio's behavior-free data lingua franca: the docx
+// document model (`core/types/*`), the layout/flow data shapes
+// (`layout-engine/types`), and the measurement data shapes
+// (`layout-engine/measure/measureTypes`). These modules describe data only;
+// they must never depend on behavior or a framework, so the engine, painter,
+// bridge, ProseMirror integration, and adapters can all sit on top of one
+// shared, swappable data surface.
+//
+// Forbidden from any model file:
+//   - bare `prosemirror-*`, `react`, `react-dom`, `@stll/ui`
+//   - a relative import that resolves into a behavior directory
+//     (`layout-painter`, `layout-bridge`, `prosemirror`, `managers`)
+//   - a relative import into `layout-engine/` at anything other than
+//     `layout-engine/types` (the model's own pure-data leaf). The measure
+//     model (`layout-engine/measure/measureTypes`) is itself a model file, so
+//     it may sit under `layout-engine/` without tripping this rule.
+// ---------------------------------------------------------------------------
+
+// ProseMirror ships as `prosemirror-state`, `prosemirror-view`, … so any
+// specifier starting with `prosemirror-` is behavior. React, react-dom, and
+// the UI kit are matched exactly (or as a subpath import) like no-react-in-core.
+const FORBIDDEN_MODEL_PACKAGES = ["react", "react-dom", "@stll/ui"];
+
+const FORBIDDEN_MODEL_BEHAVIOR_DIRS = [
+  "layout-painter",
+  "layout-bridge",
+  "prosemirror",
+  "managers",
+];
+
+const isForbiddenModelPackage = (specifier: string): boolean => {
+  if (specifier.startsWith("prosemirror-")) {
+    return true;
+  }
+  for (const pkg of FORBIDDEN_MODEL_PACKAGES) {
+    if (specifier === pkg || specifier.startsWith(`${pkg}/`)) {
+      return true;
+    }
+  }
+  return false;
+};
+
+// Allowed engine targets are the model's own pure-data leaves:
+//   - `layout-engine/types`
+//   - `layout-engine/measure/measureTypes`
+// Any other relative reach into `layout-engine/` pulls engine behavior.
+const isAllowedModelEngineTarget = (stripped: string): boolean =>
+  stripped.endsWith("/layout-engine/types") ||
+  stripped.endsWith("layout-engine/types") ||
+  stripped.endsWith("/layout-engine/measure/measureTypes") ||
+  stripped.endsWith("layout-engine/measure/measureTypes");
+
+const resolvesIntoBehaviorDir = (stripped: string): boolean => {
+  for (const dir of FORBIDDEN_MODEL_BEHAVIOR_DIRS) {
+    if (
+      stripped.includes(`/${dir}/`) ||
+      stripped.endsWith(`/${dir}`) ||
+      stripped.startsWith(`${dir}/`)
+    ) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const checkModelPurity = (context: RuleContext, importNode: AstNode): void => {
+  const specifier = importSpecifierOf(importNode);
+  if (specifier === null) {
+    return;
+  }
+  const importerPath = filenameOf(context);
+  if (importerPath === "") {
+    return;
+  }
+
+  if (isForbiddenModelPackage(specifier)) {
+    context.report({ node: importNode, messageId: "modelImpureData" });
+    return;
+  }
+
+  if (!specifier.startsWith(".")) {
+    return;
+  }
+  const resolved = resolveCoreTarget(importerPath, specifier);
+  if (resolved === null) {
+    return;
+  }
+  const stripped = stripExtAndIndex(resolved);
+
+  if (resolvesIntoBehaviorDir(stripped)) {
+    context.report({ node: importNode, messageId: "modelImpureData" });
+    return;
+  }
+
+  if (
+    stripped.includes("/layout-engine/") &&
+    !isAllowedModelEngineTarget(stripped)
+  ) {
+    context.report({ node: importNode, messageId: "modelImpureData" });
+  }
+};
+
 export default {
   meta: { name: "folio-layer-boundaries" },
   rules: {
@@ -321,6 +427,36 @@ export default {
         const handle = (node: unknown) => {
           if (isAstNode(node)) {
             checkReactFreeCore(context, node);
+          }
+        };
+        return {
+          ImportDeclaration: handle,
+          ImportExpression: handle,
+          ExportNamedDeclaration: handle,
+          ExportAllDeclaration: handle,
+        };
+      },
+    },
+    "model-is-pure-data": {
+      meta: {
+        type: "problem",
+        messages: {
+          modelImpureData:
+            "The folio model layer (core/types, layout-engine/types, " +
+            "layout-engine/measure/measureTypes) is pure data — the " +
+            "behavior-free lingua franca that the engine, painter, bridge, " +
+            "ProseMirror integration, and adapters all sit on top of. It must " +
+            "not depend on ProseMirror, DOM render, React, @stll/ui, or engine " +
+            "behavior (layout-painter, layout-bridge, prosemirror, managers, " +
+            "or any layout-engine module other than layout-engine/types). Move " +
+            "behavior into the layer that owns it and keep the model describing " +
+            "data only.",
+        },
+      },
+      create(context: RuleContext) {
+        const handle = (node: unknown) => {
+          if (isAstNode(node)) {
+            checkModelPurity(context, node);
           }
         };
         return {
