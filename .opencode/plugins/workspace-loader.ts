@@ -1,7 +1,7 @@
-// .opencode/plugins/workspace-loader.ts
-import { define } from "@opencode-ai/plugin/v2/promise"
+import type { Plugin } from "@opencode-ai/plugin"
 
-export default define({
-  id: "@stll/plugin-workspace-loader",
-  setup: async () => { /* TODO */ },
-})
+const plugin: Plugin = async () => {
+  return {}
+}
+
+export default plugin

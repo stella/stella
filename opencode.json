@@ -7,7 +7,12 @@
     ".opencode/agents/contract-analyzer.md",
     ".opencode/agents/compliance-checker.md"
   ],
-  "plugins": [".opencode/plugins/workspace-loader.ts"],
+  "plugins": [
+    ".opencode/plugins/workspace-loader.ts",
+    ".opencode/plugins/audit.ts",
+    ".opencode/plugins/legal-tools.ts",
+    ".opencode/plugins/i18n.ts"
+  ],
   "mcpServers": {
     "stella": {
       "url": "http://api:3001/mcp",
