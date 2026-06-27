@@ -1,0 +1,14 @@
+{
+  "agents": [],
+  "plugins": [".opencode/plugins/workspace-loader.ts"],
+  "mcpServers": {
+    "stella": {
+      "url": "http://api:3001/mcp",
+      "headers": { "x-source": "opencode" }
+    },
+    "stella-anonymized": {
+      "url": "http://api:3001/mcp-anonymized",
+      "headers": { "x-source": "opencode" }
+    }
+  }
+}
