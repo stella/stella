@@ -40,6 +40,7 @@ const makeDeps = (
     getCollaborationModules: () => null,
     getPrecomputedInitialState: () => null,
     getReadOnly: () => false,
+    getDocumentKey: () => undefined,
     getDocumentContext: () => null,
     onTransaction: (_transaction: Transaction, _newState: EditorState) => {
       spies["onTransaction"].calls += 1;

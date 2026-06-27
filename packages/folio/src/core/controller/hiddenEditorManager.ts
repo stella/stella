@@ -353,6 +353,13 @@ export type HiddenEditorManagerDeps = {
   getCollaborationModules: () => CollaborationModules | null;
   getPrecomputedInitialState: () => EditorState | null | undefined;
   getReadOnly: () => boolean;
+  /**
+   * Caller-provided stable identity of the loaded document: the same key across
+   * internal edits (so typing does not trigger an external re-sync) and a
+   * distinct key per loaded file. Authoritative when present; a metadata
+   * signature is used as a fallback when undefined.
+   */
+  getDocumentKey: () => string | undefined;
   /** Document context for the API's `getDocument` (PM state -> Document). */
   getDocumentContext: () => Document | null;
   onTransaction: (transaction: Transaction, newState: EditorState) => void;
@@ -394,6 +401,12 @@ export const createHiddenEditorManager = (
   // that originated from editing (which get passed back through props).
   let lastDocumentId: string | null = null;
   let lastCollaborationFragment: XmlFragment | null = null;
+
+  // A caller-provided documentKey is authoritative (stable across internal
+  // edits, distinct per loaded file); fall back to a metadata signature when no
+  // key is supplied.
+  const currentDocumentIdentity = (): string =>
+    deps.getDocumentKey() ?? getDocumentIdentity(deps.getDocument());
 
   const tryCreate = (): void => {
     if (!requested || view !== null || isDestroying) {
@@ -516,7 +529,7 @@ export const createHiddenEditorManager = (
     );
     syncHiddenEditorAccessibility(view, deps.getReadOnly());
     isInitialized = true;
-    lastDocumentId = getDocumentIdentity(document);
+    lastDocumentId = currentDocumentIdentity();
     lastCollaborationFragment = collaboration?.yXmlFragment ?? null;
 
     // Notify that view is ready.
@@ -562,7 +575,7 @@ export const createHiddenEditorManager = (
     }
 
     const document = deps.getDocument();
-    const currentDocId = getDocumentIdentity(document);
+    const currentDocId = currentDocumentIdentity();
     const currentCollaborationFragment = collaboration?.yXmlFragment ?? null;
     const collaborationSourceChanged =
       currentCollaborationFragment !== lastCollaborationFragment;

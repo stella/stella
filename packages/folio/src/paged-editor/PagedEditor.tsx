@@ -248,6 +248,12 @@ import { useVisualLineNavigation } from "./useVisualLineNavigation";
 export type PagedEditorProps = {
   /** The document to edit. */
   document: Document | null;
+  /**
+   * Stable identity of the loaded document (same across internal edits, distinct
+   * per loaded file), used to distinguish a genuine external load from an
+   * edited document passed back. Falls back to a metadata signature when omitted.
+   */
+  documentKey?: string;
   /** Document styles for style resolution. */
   styles?: StyleDefinitions | null;
   /** Theme for styling. */
@@ -1778,6 +1784,7 @@ export function PagedEditor(
   const {
     ref,
     document,
+    documentKey,
     styles,
     theme: _theme,
     sectionProperties,
@@ -6997,6 +7004,7 @@ export function PagedEditor(
       <HiddenProseMirror
         ref={hiddenPMRef}
         document={document}
+        {...(documentKey !== undefined ? { documentKey } : {})}
         widthPx={contentWidth}
         precomputedInitialState={validPrecomputedInitialState}
         readOnly={readOnly}

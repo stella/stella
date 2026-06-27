@@ -80,6 +80,12 @@ const loadCollaborationModules = (): Promise<CollaborationModules> => {
 export type HiddenProseMirrorProps = {
   /** The document to edit */
   document: Document | null;
+  /**
+   * Stable identity of the loaded document (same across internal edits, distinct
+   * per loaded file). When provided it is authoritative for external-load
+   * detection; otherwise a document-metadata signature is used as a fallback.
+   */
+  documentKey?: string;
   /** Document styles for style resolution */
   styles?: StyleDefinitions | null;
   /** Theme for styling */
@@ -203,6 +209,7 @@ export function HiddenProseMirror(
   const {
     ref,
     document,
+    documentKey,
     styles,
     theme: _theme,
     widthPx = 612, // Default Letter width at 72dpi
@@ -232,6 +239,7 @@ export function HiddenProseMirror(
   // accessor functions, so it always sees the current render's value.
   const readOnlyRef = useRef(readOnly);
   const documentRef = useRef(document);
+  const documentKeyRef = useRef(documentKey);
   const stylesRef = useRef(styles);
   const extensionManagerRef = useRef(extensionManager);
   const externalPluginsRef = useRef(externalPlugins);
@@ -267,6 +275,7 @@ export function HiddenProseMirror(
 
   // Keep document ref in sync
   documentRef.current = document;
+  documentKeyRef.current = documentKey;
 
   // The off-screen EditorView lifecycle (create/destroy, editorProps, and the
   // external-document / editable sync) lives in the framework-agnostic manager;
@@ -285,6 +294,7 @@ export function HiddenProseMirror(
       getCollaborationModules: () => collaborationModulesRef.current,
       getPrecomputedInitialState: () => precomputedInitialStateRef.current,
       getReadOnly: () => readOnlyRef.current,
+      getDocumentKey: () => documentKeyRef.current,
       getDocumentContext: () => documentRef.current,
       onTransaction: (transaction, newState) =>
         onTransactionRef.current?.(transaction, newState),
