@@ -25,11 +25,13 @@ function DefaultSelectRoot(props: FolioSelectRootProps) {
 function DefaultSelectTrigger({
   className,
   children,
+  size,
   ...props
 }: FolioSelectTriggerProps) {
   return (
     <SelectPrimitive.Trigger
       className={cn("folio-default-select-trigger", className)}
+      data-size={size}
       {...props}
     >
       {children}

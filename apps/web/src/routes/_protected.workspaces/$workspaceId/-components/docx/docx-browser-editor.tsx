@@ -25,7 +25,11 @@ import {
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
-import { FormattingBar, setAnonymizationTermsMeta } from "@stll/folio";
+import {
+  FolioUIProvider,
+  FormattingBar,
+  setAnonymizationTermsMeta,
+} from "@stll/folio";
 import type {
   AnonymizationTerm,
   DocxCompatibility,
@@ -45,21 +49,22 @@ import { stellaToast } from "@stll/ui/components/toast";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
+import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
 import "@stll/folio/editor.css";
 
-import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
-import { DocxEditor } from "@/components/docx/app-docx-editor";
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
 import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
+import { DocxEditor } from "@/components/docx/app-docx-editor";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { StatusMessage } from "@/components/route-components";
 import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import { folioUIComponents } from "@/lib/folio-ui-components";
 import { composeRefs } from "@/lib/slot";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
@@ -1712,19 +1717,21 @@ const DocxLoadingToolbar = ({
 
   return (
     <div className="pointer-events-none z-50 flex shrink-0 flex-col gap-0 bg-[var(--doc-page)] [&_[data-slot=select-trigger]:focus-visible]:ring-0 [&_[data-slot=select-trigger]:hover]:!bg-transparent [&_[data-slot=select-trigger][data-pressed]]:!bg-transparent [&_button:active]:!bg-transparent [&_button:focus-visible]:ring-0 [&_button:hover]:!bg-transparent [&_button[data-pressed]]:!bg-transparent [&_button[data-pressed]]:shadow-none">
-      <FormattingBar
-        canRedo={false}
-        canUndo={false}
-        currentFormatting={{}}
-        onFormat={noop}
-        onRedo={noop}
-        onUndo={noop}
-        priorityExtra={<DocxLoadingPriorityExtra />}
-        stylePickerLabel={stylePickerLabel}
-        stylePickerLabelStyle={stylePickerLabelStyle}
-      >
-        {toolbarExtra}
-      </FormattingBar>
+      <FolioUIProvider components={folioUIComponents}>
+        <FormattingBar
+          canRedo={false}
+          canUndo={false}
+          currentFormatting={{}}
+          onFormat={noop}
+          onRedo={noop}
+          onUndo={noop}
+          priorityExtra={<DocxLoadingPriorityExtra />}
+          stylePickerLabel={stylePickerLabel}
+          stylePickerLabelStyle={stylePickerLabelStyle}
+        >
+          {toolbarExtra}
+        </FormattingBar>
+      </FolioUIProvider>
     </div>
   );
 };
