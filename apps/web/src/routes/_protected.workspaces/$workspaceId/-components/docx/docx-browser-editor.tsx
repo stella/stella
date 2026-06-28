@@ -63,6 +63,7 @@ import Tooltip from "@/components/tooltip";
 import { env } from "@/env";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { anonymizeChatTextInWorker } from "@/lib/anonymize/anonymize-chat-worker-client";
+import { folioUIComponents } from "@/lib/folio-ui-components";
 import { composeRefs } from "@/lib/slot";
 import { DocxLoadingShell } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/docx-loading-shell";
 import { useDocxBlockScroll } from "@/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll";
@@ -1480,6 +1481,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
             ref={editorRef}
             autoOpenReviewSidebar={false}
             className="folio-docx-preview folio-peek h-full"
+            components={folioUIComponents}
             documentBuffer={editorBuffer}
             documentKey={previewIdentity}
             initialZoom={targetZoom}

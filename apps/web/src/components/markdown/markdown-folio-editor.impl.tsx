@@ -16,6 +16,7 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
+import { folioUIComponents } from "@/lib/folio-ui-components";
 import { composeRefs } from "@/lib/slot";
 
 // Flatten Word constructs markdown can't carry so the emitted markdown stays
@@ -172,6 +173,7 @@ export function MarkdownFolioEditor({
     >
       <DocxEditor
         className="h-full"
+        components={folioUIComponents}
         document={doc}
         initialZoom={fitZoom}
         key={seed}

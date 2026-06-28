@@ -148,6 +148,7 @@ import {
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
 import { toAPIError, userErrorMessage } from "@/lib/errors";
+import { folioUIComponents } from "@/lib/folio-ui-components";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
@@ -2656,6 +2657,7 @@ export const TemplateStudioPage = ({
               ref={editorRef}
               autoOpenReviewSidebar={false}
               className="h-full"
+              components={folioUIComponents}
               documentBuffer={docBuffer}
               initialZoom={fitZoom}
               loadingIndicator={null}
