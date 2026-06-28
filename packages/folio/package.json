@@ -23,6 +23,7 @@
     "format": "oxfmt .",
     "perf": "bun scripts/profile-editor.ts",
     "test": "bun test src",
+    "test:property": "bun test property.test",
     "test:visual": "bunx playwright test",
     "test:visual:update": "bunx playwright test --update-snapshots",
     "test:visual:report": "bunx playwright show-report"
@@ -61,6 +62,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.61.0",
+    "@stll/property-testing": "workspace:*",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
     "fast-check": "catalog:",

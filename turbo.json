@@ -48,6 +48,11 @@
       "dependsOn": [],
       "inputs": ["$TURBO_DEFAULT$"]
     },
+    "test:property": {
+      "dependsOn": [],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "cache": false
+    },
     "clean": {
       "cache": false
     }
