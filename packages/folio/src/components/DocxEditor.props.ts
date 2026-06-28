@@ -15,6 +15,7 @@ import type {
   SetContentControlContentInput,
   SetContentControlValueInput,
 } from "../core/content-controls";
+import type { FolioEditor } from "../core/controller/folioEditor";
 import type { DocxCompatibility } from "../core/docx/compatibility";
 import type { FolioSelectiveSaveFlags } from "../core/docx/selectiveSaveFlags";
 import type { TripwireResult } from "../core/docx/selectiveSaveTripwire";
@@ -281,6 +282,8 @@ export type DocxEditorRef = {
   hasPendingChanges: () => boolean;
   /** Get the editor ref */
   getEditorRef: () => PagedEditorRef | null;
+  /** The headless editor controller (Seam 6), or null before the editor mounts. */
+  getEditor: () => FolioEditor | null;
   /** Save the document to buffer. Pass { selective: false } to force full repack. */
   save: (options?: { selective?: boolean }) => Promise<ArrayBuffer | null>;
   /** Set zoom level */

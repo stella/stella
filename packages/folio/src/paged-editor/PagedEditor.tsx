@@ -331,6 +331,8 @@ export type PagedEditorProps = {
 };
 
 export type PagedEditorRef = {
+  /** The headless editor controller (imperative API + events; Seam 6). */
+  getEditor: () => FolioEditor;
   /** Get the current document. */
   getDocument: () => Document | null;
   /** Get the ProseMirror EditorState. */
@@ -5983,6 +5985,9 @@ export function PagedEditor(
   useImperativeHandle(
     ref,
     () => ({
+      getEditor() {
+        return folioEditor;
+      },
       getDocument() {
         return folioEditor.getDocument();
       },
