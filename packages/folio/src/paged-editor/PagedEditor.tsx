@@ -37,6 +37,9 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import type { AISuggestion } from "../core/ai-suggestions/types";
+import { createFolioEditor } from "../core/controller/folioEditor";
+import type { FolioEditor } from "../core/controller/folioEditor";
+import { createFolioEditorEmitter } from "../core/controller/folioEditorEvents";
 import { runLayoutPipeline as runLayoutPipelineCompute } from "../core/controller/layoutPipeline";
 import {
   browserClock,
@@ -2314,6 +2317,19 @@ export function PagedEditor(
   );
   const runLayoutPipelineRef = useRef(runLayoutPipeline);
   runLayoutPipelineRef.current = runLayoutPipeline;
+
+  const folioEmitterRef = useRef(createFolioEditorEmitter());
+  const folioEditorRef = useRef<FolioEditor | null>(null);
+  if (!folioEditorRef.current) {
+    folioEditorRef.current = createFolioEditor({
+      getEditorApi: () => hiddenPMRef.current,
+      getLayout: () => layoutRef.current,
+      runLayout: (state, options) =>
+        runLayoutPipelineRef.current(state, options),
+      emitter: folioEmitterRef.current,
+    });
+  }
+  const folioEditor = folioEditorRef.current;
 
   // =========================================================================
   // Coalesced Layout (rAF throttle)
@@ -5960,13 +5976,13 @@ export function PagedEditor(
     ref,
     () => ({
       getDocument() {
-        return hiddenPMRef.current?.getDocument() ?? null;
+        return folioEditor.getDocument();
       },
       getState() {
-        return hiddenPMRef.current?.getState() ?? null;
+        return folioEditor.getState();
       },
       getView() {
-        return hiddenPMRef.current?.getView() ?? null;
+        return folioEditor.getView();
       },
       getHfView(rId: string) {
         return hfPMsRef.current?.getView(rId) ?? null;
@@ -5981,42 +5997,39 @@ export function PagedEditor(
         ensureHiddenEditorView(options);
       },
       focus() {
-        hiddenPMRef.current?.focus();
+        folioEditor.focus();
         setIsFocused(true);
       },
       blur() {
-        hiddenPMRef.current?.blur();
+        folioEditor.blur();
         setIsFocused(false);
       },
       isFocused() {
-        return hiddenPMRef.current?.isFocused() ?? false;
+        return folioEditor.isFocused();
       },
       dispatch(tr: Transaction) {
-        hiddenPMRef.current?.dispatch(tr);
+        folioEditor.dispatch(tr);
       },
       undo() {
-        return hiddenPMRef.current?.undo() ?? false;
+        return folioEditor.undo();
       },
       redo() {
-        return hiddenPMRef.current?.redo() ?? false;
+        return folioEditor.redo();
       },
       canUndo() {
-        return hiddenPMRef.current?.canUndo() ?? false;
+        return folioEditor.canUndo();
       },
       canRedo() {
-        return hiddenPMRef.current?.canRedo() ?? false;
+        return folioEditor.canRedo();
       },
       setSelection(anchor: number, head?: number) {
-        hiddenPMRef.current?.setSelection(anchor, head);
+        folioEditor.setSelection(anchor, head);
       },
       getLayout() {
-        return layout;
+        return folioEditor.getLayout();
       },
       relayout() {
-        const state = hiddenPMRef.current?.getState();
-        if (state) {
-          runLayoutPipeline(state, { reason: "manual" });
-        }
+        folioEditor.relayout();
       },
       scrollToPosition: scrollToPositionImpl,
       scrollToPage: scrollToPageImpl,
@@ -6082,8 +6095,7 @@ export function PagedEditor(
     }),
     [
       ensureHiddenEditorView,
-      layout,
-      runLayoutPipeline,
+      folioEditor,
       scrollToPageImpl,
       scrollToPositionImpl,
     ],
