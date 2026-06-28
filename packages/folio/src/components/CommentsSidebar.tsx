@@ -21,10 +21,9 @@ import React, {
 import { CheckIcon, MoreVerticalIcon } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
 
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
-
 import type { Comment, Paragraph } from "../core/types/content";
 import { closestHtmlElement, queryHtmlElement } from "../core/utils/domGuards";
+import { containedHandler } from "../utils/contained-handler";
 
 /** Extract plain text from a Comment's paragraph content */
 function getCommentText(paragraphs?: Paragraph[]): string {

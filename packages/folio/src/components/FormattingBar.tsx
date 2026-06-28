@@ -27,10 +27,10 @@ import { useTranslations } from "use-intl";
 import { ColorPicker } from "@stll/ui/components/color-picker";
 import type { ColorPreset } from "@stll/ui/components/color-picker";
 import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/components/menu";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 
 import type { ParagraphAlignment } from "../core/types/document";
 import { cn } from "../lib/utils";
+import { containedHandler } from "../utils/contained-handler";
 import {
   ToolbarButton,
   ToolbarGroup,

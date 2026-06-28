@@ -32,8 +32,6 @@ import type { EditorState, Transaction, Plugin } from "prosemirror-state";
 import { CellSelection } from "prosemirror-tables";
 import type { EditorView } from "prosemirror-view";
 
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
-
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import type { AISuggestion } from "../core/ai-suggestions/types";
@@ -173,6 +171,7 @@ import {
   htmlQueryAll,
   queryHtmlElement,
 } from "../core/utils/domGuards";
+import { containedHandler } from "../utils/contained-handler";
 // Internal components
 import { AISuggestionRectsOverlay } from "./AISuggestionRectsOverlay";
 import type { AISuggestionRectGroup } from "./AISuggestionRectsOverlay";

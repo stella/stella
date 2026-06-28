@@ -5,6 +5,7 @@ export type {
   DocxEditorRef,
 } from "./components/DocxEditor.props";
 export type { EditorMode } from "./components/hooks/useEditorMode";
+export type { FolioButtonProps, FolioUIComponents } from "./ui/folio-ui";
 export {
   FormattingBar,
   type FormattingBarProps,

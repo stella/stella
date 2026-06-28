@@ -20,10 +20,10 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { Input } from "@stll/ui/components/input";
 
+import { useFolioUI } from "../../ui/folio-ui";
 import {
   getFindDialogOpenBehavior,
   shouldRefreshFindDialogSearch,
@@ -125,6 +125,7 @@ export function FindReplaceDialog({
 }: FindReplaceDialogProps): React.ReactElement | null {
   const id = React.useId();
   const t = useTranslations("folio");
+  const { Button } = useFolioUI();
   // State
   const [searchText, setSearchText] = useState("");
   const [matchCase, setMatchCase] = useState(false);
