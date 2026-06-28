@@ -1509,6 +1509,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
           },
           {
@@ -1998,10 +2001,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -3351,6 +3354,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
           },
           {
@@ -3840,10 +3846,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -6122,6 +6128,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
           },
           {
@@ -6611,10 +6620,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -7023,7 +7032,7 @@
             "location": "packages/folio/src/components/TextContextMenu.tsx#9"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
           }
         ]
       },
@@ -8504,6 +8513,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
           },
           {
@@ -8993,10 +9005,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -11232,7 +11244,7 @@
             "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#1"
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#10"
@@ -13647,6 +13659,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
           },
           {
@@ -14136,10 +14151,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -16702,6 +16717,9 @@
             "location": "packages/folio/src/core/content-controls/errors.ts#7"
           },
           {
+            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#13"
+          },
+          {
             "location": "packages/folio/src/core/docx/parser.ts#21"
           },
           {
@@ -16720,7 +16738,10 @@
             "location": "packages/folio/src/core/layout-engine/measure/font-metrics.worker.ts#18"
           },
           {
-            "location": "packages/folio/src/core/layout-engine/measure/measureContainer.ts#14"
+            "location": "packages/folio/src/core/layout-engine/measure/measureContainer.ts#19"
+          },
+          {
+            "location": "packages/folio/src/core/layout-engine/measure/measureProvider.ts#12"
           },
           {
             "location": "packages/folio/src/core/layout-engine/paginator.ts#8"
@@ -21072,6 +21093,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#14"
           },
           {
@@ -22245,6 +22269,9 @@
         ],
         "occurrences": [
           {
+            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#10"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/extensions/core/HistoryExtension.ts#5"
           },
           {
@@ -22255,9 +22282,6 @@
           },
           {
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#31"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#29"
           }
         ]
       },
@@ -22494,7 +22518,7 @@
             "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#6"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#28"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#29"
           }
         ]
       },
@@ -22561,6 +22585,18 @@
           },
           {
             "location": "packages/folio/src/core/ai-edits/apply.ts#2"
+          },
+          {
+            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#11"
+          },
+          {
+            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#12"
+          },
+          {
+            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#14"
+          },
+          {
+            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#15"
           },
           {
             "location": "packages/folio/src/core/layout-bridge/wrapEditorViewAsSurface.ts#12"
@@ -22737,16 +22773,13 @@
             "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#35"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#30"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#36"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#29"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#34"
           },
           {
             "location": "packages/folio/src/paged-editor/PagedEditor.tsx#30"
+          },
+          {
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#31"
           }
         ]
       },
@@ -22801,13 +22834,13 @@
         ],
         "occurrences": [
           {
+            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#13"
+          },
+          {
             "location": "packages/folio/src/core/prosemirror/extensions/nodes/TableExtension.ts#21"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#37"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#31"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#32"
           }
         ]
       },
@@ -22939,6 +22972,15 @@
             "location": "packages/folio/src/core/ai-suggestions/apply.ts#14"
           },
           {
+            "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#14"
+          },
+          {
+            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#16"
+          },
+          {
+            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#17"
+          },
+          {
             "location": "packages/folio/src/core/layout-bridge/wrapEditorViewAsSurface.ts#14"
           },
           {
@@ -23014,16 +23056,13 @@
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#35"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#38"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#35"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#39"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#48"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#59"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#32"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#33"
           },
           {
             "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#52"
@@ -23032,7 +23071,7 @@
             "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#35"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#59"
+            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#48"
           }
         ]
       },
@@ -23250,7 +23289,7 @@
             "location": "packages/folio/src/components/TextContextMenu.tsx#9"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#27"
           }
         ]
       },
@@ -24145,6 +24184,9 @@
             "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
           },
           {
@@ -24634,10 +24676,10 @@
             "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#24"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
           },
           {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
+            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
           },
           {
             "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
@@ -25754,7 +25796,7 @@
             "location": "apps/web/src/routes/_protected.settings/account.beta.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#2"
+            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#11"
@@ -26723,7 +26765,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#7"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#40"
+            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#18"
           }
         ]
       },
@@ -26792,10 +26834,10 @@
             "location": "packages/folio/src/components/DocxEditor.props.ts#5"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#41"
+            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#19"
           },
           {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#42"
+            "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#20"
           }
         ]
       },
