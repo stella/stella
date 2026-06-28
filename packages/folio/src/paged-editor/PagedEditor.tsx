@@ -37,6 +37,9 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import type { AISuggestion } from "../core/ai-suggestions/types";
+import { createFolioEditor } from "../core/controller/folioEditor";
+import type { FolioEditor } from "../core/controller/folioEditor";
+import { createFolioEditorEmitter } from "../core/controller/folioEditorEvents";
 import { runLayoutPipeline as runLayoutPipelineCompute } from "../core/controller/layoutPipeline";
 import {
   browserClock,
@@ -328,6 +331,8 @@ export type PagedEditorProps = {
 };
 
 export type PagedEditorRef = {
+  /** The headless editor controller (imperative API + events; Seam 6). */
+  getEditor: () => FolioEditor;
   /** Get the current document. */
   getDocument: () => Document | null;
   /** Get the ProseMirror EditorState. */
@@ -1771,6 +1776,9 @@ export function PagedEditor(
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
+  // FolioEditor event emitter (Seam 6), declared early so the layout/selection/
+  // doc emission points below can publish to it.
+  const folioEmitterRef = useRef(createFolioEditorEmitter());
   const hiddenPMRef = useRef<HiddenProseMirrorRef>(null);
   const hfPMsRef = useRef<HiddenHeaderFooterPMsRef>(null);
   const painterRef = useRef<LayoutPainter | null>(null);
@@ -2280,6 +2288,14 @@ export function PagedEditor(
       if (outcome.blockLookup) {
         painterRef.current?.setBlockLookup(outcome.blockLookup);
       }
+      if (outcome.layout) {
+        // Publish to the ref before emitting so layoutComplete handlers that
+        // call folioEditor.getLayout() observe the layout that just completed
+        // (setLayout is async; the ref mirror otherwise only refreshes on the
+        // next render).
+        layoutRef.current = outcome.layout;
+        folioEmitterRef.current.emit("layoutComplete", outcome.layout);
+      }
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- hand-curated dep set; ref-held values are intentionally omitted
     [
@@ -2315,6 +2331,18 @@ export function PagedEditor(
   const runLayoutPipelineRef = useRef(runLayoutPipeline);
   runLayoutPipelineRef.current = runLayoutPipeline;
 
+  const folioEditorRef = useRef<FolioEditor | null>(null);
+  if (!folioEditorRef.current) {
+    folioEditorRef.current = createFolioEditor({
+      getEditorApi: () => hiddenPMRef.current,
+      getLayout: () => layoutRef.current,
+      runLayout: (state, options) =>
+        runLayoutPipelineRef.current(state, options),
+      emitter: folioEmitterRef.current,
+    });
+  }
+  const folioEditor = folioEditorRef.current;
+
   // =========================================================================
   // Coalesced Layout (rAF throttle)
   // =========================================================================
@@ -2343,6 +2371,7 @@ export function PagedEditor(
     const newDoc = hiddenPMRef.current?.getDocument();
     if (newDoc) {
       onDocumentChangeRef.current?.(newDoc);
+      folioEmitterRef.current.emit("docChange", newDoc);
     }
   }, []);
 
@@ -2518,6 +2547,7 @@ export function PagedEditor(
       // Always notify selection change (for toolbar sync) even if layout not ready
       // Use ref to avoid infinite loops when callback is unstable
       onSelectionChangeRef.current?.(from, to);
+      folioEmitterRef.current.emit("selectionChange", { from, to });
       // `onSelectionTextChange` carries the resolved text
       // alongside the range so consumers (anonymisation
       // term prefill, etc.) don't need to hold a reference
@@ -3333,6 +3363,7 @@ export function PagedEditor(
         // would freeze on the previous body selection while its actions
         // dispatch on the HF view.
         onSelectionChangeRef.current?.(from, to);
+        folioEmitterRef.current.emit("selectionChange", { from, to });
       }
     },
     [scheduleLayout, ensureHiddenEditorView],
@@ -5959,14 +5990,17 @@ export function PagedEditor(
   useImperativeHandle(
     ref,
     () => ({
+      getEditor() {
+        return folioEditor;
+      },
       getDocument() {
-        return hiddenPMRef.current?.getDocument() ?? null;
+        return folioEditor.getDocument();
       },
       getState() {
-        return hiddenPMRef.current?.getState() ?? null;
+        return folioEditor.getState();
       },
       getView() {
-        return hiddenPMRef.current?.getView() ?? null;
+        return folioEditor.getView();
       },
       getHfView(rId: string) {
         return hfPMsRef.current?.getView(rId) ?? null;
@@ -5981,42 +6015,39 @@ export function PagedEditor(
         ensureHiddenEditorView(options);
       },
       focus() {
-        hiddenPMRef.current?.focus();
+        folioEditor.focus();
         setIsFocused(true);
       },
       blur() {
-        hiddenPMRef.current?.blur();
+        folioEditor.blur();
         setIsFocused(false);
       },
       isFocused() {
-        return hiddenPMRef.current?.isFocused() ?? false;
+        return folioEditor.isFocused();
       },
       dispatch(tr: Transaction) {
-        hiddenPMRef.current?.dispatch(tr);
+        folioEditor.dispatch(tr);
       },
       undo() {
-        return hiddenPMRef.current?.undo() ?? false;
+        return folioEditor.undo();
       },
       redo() {
-        return hiddenPMRef.current?.redo() ?? false;
+        return folioEditor.redo();
       },
       canUndo() {
-        return hiddenPMRef.current?.canUndo() ?? false;
+        return folioEditor.canUndo();
       },
       canRedo() {
-        return hiddenPMRef.current?.canRedo() ?? false;
+        return folioEditor.canRedo();
       },
       setSelection(anchor: number, head?: number) {
-        hiddenPMRef.current?.setSelection(anchor, head);
+        folioEditor.setSelection(anchor, head);
       },
       getLayout() {
-        return layout;
+        return folioEditor.getLayout();
       },
       relayout() {
-        const state = hiddenPMRef.current?.getState();
-        if (state) {
-          runLayoutPipeline(state, { reason: "manual" });
-        }
+        folioEditor.relayout();
       },
       scrollToPosition: scrollToPositionImpl,
       scrollToPage: scrollToPageImpl,
@@ -6082,8 +6113,7 @@ export function PagedEditor(
     }),
     [
       ensureHiddenEditorView,
-      layout,
-      runLayoutPipeline,
+      folioEditor,
       scrollToPageImpl,
       scrollToPositionImpl,
     ],

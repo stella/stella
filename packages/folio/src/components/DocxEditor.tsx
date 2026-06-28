@@ -2718,6 +2718,7 @@ export function DocxEditor({
         );
       },
       getEditorRef: () => pagedEditorRef.current,
+      getEditor: () => pagedEditorRef.current?.getEditor() ?? null,
       save: handleSave,
       setZoom: setZoomWithViewportAnchor,
       getZoom: () => zoomRef.current,
