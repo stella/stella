@@ -37,22 +37,14 @@ import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { HiddenHeaderFooterPMs } from "../components/HiddenHeaderFooterPMs";
 import type { HiddenHeaderFooterPMsRef } from "../components/HiddenHeaderFooterPMs";
 import type { AISuggestion } from "../core/ai-suggestions/types";
+import { runLayoutPipeline as runLayoutPipelineCompute } from "../core/controller/layoutPipeline";
 import {
   browserClock,
   createLayoutScheduler,
   type LayoutScheduler,
 } from "../core/controller/layoutScheduler";
+import { createLayoutSession } from "../core/controller/layoutSession";
 import { getFootnoteText } from "../core/docx/footnoteParser";
-import { buildBookmarkPageMap } from "../core/fields/bookmarkPages";
-import { buildBookmarkText } from "../core/fields/bookmarkText";
-import {
-  buildHeaderFooterFieldValues,
-  fieldValuesEqual,
-  resolveFieldValues,
-} from "../core/fields/resolveFieldValues";
-import type { HeaderFooterFieldInputs } from "../core/fields/resolveFieldValues";
-import { buildSectionPageCounts } from "../core/fields/sectionPageCounts";
-import { buildSeqValues } from "../core/fields/seqValues";
 import { clickToPosition } from "../core/layout-bridge/clickToPosition";
 import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
 import {
@@ -66,12 +58,6 @@ import {
   findHfPmSpans,
   findHfSlotForTarget,
 } from "../core/layout-bridge/findHfPmSpans";
-import {
-  FOOTNOTE_ENTRY_MARGIN_BOTTOM,
-  collectFootnoteRefs,
-  buildFootnoteContentMap,
-} from "../core/layout-bridge/footnoteLayout";
-import type { MeasureBlocksFn } from "../core/layout-bridge/footnoteLayout";
 import {
   convertHeaderFooterPmDocToContent,
   convertHeaderFooterToContent,
@@ -94,30 +80,11 @@ import type {
   CaretPosition,
 } from "../core/layout-bridge/selectionRects";
 import type * as SelectionGeometry from "../core/layout-bridge/selectionRects";
-import {
-  applyTemplatePreviewToBlocks,
-  templatePreviewDirtyRange,
-} from "../core/layout-bridge/templatePreviewFlow";
-// Layout bridge
-import { toFlowBlocks } from "../core/layout-bridge/toFlowBlocks";
-import type { ToFlowBlocksOptions } from "../core/layout-bridge/toFlowBlocks";
+import { templatePreviewDirtyRange } from "../core/layout-bridge/templatePreviewFlow";
 // Layout engine
-import { layoutDocument } from "../core/layout-engine";
-import type { ColumnLayout, SectionLayoutConfig } from "../core/layout-engine";
-import {
-  recordLayoutComplete,
-  recordLayoutError,
-  recordLayoutPhase,
-} from "../core/layout-engine/layoutInstrumentation";
-import type {
-  LayoutPhase,
-  LayoutRunReason,
-} from "../core/layout-engine/layoutInstrumentation";
-import {
-  measureBlocks,
-  measureSingleBlockWithoutFloatingZones,
-} from "../core/layout-engine/measure/measureBlocks";
-import { installCanvasMeasureProvider } from "../core/layout-engine/measure/measureContainer";
+import type { ColumnLayout } from "../core/layout-engine";
+import { recordLayoutPhase } from "../core/layout-engine/layoutInstrumentation";
+import type { LayoutRunReason } from "../core/layout-engine/layoutInstrumentation";
 import type {
   Layout,
   FlowBlock,
@@ -125,29 +92,19 @@ import type {
   TableBlock,
   TableMeasure,
   PageMargins,
-  SectionBreakBlock,
   FootnoteContent,
   PageHeaderFooterRefs,
 } from "../core/layout-engine/types";
 // Layout painter
 import { LayoutPainter } from "../core/layout-painter";
-import type { BlockLookup } from "../core/layout-painter";
 import {
   findPageShellForPmPos,
   PAINTER_PAINTED_EVENT,
-  renderPages,
 } from "../core/layout-painter/renderPage";
 import type {
   HeaderFooterContent,
-  RenderPageOptions,
   FootnoteRenderItem,
 } from "../core/layout-painter/renderPage";
-import {
-  computeFirstPageHeaderFooterMarginExtender,
-  computeHeaderFooterMarginExtender,
-  extendSectionBreakMargins,
-} from "../core/paged-layout/headerFooterMargins";
-import { tryBuildIncrementalMeasures } from "../core/paged-layout/incrementalMeasure";
 import type { DirtyRange } from "../core/paged-layout/incrementalMeasure";
 // Selection sync
 import { LayoutSelectionGate } from "../core/paged-layout/LayoutSelectionGate";
@@ -162,7 +119,6 @@ import {
   PAGES_CONTAINER_CLASS,
   scrollPagesToPmPosition,
 } from "../core/paged-layout/scrollToPmPosition";
-import { computePerBlockMeasureInputs } from "../core/paged-layout/sectionBlockWidths";
 import {
   DEFAULT_PAGE_HEIGHT_PX,
   getMargins,
@@ -207,7 +163,6 @@ import type {
   StyleDefinitions,
   SectionProperties,
   HeaderFooter,
-  Watermark,
   TextFormatting,
 } from "../core/types/document";
 import {
@@ -215,7 +170,6 @@ import {
   htmlQueryAll,
   queryHtmlElement,
 } from "../core/utils/domGuards";
-import { getDocumentWatermark } from "../core/watermark";
 // Internal components
 import { AISuggestionRectsOverlay } from "./AISuggestionRectsOverlay";
 import type { AISuggestionRectGroup } from "./AISuggestionRectsOverlay";
@@ -1664,27 +1618,6 @@ function getTableRowOffset(
   return offsetY;
 }
 
-function pageMarginsEqual(left: PageMargins, right: PageMargins): boolean {
-  return (
-    left.top === right.top &&
-    left.right === right.right &&
-    left.bottom === right.bottom &&
-    left.left === right.left &&
-    left.header === right.header &&
-    left.footer === right.footer
-  );
-}
-
-function optionalPageMarginsEqual(
-  left: PageMargins | undefined,
-  right: PageMargins | undefined,
-): boolean {
-  if (left === undefined || right === undefined) {
-    return left === right;
-  }
-  return pageMarginsEqual(left, right);
-}
-
 /**
  * Extract column layout from section properties.
  * Returns undefined for single-column (default) to avoid unnecessary paginator overhead.
@@ -1883,6 +1816,11 @@ export function PagedEditor(
 
   // State
   const [layout, setLayout] = useState<Layout | null>(null);
+  // Mirror `layout` in a ref so the layout pipeline reads the latest page-count
+  // estimate without `layout` in runLayoutPipeline's deps (which would recreate
+  // the callback every layout run and re-fire the effects keyed on its identity).
+  const layoutRef = useRef(layout);
+  layoutRef.current = layout;
   const [blocks, setBlocks] = useState<FlowBlock[]>([]);
   const [measures, setMeasures] = useState<Measure[]>([]);
   // Reactive "has the hidden editor been requested" signal. The manager owns
@@ -1893,11 +1831,7 @@ export function PagedEditor(
   const shouldFocusHiddenEditorOnReadyRef = useRef(collaboration !== undefined);
   const [precomputedInitialState, setPrecomputedInitialState] =
     useState<EditorState | null>(null);
-  const layoutArtifactsRef = useRef<{
-    blocks: FlowBlock[];
-    blockWidths: number[];
-    measures: Measure[];
-  } | null>(null);
+  const layoutSessionRef = useRef(createLayoutSession());
   const precomputedInitialStateRef = useRef<EditorState | null>(null);
   const precomputedInitialDocumentRef = useRef<Document | null>(null);
   const preHiddenInitialLayoutDoneRef = useRef(false);
@@ -1906,9 +1840,6 @@ export function PagedEditor(
   const queuedInputBeforeHiddenEditorRef = useRef<QueuedHiddenEditorInput[]>(
     [],
   );
-  const lastLayoutEditorStateRef = useRef<EditorState | null>(null);
-  const lastLaidOutPmDocRef = useRef<EditorState["doc"] | null>(null);
-  const lastLayoutUsedLoadedFontsRef = useRef(false);
   const pendingInitialFontReadyLayoutRef = useRef(false);
   const suppressFontReadyUntilRef = useRef(0);
   const [isFocused, setIsFocused] = useState(false);
@@ -1952,14 +1883,10 @@ export function PagedEditor(
   // Template fill preview — the hidden editor's plugin keeps marker↔value
   // entries in sync; the layout pipeline substitutes them into the flow
   // blocks so the painted pages reflow as if the values were the text.
-  // `templatePreviewRef` mirrors the latest plugin state (change detection),
-  // `lastLaidOutTemplatePreviewRef` records what the last pipeline run
-  // actually substituted.
+  // `templatePreviewRef` mirrors the latest plugin state (change detection);
+  // the layout session's `lastTemplatePreview` records what the last pipeline
+  // run actually substituted.
   const templatePreviewRef = useRef<{
-    entries: readonly TemplatePreviewEntry[];
-    mode: TemplatePreviewValues["mode"];
-  }>({ entries: EMPTY_TEMPLATE_PREVIEW_ENTRIES, mode: "plain" });
-  const lastLaidOutTemplatePreviewRef = useRef<{
     entries: readonly TemplatePreviewEntry[];
     mode: TemplatePreviewValues["mode"];
   }>({ entries: EMPTY_TEMPLATE_PREVIEW_ENTRIES, mode: "plain" });
@@ -2304,793 +2231,55 @@ export function PagedEditor(
         reason?: LayoutRunReason;
       } = {},
     ) => {
-      // Composition root for text measurement: install the canvas backend
-      // before any layout/measure runs. Idempotent; the engine measures
-      // through the pure provider seam, which throws until a backend is set.
-      installCanvasMeasureProvider();
-      const reason = options.reason ?? "manual";
-      const recordPhaseDuration = (
-        phase: LayoutPhase,
-        startedAt: number,
-      ): void => {
-        recordLayoutPhase(reason, phase, performance.now() - startedAt);
-      };
-
-      // Capture current state sequence for this layout run
-      const currentEpoch = syncCoordinator.getStateSeq();
-
-      // Signal layout is starting
-      syncCoordinator.onLayoutStart();
-
-      try {
-        // Step 1: Convert PM doc to flow blocks
-        let phaseStartedAt = performance.now();
-        const pageContentHeight = pageSize.h - margins.top - margins.bottom;
-        const flowOpts: ToFlowBlocksOptions = {
-          pageContentHeight,
-        };
-        if (_theme !== undefined) {
-          flowOpts.theme = _theme;
-        }
-        // Stamp the document's `w:defaultTabStop` onto every paragraph so
-        // list-marker tab-stop math (renderParagraph + measureParagraph)
-        // uses the right grid. Absent settings.xml falls back to the
-        // OOXML default inside `getListMarkerInlineWidth`.
-        if (defaultTabStop !== undefined) {
-          flowOpts.defaultTabStopTwips = defaultTabStop;
-        }
-        let newBlocks = toFlowBlocks(state.doc, flowOpts);
-        // Template fill preview: substitute each matched {{marker}} range
-        // with its typed value at the flow-block level so the pages lay out
-        // (wrap, paginate) as if the value were the document text. View-only:
-        // the PM doc — and with it the save path — is never modified.
-        const previewState = templatePreviewValuesKey.getState(state);
-        const previewEntries =
-          previewState?.entries ?? EMPTY_TEMPLATE_PREVIEW_ENTRIES;
-        const previewMode = previewState?.preview?.mode ?? "plain";
-        if (previewEntries.length > 0) {
-          newBlocks = applyTemplatePreviewToBlocks(newBlocks, {
-            entries: previewEntries,
-            mode: previewMode,
-          });
-        }
-        lastLaidOutTemplatePreviewRef.current = {
-          entries: previewEntries,
-          mode: previewMode,
-        };
-        setBlocks(newBlocks);
-        recordPhaseDuration("flow-blocks", phaseStartedAt);
-
-        // Step 2.5: Collect footnote references from blocks
-        phaseStartedAt = performance.now();
-        const footnoteRefs = collectFootnoteRefs(newBlocks);
-        const hasFootnotes =
-          footnoteRefs.length > 0 && document?.package.footnotes;
-
-        // Step 2.75: Prepare header/footer content for rendering (needed before layout
-        // to compute effective margins when header content exceeds available space)
-        const hfMetricsHeader: HeaderFooterMetrics = {
-          section: "header",
+      const outcome = runLayoutPipelineCompute(
+        {
+          contentWidth,
+          columns,
           pageSize,
           margins,
-        };
-        const hfMetricsFooter: HeaderFooterMetrics = {
-          section: "footer",
-          pageSize,
-          margins,
-        };
-        // Header/footer blocks are measured once but painted on every page with
-        // a different page number. Measure with the prior render's page count
-        // first, then rebuild the prepared HF content with the final page count
-        // after body layout stabilizes so digit-boundary changes are reflected
-        // before paint.
-        const hfPageCountEstimate = layout?.pages.length ?? 1;
-        const hfClock = new Date();
-        const buildHfOptions = (
-          pageCount: number,
-          fieldInputs?: HeaderFooterFieldInputs,
-        ) => {
-          const hfMeasureBlocks: MeasureBlocksFn = (hfBlocks, hfWidth) =>
-            measureBlocks(
-              hfBlocks,
-              hfWidth,
-              undefined,
-              undefined,
-              buildHeaderFooterFieldValues(
-                hfBlocks,
-                pageCount,
-                hfClock,
-                fieldInputs,
-              ),
-            );
-          return {
-            ...(styles ? { styles } : {}),
-            ...(_theme !== undefined ? { theme: _theme } : {}),
-            measureBlocks: hfMeasureBlocks,
-            ...(defaultTabStop !== undefined
-              ? { defaultTabStopTwips: defaultTabStop }
-              : {}),
-          };
-        };
-        const hfOptions = buildHfOptions(hfPageCountEstimate);
-        let headerContentForRender = renderHfFromContentOrPm(
+          pageGap,
+          syncCoordinator,
           headerContent,
-          headerContentRId,
-          hfPMsRef.current,
-          contentWidth,
-          hfMetricsHeader,
-          hfOptions,
-        );
-        let footerContentForRender = renderHfFromContentOrPm(
           footerContent,
+          firstPageHeaderContent,
+          firstPageFooterContent,
+          headerContentRId,
           footerContentRId,
-          hfPMsRef.current,
-          contentWidth,
-          hfMetricsFooter,
-          hfOptions,
-        );
-        const hasTitlePg = sectionProperties?.titlePg === true;
-        let firstPageHeaderForRender = hasTitlePg
-          ? renderHfFromContentOrPm(
-              firstPageHeaderContent,
-              firstPageHeaderContentRId,
-              hfPMsRef.current,
-              contentWidth,
-              hfMetricsHeader,
-              hfOptions,
-            )
-          : undefined;
-        let firstPageFooterForRender = hasTitlePg
-          ? renderHfFromContentOrPm(
-              firstPageFooterContent,
-              firstPageFooterContentRId,
-              hfPMsRef.current,
-              contentWidth,
-              hfMetricsFooter,
-              hfOptions,
-            )
-          : undefined;
-        let headerContentByRId = renderHeaderFooterContentByRId(
-          document?.package.headers,
-          hfPMsRef.current,
-          contentWidth,
-          hfMetricsHeader,
-          hfOptions,
-        );
-        let footerContentByRId = renderHeaderFooterContentByRId(
-          document?.package.footers,
-          hfPMsRef.current,
-          contentWidth,
-          hfMetricsFooter,
-          hfOptions,
-        );
-
-        // Rendered H/F content is shared across every extender; only the
-        // page size (body vs. a section's own) and the mode (default vs.
-        // first-page) vary.
-        const hfExtenderContent = {
-          headerContent: headerContentForRender,
-          footerContent: footerContentForRender,
-          firstPageHeaderContent: firstPageHeaderForRender,
-          firstPageFooterContent: firstPageFooterForRender,
-        };
-        const hfWarn = (msg: string): void => {
-          // eslint-disable-next-line no-console -- standalone editor package has no logger in scope
-          console.warn(`[PagedEditor] ${msg}`);
-        };
-        // Default extender — applied to pages 2+ of every section. It
-        // ignores firstPage H/F so a `<w:titlePg/>` section's
-        // overflowing first-page header doesn't push body content down
-        // on every subsequent page.
-        const extendForHfOverflow = computeHeaderFooterMarginExtender({
-          ...hfExtenderContent,
-          pageSize,
-          warn: hfWarn,
-        });
-        // First-page extender — used only for page 1 of a titlePg
-        // section so the title page's larger header reservation is
-        // honored without leaking onto pages 2+.
-        const extendForFirstPage = computeFirstPageHeaderFooterMarginExtender({
-          ...hfExtenderContent,
-          pageSize,
-          warn: hfWarn,
-        });
-        let effectiveMargins = extendForHfOverflow(margins);
-        let effectiveFirstPageMargins = hasTitlePg
-          ? extendForFirstPage(margins)
-          : undefined;
-        const sectionBreaks = newBlocks.filter(
-          (block): block is SectionBreakBlock => block.kind === "sectionBreak",
-        );
-        const originalSectionBreakMargins = new Map<
-          SectionBreakBlock["id"],
-          PageMargins | undefined
-        >();
-        for (const sectionBreak of sectionBreaks) {
-          originalSectionBreakMargins.set(
-            sectionBreak.id,
-            sectionBreak.margins ? { ...sectionBreak.margins } : undefined,
-          );
-        }
-        const restoreSectionBreakMargins = (): void => {
-          for (const sectionBreak of sectionBreaks) {
-            const originalMargins = originalSectionBreakMargins.get(
-              sectionBreak.id,
-            );
-            if (originalMargins === undefined) {
-              delete sectionBreak.margins;
-              continue;
-            }
-            sectionBreak.margins = { ...originalMargins };
-          }
-        };
-        const applySectionBreakMargins = (
-          content: typeof hfExtenderContent,
-          bodyMargins: PageMargins,
-        ): void => {
-          restoreSectionBreakMargins();
-          // Section-break blocks carry their own `pageSize`/`margins` from
-          // `<w:sectPr>` and the layout engine prefers those over the
-          // body-level fallback. Extend each against its own resolved page
-          // so an overflowing footer never re-overlaps body text on the next
-          // section. (Eigenpal #400.)
-          extendSectionBreakMargins(sectionBreaks, {
-            content,
-            bodyPageSize: pageSize,
-            bodyMargins,
-            warn: hfWarn,
-          });
-        };
-        applySectionBreakMargins(hfExtenderContent, effectiveMargins);
-        recordPhaseDuration("header-footer", phaseStartedAt);
-
-        // Compute per-block widths + band geometry from the EFFECTIVE margins
-        // layout uses (header/footer overflow extension + section-break margin
-        // extension applied above), so a page/margin-pinned topAndBottom band
-        // reserves its band at the same Y the box is painted. Measuring with the
-        // raw margins would mis-place the reserved band when a tall header/footer
-        // extends the margins. eigenpal #694.
-        phaseStartedAt = performance.now();
-        let bodyLayoutConfig: SectionLayoutConfig = {
-          pageSize,
-          margins: effectiveMargins,
-        };
-        if (columns !== undefined) {
-          bodyLayoutConfig.columns = columns;
-        }
-        let blockMeasureInputs = computePerBlockMeasureInputs({
-          blocks: newBlocks,
-          bodyConfig: bodyLayoutConfig,
-          finalConfig: bodyLayoutConfig,
-        });
-        let blockWidths = blockMeasureInputs.widths;
-        const incrementalResult =
-          options.dirtyRange && !options.forceFull && layoutArtifactsRef.current
-            ? tryBuildIncrementalMeasures({
-                previousBlocks: layoutArtifactsRef.current.blocks,
-                previousMeasures: layoutArtifactsRef.current.measures,
-                previousBlockWidths: layoutArtifactsRef.current.blockWidths,
-                nextBlocks: newBlocks,
-                nextBlockWidths: blockWidths,
-                dirtyRange: options.dirtyRange,
-                measureBlock: measureSingleBlockWithoutFloatingZones,
-              })
-            : null;
-        let newMeasures =
-          incrementalResult?.measures ??
-          measureBlocks(newBlocks, blockWidths, blockMeasureInputs.marginTops, {
-            pageHeight: blockMeasureInputs.pageHeights,
-            marginBottom: blockMeasureInputs.marginBottoms,
-          });
-        layoutArtifactsRef.current = {
-          blocks: newBlocks,
-          blockWidths,
-          measures: newMeasures,
-        };
-        setMeasures(newMeasures);
-        recordPhaseDuration("measure-blocks", phaseStartedAt);
-
-        // Step 3: Layout blocks onto pages (two-pass if footnotes exist)
-        phaseStartedAt = performance.now();
-        let newLayout: Layout;
-        let pageFootnoteMap = new Map<number, number[]>();
-        let footnoteContentMap = new Map<number, FootnoteContent>();
-
-        // Common layout options for all passes
-        const bodyBreakType = sectionProperties?.sectionStart as
-          | "continuous"
-          | "nextPage"
-          | "evenPage"
-          | "oddPage"
-          | undefined;
-        const buildLayoutOpts = (
-          nextMargins: PageMargins,
-          nextFirstPageMargins: PageMargins | undefined,
-        ): Parameters<typeof layoutDocument>[2] => {
-          const nextLayoutOpts: Parameters<typeof layoutDocument>[2] = {
-            pageSize,
-            margins: nextMargins,
-            pageGap,
-          };
-          if (nextFirstPageMargins !== undefined) {
-            nextLayoutOpts.firstPageMargins = nextFirstPageMargins;
-          }
-          if (columns !== undefined) {
-            nextLayoutOpts.columns = columns;
-          }
-          if (bodyBreakType !== undefined) {
-            nextLayoutOpts.bodyBreakType = bodyBreakType;
-          }
-          if (sectionHeaderFooterRefs !== undefined) {
-            nextLayoutOpts.sectionHeaderFooterRefs = sectionHeaderFooterRefs;
-          }
-          return nextLayoutOpts;
-        };
-        const layoutOpts = buildLayoutOpts(
-          effectiveMargins,
-          effectiveFirstPageMargins,
-        );
-        // The exact options the layout was produced with, reused if the field-
-        // width stabilization pass re-lays-out below.
-        let layoutOptsUsed: Parameters<typeof layoutDocument>[2] = layoutOpts;
-
-        if (hasFootnotes) {
-          // Build footnote content and measure heights up front. The
-          // per-fn height table feeds into the layout engine so each
-          // body line carrying an fn ref reserves space for that fn
-          // on its host page in a single pass — no convergence loop.
-          footnoteContentMap = buildFootnoteContentMap(
-            document!.package.footnotes!,
-            footnoteRefs,
-            contentWidth,
-            (() => {
-              const footnoteOptions: Parameters<
-                typeof buildFootnoteContentMap
-              >[3] = { measureBlocks };
-              if (styles) {
-                footnoteOptions.styles = styles;
-              }
-              if (_theme !== undefined) {
-                footnoteOptions.theme = _theme;
-              }
-              if (defaultTabStop !== undefined) {
-                footnoteOptions.defaultTabStopTwips = defaultTabStop;
-              }
-              return footnoteOptions;
-            })(),
-          );
-
-          const footnoteHeightById = new Map<number, number>();
-          // Any per-fn wrapper margin applied by the painter is reserved
-          // alongside content height. The value is zero for Word-like footnote
-          // spacing; source paragraph spacing inside each note carries the
-          // visible gaps.
-          for (const [id, content] of footnoteContentMap) {
-            footnoteHeightById.set(
-              id,
-              content.height + FOOTNOTE_ENTRY_MARGIN_BOTTOM,
-            );
-          }
-          // Note: the layout engine adds the divider's height once per
-          // fn-bearing page (in paginator.addFootnoteHeight); we pass per-fn
-          // content plus any wrapper margin here.
-
-          layoutOptsUsed = { ...layoutOpts, footnoteHeightById };
-          newLayout = layoutDocument(newBlocks, newMeasures, layoutOptsUsed);
-
-          // The layout engine assigned `page.footnoteIds` line-by-
-          // line via `paginator.addFootnoteHeight(_, ids)`, so a fn
-          // ref in a continuation fragment of a split paragraph
-          // lands on the page where the ref-bearing line actually
-          // is. Build pageFootnoteMap from those page records (not
-          // from `mapFootnotesToPages`'s pmRange scan, which can't
-          // disambiguate split-paragraph halves; Codex PR #258).
-          pageFootnoteMap = new Map<number, number[]>();
-          for (const page of newLayout.pages) {
-            if (page.footnoteIds && page.footnoteIds.length > 0) {
-              pageFootnoteMap.set(page.number, page.footnoteIds);
-            }
-          }
-        } else {
-          // No footnotes — single pass
-          newLayout = layoutDocument(newBlocks, newMeasures, layoutOpts);
-        }
-
-        const rebuildFootnotePageMap = (): void => {
-          pageFootnoteMap = new Map<number, number[]>();
-          for (const page of newLayout.pages) {
-            if (page.footnoteIds && page.footnoteIds.length > 0) {
-              pageFootnoteMap.set(page.number, page.footnoteIds);
-            }
-          }
-        };
-
-        const withFootnoteHeights = (
-          nextLayoutOpts: Parameters<typeof layoutDocument>[2],
-        ): Parameters<typeof layoutDocument>[2] => {
-          if (!hasFootnotes) {
-            return nextLayoutOpts;
-          }
-          const footnoteHeightById = new Map<number, number>();
-          for (const [id, content] of footnoteContentMap) {
-            footnoteHeightById.set(
-              id,
-              content.height + FOOTNOTE_ENTRY_MARGIN_BOTTOM,
-            );
-          }
-          return { ...nextLayoutOpts, footnoteHeightById };
-        };
-
-        const relayoutWithCurrentMeasures = (
-          nextLayoutOpts: Parameters<typeof layoutDocument>[2],
-        ): void => {
-          layoutOptsUsed = withFootnoteHeights(nextLayoutOpts);
-          newLayout = layoutDocument(newBlocks, newMeasures, layoutOptsUsed);
-          if (hasFootnotes) {
-            rebuildFootnotePageMap();
-          }
-        };
-
-        const stabilizeFieldWidths = (): void => {
-          if (incrementalResult) {
-            return;
-          }
-          const MAX_FIELD_STABILIZATION_PASSES = 3;
-          const fieldClock = new Date();
-          let previousFieldValues: Map<number, string> | null = null;
-          for (let pass = 0; pass < MAX_FIELD_STABILIZATION_PASSES; pass++) {
-            const seqValues = buildSeqValues(newBlocks);
-            const bookmarkTextInputs =
-              previousFieldValues === null
-                ? { seqValues }
-                : { fieldValues: previousFieldValues, seqValues };
-            const { values, changed } = resolveFieldValues(
-              newBlocks,
-              newLayout.pages,
-              {
-                totalPages: newLayout.pages.length,
-                bookmarkPages: buildBookmarkPageMap(newLayout.pages, newBlocks),
-                bookmarkText: buildBookmarkText(newBlocks, bookmarkTextInputs),
-                seqValues,
-                sectionPageCounts: buildSectionPageCounts(newLayout.pages),
-                now: fieldClock,
-              },
-            );
-            const settled =
-              previousFieldValues === null
-                ? !changed
-                : fieldValuesEqual(previousFieldValues, values);
-            if (settled) {
-              stabilizedFieldValues = values;
-              break;
-            }
-            previousFieldValues = values;
-            stabilizedFieldValues = values;
-            newMeasures = measureBlocks(
-              newBlocks,
-              blockWidths,
-              blockMeasureInputs.marginTops,
-              {
-                pageHeight: blockMeasureInputs.pageHeights,
-                marginBottom: blockMeasureInputs.marginBottoms,
-              },
-              values,
-            );
-            relayoutWithCurrentMeasures(layoutOptsUsed);
-            layoutArtifactsRef.current = {
-              blocks: newBlocks,
-              blockWidths,
-              measures: newMeasures,
-            };
-            setMeasures(newMeasures);
-          }
-        };
-
-        // Field-width stabilization: fields were measured at their cached
-        // fallback text. Resolve them against this layout and, if a value's
-        // width differs, re-measure and re-lay-out so wrapping matches what the
-        // painter draws. PAGE/NUMPAGES depend on the layout they help produce,
-        // so a re-layout can shift pages and change values again — iterate to a
-        // fixed point with a small cap. Gated on a real change, so field-free
-        // documents and most edits do zero passes; skipped on the incremental
-        // (typing) path to keep keystrokes cheap.
-        let stabilizedFieldValues: Map<number, string> | undefined;
-        stabilizeFieldWidths();
-
-        const rebuildHeaderFooterForLayout = (): typeof hfExtenderContent => {
-          const seqValues = buildSeqValues(newBlocks);
-          const bookmarkTextInputs =
-            stabilizedFieldValues === undefined
-              ? { seqValues }
-              : { fieldValues: stabilizedFieldValues, seqValues };
-          const finalHfFieldInputs: HeaderFooterFieldInputs = {
-            bookmarkPages: buildBookmarkPageMap(newLayout.pages, newBlocks),
-            bookmarkText: buildBookmarkText(newBlocks, bookmarkTextInputs),
-            seqValues,
-            sectionPageCounts: buildSectionPageCounts(newLayout.pages),
-          };
-          const finalHfOptions = buildHfOptions(
-            newLayout.pages.length,
-            finalHfFieldInputs,
-          );
-          headerContentForRender = renderHfFromContentOrPm(
-            headerContent,
-            headerContentRId,
-            hfPMsRef.current,
-            contentWidth,
-            hfMetricsHeader,
-            finalHfOptions,
-          );
-          footerContentForRender = renderHfFromContentOrPm(
-            footerContent,
-            footerContentRId,
-            hfPMsRef.current,
-            contentWidth,
-            hfMetricsFooter,
-            finalHfOptions,
-          );
-          firstPageHeaderForRender = hasTitlePg
-            ? renderHfFromContentOrPm(
-                firstPageHeaderContent,
-                firstPageHeaderContentRId,
-                hfPMsRef.current,
-                contentWidth,
-                hfMetricsHeader,
-                finalHfOptions,
-              )
-            : undefined;
-          firstPageFooterForRender = hasTitlePg
-            ? renderHfFromContentOrPm(
-                firstPageFooterContent,
-                firstPageFooterContentRId,
-                hfPMsRef.current,
-                contentWidth,
-                hfMetricsFooter,
-                finalHfOptions,
-              )
-            : undefined;
-          headerContentByRId = renderHeaderFooterContentByRId(
-            document?.package.headers,
-            hfPMsRef.current,
-            contentWidth,
-            hfMetricsHeader,
-            finalHfOptions,
-          );
-          footerContentByRId = renderHeaderFooterContentByRId(
-            document?.package.footers,
-            hfPMsRef.current,
-            contentWidth,
-            hfMetricsFooter,
-            finalHfOptions,
-          );
-          return {
-            headerContent: headerContentForRender,
-            footerContent: footerContentForRender,
-            firstPageHeaderContent: firstPageHeaderForRender,
-            firstPageFooterContent: firstPageFooterForRender,
-          };
-        };
-
-        const MAX_HEADER_FOOTER_STABILIZATION_PASSES = 3;
-        for (
-          let pass = 0;
-          pass < MAX_HEADER_FOOTER_STABILIZATION_PASSES;
-          pass++
-        ) {
-          const finalHfExtenderContent = rebuildHeaderFooterForLayout();
-          const finalEffectiveMargins = computeHeaderFooterMarginExtender({
-            ...finalHfExtenderContent,
-            pageSize,
-            warn: hfWarn,
-          })(margins);
-          const finalEffectiveFirstPageMargins = hasTitlePg
-            ? computeFirstPageHeaderFooterMarginExtender({
-                ...finalHfExtenderContent,
-                pageSize,
-                warn: hfWarn,
-              })(margins)
-            : undefined;
-
-          if (
-            !pageMarginsEqual(effectiveMargins, finalEffectiveMargins) ||
-            !optionalPageMarginsEqual(
-              effectiveFirstPageMargins,
-              finalEffectiveFirstPageMargins,
-            )
-          ) {
-            effectiveMargins = finalEffectiveMargins;
-            effectiveFirstPageMargins = finalEffectiveFirstPageMargins;
-            applySectionBreakMargins(finalHfExtenderContent, effectiveMargins);
-            bodyLayoutConfig = { pageSize, margins: effectiveMargins };
-            if (columns !== undefined) {
-              bodyLayoutConfig.columns = columns;
-            }
-            blockMeasureInputs = computePerBlockMeasureInputs({
-              blocks: newBlocks,
-              bodyConfig: bodyLayoutConfig,
-              finalConfig: bodyLayoutConfig,
-            });
-            blockWidths = blockMeasureInputs.widths;
-            newMeasures = measureBlocks(
-              newBlocks,
-              blockWidths,
-              blockMeasureInputs.marginTops,
-              {
-                pageHeight: blockMeasureInputs.pageHeights,
-                marginBottom: blockMeasureInputs.marginBottoms,
-              },
-            );
-            layoutArtifactsRef.current = {
-              blocks: newBlocks,
-              blockWidths,
-              measures: newMeasures,
-            };
-            setMeasures(newMeasures);
-            relayoutWithCurrentMeasures(
-              buildLayoutOpts(effectiveMargins, effectiveFirstPageMargins),
-            );
-            stabilizeFieldWidths();
-            continue;
-          }
-          break;
-        }
-
-        setLayout(newLayout);
-        lastLayoutEditorStateRef.current = state;
-        lastLaidOutPmDocRef.current = state.doc;
-        lastLayoutUsedLoadedFontsRef.current = documentFontsAreLoaded();
-        recordLayoutComplete(reason);
-        recordPhaseDuration("layout-document", phaseStartedAt);
-
-        // Step 4: Paint to DOM
-        if (pagesContainerRef.current && painterRef.current) {
-          phaseStartedAt = performance.now();
-          // Build block lookup
-          const blockLookup: BlockLookup = new Map();
-          for (let i = 0; i < newBlocks.length; i++) {
-            const block = newBlocks[i];
-            const measure = newMeasures[i];
-            if (block && measure) {
-              blockLookup.set(String(block.id), { block, measure });
-            }
-          }
-          painterRef.current.setBlockLookup(blockLookup);
-
-          // Build per-page footnote render items
-          const footnotesByPage = hasFootnotes
-            ? buildFootnoteRenderItems(
-                pageFootnoteMap,
-                footnoteContentMap,
-                document,
-              )
-            : undefined;
-
-          // Render pages to container.
-          // Built incrementally so optional fields are only present when
-          // defined (RenderPageOptions has `exactOptionalPropertyTypes`).
-          const renderOpts: RenderPageOptions & {
-            pageGap?: number;
-            footnotesByPage?: Map<number, FootnoteRenderItem[]>;
-          } = {
-            pageGap,
-            showShadow: true,
-            blockLookup,
-            titlePg: hasTitlePg,
-          };
-          if (headerContentForRender) {
-            renderOpts.headerContent = headerContentForRender;
-          }
-          if (footerContentForRender) {
-            renderOpts.footerContent = footerContentForRender;
-          }
-          if (firstPageHeaderForRender) {
-            renderOpts.firstPageHeaderContent = firstPageHeaderForRender;
-          }
-          if (firstPageFooterForRender) {
-            renderOpts.firstPageFooterContent = firstPageFooterForRender;
-          }
-          if (headerContentByRId) {
-            renderOpts.headerContentByRId = headerContentByRId;
-          }
-          if (footerContentByRId) {
-            renderOpts.footerContentByRId = footerContentByRId;
-          }
-          if (
-            sectionHeaderFooterRefs === undefined &&
-            sectionProperties?.headerDistance
-          ) {
-            renderOpts.headerDistance = twipsToPixels(
-              sectionProperties.headerDistance,
-            );
-          }
-          if (
-            sectionHeaderFooterRefs === undefined &&
-            sectionProperties?.footerDistance
-          ) {
-            renderOpts.footerDistance = twipsToPixels(
-              sectionProperties.footerDistance,
-            );
-          }
-          if (sectionProperties?.pageBorders) {
-            renderOpts.pageBorders = sectionProperties.pageBorders;
-          }
-          if (_theme) {
-            renderOpts.theme = _theme;
-          }
-          if (footnotesByPage?.size) {
-            renderOpts.footnotesByPage = footnotesByPage;
-          }
-          // Map bookmarks to the pages they land on so PAGEREF fields resolve
-          // to live page numbers at paint.
-          const bookmarkPages = buildBookmarkPageMap(
-            newLayout.pages,
-            newBlocks,
-          );
-          if (bookmarkPages.size > 0) {
-            renderOpts.bookmarkPages = bookmarkPages;
-          }
-          // Assign SEQ caption numbers in document order so SEQ fields resolve.
-          const seqValues = buildSeqValues(newBlocks);
-          if (seqValues.size > 0) {
-            renderOpts.seqValues = seqValues;
-          }
-          // Bookmark text for REF cross-references.
-          const bookmarkTextInputs =
-            stabilizedFieldValues === undefined
-              ? { seqValues }
-              : { fieldValues: stabilizedFieldValues, seqValues };
-          const bookmarkText = buildBookmarkText(newBlocks, bookmarkTextInputs);
-          if (bookmarkText.size > 0) {
-            renderOpts.bookmarkText = bookmarkText;
-          }
-          // Per-section page counts so SECTIONPAGES fields resolve.
-          renderOpts.sectionPageCounts = buildSectionPageCounts(
-            newLayout.pages,
-          );
-          // Document watermark (rendered behind every page). Build a
-          // per-header-rId map so titlePg / even-odd / per-section
-          // header parts each paint their own watermark; the painter
-          // falls back to `renderOpts.watermark` for documents that
-          // share one header. Picture watermarks need an image-rId →
-          // asset URL resolver that currently lives outside the
-          // editor; until that's wired in, the painter silently skips
-          // them.
-          if (document) {
-            const watermark = getDocumentWatermark(document);
-            if (watermark) {
-              renderOpts.watermark = watermark;
-            }
-            const headers = document.package.headers;
-            if (headers) {
-              const watermarkByHeaderRId = new Map<string, Watermark>();
-              for (const [rId, header] of headers) {
-                if (header.watermark) {
-                  watermarkByHeaderRId.set(rId, header.watermark);
-                }
-              }
-              if (watermarkByHeaderRId.size > 0) {
-                renderOpts.watermarkByHeaderRId = watermarkByHeaderRId;
-              }
-            }
-          }
-          renderPages(newLayout.pages, pagesContainerRef.current, renderOpts);
-          recordPhaseDuration("render-pages", phaseStartedAt);
-        }
-      } catch (error) {
-        const invalidHighlights = describeInvalidHighlightMarks(state.doc);
-        recordLayoutError(
-          reason,
-          invalidHighlights
-            ? new Error(
-                `${String(error)} Invalid highlights: ${invalidHighlights}`,
-              )
-            : error,
-        );
-        // Keep the previous visible layout if measurement or painting fails.
+          firstPageHeaderContentRId,
+          firstPageFooterContentRId,
+          sectionHeaderFooterRefs,
+          theme: _theme,
+          sectionProperties,
+          document,
+          defaultTabStop,
+          styles,
+          layout: layoutRef.current,
+          hfPMs: hfPMsRef.current,
+          painter: painterRef.current,
+          pagesContainer: pagesContainerRef.current,
+          session: layoutSessionRef.current,
+          renderHfFromContentOrPm,
+          renderHeaderFooterContentByRId,
+          documentFontsAreLoaded,
+          buildFootnoteRenderItems,
+          describeInvalidHighlightMarks,
+          emptyTemplatePreviewEntries: EMPTY_TEMPLATE_PREVIEW_ENTRIES,
+        },
+        state,
+        options,
+      );
+      if (outcome.blocks) {
+        setBlocks(outcome.blocks);
       }
-
-      // Signal layout is complete for this sequence
-      syncCoordinator.onLayoutComplete(currentEpoch);
+      if (outcome.measures !== undefined) {
+        setMeasures(outcome.measures);
+      }
+      if (outcome.layout) {
+        setLayout(outcome.layout);
+      }
+      if (outcome.blockLookup) {
+        painterRef.current?.setBlockLookup(outcome.blockLookup);
+      }
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- hand-curated dep set; ref-held values are intentionally omitted
     [
@@ -6444,7 +5633,7 @@ export function PagedEditor(
       updateAnonymizationOverlay();
       updateDirectivesOverlay();
       if (fontsLoaded) {
-        lastLayoutUsedLoadedFontsRef.current = true;
+        layoutSessionRef.current.usedLoadedFonts = true;
         suppressFontReadyUntilRef.current =
           performance.now() + INITIAL_FONT_READY_SUPPRESSION_MS;
       }
@@ -6517,12 +5706,12 @@ export function PagedEditor(
         });
       };
 
-      if (lastLaidOutPmDocRef.current?.eq(view.state.doc)) {
+      if (layoutSessionRef.current.lastPmDoc?.eq(view.state.doc)) {
         // The doc is already laid out, but the painted pages may carry a
         // fill preview the fresh view's plugin no longer holds (or vice
         // versa) — the substituted values live in the flow blocks, so a
         // mismatch needs a pipeline re-run, not just overlay repaints.
-        const lastPreview = lastLaidOutTemplatePreviewRef.current;
+        const lastPreview = layoutSessionRef.current.lastTemplatePreview;
         if (
           templatePreviewRef.current.mode !== lastPreview.mode ||
           templatePreviewDirtyRange(
@@ -6565,7 +5754,7 @@ export function PagedEditor(
         clearAllCaches();
         runInitialLayout(currentView);
         if (fontsLoaded) {
-          lastLayoutUsedLoadedFontsRef.current = true;
+          layoutSessionRef.current.usedLoadedFonts = true;
           suppressFontReadyUntilRef.current =
             performance.now() + INITIAL_FONT_READY_SUPPRESSION_MS;
         }
@@ -6631,7 +5820,7 @@ export function PagedEditor(
 
         try {
           const positions = computeAnchorPositions(
-            lastLayoutEditorStateRef.current,
+            layoutSessionRef.current.lastEditorState,
             layout,
             blocks,
             measures,
@@ -6682,14 +5871,14 @@ export function PagedEditor(
       if (performance.now() < suppressFontReadyUntilRef.current) {
         return;
       }
-      lastLayoutUsedLoadedFontsRef.current = false;
+      layoutSessionRef.current.usedLoadedFonts = false;
     };
 
     const handleFontsLoaded = () => {
       if (
         pendingInitialFontReadyLayoutRef.current ||
         performance.now() < suppressFontReadyUntilRef.current ||
-        lastLayoutUsedLoadedFontsRef.current
+        layoutSessionRef.current.usedLoadedFonts
       ) {
         return;
       }
@@ -6735,7 +5924,7 @@ export function PagedEditor(
       lastLayoutInputSignatureRef.current = layoutInputSignature;
       if (
         !layoutInputsChanged &&
-        view.state.doc === lastLaidOutPmDocRef.current
+        view.state.doc === layoutSessionRef.current.lastPmDoc
       ) {
         return;
       }
