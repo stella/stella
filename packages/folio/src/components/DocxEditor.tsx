@@ -2994,39 +2994,45 @@ export function DocxEditor({
     (!preserveDocumentWhileLoading || !history.state)
   ) {
     return (
-      <div
-        className={`folio-root folio-editor folio-editor-loading ${className}`}
-        style={containerStyle}
-        data-testid="folio-editor"
-      >
-        {loadingIndicator || <DefaultLoadingIndicator />}
-      </div>
+      <FolioUIProvider components={components}>
+        <div
+          className={`folio-root folio-editor folio-editor-loading ${className}`}
+          style={containerStyle}
+          data-testid="folio-editor"
+        >
+          {loadingIndicator || <DefaultLoadingIndicator />}
+        </div>
+      </FolioUIProvider>
     );
   }
 
   // Render error state
   if (state.documentLoad.status === "error") {
     return (
-      <div
-        className={`folio-root folio-editor folio-editor-error ${className}`}
-        style={containerStyle}
-        data-testid="folio-editor"
-      >
-        <ParseError message={state.documentLoad.message} />
-      </div>
+      <FolioUIProvider components={components}>
+        <div
+          className={`folio-root folio-editor folio-editor-error ${className}`}
+          style={containerStyle}
+          data-testid="folio-editor"
+        >
+          <ParseError message={state.documentLoad.message} />
+        </div>
+      </FolioUIProvider>
     );
   }
 
   // Render placeholder when no document
   if (!history.state) {
     return (
-      <div
-        className={`folio-root folio-editor folio-editor-empty ${className}`}
-        style={containerStyle}
-        data-testid="folio-editor"
-      >
-        {placeholder || <DefaultPlaceholder />}
-      </div>
+      <FolioUIProvider components={components}>
+        <div
+          className={`folio-root folio-editor folio-editor-empty ${className}`}
+          style={containerStyle}
+          data-testid="folio-editor"
+        >
+          {placeholder || <DefaultPlaceholder />}
+        </div>
+      </FolioUIProvider>
     );
   }
 

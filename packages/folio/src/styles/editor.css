@@ -1064,3 +1064,52 @@
   background: color-mix(in srgb, #f97316 28%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in srgb, #f97316 45%, transparent);
 }
+
+/* ── Default chrome button ─────────────────────────────────────────────
+   Styling for the built-in, dependency-free Button used when a consumer does
+   not inject one (see `ui/defaults/button.tsx`). Each rule is a single class so
+   a caller's `className` can override the defaults with equal-or-greater
+   specificity and later source order; inline styles would always outrank the
+   caller and hide pressed/active/layout visuals on the standalone path. */
+.folio-default-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  border-radius: 0.5rem;
+  border-width: 1px;
+  border-style: solid;
+  font-weight: 500;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.folio-default-button--default {
+  background: var(--doc-primary, #2563eb);
+  color: var(--doc-primary-foreground, #ffffff);
+  border-color: var(--doc-primary, #2563eb);
+}
+
+.folio-default-button--ghost {
+  background: transparent;
+  color: var(--doc-text, inherit);
+  border-color: transparent;
+}
+
+.folio-default-button--sm {
+  height: 2rem;
+  padding: 0 0.625rem;
+  font-size: 0.8125rem;
+}
+
+.folio-default-button--xs {
+  height: 1.75rem;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+}
+
+.folio-default-button--icon-xs {
+  height: 1.75rem;
+  width: 1.75rem;
+  padding: 0;
+}
