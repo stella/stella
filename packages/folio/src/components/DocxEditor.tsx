@@ -179,7 +179,7 @@ import { useDocumentHistory } from "../hooks/useHistory";
 import { useTableSelection } from "../hooks/useTableSelection";
 import { PagedEditor } from "../paged-editor/PagedEditor";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
-import { FolioUIProvider, useFolioUI } from "../ui/folio-ui";
+import { FolioUIProvider, DEFAULT_COMPONENTS } from "../ui/folio-ui";
 import { containedHandler } from "../utils/contained-handler";
 import { clampRangeToDocSize, resolveFolioAIBlockRange } from "./aiEditRange";
 import { resolveCommentCreationRange } from "./commentAnchors";
@@ -487,7 +487,10 @@ export function DocxEditor({
   onSelectiveSaveTripwire,
 }: DocxEditorProps & { ref?: Ref<DocxEditorRef> }) {
   const t = useTranslations("folio");
-  const { Button } = useFolioUI();
+  // DocxEditor renders FolioUIProvider itself, so it can't consume its own
+  // provider via useFolioUI() (that resolves to the default context). Resolve
+  // from the `components` prop directly, with the built-in default as fallback.
+  const Button = components?.Button ?? DEFAULT_COMPONENTS.Button;
 
   // State
   const [state, setState] = useState<EditorState>({
