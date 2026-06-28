@@ -2289,6 +2289,11 @@ export function PagedEditor(
         painterRef.current?.setBlockLookup(outcome.blockLookup);
       }
       if (outcome.layout) {
+        // Publish to the ref before emitting so layoutComplete handlers that
+        // call folioEditor.getLayout() observe the layout that just completed
+        // (setLayout is async; the ref mirror otherwise only refreshes on the
+        // next render).
+        layoutRef.current = outcome.layout;
         folioEmitterRef.current.emit("layoutComplete", outcome.layout);
       }
     },
