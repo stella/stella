@@ -78,5 +78,7 @@ export const createFolioEditor = (deps: FolioEditorDeps): FolioEditor => ({
     }
   },
 
-  on: deps.emitter.on,
+  // Wrap rather than tear off the method, so the contract holds for any emitter
+  // implementation (e.g. a class-based one whose `on` relies on `this`).
+  on: (event, listener) => deps.emitter.on(event, listener),
 });
