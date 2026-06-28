@@ -26,10 +26,10 @@ import { useTranslations } from "use-intl";
 
 import { ColorPicker } from "@stll/ui/components/color-picker";
 import type { ColorPreset } from "@stll/ui/components/color-picker";
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/components/menu";
 
 import type { ParagraphAlignment } from "../core/types/document";
 import { cn } from "../lib/utils";
+import { useFolioUI } from "../ui/folio-ui";
 import { containedHandler } from "../utils/contained-handler";
 import {
   ToolbarButton,
@@ -109,6 +109,11 @@ export function FormattingBar(props: FormattingBarProps) {
     inline = false,
   } = props;
 
+  const {
+    Root: Menu,
+    Trigger: MenuTrigger,
+    Popup: MenuPopup,
+  } = useFolioUI().Menu;
   const t = useTranslations("folio");
   const barRef = useRef<HTMLDivElement>(null);
   const [showSecondaryInline, setShowSecondaryInline] = useState(false);

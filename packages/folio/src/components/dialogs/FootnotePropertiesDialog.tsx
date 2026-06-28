@@ -6,15 +6,6 @@
 
 import { useId, useState } from "react";
 
-import {
-  Dialog,
-  DialogPortal,
-  DialogBackdrop,
-  DialogPopup,
-  DialogTitle,
-  DialogClose,
-} from "@stll/ui/components/dialog";
-
 import type {
   FootnoteProperties,
   EndnoteProperties,
@@ -23,6 +14,7 @@ import type {
   NoteNumberRestart,
   NumberFormat,
 } from "../../core/types/document";
+import { useFolioUI } from "../../ui/folio-ui";
 
 // ============================================================================
 // TYPES
@@ -63,6 +55,14 @@ export function FootnotePropertiesDialog({
   footnotePr,
   endnotePr,
 }: FootnotePropertiesDialogProps) {
+  const {
+    Root: Dialog,
+    Portal: DialogPortal,
+    Backdrop: DialogBackdrop,
+    Popup: DialogPopup,
+    Title: DialogTitle,
+    Close: DialogClose,
+  } = useFolioUI().Dialog;
   const id = useId();
   const [fnPosition, setFnPosition] = useState<FootnotePosition>(
     footnotePr?.position ?? "pageBottom",

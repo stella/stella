@@ -9,14 +9,7 @@
 
 import { useEffect, useId, useState } from "react";
 
-import {
-  Dialog,
-  DialogPortal,
-  DialogBackdrop,
-  DialogPopup,
-  DialogTitle,
-  DialogClose,
-} from "@stll/ui/components/dialog";
+import { useFolioUI } from "../../ui/folio-ui";
 
 // ============================================================================
 // TYPES
@@ -56,6 +49,14 @@ export function ImagePositionDialog({
   onApply,
   currentData,
 }: ImagePositionDialogProps) {
+  const {
+    Root: Dialog,
+    Portal: DialogPortal,
+    Backdrop: DialogBackdrop,
+    Popup: DialogPopup,
+    Title: DialogTitle,
+    Close: DialogClose,
+  } = useFolioUI().Dialog;
   const id = useId();
   const [hMode, setHMode] = useState<"align" | "offset">("align");
   const [hAlign, setHAlign] = useState("center");

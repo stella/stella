@@ -3,13 +3,7 @@
  * Values are points; internally the editor stores half-points (OOXML w:sz).
  */
 
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/components/select";
+import { useFolioUI } from "../../ui/folio-ui";
 
 // ============================================================================
 // TYPES
@@ -49,6 +43,13 @@ export function FontSizePicker({
   placeholder = "",
   width = 56,
 }: FontSizePickerProps) {
+  const {
+    Root: Select,
+    Trigger: SelectTrigger,
+    Value: SelectValue,
+    Popup: SelectPopup,
+    Item: SelectItem,
+  } = useFolioUI().Select;
   const sizeOptions = sizes ?? Array.from(DEFAULT_SIZES);
   const selectedLabel = value === undefined ? undefined : formatSize(value);
 

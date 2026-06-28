@@ -37,24 +37,6 @@ import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
 import {
-  Menu,
-  MenuCheckboxItem,
-  MenuGroup,
-  MenuGroupLabel,
-  MenuItem,
-  MenuPopup,
-  MenuSeparator,
-  MenuTrigger,
-} from "@stll/ui/components/menu";
-import {
-  Select as StSelect,
-  SelectItem as StSelectItem,
-  SelectPopup as StSelectPopup,
-  SelectTrigger as StSelectTrigger,
-  SelectValue as StSelectValue,
-} from "@stll/ui/components/select";
-
-import {
   applyFolioAIEditOperations,
   createFolioAIEditSnapshot,
 } from "../core/ai-edits";
@@ -491,6 +473,23 @@ export function DocxEditor({
   // provider via useFolioUI() (that resolves to the default context). Resolve
   // from the `components` prop directly, with the built-in default as fallback.
   const Button = components?.Button ?? DEFAULT_COMPONENTS.Button;
+  const {
+    Root: Menu,
+    Trigger: MenuTrigger,
+    Popup: MenuPopup,
+    Item: MenuItem,
+    CheckboxItem: MenuCheckboxItem,
+    Group: MenuGroup,
+    GroupLabel: MenuGroupLabel,
+    Separator: MenuSeparator,
+  } = components?.Menu ?? DEFAULT_COMPONENTS.Menu;
+  const {
+    Root: StSelect,
+    Trigger: StSelectTrigger,
+    Value: StSelectValue,
+    Popup: StSelectPopup,
+    Item: StSelectItem,
+  } = components?.Select ?? DEFAULT_COMPONENTS.Select;
 
   // State
   const [state, setState] = useState<EditorState>({

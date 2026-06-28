@@ -7,15 +7,8 @@
 
 import * as React from "react";
 
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/components/select";
-
 import type { Style, StyleType, Theme } from "../../core/types/document";
+import { useFolioUI } from "../../ui/folio-ui";
 
 // ============================================================================
 // TYPES
@@ -150,6 +143,13 @@ export function StylePicker({
   className,
   width = 140,
 }: StylePickerProps) {
+  const {
+    Root: Select,
+    Trigger: SelectTrigger,
+    Value: SelectValue,
+    Popup: SelectPopup,
+    Item: SelectItem,
+  } = useFolioUI().Select;
   const styleOptions = React.useMemo(() => {
     if (!styles || styles.length === 0) {
       return DEFAULT_STYLES;

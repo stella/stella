@@ -8,14 +8,7 @@
 
 import { useEffect, useId, useState } from "react";
 
-import {
-  Dialog,
-  DialogPortal,
-  DialogBackdrop,
-  DialogPopup,
-  DialogTitle,
-  DialogClose,
-} from "@stll/ui/components/dialog";
+import { useFolioUI } from "../../ui/folio-ui";
 
 // ============================================================================
 // TYPES
@@ -45,6 +38,14 @@ export function ImagePropertiesDialog({
   onApply,
   currentData,
 }: ImagePropertiesDialogProps) {
+  const {
+    Root: Dialog,
+    Portal: DialogPortal,
+    Backdrop: DialogBackdrop,
+    Popup: DialogPopup,
+    Title: DialogTitle,
+    Close: DialogClose,
+  } = useFolioUI().Dialog;
   const id = useId();
   const [alt, setAlt] = useState("");
   const [borderWidth, setBorderWidth] = useState(0);

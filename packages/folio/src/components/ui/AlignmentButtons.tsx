@@ -14,15 +14,9 @@ import {
   ChevronDownIcon,
 } from "lucide-react";
 
-import {
-  Popover,
-  PopoverClose,
-  PopoverPopup,
-  PopoverTrigger,
-} from "@stll/ui/components/popover";
-
 import type { ParagraphAlignment } from "../../core/types/document";
 import { cn } from "../../lib/utils";
+import { useFolioUI } from "../../ui/folio-ui";
 
 export type AlignmentButtonsProps = {
   value?: ParagraphAlignment;
@@ -66,6 +60,12 @@ export function AlignmentButtons({
   onChange,
   disabled = false,
 }: AlignmentButtonsProps) {
+  const {
+    Root: Popover,
+    Trigger: PopoverTrigger,
+    Popup: PopoverPopup,
+    Close: PopoverClose,
+  } = useFolioUI().Popover;
   const defaultOption = OPTIONS[0];
   if (!defaultOption) {
     panic("AlignmentButtons: OPTIONS is empty");

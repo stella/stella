@@ -28,6 +28,7 @@
     "test:visual:report": "bunx playwright show-report"
   },
   "dependencies": {
+    "@base-ui/react": "catalog:",
     "@fontsource/arimo": "^5.2.8",
     "@fontsource/caladea": "^5.2.8",
     "@fontsource/carlito": "^5.2.8",

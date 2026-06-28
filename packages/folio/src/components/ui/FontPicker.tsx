@@ -3,13 +3,7 @@
  * Each item rendered in its own font for preview.
  */
 
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/components/select";
+import { useFolioUI } from "../../ui/folio-ui";
 
 // ============================================================================
 // TYPES
@@ -110,6 +104,13 @@ export function FontPicker({
   placeholder = "Font",
   width = 100,
 }: FontPickerProps) {
+  const {
+    Root: Select,
+    Trigger: SelectTrigger,
+    Value: SelectValue,
+    Popup: SelectPopup,
+    Item: SelectItem,
+  } = useFolioUI().Select;
   const fontOptions = fonts ?? DEFAULT_FONTS;
 
   return (
