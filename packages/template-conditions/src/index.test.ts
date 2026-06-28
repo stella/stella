@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { evaluateCondition, MAX_CONDITION_DEPTH } from "./index";
 import type { NamedCondition } from "./index";
 
@@ -821,7 +823,7 @@ describe("evaluateCondition property checks", () => {
           evaluateReference(node, data),
         );
       }),
-      { numRuns: 500 },
+      propertyConfig({ numRuns: 500 }),
     );
   });
 });

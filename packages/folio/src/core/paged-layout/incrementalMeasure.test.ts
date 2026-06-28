@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import type {
   FlowBlock,
   Measure,
@@ -62,7 +64,7 @@ describe("incremental paragraph measurement", () => {
           expect(result?.measures).toEqual(fullNextMeasures);
         },
       ),
-      { numRuns: 1000 },
+      propertyConfig({ numRuns: 1000 }),
     );
   });
 
@@ -104,7 +106,7 @@ describe("incremental paragraph measurement", () => {
           expect(result?.measures).toEqual(fullNextMeasures);
         },
       ),
-      { numRuns: 1000 },
+      propertyConfig({ numRuns: 1000 }),
     );
   });
 
@@ -135,7 +137,7 @@ describe("incremental paragraph measurement", () => {
           }
         },
       ),
-      { numRuns: 500 },
+      propertyConfig({ numRuns: 500 }),
     );
   });
 

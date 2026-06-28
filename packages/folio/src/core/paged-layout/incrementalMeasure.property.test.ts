@@ -8,6 +8,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { mergeDirtyRanges, type DirtyRange } from "./incrementalMeasure";
 
 const range = fc
@@ -23,6 +25,7 @@ describe("mergeDirtyRanges (properties)", () => {
         expect(mergeDirtyRanges(null, r)).toEqual(r);
         expect(mergeDirtyRanges(r, null)).toEqual(r);
       }),
+      propertyConfig(),
     );
   });
 
@@ -41,6 +44,7 @@ describe("mergeDirtyRanges (properties)", () => {
         expect(merged.from).toBe(Math.min(a.from, b.from));
         expect(merged.to).toBe(Math.max(a.to, b.to));
       }),
+      propertyConfig(),
     );
   });
 
@@ -49,6 +53,7 @@ describe("mergeDirtyRanges (properties)", () => {
       fc.property(nullableRange, nullableRange, (a, b) => {
         expect(mergeDirtyRanges(a, b)).toEqual(mergeDirtyRanges(b, a));
       }),
+      propertyConfig(),
     );
   });
 
@@ -57,6 +62,7 @@ describe("mergeDirtyRanges (properties)", () => {
       fc.property(range, (a) => {
         expect(mergeDirtyRanges(a, a)).toEqual({ from: a.from, to: a.to });
       }),
+      propertyConfig(),
     );
   });
 
@@ -77,6 +83,7 @@ describe("mergeDirtyRanges (properties)", () => {
           to: Math.max(...present.map((r) => r.to)),
         });
       }),
+      propertyConfig(),
     );
   });
 });

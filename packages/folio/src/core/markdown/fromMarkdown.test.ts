@@ -12,6 +12,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { fromMarkdown } from "./fromMarkdown";
 import { toMarkdown } from "./index";
 
@@ -151,7 +153,7 @@ describe("markdown bridge — round-trip", () => {
         looseListItemMarkdown(),
         (source) => normalize(normalize(source)) === normalize(source),
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
