@@ -216,7 +216,10 @@ export function runLayoutPipeline<THfPMs>(
     describeInvalidHighlightMarks,
     emptyTemplatePreviewEntries: EMPTY_TEMPLATE_PREVIEW_ENTRIES,
   } = deps;
-  const outcome: LayoutOutcome = {};
+  // Reassigned to {} in the catch so a failed run returns no outcome (the
+  // adapter then keeps the previously painted layout instead of advancing React
+  // state/overlays to a layout we failed to paint).
+  let outcome: LayoutOutcome = {};
   let pendingArtifacts: LayoutArtifacts;
   let pendingTemplatePreview: LayoutTemplatePreview;
   // Composition root for text measurement: install the canvas backend
@@ -1001,7 +1004,10 @@ export function runLayoutPipeline<THfPMs>(
         ? new Error(`${String(error)} Invalid highlights: ${invalidHighlights}`)
         : error,
     );
-    // Keep the previous visible layout if measurement or painting fails.
+    // Keep the previous visible layout if measurement or painting fails: drop
+    // any partial outcome so the adapter applies nothing and the next run (the
+    // session memory above was not committed) re-lays-out and repaints.
+    outcome = {};
   }
 
   // Signal layout is complete for this sequence
