@@ -1774,6 +1774,9 @@ export function PagedEditor(
   // Refs
   const containerRef = useRef<HTMLDivElement>(null);
   const pagesContainerRef = useRef<HTMLDivElement>(null);
+  // FolioEditor event emitter (Seam 6), declared early so the layout/selection/
+  // doc emission points below can publish to it.
+  const folioEmitterRef = useRef(createFolioEditorEmitter());
   const hiddenPMRef = useRef<HiddenProseMirrorRef>(null);
   const hfPMsRef = useRef<HiddenHeaderFooterPMsRef>(null);
   const painterRef = useRef<LayoutPainter | null>(null);
@@ -2283,6 +2286,9 @@ export function PagedEditor(
       if (outcome.blockLookup) {
         painterRef.current?.setBlockLookup(outcome.blockLookup);
       }
+      if (outcome.layout) {
+        folioEmitterRef.current.emit("layoutComplete", outcome.layout);
+      }
     },
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- hand-curated dep set; ref-held values are intentionally omitted
     [
@@ -2318,7 +2324,6 @@ export function PagedEditor(
   const runLayoutPipelineRef = useRef(runLayoutPipeline);
   runLayoutPipelineRef.current = runLayoutPipeline;
 
-  const folioEmitterRef = useRef(createFolioEditorEmitter());
   const folioEditorRef = useRef<FolioEditor | null>(null);
   if (!folioEditorRef.current) {
     folioEditorRef.current = createFolioEditor({
@@ -2359,6 +2364,7 @@ export function PagedEditor(
     const newDoc = hiddenPMRef.current?.getDocument();
     if (newDoc) {
       onDocumentChangeRef.current?.(newDoc);
+      folioEmitterRef.current.emit("docChange", newDoc);
     }
   }, []);
 
@@ -2534,6 +2540,7 @@ export function PagedEditor(
       // Always notify selection change (for toolbar sync) even if layout not ready
       // Use ref to avoid infinite loops when callback is unstable
       onSelectionChangeRef.current?.(from, to);
+      folioEmitterRef.current.emit("selectionChange", { from, to });
       // `onSelectionTextChange` carries the resolved text
       // alongside the range so consumers (anonymisation
       // term prefill, etc.) don't need to hold a reference
@@ -3349,6 +3356,7 @@ export function PagedEditor(
         // would freeze on the previous body selection while its actions
         // dispatch on the HF view.
         onSelectionChangeRef.current?.(from, to);
+        folioEmitterRef.current.emit("selectionChange", { from, to });
       }
     },
     [scheduleLayout, ensureHiddenEditorView],
