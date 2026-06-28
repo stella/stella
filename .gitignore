@@ -23,6 +23,7 @@ test-results/
 
 # Claude Code worktrees (local state)
 .claude/worktrees/
+.worktrees/
 
 # QA reports (ephemeral, local-only)
 .agents/reports/
