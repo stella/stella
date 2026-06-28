@@ -1,35 +1,55 @@
 import { Result } from "better-result"
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers"
+import type { HandlerConfig } from "@/api/lib/api-handlers"
 import { HandlerError } from "@/api/lib/errors/tagged-errors"
 import { getOrCreateSession } from "@/api/lib/opencode-session-manager"
 import { transformOpencodeToStellaSSE } from "@/api/lib/sse-transformer"
 import { env } from "@/api/env"
+import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat"
 
 export const config = {
-  permissions: { chat: ["create"] },
+  permissions: { agentSkill: ["create"] },
   body: {} as any,
   requiresUsage: { actionType: "chat" },
-} as const
+} satisfies HandlerConfig
 
-export default createSafeRootHandler(config, async function* (ctx) {
-  if (env.USE_OPENCODE_CHAT !== "true") {
+type ChatBody = {
+  text?: string
+  threadId?: string
+  workspaceId?: string
+  sendMode?: string
+}
+
+const selectAgent = (sendMode: string | undefined): string => {
+  if (sendMode === CHAT_SEND_MODE.anonymized) return "build-anonymized"
+  return "build"
+}
+
+const handler = async function* (ctx: any) {
+  if (!env.USE_OPENCODE_CHAT) {
     const { default: sendMessage } = await import("./send-message")
-    return await sendMessage.handler(ctx as any)
+    return Result.ok(await sendMessage.handler(ctx as any))
   }
 
-  const body = ctx.body as { text?: string; threadId?: string; workspaceId?: string }
+  const body = ctx.body as ChatBody
   const userMessage = body.text ?? ""
   const threadId = body.threadId ?? ""
   const workspaceId = body.workspaceId ?? null
+  const sendMode = isChatSendMode(body.sendMode) ? body.sendMode : CHAT_SEND_MODE.rawOverride
 
-  const session = yield* Result.await(
-    getOrCreateSession(threadId, workspaceId, ctx.user.id),
-  )
+  const sessionResult = await getOrCreateSession(threadId, workspaceId, ctx.user.id)
+  if (Result.isError(sessionResult)) {
+    throw new HandlerError({ status: 502, message: sessionResult.error.message })
+  }
+
+  const { sessionId: opencodeSessionId } = sessionResult.value
 
   const baseUrl = env.OPENCODE_BASE_URL ?? "http://opencode-auth:4096"
+  const agent = selectAgent(sendMode)
+
   const opencodeResponse = await fetch(
-    `${baseUrl}/api/sessions/${session.sessionId}/prompt`,
+    `${baseUrl}/api/sessions/${opencodeSessionId}/prompt`,
     {
       method: "POST",
       headers: {
@@ -38,7 +58,7 @@ export default createSafeRootHandler(config, async function* (ctx) {
       },
       body: JSON.stringify({
         parts: [{ type: "text", text: userMessage }],
-        agent: "build",
+        agent,
       }),
     },
   )
@@ -78,11 +98,15 @@ export default createSafeRootHandler(config, async function* (ctx) {
     },
   })
 
-  return new Response(readable, {
-    headers: {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      Connection: "keep-alive",
-    },
-  })
-})
+  return Result.ok(
+    new Response(readable, {
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    }),
+  )
+}
+
+export default createSafeRootHandler(config, handler)
