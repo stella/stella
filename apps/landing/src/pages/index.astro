@@ -662,13 +662,13 @@ const selfHostingDocsUrl =
     })();
   </script>
 
-  <!--
+  {/*
     Web Animations API drives the illustration motion directly.
     CSS @keyframes get frozen by Chrome when prefers-reduced-motion
     is set; WAAPI does not, matching how Framer Motion behaves.
     Negative `delay` starts the animation already in progress so the
     staggered loops form a continuous cycle.
-  -->
+  */}
   <script is:inline>
     (function () {
       // Unified master breath shared by all three tiles. Same cycle length
