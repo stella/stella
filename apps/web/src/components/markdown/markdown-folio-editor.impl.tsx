@@ -5,8 +5,8 @@ import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
 import "@stll/folio/editor.css";
-import { DocxEditor, fromMarkdown, toMarkdown } from "@stll/folio";
-import type { Document, DocxEditorRef, MarkdownOptions } from "@stll/folio";
+import { fromMarkdown, toMarkdown } from "@stll/folio";
+import type { Document, MarkdownOptions } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
 import { cn } from "@stll/ui/lib/utils";
@@ -16,7 +16,8 @@ import {
   useDocxFitZoom,
   useDocxWheelZoom,
 } from "@/components/docx-preview-zoom";
-import { folioUIComponents } from "@/lib/folio-ui-components";
+import { DocxEditor } from "@/components/docx/app-docx-editor";
+import type { DocxEditorRef } from "@/components/docx/app-docx-editor";
 import { composeRefs } from "@/lib/slot";
 
 // Flatten Word constructs markdown can't carry so the emitted markdown stays
@@ -173,7 +174,6 @@ export function MarkdownFolioEditor({
     >
       <DocxEditor
         className="h-full"
-        components={folioUIComponents}
         document={doc}
         initialZoom={fitZoom}
         key={seed}

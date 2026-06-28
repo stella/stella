@@ -39,7 +39,6 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { apiUrl } from "@/lib/api-url";
 import { DOCX_MIME } from "@/lib/consts";
 import { APIError } from "@/lib/errors";
-import { folioUIComponents } from "@/lib/folio-ui-components";
 import { usePDFStore } from "@/lib/pdf/pdf-context";
 import { PDFPage } from "@/lib/pdf/pdf-page";
 import { PDFViewport } from "@/lib/pdf/pdf-viewport";
@@ -50,7 +49,7 @@ import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
 const DocxEditor = lazy(async () => {
-  const m = await import("@stll/folio");
+  const m = await import("@/components/docx/app-docx-editor");
   return { default: m.DocxEditor };
 });
 
@@ -506,7 +505,6 @@ const PeekDocxViewer = ({
         ref={editorRef}
         autoOpenReviewSidebar={false}
         className="folio-docx-preview folio-peek h-full"
-        components={folioUIComponents}
         documentBuffer={buffer}
         initialZoom={targetZoom}
         loadingIndicator={null}

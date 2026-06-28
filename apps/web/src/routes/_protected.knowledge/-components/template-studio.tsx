@@ -148,7 +148,6 @@ import {
   TOOLBAR_ROW_HEIGHT,
 } from "@/lib/consts";
 import { toAPIError, userErrorMessage } from "@/lib/errors";
-import { folioUIComponents } from "@/lib/folio-ui-components";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind, VALUE_TYPE_META } from "@/lib/value-types";
 import {
@@ -201,7 +200,7 @@ import {
 } from "@/routes/_protected.knowledge/-queries";
 
 const DocxEditor = lazy(async () => {
-  const m = await import("@stll/folio");
+  const m = await import("@/components/docx/app-docx-editor");
   return { default: m.DocxEditor };
 });
 
@@ -2657,7 +2656,6 @@ export const TemplateStudioPage = ({
               ref={editorRef}
               autoOpenReviewSidebar={false}
               className="h-full"
-              components={folioUIComponents}
               documentBuffer={docBuffer}
               initialZoom={fitZoom}
               loadingIndicator={null}
