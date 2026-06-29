@@ -32,8 +32,10 @@
   "exports": {
     ".": {
       "bun": "./src/index.ts",
-      "types": "./src/index.ts",
-      "import": "./dist/index.js"
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
     }
   },
   "publishConfig": {
@@ -41,7 +43,7 @@
   },
   "scripts": {
     "clean": "git clean -xdf dist .cache .turbo node_modules",
-    "build": "rm -rf dist && tsgo -p tsconfig.build.json",
+    "build": "tsdown",
     "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "tsgo --noEmit",
@@ -55,6 +57,7 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:"
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:"
   }
 }
