@@ -2883,6 +2883,7 @@
         "table": "جدول",
         "timeline": "خط زمني"
       },
+      "newView": "{layoutType, select, overview {{layout} جديدة} filesystem {{layout} جديدة} other {{layout} جديد}}",
       "noFilterResults": "لا توجد عناصر تطابق عوامل التصفية هذه",
       "noFilterResultsHint": "ستظهر هنا إذا أزلت بعض عوامل التصفية.",
       "removeAdvancedFilter": "إزالة عامل التصفية المتقدم",

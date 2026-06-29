@@ -2883,6 +2883,7 @@
         "table": "Tableau",
         "timeline": "Chronologie"
       },
+      "newView": "{layoutType, select, overview {Nouvel {layout}} filesystem {Nouvelle {layout}} timeline {Nouvelle {layout}} other {Nouveau {layout}}}",
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",

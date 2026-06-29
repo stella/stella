@@ -2883,6 +2883,7 @@
         "table": "Tabelle",
         "timeline": "Zeitleiste"
       },
+      "newView": "{layoutType, select, calendar {Neuer {layout}} other {Neue {layout}}}",
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",

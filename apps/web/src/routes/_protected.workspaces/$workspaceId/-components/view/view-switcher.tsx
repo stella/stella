@@ -267,11 +267,13 @@ export const ViewSwitcher = ({
                       createView.mutate(
                         {
                           id: viewId,
-                          // Name a new view by its layout type ("Calendar",
-                          // "Table", …). A "New {layout}" template would need a
-                          // gender-agreeing adjective, which can't be done
-                          // correctly across every locale's layout nouns.
-                          name: t(LAYOUT_LABEL_KEYS[layoutType]),
+                          // `layoutType` lets each locale inflect "New {layout}"
+                          // for the layout noun's gender (ICU select); the name
+                          // stays distinct from the default-view-name set.
+                          name: t("workspaces.views.newView", {
+                            layout: t(LAYOUT_LABEL_KEYS[layoutType]),
+                            layoutType,
+                          }),
                           layout: defaultLayouts[layoutType],
                         },
                         {

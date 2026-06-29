@@ -2883,6 +2883,7 @@
         "table": "Tabela",
         "timeline": "Oś czasu"
       },
+      "newView": "{layoutType, select, table {Nowa {layout}} filesystem {Nowa {layout}} timeline {Nowa {layout}} other {Nowy {layout}}}",
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
