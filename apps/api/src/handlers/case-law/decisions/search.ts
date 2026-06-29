@@ -84,7 +84,7 @@ const searchPostgresDecisions = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const tsQuery = sql`plainto_tsquery('simple', unaccent(${body.query}))`;
+  const tsQuery = sql`plainto_tsquery('simple', unaccent(arabic_normalize(${body.query})))`;
 
   // Validate cursor early so a tampered value fails visibly
   let parsedCursor: { score: number; id: string } | null = null;

@@ -1,3 +1,6 @@
+-- Override any statement_timeout inherited from an earlier migration in the
+-- same migrator session; this one-time backfill scans the table.
+SET statement_timeout = '10min';--> statement-breakpoint
 -- Re-index the tenant search tsvectors through arabic_normalize so the
 -- stored tokens match the normalized query side. Mirrors the write-side
 -- expressions in lib/search/index-entity.ts and index-global.ts. Guarded

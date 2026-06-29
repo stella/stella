@@ -35,7 +35,7 @@ const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
 const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const limit = query.limit;
-  const tsQuery = sql`plainto_tsquery('simple', unaccent(${query.query}))`;
+  const tsQuery = sql`plainto_tsquery('simple', unaccent(arabic_normalize(${query.query})))`;
 
   const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
 
