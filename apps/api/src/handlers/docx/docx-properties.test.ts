@@ -18,6 +18,8 @@ import fc from "fast-check";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { applyEdits } from "./apply-edits";
 import { diffParagraphs, tokenize } from "./diff-paragraphs";
 import { discoverPlaceholders } from "./discover-placeholders";
@@ -229,7 +231,7 @@ describe("property: diff → apply roundtrip", () => {
         const accepted = extractAcceptedText(result);
         expect(accepted[0]).toBe(newText);
       }),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 
@@ -248,7 +250,7 @@ describe("property: diff → apply roundtrip", () => {
 
         expect(edits).toEqual([]);
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -286,7 +288,7 @@ describe("property: diff → apply roundtrip", () => {
           expect(result).toContain("w:del");
         },
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -312,7 +314,7 @@ describe("property: diff → apply roundtrip", () => {
         expect(accepted[0]).toBe(extended);
         expect(result).toContain("w:ins");
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -350,7 +352,7 @@ describe("property: multi-paragraph editing", () => {
         // Second paragraph changed
         expect(accepted[1]).toBe(newText2);
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -377,7 +379,7 @@ describe("property: ID generation", () => {
           }
         },
       ),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 
@@ -400,7 +402,7 @@ describe("property: ID generation", () => {
           }
         },
       ),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 });
@@ -452,7 +454,7 @@ describe("property: run map coverage", () => {
         }
         expect(totalLen).toBe(text.length);
       }),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 });
@@ -575,7 +577,7 @@ describe("property: tokenization roundtrip", () => {
           expect(tokenize(text).join("")).toBe(text);
         },
       ),
-      { numRuns: 300 },
+      propertyConfig({ numRuns: 300 }),
     );
   });
 });
@@ -608,7 +610,7 @@ describe("property: output w:id uniqueness", () => {
         const ids = collectAllIds(doc);
         expect(ids.length).toBe(new Set(ids).size);
       }),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 });
@@ -654,7 +656,7 @@ describe("property: multi-w:t per run", () => {
           expect(accepted[0]).toBe(replacement);
         },
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -690,7 +692,7 @@ describe("property: multi-w:t per run", () => {
         const accepted = extractAcceptedText(result);
         expect(accepted[0]).toBe(textA);
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -726,7 +728,7 @@ describe("property: multi-w:t per run", () => {
         const accepted = extractAcceptedText(result);
         expect(accepted[0]).toBe(textB);
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -767,7 +769,7 @@ describe("property: multi-w:t per run", () => {
           expect(accepted[0]).toBe(replacement);
         },
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -810,7 +812,7 @@ describe("property: multi-w:t per run", () => {
           expect(validation.valid).toBe(true);
         },
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -846,7 +848,7 @@ describe("property: OOXML validation on generated output", () => {
         }
         expect(validation.valid).toBe(true);
       }),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 
@@ -891,7 +893,7 @@ describe("property: OOXML validation on generated output", () => {
           expect(validation.valid).toBe(true);
         },
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -959,7 +961,7 @@ describe("property: placeholder roundtrip", () => {
           expect(discovered.length).toBe(names.length);
         },
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -1013,7 +1015,7 @@ describe("property: structural isolation", () => {
           expect(accepted[0]).toBe(replacement);
         },
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -1056,7 +1058,7 @@ describe("property: structural isolation", () => {
           expect(accepted[0]).toBe(replacement);
         },
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -1109,7 +1111,7 @@ describe("property: structural isolation", () => {
           expect(accepted[0]).toBe(newText);
         },
       ),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -1140,7 +1142,7 @@ describe("property: structural isolation", () => {
         const accepted = extractAcceptedText(result);
         expect(accepted[0]).toBe(newText);
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -1169,7 +1171,7 @@ describe("property: structural isolation", () => {
         // All text should be wrapped in w:del
         expect(result).toContain("w:del");
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -1300,7 +1302,7 @@ describe("regression: multi-w:t text ordering", () => {
         const accepted = extractAcceptedText(result);
         expect(accepted[0]).toBe(newText);
       }),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 });
@@ -1332,27 +1334,39 @@ const assertRoundtrip = (oldText: string, newText: string) => {
 
 describe("property: adversarial text roundtrip", () => {
   test("punctuation-heavy text (legal citations)", async () => {
-    fc.assert(fc.property(punctuatedText, punctuatedText, assertRoundtrip), {
-      numRuns: 100,
-    });
+    fc.assert(
+      fc.property(punctuatedText, punctuatedText, assertRoundtrip),
+      propertyConfig({
+        numRuns: 100,
+      }),
+    );
   });
 
   test("whitespace variants (tabs, double spaces)", async () => {
-    fc.assert(fc.property(whitespaceText, whitespaceText, assertRoundtrip), {
-      numRuns: 100,
-    });
+    fc.assert(
+      fc.property(whitespaceText, whitespaceText, assertRoundtrip),
+      propertyConfig({
+        numRuns: 100,
+      }),
+    );
   });
 
   test("CJK text roundtrip", async () => {
-    fc.assert(fc.property(cjkText, cjkText, assertRoundtrip), {
-      numRuns: 100,
-    });
+    fc.assert(
+      fc.property(cjkText, cjkText, assertRoundtrip),
+      propertyConfig({
+        numRuns: 100,
+      }),
+    );
   });
 
   test("long paragraph roundtrip (50-200 words)", async () => {
-    fc.assert(fc.property(longParagraph, longParagraph, assertRoundtrip), {
-      numRuns: 20,
-    });
+    fc.assert(
+      fc.property(longParagraph, longParagraph, assertRoundtrip),
+      propertyConfig({
+        numRuns: 20,
+      }),
+    );
   });
 
   test("repeated words: removing one occurrence", async () => {
@@ -1367,7 +1381,7 @@ describe("property: adversarial text roundtrip", () => {
         const newWords = [...words.slice(0, mid), ...words.slice(mid + 1)];
         assertRoundtrip(text, newWords.join(" "));
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -1382,7 +1396,7 @@ describe("property: adversarial text roundtrip", () => {
         words[mid] = replacement;
         assertRoundtrip(text, words.join(" "));
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -1406,14 +1420,17 @@ describe("property: adversarial text roundtrip", () => {
           assertRoundtrip(text, newText);
         },
       ),
-      { numRuns: 20 },
+      propertyConfig({ numRuns: 20 }),
     );
   });
 
   test("full Unicode graphemes roundtrip (emoji, combining marks, CJK)", async () => {
-    fc.assert(fc.property(xmlSafeWord, xmlSafeWord, assertRoundtrip), {
-      numRuns: 200,
-    });
+    fc.assert(
+      fc.property(xmlSafeWord, xmlSafeWord, assertRoundtrip),
+      propertyConfig({
+        numRuns: 200,
+      }),
+    );
   });
 
   test("token boundary edit: adding/removing spaces between words", async () => {
@@ -1424,7 +1441,7 @@ describe("property: adversarial text roundtrip", () => {
         const collapsed = `${a} ${b}${c}`;
         assertRoundtrip(spaced, collapsed);
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -1503,9 +1520,12 @@ const binaryUnicode = fc
 
 describe("property: binary Unicode stress test", () => {
   test("roundtrip with arbitrary Unicode (binary unit)", async () => {
-    fc.assert(fc.property(binaryUnicode, binaryUnicode, assertRoundtrip), {
-      numRuns: 300,
-    });
+    fc.assert(
+      fc.property(binaryUnicode, binaryUnicode, assertRoundtrip),
+      propertyConfig({
+        numRuns: 300,
+      }),
+    );
   });
 
   test("binary Unicode multi-w:t roundtrip", async () => {
@@ -1546,7 +1566,7 @@ describe("property: binary Unicode stress test", () => {
           expect(accepted[0]).toBe(replacement);
         },
       ),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 
@@ -1577,7 +1597,7 @@ describe("property: binary Unicode stress test", () => {
         }
         expect(validation.valid).toBe(true);
       }),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 });

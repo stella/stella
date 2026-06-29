@@ -1,6 +1,12 @@
 {
   "$schema": "https://turborepo.com/schema.json",
   "globalDependencies": ["oxlint.config.ts", ".oxfmtrc.json"],
+  // Turbo runs tasks in strict env mode, which strips undeclared variables from
+  // the task environment. propertyConfig reads these at run time: the nightly
+  // factor that scales property numRuns, and CI to enable fast-check verbose
+  // reporting. Without passing them through, the nightly sweep would silently
+  // run at factor 1.
+  "globalPassThroughEnv": ["CI", "PROPERTY_TEST_NUM_RUNS_FACTOR"],
   "tasks": {
     "transit": {
       "dependsOn": ["^transit"]
@@ -47,6 +53,11 @@
     "test": {
       "dependsOn": [],
       "inputs": ["$TURBO_DEFAULT$"]
+    },
+    "test:property": {
+      "dependsOn": [],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "cache": false
     },
     "clean": {
       "cache": false

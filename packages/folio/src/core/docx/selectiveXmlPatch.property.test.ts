@@ -17,6 +17,8 @@
 import { describe, test, expect } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import {
   buildPatchedDocumentXml,
   countParagraphElements,
@@ -64,7 +66,7 @@ describe("buildPatchedDocumentXml property invariants", () => {
         const result = buildPatchedDocumentXml(xml, xml, new Set());
         expect(result).toBe(xml);
       }),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -76,7 +78,7 @@ describe("buildPatchedDocumentXml property invariants", () => {
         const result = buildPatchedDocumentXml(xml, xml, ids);
         expect(result).toBe(xml);
       }),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -98,7 +100,7 @@ describe("buildPatchedDocumentXml property invariants", () => {
           );
         }
       }),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -134,7 +136,7 @@ describe("buildPatchedDocumentXml property invariants", () => {
           );
         }
       }),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -156,7 +158,7 @@ describe("buildPatchedDocumentXml property invariants", () => {
         const b = buildPatchedDocumentXml(original, serialized, orderB);
         expect(a).toBe(b);
       }),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -175,7 +177,7 @@ describe("buildPatchedDocumentXml property invariants", () => {
           }
         }
       }),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 });

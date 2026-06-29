@@ -25,6 +25,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import type { SdtProperties } from "../types/document";
 import { parseSdtProperties } from "./sdtProperties";
 import { reconcileRawSdtPr } from "./sdtPropertiesPatch";
@@ -583,7 +585,7 @@ describe("sdtPr property tests", () => {
       ),
       // 150 runs is enough coverage for the sdtPr shape we generate, keeps
       // wall-clock well under the 30s budget noted in the task.
-      { numRuns: 150 },
+      propertyConfig({ numRuns: 150 }),
     );
   });
 
@@ -602,7 +604,7 @@ describe("sdtPr property tests", () => {
         const props = parseSdtPr(xml);
         expect(props.showingPlaceholder).toBe(form.expected);
       }),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -618,7 +620,7 @@ describe("sdtPr property tests", () => {
         expect(props.sdtType).toBe("checkbox");
         expect(props.checked).toBe(form.expected);
       }),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -654,7 +656,7 @@ describe("sdtPr property tests", () => {
         const reparsed = parseSdtPr(reconciled);
         expect(projection(reparsed)).toEqual(projection(props1));
       }),
-      { numRuns: 150 },
+      propertyConfig({ numRuns: 150 }),
     );
   });
 });

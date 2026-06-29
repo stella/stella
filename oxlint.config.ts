@@ -1224,6 +1224,10 @@ export default defineConfig({
               "apps/api/src/lib/subprocess.ts",
               "apps/web/e2e/helpers/api.ts",
               "apps/web/e2e/staging/global-setup.ts",
+              // Test-only helper: reads PROPERTY_TEST_NUM_RUNS_FACTOR and CI
+              // to tune fast-check at assert time. Never imported by runtime
+              // code, so there is no app env module to route through.
+              "packages/property-testing/src/index.ts",
             ],
           },
         ],

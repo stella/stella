@@ -1,0 +1,61 @@
+name: Nightly Property Tests
+
+on:
+  schedule:
+    # 05:17 UTC daily, after the nightly full test suite.
+    - cron: "17 5 * * *"
+  workflow_dispatch:
+    inputs:
+      factor:
+        description: "numRuns multiplier (overrides the default nightly factor)"
+        required: false
+        default: "10"
+
+permissions: {}
+
+jobs:
+  property-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/bun-ci-retry.sh --ignore-scripts
+        env:
+          # .npmrc references NPM_TOKEN, but this workflow can be manually
+          # dispatched on a branch ref. Do not expose the real token to
+          # branch-controlled install scripts.
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          mv .env.example .env
+          cd ../web
+          mv .env.example .env
+
+      # Run only the property tests, in isolation, with a larger per-test
+      # budget than PR CI affords. Each package's test:property selects every
+      # test file that uses fc.assert (by content, so a file does not have to be
+      # named *.property.test.ts to be covered). `propertyConfig` from
+      # @stll/property-testing reads PROPERTY_TEST_NUM_RUNS_FACTOR to scale every
+      # property's numRuns; verbose reporting is on under CI so a failing run
+      # logs the full list of shrunk values plus the replay seed.
+      - name: Property test suite
+        run: bun run test:property
+        env:
+          TURBO_FORCE: "true"
+          PROPERTY_TEST_NUM_RUNS_FACTOR: ${{ github.event.inputs.factor || '10' }}

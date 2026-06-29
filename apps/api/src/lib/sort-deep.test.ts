@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { sortDeep } from "./sort-deep";
 
 /**
@@ -44,6 +46,7 @@ describe("sortDeep", () => {
         const twice = sortDeep(once);
         expect(twice).toEqual(once);
       }),
+      propertyConfig(),
     );
   });
 
@@ -58,6 +61,7 @@ describe("sortDeep", () => {
         // JSON.stringify(-0) → "0" and toEqual uses Object.is.
         expect(JSON.stringify(JSON.parse(serialised))).toBe(serialised);
       }),
+      propertyConfig(),
     );
   });
 
@@ -86,6 +90,7 @@ describe("sortDeep", () => {
       fc.property(jsonArbitrary, (input) => {
         assertKeysSorted(sortDeep(input));
       }),
+      propertyConfig(),
     );
   });
 
@@ -98,6 +103,7 @@ describe("sortDeep", () => {
         // structural comparison.
         expect(normalizeJsonValue(sorted)).toEqual(normalizeJsonValue(input));
       }),
+      propertyConfig(),
     );
   });
 
@@ -107,6 +113,7 @@ describe("sortDeep", () => {
         const sorted = sortDeep(arr);
         expect(sorted).toEqual(arr);
       }),
+      propertyConfig(),
     );
   });
 
@@ -124,6 +131,7 @@ describe("sortDeep", () => {
           expect(sortDeep(prim)).toBe(prim);
         },
       ),
+      propertyConfig(),
     );
   });
 

@@ -8,6 +8,7 @@
   },
   "scripts": {
     "test": "bun test --preload ./src/tests/setup-env.ts",
+    "test:property": "bun test --preload ./src/tests/setup-env.ts $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "dev": "bun run docker:dev && NODE_ENV=development bun --port 3001 --preload ./src/dev/register-mock-ai.ts --watch src/index.ts",
     "dev:ai-tools": "devtools",
     "docker:dev": "docker compose --profile dev up -d",
@@ -101,6 +102,7 @@
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.2",
     "@faker-js/faker": "^10.3.0",
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
     "@types/nodemailer": "^8.0.1",

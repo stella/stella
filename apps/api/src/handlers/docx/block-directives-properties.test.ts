@@ -12,6 +12,8 @@ import fc from "fast-check";
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import {
   evaluateCondition,
   flattenTemplateData,
@@ -101,7 +103,7 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
         const result = resolvePath(ident, data);
         expect(result).toBe("found");
       }),
-      { numRuns: 200 },
+      propertyConfig({ numRuns: 200 }),
     );
   });
 
@@ -117,7 +119,7 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
         const result = resolvePath(ident, data);
         expect(result).toBeUndefined();
       }),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -133,7 +135,7 @@ describe("property: parseNumeric rejects non-numeric identifiers", () => {
         const result = resolvePath(ident, data);
         expect(result).toBe("found");
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -177,7 +179,7 @@ describe("property: nested objects in #each items resolve", () => {
           }
         },
       ),
-      { numRuns: 30 },
+      propertyConfig({ numRuns: 30 }),
     );
   });
 
@@ -208,7 +210,7 @@ describe("property: nested objects in #each items resolve", () => {
           expect(joined).toContain(nestedVal);
         },
       ),
-      { numRuns: 30 },
+      propertyConfig({ numRuns: 30 }),
     );
   });
 });
@@ -241,7 +243,7 @@ describe("property: arrays inside loop items are not recursed into", () => {
           }
         },
       ),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 });
@@ -279,7 +281,7 @@ describe("property: compound condition inference per sub-expression", () => {
           }
         },
       ),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -326,7 +328,7 @@ describe("property: compound condition inference per sub-expression", () => {
           expect(rightField).toBeUndefined();
         },
       ),
-      { numRuns: 30 },
+      propertyConfig({ numRuns: 30 }),
     );
   });
 });
@@ -483,7 +485,7 @@ describe("property: flattenTemplateData roundtrip", () => {
         expect(flattened).toHaveProperty(["address.city"]);
         expect(flattened).toHaveProperty(["address.zip"]);
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -497,7 +499,7 @@ describe("property: evaluateCondition consistency", () => {
         const neg = evaluateCondition(`!${path}`, data);
         expect(neg).toBe(!pos);
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 
@@ -509,7 +511,7 @@ describe("property: evaluateCondition consistency", () => {
         const reverse = evaluateCondition(`${b} == ${a}`, data);
         expect(forward).toBe(reverse);
       }),
-      { numRuns: 100 },
+      propertyConfig({ numRuns: 100 }),
     );
   });
 });
@@ -542,7 +544,7 @@ describe("property: loop-expanded @num markers number sequentially", () => {
           expect(numbers).toEqual(names.map((_, i) => i + 1));
         },
       ),
-      { numRuns: 20 },
+      propertyConfig({ numRuns: 20 }),
     );
   });
 
@@ -571,7 +573,7 @@ describe("property: loop-expanded @num markers number sequentially", () => {
           expect(pair[2]).toBe(String(i + 1));
         }
       }),
-      { numRuns: 20 },
+      propertyConfig({ numRuns: 20 }),
     );
   });
 
@@ -597,7 +599,7 @@ describe("property: loop-expanded @num markers number sequentially", () => {
         );
         expect(refs).toEqual(Array.from({ length: count }, () => "1"));
       }),
-      { numRuns: 20 },
+      propertyConfig({ numRuns: 20 }),
     );
   });
 });

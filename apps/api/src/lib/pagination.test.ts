@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import {
   createCursorPage,
   decodePaginationCursor,
@@ -110,6 +112,7 @@ describe("cursor pagination — properties", () => {
           parts,
         );
       }),
+      propertyConfig(),
     );
   });
 
@@ -119,6 +122,7 @@ describe("cursor pagination — properties", () => {
         const result = decodePaginationCursor(input);
         expect(result === null || Array.isArray(result)).toBe(true);
       }),
+      propertyConfig(),
     );
   });
 
@@ -139,6 +143,7 @@ describe("cursor pagination — properties", () => {
           expect(page.items).toEqual(rows.slice(0, page.items.length));
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -162,6 +167,7 @@ describe("cursor pagination — properties", () => {
           }
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -172,6 +178,7 @@ describe("cursor pagination — properties", () => {
           isDateOnlyPaginationCursorPart(d.toISOString().slice(0, 10)),
         ).toBe(true);
       }),
+      propertyConfig(),
     );
   });
 
@@ -185,6 +192,7 @@ describe("cursor pagination — properties", () => {
           s,
         );
       }),
+      propertyConfig(),
     );
   });
 
@@ -193,6 +201,7 @@ describe("cursor pagination — properties", () => {
       fc.property(boundedDate, (d) => {
         expect(parseDateTimePaginationCursorPart(d.toISOString())).toEqual(d);
       }),
+      propertyConfig(),
     );
   });
 
@@ -204,6 +213,7 @@ describe("cursor pagination — properties", () => {
         const stripped = d.toISOString().replace(/\.\d{3}Z$/u, "Z");
         expect(parseDateTimePaginationCursorPart(stripped)).toBeNull();
       }),
+      propertyConfig(),
     );
   });
 
@@ -212,6 +222,7 @@ describe("cursor pagination — properties", () => {
       fc.property(fc.uuid(), (id) => {
         expect(isUuidPaginationCursorPart(id)).toBe(true);
       }),
+      propertyConfig(),
     );
   });
 });

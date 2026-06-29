@@ -8,6 +8,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { createLayoutScheduler, type SchedulerClock } from "./layoutScheduler";
 
 type BurstItem = {
@@ -116,6 +118,7 @@ describe("layoutScheduler (properties)", () => {
           }
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -145,6 +148,7 @@ describe("layoutScheduler (properties)", () => {
           expect(runCount).toBe(0);
         },
       ),
+      propertyConfig(),
     );
   });
 });

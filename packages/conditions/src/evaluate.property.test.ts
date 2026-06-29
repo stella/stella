@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import {
   type ConditionValue,
   evaluateCondition,
@@ -131,6 +133,7 @@ describe("evaluator invariants (property-based)", () => {
           "boolean",
         );
       }),
+      propertyConfig(),
     );
   });
 
@@ -150,6 +153,7 @@ describe("evaluator invariants (property-based)", () => {
           expect(evaluateCondition(group, resolve)).toBe(expected);
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -161,6 +165,7 @@ describe("evaluator invariants (property-based)", () => {
           evaluateCondition(node, resolve),
         );
       }),
+      propertyConfig(),
     );
   });
 
@@ -184,6 +189,7 @@ describe("evaluator invariants (property-based)", () => {
           !evaluateCondition(neqNode, resolve),
         );
       }),
+      propertyConfig(),
     );
   });
 
@@ -212,6 +218,7 @@ describe("evaluator invariants (property-based)", () => {
           );
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -233,6 +240,7 @@ describe("evaluator invariants (property-based)", () => {
           !evaluateCondition(notEmpty, resolve),
         );
       }),
+      propertyConfig(),
     );
   });
 
@@ -261,6 +269,7 @@ describe("evaluator invariants (property-based)", () => {
           expect(evaluateCondition(cmp("lt"), resolve)).toBe(false);
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -282,6 +291,7 @@ describe("evaluator invariants (property-based)", () => {
           expect(evaluateCondition(node, makeResolver({}))).toBe(false);
         },
       ),
+      propertyConfig(),
     );
   });
 });

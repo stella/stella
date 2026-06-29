@@ -4,6 +4,7 @@ import fc from "fast-check";
 import * as v from "valibot";
 
 import { conditionNodeSchema } from "@stll/conditions";
+import { propertyConfig } from "@stll/property-testing";
 
 import { tConditionNode } from "@/api/lib/conditions/contract";
 import {
@@ -330,6 +331,7 @@ describe("conditionNodeSchema — properties", () => {
         expect(v.is(conditionNodeSchema, filter)).toBe(true);
         expect(Value.Check(tConditionNode, filter)).toBe(true);
       }),
+      propertyConfig(),
     );
   });
 });
@@ -341,6 +343,7 @@ describe("viewLayoutSchema — properties", () => {
         expect(v.is(viewLayoutSchema, layout)).toBe(true);
         expect(Value.Check(tViewLayoutSchema, layout)).toBe(true);
       }),
+      propertyConfig(),
     );
   });
 
@@ -349,6 +352,7 @@ describe("viewLayoutSchema — properties", () => {
       fc.property(arbLayout, (layout) => {
         expect(parseViewLayout(layout)).toEqual(layout as ViewLayout);
       }),
+      propertyConfig(),
     );
   });
 
@@ -368,6 +372,7 @@ describe("viewLayoutSchema — properties", () => {
           expect(Value.Check(tViewLayoutSchema, polluted)).toBe(false);
         },
       ),
+      propertyConfig(),
     );
   });
 
