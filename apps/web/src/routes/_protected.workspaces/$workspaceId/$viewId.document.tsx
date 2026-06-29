@@ -78,7 +78,7 @@ import { PdfViewerControls } from "@/routes/_protected.workspaces/-components/pd
 import "@/routes/_protected.workspaces/$workspaceId/-components/peek/peek-docx.css";
 
 const ReadOnlyDocxViewer = lazy(async () => {
-  const m = await import("@stll/folio");
+  const m = await import("@/components/docx/app-docx-editor");
   return { default: m.DocxEditor };
 });
 

@@ -22,7 +22,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
+import { containedHandler } from "../../utils/contained-handler";
 
 export type HyperlinkPopupData = {
   href: string;

@@ -7,15 +7,8 @@
 
 import * as React from "react";
 
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/components/select";
-
 import type { Style, StyleType, Theme } from "../../core/types/document";
+import { useFolioUI } from "../../ui/folio-ui";
 
 // ============================================================================
 // TYPES
@@ -150,6 +143,13 @@ export function StylePicker({
   className,
   width = 140,
 }: StylePickerProps) {
+  const {
+    Root: Select,
+    Trigger: SelectTrigger,
+    Value: SelectValue,
+    Popup: SelectPopup,
+    Item: SelectItem,
+  } = useFolioUI().Select;
   const styleOptions = React.useMemo(() => {
     if (!styles || styles.length === 0) {
       return DEFAULT_STYLES;
@@ -199,8 +199,7 @@ export function StylePicker({
     >
       <SelectTrigger
         size="sm"
-        className={`h-8 min-h-0 min-w-0 border-transparent bg-transparent text-sm text-[var(--doc-text-muted)] shadow-none hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)] data-[pressed]:bg-[var(--doc-primary-light)] ${className ?? ""}`}
-        data-folio-style-picker=""
+        className={`folio-style-picker h-8 min-h-0 min-w-0 border-transparent bg-transparent text-sm text-[var(--doc-text-muted)] shadow-none hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)] data-[pressed]:bg-[var(--doc-primary-light)] ${className ?? ""}`}
         style={{
           width: typeof width === "number" ? `${width}px` : width,
         }}

@@ -9,17 +9,9 @@
 
 import { useEffect, useId, useState } from "react";
 
-import {
-  Dialog,
-  DialogPortal,
-  DialogBackdrop,
-  DialogPopup,
-  DialogTitle,
-  DialogClose,
-} from "@stll/ui/components/dialog";
-
 import type { SectionProperties } from "../../core/types/document";
 import { TWIPS_PER_INCH } from "../../core/utils/units";
+import { useFolioUI } from "../../ui/folio-ui";
 
 /** Common page sizes in twips (width x height in portrait orientation) */
 const PAGE_SIZES = [
@@ -80,6 +72,14 @@ export function PageSetupDialog({
   onApply,
   currentProps,
 }: PageSetupDialogProps) {
+  const {
+    Root: Dialog,
+    Portal: DialogPortal,
+    Backdrop: DialogBackdrop,
+    Popup: DialogPopup,
+    Title: DialogTitle,
+    Close: DialogClose,
+  } = useFolioUI().Dialog;
   const id = useId();
   const [pageWidth, setPageWidth] = useState(DEFAULT_WIDTH);
   const [pageHeight, setPageHeight] = useState(DEFAULT_HEIGHT);

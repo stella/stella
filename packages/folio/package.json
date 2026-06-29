@@ -28,6 +28,7 @@
     "test:visual:report": "bunx playwright show-report"
   },
   "dependencies": {
+    "@base-ui/react": "catalog:",
     "@fontsource/arimo": "^5.2.8",
     "@fontsource/caladea": "^5.2.8",
     "@fontsource/carlito": "^5.2.8",
@@ -37,7 +38,6 @@
     "@stll/docx-core": "workspace:*",
     "@stll/docx-utils": "workspace:*",
     "@stll/template-conditions": "workspace:*",
-    "@stll/ui": "workspace:*",
     "better-result": "catalog:",
     "csstype": "^3.1.3",
     "fast-xml-parser": "^5.9.3",

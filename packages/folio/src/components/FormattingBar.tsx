@@ -24,13 +24,11 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { ColorPicker } from "@stll/ui/components/color-picker";
-import type { ColorPreset } from "@stll/ui/components/color-picker";
-import { Menu, MenuPopup, MenuTrigger } from "@stll/ui/components/menu";
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
-
 import type { ParagraphAlignment } from "../core/types/document";
 import { cn } from "../lib/utils";
+import { useFolioUI } from "../ui/folio-ui";
+import type { ColorPreset } from "../ui/folio-ui";
+import { containedHandler } from "../utils/contained-handler";
 import {
   ToolbarButton,
   ToolbarGroup,
@@ -109,6 +107,9 @@ export function FormattingBar(props: FormattingBarProps) {
     inline = false,
   } = props;
 
+  const folioUI = useFolioUI();
+  const { Root: Menu, Trigger: MenuTrigger, Popup: MenuPopup } = folioUI.Menu;
+  const ColorPicker = folioUI.ColorPicker;
   const t = useTranslations("folio");
   const barRef = useRef<HTMLDivElement>(null);
   const [showSecondaryInline, setShowSecondaryInline] = useState(false);

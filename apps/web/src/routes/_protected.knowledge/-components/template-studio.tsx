@@ -200,7 +200,7 @@ import {
 } from "@/routes/_protected.knowledge/-queries";
 
 const DocxEditor = lazy(async () => {
-  const m = await import("@stll/folio");
+  const m = await import("@/components/docx/app-docx-editor");
   return { default: m.DocxEditor };
 });
 

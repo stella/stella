@@ -33,6 +33,7 @@ import type {
 } from "../core/types/document";
 import type { DocxInput } from "../core/utils/docxInput";
 import type { PagedEditorRef } from "../paged-editor/PagedEditor";
+import type { FolioUIComponents } from "../ui/folio-ui";
 import type { DocumentLoadState } from "./hooks/useDocumentLoader";
 // `EditorMode` is owned by `./hooks/useEditorMode`. Re-imported here for use
 // in `DocxEditorProps`; the canonical export is from the hook module.
@@ -130,6 +131,12 @@ export type DocxEditorProps = {
   readOnly?: boolean;
   /** Whether comments/tracked changes should auto-open the review sidebar (default: true) */
   autoOpenReviewSidebar?: boolean;
+  /**
+   * Override folio's built-in chrome UI primitives (Button, …) with a
+   * consumer's design-system components. Omitted entries fall back to folio's
+   * built-in defaults, so standalone folio works without any injection.
+   */
+  components?: Partial<FolioUIComponents>;
   /** Custom toolbar actions */
   toolbarExtra?: ReactNode;
   /** Additional CSS class name */

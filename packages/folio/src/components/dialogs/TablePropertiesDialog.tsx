@@ -4,14 +4,7 @@
 
 import { useCallback, useEffect, useId, useState } from "react";
 
-import {
-  Dialog,
-  DialogPortal,
-  DialogBackdrop,
-  DialogPopup,
-  DialogTitle,
-  DialogClose,
-} from "@stll/ui/components/dialog";
+import { useFolioUI } from "../../ui/folio-ui";
 
 export type TableProperties = {
   width?: number | null;
@@ -36,6 +29,14 @@ export function TablePropertiesDialog({
   onApply,
   currentProps,
 }: TablePropertiesDialogProps) {
+  const {
+    Root: Dialog,
+    Portal: DialogPortal,
+    Backdrop: DialogBackdrop,
+    Popup: DialogPopup,
+    Title: DialogTitle,
+    Close: DialogClose,
+  } = useFolioUI().Dialog;
   const id = useId();
   const [width, setWidth] = useState(currentProps?.width ?? 0);
   const [widthType, setWidthType] = useState(currentProps?.widthType ?? "auto");

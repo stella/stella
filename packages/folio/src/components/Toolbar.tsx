@@ -14,9 +14,8 @@
 
 import React, { useCallback, useRef } from "react";
 
-import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
-
 import { cn } from "../lib/utils";
+import { containedHandler } from "../utils/contained-handler";
 import { FormattingBar } from "./FormattingBar";
 import {
   ToolbarButton,

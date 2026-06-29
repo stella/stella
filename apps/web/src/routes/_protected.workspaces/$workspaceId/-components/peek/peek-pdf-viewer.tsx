@@ -49,7 +49,7 @@ import { PageAnonymization } from "@/routes/_protected.workspaces/$workspaceId/-
 import { PageCitation } from "@/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation";
 
 const DocxEditor = lazy(async () => {
-  const m = await import("@stll/folio");
+  const m = await import("@/components/docx/app-docx-editor");
   return { default: m.DocxEditor };
 });
 

@@ -10,7 +10,7 @@
  * through `dispatchDropdownPick` / `dispatchDatePick` so the change rides
  * the normal undo stack.
  *
- * The dropdown popover uses `@stll/ui` `MenuItem` styling for visual + a11y
+ * The dropdown popover uses the injected `MenuItem` for visual + a11y
  * consistency with the rest of the editor.
  */
 
@@ -20,15 +20,13 @@ import { createPortal } from "react-dom";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
-import { MenuItem } from "@stll/ui/components/menu";
-
 import {
   CONTENT_CONTROL_WIDGET_EVENT_NAME,
   dispatchDatePick,
   dispatchDropdownPick,
 } from "../core/prosemirror/plugins/contentControlWidgets";
 import type { ContentControlWidgetEvent } from "../core/prosemirror/plugins/contentControlWidgets";
+import { useFolioUI } from "../ui/folio-ui";
 
 type ListItem = { displayText: string; value: string };
 
@@ -87,6 +85,9 @@ type ContentControlWidgetsOverlayProps = {
 export function ContentControlWidgetsOverlay({
   getEditorView,
 }: ContentControlWidgetsOverlayProps) {
+  const folioUI = useFolioUI();
+  const { Item: MenuItem } = folioUI.Menu;
+  const DatePickerPopover = folioUI.DatePickerPopover;
   const t = useTranslations("folio");
   const tCommon = useTranslations("common");
   const [open, setOpen] = useState<OpenPicker | null>(null);

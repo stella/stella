@@ -26,11 +26,10 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { Button } from "@stll/ui/components/button";
-
 import { ErrorManager } from "../core/managers/ErrorManager";
 import type { ErrorNotification } from "../core/managers/types";
 import { cn } from "../lib/utils";
+import { useFolioUI } from "../ui/folio-ui";
 
 /**
  * Error context value
@@ -364,6 +363,7 @@ function DefaultErrorFallback({
   onReset,
 }: DefaultErrorFallbackProps): React.ReactElement {
   const t = useTranslations("folio");
+  const { Button } = useFolioUI();
 
   return (
     <div className="bg-background m-5 flex min-h-[200px] flex-col items-center justify-center rounded-lg border p-10 text-center">
@@ -415,6 +415,7 @@ export function ParseErrorDisplay({
   onRetry,
   className = "",
 }: ParseErrorDisplayProps): React.ReactElement {
+  const { Button } = useFolioUI();
   return (
     <div
       className={cn(
