@@ -1,17 +1,27 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { redirectToDefaultWorkspaceView } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
+import { DefaultPendingComponent } from "@/components/route-components";
+import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
 export const Route = createFileRoute(
   "/_protected/workspaces/$workspaceId/timesheets",
 )({
   // Time tracking is intentionally excluded from the current product surface.
-  // Keep the disabled route redirect-only so dormant UI cannot mount during
-  // direct URL or deep-link navigation.
-  beforeLoad: async ({ context, params }) => {
-    await redirectToDefaultWorkspaceView({
-      queryClient: context.queryClient,
-      workspaceId: params.workspaceId,
-    });
-  },
+  // The route only redirects to the workspace's default view, from a mounted
+  // component so no dormant product UI mounts on a direct/deep-link visit.
+  // Remount on workspace change so a stale in-flight redirect is cancelled.
+  remountDeps: ({ params }) => params.workspaceId,
+  component: TimesheetsRedirect,
 });
+
+function TimesheetsRedirect() {
+  const queryClient = Route.useRouteContext({
+    select: (context) => context.queryClient,
+  });
+  const workspaceId = Route.useParams({
+    select: (params) => params.workspaceId,
+  });
+  useDefaultWorkspaceViewRedirect({ queryClient, workspaceId });
+
+  return <DefaultPendingComponent />;
+}

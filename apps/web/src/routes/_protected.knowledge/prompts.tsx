@@ -1,4 +1,4 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 // Legacy "Prompts" surface — folded into Tools after the
 // prompts/skills consolidation. A "prompt" is now a skill whose
@@ -7,11 +7,7 @@ import { createFileRoute, redirect } from "@tanstack/react-router";
 // pre-filtered to the skill kind so muscle-memory bookmarks keep
 // working.
 export const Route = createFileRoute("/_protected/knowledge/prompts")({
-  beforeLoad: () => {
-    throw redirect({
-      to: "/knowledge/tools",
-      search: { kind: "skill" },
-      replace: true,
-    });
-  },
+  component: () => (
+    <Navigate replace search={{ kind: "skill" }} to="/knowledge/tools" />
+  ),
 });

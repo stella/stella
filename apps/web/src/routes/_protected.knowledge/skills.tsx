@@ -1,11 +1,7 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_protected/knowledge/skills")({
-  beforeLoad: () => {
-    throw redirect({
-      to: "/knowledge/tools",
-      search: { kind: "skill" },
-      replace: true,
-    });
-  },
+  component: () => (
+    <Navigate replace search={{ kind: "skill" }} to="/knowledge/tools" />
+  ),
 });

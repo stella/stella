@@ -329,7 +329,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-router-select.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
-    "./.oxlint-plugins/no-component-on-redirect-route.ts",
+    "./.oxlint-plugins/no-beforeload-redirect.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
@@ -410,11 +410,10 @@ export default defineConfig({
     },
     {
       files: [
-        ".oxlint-plugins/__fixtures__/no-component-on-redirect-route.fixture.tsx",
+        ".oxlint-plugins/__fixtures__/no-beforeload-redirect.fixture.tsx",
       ],
       rules: {
-        "no-component-on-redirect-route/no-component-on-redirect-route":
-          "error",
+        "no-beforeload-redirect/no-beforeload-redirect": "error",
       },
     },
     {
@@ -1183,9 +1182,18 @@ export default defineConfig({
       files: ["apps/web/src/routes/**/*.{ts,tsx}"],
       rules: {
         "@tanstack/router/create-route-property-order": "error",
-        "no-component-on-redirect-route/no-component-on-redirect-route":
-          "error",
+        "no-beforeload-redirect/no-beforeload-redirect": "error",
         "no-raw-route-query-client/no-raw-route-query-client": "error",
+      },
+    },
+    {
+      // Public, server-rendered law routes (isPublicSsrPath) must redirect
+      // from beforeLoad so the server emits a real HTTP redirect for crawlers
+      // and no-JS clients. The client-only blank-page race the rule guards
+      // against does not apply to SSR routes.
+      files: ["apps/web/src/routes/law/**/*.{ts,tsx}"],
+      rules: {
+        "no-beforeload-redirect/no-beforeload-redirect": "off",
       },
     },
     {
