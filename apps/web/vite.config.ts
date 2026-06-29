@@ -197,23 +197,38 @@ export default defineConfig(({ mode }) => {
       alias: [
         {
           find: /^@stll\/conditions$/u,
-          replacement: path.resolve(APP_ROOT, "../../packages/conditions/src/index.ts"),
+          replacement: path.resolve(
+            APP_ROOT,
+            "../../packages/conditions/src/index.ts",
+          ),
         },
         {
           find: /^@stll\/template-conditions$/u,
-          replacement: path.resolve(APP_ROOT, "../../packages/template-conditions/src/index.ts"),
+          replacement: path.resolve(
+            APP_ROOT,
+            "../../packages/template-conditions/src/index.ts",
+          ),
         },
         {
           find: /^@stll\/docx-utils$/u,
-          replacement: path.resolve(APP_ROOT, "../../packages/docx-utils/src/index.ts"),
+          replacement: path.resolve(
+            APP_ROOT,
+            "../../packages/docx-utils/src/index.ts",
+          ),
         },
         {
           find: /^@stll\/docx-core$/u,
-          replacement: path.resolve(APP_ROOT, "../../packages/docx-core/src/index.ts"),
+          replacement: path.resolve(
+            APP_ROOT,
+            "../../packages/docx-core/src/index.ts",
+          ),
         },
         {
           find: /^@stll\/docx-core\/model$/u,
-          replacement: path.resolve(APP_ROOT, "../../packages/docx-core/src/model/document.ts"),
+          replacement: path.resolve(
+            APP_ROOT,
+            "../../packages/docx-core/src/model/document.ts",
+          ),
         },
       ],
       dedupe: [
