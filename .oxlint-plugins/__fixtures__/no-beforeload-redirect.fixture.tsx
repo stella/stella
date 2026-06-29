@@ -59,6 +59,31 @@ export const BadMultiWithComponentRoute = createFileRoute(
   component: SafeComponent,
 });
 
+// Concise ternary where both branches redirect: still an unconditional alias.
+export const BadTernaryRoute = createFileRoute("/__fixture/bad-ternary")({
+  // oxlint-disable-next-line no-beforeload-redirect/no-beforeload-redirect
+  beforeLoad: ({ context }) =>
+    context.flag ? redirect({ to: "/a" }) : redirect({ to: "/b" }),
+});
+
+// `return <redirecting ternary>` in a block body is the same alias.
+export const BadReturnTernaryRoute = createFileRoute(
+  "/__fixture/bad-return-ternary",
+)({
+  // oxlint-disable-next-line no-beforeload-redirect/no-beforeload-redirect
+  loader: ({ context }) => {
+    const fallback = "/b";
+    return context.flag ? redirect({ to: "/a" }) : redirect({ to: fallback });
+  },
+});
+
+// Safe: a ternary where only one branch redirects can fall through to render.
+export const SafeTernaryGuardRoute = createFileRoute("/__fixture/safe-ternary")({
+  beforeLoad: ({ context }) =>
+    context.flag ? redirect({ to: "/a" }) : undefined,
+  component: GuardedComponent,
+});
+
 // Safe: redirect from a mounted inert component.
 export const SafeRedirectRoute = createFileRoute("/__fixture/safe-redirect")({
   component: () => <Navigate replace to="/" />,

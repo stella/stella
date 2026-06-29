@@ -39,17 +39,30 @@ const FUNCTION_TYPES = new Set([
 const isRedirectCall = (node) =>
   node?.type === "CallExpression" && isIdentifier(node.callee, "redirect");
 
-// `throw redirect(...)` or `return redirect(...)`.
+// An expression that always evaluates to a redirect: `redirect(...)`, or a
+// ternary whose both branches are themselves redirect expressions
+// (`cond ? redirect(a) : redirect(b)`).
+const isRedirectExpression = (node) => {
+  if (node?.type === "ConditionalExpression") {
+    return (
+      isRedirectExpression(node.consequent) &&
+      isRedirectExpression(node.alternate)
+    );
+  }
+  return isRedirectCall(node);
+};
+
+// `throw <redirect>` or `return <redirect>` (including a redirecting ternary).
 const isRedirectStatement = (node) =>
-  (node?.type === "ThrowStatement" && isRedirectCall(node.argument)) ||
-  (node?.type === "ReturnStatement" && isRedirectCall(node.argument));
+  (node?.type === "ThrowStatement" && isRedirectExpression(node.argument)) ||
+  (node?.type === "ReturnStatement" && isRedirectExpression(node.argument));
 
 // A statement that completes the handler WITHOUT redirecting, so a path can
 // fall through and render the route: a plain/non-redirect `return`, or a
 // non-redirect `throw`.
 const isNonRedirectCompletion = (node) =>
-  (node?.type === "ReturnStatement" && !isRedirectCall(node.argument)) ||
-  (node?.type === "ThrowStatement" && !isRedirectCall(node.argument));
+  (node?.type === "ReturnStatement" && !isRedirectExpression(node.argument)) ||
+  (node?.type === "ThrowStatement" && !isRedirectExpression(node.argument));
 
 // Is a non-redirect exit reachable anywhere inside this statement? Skips nested
 // function bodies, whose returns/throws belong to that function, not the
@@ -133,7 +146,7 @@ const alwaysRedirects = (fn) => {
   if (fn.body?.type === "BlockStatement") {
     return blockAlwaysRedirects(fn.body.body);
   }
-  return isRedirectCall(fn.body);
+  return isRedirectExpression(fn.body);
 };
 
 const isCreateFileRouteConfig = (node) => {
