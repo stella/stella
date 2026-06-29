@@ -81,6 +81,22 @@ describe("fromProseDoc bidi tri-state (changed vs original)", () => {
   });
 });
 
+describe("pageBreakBefore tri-state (same class, fallback path)", () => {
+  test("explicit pageBreakBefore=false is preserved on a new paragraph", () => {
+    const doc = schema.node("doc", null, [
+      schema.node("paragraph", { pageBreakBefore: false }, [
+        schema.text("Body"),
+      ]),
+    ]);
+    const out = fromProseDoc(doc);
+    const block = out.package.document.content.at(0);
+    if (block?.type !== "paragraph") {
+      throw new Error("expected a paragraph");
+    }
+    expect(block.formatting?.pageBreakBefore).toBe(false);
+  });
+});
+
 describe("explicit LTR survives serialization (save invariant)", () => {
   test('bidi=false serializes as <w:bidi w:val="0"/>', () => {
     const out = fromProseDoc(paraNode("عربي", false));

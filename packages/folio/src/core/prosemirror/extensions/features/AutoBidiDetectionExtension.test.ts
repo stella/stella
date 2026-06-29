@@ -36,6 +36,13 @@ const schema = new Schema({
       attrs: { displayText: { default: "" } },
       toDOM: () => ["span", 0],
     },
+    // Inline content control holding nested inline content (mirrors inline SDT).
+    inlineSdt: {
+      group: "inline",
+      inline: true,
+      content: "text*",
+      toDOM: () => ["span", 0],
+    },
     text: { group: "inline" },
   },
 });
@@ -60,6 +67,12 @@ const fieldLedPara = (fieldText: string, trailing: string) =>
   schema.node("paragraph", { bidi: null, bidiAuto: null }, [
     schema.node("field", { displayText: fieldText }),
     ...(trailing.length > 0 ? [schema.text(trailing)] : []),
+  ]);
+
+// Paragraph whose only content is an inline content control holding `text`.
+const sdtLedPara = (text: string) =>
+  schema.node("paragraph", { bidi: null, bidiAuto: null }, [
+    schema.node("inlineSdt", null, text.length > 0 ? [schema.text(text)] : []),
   ]);
 
 const stateOf = (...paras: PMNode[]) =>
@@ -127,6 +140,11 @@ describe("ensureBaseDirectionInState (initial load)", () => {
     const state = ensureBaseDirectionInState(stateOf(fieldLedPara("عربي", "")));
     expect(bidis(state)).toEqual([true]);
   });
+
+  test("detects RTL from text inside an inline content control (SDT)", () => {
+    const state = ensureBaseDirectionInState(stateOf(sdtLedPara("عربي")));
+    expect(bidis(state)).toEqual([true]);
+  });
 });
 
 describe("appendTransaction (live editing)", () => {
@@ -167,6 +185,15 @@ describe("appendTransaction (live editing)", () => {
     let state = stateOf(para("Hello", { bidi: true, bidiAuto: null }));
     state = state.apply(state.tr.insertText(" world", 6));
     expect(bidis(state)).toEqual([true]);
+  });
+
+  test("detects the edited paragraph in a multi-paragraph doc (scoped scan)", () => {
+    // Type Arabic into the second (empty) paragraph; only it flips to RTL.
+    let state = stateOf(para("First"), para(""));
+    state = state.apply(
+      state.tr.insertText("مرحبا", state.doc.content.size - 1),
+    );
+    expect(bidis(state)).toEqual([null, true]);
   });
 
   test("selection-only transactions do not allocate", () => {

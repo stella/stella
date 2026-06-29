@@ -857,9 +857,10 @@ function paragraphAttrsToFormatting(
     typeof outlineLevel === "number" ||
     attrs.contextualSpacing ||
     attrs.spacingExplicit ||
-    // Tri-state: an explicit `false` (forced LTR) is meaningful formatting and
-    // must keep the paragraph from short-circuiting to "no formatting".
-    attrs.bidi != null;
+    // Tri-state toggles: an explicit `false` is meaningful formatting and must
+    // keep the paragraph from short-circuiting to "no formatting".
+    attrs.bidi != null ||
+    attrs.pageBreakBefore != null;
 
   if (!hasFormatting) {
     return undefined;
@@ -923,10 +924,13 @@ function paragraphAttrsToFormatting(
   if (attrs.contextualSpacing) {
     f.contextualSpacing = attrs.contextualSpacing;
   }
-  // Preserve an explicit decision, including `false` (forced LTR) so it
-  // serializes as `<w:bidi w:val="0"/>`; only undecided `null` is omitted.
+  // Preserve explicit tri-state decisions, including `false` (which serializes
+  // as `w:val="0"`); only undecided `null` is omitted.
   if (attrs.bidi != null) {
     f.bidi = attrs.bidi;
+  }
+  if (attrs.pageBreakBefore != null) {
+    f.pageBreakBefore = attrs.pageBreakBefore;
   }
   return f;
 }

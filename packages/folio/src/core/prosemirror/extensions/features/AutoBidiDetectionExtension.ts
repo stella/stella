@@ -31,6 +31,8 @@ import type { Node as PMNode } from "prosemirror-model";
 import { Plugin, PluginKey } from "prosemirror-state";
 import type { EditorState } from "prosemirror-state";
 
+import type { DirtyRange } from "../../../paged-layout/incrementalMeasure";
+import { getTransactionDirtyRange } from "../../../paged-layout/transactionDirtyRange";
 import { detectBaseDirection } from "../../../utils/baseDirection";
 import { createExtension } from "../create";
 import type { ExtensionRuntime } from "../types";
@@ -46,12 +48,11 @@ type BidiUpdate = {
 // First-strong detection needs the paragraph's directional text in document
 // order. `node.textContent` skips inline field atoms (MERGEFIELD/REF results
 // keep their rendered text in attrs, not child text), which would mis-detect a
-// field-led paragraph; walk direct inline children and fold in field display
-// text. Text inside hyperlink marks is regular child text, so it is included.
+// field-led paragraph. Walk descendants so text nested in inline content
+// controls (SDT) and hyperlinks is included, and fold in field display text.
 const paragraphDirectionalText = (node: PMNode): string => {
   let text = "";
-  for (let i = 0; i < node.childCount; i++) {
-    const child = node.child(i);
+  node.descendants((child) => {
     if (child.isText) {
       text += child.text ?? "";
     } else if (child.type.name === "field") {
@@ -60,44 +61,71 @@ const paragraphDirectionalText = (node: PMNode): string => {
         text += display;
       }
     }
-  }
+  });
   return text;
 };
 
+// Decide the update (if any) for a single paragraph node.
+const evaluateParagraph = (node: PMNode, pos: number): BidiUpdate | null => {
+  const currentBidi = node.attrs["bidi"] ?? null;
+  const autoManaged = currentBidi === null || node.attrs["bidiAuto"] === true;
+  // Explicit decision (user toggle / imported w:bidi): leave it alone.
+  if (!autoManaged) {
+    return null;
+  }
+
+  const wantRtl = detectBaseDirection(paragraphDirectionalText(node)) === "rtl";
+  const desiredBidi = wantRtl ? true : null;
+  const desiredAuto = wantRtl ? true : null;
+  const unchanged =
+    currentBidi === desiredBidi &&
+    (node.attrs["bidiAuto"] ?? null) === desiredAuto;
+  if (unchanged) {
+    return null;
+  }
+  return {
+    pos,
+    attrs: { ...node.attrs, bidi: desiredBidi, bidiAuto: desiredAuto },
+  };
+};
+
+// Whole-document scan (load/seed, and the rare multi-transaction fallback).
 const collectBidiUpdates = (doc: PMNode): BidiUpdate[] => {
   const updates: BidiUpdate[] = [];
-
   doc.descendants((node, pos) => {
-    // Non-paragraph: recurse — paragraphs nested in tables / cells are in scope.
     if (node.type.name !== "paragraph") {
+      // Recurse — paragraphs nested in tables / cells are in scope.
       return;
     }
-
-    const currentBidi = node.attrs["bidi"] ?? null;
-    const autoManaged = currentBidi === null || node.attrs["bidiAuto"] === true;
-    // Explicit decision (user toggle / imported w:bidi): leave it alone.
-    if (!autoManaged) {
-      return false;
+    const update = evaluateParagraph(node, pos);
+    if (update) {
+      updates.push(update);
     }
-
-    const wantRtl =
-      detectBaseDirection(paragraphDirectionalText(node)) === "rtl";
-    const desiredBidi = wantRtl ? true : null;
-    const desiredAuto = wantRtl ? true : null;
-    const changed =
-      currentBidi !== desiredBidi ||
-      (node.attrs["bidiAuto"] ?? null) !== desiredAuto;
-    if (changed) {
-      updates.push({
-        pos,
-        attrs: { ...node.attrs, bidi: desiredBidi, bidiAuto: desiredAuto },
-      });
-    }
-
     // Paragraphs only contain inline content — skip the subtree.
     return false;
   });
+  return updates;
+};
 
+// Scan only the paragraphs overlapping a transaction's edited range, so a
+// keystroke in a large mostly-LTR document doesn't re-scan every paragraph.
+const collectBidiUpdatesInRange = (
+  doc: PMNode,
+  range: DirtyRange,
+): BidiUpdate[] => {
+  const from = Math.max(0, Math.min(range.from, doc.content.size));
+  const to = Math.max(from, Math.min(range.to, doc.content.size));
+  const seen = new Set<number>();
+  const updates: BidiUpdate[] = [];
+  doc.nodesBetween(from, to, (node, pos) => {
+    if (node.type.name === "paragraph" && !seen.has(pos)) {
+      seen.add(pos);
+      const update = evaluateParagraph(node, pos);
+      if (update) {
+        updates.push(update);
+      }
+    }
+  });
   return updates;
 };
 
@@ -154,7 +182,15 @@ const createAutoBidiDetectionPlugin = (): Plugin =>
         return null;
       }
 
-      const updates = collectBidiUpdates(newState.doc);
+      // Common case: a single transaction — scan only its edited range. For the
+      // rarer multi-transaction batch (positions would span intermediate docs),
+      // fall back to a correct whole-document scan.
+      const [first, ...rest] = transactions;
+      const range =
+        first && rest.length === 0 ? getTransactionDirtyRange(first) : null;
+      const updates = range
+        ? collectBidiUpdatesInRange(newState.doc, range)
+        : collectBidiUpdates(newState.doc);
       if (updates.length === 0) {
         return null;
       }

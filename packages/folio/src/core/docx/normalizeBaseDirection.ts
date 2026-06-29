@@ -19,6 +19,7 @@ import type {
   Document,
   Hyperlink,
   Paragraph,
+  ParagraphContent,
   Run,
   Table,
 } from "../types/document";
@@ -44,17 +45,38 @@ const hyperlinkText = (link: Hyperlink): string => {
   return text;
 };
 
-const paragraphText = (paragraph: Paragraph): string => {
+// First-strong directional text for model paragraph content. Mirrors the
+// editor's field/SDT-aware detection: it folds in field result text and recurses
+// inline content controls and insertion wrappers (deleted/moved-away content is
+// not live text, so it is skipped). Mutually recursive, hence declarations.
+function paragraphContentText(items: readonly ParagraphContent[]): string {
   let text = "";
-  for (const item of paragraph.content) {
-    if (item.type === "run") {
-      text += runText(item);
-    } else if (item.type === "hyperlink") {
-      text += hyperlinkText(item);
-    }
+  for (const item of items) {
+    text += singleItemText(item);
   }
   return text;
-};
+}
+
+function singleItemText(item: ParagraphContent): string {
+  switch (item.type) {
+    case "run":
+      return runText(item);
+    case "hyperlink":
+      return hyperlinkText(item);
+    case "simpleField":
+    case "insertion":
+      return paragraphContentText(item.content);
+    case "complexField":
+      return paragraphContentText(item.fieldResult);
+    case "inlineSdt":
+      return paragraphContentText(item.content);
+    default:
+      return "";
+  }
+}
+
+const paragraphText = (paragraph: Paragraph): string =>
+  paragraphContentText(paragraph.content);
 
 const normalizeParagraph = (paragraph: Paragraph): Paragraph => {
   // Respect an explicit decision (true = RTL, false = forced LTR); only fill in

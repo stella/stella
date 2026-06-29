@@ -53,6 +53,20 @@ describe("normalizeBaseDirection", () => {
     );
   });
 
+  test("detects RTL inside an insertion (tracked-change) wrapper", () => {
+    const doc = docOf({
+      type: "paragraph",
+      content: [
+        {
+          type: "insertion",
+          info: { id: 1, author: "Reviewer" },
+          content: [{ type: "run", content: [{ type: "text", text: "عربي" }] }],
+        },
+      ],
+    });
+    expect(bidiOf(normalizeBaseDirection(doc), 0)).toBe(true);
+  });
+
   test("detects RTL inside hyperlinked runs", () => {
     const doc = docOf({
       type: "paragraph",
