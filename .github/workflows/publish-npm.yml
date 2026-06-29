@@ -1,0 +1,176 @@
+name: Publish npm packages
+
+# Publishes the shared @stll dependency packages (docx-core, docx-utils,
+# conditions, template-conditions) to npm with SLSA provenance via OIDC trusted
+# publishing — no long-lived NPM_TOKEN. These packages live in this monorepo
+# (stella's apps consume them) and are published from here; external consumers
+# install the published versions.
+#
+# Least privilege: packing and publishing are separate jobs. The `pack` job runs
+# the untrusted build (bun install, prepack, bun pm pack) with NO id-token, so a
+# compromised build/postinstall script cannot mint an OIDC credential. Only the
+# `publish` job — which just downloads the prebuilt tarballs and runs the
+# hardened action — is granted id-token: write, and it runs only when `publish`
+# is ticked.
+#
+# Prerequisite (one-time, per package, by a maintainer on npmjs.com): configure
+# an npm "trusted publisher" for each @stll/* package pointing at this repository
+# and this workflow file. The hardened action refuses to fall back to token auth,
+# so the first publish will fail until the trusted publisher exists.
+#
+# Default run (publish unchecked) builds and packs only — a safe dry run. Tick
+# "publish" to actually push to npm. The hardened action is idempotent: it skips
+# any name@version already on the registry.
+
+env:
+  NODE_VERSION: "22"
+  NPM_VERSION: "11.11.1"
+
+on:
+  # Auto-release: a version bump merged to main publishes that package. The
+  # hardened action is idempotent, so the three packages you did not bump are
+  # packed but skipped (their version already exists on the registry).
+  push:
+    branches: [main]
+    paths:
+      - packages/conditions/package.json
+      - packages/template-conditions/package.json
+      - packages/docx-core/package.json
+      - packages/docx-utils/package.json
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package(s) to publish (dependency order enforced for "all")
+        type: choice
+        options:
+          - all
+          - conditions
+          - template-conditions
+          - docx-core
+          - docx-utils
+        default: all
+      publish:
+        description: Publish to npm (leave unchecked for a build + pack dry run)
+        type: boolean
+        default: false
+
+concurrency:
+  group: publish-npm-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  pack:
+    name: Build and pack
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read # deliberately NO id-token: untrusted build scripts run here
+    outputs:
+      packages: ${{ steps.pack.outputs.packages }}
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build and pack selected packages (dependency order)
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          # On push (auto-release) there is no input, so pack all and let the
+          # idempotent publish skip unchanged versions. conditions before
+          # template-conditions (which depends on it); the docx packages are
+          # independent.
+          selected="${{ github.event_name == 'workflow_dispatch' && inputs.package || 'all' }}"
+          case "${selected}" in
+            all) pkgs=(conditions template-conditions docx-core docx-utils) ;;
+            *) pkgs=("${selected}") ;;
+          esac
+
+          # Build, then transform each package.json from its in-repo source
+          # shape (exports -> ./src/*.ts) to the published dist shape
+          # (exports -> ./dist, real .d.ts, no src). No restore needed: this is
+          # an ephemeral checkout.
+          #
+          # Pack with `bun pm pack`, NOT `npm pack`: only Bun rewrites the
+          # `catalog:` / `workspace:*` dependency protocols to concrete versions
+          # in the published package.json. npm would ship those literals, making
+          # the package uninstallable for external consumers. One tarball per
+          # package lands at release-artifacts/<pkg>/, so the publish matrix can
+          # resolve each by package name.
+          for p in "${pkgs[@]}"; do
+            echo "::group::Build + pack @stll/${p}"
+            (cd "packages/${p}" && bun run build)
+            bun scripts/prepare-publish.ts "packages/${p}"
+            dest="release-artifacts/${p}"
+            mkdir -p "${dest}"
+            (cd "packages/${p}" && bun pm pack --destination "${GITHUB_WORKSPACE}/${dest}")
+            sha256sum "${dest}"/*.tgz >> release-artifacts/SHA256SUMS
+            echo "::endgroup::"
+          done
+
+          # Emit the selected package names as a JSON array for the publish
+          # matrix (the hardened action publishes one tarball per invocation).
+          packages="$(printf '%s\n' "${pkgs[@]}" | jq -Rnc '[inputs]')"
+          echo "packages=${packages}" >> "${GITHUB_OUTPUT}"
+          printf 'Packed: %s\n' "${packages}"
+
+      - name: Upload tarballs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarballs
+          path: release-artifacts/
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    name: Publish @stll/${{ matrix.package }}
+    needs: pack
+    # Auto-publish on a version-bump push; on manual dispatch, only when ticked.
+    if: ${{ github.event_name == 'push' || inputs.publish }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC only here; build scripts already ran in the pack job
+      attestations: write # build provenance attestation for the published tarball
+    strategy:
+      fail-fast: false
+      # Serialize: one publish at a time keeps logs legible and lets a
+      # dependency land before a dependent (the hardened action is idempotent,
+      # so order is not strictly required, but it is the friendlier default).
+      max-parallel: 1
+      matrix:
+        # The hardened action publishes exactly one tarball per invocation, so
+        # fan out one matrix leg per selected package.
+        package: ${{ fromJSON(needs.pack.outputs.packages) }}
+    steps:
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm for trusted publishing
+        # --ignore-scripts: this job holds id-token: write, so do not run any
+        # lifecycle hooks from the fetched npm package before the hardened
+        # publish step (npm itself needs none to run).
+        run: npm install --global --ignore-scripts "npm@${{ env.NPM_VERSION }}"
+
+      - name: Download tarballs
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: npm-tarballs
+          path: release-artifacts/
+
+      - name: Resolve tarball path
+        id: tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          tgz="$(ls "release-artifacts/${{ matrix.package }}"/*.tgz)"
+          echo "path=${tgz}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish to npm
+        uses: stella/.github/.github/actions/npm-publish-hardened@96b8912e0786548c4e62046ce3965769991dd0e0
+        with:
+          tarball: ${{ steps.tarball.outputs.path }}

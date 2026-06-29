@@ -1,19 +1,51 @@
 {
   "name": "@stll/docx-core",
   "version": "0.1.0",
-  "private": true,
+  "description": "Typed OOXML/DOCX document model with parsing, validation, and serialization, plus a legal-source compiler that produces DOCX packages.",
+  "keywords": [
+    "document-model",
+    "docx",
+    "legal",
+    "ooxml",
+    "openxml",
+    "serialize",
+    "validate",
+    "word"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/docx-core",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/docx-core"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "type": "module",
+  "sideEffects": false,
   "exports": {
     ".": "./src/index.ts",
     "./model": "./src/model/document.ts"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "typecheck": "tsgo --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/docx-core",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/docx-core",
-    "format": "oxfmt ."
+    "format": "oxfmt .",
+    "prepack": "bun run build"
   },
   "dependencies": {
     "better-result": "catalog:",
@@ -21,6 +53,7 @@
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
-    "@types/bun": "catalog:"
+    "@types/bun": "catalog:",
+    "tsdown": "catalog:"
   }
 }

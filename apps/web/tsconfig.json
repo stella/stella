@@ -13,14 +13,22 @@
       "@stll/business-registries/*": [
         "../../packages/business-registries/src/*/index.ts"
       ],
+      "@stll/conditions": ["../../packages/conditions/src/index.ts"],
       "@stll/country-codes": ["../../packages/country-codes/src/index.ts"],
       "@stll/docx-core": ["../../packages/docx-core/src/index.ts"],
+      "@stll/docx-core/model": [
+        "../../packages/docx-core/src/model/document.ts"
+      ],
+      "@stll/docx-utils": ["../../packages/docx-utils/src/index.ts"],
       "@stll/errors": ["../../packages/errors/src/index.ts"],
       "@stll/folio": ["../../packages/folio/src/index.ts"],
       "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],
       "@stll/money": ["../../packages/money/src/index.ts"],
       "@stll/permissions": ["../../packages/permissions/src/index.ts"],
       "@stll/skills": ["../../packages/skills/src/index.ts"],
+      "@stll/template-conditions": [
+        "../../packages/template-conditions/src/index.ts"
+      ],
       "@stll/ui/*": ["../../packages/ui/src/*"]
     }
   },

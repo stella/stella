@@ -1,21 +1,50 @@
 {
   "name": "@stll/conditions",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "A generic boolean/predicate condition engine: schema, evaluate, walk.",
+  "keywords": [
+    "ast",
+    "boolean",
+    "condition",
+    "evaluate",
+    "predicate",
+    "rules",
+    "schema"
+  ],
+  "homepage": "https://github.com/stella/stella/tree/main/packages/conditions",
+  "bugs": {
+    "url": "https://github.com/stella/stella/issues"
+  },
   "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stella/stella.git",
+    "directory": "packages/conditions"
+  },
+  "files": [
+    "dist",
+    "src",
+    "README.md"
+  ],
   "type": "module",
   "sideEffects": false,
   "exports": {
     ".": "./src/index.ts"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "clean": "git clean -xdf .cache .turbo node_modules",
+    "clean": "git clean -xdf dist .cache .turbo node_modules",
+    "build": "tsdown",
+    "pack:dry-run": "bun pm pack --dry-run",
     "test": "bun test src",
     "test:property": "bun test $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "typecheck": "tsgo --noEmit",
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --deny-warnings --type-aware packages/conditions",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/conditions",
-    "format": "oxfmt ."
+    "format": "oxfmt .",
+    "prepack": "bun run build"
   },
   "dependencies": {
     "valibot": "catalog:"
@@ -24,6 +53,7 @@
     "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "@types/bun": "catalog:",
-    "fast-check": "catalog:"
+    "fast-check": "catalog:",
+    "tsdown": "catalog:"
   }
 }
