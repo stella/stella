@@ -1318,6 +1318,34 @@
       "pt-BR",
       "sk"
     ],
+    "webSearch.settings.platformFallback": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "webSearch.settings.title": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "workspaces.files.defaultPropertyName": [
       "fr"
     ],

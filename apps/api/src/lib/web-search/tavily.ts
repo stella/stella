@@ -10,6 +10,37 @@ import type {
 import { WebSearchProviderError } from "@/api/lib/web-search/types";
 
 const TAVILY_ENDPOINT = "https://api.tavily.com/search";
+const VALIDATE_TIMEOUT_MS = 10_000;
+
+/**
+ * Probe a Tavily key with a minimal search before persisting it.
+ * Throws `WebSearchProviderError` (carrying the HTTP status) so the
+ * settings handler can map a 401/403 to "key rejected" and anything
+ * else to an upstream failure. Consumes one Tavily search credit.
+ */
+export const validateTavilyKey = async (apiKey: string): Promise<void> => {
+  const response = await fetch(TAVILY_ENDPOINT, {
+    method: "POST",
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      query: "stella api key check",
+      max_results: 1,
+      search_depth: "basic",
+      include_answer: false,
+    }),
+    signal: AbortSignal.timeout(VALIDATE_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new WebSearchProviderError({
+      provider: "tavily",
+      status: response.status,
+      message: `Tavily rejected the API key (${response.status})`,
+    });
+  }
+};
 
 const tavilyResponseSchema = v.object({
   query: v.optional(v.string()),

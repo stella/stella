@@ -2274,6 +2274,14 @@ export const organizationSettings = p.pgTable(
     deeplApiKeyEncrypted: bytea("deepl_api_key_encrypted"),
     /** AES-GCM initialization vector for deeplApiKeyEncrypted. */
     deeplApiKeyIv: bytea("deepl_api_key_iv"),
+    /** Encrypted web-search provider (Tavily) BYOK key, AES-256-GCM. */
+    webSearchApiKeyEncrypted: bytea("web_search_api_key_encrypted"),
+    /** AES-GCM initialization vector for webSearchApiKeyEncrypted. */
+    webSearchApiKeyIv: bytea("web_search_api_key_iv"),
+    /** Encrypted url-fetch provider (Jina) BYOK key, AES-256-GCM. */
+    urlFetchApiKeyEncrypted: bytea("url_fetch_api_key_encrypted"),
+    /** AES-GCM initialization vector for urlFetchApiKeyEncrypted. */
+    urlFetchApiKeyIv: bytea("url_fetch_api_key_iv"),
     /**
      * Whether stella may annotate AI requests with prompt-cache
      * markers (Anthropic `cacheControl`, OpenAI `promptCacheKey`).

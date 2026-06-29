@@ -24,7 +24,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";
-import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
+import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 
 import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
 
@@ -287,7 +287,13 @@ const listCatalogue = createSafeRootHandler(
       connectorSlugByUrl.set(row.url, row.slug);
     }
     const nativeToolBackendSet = new Set(NATIVE_TOOL_SLUGS);
-    const webSearchDeployAvailable = isWebSearchDeployAvailable();
+    // Org-aware: available when the deploy supplies a key or the org
+    // has its own BYOK key (org-level enable/disable is applied
+    // separately below via nativeToolOverrides).
+    const { webSearchProvider } = await loadWebSearchProvidersForOrg(
+      session.activeOrganizationId,
+    );
+    const webSearchDeployAvailable = webSearchProvider !== null;
 
     const response: CatalogueEntryResponse[] = [];
     for (const entry of entries) {

@@ -9,6 +9,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 
 const config = {
   permissions: { chat: ["create"] },
@@ -66,7 +67,13 @@ const getMessages = createSafeRootHandler(
       practiceJurisdictions: orgSettingsForChat?.practiceJurisdictions ?? [],
       nativeToolOverrides: orgSettingsForChat?.nativeToolOverrides ?? {},
     });
-    const webSearchAvailable = isWebSearchAvailable(disabledNativeToolSlugs);
+    const { webSearchProvider } = await loadWebSearchProvidersForOrg(
+      session.activeOrganizationId,
+    );
+    const webSearchAvailable = isWebSearchAvailable({
+      webSearchProviderAvailable: webSearchProvider !== null,
+      disabledNativeToolSlugs,
+    });
 
     if (!thread) {
       if (allowMissingThread) {

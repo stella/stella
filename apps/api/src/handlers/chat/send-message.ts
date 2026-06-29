@@ -118,6 +118,7 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
+import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS = 120_000;
@@ -242,6 +243,13 @@ const sendMessage = createSafeRootHandler(
         })
       : null;
 
+    // Resolve the org's web-search providers once (BYOK key first,
+    // platform env key as fallback) and reuse for both the validation
+    // and streaming tool sets.
+    const webSearchProviders = await loadWebSearchProvidersForOrg(
+      session.activeOrganizationId,
+    );
+
     // Tool input schemas don't depend on `accessibleWorkspaceIds`
     // (scope is checked at execute time, not in the schema), so we
     // can validate the incoming message against the broad set and
@@ -268,6 +276,7 @@ const sendMessage = createSafeRootHandler(
       }),
       hasActiveDocxEditClient: true,
       webSearchEnabled: validationThreadState.webSearchEnabled,
+      webSearchProviders,
       externalTools: validationExternalMcpTools?.tools,
       disabledNativeToolSlugs,
       activeSkillContext: validationActiveSkillContext,
@@ -596,6 +605,7 @@ const sendMessage = createSafeRootHandler(
         body.activeFile?.supportsDocxEdits === true ||
         body.activeTemplate !== undefined,
       webSearchEnabled: thread.data.webSearchEnabled,
+      webSearchProviders,
       externalTools: externalMcpTools.tools,
       disabledNativeToolSlugs,
       skillMetadata: chatContext.skillMetadata,
