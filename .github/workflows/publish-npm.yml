@@ -75,19 +75,20 @@ jobs:
             *) pkgs=("${{ inputs.package }}") ;;
           esac
 
-          mkdir -p release-artifacts
+          # Pack with `bun pm pack`, NOT `npm pack`: only Bun rewrites the
+          # `catalog:` / `workspace:*` dependency protocols to concrete versions
+          # in the published package.json. npm would ship those literals, making
+          # the package uninstallable for external consumers.
           tarballs=()
           for p in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${p}"
             (cd "packages/${p}" && bun run build)
-            pack_json="$(
-              cd "packages/${p}" &&
-              npm pack --json --ignore-scripts \
-                --pack-destination "${GITHUB_WORKSPACE}/release-artifacts"
-            )"
-            file="$(echo "${pack_json}" | jq -r '.[0].filename')"
-            sha256sum "release-artifacts/${file}" >> release-artifacts/SHA256SUMS
-            tarballs+=("release-artifacts/${file}")
+            dest="${GITHUB_WORKSPACE}/release-artifacts/${p}"
+            mkdir -p "${dest}"
+            (cd "packages/${p}" && bun pm pack --destination "${dest}")
+            tgz="$(ls "${dest}"/*.tgz)"
+            sha256sum "${tgz}" >> release-artifacts/SHA256SUMS
+            tarballs+=("${tgz}")
             echo "::endgroup::"
           done
 
