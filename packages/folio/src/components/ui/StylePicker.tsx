@@ -199,8 +199,7 @@ export function StylePicker({
     >
       <SelectTrigger
         size="sm"
-        className={`h-8 min-h-0 min-w-0 border-transparent bg-transparent text-sm text-[var(--doc-text-muted)] shadow-none hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)] data-[pressed]:bg-[var(--doc-primary-light)] ${className ?? ""}`}
-        data-folio-style-picker=""
+        className={`folio-style-picker h-8 min-h-0 min-w-0 border-transparent bg-transparent text-sm text-[var(--doc-text-muted)] shadow-none hover:bg-[var(--doc-primary-light)] hover:text-[var(--doc-text)] data-[pressed]:bg-[var(--doc-primary-light)] ${className ?? ""}`}
         style={{
           width: typeof width === "number" ? `${width}px` : width,
         }}

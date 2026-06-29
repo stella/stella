@@ -119,7 +119,6 @@ export type FolioSelectTriggerProps = Pick<
   className?: string;
   children?: ReactNode;
   size?: "sm" | "default" | "lg";
-  "data-folio-style-picker"?: string;
 };
 export type FolioSelectValueProps = Pick<
   SelectPrimitive.Value.Props,
@@ -372,6 +371,19 @@ export const DEFAULT_COMPONENTS: FolioUIComponents = {
 
 const FolioUIContext = createContext<FolioUIComponents>(DEFAULT_COMPONENTS);
 
+/**
+ * Merge a consumer's partial overrides over the built-in defaults: every key is
+ * present (defaults fill the gaps), and each provided override wins. Pure, so
+ * the resolution contract is unit-tested independently of React.
+ */
+export function resolveFolioComponents(
+  components?: Partial<FolioUIComponents>,
+): FolioUIComponents {
+  return components
+    ? { ...DEFAULT_COMPONENTS, ...components }
+    : DEFAULT_COMPONENTS;
+}
+
 export function FolioUIProvider({
   components,
   children,
@@ -379,9 +391,7 @@ export function FolioUIProvider({
   components?: Partial<FolioUIComponents> | undefined;
   children: ReactNode;
 }) {
-  const value = components
-    ? { ...DEFAULT_COMPONENTS, ...components }
-    : DEFAULT_COMPONENTS;
+  const value = resolveFolioComponents(components);
   return (
     <FolioUIContext.Provider value={value}>{children}</FolioUIContext.Provider>
   );
