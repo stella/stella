@@ -25,6 +25,8 @@ import { paragraphToStyle } from "../../../utils/formatToStyle";
 import { collectHeadings } from "../../../utils/headingCollector";
 import { expectParagraphAttrs } from "../../attrs";
 import { autospacingMatchesBase } from "../../autospacingBase";
+import { directionIsRtl } from "../../paragraphDirection";
+import type { ParagraphDirection } from "../../paragraphDirection";
 import type { ParagraphAttrs } from "../../schema/nodes";
 import {
   paragraphAttrsFromResolvedStyle,
@@ -383,11 +385,11 @@ const paragraphNodeSpec: NodeSpec = {
     runInWithNext: { default: null },
     defaultTextFormatting: { default: null },
     sectionBreakType: { default: null },
-    bidi: { default: null },
-    // Ephemeral, editor-runtime-only: marks a `bidi` value that auto-detection
-    // set (vs an explicit user toggle or imported `w:bidi`). Never serialized to
-    // DOCX or DOM — it only lets auto-detection re-evaluate its own decisions.
-    bidiAuto: { default: null },
+    // Base text direction (discriminated union; see paragraphDirection.ts). The
+    // `source` distinguishes an authoritative manual/import decision from a
+    // re-evaluable auto-detected one; only the resolved RTL-ness serializes
+    // (`w:bidi`) or reaches the DOM (`dir`).
+    direction: { default: null },
     outlineLevel: { default: null },
     bookmarks: { default: null },
     _emptyHyperlinks: { default: null },
@@ -489,7 +491,7 @@ const paragraphNodeSpec: NodeSpec = {
       domAttrs["data-list-marker"] = attrs.listMarker;
     }
 
-    if (attrs.bidi) {
+    if (directionIsRtl(attrs.direction)) {
       domAttrs["dir"] = "rtl";
     }
 
@@ -838,7 +840,7 @@ export function getParagraphBidi(state: EditorState): boolean {
   if (paragraph.type.name !== "paragraph") {
     return false;
   }
-  return !!paragraph.attrs["bidi"];
+  return directionIsRtl(paragraph.attrs["direction"]);
 }
 
 // ============================================================================
@@ -1056,22 +1058,20 @@ export const ParagraphExtension = createNodeExtension({
             if (paragraph.type.name !== "paragraph") {
               return false;
             }
-            const currentBidi = paragraph.attrs["bidi"] || false;
-            // Toggle to an explicit value (true/false), never back to `null`.
-            // `null` means "no decision" and is reserved for auto-detection;
-            // a deliberate LTR must be recorded as `false` so AutoBidiDetection
-            // does not re-flip an Arabic paragraph the user set to LTR.
-            // Clearing `bidiAuto` marks this as a manual decision, so
-            // auto-detection never revisits it.
-            return setParagraphAttrsCmd({ bidi: !currentBidi, bidiAuto: null })(
-              state,
-              dispatch,
-            );
+            // Toggle to the opposite explicit direction. A manual decision
+            // (`source: "manual"`) is authoritative, so auto-detection never
+            // revisits it.
+            const next: ParagraphDirection = directionIsRtl(
+              paragraph.attrs["direction"],
+            )
+              ? { source: "manual", value: "ltr" }
+              : { source: "manual", value: "rtl" };
+            return setParagraphAttr("direction", next)(state, dispatch);
           },
-        // A manual direction choice clears `bidiAuto`, so auto-detection treats
-        // it as authoritative and never re-evaluates it.
-        setRtl: () => setParagraphAttrsCmd({ bidi: true, bidiAuto: null }),
-        setLtr: () => setParagraphAttrsCmd({ bidi: false, bidiAuto: null }),
+        setRtl: () =>
+          setParagraphAttr("direction", { source: "manual", value: "rtl" }),
+        setLtr: () =>
+          setParagraphAttr("direction", { source: "manual", value: "ltr" }),
         setTabs: (tabs: TabStop[]) =>
           setParagraphAttr("tabs", tabs.length > 0 ? tabs : null),
         addTabStop:

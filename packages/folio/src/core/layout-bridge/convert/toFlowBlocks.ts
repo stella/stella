@@ -64,6 +64,7 @@ import {
 } from "../../prosemirror/attrs";
 import { autospacingMatchesBase } from "../../prosemirror/autospacingBase";
 import { runShadingAttrsToShading } from "../../prosemirror/conversion/runShadingMark";
+import { directionIsRtl } from "../../prosemirror/paragraphDirection";
 import type { RunFormattingOverrideAttrs } from "../../prosemirror/schema/marks";
 import type {
   ImageAttrs,
@@ -1649,7 +1650,7 @@ function convertParagraphAttrs(
   if (pmAttrs.runInWithNext) {
     attrs.runInWithNext = true;
   }
-  if (pmAttrs.bidi) {
+  if (directionIsRtl(pmAttrs.direction)) {
     attrs.bidi = true;
   }
   if (pmAttrs.styleId) {

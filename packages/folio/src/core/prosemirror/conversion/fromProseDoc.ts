@@ -97,6 +97,7 @@ import {
   autospacingMatchesBase,
   hasAutospacingBaseSide,
 } from "../autospacingBase";
+import { directionToBidi } from "../paragraphDirection";
 import type { RunFormattingOverrideAttrs } from "../schema/marks";
 import type {
   ParagraphAttrs,
@@ -702,9 +703,9 @@ function isStyleSourcedNumPr(attrs: ParagraphAttrs): boolean {
 // off, serialized as `w:val="0"`), and `null`/`undefined` (inherit). A
 // truthiness check (`if (attrs.key)`) silently collapses explicit `false` into
 // "inherit", dropping the user's decision on save. Branch on `== null` so every
-// toggle routed through here preserves `false` — making that drop impossible to
-// reintroduce per-attribute (the bidi/LTR round-trip depends on it).
-type BooleanToggleKey = "bidi" | "pageBreakBefore";
+// toggle routed through here preserves `false`. (Direction is handled
+// separately via the `direction` discriminated union, not this helper.)
+type BooleanToggleKey = "pageBreakBefore";
 
 function assignBooleanToggle(
   result: ParagraphFormatting,
@@ -828,10 +829,18 @@ function paragraphAttrsToFormatting(
         delete result.spacingExplicit;
       }
     }
-    // Persist an explicit bidi decision, including `false` (LTR forced via
-    // setLtr) so it serializes as `<w:bidi w:val="0"/>` and survives save/reload;
-    // otherwise auto-detection re-flips an Arabic paragraph back to RTL.
-    assignBooleanToggle(result, attrs, orig, "bidi");
+    // Resolve the paragraph direction to the OOXML `w:bidi` tri-state. An
+    // explicit `false` (forced LTR) is preserved so it serializes as
+    // `<w:bidi w:val="0"/>` and survives save/reload; `undefined` (undecided)
+    // clears it.
+    const bidi = directionToBidi(attrs.direction);
+    if (bidi !== (orig.bidi ?? undefined)) {
+      if (bidi === undefined) {
+        delete result.bidi;
+      } else {
+        result.bidi = bidi;
+      }
+    }
 
     return result;
   }
@@ -839,6 +848,7 @@ function paragraphAttrsToFormatting(
   // Fallback: reconstruct formatting from individual attrs (e.g. for
   // newly created paragraphs that don't have _originalFormatting)
   const outlineLevel = Reflect.get(attrs, "outlineLevel");
+  const bidi = directionToBidi(attrs.direction);
   const hasFormatting =
     attrs.alignment ||
     shouldSerializeSpaceBefore ||
@@ -859,7 +869,7 @@ function paragraphAttrsToFormatting(
     attrs.spacingExplicit ||
     // Tri-state toggles: an explicit `false` is meaningful formatting and must
     // keep the paragraph from short-circuiting to "no formatting".
-    attrs.bidi != null ||
+    bidi != null ||
     attrs.pageBreakBefore != null;
 
   if (!hasFormatting) {
@@ -926,8 +936,8 @@ function paragraphAttrsToFormatting(
   }
   // Preserve explicit tri-state decisions, including `false` (which serializes
   // as `w:val="0"`); only undecided `null` is omitted.
-  if (attrs.bidi != null) {
-    f.bidi = attrs.bidi;
+  if (bidi != null) {
+    f.bidi = bidi;
   }
   if (attrs.pageBreakBefore != null) {
     f.pageBreakBefore = attrs.pageBreakBefore;

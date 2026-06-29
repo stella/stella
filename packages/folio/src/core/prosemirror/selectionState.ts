@@ -8,6 +8,7 @@ import type { Mark } from "prosemirror-model";
 import type { EditorState } from "prosemirror-state";
 
 import type { TextFormatting, ParagraphFormatting } from "../types/document";
+import { directionIsRtl } from "./paragraphDirection";
 
 // ============================================================================
 // TYPES
@@ -172,7 +173,7 @@ export function extractSelectionState(
     if (paragraph.attrs["tabs"]) {
       paragraphFormatting.tabs = paragraph.attrs["tabs"];
     }
-    if (paragraph.attrs["bidi"]) {
+    if (directionIsRtl(paragraph.attrs["direction"])) {
       paragraphFormatting.bidi = true;
     }
     if (paragraph.attrs["styleId"]) {

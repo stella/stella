@@ -1,12 +1,13 @@
 /**
  * Tests for AutoBidiDetectionExtension.
  *
- * Contract: an "auto-managed" paragraph (bidi unset, or previously auto-set via
- * `bidiAuto`) whose first strong character is RTL gets `bidi: true` + the
- * ephemeral `bidiAuto: true`, both on load (`ensureBaseDirectionInState`) and on
- * live edits (`appendTransaction`). Detection includes inline field display
- * text. An explicit decision (user toggle / import, `bidiAuto` cleared) is never
- * overridden, and an auto-set value is re-evaluated when the text changes.
+ * Contract: an "auto-managed" paragraph (direction undecided, or previously
+ * auto-set as `{ source: "auto" }`) whose first strong character is RTL gets
+ * `{ source: "auto" }`, both on load (`ensureBaseDirectionInState`) and on live
+ * edits (`appendTransaction`). Detection includes inline field display text and
+ * ignores deleted text. A manual decision (`{ source: "manual" }`, from a user
+ * toggle or import) is never overridden, and an auto-set value is re-evaluated
+ * when the text changes.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -14,6 +15,7 @@ import { Schema } from "prosemirror-model";
 import type { Node as PMNode } from "prosemirror-model";
 import { EditorState } from "prosemirror-state";
 
+import type { ParagraphDirection } from "../../paragraphDirection";
 import {
   AutoBidiDetectionExtension,
   ensureBaseDirectionInState,
@@ -25,7 +27,7 @@ const schema = new Schema({
     paragraph: {
       group: "block",
       content: "inline*",
-      attrs: { bidi: { default: null }, bidiAuto: { default: null } },
+      attrs: { direction: { default: null } },
       toDOM: () => ["p", 0],
     },
     // Inline atom whose rendered text lives in attrs (mirrors the real field).
@@ -57,25 +59,23 @@ if (!plugin) {
   throw new Error("Expected plugin from AutoBidiDetectionExtension");
 }
 
-type ParaAttrs = { bidi?: boolean | null; bidiAuto?: boolean | null };
-
-const para = (text: string, attrs: ParaAttrs = {}) =>
+const para = (text: string, direction: ParagraphDirection | null = null) =>
   schema.node(
     "paragraph",
-    { bidi: attrs.bidi ?? null, bidiAuto: attrs.bidiAuto ?? null },
+    { direction },
     text.length > 0 ? [schema.text(text)] : [],
   );
 
 // Paragraph led by a field atom whose display text is `fieldText`.
 const fieldLedPara = (fieldText: string, trailing: string) =>
-  schema.node("paragraph", { bidi: null, bidiAuto: null }, [
+  schema.node("paragraph", { direction: null }, [
     schema.node("field", { displayText: fieldText }),
     ...(trailing.length > 0 ? [schema.text(trailing)] : []),
   ]);
 
 // Paragraph whose only content is an inline content control holding `text`.
 const sdtLedPara = (text: string) =>
-  schema.node("paragraph", { bidi: null, bidiAuto: null }, [
+  schema.node("paragraph", { direction: null }, [
     schema.node("inlineSdt", null, text.length > 0 ? [schema.text(text)] : []),
   ]);
 
@@ -89,131 +89,136 @@ const stateOf = (...paras: PMNode[]) =>
 const stateWithoutPlugin = (...paras: PMNode[]) =>
   EditorState.create({ doc: schema.node("doc", null, paras) });
 
-const bidis = (state: EditorState): (boolean | null)[] => {
-  const out: (boolean | null)[] = [];
+// Compact, assertion-friendly tag for a paragraph's direction.
+const dirTag = (direction: ParagraphDirection | null): string => {
+  if (direction == null) {
+    return "none";
+  }
+  if (direction.source === "auto") {
+    return "auto";
+  }
+  return direction.value; // "rtl" | "ltr"
+};
+
+const dirs = (state: EditorState): string[] => {
+  const out: string[] = [];
   state.doc.descendants((node) => {
     if (node.type.name === "paragraph") {
-      out.push(node.attrs["bidi"] as boolean | null);
+      out.push(dirTag(node.attrs["direction"]));
     }
     return false;
   });
   return out;
 };
 
+const RTL = { source: "manual", value: "rtl" } as const;
+const LTR = { source: "manual", value: "ltr" } as const;
+
 describe("ensureBaseDirectionInState (initial load)", () => {
-  test("sets bidi=true on an Arabic-led paragraph", () => {
-    expect(bidis(ensureBaseDirectionInState(stateOf(para("هذا عقد"))))).toEqual(
-      [true],
-    );
+  test("auto-sets an Arabic-led paragraph", () => {
+    expect(dirs(ensureBaseDirectionInState(stateOf(para("هذا عقد"))))).toEqual([
+      "auto",
+    ]);
   });
 
   test("leaves a Latin-led paragraph undecided", () => {
     expect(
-      bidis(ensureBaseDirectionInState(stateOf(para("Agreement")))),
-    ).toEqual([null]);
+      dirs(ensureBaseDirectionInState(stateOf(para("Agreement")))),
+    ).toEqual(["none"]);
   });
 
   test("is a no-op when the extension is disabled (plugin absent)", () => {
-    // Respects `disable: ["autoBidiDetection"]`: no bidi injected on seed.
     expect(
-      bidis(ensureBaseDirectionInState(stateWithoutPlugin(para("هذا عقد")))),
-    ).toEqual([null]);
+      dirs(ensureBaseDirectionInState(stateWithoutPlugin(para("هذا عقد")))),
+    ).toEqual(["none"]);
   });
 
-  test("does not override an explicit LTR (false) on Arabic text", () => {
+  test("does not override a manual LTR on Arabic text", () => {
     expect(
-      bidis(ensureBaseDirectionInState(stateOf(para("عربي", { bidi: false })))),
-    ).toEqual([false]);
+      dirs(ensureBaseDirectionInState(stateOf(para("عربي", LTR)))),
+    ).toEqual(["ltr"]);
   });
 
-  test("leaves an already-RTL paragraph as true (idempotent)", () => {
+  test("leaves a manual RTL paragraph untouched (idempotent)", () => {
     expect(
-      bidis(ensureBaseDirectionInState(stateOf(para("عربي", { bidi: true })))),
-    ).toEqual([true]);
+      dirs(ensureBaseDirectionInState(stateOf(para("عربي", RTL)))),
+    ).toEqual(["rtl"]);
   });
 
   test("mixed: detects per paragraph", () => {
     const state = ensureBaseDirectionInState(
       stateOf(para("English"), para("نص عربي"), para("123 only")),
     );
-    expect(bidis(state)).toEqual([null, true, null]);
+    expect(dirs(state)).toEqual(["none", "auto", "none"]);
   });
 
   test("detects RTL from an inline field's display text", () => {
-    // node.textContent omits the field atom; detection must fold in displayText.
     const state = ensureBaseDirectionInState(stateOf(fieldLedPara("عربي", "")));
-    expect(bidis(state)).toEqual([true]);
+    expect(dirs(state)).toEqual(["auto"]);
   });
 
   test("detects RTL from text inside an inline content control (SDT)", () => {
     const state = ensureBaseDirectionInState(stateOf(sdtLedPara("عربي")));
-    expect(bidis(state)).toEqual([true]);
+    expect(dirs(state)).toEqual(["auto"]);
   });
 
   test("ignores deleted (non-live) text when detecting direction", () => {
-    // Deleted Arabic followed by live Latin: the live content is LTR, so the
-    // paragraph must not be auto-flipped to RTL by the struck-through text.
-    const paragraph = schema.node("paragraph", { bidi: null, bidiAuto: null }, [
+    const paragraph = schema.node("paragraph", { direction: null }, [
       schema.text("عربي", [schema.mark("deletion")]),
       schema.text(" agreement"),
     ]);
-    const state = ensureBaseDirectionInState(stateOf(paragraph));
-    expect(bidis(state)).toEqual([null]);
+    expect(dirs(ensureBaseDirectionInState(stateOf(paragraph)))).toEqual([
+      "none",
+    ]);
   });
 });
 
 describe("appendTransaction (live editing)", () => {
-  test("typing Arabic into an empty paragraph sets bidi=true", () => {
+  test("typing Arabic into an empty paragraph auto-sets RTL", () => {
     let state = stateOf(para(""));
     state = state.apply(state.tr.insertText("مرحبا", 1));
-    expect(bidis(state)).toEqual([true]);
+    expect(dirs(state)).toEqual(["auto"]);
   });
 
-  test("typing Latin leaves bidi undecided", () => {
+  test("typing Latin leaves the paragraph undecided", () => {
     let state = stateOf(para(""));
     state = state.apply(state.tr.insertText("hello", 1));
-    expect(bidis(state)).toEqual([null]);
+    expect(dirs(state)).toEqual(["none"]);
   });
 
-  test("does not re-flip a paragraph the user set to explicit LTR", () => {
-    // Arabic paragraph the user forced to LTR (false, bidiAuto cleared); a
-    // further edit must not re-detect it back to RTL.
-    let state = stateOf(para("عربي", { bidi: false }));
+  test("does not re-flip a paragraph the user set to manual LTR", () => {
+    let state = stateOf(para("عربي", LTR));
     state = state.apply(state.tr.insertText(" مزيد", 5));
-    expect(bidis(state)).toEqual([false]);
+    expect(dirs(state)).toEqual(["ltr"]);
   });
 
   test("re-evaluates an auto-set value when the text changes (no sticky RTL)", () => {
-    // Type Arabic into an empty paragraph -> auto RTL.
     let state = stateOf(para(""));
     state = state.apply(state.tr.insertText("مرحبا", 1));
-    expect(bidis(state)).toEqual([true]);
+    expect(dirs(state)).toEqual(["auto"]);
     // Replace all of it with Latin -> the auto value is cleared, not sticky.
     const end = state.doc.content.size - 1;
     state = state.apply(state.tr.replaceWith(1, end, schema.text("hello")));
-    expect(bidis(state)).toEqual([null]);
+    expect(dirs(state)).toEqual(["none"]);
   });
 
   test("does not re-evaluate a manual RTL set on Latin text", () => {
-    // User explicitly set RTL (bidiAuto cleared) on Latin content; editing must
-    // leave the explicit decision intact.
-    let state = stateOf(para("Hello", { bidi: true, bidiAuto: null }));
+    let state = stateOf(para("Hello", RTL));
     state = state.apply(state.tr.insertText(" world", 6));
-    expect(bidis(state)).toEqual([true]);
+    expect(dirs(state)).toEqual(["rtl"]);
   });
 
   test("detects the edited paragraph in a multi-paragraph doc (scoped scan)", () => {
-    // Type Arabic into the second (empty) paragraph; only it flips to RTL.
     let state = stateOf(para("First"), para(""));
     state = state.apply(
       state.tr.insertText("مرحبا", state.doc.content.size - 1),
     );
-    expect(bidis(state)).toEqual([null, true]);
+    expect(dirs(state)).toEqual(["none", "auto"]);
   });
 
   test("selection-only transactions do not allocate", () => {
     let state = stateOf(para("Agreement"));
     state = state.apply(state.tr.setSelection(state.selection));
-    expect(bidis(state)).toEqual([null]);
+    expect(dirs(state)).toEqual(["none"]);
   });
 });

@@ -1,6 +1,6 @@
 /**
- * AutoBidiDetection — sets the paragraph `bidi` attribute on RTL-led
- * paragraphs that arrived without an explicit direction decision.
+ * AutoBidiDetection — sets the paragraph `direction` (to `{ source: "auto" }`)
+ * on RTL-led paragraphs that arrived without an explicit direction decision.
  *
  * Why: Folio only ever rendered/exported RTL when a paragraph already carried
  * `w:bidi` (from a Word import) or the user toggled it by hand. Content that
@@ -14,15 +14,15 @@
  * Detection uses the first-strong-character rule (`detectBaseDirection`), the
  * same logic the layout painter uses for base direction.
  *
- * Auto vs. explicit: a paragraph is "auto-managed" when its `bidi` is unset
- * (`null`) OR was set by this detector (`bidiAuto === true`). Only auto-managed
- * paragraphs are (re-)evaluated; an explicit user toggle or imported `w:bidi`
- * sets `bidi` with `bidiAuto` cleared, so it is authoritative and never touched.
- * Because we re-evaluate our own decisions, replacing an auto-RTL paragraph's
- * text with Latin clears the flag again (no stale "sticky" RTL).
+ * Auto vs. explicit: only "auto-managed" paragraphs are (re-)evaluated — those
+ * whose `direction` is undecided (absent) or was set by this detector
+ * (`source: "auto"`). A manual user toggle or imported `w:bidi`
+ * (`source: "manual"`) is authoritative and never touched. Because the detector
+ * re-evaluates its own decisions, replacing an auto-RTL paragraph's text with
+ * Latin clears it again (no stale "sticky" RTL).
  *
- * `bidiAuto` is an ephemeral editor-runtime attr — it is never serialized to
- * DOCX or the DOM, so the persisted model still carries only the real `w:bidi`.
+ * The `direction` discriminated union is editor-runtime state; only its resolved
+ * RTL-ness serializes (`w:bidi`) — the persisted model keeps the flat tri-state.
  *
  * Mirrors the appendTransaction + ensure-in-state pattern of
  * `ParaIdAllocatorExtension`.
@@ -34,6 +34,8 @@ import type { EditorState } from "prosemirror-state";
 import type { DirtyRange } from "../../../paged-layout/incrementalMeasure";
 import { getTransactionDirtyRange } from "../../../paged-layout/transactionDirtyRange";
 import { detectBaseDirection } from "../../../utils/baseDirection";
+import { directionIsAutoManaged } from "../../paragraphDirection";
+import type { ParagraphDirection } from "../../paragraphDirection";
 import { createExtension } from "../create";
 import type { ExtensionRuntime } from "../types";
 import { ignoreTrackedChanges } from "./ParagraphChangeTrackerExtension";
@@ -72,26 +74,24 @@ const paragraphDirectionalText = (node: PMNode): string => {
 
 // Decide the update (if any) for a single paragraph node.
 const evaluateParagraph = (node: PMNode, pos: number): BidiUpdate | null => {
-  const currentBidi = node.attrs["bidi"] ?? null;
-  const autoManaged = currentBidi === null || node.attrs["bidiAuto"] === true;
-  // Explicit decision (user toggle / imported w:bidi): leave it alone.
-  if (!autoManaged) {
+  const current = node.attrs["direction"];
+  // Explicit decision (manual toggle / imported w:bidi): leave it alone.
+  if (!directionIsAutoManaged(current)) {
     return null;
   }
 
   const wantRtl = detectBaseDirection(paragraphDirectionalText(node)) === "rtl";
-  const desiredBidi = wantRtl ? true : null;
-  const desiredAuto = wantRtl ? true : null;
-  const unchanged =
-    currentBidi === desiredBidi &&
-    (node.attrs["bidiAuto"] ?? null) === desiredAuto;
-  if (unchanged) {
+  // Auto-managed means `current` is undecided (absent) or `{ source: "auto" }`,
+  // so its RTL-ness is exactly whether it is already auto. No change when that
+  // already matches the detected direction.
+  const currentIsAuto = current?.source === "auto";
+  if (currentIsAuto === wantRtl) {
     return null;
   }
-  return {
-    pos,
-    attrs: { ...node.attrs, bidi: desiredBidi, bidiAuto: desiredAuto },
-  };
+  const desired: ParagraphDirection | null = wantRtl
+    ? { source: "auto" }
+    : null;
+  return { pos, attrs: { ...node.attrs, direction: desired } };
 };
 
 // Whole-document scan (load/seed, and the rare multi-transaction fallback).
