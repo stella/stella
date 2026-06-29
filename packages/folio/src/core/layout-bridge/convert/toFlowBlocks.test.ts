@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { schema } from "../prosemirror/schema";
-import { AUTO_PARAGRAPH_SPACING_PX } from "../utils/units";
+import { schema } from "../../prosemirror/schema";
+import { AUTO_PARAGRAPH_SPACING_PX } from "../../utils/units";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 describe("toFlowBlocks paragraph formatting", () => {

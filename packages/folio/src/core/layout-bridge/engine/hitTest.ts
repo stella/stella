@@ -5,8 +5,8 @@
  * Used by the paged editor to translate user clicks into PM positions.
  */
 
-import { getHeaderRowsHeight } from "../layout-engine/index";
-import { measuredLineRangeHeight } from "../layout-engine/lineFlow";
+import { getHeaderRowsHeight } from "../../layout-engine/index";
+import { measuredLineRangeHeight } from "../../layout-engine/lineFlow";
 import type {
   Layout,
   Page,
@@ -20,7 +20,7 @@ import type {
   TableBlock,
   TableMeasure,
   BlockId,
-} from "../layout-engine/types";
+} from "../../layout-engine/types";
 
 // =============================================================================
 // TYPES

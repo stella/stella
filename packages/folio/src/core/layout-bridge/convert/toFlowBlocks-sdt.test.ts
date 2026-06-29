@@ -8,7 +8,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { schema } from "../prosemirror/schema";
+import { schema } from "../../prosemirror/schema";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 describe("toFlowBlocks — run-in merge respects SDT boundaries", () => {

@@ -12,12 +12,12 @@ import { describe, test, expect } from "bun:test";
 import {
   clickToPosition,
   clickToPositionInParagraph,
-} from "../layout-bridge/clickToPosition";
+} from "../layout-bridge/engine/clickToPosition";
 import {
   hitTestPage,
   hitTestFragment,
   getPageTop,
-} from "../layout-bridge/hitTest";
+} from "../layout-bridge/engine/hitTest";
 import { layoutDocument } from "../layout-engine/index";
 import type {
   ParagraphBlock,

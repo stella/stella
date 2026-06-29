@@ -7,8 +7,8 @@
 
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
-import { convertBulletToUnicode } from "../docx/bulletMarkers";
-import { padDecimal } from "../docx/numberingParser";
+import { convertBulletToUnicode } from "../../docx/bulletMarkers";
+import { padDecimal } from "../../docx/numberingParser";
 import type {
   FlowBlock,
   ParagraphBlock,
@@ -32,11 +32,11 @@ import type {
   SdtGroup,
   TabStop,
   FloatingTablePosition,
-} from "../layout-engine/types";
+} from "../../layout-engine/types";
 import {
   DEFAULT_TEXTBOX_MARGINS,
   DEFAULT_TEXTBOX_WIDTH,
-} from "../layout-engine/types";
+} from "../../layout-engine/types";
 import {
   expectBlockSdtAttrs,
   expectCharacterSpacingMarkAttrs,
@@ -61,31 +61,31 @@ import {
   expectTextEffectMarkAttrs,
   expectTrackedChangeMarkAttrs,
   expectUnderlineMarkAttrs,
-} from "../prosemirror/attrs";
-import { autospacingMatchesBase } from "../prosemirror/autospacingBase";
-import { runShadingAttrsToShading } from "../prosemirror/conversion/runShadingMark";
-import type { RunFormattingOverrideAttrs } from "../prosemirror/schema/marks";
+} from "../../prosemirror/attrs";
+import { autospacingMatchesBase } from "../../prosemirror/autospacingBase";
+import { runShadingAttrsToShading } from "../../prosemirror/conversion/runShadingMark";
+import type { RunFormattingOverrideAttrs } from "../../prosemirror/schema/marks";
 import type {
   ImageAttrs,
   ParagraphAttrs as PMParagraphAttrs,
-} from "../prosemirror/schema/nodes";
-import { assertValidProseMirrorDocument } from "../prosemirror/validation";
+} from "../../prosemirror/schema/nodes";
+import { assertValidProseMirrorDocument } from "../../prosemirror/validation";
 import type {
   ColorValue,
   Theme,
   SectionProperties,
   NumberFormat,
   TextFormatting,
-} from "../types/document";
-import { NUMBER_FORMAT_VALUES } from "../types/documentEnumValues";
-import { resolveColor, resolveHighlightToCss } from "../utils/colorResolver";
-import { resolveShadingFill } from "../utils/formatToStyle";
+} from "../../types/document";
+import { NUMBER_FORMAT_VALUES } from "../../types/documentEnumValues";
+import { resolveColor, resolveHighlightToCss } from "../../utils/colorResolver";
+import { resolveShadingFill } from "../../utils/formatToStyle";
 import {
   AUTO_PARAGRAPH_SPACING_PX,
   pointsToPixels,
   halfPointsToPixels,
   halfPointsToPoints,
-} from "../utils/units";
+} from "../../utils/units";
 
 /**
  * Options for the conversion.

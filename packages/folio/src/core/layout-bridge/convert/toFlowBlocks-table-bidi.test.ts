@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { Node as PMNode } from "prosemirror-model";
 
-import type { TableBlock } from "../layout-engine/types";
-import { schema } from "../prosemirror/schema";
+import type { TableBlock } from "../../layout-engine/types";
+import { schema } from "../../prosemirror/schema";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 const cell = (text: string): PMNode =>

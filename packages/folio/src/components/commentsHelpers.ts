@@ -1,7 +1,7 @@
 import { Selection } from "prosemirror-state";
 import type { EditorView } from "prosemirror-view";
 
-import { findBodyPmAnchors } from "../core/layout-bridge/findBodyPmSpans";
+import { findBodyPmAnchors } from "../core/layout-bridge/dom/findBodyPmSpans";
 import type { Comment } from "../core/types/content";
 import type { CommentMarkRange } from "./commentAnchors";
 import { clampCommentMarkRange } from "./commentAnchors";

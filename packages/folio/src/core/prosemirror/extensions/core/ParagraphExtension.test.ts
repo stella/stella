@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { EditorState, TextSelection } from "prosemirror-state";
 import type { Transaction } from "prosemirror-state";
 
-import { toFlowBlocks } from "../../../layout-bridge/toFlowBlocks";
+import { toFlowBlocks } from "../../../layout-bridge/convert/toFlowBlocks";
 import { AUTO_PARAGRAPH_SPACING_PX } from "../../../utils/units";
 import { schema, singletonManager } from "../../schema";
 

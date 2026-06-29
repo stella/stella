@@ -19,7 +19,7 @@ import {
   useState,
 } from "react";
 
-import { findBodyPmAnchors } from "../core/layout-bridge/findBodyPmSpans";
+import { findBodyPmAnchors } from "../core/layout-bridge/dom/findBodyPmSpans";
 import type { HeadingInfo } from "../core/utils/headingCollector";
 import { useFolioUI } from "../ui/folio-ui";
 import type { OutlineItem } from "../ui/folio-ui";

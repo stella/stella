@@ -4,14 +4,14 @@ import type {
   ParagraphBlock,
   TableBlock as LayoutTableBlock,
   TextRun,
-} from "../layout-engine/types";
-import { toProseDoc } from "../prosemirror/conversion/toProseDoc";
+} from "../../layout-engine/types";
+import { toProseDoc } from "../../prosemirror/conversion/toProseDoc";
 import type {
   Document,
   Paragraph,
   StyleDefinitions,
   Table,
-} from "../types/document";
+} from "../../types/document";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 function makeDoc(paragraph: Paragraph, styles?: StyleDefinitions): Document {

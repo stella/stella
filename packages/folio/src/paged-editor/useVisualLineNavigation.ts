@@ -19,7 +19,7 @@ import type { EditorView } from "prosemirror-view";
 import {
   findBodyEmptyRuns,
   findBodyPmSpans,
-} from "../core/layout-bridge/findBodyPmSpans";
+} from "../core/layout-bridge/dom/findBodyPmSpans";
 import { closestHtmlElement, htmlQueryAll } from "../core/utils/domGuards";
 
 /** Only match lines inside page body content, skipping header/footer lines. */

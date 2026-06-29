@@ -11,8 +11,8 @@
  * (initial paint, off-screen pages).
  */
 
-import { findBodyPmSpans } from "../layout-bridge/findBodyPmSpans";
-import type { SelectionRect } from "../layout-bridge/selectionRects";
+import { findBodyPmSpans } from "../layout-bridge/dom/findBodyPmSpans";
+import type { SelectionRect } from "../layout-bridge/engine/selectionRects";
 import type { FlowBlock, Layout, Measure } from "../layout-engine/types";
 
 // `nodeType === TEXT_NODE` does not narrow a ChildNode to Text in TS, so guard
@@ -238,7 +238,7 @@ export const projectRangesToRects = async <T extends ProjectableRange>(
 
   if (fallback.length > 0 && layout && blocks.length > 0) {
     const { selectionToRects } =
-      await import("../layout-bridge/selectionRects");
+      await import("../layout-bridge/engine/selectionRects");
     for (const range of fallback) {
       const rects = selectionToRects(
         layout,

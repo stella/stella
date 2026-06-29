@@ -29,9 +29,9 @@ import type {
   TableRow,
   TextBoxBlock,
   TextRun,
-} from "../layout-engine/types";
-import type { TemplatePreviewValue } from "../prosemirror/plugins/templatePreviewValues";
-import { templatePreviewValueFingerprint } from "../prosemirror/plugins/templatePreviewValues";
+} from "../../layout-engine/types";
+import type { TemplatePreviewValue } from "../../prosemirror/plugins/templatePreviewValues";
+import { templatePreviewValueFingerprint } from "../../prosemirror/plugins/templatePreviewValues";
 
 /** One marker→value substitution, in PM doc positions. */
 export type TemplatePreviewFlowEntry = {

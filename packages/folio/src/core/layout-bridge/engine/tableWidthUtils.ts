@@ -1,4 +1,4 @@
-import type { TableWidthType } from "../types/document";
+import type { TableWidthType } from "../../types/document";
 
 const TWIPS_PER_INCH = 1440;
 const PX_PER_INCH = 96;

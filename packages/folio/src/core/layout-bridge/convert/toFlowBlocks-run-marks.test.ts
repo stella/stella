@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Schema } from "prosemirror-model";
 
-import type { ParagraphBlock, TextRun } from "../layout-engine/types";
+import type { ParagraphBlock, TextRun } from "../../layout-engine/types";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 const schema = new Schema({

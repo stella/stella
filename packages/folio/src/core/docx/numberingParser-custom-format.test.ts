@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { resolveListTemplate } from "../layout-bridge/toFlowBlocks";
+import { resolveListTemplate } from "../layout-bridge/convert/toFlowBlocks";
 import { formatNumber, parseNumbering } from "./numberingParser";
 
 const W =

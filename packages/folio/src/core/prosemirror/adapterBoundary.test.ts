@@ -2,7 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 const ADAPTER_BOUNDARY_FILES = [
   "src/core/prosemirror/conversion/fromProseDoc.ts",
-  "src/core/layout-bridge/toFlowBlocks.ts",
+  "src/core/layout-bridge/convert/toFlowBlocks.ts",
   "src/core/prosemirror/validation.ts",
 ] as const;
 

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ParagraphBlock } from "../layout-engine/types";
-import { schema } from "../prosemirror/schema";
+import type { ParagraphBlock } from "../../layout-engine/types";
+import { schema } from "../../prosemirror/schema";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 // Run-in heading chains (`<w:specVanish/>` on the paragraph mark of

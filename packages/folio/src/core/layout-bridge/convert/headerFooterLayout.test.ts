@@ -5,10 +5,10 @@ import type {
   Measure,
   ParagraphBlock,
   TableBlock,
-} from "../layout-engine/types";
-import { headerFooterToProseDoc } from "../prosemirror/conversion/toProseDoc";
-import { schema } from "../prosemirror/schema";
-import type { HeaderFooter } from "../types/document";
+} from "../../layout-engine/types";
+import { headerFooterToProseDoc } from "../../prosemirror/conversion/toProseDoc";
+import { schema } from "../../prosemirror/schema";
+import type { HeaderFooter } from "../../types/document";
 import type { HeaderFooterMetrics } from "./headerFooterLayout";
 import {
   calculateHeaderFooterMarginPushBounds,

@@ -1,16 +1,16 @@
 import { describe, expect, test } from "bun:test";
 
-import { measureParagraph } from "../layout-engine/measure";
+import { measureParagraph } from "../../layout-engine/measure";
 import {
   fixedCharWidth,
   withFakeTextMeasure,
-} from "../layout-engine/measure/__tests__/fakeTextMeasure";
+} from "../../layout-engine/measure/__tests__/fakeTextMeasure";
 import type {
   FlowBlock,
   ParagraphBlock,
   TableBlock,
   TextRun,
-} from "../layout-engine/types";
+} from "../../layout-engine/types";
 import {
   applyTemplatePreviewToBlocks,
   templatePreviewDirtyRange,

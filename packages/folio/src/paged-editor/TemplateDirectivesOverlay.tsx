@@ -14,7 +14,7 @@
 
 import type { CSSProperties } from "react";
 
-import type { SelectionRect } from "../core/layout-bridge/selectionRects";
+import type { SelectionRect } from "../core/layout-bridge/engine/selectionRects";
 import type {
   DirectiveKind,
   DirectiveRange,
