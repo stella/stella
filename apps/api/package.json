@@ -75,6 +75,7 @@
     "@stll/permissions": "workspace:*",
     "@stll/skills": "workspace:*",
     "@stll/template-conditions": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
     "@stll/transactional": "workspace:*",
     "@t3-oss/env-core": "catalog:",
     "@valibot/to-json-schema": "^1.7.1",

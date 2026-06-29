@@ -1,6 +1,8 @@
 import { Result } from "better-result";
-import { and, eq, ilike, or } from "drizzle-orm";
+import { and, eq, ilike, or, sql } from "drizzle-orm";
 import { t } from "elysia";
+
+import { normalizeSearchText } from "@stll/text-normalize";
 
 import { contacts } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -19,15 +21,19 @@ const searchContacts = createSafeRootHandler(
     query: searchContactsQuerySchema,
   },
   async function* ({ safeDb, session, query }) {
-    const pattern = `%${escapeLike(query.q)}%`;
+    const normalized = normalizeSearchText(query.q);
+    if (normalized.length === 0) {
+      return Result.ok({ items: [] });
+    }
+    const pattern = `%${escapeLike(normalized)}%`;
 
     const conditions = [
       eq(contacts.organizationId, session.activeOrganizationId),
       or(
-        ilike(contacts.displayName, pattern),
-        ilike(contacts.firstName, pattern),
-        ilike(contacts.lastName, pattern),
-        ilike(contacts.organizationName, pattern),
+        ilike(sql`arabic_normalize(${contacts.displayName})`, pattern),
+        ilike(sql`arabic_normalize(${contacts.firstName})`, pattern),
+        ilike(sql`arabic_normalize(${contacts.lastName})`, pattern),
+        ilike(sql`arabic_normalize(${contacts.organizationName})`, pattern),
       ),
     ];
 

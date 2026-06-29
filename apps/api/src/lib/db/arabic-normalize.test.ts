@@ -1,0 +1,70 @@
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
+import { readFileSync } from "node:fs";
+import nodePath from "node:path";
+
+import { normalizeSearchText } from "@stll/text-normalize";
+
+import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import type { TestDatabase } from "@/api/tests/security/test-utils";
+
+const MIGRATION_PATH = nodePath.resolve(
+  import.meta.dir,
+  "../../../drizzle/20260629123000_arabic_normalize_function/migration.sql",
+);
+
+// The shared search-key contract: the SQL arabic_normalize() must produce
+// the same match key as the TS normalizeSearchText for every input. The
+// presentation-form inputs also empirically confirm that Postgres
+// normalize(NFKC) folds them the same way String.normalize("NFKC") does.
+const VECTORS: readonly string[] = [
+  "أحمد",
+  "احمد",
+  "إسلام",
+  "آمنة",
+  "خدمة",
+  "يكفى",
+  "مُحَمَّد",
+  "مـحـمـد",
+  "مؤمن",
+  "مسئول",
+  "ء",
+  "السلام عليكم",
+  "٢٠٢٤",
+  "۲۰۲۴",
+  "HELLO Wörld",
+  "  a   b  ",
+  "ﷲ", // U+FDF2 ligature -> الله via NFKC
+  "ﺍﺣﻤﺪ", // presentation forms -> احمد via NFKC
+];
+
+let testDb: TestDatabase;
+
+beforeAll(async () => {
+  testDb = await getTestDb();
+  const migrationSql = readFileSync(MIGRATION_PATH, "utf-8");
+  for (const statement of migrationSql.split("--> statement-breakpoint")) {
+    const trimmed = statement.trim();
+    if (trimmed.length === 0) {
+      continue;
+    }
+    // oxlint-disable-next-line no-await-in-loop -- ordered DDL on one connection
+    await testDb.execute(sql.raw(trimmed));
+  }
+});
+
+afterAll(async () => {
+  await releaseTestDb();
+});
+
+describe("arabic_normalize SQL function", () => {
+  test("matches normalizeSearchText for every vector", async () => {
+    for (const input of VECTORS) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential queries on one PGlite connection
+      const result = await testDb.execute<{ out: string | null }>(
+        sql`SELECT arabic_normalize(${input}) AS out`,
+      );
+      expect(result.rows.at(0)?.out).toBe(normalizeSearchText(input));
+    }
+  });
+});
