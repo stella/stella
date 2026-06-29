@@ -408,7 +408,7 @@ export const fillHandler = async ({
 };
 
 const config = {
-  permissions: { template: ["create"] },
+  permissions: { template: ["use"] },
   body: fillBodySchema,
   query: fillQuerySchema,
 } satisfies HandlerConfig;

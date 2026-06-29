@@ -427,7 +427,7 @@ const fillByIdHandler = async function* ({
 };
 
 const config = {
-  permissions: { template: ["create"] },
+  permissions: { template: ["use"] },
   params: fillByIdParamsSchema,
   body: fillByIdBodySchema,
   query: fillByIdQuerySchema,

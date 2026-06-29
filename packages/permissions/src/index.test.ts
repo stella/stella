@@ -84,6 +84,25 @@ describe("role grant boundaries", () => {
     }
   });
 
+  test("intern may fill templates but not author; external cannot fill", () => {
+    // The dedicated `use` grant lets a paralegal-style role generate
+    // documents from templates without any authoring rights.
+    expect(roles.intern.authorize({ template: ["use"] }).success).toBe(true);
+    for (const action of ["create", "update", "delete"] as const) {
+      expect(roles.intern.authorize({ template: [action] }).success).toBe(
+        false,
+      );
+    }
+
+    // External collaborators stay read-only: no filling firm templates.
+    expect(roles.external.authorize({ template: ["use"] }).success).toBe(false);
+
+    // Staff roles keep full template access, including `use`.
+    for (const role of ["owner", "admin", "member"] as const) {
+      expect(roles[role].authorize({ template: ["use"] }).success).toBe(true);
+    }
+  });
+
   test("every role can read its workspace", () => {
     for (const role of [
       "owner",
