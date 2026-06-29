@@ -27,6 +27,16 @@ env:
   NPM_VERSION: "11.11.1"
 
 on:
+  # Auto-release: a version bump merged to main publishes that package. The
+  # hardened action is idempotent, so the three packages you did not bump are
+  # packed but skipped (their version already exists on the registry).
+  push:
+    branches: [main]
+    paths:
+      - packages/conditions/package.json
+      - packages/template-conditions/package.json
+      - packages/docx-core/package.json
+      - packages/docx-utils/package.json
   workflow_dispatch:
     inputs:
       package:
@@ -45,7 +55,7 @@ on:
         default: false
 
 concurrency:
-  group: publish-npm-${{ inputs.package }}
+  group: publish-npm-${{ github.ref }}
   cancel-in-progress: false
 
 jobs:
@@ -68,11 +78,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          # conditions before template-conditions (which depends on it); the
-          # docx packages are independent.
-          case "${{ inputs.package }}" in
+          # On push (auto-release) there is no input, so pack all and let the
+          # idempotent publish skip unchanged versions. conditions before
+          # template-conditions (which depends on it); the docx packages are
+          # independent.
+          selected="${{ github.event_name == 'workflow_dispatch' && inputs.package || 'all' }}"
+          case "${selected}" in
             all) pkgs=(conditions template-conditions docx-core docx-utils) ;;
-            *) pkgs=("${{ inputs.package }}") ;;
+            *) pkgs=("${selected}") ;;
           esac
 
           # Build, then transform each package.json from its in-repo source
@@ -114,11 +127,13 @@ jobs:
   publish:
     name: Publish @stll/${{ matrix.package }}
     needs: pack
-    if: ${{ inputs.publish }}
+    # Auto-publish on a version-bump push; on manual dispatch, only when ticked.
+    if: ${{ github.event_name == 'push' || inputs.publish }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write # OIDC only here; build scripts already ran in the pack job
+      attestations: write # build provenance attestation for the published tarball
     strategy:
       fail-fast: false
       # Serialize: one publish at a time keeps logs legible and lets a
