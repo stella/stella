@@ -6,6 +6,13 @@ name: Publish npm packages
 # (stella's apps consume them) and are published from here; external consumers
 # install the published versions.
 #
+# Least privilege: packing and publishing are separate jobs. The `pack` job runs
+# the untrusted build (bun install, prepack, bun pm pack) with NO id-token, so a
+# compromised build/postinstall script cannot mint an OIDC credential. Only the
+# `publish` job — which just downloads the prebuilt tarballs and runs the
+# hardened action — is granted id-token: write, and it runs only when `publish`
+# is ticked.
+#
 # Prerequisite (one-time, per package, by a maintainer on npmjs.com): configure
 # an npm "trusted publisher" for each @stll/* package pointing at this repository
 # and this workflow file. The hardened action refuses to fall back to token auth,
@@ -42,22 +49,15 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
-  publish:
-    name: Build, pack, and publish
+  pack:
+    name: Build and pack
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      id-token: write # OIDC, required for trusted publishing + provenance
+      contents: read # deliberately NO id-token: untrusted build scripts run here
+    outputs:
+      tarballs: ${{ steps.pack.outputs.tarballs }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
-
-      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          registry-url: https://registry.npmjs.org
-
-      - name: Install npm for trusted publishing
-        run: npm install --global "npm@${{ env.NPM_VERSION }}"
 
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
 
@@ -83,10 +83,10 @@ jobs:
           for p in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${p}"
             (cd "packages/${p}" && bun run build)
-            dest="${GITHUB_WORKSPACE}/release-artifacts/${p}"
+            dest="release-artifacts/${p}"
             mkdir -p "${dest}"
-            (cd "packages/${p}" && bun pm pack --destination "${dest}")
-            tgz="$(ls "${dest}"/*.tgz)"
+            (cd "packages/${p}" && bun pm pack --destination "${GITHUB_WORKSPACE}/${dest}")
+            tgz="${dest}/$(basename "$(ls "${dest}"/*.tgz)")"
             sha256sum "${tgz}" >> release-artifacts/SHA256SUMS
             tarballs+=("${tgz}")
             echo "::endgroup::"
@@ -95,8 +95,38 @@ jobs:
           echo "tarballs=${tarballs[*]}" >> "${GITHUB_OUTPUT}"
           printf 'Packed:\n%s\n' "${tarballs[*]}"
 
-      - name: Publish to npm (OIDC trusted publishing + provenance)
-        if: ${{ inputs.publish }}
+      - name: Upload tarballs
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarballs
+          path: release-artifacts/
+          retention-days: 1
+          if-no-files-found: error
+
+  publish:
+    name: Publish to npm (OIDC trusted publishing + provenance)
+    needs: pack
+    if: ${{ inputs.publish }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC only here; build scripts already ran in the pack job
+    steps:
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm for trusted publishing
+        run: npm install --global "npm@${{ env.NPM_VERSION }}"
+
+      - name: Download tarballs
+        uses: actions/download-artifact@37930b1c2abaa49bbe596cd826c3c89aef350131 # v7.0.0
+        with:
+          name: npm-tarballs
+          path: release-artifacts/
+
+      - name: Publish to npm
         uses: stella/.github/.github/actions/npm-publish-hardened@96b8912e0786548c4e62046ce3965769991dd0e0
         with:
-          tarballs: ${{ steps.pack.outputs.tarballs }}
+          tarballs: ${{ needs.pack.outputs.tarballs }}
