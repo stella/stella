@@ -28,11 +28,18 @@ import { suppressHiddenEditorScrollToSelection } from "../paged-layout/hiddenEdi
 import { isReadOnlyEditKey } from "../paged-layout/readOnlyEditAttempt";
 import { toProseDoc, createEmptyDoc } from "../prosemirror/conversion";
 import type { ExtensionManager } from "../prosemirror/extensions/ExtensionManager";
+import { ensureBaseDirectionInState } from "../prosemirror/extensions/features/AutoBidiDetectionExtension";
 import { ensureParaIdsInState } from "../prosemirror/extensions/features/ParaIdAllocatorExtension";
 import { createDocumentStylesPlugin } from "../prosemirror/plugins/documentStyles";
 import { schema } from "../prosemirror/schema";
 import type { Document, StyleDefinitions } from "../types/document";
 import { createHiddenEditorApi, type HiddenEditorApi } from "./hiddenEditorApi";
+
+// Initial-load normalization. `appendTransaction` does not fire for the seed
+// document, so the paraId allocator and RTL base-direction detection are
+// applied imperatively to freshly created states.
+const normalizeSeedState = (state: EditorState): EditorState =>
+  ensureBaseDirectionInState(ensureParaIdsInState(state));
 
 type YProseMirrorModule = typeof YProseMirror;
 type YjsModule = typeof Yjs;
@@ -263,7 +270,7 @@ export function createHiddenEditorState(
     }
 
     if (collaboration.shouldSeed && collaboration.yXmlFragment.length === 0) {
-      const seedState = ensureParaIdsInState(
+      const seedState = normalizeSeedState(
         PMEditorState.create({
           doc: localDoc,
           schema: activeSchema,
@@ -282,7 +289,7 @@ export function createHiddenEditorState(
       activeSchema,
     );
 
-    const initializedState = ensureParaIdsInState(
+    const initializedState = normalizeSeedState(
       PMEditorState.create({
         doc,
         schema: activeSchema,
@@ -301,7 +308,7 @@ export function createHiddenEditorState(
     }
 
     const startedAt = performance.now();
-    const state = ensureParaIdsInState(
+    const state = normalizeSeedState(
       PMEditorState.create({
         doc,
         schema: activeSchema,
@@ -317,7 +324,7 @@ export function createHiddenEditorState(
   }
 
   const startedAt = performance.now();
-  const state = ensureParaIdsInState(
+  const state = normalizeSeedState(
     PMEditorState.create({
       doc: localDoc,
       schema: activeSchema,

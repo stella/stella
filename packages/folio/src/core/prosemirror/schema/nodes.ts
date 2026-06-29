@@ -160,6 +160,13 @@ export type ParagraphAttrs = {
 
   // Text direction
   bidi?: boolean;
+  /**
+   * Ephemeral, editor-runtime-only flag: `true` when auto-detection set `bidi`
+   * (as opposed to an explicit user toggle or imported `w:bidi`). Never
+   * serialized to DOCX or DOM; it only lets auto-detection re-evaluate the
+   * paragraphs it previously decided. See AutoBidiDetectionExtension.
+   */
+  bidiAuto?: boolean;
 
   // Outline level for TOC (0-9)
   outlineLevel?: number;

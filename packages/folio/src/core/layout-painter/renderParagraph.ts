@@ -33,6 +33,7 @@ import type {
   TabStop as TabCalcStop,
 } from "../prosemirror/utils/tabCalculator";
 import { getAuthorColorIdx, AUTHOR_COLORS } from "../utils/authorColors";
+import { detectBaseDirection } from "../utils/baseDirection";
 import { resolveFontFamily } from "../utils/fontResolver";
 import { DOCX_BOLD_FONT_WEIGHT } from "../utils/fontWeights";
 import {
@@ -2163,17 +2164,6 @@ function bordersFormGroup(a?: ParagraphBorders, b?: ParagraphBorders): boolean {
   );
 }
 
-// Strong-RTL letters, matched by Unicode script so RTL scripts outside the BMP
-// (Adlam U+1E900) and newer blocks (Arabic Extended-B U+0870) are covered
-// without hand-rolling code-point ranges. These eight cover every RTL script in
-// real-world use (Hebrew/Arabic are ~all of it); newer scripts (Yezidi, Garay,
-// …) are omitted because the pinned oxlint/tsc Unicode database rejects their
-// names. Only used to classify the first *letter* (`\p{L}`), so the non-letter
-// members of these scripts (Arabic-Indic digits, combining marks, punctuation)
-// are never tested — they're weak/neutral and skipped upstream.
-const RTL_STRONG_LETTER =
-  /[\p{Script=Hebrew}\p{Script=Arabic}\p{Script=Syriac}\p{Script=Thaana}\p{Script=Nko}\p{Script=Samaritan}\p{Script=Mandaic}\p{Script=Adlam}]/u;
-
 /**
  * Decide whether a paragraph without an explicit `w:bidi` flag should still be
  * laid out right-to-left. Only paragraphs that carry at least one `w:rtl` run
@@ -2197,24 +2187,9 @@ function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
       return isFieldRun(r) ? (r.fallback ?? "") : "";
     })
     .join("");
-  // The first strong directional signal, in one native scan: an explicit bidi
-  // mark (RLM U+200F / ALM U+061C => RTL, LRM U+200E => LTR) or the first
-  // letter (`\p{L}`). Digits, combining marks, punctuation and spaces are
-  // weak/neutral and skipped. The first letter's script decides; nothing
-  // strong => honor w:rtl.
-  const match =
-    /(?<rtlMark>\u200F|\u061C)|(?<lrmMark>\u200E)|(?<letter>\p{L})/u.exec(text);
-  if (!match) {
-    return true;
-  }
-  const { rtlMark, lrmMark, letter } = match.groups ?? {};
-  if (rtlMark !== undefined) {
-    return true; // RLM or ALM
-  }
-  if (lrmMark !== undefined) {
-    return false; // LRM
-  }
-  return letter !== undefined && RTL_STRONG_LETTER.test(letter);
+  // First strong directional character decides; nothing strong (null) => honor
+  // w:rtl, "rtl" => RTL; only an explicit "ltr" first char stays LTR.
+  return detectBaseDirection(text) !== "ltr";
 }
 
 /**

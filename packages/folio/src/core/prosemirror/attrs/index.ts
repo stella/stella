@@ -376,6 +376,7 @@ export const readParagraphAttrs = (
     issues,
   );
   optionalBoolean(attrs, "bidi", "paragraph.attrs.bidi", issues);
+  optionalBoolean(attrs, "bidiAuto", "paragraph.attrs.bidiAuto", issues);
   optionalOneOf(
     attrs,
     "sectionBreakType",

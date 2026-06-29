@@ -698,6 +698,36 @@ function isStyleSourcedNumPr(attrs: ParagraphAttrs): boolean {
   );
 }
 
+// OOXML boolean paragraph toggles are tri-state: `true` (on), `false` (explicit
+// off, serialized as `w:val="0"`), and `null`/`undefined` (inherit). A
+// truthiness check (`if (attrs.key)`) silently collapses explicit `false` into
+// "inherit", dropping the user's decision on save. Branch on `== null` so every
+// toggle routed through here preserves `false` — making that drop impossible to
+// reintroduce per-attribute (the bidi/LTR round-trip depends on it).
+type BooleanToggleKey = "bidi" | "pageBreakBefore";
+
+function assignBooleanToggle(
+  result: ParagraphFormatting,
+  attrs: ParagraphAttrs,
+  orig: ParagraphFormatting,
+  key: BooleanToggleKey,
+): void {
+  // Tri-state: `true`/`false` are explicit decisions to keep; `null`/`undefined`
+  // is "undecided" and clears the toggle. `exactOptionalPropertyTypes` forbids
+  // assigning `undefined`, and `no-dynamic-delete` forbids `delete result[key]`,
+  // so the undecided branch clears via `Reflect.deleteProperty`. This preserves
+  // an explicit `false` that a truthiness check would have dropped.
+  const value = attrs[key] ?? undefined;
+  if (value === (orig[key] ?? undefined)) {
+    return;
+  }
+  if (value === undefined) {
+    Reflect.deleteProperty(result, key);
+  } else {
+    result[key] = value;
+  }
+}
+
 function paragraphAttrsToFormatting(
   attrs: ParagraphAttrs,
 ): ParagraphFormatting | undefined {
@@ -790,13 +820,7 @@ function paragraphAttrsToFormatting(
         delete result.styleId;
       }
     }
-    if (attrs.pageBreakBefore !== (orig.pageBreakBefore ?? undefined)) {
-      if (attrs.pageBreakBefore) {
-        result.pageBreakBefore = attrs.pageBreakBefore;
-      } else {
-        delete result.pageBreakBefore;
-      }
-    }
+    assignBooleanToggle(result, attrs, orig, "pageBreakBefore");
     if (attrs.spacingExplicit !== orig.spacingExplicit) {
       if (attrs.spacingExplicit) {
         result.spacingExplicit = attrs.spacingExplicit;
@@ -804,13 +828,10 @@ function paragraphAttrsToFormatting(
         delete result.spacingExplicit;
       }
     }
-    if (attrs.bidi !== (orig.bidi ?? undefined)) {
-      if (attrs.bidi) {
-        result.bidi = attrs.bidi;
-      } else {
-        delete result.bidi;
-      }
-    }
+    // Persist an explicit bidi decision, including `false` (LTR forced via
+    // setLtr) so it serializes as `<w:bidi w:val="0"/>` and survives save/reload;
+    // otherwise auto-detection re-flips an Arabic paragraph back to RTL.
+    assignBooleanToggle(result, attrs, orig, "bidi");
 
     return result;
   }
@@ -836,7 +857,10 @@ function paragraphAttrsToFormatting(
     typeof outlineLevel === "number" ||
     attrs.contextualSpacing ||
     attrs.spacingExplicit ||
-    attrs.bidi;
+    // Tri-state toggles: an explicit `false` is meaningful formatting and must
+    // keep the paragraph from short-circuiting to "no formatting".
+    attrs.bidi != null ||
+    attrs.pageBreakBefore != null;
 
   if (!hasFormatting) {
     return undefined;
@@ -900,8 +924,13 @@ function paragraphAttrsToFormatting(
   if (attrs.contextualSpacing) {
     f.contextualSpacing = attrs.contextualSpacing;
   }
-  if (attrs.bidi) {
+  // Preserve explicit tri-state decisions, including `false` (which serializes
+  // as `w:val="0"`); only undecided `null` is omitted.
+  if (attrs.bidi != null) {
     f.bidi = attrs.bidi;
+  }
+  if (attrs.pageBreakBefore != null) {
+    f.pageBreakBefore = attrs.pageBreakBefore;
   }
   return f;
 }
