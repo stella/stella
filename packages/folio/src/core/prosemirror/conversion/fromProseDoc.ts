@@ -712,14 +712,20 @@ function assignBooleanToggle(
   orig: ParagraphFormatting,
   key: BooleanToggleKey,
 ): void {
-  // Normalize the undecided sentinel to `undefined`: assigning `undefined`
-  // clears the toggle (serializes as absent) without a dynamic `delete`, while
-  // an explicit `false` is preserved.
+  // Tri-state: `true`/`false` are explicit decisions to keep; `null`/`undefined`
+  // is "undecided" and clears the toggle. `exactOptionalPropertyTypes` forbids
+  // assigning `undefined`, and `no-dynamic-delete` forbids `delete result[key]`,
+  // so the undecided branch clears via `Reflect.deleteProperty`. This preserves
+  // an explicit `false` that a truthiness check would have dropped.
   const value = attrs[key] ?? undefined;
   if (value === (orig[key] ?? undefined)) {
     return;
   }
-  result[key] = value;
+  if (value === undefined) {
+    Reflect.deleteProperty(result, key);
+  } else {
+    result[key] = value;
+  }
 }
 
 function paragraphAttrsToFormatting(
