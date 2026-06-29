@@ -12,7 +12,10 @@ const toISODate = (value: string | Date | null): string => {
     return "";
   }
   if (value instanceof Date) {
-    return value.toISOString().slice(0, 10);
+    const year = value.getFullYear().toString().padStart(4, "0");
+    const month = (value.getMonth() + 1).toString().padStart(2, "0");
+    const day = value.getDate().toString().padStart(2, "0");
+    return `${year}-${month}-${day}`;
   }
   return value.length >= 10 ? value.slice(0, 10) : value;
 };

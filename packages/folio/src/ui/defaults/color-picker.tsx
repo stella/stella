@@ -25,6 +25,7 @@ export function DefaultColorPicker({
   onSelect,
   onClear,
   presets = EMPTY_PRESETS,
+  columns = 8,
   children,
 }: FolioColorPickerProps) {
   return (
@@ -51,7 +52,10 @@ export function DefaultColorPicker({
                 No color
               </PopoverPrimitive.Close>
             )}
-            <div className="folio-default-color-picker-swatches">
+            <div
+              className="folio-default-color-picker-swatches"
+              style={{ gridTemplateColumns: `repeat(${columns}, 1fr)` }}
+            >
               {presets.map((preset) => (
                 <PopoverPrimitive.Close
                   aria-label={preset.label}
