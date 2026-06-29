@@ -39,8 +39,10 @@ const ENGINE_DIR = resolve(import.meta.dir, "..", "layout-bridge", "engine");
 // dynamic form is genuinely mid-expression, so it stays unanchored; comment
 // stripping (below) handles its only practical false-positive source.
 const IMPORT_REGEXES = [
-  // `import … from "x"`, `export … from "x"`, `export * from "x"`
-  /^[ \t]*(?:import|export)\b[^;]*?\bfrom\s*["'](?<spec>[^"']+)["']/gmu,
+  // `import … from "x"` (single- or multi-line; `[^;]` spans the clause)
+  /^[ \t]*import\b[^;]*?\bfrom\s*["'](?<spec>[^"']+)["']/gmu,
+  // `export … from "x"`, `export * from "x"`
+  /^[ \t]*export\b[^;]*?\bfrom\s*["'](?<spec>[^"']+)["']/gmu,
   // bare side-effect import: `import "x"`
   /^[ \t]*import\s*["'](?<spec>[^"']+)["']/gmu,
   // dynamic import: `import("x")`
