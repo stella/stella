@@ -1,3 +1,5 @@
+import { createStyleResolver } from "../prosemirror/styles/styleResolver";
+import type { StyleResolver } from "../prosemirror/styles/styleResolver";
 /**
  * Model-level RTL base-direction normalization.
  *
@@ -81,10 +83,20 @@ function singleItemText(item: ParagraphContent): string {
 const paragraphText = (paragraph: Paragraph): string =>
   paragraphContentText(paragraph.content);
 
-const normalizeParagraph = (paragraph: Paragraph): Paragraph => {
-  // Respect an explicit decision (true = RTL, false = forced LTR); only fill in
-  // the undecided case.
-  if (paragraph.formatting?.bidi != null) {
+const normalizeParagraph = (
+  paragraph: Paragraph,
+  styles: StyleResolver,
+): Paragraph => {
+  // Respect an explicit direction decision before normalizing — direct
+  // (`true` = RTL, `false` = forced LTR) OR inherited from the paragraph style
+  // / doc defaults (e.g. a style with `w:bidi w:val="0"` that forces Arabic
+  // text LTR). Only fill in the truly undecided case. Mirrors toProseDoc's
+  // `formatting?.bidi ?? stylePpr?.bidi` resolution.
+  const effectiveBidi =
+    paragraph.formatting?.bidi ??
+    styles.resolveParagraphStyle(paragraph.formatting?.styleId)
+      .paragraphFormatting?.bidi;
+  if (effectiveBidi != null) {
     return paragraph;
   }
   if (detectBaseDirection(paragraphText(paragraph)) !== "rtl") {
@@ -96,7 +108,7 @@ const normalizeParagraph = (paragraph: Paragraph): Paragraph => {
   };
 };
 
-const normalizeTable = (table: Table): Table => ({
+const normalizeTable = (table: Table, styles: StyleResolver): Table => ({
   ...table,
   rows: table.rows.map((row) => ({
     ...row,
@@ -104,36 +116,44 @@ const normalizeTable = (table: Table): Table => ({
       ...cell,
       content: cell.content.map((block) =>
         block.type === "paragraph"
-          ? normalizeParagraph(block)
-          : normalizeTable(block),
+          ? normalizeParagraph(block, styles)
+          : normalizeTable(block, styles),
       ),
     })),
   })),
 });
 
-const normalizeBlocks = (blocks: BlockContent[]): BlockContent[] =>
+const normalizeBlocks = (
+  blocks: BlockContent[],
+  styles: StyleResolver,
+): BlockContent[] =>
   blocks.map((block) => {
     if (block.type === "paragraph") {
-      return normalizeParagraph(block);
+      return normalizeParagraph(block, styles);
     }
     if (block.type === "table") {
-      return normalizeTable(block);
+      return normalizeTable(block, styles);
     }
     // Block content control: recurse into its block children.
-    return { ...block, content: normalizeBlocks(block.content) };
+    return { ...block, content: normalizeBlocks(block.content, styles) };
   });
 
 /**
  * Return a copy of `doc` with `bidi` filled in for undecided RTL-led body
  * paragraphs (including those nested in tables and block content controls).
+ * A paragraph whose direction is set directly OR via its style / doc defaults
+ * is left untouched.
  */
-export const normalizeBaseDirection = (doc: Document): Document => ({
-  ...doc,
-  package: {
-    ...doc.package,
-    document: {
-      ...doc.package.document,
-      content: normalizeBlocks(doc.package.document.content),
+export const normalizeBaseDirection = (doc: Document): Document => {
+  const styles = createStyleResolver(doc.package.styles);
+  return {
+    ...doc,
+    package: {
+      ...doc.package,
+      document: {
+        ...doc.package.document,
+        content: normalizeBlocks(doc.package.document.content, styles),
+      },
     },
-  },
-});
+  };
+};
