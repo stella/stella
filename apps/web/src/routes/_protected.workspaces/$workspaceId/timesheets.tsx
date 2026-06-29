@@ -9,6 +9,8 @@ export const Route = createFileRoute(
   // Time tracking is intentionally excluded from the current product surface.
   // The route only redirects to the workspace's default view, from a mounted
   // component so no dormant product UI mounts on a direct/deep-link visit.
+  // Remount on workspace change so a stale in-flight redirect is cancelled.
+  remountDeps: ({ params }) => params.workspaceId,
   component: TimesheetsRedirect,
 });
 

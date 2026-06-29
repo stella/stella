@@ -4,6 +4,10 @@ import { DefaultPendingComponent } from "@/components/route-components";
 import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId/")({
+  // Remount on workspace change so the mount-only redirect re-resolves and the
+  // previous workspace's in-flight run is cancelled (no default remountDeps
+  // otherwise keeps this component mounted across $workspaceId changes).
+  remountDeps: ({ params }) => params.workspaceId,
   component: WorkspaceIndexRedirect,
 });
 
