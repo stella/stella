@@ -27,10 +27,17 @@ const { resolve } = path;
 const ENGINE_DIR = resolve(import.meta.dir, "..", "layout-bridge", "engine");
 
 // Match the specifier of every static import/export, bare side-effect import
-// (`import "./setup"`), and dynamic import (`import("./setup")`). Bounded
-// character classes keep matching linear.
+// (`import "./setup"`), and dynamic import (`import("./setup")`).
+//
+// Static and side-effect forms are anchored to statement position (`^[ \t]*`
+// under the `m` flag) so a string literal that merely contains the word `from`
+// or `import` before a quoted path cannot masquerade as an import. The gap
+// before `from` is bounded by `[^;]` so a multiline named import still matches
+// while a trailing string on a later statement cannot be pulled in. The dynamic
+// form is genuinely mid-expression, so it stays unanchored; comment stripping
+// (below) handles its only practical false-positive source.
 const IMPORT_REGEX =
-  /\bfrom\s*["'](?<fromSpec>[^"']+)["']|\bimport\s*["'](?<importSpec>[^"']+)["']|\bimport\s*\(\s*["'](?<dynImportSpec>[^"']+)["']\s*\)/gu;
+  /^[ \t]*(?:import|export)\b[^;]*?\bfrom\s*["'](?<fromSpec>[^"']+)["']|^[ \t]*import\s*["'](?<importSpec>[^"']+)["']|\bimport\s*\(\s*["'](?<dynImportSpec>[^"']+)["']\s*\)/gmu;
 
 // A forbidden upward edge: engine/ reaching into a sibling concern. Engine
 // files reference siblings relatively, so a violation looks like
@@ -146,6 +153,28 @@ describe("layout-bridge layering — synthetic fixtures", () => {
     const violations = upwardEdgesForSource(
       importer,
       'import { measureRun } from "../../layout-engine/measure/measureProvider";',
+    );
+    expect(violations).toEqual([]);
+  });
+
+  test("a string literal that mentions a convert import is ignored", () => {
+    const fromInString = upwardEdgesForSource(
+      importer,
+      'throw new Error("layout failed from \\"../convert/toFlowBlocks\\"");',
+    );
+    const importInString = upwardEdgesForSource(
+      importer,
+      'const hint = "run import \\"../dom/findBodyPmSpans\\" first";',
+    );
+    expect(fromInString).toEqual([]);
+    expect(importInString).toEqual([]);
+  });
+
+  test("a real import is not confused with a trailing string on a later line", () => {
+    const violations = upwardEdgesForSource(
+      importer,
+      'import { getPageTop } from "./hitTest";\n' +
+        'const note = "ported from \\"../convert/toFlowBlocks\\"";',
     );
     expect(violations).toEqual([]);
   });
