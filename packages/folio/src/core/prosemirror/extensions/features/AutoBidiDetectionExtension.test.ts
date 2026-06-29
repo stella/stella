@@ -50,6 +50,10 @@ const stateOf = (...paras: PMNode[]) =>
     plugins: [plugin],
   });
 
+// A state built WITHOUT the plugin models a manager that disabled the extension.
+const stateWithoutPlugin = (...paras: PMNode[]) =>
+  EditorState.create({ doc: schema.node("doc", null, paras) });
+
 const bidis = (state: EditorState): (boolean | null)[] => {
   const out: (boolean | null)[] = [];
   state.doc.descendants((node) => {
@@ -71,6 +75,13 @@ describe("ensureBaseDirectionInState (initial load)", () => {
   test("leaves a Latin-led paragraph undecided", () => {
     expect(
       bidis(ensureBaseDirectionInState(stateOf(para("Agreement")))),
+    ).toEqual([null]);
+  });
+
+  test("is a no-op when the extension is disabled (plugin absent)", () => {
+    // Respects `disable: ["autoBidiDetection"]`: no bidi injected on seed.
+    expect(
+      bidis(ensureBaseDirectionInState(stateWithoutPlugin(para("هذا عقد")))),
     ).toEqual([null]);
   });
 

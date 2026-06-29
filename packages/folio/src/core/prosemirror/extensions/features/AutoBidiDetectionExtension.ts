@@ -94,6 +94,14 @@ const applyBidiUpdates = (
  * bytes; editing the paragraph tracks it and the patch then includes `w:bidi`.
  */
 export const ensureBaseDirectionInState = (state: EditorState): EditorState => {
+  // Respect the extension-disable contract: if a manager was built with
+  // `disable: ["autoBidiDetection"]`, the plugin is absent from the state and
+  // this imperative seed pass must be a no-op too (otherwise a disabled feature
+  // would still materialise — and, on the collaborative path, persist — bidi
+  // attrs). The live `appendTransaction` already only runs when registered.
+  if (!autoBidiDetectionKey.get(state)) {
+    return state;
+  }
   const updates = collectBidiUpdates(state.doc);
   if (updates.length === 0) {
     return state;
