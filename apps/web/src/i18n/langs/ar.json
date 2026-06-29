@@ -2875,12 +2875,12 @@
       "groupItemCount": "{count, plural, one {# item} other {# items}}",
       "hideColumn": "إخفاء العمود",
       "layouts": {
-        "calendar": "التقويم",
+        "calendar": "تقويم",
         "grid": "شبكة",
         "kanban": "مخطط الملفات",
         "list": "قائمة",
         "overview": "نظرة عامة",
-        "table": "الجدول",
+        "table": "جدول",
         "timeline": "خط زمني"
       },
       "newView": "{layout} جديدة",
