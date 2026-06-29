@@ -1,6 +1,7 @@
 import type { FolioUIComponents } from "@stll/folio";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
+import { ColorPicker } from "@stll/ui/components/color-picker";
 import {
   Dialog,
   DialogBackdrop,
@@ -20,6 +21,7 @@ import {
   MenuSeparator,
   MenuTrigger,
 } from "@stll/ui/components/menu";
+import { OutlineRail } from "@stll/ui/components/outline-rail";
 import {
   Popover,
   PopoverClose,
@@ -33,6 +35,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
+
+import { DatePickerPopover } from "@/components/date-picker-popover";
 
 /**
  * Chrome UI primitives injected into folio's `DocxEditor` so the editor keeps
@@ -49,6 +53,9 @@ export const folioUIComponents: Partial<FolioUIComponents> = {
   Button,
   Checkbox,
   Input,
+  ColorPicker,
+  DatePickerPopover,
+  OutlineRail,
   Dialog: {
     Root: Dialog,
     Portal: DialogPortal,
