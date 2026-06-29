@@ -1,7 +1,8 @@
+import { panic } from "better-result";
 import { pushSchema } from "drizzle-kit/api-postgres";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
 import * as authSchema from "@/api/db/auth-schema";
@@ -78,11 +79,13 @@ const createTestDb = async (): Promise<TestDatabase> => {
 
   // Search-index write paths call arabic_normalize(); pushSchema only
   // creates tables, so apply the function migration the way runtime does.
+  const drizzleDir = nodePath.resolve(import.meta.dir, "../../../drizzle");
+  const arabicFnMigration =
+    readdirSync(drizzleDir).find((name) =>
+      name.endsWith("_arabic_normalize_function"),
+    ) ?? panic("arabic_normalize_function migration not found");
   const arabicNormalizeMigration = readFileSync(
-    nodePath.resolve(
-      import.meta.dir,
-      "../../../drizzle/20260629123000_arabic_normalize_function/migration.sql",
-    ),
+    nodePath.join(drizzleDir, arabicFnMigration, "migration.sql"),
     "utf-8",
   );
   for (const statement of arabicNormalizeMigration.split(
