@@ -571,25 +571,24 @@ describe("custom oxlint guardrails", () => {
     expect(tableSource).not.toContain("composeRefs(tableWrapperRef");
   });
 
-  test("redirect-only route lint forbids render components", () => {
+  test("route lint forbids redirecting from beforeLoad/loader", () => {
     const pluginSource = readRootFixture(
-      ".oxlint-plugins/no-component-on-redirect-route.ts",
+      ".oxlint-plugins/no-beforeload-redirect.ts",
     );
     const configSource = readRootFixture("oxlint.config.ts");
 
-    expect(pluginSource).toContain("throw redirect");
-    expect(pluginSource).toContain("component");
-    expect(pluginSource).toContain("pendingComponent");
-    expect(pluginSource).toContain("abandoned before mount");
+    expect(pluginSource).toContain("beforeLoad");
+    expect(pluginSource).toContain("loader");
+    expect(pluginSource).toContain("redirect");
 
     expect(configSource).toContain(
-      "./.oxlint-plugins/no-component-on-redirect-route.ts",
+      "./.oxlint-plugins/no-beforeload-redirect.ts",
     );
     expect(configSource).toContain(
-      "no-component-on-redirect-route/no-component-on-redirect-route",
+      "no-beforeload-redirect/no-beforeload-redirect",
     );
     expect(configSource).toContain(
-      ".oxlint-plugins/__fixtures__/no-component-on-redirect-route.fixture.tsx",
+      ".oxlint-plugins/__fixtures__/no-beforeload-redirect.fixture.tsx",
     );
   });
 });

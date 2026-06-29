@@ -1,7 +1,5 @@
-import { createFileRoute, redirect } from "@tanstack/react-router";
+import { createFileRoute, Navigate } from "@tanstack/react-router";
 
 export const Route = createFileRoute("/_protected/settings/organization/")({
-  beforeLoad: () => {
-    throw redirect({ to: "/settings/organization/members", replace: true });
-  },
+  component: () => <Navigate replace to="/settings/organization/members" />,
 });
