@@ -74,6 +74,8 @@ describe("isParagraphDirection", () => {
     expect(isParagraphDirection({ source: "manual" })).toBe(false);
     expect(isParagraphDirection({ source: "manual", value: "x" })).toBe(false);
     expect(isParagraphDirection({ source: "other" })).toBe(false);
-    expect(isParagraphDirection({ source: "auto", value: "ltr" })).toBe(true);
+    // `auto` must not carry a payload — that is the illegal state this union
+    // is meant to forbid.
+    expect(isParagraphDirection({ source: "auto", value: "ltr" })).toBe(false);
   });
 });

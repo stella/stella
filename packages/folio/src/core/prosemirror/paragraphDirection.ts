@@ -68,7 +68,9 @@ export const isParagraphDirection = (
     return false;
   }
   if (value.source === "auto") {
-    return true;
+    // `auto` carries no payload; reject a stray `value` so the illegal
+    // "auto + ltr/rtl" shape stays unrepresentable.
+    return !("value" in value);
   }
   return (
     value.source === "manual" &&
