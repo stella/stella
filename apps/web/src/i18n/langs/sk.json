@@ -2883,7 +2883,7 @@
         "table": "Tabuľka",
         "timeline": "Časová os"
       },
-      "newView": "Nový {layout}",
+      "newView": "{layoutType, select, table {Nová {layout}} timeline {Nová {layout}} other {Nový {layout}}}",
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",

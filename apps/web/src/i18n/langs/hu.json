@@ -2883,7 +2883,7 @@
         "table": "Táblázat",
         "timeline": "Idővonal"
       },
-      "newView": "Új {layout}",
+      "newView": "{layoutType, select, other {Új {layout}}}",
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",

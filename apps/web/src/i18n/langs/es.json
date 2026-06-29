@@ -2883,7 +2883,7 @@
         "table": "Tabla",
         "timeline": "Línea de tiempo"
       },
-      "newView": "Nueva {layout}",
+      "newView": "{layoutType, select, overview {Nuevo {layout}} kanban {Nuevo {layout}} calendar {Nuevo {layout}} other {Nueva {layout}}}",
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
