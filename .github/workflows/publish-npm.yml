@@ -75,6 +75,11 @@ jobs:
             *) pkgs=("${{ inputs.package }}") ;;
           esac
 
+          # Build, then transform each package.json from its in-repo source
+          # shape (exports -> ./src/*.ts) to the published dist shape
+          # (exports -> ./dist, real .d.ts, no src). No restore needed: this is
+          # an ephemeral checkout.
+          #
           # Pack with `bun pm pack`, NOT `npm pack`: only Bun rewrites the
           # `catalog:` / `workspace:*` dependency protocols to concrete versions
           # in the published package.json. npm would ship those literals, making
@@ -84,6 +89,7 @@ jobs:
           for p in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${p}"
             (cd "packages/${p}" && bun run build)
+            bun scripts/prepare-publish.ts "packages/${p}"
             dest="release-artifacts/${p}"
             mkdir -p "${dest}"
             (cd "packages/${p}" && bun pm pack --destination "${GITHUB_WORKSPACE}/${dest}")
