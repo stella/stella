@@ -2886,7 +2886,6 @@ type Messages = {
         "table": "Table";
         "timeline": "Timeline";
       };
-      "newView": "New {layout}";
       "noFilterResults": "No items match these filters";
       "noFilterResultsHint": "They would show up here if you removed some filters.";
       "removeAdvancedFilter": "Remove advanced filter";
