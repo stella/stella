@@ -28,7 +28,13 @@ jobs:
     name: Build + deploy staging
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04-arm
-    timeout-minutes: 75
+    # Headroom for a cache-miss image build (~15-20 min) plus the
+    # watcher budget below (65 min), which itself must outlast the
+    # infra promote job's own 60-min timeout. Keep this strictly
+    # greater than build + watcher so the job's own timeout never
+    # guillotines the watcher before it can read the infra run's
+    # real conclusion.
+    timeout-minutes: 90
 
     steps:
       - name: Resolve synthetic ref
@@ -158,7 +164,15 @@ jobs:
 
           watch_run_with_retry() {
             local run_id="$1"
-            local max_attempts=180
+            # Poll long enough to outlast the infra promote job's own
+            # 60-min timeout-minutes (plus buffer for GitHub to flip the
+            # run to a terminal state). The watcher's job is to surface
+            # the infra run's real conclusion; a shorter budget makes it
+            # give up first and report a misleading "did not complete in
+            # N minutes" while the infra deploy is still legitimately
+            # working (e.g. a slow ECS rollout) and about to report
+            # success or a concrete failure. 390 x 10s = 65 min.
+            local max_attempts=390
             local sleep_seconds=10
             local max_consecutive_errors=12
             local consecutive_errors=0
