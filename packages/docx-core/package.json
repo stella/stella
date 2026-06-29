@@ -34,17 +34,13 @@
   "exports": {
     ".": {
       "bun": "./src/index.ts",
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      }
+      "types": "./src/index.ts",
+      "import": "./dist/index.js"
     },
     "./model": {
       "bun": "./src/model/document.ts",
-      "import": {
-        "types": "./dist/model/document.d.ts",
-        "default": "./dist/model/document.js"
-      }
+      "types": "./src/model/document.ts",
+      "import": "./dist/model/document.js"
     }
   },
   "publishConfig": {

@@ -16,6 +16,7 @@
       "@stll/conditions": ["../../packages/conditions/src/index.ts"],
       "@stll/country-codes": ["../../packages/country-codes/src/index.ts"],
       "@stll/docx-core": ["../../packages/docx-core/src/index.ts"],
+      "@stll/docx-utils": ["../../packages/docx-utils/src/index.ts"],
       "@stll/errors": ["../../packages/errors/src/index.ts"],
       "@stll/folio": ["../../packages/folio/src/index.ts"],
       "@stll/infosoud": ["../../packages/infosoud/src/index.ts"],

@@ -32,10 +32,8 @@
   "exports": {
     ".": {
       "bun": "./src/index.ts",
-      "import": {
-        "types": "./dist/index.d.ts",
-        "default": "./dist/index.js"
-      }
+      "types": "./src/index.ts",
+      "import": "./dist/index.js"
     }
   },
   "publishConfig": {
