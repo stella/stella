@@ -22587,6 +22587,9 @@
             "location": "packages/folio/src/core/ai-edits/apply.ts#2"
           },
           {
+            "location": "packages/folio/src/core/controller/folioEditor.ts#7"
+          },
+          {
             "location": "packages/folio/src/core/controller/hiddenEditorApi.ts#11"
           },
           {
@@ -22597,6 +22600,12 @@
           },
           {
             "location": "packages/folio/src/core/controller/hiddenEditorManager.ts#15"
+          },
+          {
+            "location": "packages/folio/src/core/controller/layoutPipeline.ts#1"
+          },
+          {
+            "location": "packages/folio/src/core/controller/layoutSession.ts#1"
           },
           {
             "location": "packages/folio/src/core/layout-bridge/wrapEditorViewAsSurface.ts#12"
