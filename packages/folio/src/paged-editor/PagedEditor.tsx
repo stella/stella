@@ -46,42 +46,42 @@ import {
 } from "../core/controller/layoutScheduler";
 import { createLayoutSession } from "../core/controller/layoutSession";
 import { getFootnoteText } from "../core/docx/footnoteParser";
-import { clickToPosition } from "../core/layout-bridge/clickToPosition";
-import { clickToPositionDom } from "../core/layout-bridge/clickToPositionDom";
+import {
+  convertHeaderFooterPmDocToContent,
+  convertHeaderFooterToContent,
+} from "../core/layout-bridge/convert/headerFooterLayout";
+import type {
+  ConvertHeaderFooterOptions,
+  HeaderFooterMetrics,
+} from "../core/layout-bridge/convert/headerFooterLayout";
+import { templatePreviewDirtyRange } from "../core/layout-bridge/convert/templatePreviewFlow";
+import { clickToPositionDom } from "../core/layout-bridge/dom/clickToPositionDom";
 import {
   findBodyEmptyRuns,
   findBodyPmAnchor,
   findBodyPmSpans,
-} from "../core/layout-bridge/findBodyPmSpans";
+} from "../core/layout-bridge/dom/findBodyPmSpans";
 import {
   clickToPositionInHfSlot,
   findHfCaretSpan,
   findHfPmSpans,
   findHfSlotForTarget,
-} from "../core/layout-bridge/findHfPmSpans";
-import {
-  convertHeaderFooterPmDocToContent,
-  convertHeaderFooterToContent,
-} from "../core/layout-bridge/headerFooterLayout";
-import type {
-  ConvertHeaderFooterOptions,
-  HeaderFooterMetrics,
-} from "../core/layout-bridge/headerFooterLayout";
+} from "../core/layout-bridge/dom/findHfPmSpans";
+import { clickToPosition } from "../core/layout-bridge/engine/clickToPosition";
 import {
   hitTestFragment,
   hitTestTableCell,
   getPageTop,
-} from "../core/layout-bridge/hitTest";
+} from "../core/layout-bridge/engine/hitTest";
 import {
   resetCanvasContext,
   clearAllCaches,
-} from "../core/layout-bridge/measuring";
+} from "../core/layout-bridge/engine/measuring";
 import type {
   SelectionRect,
   CaretPosition,
-} from "../core/layout-bridge/selectionRects";
-import type * as SelectionGeometry from "../core/layout-bridge/selectionRects";
-import { templatePreviewDirtyRange } from "../core/layout-bridge/templatePreviewFlow";
+} from "../core/layout-bridge/engine/selectionRects";
+import type * as SelectionGeometry from "../core/layout-bridge/engine/selectionRects";
 // Layout engine
 import type { ColumnLayout } from "../core/layout-engine";
 import { recordLayoutPhase } from "../core/layout-engine/layoutInstrumentation";
@@ -606,10 +606,12 @@ let selectionGeometryPromise: Promise<SelectionGeometryModule> | null = null;
 
 const loadSelectionGeometry = (): Promise<SelectionGeometryModule> => {
   selectionGeometryPromise ??=
-    import("../core/layout-bridge/selectionRects").catch((error: unknown) => {
-      selectionGeometryPromise = null;
-      throw error;
-    });
+    import("../core/layout-bridge/engine/selectionRects").catch(
+      (error: unknown) => {
+        selectionGeometryPromise = null;
+        throw error;
+      },
+    );
 
   return selectionGeometryPromise;
 };

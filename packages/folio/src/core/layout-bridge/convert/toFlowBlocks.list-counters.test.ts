@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
-import { toProseDoc } from "../prosemirror/conversion/toProseDoc";
-import type { Document, Paragraph } from "../types/document";
+import { toProseDoc } from "../../prosemirror/conversion/toProseDoc";
+import type { Document, Paragraph } from "../../types/document";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 function listParagraph(options: {

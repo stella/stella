@@ -14,7 +14,7 @@ import React, { useEffect, useState } from "react";
 import type {
   SelectionRect,
   CaretPosition,
-} from "../core/layout-bridge/selectionRects";
+} from "../core/layout-bridge/engine/selectionRects";
 import type { Layout, FlowBlock, Measure } from "../core/layout-engine/types";
 import "../styles/editor.css";
 
@@ -238,7 +238,7 @@ export function useSelectionOverlay(
     }
 
     // Import dynamically to avoid circular dependencies
-    void import("../core/layout-bridge/selectionRects").then(
+    void import("../core/layout-bridge/engine/selectionRects").then(
       ({ selectionToRects, getCaretPosition }) => {
         const { from, to } = pmSelection;
 

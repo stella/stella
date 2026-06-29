@@ -14,14 +14,14 @@
 export {
   getCanvasContext,
   resetCanvasContext,
-} from "../../layout-engine/measure/measureContainer";
+} from "../../../layout-engine/measure/measureContainer";
 
 export {
   getFontMetrics,
   measureTextWidth,
   measureText,
   measureRun,
-} from "../../layout-engine/measure/measureProvider";
+} from "../../../layout-engine/measure/measureProvider";
 
 export {
   buildFontString,
@@ -33,14 +33,14 @@ export {
   pxToPt,
   halfPtToPx,
   pxToHalfPt,
-} from "../../layout-engine/measure/measureHelpers";
+} from "../../../layout-engine/measure/measureHelpers";
 
 export type {
   FontStyle,
   FontMetrics,
   TextMeasurement,
   RunMeasurement,
-} from "../../layout-engine/measure/measureTypes";
+} from "../../../layout-engine/measure/measureTypes";
 
 export {
   measureParagraph,
@@ -51,7 +51,7 @@ export {
   MIN_WRAP_SEGMENT_WIDTH,
   type FloatingImageZone,
   type MeasureParagraphOptions,
-} from "../../layout-engine/measure/measureParagraph";
+} from "../../../layout-engine/measure/measureParagraph";
 
 export {
   rectsToFloatingZones,
@@ -61,7 +61,7 @@ export {
   type FloatingLineMargins,
   type FloatingLineSegmentZone,
   type WrapTextDirection,
-} from "../../layout-engine/measure/floatingZones";
+} from "../../../layout-engine/measure/floatingZones";
 
 export {
   getCachedTextWidth,
@@ -82,7 +82,7 @@ export {
   getParagraphCacheSize,
   clearAllCaches,
   getTotalCacheSize,
-} from "../../layout-engine/measure/cache";
+} from "../../../layout-engine/measure/cache";
 
 // Feature-flag accessors for the measurement subsystem. Host apps
 // install the bag before mounting `DocxEditor`; measurement code reads
@@ -92,4 +92,4 @@ export {
   isWorkerFontMetricsEnabled,
   setFolioMeasurementFlags,
   type FolioMeasurementFeatureFlags,
-} from "../../layout-engine/measure/featureFlags";
+} from "../../../layout-engine/measure/featureFlags";

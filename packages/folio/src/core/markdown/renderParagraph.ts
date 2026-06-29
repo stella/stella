@@ -6,7 +6,7 @@
  * PR #595.
  */
 
-import { resolveListTemplate } from "../layout-bridge/toFlowBlocks";
+import { resolveListTemplate } from "../layout-bridge/convert/toFlowBlocks";
 import type { DocxPackage, ListRendering, Paragraph } from "../types/document";
 import { isHeadingStyle, parseHeadingLevel } from "./headings";
 import { renderParagraphInline } from "./renderRuns";

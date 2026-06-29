@@ -5,7 +5,7 @@ import type {
   ParagraphBlock,
   TableBlock,
   TextBoxBlock,
-} from "../layout-engine/types";
+} from "../../layout-engine/types";
 import { collectFootnoteRefs } from "./footnoteLayout";
 
 function paragraphWithFootnoteRef(

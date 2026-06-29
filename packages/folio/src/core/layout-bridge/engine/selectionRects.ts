@@ -8,17 +8,17 @@
  * of rectangles that cover the selected text across all pages and fragments.
  */
 
-import { getHeaderRowsHeight } from "../layout-engine/index";
-import { measuredLineContentOffset } from "../layout-engine/lineFlow";
-import { measureParagraph } from "../layout-engine/measure";
-import { buildRunFontStyle } from "../layout-engine/measure/measureHelpers";
-import { measureRun } from "../layout-engine/measure/measureProvider";
-import type { FontStyle } from "../layout-engine/measure/measureTypes";
+import { getHeaderRowsHeight } from "../../layout-engine/index";
+import { measuredLineContentOffset } from "../../layout-engine/lineFlow";
+import { measureParagraph } from "../../layout-engine/measure";
+import { buildRunFontStyle } from "../../layout-engine/measure/measureHelpers";
+import { measureRun } from "../../layout-engine/measure/measureProvider";
+import type { FontStyle } from "../../layout-engine/measure/measureTypes";
 import {
   buildTableCellFloatingZones,
   getTableCellContentWidth,
   getTableCellFloatingImages,
-} from "../layout-engine/measure/tableCellFloating";
+} from "../../layout-engine/measure/tableCellFloating";
 import type {
   Layout,
   FlowBlock,
@@ -36,8 +36,8 @@ import type {
   TabRun,
   MathRun,
   BlockId,
-} from "../layout-engine/types";
-import { inlineImageBoundingBox } from "../utils/rotationBoundingBox";
+} from "../../layout-engine/types";
+import { inlineImageBoundingBox } from "../../utils/rotationBoundingBox";
 import { getPageTop } from "./hitTest";
 
 /**

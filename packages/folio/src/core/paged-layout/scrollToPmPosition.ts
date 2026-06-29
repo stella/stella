@@ -19,7 +19,7 @@ import type { EditorView } from "prosemirror-view";
 import {
   findBodyPmAnchor,
   findBodyPmAnchors,
-} from "../layout-bridge/findBodyPmSpans";
+} from "../layout-bridge/dom/findBodyPmSpans";
 import { findPageShellForPmPos } from "../layout-painter/renderPage";
 import {
   isValidPmScrollPosition,

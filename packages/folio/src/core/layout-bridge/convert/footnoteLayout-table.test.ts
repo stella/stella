@@ -3,9 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   fixedCharWidth,
   withFakeTextMeasure,
-} from "../layout-engine/measure/__tests__/fakeTextMeasure";
-import type { FlowBlock } from "../layout-engine/types";
-import type { Footnote } from "../types/document";
+} from "../../layout-engine/measure/__tests__/fakeTextMeasure";
+import type { FlowBlock } from "../../layout-engine/types";
+import type { Footnote } from "../../types/document";
 import {
   applyFootnotePresentation,
   convertFootnoteToContent,

@@ -9,7 +9,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { toFlowBlocks } from "../../layout-bridge/toFlowBlocks";
+import { toFlowBlocks } from "../../layout-bridge/convert/toFlowBlocks";
 import type { FlowBlock, TextRun } from "../../layout-engine/types";
 import type {
   Document,

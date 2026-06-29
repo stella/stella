@@ -14,15 +14,15 @@ import {
   FOOTNOTE_ENTRY_MARGIN_BOTTOM,
   buildFootnoteContentMap,
   collectFootnoteRefs,
-} from "../layout-bridge/footnoteLayout";
-import type { MeasureBlocksFn } from "../layout-bridge/footnoteLayout";
+} from "../layout-bridge/convert/footnoteLayout";
+import type { MeasureBlocksFn } from "../layout-bridge/convert/footnoteLayout";
 import type {
   ConvertHeaderFooterOptions,
   HeaderFooterMetrics,
-} from "../layout-bridge/headerFooterLayout";
-import { applyTemplatePreviewToBlocks } from "../layout-bridge/templatePreviewFlow";
-import { toFlowBlocks } from "../layout-bridge/toFlowBlocks";
-import type { ToFlowBlocksOptions } from "../layout-bridge/toFlowBlocks";
+} from "../layout-bridge/convert/headerFooterLayout";
+import { applyTemplatePreviewToBlocks } from "../layout-bridge/convert/templatePreviewFlow";
+import { toFlowBlocks } from "../layout-bridge/convert/toFlowBlocks";
+import type { ToFlowBlocksOptions } from "../layout-bridge/convert/toFlowBlocks";
 import { layoutDocument } from "../layout-engine";
 import type { ColumnLayout, SectionLayoutConfig } from "../layout-engine";
 import {

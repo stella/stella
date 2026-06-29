@@ -1,14 +1,14 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { clearAllCaches } from "../layout-engine/measure";
-import { resetCanvasContext } from "../layout-engine/measure/measureContainer";
+import { clearAllCaches } from "../../layout-engine/measure";
+import { resetCanvasContext } from "../../layout-engine/measure/measureContainer";
 import type {
   Layout,
   Measure,
   ParagraphBlock,
   TableBlock,
   TableMeasure,
-} from "../layout-engine/types";
+} from "../../layout-engine/types";
 import { hitTestTableCell } from "./hitTest";
 import { getCaretPosition, selectionToRects } from "./selectionRects";
 

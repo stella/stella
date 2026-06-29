@@ -29,14 +29,18 @@ import type {
   Run,
   TableBlock,
   TableMeasure,
-} from "../layout-engine/types";
+} from "../../layout-engine/types";
 import {
   isFloatingImageRun,
   isFloatingTextBoxBlock,
-} from "../layout-engine/types";
-import { headerFooterToProseDoc } from "../prosemirror/conversion/toProseDoc";
-import type { HeaderFooter, StyleDefinitions, Theme } from "../types/document";
-import { emuToPixels } from "../utils/units";
+} from "../../layout-engine/types";
+import { headerFooterToProseDoc } from "../../prosemirror/conversion/toProseDoc";
+import type {
+  HeaderFooter,
+  StyleDefinitions,
+  Theme,
+} from "../../types/document";
+import { emuToPixels } from "../../utils/units";
 import type { MeasureBlocksFn } from "./footnoteLayout";
 import { toFlowBlocks } from "./toFlowBlocks";
 

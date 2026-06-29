@@ -18,16 +18,16 @@ import type {
   TableRowMeasure,
   TextRun,
   FootnoteContent,
-} from "../layout-engine/types";
+} from "../../layout-engine/types";
 import {
   DEFAULT_TEXTBOX_MARGINS as TEXTBOX_MARGINS,
   FOOTNOTE_ENTRY_MARGIN_BOTTOM,
   FOOTNOTE_FALLBACK_LINE_HEIGHT,
   FOOTNOTE_SEPARATOR_HEIGHT,
-} from "../layout-engine/types";
-import { footnoteToProseDoc } from "../prosemirror/conversion/toProseDoc";
-import type { Footnote, StyleDefinitions, Theme } from "../types/document";
-import { measureParagraph } from "./measuring";
+} from "../../layout-engine/types";
+import { footnoteToProseDoc } from "../../prosemirror/conversion/toProseDoc";
+import type { Footnote, StyleDefinitions, Theme } from "../../types/document";
+import { measureParagraph } from "../engine/measuring";
 import { toFlowBlocks } from "./toFlowBlocks";
 
 // Re-exported for back-compat with existing callers that imported the

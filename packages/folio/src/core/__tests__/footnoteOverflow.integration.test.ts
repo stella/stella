@@ -11,7 +11,7 @@
 
 import { describe, expect, test } from "bun:test";
 
-import { calculateFootnoteReservedHeights } from "../layout-bridge/footnoteLayout";
+import { calculateFootnoteReservedHeights } from "../layout-bridge/convert/footnoteLayout";
 import { FOOTNOTE_SEPARATOR_HEIGHT as PAGINATOR_FOOTNOTE_SEPARATOR_HEIGHT } from "../layout-engine/paginator";
 import type {
   Page,

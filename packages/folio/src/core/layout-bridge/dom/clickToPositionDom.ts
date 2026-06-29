@@ -14,7 +14,7 @@ import {
   findHtmlElement,
   htmlQueryAll,
   queryHtmlElement,
-} from "../utils/domGuards";
+} from "../../utils/domGuards";
 
 /**
  * Find ProseMirror position from a click using DOM-based detection.

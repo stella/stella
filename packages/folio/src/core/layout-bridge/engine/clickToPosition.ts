@@ -11,13 +11,13 @@
 import {
   measuredLineAdvance,
   measuredLineContentOffset,
-} from "../layout-engine/lineFlow";
+} from "../../layout-engine/lineFlow";
 import {
   buildRunFontStyle,
   findCharacterAtX as findCharAtX,
-} from "../layout-engine/measure/measureHelpers";
-import { measureRun } from "../layout-engine/measure/measureProvider";
-import type { FontStyle } from "../layout-engine/measure/measureTypes";
+} from "../../layout-engine/measure/measureHelpers";
+import { measureRun } from "../../layout-engine/measure/measureProvider";
+import type { FontStyle } from "../../layout-engine/measure/measureTypes";
 import type {
   ParagraphBlock,
   ParagraphFragment,
@@ -26,8 +26,8 @@ import type {
   Run,
   TextRun,
   TabRun,
-} from "../layout-engine/types";
-import { inlineImageBoundingBox } from "../utils/rotationBoundingBox";
+} from "../../layout-engine/types";
+import { inlineImageBoundingBox } from "../../utils/rotationBoundingBox";
 import type { FragmentHit, TableCellHit } from "./hitTest";
 
 // =============================================================================
