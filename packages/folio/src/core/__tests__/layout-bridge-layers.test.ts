@@ -27,17 +27,25 @@ const { resolve } = path;
 const ENGINE_DIR = resolve(import.meta.dir, "..", "layout-bridge", "engine");
 
 // Match the specifier of every static import/export, bare side-effect import
-// (`import "./setup"`), and dynamic import (`import("./setup")`).
+// (`import "./setup"`), and dynamic import (`import("./setup")`). Each form is
+// a separate pattern: kept apart so no single regex grows complex enough to
+// trip the regex-complexity lint, and so the anchoring differs per form.
 //
-// Static and side-effect forms are anchored to statement position (`^[ \t]*`
-// under the `m` flag) so a string literal that merely contains the word `from`
-// or `import` before a quoted path cannot masquerade as an import. The gap
-// before `from` is bounded by `[^;]` so a multiline named import still matches
-// while a trailing string on a later statement cannot be pulled in. The dynamic
-// form is genuinely mid-expression, so it stays unanchored; comment stripping
-// (below) handles its only practical false-positive source.
-const IMPORT_REGEX =
-  /^[ \t]*(?:import|export)\b[^;]*?\bfrom\s*["'](?<fromSpec>[^"']+)["']|^[ \t]*import\s*["'](?<importSpec>[^"']+)["']|\bimport\s*\(\s*["'](?<dynImportSpec>[^"']+)["']\s*\)/gmu;
+// The static and side-effect forms are anchored to statement position
+// (`^[ \t]*` under the `m` flag) so a string literal that merely contains the
+// word `from` or `import` before a quoted path cannot masquerade as an import.
+// The gap before `from` is bounded by `[^;]` so a multiline named import still
+// matches while a trailing string on a later statement cannot be pulled in. The
+// dynamic form is genuinely mid-expression, so it stays unanchored; comment
+// stripping (below) handles its only practical false-positive source.
+const IMPORT_REGEXES = [
+  // `import … from "x"`, `export … from "x"`, `export * from "x"`
+  /^[ \t]*(?:import|export)\b[^;]*?\bfrom\s*["'](?<spec>[^"']+)["']/gmu,
+  // bare side-effect import: `import "x"`
+  /^[ \t]*import\s*["'](?<spec>[^"']+)["']/gmu,
+  // dynamic import: `import("x")`
+  /\bimport\s*\(\s*["'](?<spec>[^"']+)["']\s*\)/gu,
+] as const;
 
 // A forbidden upward edge: engine/ reaching into a sibling concern. Engine
 // files reference siblings relatively, so a violation looks like
@@ -60,13 +68,13 @@ const upwardEdgesForSource = (
   source: string,
 ): LayerViolation[] => {
   const found: LayerViolation[] = [];
-  for (const match of stripComments(source).matchAll(IMPORT_REGEX)) {
-    const specifier =
-      match.groups?.["fromSpec"] ??
-      match.groups?.["importSpec"] ??
-      match.groups?.["dynImportSpec"];
-    if (specifier !== undefined && isUpwardEdge(specifier)) {
-      found.push({ importer: filePath, specifier });
+  const stripped = stripComments(source);
+  for (const regex of IMPORT_REGEXES) {
+    for (const match of stripped.matchAll(regex)) {
+      const specifier = match.groups?.["spec"];
+      if (specifier !== undefined && isUpwardEdge(specifier)) {
+        found.push({ importer: filePath, specifier });
+      }
     }
   }
   return found;
