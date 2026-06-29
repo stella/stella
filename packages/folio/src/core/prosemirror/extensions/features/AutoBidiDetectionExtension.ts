@@ -14,11 +14,15 @@
  * Detection uses the first-strong-character rule (`detectBaseDirection`), the
  * same logic the layout painter uses for base direction.
  *
- * Clobber safety: we act ONLY when `bidi` is unset (`null`/`undefined`).
- * Explicit user/import decisions are `bidi: true` (RTL) or `bidi: false`
- * (LTR — see `setLtr`), so an Arabic paragraph the user deliberately set to LTR
- * is never re-flipped. We never set `bidi: false` here; LTR-led paragraphs are
- * left untouched (unset already means LTR).
+ * Auto vs. explicit: a paragraph is "auto-managed" when its `bidi` is unset
+ * (`null`) OR was set by this detector (`bidiAuto === true`). Only auto-managed
+ * paragraphs are (re-)evaluated; an explicit user toggle or imported `w:bidi`
+ * sets `bidi` with `bidiAuto` cleared, so it is authoritative and never touched.
+ * Because we re-evaluate our own decisions, replacing an auto-RTL paragraph's
+ * text with Latin clears the flag again (no stale "sticky" RTL).
+ *
+ * `bidiAuto` is an ephemeral editor-runtime attr — it is never serialized to
+ * DOCX or the DOM, so the persisted model still carries only the real `w:bidi`.
  *
  * Mirrors the appendTransaction + ensure-in-state pattern of
  * `ParaIdAllocatorExtension`.
@@ -39,6 +43,26 @@ type BidiUpdate = {
   attrs: Record<string, unknown>;
 };
 
+// First-strong detection needs the paragraph's directional text in document
+// order. `node.textContent` skips inline field atoms (MERGEFIELD/REF results
+// keep their rendered text in attrs, not child text), which would mis-detect a
+// field-led paragraph; walk direct inline children and fold in field display
+// text. Text inside hyperlink marks is regular child text, so it is included.
+const paragraphDirectionalText = (node: PMNode): string => {
+  let text = "";
+  node.forEach((child) => {
+    if (child.isText) {
+      text += child.text ?? "";
+    } else if (child.type.name === "field") {
+      const display = child.attrs["displayText"];
+      if (typeof display === "string") {
+        text += display;
+      }
+    }
+  });
+  return text;
+};
+
 const collectBidiUpdates = (doc: PMNode): BidiUpdate[] => {
   const updates: BidiUpdate[] = [];
 
@@ -48,14 +72,25 @@ const collectBidiUpdates = (doc: PMNode): BidiUpdate[] => {
       return;
     }
 
-    // Only undecided paragraphs are candidates. An explicit true/false (user
-    // toggle or Word import) is authoritative and must not be overridden.
-    if (node.attrs["bidi"] != null) {
+    const currentBidi = node.attrs["bidi"] ?? null;
+    const autoManaged = currentBidi === null || node.attrs["bidiAuto"] === true;
+    // Explicit decision (user toggle / imported w:bidi): leave it alone.
+    if (!autoManaged) {
       return false;
     }
 
-    if (detectBaseDirection(node.textContent) === "rtl") {
-      updates.push({ pos, attrs: { ...node.attrs, bidi: true } });
+    const wantRtl =
+      detectBaseDirection(paragraphDirectionalText(node)) === "rtl";
+    const desiredBidi = wantRtl ? true : null;
+    const desiredAuto = wantRtl ? true : null;
+    const changed =
+      currentBidi !== desiredBidi ||
+      (node.attrs["bidiAuto"] ?? null) !== desiredAuto;
+    if (changed) {
+      updates.push({
+        pos,
+        attrs: { ...node.attrs, bidi: desiredBidi, bidiAuto: desiredAuto },
+      });
     }
 
     // Paragraphs only contain inline content — skip the subtree.

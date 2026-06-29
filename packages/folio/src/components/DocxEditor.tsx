@@ -40,6 +40,7 @@ import {
   applyFolioAIEditOperations,
   createFolioAIEditSnapshot,
 } from "../core/ai-edits";
+import { normalizeBaseDirection } from "../core/docx/normalizeBaseDirection";
 import { getCachedNumberingMap } from "../core/docx/numberingParser";
 // ProseMirror editor
 import {
@@ -1252,10 +1253,16 @@ export function DocxEditor({
       return null;
     }
 
-    const doc = structuredClone(history.state);
+    let doc = structuredClone(history.state);
     const pmDoc = pagedEditorRef.current?.getDocument();
     if (pmDoc) {
       doc.package.document.content = pmDoc.package.document.content;
+    } else {
+      // The editor view was never instantiated, so getDocument() returned null
+      // and the PM-layer auto-bidi normalization never reached this clone.
+      // Apply the equivalent model-layer pass so an unflagged RTL-led document
+      // saved without focusing the editor still exports correct `w:bidi`.
+      doc = normalizeBaseDirection(doc);
     }
     // Flush in-flight HF PM edits into the cloned package — the persistent
     // hidden HF EditorViews don't mutate history.state per keystroke

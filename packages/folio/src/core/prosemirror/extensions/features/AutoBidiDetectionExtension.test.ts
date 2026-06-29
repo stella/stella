@@ -1,11 +1,12 @@
 /**
  * Tests for AutoBidiDetectionExtension.
  *
- * Contract: a paragraph whose direction is undecided (`bidi == null`) and whose
- * first strong character is RTL gets `bidi: true` — both when seeded on load
- * (`ensureBaseDirectionInState`) and when content is inserted live
- * (`appendTransaction`). An explicit decision (`true`/`false`) is never
- * overridden, and Latin-led paragraphs are left untouched.
+ * Contract: an "auto-managed" paragraph (bidi unset, or previously auto-set via
+ * `bidiAuto`) whose first strong character is RTL gets `bidi: true` + the
+ * ephemeral `bidiAuto: true`, both on load (`ensureBaseDirectionInState`) and on
+ * live edits (`appendTransaction`). Detection includes inline field display
+ * text. An explicit decision (user toggle / import, `bidiAuto` cleared) is never
+ * overridden, and an auto-set value is re-evaluated when the text changes.
  */
 
 import { describe, expect, test } from "bun:test";
@@ -24,8 +25,16 @@ const schema = new Schema({
     paragraph: {
       group: "block",
       content: "inline*",
-      attrs: { bidi: { default: null } },
+      attrs: { bidi: { default: null }, bidiAuto: { default: null } },
       toDOM: () => ["p", 0],
+    },
+    // Inline atom whose rendered text lives in attrs (mirrors the real field).
+    field: {
+      group: "inline",
+      inline: true,
+      atom: true,
+      attrs: { displayText: { default: "" } },
+      toDOM: () => ["span", 0],
     },
     text: { group: "inline" },
   },
@@ -37,12 +46,21 @@ if (!plugin) {
   throw new Error("Expected plugin from AutoBidiDetectionExtension");
 }
 
-const para = (text: string, bidi: boolean | null = null) =>
+type ParaAttrs = { bidi?: boolean | null; bidiAuto?: boolean | null };
+
+const para = (text: string, attrs: ParaAttrs = {}) =>
   schema.node(
     "paragraph",
-    { bidi },
+    { bidi: attrs.bidi ?? null, bidiAuto: attrs.bidiAuto ?? null },
     text.length > 0 ? [schema.text(text)] : [],
   );
+
+// Paragraph led by a field atom whose display text is `fieldText`.
+const fieldLedPara = (fieldText: string, trailing: string) =>
+  schema.node("paragraph", { bidi: null, bidiAuto: null }, [
+    schema.node("field", { displayText: fieldText }),
+    ...(trailing.length > 0 ? [schema.text(trailing)] : []),
+  ]);
 
 const stateOf = (...paras: PMNode[]) =>
   EditorState.create({
@@ -87,13 +105,13 @@ describe("ensureBaseDirectionInState (initial load)", () => {
 
   test("does not override an explicit LTR (false) on Arabic text", () => {
     expect(
-      bidis(ensureBaseDirectionInState(stateOf(para("عربي", false)))),
+      bidis(ensureBaseDirectionInState(stateOf(para("عربي", { bidi: false })))),
     ).toEqual([false]);
   });
 
   test("leaves an already-RTL paragraph as true (idempotent)", () => {
     expect(
-      bidis(ensureBaseDirectionInState(stateOf(para("عربي", true)))),
+      bidis(ensureBaseDirectionInState(stateOf(para("عربي", { bidi: true })))),
     ).toEqual([true]);
   });
 
@@ -102,6 +120,12 @@ describe("ensureBaseDirectionInState (initial load)", () => {
       stateOf(para("English"), para("نص عربي"), para("123 only")),
     );
     expect(bidis(state)).toEqual([null, true, null]);
+  });
+
+  test("detects RTL from an inline field's display text", () => {
+    // node.textContent omits the field atom; detection must fold in displayText.
+    const state = ensureBaseDirectionInState(stateOf(fieldLedPara("عربي", "")));
+    expect(bidis(state)).toEqual([true]);
   });
 });
 
@@ -119,11 +143,30 @@ describe("appendTransaction (live editing)", () => {
   });
 
   test("does not re-flip a paragraph the user set to explicit LTR", () => {
-    // Arabic paragraph the user forced to LTR (false); a further edit must not
-    // re-detect it back to RTL.
-    let state = stateOf(para("عربي", false));
+    // Arabic paragraph the user forced to LTR (false, bidiAuto cleared); a
+    // further edit must not re-detect it back to RTL.
+    let state = stateOf(para("عربي", { bidi: false }));
     state = state.apply(state.tr.insertText(" مزيد", 5));
     expect(bidis(state)).toEqual([false]);
+  });
+
+  test("re-evaluates an auto-set value when the text changes (no sticky RTL)", () => {
+    // Type Arabic into an empty paragraph -> auto RTL.
+    let state = stateOf(para(""));
+    state = state.apply(state.tr.insertText("مرحبا", 1));
+    expect(bidis(state)).toEqual([true]);
+    // Replace all of it with Latin -> the auto value is cleared, not sticky.
+    const end = state.doc.content.size - 1;
+    state = state.apply(state.tr.replaceWith(1, end, schema.text("hello")));
+    expect(bidis(state)).toEqual([null]);
+  });
+
+  test("does not re-evaluate a manual RTL set on Latin text", () => {
+    // User explicitly set RTL (bidiAuto cleared) on Latin content; editing must
+    // leave the explicit decision intact.
+    let state = stateOf(para("Hello", { bidi: true, bidiAuto: null }));
+    state = state.apply(state.tr.insertText(" world", 6));
+    expect(bidis(state)).toEqual([true]);
   });
 
   test("selection-only transactions do not allocate", () => {

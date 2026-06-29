@@ -384,6 +384,10 @@ const paragraphNodeSpec: NodeSpec = {
     defaultTextFormatting: { default: null },
     sectionBreakType: { default: null },
     bidi: { default: null },
+    // Ephemeral, editor-runtime-only: marks a `bidi` value that auto-detection
+    // set (vs an explicit user toggle or imported `w:bidi`). Never serialized to
+    // DOCX or DOM — it only lets auto-detection re-evaluate its own decisions.
+    bidiAuto: { default: null },
     outlineLevel: { default: null },
     bookmarks: { default: null },
     _emptyHyperlinks: { default: null },
@@ -1057,11 +1061,17 @@ export const ParagraphExtension = createNodeExtension({
             // `null` means "no decision" and is reserved for auto-detection;
             // a deliberate LTR must be recorded as `false` so AutoBidiDetection
             // does not re-flip an Arabic paragraph the user set to LTR.
-            return setParagraphAttr("bidi", !currentBidi)(state, dispatch);
+            // Clearing `bidiAuto` marks this as a manual decision, so
+            // auto-detection never revisits it.
+            return setParagraphAttrsCmd({ bidi: !currentBidi, bidiAuto: null })(
+              state,
+              dispatch,
+            );
           },
-        setRtl: () => setParagraphAttr("bidi", true),
-        // Explicit LTR is `false`, not `null`: see toggleBidi above.
-        setLtr: () => setParagraphAttr("bidi", false),
+        // A manual direction choice clears `bidiAuto`, so auto-detection treats
+        // it as authoritative and never re-evaluates it.
+        setRtl: () => setParagraphAttrsCmd({ bidi: true, bidiAuto: null }),
+        setLtr: () => setParagraphAttrsCmd({ bidi: false, bidiAuto: null }),
         setTabs: (tabs: TabStop[]) =>
           setParagraphAttr("tabs", tabs.length > 0 ? tabs : null),
         addTabStop:
