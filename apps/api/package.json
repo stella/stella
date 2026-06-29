@@ -49,7 +49,7 @@
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/cors": "^1.4.2",
     "@libpdf/core": "catalog:",
-    "@litko/yara-x": "0.6.0",
+    "@litko/yara-x": "^0.6.1",
     "@modelcontextprotocol/sdk": "1.29.0",
     "@openrouter/ai-sdk-provider": "^2.9.1",
     "@opentelemetry/api-logs": "^0.219.0",
