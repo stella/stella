@@ -23,7 +23,7 @@
     "format": "oxfmt .",
     "perf": "bun scripts/profile-editor.ts",
     "test": "bun test src",
-    "test:property": "bun test property.test",
+    "test:property": "bun test $(grep -rlF 'fc.assert' src --include='*.test.ts')",
     "test:visual": "bunx playwright test",
     "test:visual:update": "bunx playwright test --update-snapshots",
     "test:visual:report": "bunx playwright show-report"

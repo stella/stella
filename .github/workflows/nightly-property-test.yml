@@ -47,11 +47,13 @@ jobs:
           cd ../web
           mv .env.example .env
 
-      # Run only the property tests (*.property.test.ts), in isolation, with a
-      # larger per-test budget than PR CI affords. `propertyConfig` from
-      # @stll/property-testing reads PROPERTY_TEST_NUM_RUNS_FACTOR to scale
-      # every property's numRuns; verbose reporting is on under CI so a failing
-      # run logs the full list of shrunk values plus the replay seed.
+      # Run only the property tests, in isolation, with a larger per-test
+      # budget than PR CI affords. Each package's test:property selects every
+      # test file that uses fc.assert (by content, so a file does not have to be
+      # named *.property.test.ts to be covered). `propertyConfig` from
+      # @stll/property-testing reads PROPERTY_TEST_NUM_RUNS_FACTOR to scale every
+      # property's numRuns; verbose reporting is on under CI so a failing run
+      # logs the full list of shrunk values plus the replay seed.
       - name: Property test suite
         run: bun run test:property
         env:
