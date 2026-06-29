@@ -10,9 +10,10 @@
  * (`true`/`false`) and LTR paragraphs alone.
  *
  * Detection mirrors the editor's first-strong rule via `detectBaseDirection`.
- * Text extraction is best-effort over the dominant content (runs and
- * hyperlinked runs); inline fields and tracked-change wrappers are treated as
- * neutral here (the editor path covers them when a view exists).
+ * Text extraction walks the live content: runs, hyperlinked runs, simple/complex
+ * field results, and the live tracked-change/control wrappers (`insertion`,
+ * `moveTo`, `inlineSdt`). Non-live content (`deletion` / `moveFrom`) is skipped,
+ * matching the editor path.
  */
 import type {
   BlockContent,
