@@ -107,7 +107,7 @@ export const applyArabicFoldsWithOffsets = (input: string): FoldedText => {
   const sourceIndex: number[] = [];
   let originalUnit = 0;
   for (const char of input) {
-    const replacement = FOLD_MAP.get(char) ?? char;
+    const replacement = applyArabicFolds(char.normalize("NFKC"));
     parts.push(replacement);
     // One offset entry per UTF-16 code unit of the replacement; folds are
     // BMP, but an unfolded astral passthrough spans two code units.

@@ -70,7 +70,7 @@ export const findHitsInText = (
   // Match against the Arabic-folded text so a query matches regardless of
   // orthographic variant; snippets are sliced from the original via the
   // offset map so the model reads the text as written.
-  const foldedQuery = applyArabicFolds(query);
+  const foldedQuery = applyArabicFolds(query.normalize("NFKC"));
   if (foldedQuery.length === 0) {
     return { hits: [], totalHits: 0, totalHitsCapped: false, truncated: false };
   }

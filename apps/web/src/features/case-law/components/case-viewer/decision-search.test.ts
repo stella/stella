@@ -55,6 +55,15 @@ describe("buildSearchResults", () => {
     ]);
   });
 
+  it("folds Arabic presentation forms copied from a PDF", () => {
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text: "ﺍﺣﻤﺪ" }],
+      query: "احمد",
+    });
+
+    expect(result.matchCount).toBe(1);
+  });
+
   it("folds Arabic alef-hamza and teh-marbuta variants", () => {
     const result = buildSearchResults({
       pieces: [{ id: "p1", text: "خدمة أحمد" }],

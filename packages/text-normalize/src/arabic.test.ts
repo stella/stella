@@ -37,6 +37,17 @@ describe("applyArabicFoldsWithOffsets", () => {
     }
   });
 
+  test("NFKC-folds Arabic presentation forms", () => {
+    expect(applyArabicFoldsWithOffsets("ﺍﺣﻤﺪ").text).toBe("احمد");
+  });
+
+  test("expands a ligature and maps every unit to its source char", () => {
+    // ﷲ (U+FDF2) is one code unit; NFKC expands it to الله (4 units).
+    const { text, sourceIndex } = applyArabicFoldsWithOffsets("ﷲ");
+    expect(text).toBe("الله");
+    expect(sourceIndex).toEqual([0, 0, 0, 0, 1]);
+  });
+
   test("a folded match maps back to the original substring", () => {
     const original = "رقم ٢٠٢٤ نهائي";
     const { text, sourceIndex } = applyArabicFoldsWithOffsets(original);

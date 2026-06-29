@@ -77,11 +77,11 @@ const normalizeSearchText = (text: string): NormalizedText => {
   };
 
   for (const rawChar of text) {
-    // Fold Arabic variants on the composed char first (alef/hamza,
-    // teh-marbuta, alef-maksura, tatweel, Arabic-Indic digits) — NFD would
-    // otherwise split a composed alef-hamza before the fold can see it —
-    // then strip remaining Latin/Arabic combining diacritics via NFD.
-    const normalizedChar = applyArabicFolds(rawChar)
+    // NFKC folds presentation forms to canonical letters; applyArabicFolds
+    // then folds Arabic variants (before NFD, so a composed alef-hamza is
+    // not split first); NFD + mark removal strips remaining Latin/Arabic
+    // combining diacritics.
+    const normalizedChar = applyArabicFolds(rawChar.normalize("NFKC"))
       .normalize("NFD")
       .replace(DIACRITIC_RE, "");
     const origStart = originalIndex;
