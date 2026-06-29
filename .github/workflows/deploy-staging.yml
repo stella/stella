@@ -28,12 +28,10 @@ jobs:
     name: Build + deploy staging
     if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04-arm
-    # Headroom for a cache-miss image build (~15-20 min) plus the
-    # watcher budget below (65 min), which itself must outlast the
-    # infra promote job's own 60-min timeout. Keep this strictly
-    # greater than build + watcher so the job's own timeout never
-    # guillotines the watcher before it can read the infra run's
-    # real conclusion.
+    # Headroom for a cache-miss image build (~15-25 min) plus the
+    # watcher budget below (45 min). Keep this strictly greater than
+    # build + watcher so the job's own timeout never guillotines the
+    # watcher before it can read the infra run's real conclusion.
     timeout-minutes: 90
 
     steps:
@@ -164,15 +162,22 @@ jobs:
 
           watch_run_with_retry() {
             local run_id="$1"
-            # Poll long enough to outlast the infra promote job's own
-            # 60-min timeout-minutes (plus buffer for GitHub to flip the
-            # run to a terminal state). The watcher's job is to surface
-            # the infra run's real conclusion; a shorter budget makes it
-            # give up first and report a misleading "did not complete in
-            # N minutes" while the infra deploy is still legitimately
-            # working (e.g. a slow ECS rollout) and about to report
-            # success or a concrete failure. 390 x 10s = 65 min.
-            local max_attempts=390
+            # Budget is bounded by the GitHub App installation token's
+            # hard 1-hour lifetime: GH_TOKEN is minted in the prior step
+            # and `gh run view` against the infra repo needs it, so
+            # polling past ~1h starts hitting auth failures that this
+            # loop miscounts as transient errors and bails on after only
+            # ~2 min (max_consecutive_errors), masking the infra run's
+            # real status. Stay well under the hour: 270 x 10s = 45 min,
+            # which still covers a realistic promote (image import +
+            # migrate + terraform + a couple of ECS stabilize cycles run
+            # well under that) and far outlasts the old 30-min budget
+            # that gave up before a slow deploy could report its
+            # conclusion. A promote that hangs near the infra job's own
+            # 60-min timeout is surfaced as a watcher timeout here rather
+            # than chased past token expiry. Do NOT raise past ~55 min
+            # without first refreshing the App token inside the loop.
+            local max_attempts=270
             local sleep_seconds=10
             local max_consecutive_errors=12
             local consecutive_errors=0
