@@ -127,6 +127,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     });
 
     expect(tools).toHaveProperty("ask-user");
@@ -159,6 +160,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: editableActiveSkillContext,
       recordAuditEvent: noopAuditRecorder,
       skillMetadata: [
@@ -208,6 +210,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       activeSkillContext: {
         ...editableActiveSkillContext,
         body: "a".repeat(ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS + 1),
@@ -243,6 +246,7 @@ describe("chat tool schemas", () => {
       }),
       hasActiveDocxEditClient: false,
       webSearchEnabled: false,
+      webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     });
 
     const businessRegistryLookup = tools["business_registry_lookup"];

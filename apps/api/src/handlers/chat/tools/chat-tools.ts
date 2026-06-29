@@ -45,16 +45,26 @@ import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getDeployAvailableRegistryHandlers } from "@/api/lib/business-registries/dispatch";
-import { isWebSearchDeployAvailable } from "@/api/lib/web-search/select-provider";
+import type { ResolvedWebSearchProviders } from "@/api/lib/web-search/select-provider";
 
 export const WEB_SEARCH_NATIVE_TOOL_SLUG = "web-search";
 
-export const isWebSearchAvailable = (
-  disabledNativeToolSlugs?: readonly string[],
-): boolean => {
+/**
+ * Combine deploy/BYOK provider availability with the org's native-tool
+ * override. `webSearchProviderAvailable` is resolved per request from
+ * the org's stored key (or the platform fallback); callers compute it
+ * via `loadWebSearchProvidersForOrg`.
+ */
+export const isWebSearchAvailable = ({
+  webSearchProviderAvailable,
+  disabledNativeToolSlugs,
+}: {
+  webSearchProviderAvailable: boolean;
+  disabledNativeToolSlugs?: readonly string[] | undefined;
+}): boolean => {
   const webSearchOrgDisabled =
     disabledNativeToolSlugs?.includes(WEB_SEARCH_NATIVE_TOOL_SLUG) ?? false;
-  return isWebSearchDeployAvailable() && !webSearchOrgDisabled;
+  return webSearchProviderAvailable && !webSearchOrgDisabled;
 };
 
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
@@ -139,6 +149,13 @@ type GetChatToolsProps = {
    * tools to be registered on a turn.
    */
   webSearchEnabled: boolean;
+  /**
+   * Web-search + url-fetch providers resolved for this org (BYOK key
+   * first, platform env key as fallback). Resolve via
+   * `loadWebSearchProvidersForOrg`. A null `webSearchProvider` means
+   * the feature is unavailable for the org and the tools are skipped.
+   */
+  webSearchProviders: ResolvedWebSearchProviders;
   externalTools?: ToolSet | undefined;
   /**
    * Native tool slugs (e.g. "ares") the org has disabled in chat.
@@ -211,6 +228,7 @@ export const getChatTools = ({
   refRegistry,
   hasActiveDocxEditClient,
   webSearchEnabled,
+  webSearchProviders,
   externalTools = {},
   disabledNativeToolSlugs,
   skillMetadata,
@@ -257,9 +275,16 @@ export const getChatTools = ({
   const infosoudDisabled =
     disabledNativeToolSlugs?.includes("infosoud") ?? false;
   const infosoudTools = infosoudDisabled ? {} : createInfosoudTools();
+  const { webSearchProvider, urlFetcher } = webSearchProviders;
+  const webSearchToolsAvailable = isWebSearchAvailable({
+    webSearchProviderAvailable: webSearchProvider !== null,
+    disabledNativeToolSlugs,
+  });
+  // The `webSearchProvider !== null` re-check narrows the type for
+  // createWebSearchTools; it is implied by webSearchToolsAvailable.
   const webSearchTools =
-    webSearchEnabled && isWebSearchAvailable(disabledNativeToolSlugs)
-      ? createWebSearchTools()
+    webSearchEnabled && webSearchToolsAvailable && webSearchProvider !== null
+      ? createWebSearchTools({ webSearchProvider, urlFetcher })
       : {};
   const activeDocxEditTools = hasActiveDocxEditClient
     ? createActiveDocxEditTools()

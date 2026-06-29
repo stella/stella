@@ -2337,6 +2337,15 @@
     "slugFormat": "Slug smie obsahovať iba malé písmená, čísla a pomlčky",
     "slugRequired": "Slug je povinný"
   },
+  "webSearch": {
+    "settings": {
+      "description": "Bring your own web-search API keys so chat can search the web and read pages with your own provider account. Without them, chat uses the platform's shared keys when available.",
+      "fetchTitle": "Page reader key",
+      "platformFallback": "The platform's shared key is in use. Add your own to use your own provider account and quota.",
+      "searchTitle": "Search provider key",
+      "title": "Web search keys"
+    }
+  },
   "workspaces": {
     "archiveMatter": "Archivovať",
     "copyToMatter": {

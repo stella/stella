@@ -178,14 +178,18 @@ const envApi = createEnv({
      * Web search backend. Only Tavily is wired today; add a new
      * picklist entry alongside its WebSearchProvider implementation.
      * Leave unset to disable the tool even when FEATURE_WEB_SEARCH=true.
+     * TAVILY_API_KEY is the shared platform key; an org's own BYOK key
+     * (set in settings) takes precedence per request, so a BYOK-only
+     * deploy sets WEB_SEARCH_PROVIDER while leaving TAVILY_API_KEY unset.
      */
     WEB_SEARCH_PROVIDER: v.optional(v.picklist(["tavily"])),
     TAVILY_API_KEY: v.optional(v.string()),
 
     /**
      * URL-fetch backend used by the chat `fetch_url` tool. Jina Reader
-     * (r.jina.ai) is keyless at low volume; supply JINA_API_KEY to
-     * raise the rate limit.
+     * (r.jina.ai) is keyless at low volume; supply JINA_API_KEY (or an
+     * org BYOK key in settings, which takes precedence) to raise the
+     * rate limit.
      */
     WEB_FETCH_PROVIDER: v.optional(v.picklist(["jina"])),
     JINA_API_KEY: v.optional(v.string()),

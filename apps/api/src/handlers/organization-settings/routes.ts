@@ -2,6 +2,7 @@ import Elysia from "elysia";
 
 import deleteAIConfig from "@/api/handlers/organization-settings/delete-ai-config";
 import deleteDeepLKey from "@/api/handlers/organization-settings/delete-deepl-key";
+import deleteWebSearchKey from "@/api/handlers/organization-settings/delete-web-search-key";
 import previewOrganizationSettings from "@/api/handlers/organization-settings/preview";
 import readOrganizationSettings from "@/api/handlers/organization-settings/read";
 import readAIAvailability from "@/api/handlers/organization-settings/read-ai-availability";
@@ -9,11 +10,13 @@ import readAIConfig from "@/api/handlers/organization-settings/read-ai-config";
 import readAnonymizationBlacklist from "@/api/handlers/organization-settings/read-anonymization-blacklist";
 import readDeepLAvailability from "@/api/handlers/organization-settings/read-deepl-availability";
 import readDeepLConfig from "@/api/handlers/organization-settings/read-deepl-config";
+import readWebSearchConfig from "@/api/handlers/organization-settings/read-web-search-config";
 import updateOrganizationSettings from "@/api/handlers/organization-settings/update";
 import updateAIConfig from "@/api/handlers/organization-settings/update-ai-config";
 import updateAnonymizationBlacklist from "@/api/handlers/organization-settings/update-anonymization-blacklist";
 import updateDeepLKey from "@/api/handlers/organization-settings/update-deepl-key";
 import updatePracticeJurisdictions from "@/api/handlers/organization-settings/update-practice-jurisdictions";
+import updateWebSearchKey from "@/api/handlers/organization-settings/update-web-search-key";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 export const organizationSettingsRoute = new Elysia({
@@ -64,6 +67,17 @@ export const organizationSettingsRoute = new Elysia({
   })
   .delete("/deepl", deleteDeepLKey.handler, {
     permissions: deleteDeepLKey.config.permissions,
+  })
+  .get("/web-search-config", readWebSearchConfig.handler, {
+    permissions: readWebSearchConfig.config.permissions,
+  })
+  .post("/web-search-key", updateWebSearchKey.handler, {
+    body: updateWebSearchKey.config.body,
+    permissions: updateWebSearchKey.config.permissions,
+  })
+  .delete("/web-search-key", deleteWebSearchKey.handler, {
+    body: deleteWebSearchKey.config.body,
+    permissions: deleteWebSearchKey.config.permissions,
   })
   .get("/anonymization-blacklist", readAnonymizationBlacklist.handler, {
     permissions: readAnonymizationBlacklist.config.permissions,

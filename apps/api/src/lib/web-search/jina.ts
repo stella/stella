@@ -6,9 +6,34 @@ import type {
 import { WebSearchProviderError } from "@/api/lib/web-search/types";
 
 const JINA_READER_BASE = "https://r.jina.ai";
+const VALIDATE_TIMEOUT_MS = 15_000;
+const VALIDATE_PROBE_URL = "https://example.com";
 
 type CreateJinaFetcherArgs = {
   apiKey: string | undefined;
+};
+
+/**
+ * Probe a Jina key by reading a trivial page before persisting it.
+ * Jina works keyless, so a key only ever raises the rate limit; this
+ * just confirms the key is accepted. Throws `WebSearchProviderError`
+ * (carrying the HTTP status) on rejection.
+ */
+export const validateJinaKey = async (apiKey: string): Promise<void> => {
+  const response = await fetch(`${JINA_READER_BASE}/${VALIDATE_PROBE_URL}`, {
+    headers: {
+      accept: "text/plain",
+      authorization: `Bearer ${apiKey}`,
+    },
+    signal: AbortSignal.timeout(VALIDATE_TIMEOUT_MS),
+  });
+  if (!response.ok) {
+    throw new WebSearchProviderError({
+      provider: "jina",
+      status: response.status,
+      message: `Jina rejected the API key (${response.status})`,
+    });
+  }
 };
 
 const parseJinaHeader = (response: Response, name: string): string | null => {
