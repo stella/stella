@@ -1,0 +1,101 @@
+name: Publish npm packages
+
+# Publishes the shared @stll dependency packages (docx-core, docx-utils,
+# conditions, template-conditions) to npm with SLSA provenance via OIDC trusted
+# publishing — no long-lived NPM_TOKEN. These packages live in this monorepo
+# (stella's apps consume them) and are published from here; external consumers
+# install the published versions.
+#
+# Prerequisite (one-time, per package, by a maintainer on npmjs.com): configure
+# an npm "trusted publisher" for each @stll/* package pointing at this repository
+# and this workflow file. The hardened action refuses to fall back to token auth,
+# so the first publish will fail until the trusted publisher exists.
+#
+# Default run (publish unchecked) builds and packs only — a safe dry run. Tick
+# "publish" to actually push to npm. The hardened action is idempotent: it skips
+# any name@version already on the registry.
+
+env:
+  NODE_VERSION: "22"
+  NPM_VERSION: "11.11.1"
+
+on:
+  workflow_dispatch:
+    inputs:
+      package:
+        description: Package(s) to publish (dependency order enforced for "all")
+        type: choice
+        options:
+          - all
+          - conditions
+          - template-conditions
+          - docx-core
+          - docx-utils
+        default: all
+      publish:
+        description: Publish to npm (leave unchecked for a build + pack dry run)
+        type: boolean
+        default: false
+
+concurrency:
+  group: publish-npm-${{ inputs.package }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    name: Build, pack, and publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write # OIDC, required for trusted publishing + provenance
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: https://registry.npmjs.org
+
+      - name: Install npm for trusted publishing
+        run: npm install --global "npm@${{ env.NPM_VERSION }}"
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build and pack selected packages (dependency order)
+        id: pack
+        shell: bash
+        run: |
+          set -euo pipefail
+          # conditions before template-conditions (which depends on it); the
+          # docx packages are independent.
+          case "${{ inputs.package }}" in
+            all) pkgs=(conditions template-conditions docx-core docx-utils) ;;
+            *) pkgs=("${{ inputs.package }}") ;;
+          esac
+
+          mkdir -p release-artifacts
+          tarballs=()
+          for p in "${pkgs[@]}"; do
+            echo "::group::Build + pack @stll/${p}"
+            (cd "packages/${p}" && bun run build)
+            pack_json="$(
+              cd "packages/${p}" &&
+              npm pack --json --ignore-scripts \
+                --pack-destination "${GITHUB_WORKSPACE}/release-artifacts"
+            )"
+            file="$(echo "${pack_json}" | jq -r '.[0].filename')"
+            sha256sum "release-artifacts/${file}" >> release-artifacts/SHA256SUMS
+            tarballs+=("release-artifacts/${file}")
+            echo "::endgroup::"
+          done
+
+          echo "tarballs=${tarballs[*]}" >> "${GITHUB_OUTPUT}"
+          printf 'Packed:\n%s\n' "${tarballs[*]}"
+
+      - name: Publish to npm (OIDC trusted publishing + provenance)
+        if: ${{ inputs.publish }}
+        uses: stella/.github/.github/actions/npm-publish-hardened@96b8912e0786548c4e62046ce3965769991dd0e0
+        with:
+          tarballs: ${{ steps.pack.outputs.tarballs }}
