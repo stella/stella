@@ -1,23 +1,19 @@
 import { Result } from "better-result";
-import { and, asc, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
-import type { Transaction } from "@/api/db";
-import {
-  clauses,
-  clauseVariants,
-  clauseVersions,
-  properties,
-  propertyDependencies,
-} from "@/api/db/schema";
+import { properties, propertyDependencies } from "@/api/db/schema";
 import type {
   PlaybookVerdictTool,
   PropertyTool,
 } from "@/api/db/schema-validators";
-import { clauseBodyToPlainText } from "@/api/handlers/clauses/clause-to-patch";
 import type {
   Position,
   ResolvedStandard,
 } from "@/api/handlers/playbooks/positions";
+import {
+  loadClauseSnapshots,
+  resolveStandard,
+} from "@/api/handlers/playbooks/resolve-standards";
 import { buildVerdictContent } from "@/api/handlers/playbooks/verdict-tiers";
 import { createDefaultTool } from "@/api/handlers/properties/create-schema";
 import { lockWorkspacePropertyWrites } from "@/api/handlers/properties/property-lock";
@@ -30,161 +26,12 @@ import { remapNodePropertyIds } from "@/api/lib/conditions/ast-utils";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
   permissions: { playbook: ["apply"] },
   params: workspaceParams({ playbookId: tSafeId("playbookDefinition") }),
 } satisfies HandlerConfig;
-
-// The verdict tool snapshots the standard at run time; cap each text so a long
-// clause body cannot bloat the property row beyond the schema's documented
-// limits (`resolvedStandardSchema`).
-const MAX_STANDARD_TEXT = 10_000;
-const MAX_FALLBACKS = 10;
-
-const capText = (text: string): string =>
-  text.length > MAX_STANDARD_TEXT ? text.slice(0, MAX_STANDARD_TEXT) : text;
-
-type ClauseSnapshot = {
-  preferredBody: string;
-  pinnedBodyByVersion: Map<number, string>;
-  fallbacks: { rank: number; text: string }[];
-};
-
-const loadClauseSnapshots = async (
-  tx: Transaction,
-  organizationId: SafeId<"organization">,
-  positions: readonly Position[],
-): Promise<Map<string, ClauseSnapshot>> => {
-  const clauseIds = [
-    ...new Set(
-      positions.flatMap((position) =>
-        position.standard.source === "clause"
-          ? [position.standard.clauseId]
-          : [],
-      ),
-    ),
-  ].map((id) => brandPersistedClauseId(id));
-
-  if (clauseIds.length === 0) {
-    return new Map();
-  }
-
-  const [clauseRows, variantRows, versionRows] = await Promise.all([
-    tx
-      .select({ id: clauses.id, body: clauses.body })
-      .from(clauses)
-      .where(
-        and(
-          eq(clauses.organizationId, organizationId),
-          inArray(clauses.id, clauseIds),
-        ),
-      ),
-    tx
-      .select({
-        clauseId: clauseVariants.clauseId,
-        body: clauseVariants.body,
-        sortOrder: clauseVariants.sortOrder,
-      })
-      .from(clauseVariants)
-      .where(
-        and(
-          eq(clauseVariants.organizationId, organizationId),
-          inArray(clauseVariants.clauseId, clauseIds),
-        ),
-      )
-      .orderBy(asc(clauseVariants.sortOrder))
-      .limit(clauseIds.length * LIMITS.clauseVariantsPerClause),
-    tx
-      .select({
-        clauseId: clauseVersions.clauseId,
-        version: clauseVersions.version,
-        body: clauseVersions.body,
-      })
-      .from(clauseVersions)
-      .where(
-        and(
-          eq(clauseVersions.organizationId, organizationId),
-          inArray(clauseVersions.clauseId, clauseIds),
-        ),
-      ),
-  ]);
-
-  const snapshots = new Map<string, ClauseSnapshot>();
-  for (const clause of clauseRows) {
-    snapshots.set(clause.id, {
-      preferredBody: clauseBodyToPlainText(clause.body),
-      pinnedBodyByVersion: new Map(),
-      fallbacks: [],
-    });
-  }
-  for (const version of versionRows) {
-    snapshots
-      .get(version.clauseId)
-      ?.pinnedBodyByVersion.set(
-        version.version,
-        clauseBodyToPlainText(version.body),
-      );
-  }
-  for (const variant of variantRows) {
-    const snapshot = snapshots.get(variant.clauseId);
-    if (!snapshot) {
-      continue;
-    }
-    const text = clauseBodyToPlainText(variant.body).trim();
-    if (text.length > 0) {
-      snapshot.fallbacks.push({ rank: variant.sortOrder, text: capText(text) });
-    }
-  }
-  return snapshots;
-};
-
-const resolveStandard = (
-  position: Position,
-  clauseSnapshots: ReadonlyMap<string, ClauseSnapshot>,
-): ResolvedStandard => {
-  const { standard } = position;
-  if (standard.source === "none") {
-    return {};
-  }
-
-  if (standard.source === "inline") {
-    const preferred = standard.preferred?.trim();
-    const fallbacks = (standard.fallbacks ?? [])
-      .map((fallback) => ({ rank: fallback.rank, text: fallback.text.trim() }))
-      .filter((fallback) => fallback.text.length > 0)
-      .slice(0, MAX_FALLBACKS)
-      .map((fallback) => ({
-        rank: fallback.rank,
-        text: capText(fallback.text),
-      }));
-    return {
-      ...(preferred && preferred.length > 0
-        ? { preferred: capText(preferred) }
-        : {}),
-      ...(fallbacks.length > 0 ? { fallbacks } : {}),
-    };
-  }
-
-  // source === "clause": resolve the pinned (or latest) body + ranked variants.
-  const snapshot = clauseSnapshots.get(standard.clauseId);
-  if (!snapshot) {
-    return {};
-  }
-  const preferredBody =
-    standard.clauseVersion !== undefined
-      ? (snapshot.pinnedBodyByVersion.get(standard.clauseVersion) ??
-        snapshot.preferredBody)
-      : snapshot.preferredBody;
-  const preferred = preferredBody.trim();
-  const fallbacks = snapshot.fallbacks.slice(0, MAX_FALLBACKS);
-  return {
-    ...(preferred.length > 0 ? { preferred: capText(preferred) } : {}),
-    ...(fallbacks.length > 0 ? { fallbacks } : {}),
-  };
-};
 
 const buildAskTool = (position: Position): PropertyTool => {
   const question = position.ask.question.trim();

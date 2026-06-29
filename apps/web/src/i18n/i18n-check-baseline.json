@@ -75,6 +75,7 @@
     "contacts.phoneTypes.other",
     "contacts.search",
     "docxReview.applyTracked",
+    "docxReview.reject",
     "docxReview.severityHigh",
     "docxReview.severityLow",
     "docxReview.severityMedium",
@@ -100,6 +101,8 @@
     "knowledge.playbooks.contentType.int",
     "knowledge.playbooks.contentType.text",
     "knowledge.playbooks.gradeRuleLabel",
+    "knowledge.playbooks.review.fixAccepted",
+    "knowledge.playbooks.review.reject",
     "knowledge.playbooks.severity.high",
     "knowledge.playbooks.severity.low",
     "knowledge.playbooks.severity.medium",
@@ -816,6 +819,17 @@
     ],
     "knowledge.playbooks.optionsLabel": [
       "fr"
+    ],
+    "knowledge.playbooks.review.playbookLabel": [
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "pl",
+      "pt-BR",
+      "sk"
     ],
     "knowledge.sections.agents.title": [
       "fr"

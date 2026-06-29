@@ -25,9 +25,10 @@ import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { usePlaybookNavStore } from "@/routes/_protected.knowledge/-components/playbook-nav-store";
-import type {
-  PlaybookPositionsValue,
-  Position,
+import {
+  type PlaybookPositionsValue,
+  type Position,
+  withFallbackRank,
 } from "@/routes/_protected.knowledge/-components/playbook-types";
 import { PositionEditor } from "@/routes/_protected.knowledge/-components/position-editor";
 import {
@@ -145,11 +146,7 @@ const normalizePosition = (position: Position): Position => {
   }
   const fallbacks = position.standard.fallbacks
     .filter((fallback) => fallback.text.trim() !== "")
-    .map((fallback, i) => ({
-      rank: i,
-      label: fallback.label,
-      text: fallback.text,
-    }));
+    .map(withFallbackRank);
   return {
     ...position,
     issue,

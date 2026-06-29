@@ -32,12 +32,13 @@ import {
 import { Textarea } from "@stll/ui/components/textarea";
 
 import type { TranslationKey } from "@/i18n/types";
-import type {
-  Position,
-  PositionAskContent,
-  PositionRule,
-  PositionSeverity,
-  PositionStandard,
+import {
+  type Position,
+  type PositionAskContent,
+  type PositionRule,
+  type PositionSeverity,
+  type PositionStandard,
+  withFallbackRank,
 } from "@/routes/_protected.knowledge/-components/playbook-types";
 import {
   clauseDetailOptions,
@@ -611,11 +612,7 @@ const InlineStandard = ({
   const removeFallback = (fallbackIndex: number) => {
     const next = fallbacks
       .filter((_, i) => i !== fallbackIndex)
-      .map((fallback, i) => ({
-        rank: i,
-        label: fallback.label,
-        text: fallback.text,
-      }));
+      .map(withFallbackRank);
     onChange({ ...standard, fallbacks: next });
   };
 

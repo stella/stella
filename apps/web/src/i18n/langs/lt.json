@@ -1510,6 +1510,27 @@
       "positions": "Pozicijos",
       "preferredLabel": "Pageidaujama formuluotė",
       "preferredPlaceholder": "Pageidaujama formuluotė",
+      "review": {
+        "changePlaybook": "Pasirinkti kitą peržiūros vadovą",
+        "extractedLabel": "Rasta:",
+        "facetTitle": "Peržiūra su peržiūros vadovu",
+        "failed": "Nepavyko peržiūrėti dokumento",
+        "fixAccepted": "Priimta",
+        "insertFailed": "Nepavyko įterpti pageidaujamos sąlygos",
+        "insertPreferred": "Įterpti pageidaujamą sąlygą",
+        "launcherDescription": "Patikrinkite šį dokumentą pagal organizacijos peržiūros vadovą ir gaukite išvadas tiesiog tekste.",
+        "noFindings": "Problemų nerasta",
+        "playbookLabel": "Peržiūros vadovas",
+        "playbookPlaceholder": "Pasirinkite peržiūros vadovą",
+        "reject": "Atmesti",
+        "reviewAgain": "Peržiūrėti dar kartą",
+        "reviewedAgainst": "Peržiūrėta pagal {name}",
+        "reviewing": "Peržiūrima…",
+        "reviewingHint": "Dideliems peržiūros vadovams tai gali užtrukti kelias minutes.",
+        "run": "Peržiūrėti",
+        "scrollToChange": "Eiti į pakeitimą",
+        "viewClause": "Žiūrėti sąlygą"
+      },
       "rule": {
         "extractOnly": "Tik ištraukti",
         "positionMatch": "Pozicijos atitiktis",
@@ -1529,7 +1550,13 @@
         "inline": "Įvestas tekstas",
         "none": "Nėra standarto"
       },
-      "updated": "Peržiūros vadovas atnaujintas"
+      "updated": "Peržiūros vadovas atnaujintas",
+      "verdict": {
+        "compliant": "Atitinka",
+        "deviation": "Nukrypimas",
+        "fallback": "Alternatyva",
+        "missing": "Trūksta"
+      }
     },
     "sections": {
       "agents": {

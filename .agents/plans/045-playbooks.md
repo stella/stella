@@ -31,9 +31,11 @@ primitive:
     (`@stll/conditions`), no LLM.
   - `positionMatch` — extracted prose compared to preferred/fallbacks (LLM),
     returns a tier. Plus `severity` (blocker | high | medium | low).
-- **FIX** — insert preferred language as a tracked change. Reuses
-  `clause-to-patch` / `rewrite`. Structurally available only when EXPECT is
-  `clause | inline`.
+- **FIX** — insert preferred language as a tracked change via the Folio editor's
+  `applyAIEditOperations({ mode: "tracked-changes" })`, mirroring the chat
+  AI-review pipeline. (NOTE: `clause-to-patch` is server-side DOCX template-fill,
+  NOT live-editor redline — do not use it here.) Structurally available only when
+  EXPECT is `clause | inline`.
 
 `RUN(Playbook, Target)` produces **Findings**, the single output unit:
 `{ positionId, documentId, extracted, verdict, severity, citation, fix? }`.
@@ -158,8 +160,10 @@ N-agnostic (1 doc or N docs) and surface-agnostic; only the renderer differs.
 2. **Run on a files table.** Materialize ASK + verdict columns, reuse
    condition-AST gating and the extraction workflow, render the compliance
    matrix; provenance card carries rationale + citation.
-3. **Run on a single file.** Findings to issue cards in folio + inline
-   citation; one-click redline via clause-to-patch (FIX).
+3. **Run on a single file.** Findings to issue cards in folio + inline citation
+   (driven by the ASK extraction's docx-folio block-id citations); one-click
+   redline via the editor's `applyAIEditOperations` tracked-changes path (mirror
+   the chat review-store -> inspector Suggestions -> review-panel pipeline).
 4. **Versioning + scope axes.** Playbook versions, counterparty/matter scope
    + conditional triggers, pin-to-clause-version.
 5. **Governance + authoring polish.** RBAC, audit surfacing, inline→library

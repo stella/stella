@@ -1510,6 +1510,27 @@
       "positions": "Álláspontok",
       "preferredLabel": "Preferált megfogalmazás",
       "preferredPlaceholder": "Preferált szövegezés",
+      "review": {
+        "changePlaybook": "Másik playbook választása",
+        "extractedLabel": "Találat:",
+        "facetTitle": "Ellenőrzés playbookkal",
+        "failed": "A dokumentum ellenőrzése nem sikerült",
+        "fixAccepted": "Elfogadva",
+        "insertFailed": "A preferált záradékot nem sikerült beszúrni",
+        "insertPreferred": "Preferált záradék beszúrása",
+        "launcherDescription": "Ellenőrizze ezt a dokumentumot egy szervezeti playbook alapján, és kapja meg a megállapításokat közvetlenül a szövegben.",
+        "noFindings": "Nem található probléma",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Válasszon playbookot",
+        "reject": "Elutasítás",
+        "reviewAgain": "Újraellenőrzés",
+        "reviewedAgainst": "Ellenőrizve {name} alapján",
+        "reviewing": "Ellenőrzés…",
+        "reviewingHint": "Nagy playbookok esetén ez akár néhány percig is eltarthat.",
+        "run": "Ellenőrzés",
+        "scrollToChange": "Ugrás a módosításhoz",
+        "viewClause": "Záradék megtekintése"
+      },
       "rule": {
         "extractOnly": "Csak kinyerés",
         "positionMatch": "Álláspont egyezése",
@@ -1529,7 +1550,13 @@
         "inline": "Egyéni szöveg",
         "none": "Nincs mérce"
       },
-      "updated": "Playbook frissítve"
+      "updated": "Playbook frissítve",
+      "verdict": {
+        "compliant": "Megfelel",
+        "deviation": "Eltérés",
+        "fallback": "Alternatív megfogalmazás",
+        "missing": "Hiányzik"
+      }
     },
     "sections": {
       "agents": {

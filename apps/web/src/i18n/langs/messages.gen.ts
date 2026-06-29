@@ -1513,6 +1513,27 @@ type Messages = {
       "positions": "Positions";
       "preferredLabel": "Preferred language";
       "preferredPlaceholder": "Preferred wording";
+      "review": {
+        "changePlaybook": "Choose another playbook";
+        "extractedLabel": "Found:";
+        "facetTitle": "Review with playbook";
+        "failed": "Failed to review document";
+        "fixAccepted": "Accepted";
+        "insertFailed": "Couldn't insert the preferred clause";
+        "insertPreferred": "Insert preferred clause";
+        "launcherDescription": "Check this document against an organization playbook and get findings inline.";
+        "noFindings": "No issues found";
+        "playbookLabel": "Playbook";
+        "playbookPlaceholder": "Choose a playbook";
+        "reject": "Reject";
+        "reviewAgain": "Review again";
+        "reviewedAgainst": "Reviewed against {name}";
+        "reviewing": "Reviewing…";
+        "reviewingHint": "This can take up to a couple of minutes for large playbooks.";
+        "run": "Review";
+        "scrollToChange": "Go to change";
+        "viewClause": "View clause";
+      };
       "rule": {
         "extractOnly": "Extract only";
         "positionMatch": "Position match";
@@ -1533,6 +1554,12 @@ type Messages = {
         "none": "No standard";
       };
       "updated": "Playbook updated";
+      "verdict": {
+        "compliant": "Compliant";
+        "deviation": "Deviation";
+        "fallback": "Fallback";
+        "missing": "Missing";
+      };
     };
     "sections": {
       "agents": {

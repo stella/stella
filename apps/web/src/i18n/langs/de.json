@@ -1510,6 +1510,27 @@
       "positions": "Standpunkte",
       "preferredLabel": "Bevorzugter Wortlaut",
       "preferredPlaceholder": "Bevorzugte Formulierung",
+      "review": {
+        "changePlaybook": "Anderes Playbook wählen",
+        "extractedLabel": "Gefunden:",
+        "facetTitle": "Mit Playbook prüfen",
+        "failed": "Dokument konnte nicht geprüft werden",
+        "fixAccepted": "Angenommen",
+        "insertFailed": "Bevorzugte Klausel konnte nicht eingefügt werden",
+        "insertPreferred": "Bevorzugte Klausel einfügen",
+        "launcherDescription": "Prüfen Sie dieses Dokument anhand eines Playbooks Ihrer Organisation und erhalten Sie die Ergebnisse direkt im Dokument.",
+        "noFindings": "Keine Probleme gefunden",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Playbook auswählen",
+        "reject": "Ablehnen",
+        "reviewAgain": "Erneut prüfen",
+        "reviewedAgainst": "Geprüft anhand von {name}",
+        "reviewing": "Wird geprüft…",
+        "reviewingHint": "Bei großen Playbooks kann dies einige Minuten dauern.",
+        "run": "Prüfen",
+        "scrollToChange": "Zur Änderung",
+        "viewClause": "Klausel anzeigen"
+      },
       "rule": {
         "extractOnly": "Nur extrahieren",
         "positionMatch": "Standpunktabgleich",
@@ -1529,7 +1550,13 @@
         "inline": "Freitext",
         "none": "Keine Vorgabe"
       },
-      "updated": "Playbook aktualisiert"
+      "updated": "Playbook aktualisiert",
+      "verdict": {
+        "compliant": "Konform",
+        "deviation": "Abweichung",
+        "fallback": "Alternative",
+        "missing": "Fehlt"
+      }
     },
     "sections": {
       "agents": {

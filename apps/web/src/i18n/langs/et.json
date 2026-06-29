@@ -1510,6 +1510,27 @@
       "positions": "Seisukohad",
       "preferredLabel": "Eelistatud sõnastus",
       "preferredPlaceholder": "Eelistatud sõnastus",
+      "review": {
+        "changePlaybook": "Vali teine playbook",
+        "extractedLabel": "Leitud:",
+        "facetTitle": "Ülevaatus playbookiga",
+        "failed": "Dokumendi ülevaatus ebaõnnestus",
+        "fixAccepted": "Nõustutud",
+        "insertFailed": "Eelistatud klausli lisamine ebaõnnestus",
+        "insertPreferred": "Lisa eelistatud klausel",
+        "launcherDescription": "Vaadake see dokument üle organisatsiooni playbooki alusel ja saage tulemused otse tekstis.",
+        "noFindings": "Probleeme ei leitud",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Vali playbook",
+        "reject": "Lükka tagasi",
+        "reviewAgain": "Vaata uuesti üle",
+        "reviewedAgainst": "Üle vaadatud {name} alusel",
+        "reviewing": "Ülevaatamine…",
+        "reviewingHint": "Suurte playbookide puhul võib see võtta paar minutit.",
+        "run": "Vaata üle",
+        "scrollToChange": "Mine muudatuse juurde",
+        "viewClause": "Vaata klauslit"
+      },
       "rule": {
         "extractOnly": "Ainult väljavõte",
         "positionMatch": "Seisukoha vastavus",
@@ -1529,7 +1550,13 @@
         "inline": "Sisestatud tekst",
         "none": "Standard puudub"
       },
-      "updated": "Playbook uuendatud"
+      "updated": "Playbook uuendatud",
+      "verdict": {
+        "compliant": "Vastav",
+        "deviation": "Kõrvalekalle",
+        "fallback": "Alternatiiv",
+        "missing": "Puudub"
+      }
     },
     "sections": {
       "agents": {

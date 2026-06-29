@@ -33,7 +33,11 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
  * to PDF (`pdfFileId`), or a DOCX whose folio blocks we serialise
  * into the prompt directly.
  */
-const isAISupportedFile = (file: ResolvedFile): boolean =>
+// Exported (with `fetchAndPrepareFiles` / `buildJustificationFilenames` below)
+// so the single-doc ephemeral review (`handlers/playbooks/review-extract.ts`)
+// reuses the exact same file-preparation + citation-allow-list wiring the batch
+// workflow uses, instead of forking a parallel DOCX→blocks / PDF→bates path.
+export const isAISupportedFile = (file: ResolvedFile): boolean =>
   (file.mimeType === PDF_MIME_TYPE && !file.encrypted) ||
   file.pdfFileId !== null ||
   file.mimeType === DOCX_MIME_TYPE;
@@ -103,7 +107,7 @@ export type PreparedDocxFile = {
 
 export type PreparedInputFile = PreparedPdfFile | PreparedDocxFile;
 
-const fetchAndPrepareFiles = async (
+export const fetchAndPrepareFiles = async (
   resolvedFiles: ResolvedFile[],
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
@@ -157,7 +161,7 @@ const fetchAndPrepareFiles = async (
     }),
   );
 
-const buildJustificationFilenames = (
+export const buildJustificationFilenames = (
   files: PreparedInputFile[],
 ): JustificationFilenames =>
   files.map((file) => {

@@ -1510,6 +1510,27 @@
       "positions": "Stanowiska",
       "preferredLabel": "Preferowane brzmienie",
       "preferredPlaceholder": "Preferowane sformułowanie",
+      "review": {
+        "changePlaybook": "Wybierz inny playbook",
+        "extractedLabel": "Znaleziono:",
+        "facetTitle": "Sprawdzenie według playbooka",
+        "failed": "Nie udało się sprawdzić dokumentu",
+        "fixAccepted": "Zaakceptowano",
+        "insertFailed": "Nie udało się wstawić preferowanej klauzuli",
+        "insertPreferred": "Wstaw preferowaną klauzulę",
+        "launcherDescription": "Sprawdź ten dokument pod kątem playbooka organizacji i zobacz ustalenia bezpośrednio w tekście.",
+        "noFindings": "Nie znaleziono problemów",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Wybierz playbook",
+        "reject": "Odrzuć",
+        "reviewAgain": "Sprawdź ponownie",
+        "reviewedAgainst": "Sprawdzono według {name}",
+        "reviewing": "Sprawdzanie…",
+        "reviewingHint": "W przypadku obszernych playbooków może to potrwać nawet kilka minut.",
+        "run": "Sprawdź",
+        "scrollToChange": "Przejdź do zmiany",
+        "viewClause": "Zobacz klauzulę"
+      },
       "rule": {
         "extractOnly": "Tylko ekstrakcja",
         "positionMatch": "Zgodność ze stanowiskiem",
@@ -1529,7 +1550,13 @@
         "inline": "Tekst własny",
         "none": "Brak wzorca"
       },
-      "updated": "Playbook zaktualizowany"
+      "updated": "Playbook zaktualizowany",
+      "verdict": {
+        "compliant": "Zgodne",
+        "deviation": "Odstępstwo",
+        "fallback": "Alternatywne brzmienie",
+        "missing": "Brak"
+      }
     },
     "sections": {
       "agents": {

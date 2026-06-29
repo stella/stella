@@ -30,3 +30,15 @@ type PlaybookListData = Exclude<
 >;
 
 export type PlaybookListItem = PlaybookListData["items"][number];
+
+type InlineFallback = NonNullable<
+  Extract<PositionStandard, { source: "inline" }>["fallbacks"]
+>[number];
+
+// Re-rank a fallback to its new index, preserving the optional `label`. A named
+// helper (not an inline `.map` arrow) so the spread does not trip oxc/no-map-spread,
+// and spreading keeps `label` optional under exactOptionalPropertyTypes.
+export const withFallbackRank = (
+  fallback: InlineFallback,
+  index: number,
+): InlineFallback => ({ ...fallback, rank: index });

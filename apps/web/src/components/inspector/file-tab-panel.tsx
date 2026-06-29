@@ -44,6 +44,7 @@ import {
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
 import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
@@ -471,6 +472,12 @@ export const FileTabPanel = ({
           )}
           {tab.facet === "suggestions" && (
             <SuggestionsFacet entityId={tab.entityId} />
+          )}
+          {tab.facet === "playbook" && (
+            <PlaybookFacet
+              entityId={tab.entityId}
+              workspaceId={tab.workspaceId}
+            />
           )}
           {tab.facet === "anonymization" && (
             <AnonymizationFacet
@@ -999,6 +1006,12 @@ export const FileTabPanel = ({
                     },
                   }
                 : {})}
+            />
+          )}
+          {sidepeekFacet === "playbook" && (
+            <PlaybookFacet
+              entityId={tab.entityId}
+              workspaceId={tab.workspaceId}
             />
           )}
           {sidepeekFacet === "anonymization" && (

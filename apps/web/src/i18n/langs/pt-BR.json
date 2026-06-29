@@ -1510,6 +1510,27 @@
       "positions": "Posições",
       "preferredLabel": "Redação preferida",
       "preferredPlaceholder": "Formulação preferida",
+      "review": {
+        "changePlaybook": "Escolher outro playbook",
+        "extractedLabel": "Encontrado:",
+        "facetTitle": "Revisar com playbook",
+        "failed": "Não foi possível revisar o documento",
+        "fixAccepted": "Aceito",
+        "insertFailed": "Não foi possível inserir a cláusula preferida",
+        "insertPreferred": "Inserir cláusula preferida",
+        "launcherDescription": "Revise este documento de acordo com um playbook da organização e veja os resultados diretamente no documento.",
+        "noFindings": "Nenhum problema encontrado",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Escolha um playbook",
+        "reject": "Rejeitar",
+        "reviewAgain": "Revisar novamente",
+        "reviewedAgainst": "Revisado de acordo com {name}",
+        "reviewing": "Revisando…",
+        "reviewingHint": "Em playbooks grandes, isso pode levar alguns minutos.",
+        "run": "Revisar",
+        "scrollToChange": "Ir para a alteração",
+        "viewClause": "Ver cláusula"
+      },
       "rule": {
         "extractOnly": "Apenas extrair",
         "positionMatch": "Correspondência de posição",
@@ -1529,7 +1550,13 @@
         "inline": "Texto livre",
         "none": "Sem padrão"
       },
-      "updated": "Playbook atualizado"
+      "updated": "Playbook atualizado",
+      "verdict": {
+        "compliant": "Conforme",
+        "deviation": "Desvio",
+        "fallback": "Alternativa",
+        "missing": "Ausente"
+      }
     },
     "sections": {
       "agents": {

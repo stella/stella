@@ -1510,6 +1510,27 @@
       "positions": "المواقف",
       "preferredLabel": "الصياغة المفضّلة",
       "preferredPlaceholder": "الصياغة المفضّلة",
+      "review": {
+        "changePlaybook": "اختر دليل مراجعة آخر",
+        "extractedLabel": "وُجِد:",
+        "facetTitle": "المراجعة باستخدام دليل المراجعة",
+        "failed": "فشلت مراجعة المستند",
+        "fixAccepted": "مقبول",
+        "insertFailed": "تعذّر إدراج البند المفضّل",
+        "insertPreferred": "إدراج البند المفضّل",
+        "launcherDescription": "افحص هذا المستند وفق دليل مراجعة خاص بالمؤسسة واحصل على النتائج مباشرةً داخل المستند.",
+        "noFindings": "لا توجد مشكلات",
+        "playbookLabel": "دليل المراجعة",
+        "playbookPlaceholder": "اختر دليل مراجعة",
+        "reject": "رفض",
+        "reviewAgain": "إعادة المراجعة",
+        "reviewedAgainst": "تمت المراجعة وفق {name}",
+        "reviewing": "جارٍ المراجعة…",
+        "reviewingHint": "قد يستغرق ذلك بضع دقائق لأدلّة المراجعة الكبيرة.",
+        "run": "مراجعة",
+        "scrollToChange": "الانتقال إلى التغيير",
+        "viewClause": "عرض البند"
+      },
       "rule": {
         "extractOnly": "استخراج فقط",
         "positionMatch": "مطابقة الموقف",
@@ -1529,7 +1550,13 @@
         "inline": "نص مباشر",
         "none": "بدون معيار"
       },
-      "updated": "تم تحديث دليل المراجعة"
+      "updated": "تم تحديث دليل المراجعة",
+      "verdict": {
+        "compliant": "مطابِق",
+        "deviation": "انحراف",
+        "fallback": "بديل",
+        "missing": "مفقود"
+      }
     },
     "sections": {
       "agents": {

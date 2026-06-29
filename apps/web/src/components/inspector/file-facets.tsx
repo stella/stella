@@ -25,12 +25,14 @@ export const FACETS: readonly Facet[] = [
   "metadata",
   "versions",
   "suggestions",
+  "playbook",
   "anonymization",
 ];
 export const FULLVIEW_FACETS: readonly Facet[] = [
   "metadata",
   "versions",
   "suggestions",
+  "playbook",
   "anonymization",
 ];
 
@@ -118,9 +120,17 @@ export const TabFacetBar = ({
   const isDocx = mimeType === DOCX_MIME;
 
   const { facets, disabledFacets } = useMemo(() => {
+    // The chat-suggestions and playbook-review surfaces are
+    // DOCX-only (they need folio block ids to target). Drop both on
+    // non-DOCX tabs. The playbook chip stays enabled on DOCX even
+    // before a run — it doubles as the launcher for "Review with
+    // playbook"; only the suggestions chip is disabled until the
+    // chat queues a proposal.
     if (!isDocx) {
       return {
-        facets: baseFacets.filter((f) => f !== "suggestions"),
+        facets: baseFacets.filter(
+          (f) => f !== "suggestions" && f !== "playbook",
+        ),
         disabledFacets: undefined,
       };
     }
@@ -138,6 +148,7 @@ export const TabFacetBar = ({
     metadata: t("common.metadata"),
     versions: t("fileDetail.versionHistory"),
     suggestions: t("docxReview.title"),
+    playbook: t("knowledge.playbooks.review.facetTitle"),
     anonymization: t("inspector.facet.anonymization"),
   };
 

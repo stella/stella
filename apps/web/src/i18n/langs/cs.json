@@ -1510,6 +1510,27 @@
       "positions": "Pozice",
       "preferredLabel": "Preferované znění",
       "preferredPlaceholder": "Preferovaná formulace",
+      "review": {
+        "changePlaybook": "Vybrat jiný playbook",
+        "extractedLabel": "Nalezeno:",
+        "facetTitle": "Kontrola podle playbooku",
+        "failed": "Dokument se nepodařilo zkontrolovat",
+        "fixAccepted": "Přijato",
+        "insertFailed": "Preferované ustanovení se nepodařilo vložit",
+        "insertPreferred": "Vložit preferované ustanovení",
+        "launcherDescription": "Zkontrolujte tento dokument podle playbooku organizace a získejte zjištění přímo v textu.",
+        "noFindings": "Nenalezeny žádné problémy",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Vyberte playbook",
+        "reject": "Odmítnout",
+        "reviewAgain": "Zkontrolovat znovu",
+        "reviewedAgainst": "Zkontrolováno podle {name}",
+        "reviewing": "Kontroluji…",
+        "reviewingHint": "U rozsáhlých playbooků to může trvat až několik minut.",
+        "run": "Zkontrolovat",
+        "scrollToChange": "Přejít na změnu",
+        "viewClause": "Zobrazit ustanovení"
+      },
       "rule": {
         "extractOnly": "Pouze extrakce",
         "positionMatch": "Shoda s pozicí",
@@ -1529,7 +1550,13 @@
         "inline": "Vlastní text",
         "none": "Bez měřítka"
       },
-      "updated": "Playbook aktualizován"
+      "updated": "Playbook aktualizován",
+      "verdict": {
+        "compliant": "Vyhovuje",
+        "deviation": "Odchylka",
+        "fallback": "Náhradní znění",
+        "missing": "Chybí"
+      }
     },
     "sections": {
       "agents": {

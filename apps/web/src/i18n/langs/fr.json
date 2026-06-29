@@ -1510,6 +1510,27 @@
       "positions": "Critères",
       "preferredLabel": "Formulation préférée",
       "preferredPlaceholder": "Formulation souhaitée",
+      "review": {
+        "changePlaybook": "Choisir un autre playbook",
+        "extractedLabel": "Trouvé :",
+        "facetTitle": "Examiner avec un playbook",
+        "failed": "Échec de l'examen du document",
+        "fixAccepted": "Accepté",
+        "insertFailed": "Impossible d'insérer la clause préférée",
+        "insertPreferred": "Insérer la clause préférée",
+        "launcherDescription": "Vérifiez ce document au regard d'un playbook de l'organisation et obtenez les résultats directement dans le document.",
+        "noFindings": "Aucun problème trouvé",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Choisir un playbook",
+        "reject": "Rejeter",
+        "reviewAgain": "Réexaminer",
+        "reviewedAgainst": "Examiné au regard de {name}",
+        "reviewing": "Examen en cours…",
+        "reviewingHint": "Pour les playbooks volumineux, cela peut prendre quelques minutes.",
+        "run": "Examiner",
+        "scrollToChange": "Aller à la modification",
+        "viewClause": "Voir la clause"
+      },
       "rule": {
         "extractOnly": "Extraction seule",
         "positionMatch": "Correspondance de critère",
@@ -1529,7 +1550,13 @@
         "inline": "Texte libre",
         "none": "Aucune référence"
       },
-      "updated": "Playbook mis à jour"
+      "updated": "Playbook mis à jour",
+      "verdict": {
+        "compliant": "Conforme",
+        "deviation": "Écart",
+        "fallback": "Alternative",
+        "missing": "Absent"
+      }
     },
     "sections": {
       "agents": {

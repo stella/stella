@@ -1510,6 +1510,27 @@
       "positions": "Pozīcijas",
       "preferredLabel": "Vēlamais formulējums",
       "preferredPlaceholder": "Vēlamais formulējums",
+      "review": {
+        "changePlaybook": "Izvēlēties citu pārbaudes ceļvedi",
+        "extractedLabel": "Atrasts:",
+        "facetTitle": "Pārbaude ar pārbaudes ceļvedi",
+        "failed": "Neizdevās pārbaudīt dokumentu",
+        "fixAccepted": "Pieņemts",
+        "insertFailed": "Neizdevās ievietot vēlamo klauzulu",
+        "insertPreferred": "Ievietot vēlamo klauzulu",
+        "launcherDescription": "Pārbaudiet šo dokumentu atbilstoši organizācijas pārbaudes ceļvedim un saņemiet secinājumus tieši tekstā.",
+        "noFindings": "Problēmas nav atrastas",
+        "playbookLabel": "Pārbaudes ceļvedis",
+        "playbookPlaceholder": "Izvēlieties pārbaudes ceļvedi",
+        "reject": "Noraidīt",
+        "reviewAgain": "Pārbaudīt vēlreiz",
+        "reviewedAgainst": "Pārbaudīts pēc {name}",
+        "reviewing": "Pārbauda…",
+        "reviewingHint": "Lieliem pārbaudes ceļvežiem tas var aizņemt dažas minūtes.",
+        "run": "Pārbaudīt",
+        "scrollToChange": "Pāriet uz izmaiņu",
+        "viewClause": "Skatīt klauzulu"
+      },
       "rule": {
         "extractOnly": "Tikai izvilkt",
         "positionMatch": "Pozīcijas atbilstība",
@@ -1529,7 +1550,13 @@
         "inline": "Ievadīts teksts",
         "none": "Nav standarta"
       },
-      "updated": "Pārbaudes ceļvedis atjaunināts"
+      "updated": "Pārbaudes ceļvedis atjaunināts",
+      "verdict": {
+        "compliant": "Atbilst",
+        "deviation": "Novirze",
+        "fallback": "Alternatīva",
+        "missing": "Trūkst"
+      }
     },
     "sections": {
       "agents": {

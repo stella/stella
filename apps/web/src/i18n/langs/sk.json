@@ -1510,6 +1510,27 @@
       "positions": "Pozície",
       "preferredLabel": "Preferované znenie",
       "preferredPlaceholder": "Preferovaná formulácia",
+      "review": {
+        "changePlaybook": "Vybrať iný playbook",
+        "extractedLabel": "Nájdené:",
+        "facetTitle": "Kontrola podľa playbooku",
+        "failed": "Dokument sa nepodarilo skontrolovať",
+        "fixAccepted": "Prijaté",
+        "insertFailed": "Preferované ustanovenie sa nepodarilo vložiť",
+        "insertPreferred": "Vložiť preferované ustanovenie",
+        "launcherDescription": "Skontrolujte tento dokument podľa playbooku organizácie a získajte zistenia priamo v texte.",
+        "noFindings": "Nenašli sa žiadne problémy",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Vyberte playbook",
+        "reject": "Odmietnuť",
+        "reviewAgain": "Skontrolovať znova",
+        "reviewedAgainst": "Skontrolované podľa {name}",
+        "reviewing": "Kontrolujem…",
+        "reviewingHint": "Pri rozsiahlych playbookoch to môže trvať až niekoľko minút.",
+        "run": "Skontrolovať",
+        "scrollToChange": "Prejsť na zmenu",
+        "viewClause": "Zobraziť ustanovenie"
+      },
       "rule": {
         "extractOnly": "Iba extrakcia",
         "positionMatch": "Zhoda s pozíciou",
@@ -1529,7 +1550,13 @@
         "inline": "Vlastný text",
         "none": "Bez štandardu"
       },
-      "updated": "Playbook aktualizovaný"
+      "updated": "Playbook aktualizovaný",
+      "verdict": {
+        "compliant": "Vyhovuje",
+        "deviation": "Odchýlka",
+        "fallback": "Náhradné znenie",
+        "missing": "Chýba"
+      }
     },
     "sections": {
       "agents": {

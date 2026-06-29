@@ -9,8 +9,11 @@ import {
   positionStandardSchema,
 } from "@/api/handlers/playbooks/position-facets";
 
-// Re-export the EXPECT/GRADE/severity facets so existing importers keep using
-// `@/api/handlers/playbooks/positions` as the one entry point for Position types.
+// The EXPECT/GRADE/severity facets live in `position-facets.ts`, a leaf module
+// with no `db/schema-validators` dependency, so the `playbook-verdict` property
+// tool (defined in schema-validators) can embed them without an import cycle.
+// Re-export them here so the facets and the Position types stay reachable from
+// this one module (e.g. the verdict engine imports PositionRule/ResolvedStandard).
 export {
   positionRuleSchema,
   positionSeveritySchema,

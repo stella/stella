@@ -30,10 +30,18 @@ import { evaluateGatingCondition } from "@/api/lib/workflow/utils";
 // ── Presence of the ASK value ─────────────────────────
 type PresenceState = "present" | "absent" | "missing";
 
+// The per-rule graders and ASK flatteners below are exported so the single-doc
+// ephemeral review handler (`handlers/playbooks/review-grade.ts`) grades an
+// in-memory ASK value with the exact same rules `computeVerdictBatch` applies to
+// persisted fields — one grading semantics across the files-table and
+// single-file surfaces.
+
 // "missing" = extraction never produced a usable value (no field, or an
 // error/pending/unsupported placeholder); "absent" = it ran and produced an
 // empty value; "present" = it produced a value.
-const askPresence = (content: FieldContent | undefined): PresenceState => {
+export const askPresence = (
+  content: FieldContent | undefined,
+): PresenceState => {
   if (!content) {
     return "missing";
   }
@@ -67,7 +75,7 @@ const askPresence = (content: FieldContent | undefined): PresenceState => {
 };
 
 // Flatten the ASK field to the prose the positionMatch model compares against.
-const askText = (content: FieldContent | undefined): string | null => {
+export const askText = (content: FieldContent | undefined): string | null => {
   if (!content) {
     return null;
   }
@@ -99,7 +107,7 @@ const askText = (content: FieldContent | undefined): string | null => {
 };
 
 // ── Deterministic grading ─────────────────────────────
-const gradePresence = (
+export const gradePresence = (
   expectation: "required" | "restricted",
   presence: PresenceState,
 ): VerdictTier => {
@@ -113,7 +121,7 @@ const gradePresence = (
   return presence === "absent" ? "compliant" : "deviation";
 };
 
-const gradePropertyConstraint = (
+export const gradePropertyConstraint = (
   condition: ConditionNode,
   askContent: FieldContent | undefined,
   fieldContentByPropertyId: ReadonlyMap<string, FieldContent>,
@@ -172,7 +180,7 @@ type PositionMatchVerdict = {
   matched: "preferred" | "fallback" | "none";
 };
 
-type GradePositionMatchArgs = {
+export type GradePositionMatchArgs = {
   askValue: string;
   standard: ResolvedStandard;
   abortSignal: AbortSignal;
@@ -185,7 +193,7 @@ type GradePositionMatchArgs = {
   serviceTier: AIRequestServiceTier;
 };
 
-const gradePositionMatch = async ({
+export const gradePositionMatch = async ({
   askValue,
   standard,
   abortSignal,
