@@ -14,14 +14,6 @@
  * The persisted/serialized model keeps the flat OOXML tri-state
  * (`ParagraphFormatting.bidi: boolean | undefined`); `directionToBidi` /
  * `directionFromBidi` bridge the two at the conversion boundary.
- *
- * Legacy collaborative documents: Yjs fragments persisted before this union
- * carried the old `bidi`/`bidiAuto` PM attrs, which the renamed schema drops on
- * load (ProseMirror ignores attrs it does not declare). Such paragraphs reload
- * as undecided and are re-derived by AutoBidiDetection, so RTL-script content
- * self-heals to `{ source: "auto" }`. There is deliberately no migration; the
- * only lossy case is a paragraph manually forced to LTR over RTL-script text,
- * which reloads undecided and may auto-detect back to RTL.
  */
 export type ParagraphDirection =
   | { source: "auto" }
