@@ -148,4 +148,69 @@ describe("normalizeBaseDirection", () => {
     normalizeBaseDirection(input);
     expect(bidiOf(input, 0)).toBeUndefined();
   });
+
+  test("respects a style-sourced LTR (w:bidi=0) and does not flip to RTL", () => {
+    const doc: Document = {
+      package: {
+        styles: {
+          styles: [
+            {
+              styleId: "Normal",
+              type: "paragraph",
+              name: "Normal",
+              default: true,
+            },
+            {
+              styleId: "LtrForced",
+              type: "paragraph",
+              name: "Ltr Forced",
+              pPr: { bidi: false },
+            },
+          ],
+        },
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              formatting: { styleId: "LtrForced" },
+              content: [
+                { type: "run", content: [{ type: "text", text: "عربي" }] },
+              ],
+            },
+          ],
+        },
+      },
+    };
+    // Style forces LTR; the Arabic content must not override it.
+    expect(bidiOf(normalizeBaseDirection(doc), 0)).toBeUndefined();
+  });
+
+  test("still normalizes when the style sets no direction", () => {
+    const doc: Document = {
+      package: {
+        styles: {
+          styles: [
+            {
+              styleId: "Normal",
+              type: "paragraph",
+              name: "Normal",
+              default: true,
+            },
+          ],
+        },
+        document: {
+          content: [
+            {
+              type: "paragraph",
+              formatting: { styleId: "Normal" },
+              content: [
+                { type: "run", content: [{ type: "text", text: "عربي" }] },
+              ],
+            },
+          ],
+        },
+      },
+    };
+    expect(bidiOf(normalizeBaseDirection(doc), 0)).toBe(true);
+  });
 });
