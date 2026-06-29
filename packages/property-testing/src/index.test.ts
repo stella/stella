@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { propertyConfig } from "./index";
+import { propertyConfig, propertyTestTimeout } from "./index";
 
 const FACTOR_ENV = "PROPERTY_TEST_NUM_RUNS_FACTOR";
 
@@ -67,12 +67,17 @@ describe("propertyConfig", () => {
   });
 
   test("enables verbose reporting under CI, quiet otherwise", () => {
-    withEnv({ CI: "true" }, () => {
-      expect(propertyConfig().verbose).toBe(true);
-    });
-    withEnv({ CI: undefined }, () => {
-      expect(propertyConfig().verbose).toBe(false);
-    });
+    for (const raw of ["true", "1", "yes"]) {
+      withEnv({ CI: raw }, () => {
+        expect(propertyConfig().verbose).toBe(true);
+      });
+    }
+    // Absent or an explicit opt-out keeps it quiet.
+    for (const raw of [undefined, "false", "0", ""]) {
+      withEnv({ CI: raw }, () => {
+        expect(propertyConfig().verbose).toBe(false);
+      });
+    }
   });
 
   test("lets a caller override the defaults explicitly", () => {
@@ -81,6 +86,17 @@ describe("propertyConfig", () => {
       expect(params.verbose).toBe(false);
       // numRuns is still scaled from the caller's per-test budget.
       expect(params.numRuns).toBe(300);
+    });
+  });
+});
+
+describe("propertyTestTimeout", () => {
+  test("scales the base timeout by the nightly factor", () => {
+    withEnv({ [FACTOR_ENV]: undefined }, () => {
+      expect(propertyTestTimeout(15_000)).toBe(15_000);
+    });
+    withEnv({ [FACTOR_ENV]: "10" }, () => {
+      expect(propertyTestTimeout(15_000)).toBe(150_000);
     });
   });
 });

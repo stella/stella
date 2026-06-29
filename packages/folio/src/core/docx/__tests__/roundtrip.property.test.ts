@@ -18,7 +18,7 @@ import { describe, test, expect } from "bun:test";
 import fc from "fast-check";
 import type { Node as PMNode, Mark } from "prosemirror-model";
 
-import { propertyConfig } from "@stll/property-testing";
+import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
 import { fromProseDoc } from "../../prosemirror/conversion/fromProseDoc";
 import { toProseDoc } from "../../prosemirror/conversion/toProseDoc";
@@ -288,29 +288,37 @@ function roundTrip(original: PMNode): PMNode {
 // ============================================================================
 
 describe("DOCX round-trip property tests", () => {
-  test("serialization never crashes", () => {
-    fc.assert(
-      fc.property(arbDocument(), (doc) => {
-        const docModel = fromProseDoc(doc);
-        const xml = serializeDocument(docModel);
-        expect(typeof xml).toBe("string");
-        expect(xml.length).toBeGreaterThan(0);
-      }),
-      propertyConfig({ numRuns: 500 }),
-    );
-  }, 15_000);
+  test(
+    "serialization never crashes",
+    () => {
+      fc.assert(
+        fc.property(arbDocument(), (doc) => {
+          const docModel = fromProseDoc(doc);
+          const xml = serializeDocument(docModel);
+          expect(typeof xml).toBe("string");
+          expect(xml.length).toBeGreaterThan(0);
+        }),
+        propertyConfig({ numRuns: 500 }),
+      );
+    },
+    propertyTestTimeout(15_000),
+  );
 
-  test("parsing never crashes", () => {
-    fc.assert(
-      fc.property(arbDocument(), (doc) => {
-        const docModel = fromProseDoc(doc);
-        const xml = serializeDocument(docModel);
-        const parsed = parseDocumentBody(xml);
-        expect(parsed.content.length).toBeGreaterThan(0);
-      }),
-      propertyConfig({ numRuns: 500 }),
-    );
-  }, 15_000);
+  test(
+    "parsing never crashes",
+    () => {
+      fc.assert(
+        fc.property(arbDocument(), (doc) => {
+          const docModel = fromProseDoc(doc);
+          const xml = serializeDocument(docModel);
+          const parsed = parseDocumentBody(xml);
+          expect(parsed.content.length).toBeGreaterThan(0);
+        }),
+        propertyConfig({ numRuns: 500 }),
+      );
+    },
+    propertyTestTimeout(15_000),
+  );
 
   test("round-trip preserves document structure", () => {
     fc.assert(
@@ -324,18 +332,22 @@ describe("DOCX round-trip property tests", () => {
     );
   });
 
-  test("round-trip preserves text content exactly", () => {
-    fc.assert(
-      fc.property(arbDocument(), (doc) => {
-        const result = roundTrip(doc);
-        // Extract all text from both documents
-        const originalText = doc.textContent;
-        const resultText = result.textContent;
-        expect(resultText).toBe(originalText);
-      }),
-      propertyConfig({ numRuns: 500 }),
-    );
-  }, 15_000);
+  test(
+    "round-trip preserves text content exactly",
+    () => {
+      fc.assert(
+        fc.property(arbDocument(), (doc) => {
+          const result = roundTrip(doc);
+          // Extract all text from both documents
+          const originalText = doc.textContent;
+          const resultText = result.textContent;
+          expect(resultText).toBe(originalText);
+        }),
+        propertyConfig({ numRuns: 500 }),
+      );
+    },
+    propertyTestTimeout(15_000),
+  );
 
   test("round-trip preserves bold marks", () => {
     // Targeted test: paragraphs with bold text

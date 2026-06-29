@@ -41,8 +41,8 @@ const reverseKeyOrder = (value: unknown): unknown => {
   }
   if (typeof value === "object" && value !== null) {
     const rebuilt: Record<string, unknown> = {};
-    for (const key of Object.keys(value).toReversed()) {
-      rebuilt[key] = reverseKeyOrder((value as Record<string, unknown>)[key]);
+    for (const [key, child] of Object.entries(value).toReversed()) {
+      rebuilt[key] = reverseKeyOrder(child);
     }
     return rebuilt;
   }

@@ -33,6 +33,13 @@ const readNumRunsFactor = (raw: string | undefined): number => {
   return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
 };
 
+// Treat the common CI values as enabled, but honor an explicit opt-out
+// (`CI=false`/`0`) so verbose reporting can be silenced locally.
+const isCi = (): boolean => {
+  const raw = process.env["CI"];
+  return raw !== undefined && raw !== "" && raw !== "false" && raw !== "0";
+};
+
 /**
  * Build the `fc.assert` parameters for a property test: pass the per-test
  * tuning you want in PR CI (typically just `numRuns`) and this scales it for
@@ -48,8 +55,20 @@ export const propertyConfig = <Ts>(
   const factor = readNumRunsFactor(process.env[NUM_RUNS_FACTOR_ENV]);
   const baseNumRuns = params.numRuns ?? FAST_CHECK_DEFAULT_NUM_RUNS;
   return {
-    verbose: Boolean(process.env["CI"]),
+    verbose: isCi(),
     ...params,
     numRuns: Math.ceil(baseNumRuns * factor),
   };
 };
+
+/**
+ * Scale a per-test Bun timeout (ms) by the same nightly factor that scales
+ * `numRuns`, so an expensive property whose run count grows ×N also gets ×N
+ * wall-clock before it is killed. In PR CI (factor 1) the timeout is unchanged.
+ *
+ * ```ts
+ * test("round-trip", () => { ... }, propertyTestTimeout(15_000));
+ * ```
+ */
+export const propertyTestTimeout = (baseMs: number): number =>
+  Math.ceil(baseMs * readNumRunsFactor(process.env[NUM_RUNS_FACTOR_ENV]));
