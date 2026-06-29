@@ -1464,7 +1464,7 @@
         "description": "قاعدة بيانات أحكام المحاكم والسوابق القضائية"
       },
       "clauses": {
-        "description": "مكتبة بنود قابلة لإعادة الاستخدام"
+        "description": "مكتبة بنود قانونية قابلة لإعادة الاستخدام"
       },
       "mcp": {
         "description": "اربط stella بالأدوات الخارجية",
@@ -1475,11 +1475,11 @@
         "title": "المهارات"
       },
       "templates": {
-        "description": "قوالب مستندات تتضمن عناصر نائبة",
+        "description": "قوالب مستندات تحتوي على حقول جاهزة للتعبئة",
         "title": "القوالب"
       },
       "tools": {
-        "description": "المهارات والتكاملات والأدوات المتاحة دائماً التي يمكن لـ AI استخدامها في المحادثة",
+        "description": "القدرات، والأنظمة المدمجة، والأدوات المتاحة دائماً والتي يمكن للذكاء الاصطناعي استخدامها لمعالجة الاستفسارات",
         "title": "الأدوات"
       }
     },
@@ -2406,7 +2406,7 @@
     },
     "files": {
       "addFilePropertyToUpload": "أضف خاصية ملف لرفع الملفات",
-      "defaultPropertyName": "المستندات",
+      "defaultPropertyName": "الملفات",
       "desktopEdit": {
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
@@ -2727,7 +2727,7 @@
       "defaultPromptPropertyName": "معلومات",
       "deleteProperty": "حذف الخاصية",
       "deletePropertyConfirmDescription": "هل أنت متأكد من رغبتك في حذف الخاصية «{propertyName}»؟ لا يمكن التراجع عن هذا الإجراء.",
-      "documentsLabel": "المستندات",
+      "documentsLabel": "الملفات",
       "editColumn": "تعديل العمود",
       "editConditions": "تعديل الشروط",
       "editConditionsDescription": "حدِّد الشروط التي يتم عندها إنشاء هذه الخاصية.",
@@ -2875,12 +2875,12 @@
       "groupItemCount": "{count, plural, one {# item} other {# items}}",
       "hideColumn": "إخفاء العمود",
       "layouts": {
-        "calendar": "تقويم",
+        "calendar": "التقويم",
         "grid": "شبكة",
-        "kanban": "كانبان",
+        "kanban": "مخطط الملفات",
         "list": "قائمة",
         "overview": "نظرة عامة",
-        "table": "جدول",
+        "table": "الجدول",
         "timeline": "خط زمني"
       },
       "newView": "{layout} جديدة",
