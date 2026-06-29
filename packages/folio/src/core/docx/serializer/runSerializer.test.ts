@@ -17,7 +17,7 @@ const FLOAT_INLINE_IMAGE: Run = {
       image: {
         type: "image",
         rId: "rId7",
-        size: { width: 5_610_225, height: 495_299.999_999_999_94 },
+        size: { width: 5_610_225, height: 495_299.99999999994 },
         wrap: { type: "inline" },
         padding: { top: 0.4, bottom: 0.6, left: 0, right: 0 },
       },
@@ -33,10 +33,10 @@ const FLOAT_FLOATING_IMAGE: Run = {
       image: {
         type: "image",
         rId: "rId8",
-        size: { width: 1_905_000.000_000_000_2, height: 933_449.999_999_999_9 },
+        size: { width: 1_905_000.0000000002, height: 933_449.9999999999 },
         wrap: {
           type: "square",
-          distT: 114_299.999_999_99,
+          distT: 114_299.99999999,
           distB: 0,
           distL: 0,
           distR: 0,
@@ -44,11 +44,11 @@ const FLOAT_FLOATING_IMAGE: Run = {
         position: {
           horizontal: {
             relativeTo: "column",
-            posOffset: 238_125.000_000_000_03,
+            posOffset: 238_125.00000000003,
           },
           vertical: {
             relativeTo: "paragraph",
-            posOffset: 962_024.999_999_999_9,
+            posOffset: 962_024.9999999999,
           },
         },
       },
@@ -64,7 +64,7 @@ const FLOAT_BEHIND_IMAGE: Run = {
       image: {
         type: "image",
         rId: "rId9",
-        size: { width: 495_299.999_999_999_94, height: 495_299.999_999_999_94 },
+        size: { width: 495_299.99999999994, height: 495_299.99999999994 },
         wrap: { type: "behind" },
         position: {
           horizontal: { relativeTo: "page", posOffset: -50.7 },
@@ -97,7 +97,7 @@ const FLOAT_FLOATING_TEXTBOX: Run = {
       shape: {
         type: "shape",
         shapeType: "textBox",
-        size: { width: 2_540_000.000_000_1, height: 1_270_000.5 },
+        size: { width: 2_540_000.0000001, height: 1_270_000.5 },
         wrap: {
           type: "square",
           distT: 91_440.7,
@@ -212,12 +212,12 @@ describe("run formatting integer attributes (issue #417)", () => {
       type: "run",
       content: [{ type: "text", text: "x" }],
       formatting: {
-        fontSize: 22.000_000_1,
-        fontSizeCs: 21.999_999,
-        spacing: 19.999_999_998,
-        scale: 99.999_99,
-        kerning: 18.000_000_3,
-        position: -6.000_000_1,
+        fontSize: 22.0000001,
+        fontSizeCs: 21.999999,
+        spacing: 19.999999998,
+        scale: 99.99999,
+        kerning: 18.0000003,
+        position: -6.0000001,
       },
     };
 

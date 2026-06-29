@@ -595,9 +595,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       });
       // Reset to avoid flooding; backoffFailures stays high so the delay
       // doesn't collapse. The value is read again at the top of the next
-      // iteration (`noProgressStreak + 1`); the rule's forward-only liveness
-      // can't see the loop back-edge.
-      // oxlint-disable-next-line no-useless-assignment -- reset read on next loop iteration
+      // iteration (`noProgressStreak + 1`).
       noProgressStreak = 0;
     }
 

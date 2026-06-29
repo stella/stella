@@ -6,7 +6,7 @@ const externalMcpDocumentUrl =
 const externalMcpSearchHit = {
   source: "ES/ConstitutionalCourt",
   source_id: "ECLI:ES:TC:2022:105",
-  score: 0.615_528_226,
+  score: 0.615528226,
   country: "ES",
   court: "Tribunal Constitucional",
   court_tier: 1,

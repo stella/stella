@@ -507,6 +507,7 @@ export const OutlineRail = ({
         )}
       </div>
 
+      {/* oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- hover-reveal disclosure on a nav landmark; onMouseEnter/Leave drive a supplementary pointer affordance, panel visibility gated by inert/aria-hidden */}
       <nav
         aria-hidden={!hovered}
         inert={hovered ? undefined : true}

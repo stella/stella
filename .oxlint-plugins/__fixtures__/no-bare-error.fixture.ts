@@ -1,4 +1,4 @@
-/* oxlint-disable unicorn/throw-new-error, unicorn/new-for-builtins */
+/* oxlint-disable unicorn/new-for-builtins */
 // Passive regression fixture for `no-bare-error/no-bare-error`.
 //
 // Each `oxlint-disable-next-line` below intentionally suppresses a

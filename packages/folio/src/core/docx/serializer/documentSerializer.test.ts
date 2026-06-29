@@ -61,8 +61,8 @@ describe("document section properties are integer-only (issue #417)", () => {
     if (!sectionProps) {
       throw new Error("expected finalSectionProperties on empty document");
     }
-    sectionProps.marginTop = 1008.000_000_000_000_1;
-    sectionProps.marginLeft = 1800.000_000_1;
+    sectionProps.marginTop = 1008.0000000000001;
+    sectionProps.marginLeft = 1800.0000001;
 
     const xml = serializeDocument(doc);
 

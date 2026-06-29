@@ -228,6 +228,12 @@ export default defineConfig({
     "unicorn/prefer-response-static-json": "off",
     "unicorn/no-immediate-mutation": "off",
     "unicorn/prefer-ternary": "off",
+    // Disabled: the legitimate "throw Error() needs new" case is already
+    // covered (more strictly) by the custom no-bare-error rule, and oxlint
+    // 1.70+ broadened this rule to flag error-named factory calls in a class
+    // `extends` clause — a false positive on the better-result
+    // `TaggedError("X")<{...}>()` pattern used throughout the codebase.
+    "unicorn/throw-new-error": "off",
     "unicorn/no-array-reduce": "error",
     "unicorn/no-array-sort": "off",
     "unicorn/no-useless-spread": "off",
