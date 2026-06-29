@@ -1,6 +1,11 @@
 import { panic, Result } from "better-result";
 import { and, count, inArray } from "drizzle-orm";
 
+import {
+  applyArabicFolds,
+  applyArabicFoldsWithOffsets,
+} from "@stll/text-normalize";
+
 import type { SafeDb } from "@/api/db";
 import { entityVersions } from "@/api/db/schema";
 import { buildChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
@@ -57,13 +62,22 @@ type SearchResult = {
   truncated: boolean;
 };
 
-const findHitsInText = (
+export const findHitsInText = (
   text: string,
   query: string,
   options: { caseSensitive: boolean; limit: number; wholeWord: boolean },
 ): SearchResult => {
+  // Match against the Arabic-folded text so a query matches regardless of
+  // orthographic variant; snippets are sliced from the original via the
+  // offset map so the model reads the text as written.
+  const foldedQuery = applyArabicFolds(query);
+  if (foldedQuery.length === 0) {
+    return { hits: [], totalHits: 0, totalHitsCapped: false, truncated: false };
+  }
+  const { text: foldedText, sourceIndex } = applyArabicFoldsWithOffsets(text);
+
   const flags = options.caseSensitive ? "g" : "gi";
-  const escaped = escapeRegExp(query);
+  const escaped = escapeRegExp(foldedQuery);
   const pattern = options.wholeWord
     ? `(?:^|[^\\p{L}\\p{N}])(${escaped})(?=$|[^\\p{L}\\p{N}])`
     : `(${escaped})`;
@@ -75,21 +89,25 @@ const findHitsInText = (
   let totalHits = 0;
   let totalHitsCapped = false;
   let match: RegExpExecArray | null;
-  while ((match = re.exec(text)) !== null) {
+  while ((match = re.exec(foldedText)) !== null) {
     // Capture group 1 always exists because the pattern wraps the
     // escaped query in `(...)`. Narrowing here keeps the helper
     // self-contained without a runtime branch.
     const captured = match[1] ?? panic("search match missing capture group");
     totalHits++;
     if (hits.length < options.limit) {
-      // Anchor the snippet window around the start of the captured
-      // substring (not `match.index`, which for whole-word matches
-      // includes the leading non-letter/non-digit boundary char).
-      const hitStart = match.index + (match[0].length - captured.length);
+      // Anchor on the start of the captured substring (not `match.index`,
+      // which for whole-word matches includes the leading boundary char),
+      // then map the folded span back to original code-unit offsets so the
+      // snippet is sliced from the unmodified source text.
+      const foldedHitStart = match.index + (match[0].length - captured.length);
+      const hitStart = sourceIndex[foldedHitStart] ?? 0;
+      const hitEnd =
+        sourceIndex[foldedHitStart + captured.length] ?? text.length;
       const snippetStart = Math.max(0, hitStart - SEARCH_SNIPPET_CONTEXT_CHARS);
       const snippetEnd = Math.min(
         text.length,
-        hitStart + captured.length + SEARCH_SNIPPET_CONTEXT_CHARS,
+        hitEnd + SEARCH_SNIPPET_CONTEXT_CHARS,
       );
       hits.push({
         snippet: text.slice(snippetStart, snippetEnd),

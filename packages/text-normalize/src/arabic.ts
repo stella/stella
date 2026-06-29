@@ -87,3 +87,37 @@ export const applyArabicFolds = (text: string): string => {
   }
   return out.join("");
 };
+
+export type FoldedText = {
+  text: string;
+  // For each UTF-16 code-unit index `i` in `text`, the code-unit index in
+  // the original input where that unit's source character began.
+  // `sourceIndex[text.length]` is the original length (end sentinel), so a
+  // match's [start, end) in folded space maps back to original offsets.
+  sourceIndex: number[];
+};
+
+/**
+ * Like applyArabicFolds, but also returns an offset map so callers that
+ * match against the folded text (e.g. find-in-page) can slice the original
+ * text at the right positions.
+ */
+export const applyArabicFoldsWithOffsets = (input: string): FoldedText => {
+  const parts: string[] = [];
+  const sourceIndex: number[] = [];
+  let originalUnit = 0;
+  for (const char of input) {
+    const replacement = FOLD_MAP.get(char) ?? char;
+    parts.push(replacement);
+    // One offset entry per UTF-16 code unit of the replacement; folds are
+    // BMP, but an unfolded astral passthrough spans two code units.
+    let unit = 0;
+    while (unit < replacement.length) {
+      sourceIndex.push(originalUnit);
+      unit += 1;
+    }
+    originalUnit += char.length;
+  }
+  sourceIndex.push(originalUnit);
+  return { text: parts.join(""), sourceIndex };
+};
