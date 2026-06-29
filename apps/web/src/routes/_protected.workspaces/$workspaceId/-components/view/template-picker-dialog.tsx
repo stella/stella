@@ -274,6 +274,7 @@ const TemplateRow = ({
   const Icon = layoutIcons[template.layoutType];
 
   return (
+    // oxlint-disable-next-line jsx-a11y/no-noninteractive-element-interactions -- onFocus mirrors onMouseEnter (keyboard parity); the <li> stays a semantic list item wrapping the actionable <button>
     <li
       className="hover:bg-muted/50 flex items-center gap-2 rounded p-2"
       onFocus={onPreview}

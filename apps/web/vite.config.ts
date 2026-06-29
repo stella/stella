@@ -150,6 +150,7 @@ export default defineConfig(({ mode }) => {
         "@better-auth/core/error",
         "@better-auth/core/utils/error-codes",
         "@better-auth/core/utils/string",
+        "@better-auth/core/utils/url",
         "better-auth/react",
         "better-auth/client",
         "better-auth/client/plugins",

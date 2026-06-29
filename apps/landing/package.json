@@ -15,11 +15,11 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@astrojs/react": "^5.0.7",
+    "@astrojs/react": "^6.0.0",
     "@astrojs/sitemap": "^3.7.3",
     "@stll/ui": "workspace:*",
-    "@tailwindcss/postcss": "catalog:",
-    "astro": "^6.4.8",
+    "@tailwindcss/vite": "catalog:",
+    "astro": "^7.0.2",
     "react": "catalog:react19",
     "react-dom": "catalog:react19",
     "tailwindcss": "catalog:"

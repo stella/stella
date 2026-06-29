@@ -61,7 +61,7 @@
     "yjs": "^13.6.31"
   },
   "devDependencies": {
-    "@playwright/test": "^1.61.0",
+    "@playwright/test": "^1.61.1",
     "@stll/property-testing": "workspace:*",
     "@types/react": "catalog:react19",
     "@types/react-dom": "catalog:react19",
