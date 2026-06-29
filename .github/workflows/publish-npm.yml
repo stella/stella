@@ -55,7 +55,7 @@ jobs:
     permissions:
       contents: read # deliberately NO id-token: untrusted build scripts run here
     outputs:
-      tarballs: ${{ steps.pack.outputs.tarballs }}
+      packages: ${{ steps.pack.outputs.packages }}
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -78,22 +78,24 @@ jobs:
           # Pack with `bun pm pack`, NOT `npm pack`: only Bun rewrites the
           # `catalog:` / `workspace:*` dependency protocols to concrete versions
           # in the published package.json. npm would ship those literals, making
-          # the package uninstallable for external consumers.
-          tarballs=()
+          # the package uninstallable for external consumers. One tarball per
+          # package lands at release-artifacts/<pkg>/, so the publish matrix can
+          # resolve each by package name.
           for p in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${p}"
             (cd "packages/${p}" && bun run build)
             dest="release-artifacts/${p}"
             mkdir -p "${dest}"
             (cd "packages/${p}" && bun pm pack --destination "${GITHUB_WORKSPACE}/${dest}")
-            tgz="${dest}/$(basename "$(ls "${dest}"/*.tgz)")"
-            sha256sum "${tgz}" >> release-artifacts/SHA256SUMS
-            tarballs+=("${tgz}")
+            sha256sum "${dest}"/*.tgz >> release-artifacts/SHA256SUMS
             echo "::endgroup::"
           done
 
-          echo "tarballs=${tarballs[*]}" >> "${GITHUB_OUTPUT}"
-          printf 'Packed:\n%s\n' "${tarballs[*]}"
+          # Emit the selected package names as a JSON array for the publish
+          # matrix (the hardened action publishes one tarball per invocation).
+          packages="$(printf '%s\n' "${pkgs[@]}" | jq -Rnc '[inputs]')"
+          echo "packages=${packages}" >> "${GITHUB_OUTPUT}"
+          printf 'Packed: %s\n' "${packages}"
 
       - name: Upload tarballs
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -104,13 +106,23 @@ jobs:
           if-no-files-found: error
 
   publish:
-    name: Publish to npm (OIDC trusted publishing + provenance)
+    name: Publish @stll/${{ matrix.package }}
     needs: pack
     if: ${{ inputs.publish }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       id-token: write # OIDC only here; build scripts already ran in the pack job
+    strategy:
+      fail-fast: false
+      # Serialize: one publish at a time keeps logs legible and lets a
+      # dependency land before a dependent (the hardened action is idempotent,
+      # so order is not strictly required, but it is the friendlier default).
+      max-parallel: 1
+      matrix:
+        # The hardened action publishes exactly one tarball per invocation, so
+        # fan out one matrix leg per selected package.
+        package: ${{ fromJSON(needs.pack.outputs.packages) }}
     steps:
       - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6
         with:
@@ -126,7 +138,15 @@ jobs:
           name: npm-tarballs
           path: release-artifacts/
 
+      - name: Resolve tarball path
+        id: tarball
+        shell: bash
+        run: |
+          set -euo pipefail
+          tgz="$(ls "release-artifacts/${{ matrix.package }}"/*.tgz)"
+          echo "path=${tgz}" >> "${GITHUB_OUTPUT}"
+
       - name: Publish to npm
         uses: stella/.github/.github/actions/npm-publish-hardened@96b8912e0786548c4e62046ce3965769991dd0e0
         with:
-          tarballs: ${{ needs.pack.outputs.tarballs }}
+          tarball: ${{ steps.tarball.outputs.path }}
