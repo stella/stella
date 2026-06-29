@@ -2406,7 +2406,7 @@
     },
     "files": {
       "addFilePropertyToUpload": "أضف خاصية ملف لرفع الملفات",
-      "defaultPropertyName": "الملفات",
+      "defaultPropertyName": "المستندات",
       "desktopEdit": {
         "action": "التحرير في تطبيق سطح المكتب",
         "authRequiredDescription": "حدّث stella وسجّل الدخول مرة أخرى قبل استخدام التحرير على سطح المكتب.",
@@ -2727,7 +2727,7 @@
       "defaultPromptPropertyName": "معلومات",
       "deleteProperty": "حذف الخاصية",
       "deletePropertyConfirmDescription": "هل أنت متأكد من رغبتك في حذف الخاصية «{propertyName}»؟ لا يمكن التراجع عن هذا الإجراء.",
-      "documentsLabel": "الملفات",
+      "documentsLabel": "المستندات",
       "editColumn": "تعديل العمود",
       "editConditions": "تعديل الشروط",
       "editConditionsDescription": "حدِّد الشروط التي يتم عندها إنشاء هذه الخاصية.",
