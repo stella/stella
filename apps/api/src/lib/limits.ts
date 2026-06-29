@@ -36,7 +36,11 @@ export const LIMITS = {
   entitySummariesPageSize: 200,
   viewsCount: 20,
   viewTemplatesPerUser: 50,
-  playbooksCount: 50,
+  /** Per-org cap on saved playbook definitions. Per-playbook size is bounded
+   *  by the positions schema's maxItems (200). */
+  playbookDefinitionsCount: 100,
+  playbookDefinitionsPageSizeDefault: 50,
+  playbookDefinitionsPageSizeMax: 100,
   templatesCount: 50,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,

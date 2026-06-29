@@ -22,6 +22,7 @@ import type {
   GenerateBatchResult,
   ResolvedFile,
 } from "@/api/lib/workflow/generate-batch-shared";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { normalizeJustification } from "@/api/lib/workflow/parse-justifications";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -199,7 +200,15 @@ export const generateBatch = async ({
     const { inputProperties, resolvedFiles, textInputs, skippedPropertyIds } =
       yield* prepareBatchInput(inputFields, batch);
 
-    if (inputProperties.length === 0) {
+    // The LLM extraction path only handles ai-model columns; verdict columns
+    // in the same level are graded by the verdict engine (dispatched upstream
+    // in `processOneBatch`), so they never reach here.
+    const aiInputProperties = inputProperties.filter(
+      (property): property is AIBatchProperty =>
+        property.tool.type === "ai-model",
+    );
+
+    if (aiInputProperties.length === 0) {
       return Result.ok({
         aiResults: [],
         aiJustifications: [],
@@ -217,7 +226,7 @@ export const generateBatch = async ({
         aiResults: [],
         aiJustifications: [],
         skippedPropertyIds,
-        unsupportedPropertyIds: inputProperties.map((p) => p.id),
+        unsupportedPropertyIds: aiInputProperties.map((p) => p.id),
       });
     }
 
@@ -233,7 +242,7 @@ export const generateBatch = async ({
       generateWorkflowData({
         entityVersionId,
         files: preparedFiles,
-        properties: inputProperties,
+        properties: aiInputProperties,
         filenames,
         textInputs,
         abortSignal,
@@ -250,7 +259,7 @@ export const generateBatch = async ({
     const aiResults: AIResult[] = [];
     const aiJustifications: AIJustification[] = [];
 
-    for (const property of inputProperties) {
+    for (const property of aiInputProperties) {
       const propertyResult = output[property.id];
       if (!propertyResult) {
         continue;

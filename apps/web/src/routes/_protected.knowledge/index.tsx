@@ -3,6 +3,7 @@ import type { ComponentType, SVGProps } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   BotIcon,
+  ClipboardCheckIcon,
   LayoutTemplateIcon,
   PackageIcon,
   TextQuoteIcon,
@@ -23,17 +24,22 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 // on the Tools page. The sidebar entry was removed so the landing
 // doesn't advertise a deleted destination.
 type KnowledgeSection = {
-  key: "templates" | "clauses" | "tools" | "agents";
+  key: "templates" | "clauses" | "playbooks" | "tools" | "agents";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  to?: "/knowledge/templates" | "/knowledge/clauses" | "/knowledge/tools";
-  // "clauses" reuses the shared common.clauses label instead of a
-  // feature-scoped duplicate; other sections use their own section title.
+  to?:
+    | "/knowledge/templates"
+    | "/knowledge/clauses"
+    | "/knowledge/playbooks"
+    | "/knowledge/tools";
+  // "clauses" and "playbooks" reuse the shared common.* labels instead of
+  // feature-scoped duplicates; other sections use their own section title.
   titleKey: Extract<
     TranslationKey,
     | "knowledge.sections.templates.title"
     | "knowledge.sections.tools.title"
     | "knowledge.sections.agents.title"
     | "common.clauses"
+    | "common.playbooks"
   >;
 };
 
@@ -55,6 +61,12 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
     icon: TextQuoteIcon,
     to: "/knowledge/clauses",
     titleKey: "common.clauses",
+  },
+  {
+    key: "playbooks",
+    icon: ClipboardCheckIcon,
+    to: "/knowledge/playbooks",
+    titleKey: "common.playbooks",
   },
   { key: "agents", icon: BotIcon, titleKey: "knowledge.sections.agents.title" },
 ];

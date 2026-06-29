@@ -51,8 +51,15 @@ import {
 import { resolveWorkflowTargetEntityIds } from "@/api/lib/workflow-targets";
 import { getBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 import type {
+  AIJustification,
+  AIResult,
+} from "@/api/lib/workflow/generate-batch-shared";
+import type {
+  AIBatchProperty,
+  BatchProperty,
   ExecutionLevel,
   PropertyBatch,
+  VerdictBatchProperty,
 } from "@/api/lib/workflow/get-execution-plan";
 import {
   getExecutionPlanData,
@@ -76,6 +83,7 @@ import {
 import { parseStoredWorkflowServiceTier } from "@/api/lib/workflow/service-tier-state";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 import { prepareBatch } from "@/api/lib/workflow/utils";
+import { computeVerdictBatch } from "@/api/lib/workflow/verdict-engine";
 
 // ── Redis keys ─────────────────────────────────────────
 const WORKFLOW_KEY_PREFIX = "workflow";
@@ -1522,78 +1530,124 @@ const processOneBatch = async ({
     ]);
     const generateFn = getBatchGenerator();
 
-    // generateBatch returns a Result<T, E> directly. The combined
-    // signal aborts when EITHER the per-batch AI timeout fires OR the
-    // worker-level per-job timeout does, so the AI SDK actually cancels
-    // the in-flight request.
-    const batchResult = await runWorkflowBatchGenerationWithRetry({
-      generate: async () =>
-        await generateFn({
-          abortSignal: AbortSignal.any([
-            AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
-            signal,
-          ]),
-          batch,
-          entityVersionId,
-          organizationId,
-          workspaceId,
-          scopedDb,
-          orgAIConfig,
-          promptCachingEnabled,
-          serviceTier,
-          usageMetering: {
-            actionType: "background",
+    // Dispatch on tool type: ai-model columns run the LLM extraction; verdict
+    // columns are graded by the verdict engine from their ASK property's
+    // already-written value. A level rarely mixes both (their dependency
+    // signatures differ), but split defensively so each path only sees the
+    // properties it can process.
+    const aiModelProperties = batch.properties.filter(
+      (property): property is AIBatchProperty =>
+        property.tool.type === "ai-model",
+    );
+    const verdictProperties = batch.properties.filter(
+      (property): property is VerdictBatchProperty =>
+        property.tool.type === "playbook-verdict",
+    );
+
+    const aiResults: AIResult[] = [];
+    const aiJustifications: AIJustification[] = [];
+    const skippedPropertyIds: SafeId<"property">[] = [];
+    const unsupportedPropertyIds: SafeId<"property">[] = [];
+    const erroredProperties: BatchProperty[] = [];
+
+    if (aiModelProperties.length > 0) {
+      const aiBatch: PropertyBatch = {
+        ...batch,
+        properties: aiModelProperties,
+      };
+      // generateBatch returns a Result<T, E> directly. The combined
+      // signal aborts when EITHER the per-batch AI timeout fires OR the
+      // worker-level per-job timeout does, so the AI SDK actually cancels
+      // the in-flight request.
+      const batchResult = await runWorkflowBatchGenerationWithRetry({
+        generate: async () =>
+          await generateFn({
+            abortSignal: AbortSignal.any([
+              AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
+              signal,
+            ]),
+            batch: aiBatch,
+            entityVersionId,
             organizationId,
-            safeDb,
-            serviceTier,
-            userId,
             workspaceId,
-          },
-          onPartialAnswer: previewPublisher.publish,
-        }),
-      onRetryError: (error, attempt) => {
-        captureError(error, {
+            scopedDb,
+            orgAIConfig,
+            promptCachingEnabled,
+            serviceTier,
+            usageMetering: {
+              actionType: "background",
+              organizationId,
+              safeDb,
+              serviceTier,
+              userId,
+              workspaceId,
+            },
+            onPartialAnswer: previewPublisher.publish,
+          }),
+        onRetryError: (error, attempt) => {
+          captureError(error, {
+            workspaceId,
+            entityId,
+            batchId: batch.id,
+            level: String(level),
+            requestId,
+            attempt: String(attempt),
+            retry: "true",
+          });
+        },
+        sleep,
+        throwIfAborted: () => signal.throwIfAborted(),
+      });
+
+      if (Result.isError(batchResult)) {
+        captureError(batchResult.error, {
           workspaceId,
           entityId,
           batchId: batch.id,
           level: String(level),
           requestId,
-          attempt: String(attempt),
-          retry: "true",
         });
-      },
-      sleep,
-      throwIfAborted: () => signal.throwIfAborted(),
-    });
-
-    if (Result.isError(batchResult)) {
-      captureError(batchResult.error, {
-        workspaceId,
-        entityId,
-        batchId: batch.id,
-        level: String(level),
-        requestId,
-      });
-
-      const isStillCurrentRequest = await isCurrentWorkflowRequest({
-        requestId,
-        workspaceId,
-      });
-      if (!isStillCurrentRequest) {
-        return;
+        erroredProperties.push(...aiModelProperties);
+      } else {
+        aiResults.push(...batchResult.value.aiResults);
+        aiJustifications.push(...batchResult.value.aiJustifications);
+        skippedPropertyIds.push(...batchResult.value.skippedPropertyIds);
+        unsupportedPropertyIds.push(
+          ...batchResult.value.unsupportedPropertyIds,
+        );
       }
-
-      await setFieldsStatus({
-        workspaceId,
-        entityVersionId,
-        batch,
-        contentType: "error",
-        scopedDb,
-      });
-      return;
     }
 
-    const processedFields = batchResult.value;
+    if (verdictProperties.length > 0) {
+      signal.throwIfAborted();
+      const verdictOutput = await computeVerdictBatch({
+        abortSignal: AbortSignal.any([
+          AbortSignal.timeout(getWorkflowBatchAITimeoutMs(serviceTier)),
+          signal,
+        ]),
+        organizationId,
+        workspaceId,
+        scopedDb,
+        entityVersionId,
+        verdictProperties,
+        inputPropertyIds: batch.inputs,
+        orgAIConfig,
+        promptCachingEnabled,
+        serviceTier,
+      });
+      aiResults.push(...verdictOutput.aiResults);
+      aiJustifications.push(...verdictOutput.aiJustifications);
+      skippedPropertyIds.push(...verdictOutput.skippedPropertyIds);
+      const erroredVerdictIds = new Set<string>(
+        verdictOutput.erroredPropertyIds,
+      );
+      for (const property of verdictProperties) {
+        if (erroredVerdictIds.has(property.id)) {
+          erroredProperties.push(property);
+        }
+      }
+    }
+
     const isStillCurrentRequest = await isCurrentWorkflowRequest({
       requestId,
       workspaceId,
@@ -1601,6 +1655,23 @@ const processOneBatch = async ({
     if (!isStillCurrentRequest) {
       return;
     }
+
+    if (erroredProperties.length > 0) {
+      await setFieldsStatus({
+        workspaceId,
+        entityVersionId,
+        batch: { ...batch, properties: erroredProperties },
+        contentType: "error",
+        scopedDb,
+      });
+    }
+
+    const processedFields = {
+      aiResults,
+      aiJustifications,
+      skippedPropertyIds,
+      unsupportedPropertyIds,
+    };
 
     // Write AI results to DB
     const candidatePropertyIds = [

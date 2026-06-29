@@ -797,6 +797,7 @@
     "organizationName": "Organizacijos pavadinimas",
     "pin": "Prisegti",
     "playVideo": "Paleisti vaizdo įrašą",
+    "playbooks": "Peržiūros vadovai",
     "preview": "Peržiūra",
     "previous": "Ankstesnis",
     "print": "Spausdinti",
@@ -804,6 +805,7 @@
     "properties": "Savybės",
     "reconnecting": "Jungiamasi iš naujo…",
     "reference": "Nuoroda",
+    "refresh": "Atnaujinti",
     "regenerate": "Generuoti iš naujo",
     "remove": "Pašalinti",
     "removeMember": "Pašalinti narį",
@@ -1455,6 +1457,80 @@
       "useInChat": "Naudoti pokalbyje",
       "whatIsAnMcpServer": "Kas yra MCP serveris?"
     },
+    "playbooks": {
+      "addFallback": "Pridėti alternatyvą",
+      "addPosition": "Pridėti poziciją",
+      "ask": "Užklausa",
+      "askContentLabel": "Atsakymo tipas",
+      "askQuestionLabel": "Klausimas",
+      "askQuestionPlaceholder": "Ką turėtume nuskaityti iš kiekvieno dokumento? Palikite tuščią, jei norite įvesti rankiniu būdu.",
+      "clauseLabel": "Sąlyga",
+      "clausePlaceholder": "Ieškoti sąlygų…",
+      "clauseRequired": "Pasirinkite sąlygą kiekvienam sąlygomis pagrįstam standartui.",
+      "clauseSearchEmpty": "Sąlygų nerasta",
+      "conditionPlaceholder": "Sukonfigūruokite šį apribojimą vėlesniame žingsnyje.",
+      "confirmDelete": "Tai visam laikui ištrins peržiūros vadovą.",
+      "contentType": {
+        "int": "Skaičius",
+        "singleSelect": "Vienas pasirinkimas",
+        "text": "Tekstas"
+      },
+      "createPlaybook": "Naujas peržiūros vadovas",
+      "created": "Peržiūros vadovas sukurtas",
+      "deleteFailed": "Nepavyko ištrinti peržiūros vadovo",
+      "deletePlaybook": "Ištrinti peržiūros vadovą",
+      "deleted": "Peržiūros vadovas ištrintas",
+      "descriptionPlaceholder": "Ką tikrina šis peržiūros vadovas?",
+      "empty": "Peržiūros vadovų dar nėra",
+      "emptyDescription": "Sukurkite peržiūros vadovą, kad galėtumėte tikrinti dokumentus pagal savo standartus.",
+      "expect": "Tikėtina",
+      "expectSourceLabel": "Standartas",
+      "expectation": {
+        "restricted": "Draudžiama"
+      },
+      "expectationLabel": "Lūkestis",
+      "fallbackLabelPlaceholder": "Žymė (neprivaloma)",
+      "fallbackTextPlaceholder": "Priimtina alternatyvi formuluotė",
+      "fallbacksLabel": "Alternatyvos",
+      "grade": "Vertinimas",
+      "gradeRuleLabel": "Taisyklė",
+      "guidanceLabel": "Gairės",
+      "guidancePlaceholder": "Pastabos vertintojams (neprivaloma)",
+      "issueLabel": "Tema",
+      "issuePlaceholder": "pvz., Atsakomybės ribojimas",
+      "loadFailed": "Nepavyko įkelti peržiūros vadovų",
+      "loading": "Įkeliami peržiūros vadovai…",
+      "namePlaceholder": "pvz., NDA peržiūra",
+      "nameRequired": "Pridėkite pavadinimą.",
+      "noPositions": "Pozicijų dar nėra. Pridėkite pirmąją.",
+      "optionsLabel": "Parinktys",
+      "optionsPlaceholder": "Po vieną parinktį eilutėje",
+      "positionIssueRequired": "Kiekvienai pozicijai reikia temos.",
+      "positionLabel": "Pozicija {index}",
+      "positions": "Pozicijos",
+      "preferredLabel": "Pageidaujama formuluotė",
+      "preferredPlaceholder": "Pageidaujama formuluotė",
+      "rule": {
+        "extractOnly": "Tik ištraukti",
+        "positionMatch": "Pozicijos atitiktis",
+        "presence": "Buvimas",
+        "propertyConstraint": "Reikšmės apribojimas"
+      },
+      "saveFailed": "Nepavyko išsaugoti peržiūros vadovo",
+      "severity": {
+        "blocker": "Blokuojanti",
+        "high": "Aukšta",
+        "low": "Žema",
+        "medium": "Vidutinė"
+      },
+      "severityLabel": "Svarba",
+      "source": {
+        "clause": "Sąlygų biblioteka",
+        "inline": "Įvestas tekstas",
+        "none": "Nėra standarto"
+      },
+      "updated": "Peržiūros vadovas atnaujintas"
+    },
     "sections": {
       "agents": {
         "description": "Konfigūruojami asistentai pasikartojančiam darbui",
@@ -1469,6 +1545,9 @@
       "mcp": {
         "description": "Prijunkite stella prie išorinių įrankių",
         "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Įvertinti kontroliniai sąrašai, tikrinantys dokumentus pagal jūsų standartus"
       },
       "prompts": {
         "description": "Pakartotinai naudojami įgūdžiai, pasiekiami pokalbyje per /",
@@ -2675,28 +2754,9 @@
       "zoomOut": "Nutolinti"
     },
     "playbooks": {
-      "action": "Playbooks",
-      "addColumn": "Add column",
-      "applied": "Playbook applied",
-      "apply": "Apply",
-      "columnNamePlaceholder": "Column name",
-      "columnsLabel": "Columns",
-      "contentType": {
-        "date": "Date",
-        "int": "Number",
-        "text": "Text"
-      },
-      "create": "New playbook",
-      "description": "Bundle AI columns that fill only for a chosen document type.",
-      "duplicateColumn": "Column names must be unique.",
-      "empty": "No playbooks yet.",
-      "incomplete": "Add a name and at least one column.",
-      "nameLabel": "Name",
-      "namePlaceholder": "e.g. Lease review",
-      "promptPlaceholder": "What should this column extract?",
-      "summary": "{type} · {count, number} columns",
-      "title": "Playbooks",
-      "typeLabel": "Document type"
+      "run": "Vykdyti peržiūros vadovą",
+      "runFailed": "Nepavyko įvykdyti peržiūros vadovo",
+      "runStarted": "Vykdomas peržiūros vadovas ({count, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}})"
     },
     "possibleDuplicates": "Galimi dublikatai",
     "properties": {

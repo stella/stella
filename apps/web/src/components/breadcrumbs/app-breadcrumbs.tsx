@@ -13,6 +13,7 @@ import {
 import { ClausesBreadcrumb } from "@/components/breadcrumbs/clauses-breadcrumb";
 import { ContactBreadcrumb } from "@/components/breadcrumbs/contact-breadcrumb";
 import { PdfBreadcrumb } from "@/components/breadcrumbs/pdf-breadcrumb";
+import { PlaybooksBreadcrumb } from "@/components/breadcrumbs/playbooks-breadcrumb";
 import { BreadcrumbLink } from "@/components/breadcrumbs/shared";
 import { SkillBreadcrumb } from "@/components/breadcrumbs/skill-breadcrumb";
 import { TemplatesBreadcrumb } from "@/components/breadcrumbs/templates-breadcrumb";
@@ -111,6 +112,7 @@ export const AppBreadcrumbs = () => {
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(["/knowledge/clauses"], <ClausesBreadcrumb />),
+    defineBreadcrumb(["/knowledge/playbooks"], <PlaybooksBreadcrumb />),
     defineBreadcrumb(["/contacts/$contactId"], renderContactBreadcrumb),
     defineBreadcrumb(
       ["/knowledge/prompts"],

@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   AlignJustifyIcon,
@@ -10,6 +11,7 @@ import {
   DownloadIcon,
   EyeIcon,
   HashIcon,
+  PlayIcon,
   Rows3Icon,
   SparklesIcon,
   UserIcon,
@@ -40,18 +42,24 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
-import { ClientOperationError } from "@/lib/errors";
+import {
+  ClientOperationError,
+  toAPIError,
+  userErrorMessage,
+} from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
   WorkspaceEntity,
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import { playbooksOptions } from "@/routes/_protected.knowledge/-queries";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import { PlaybooksManager } from "@/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
@@ -64,12 +72,17 @@ import {
   workspaceFilesOptions,
   workspaceFoldersOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import {
+  propertiesKeys,
+  propertiesOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   getInternalPropertyId,
   resolveKanbanGroupBy,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 type ViewToolbarProps = {
   view: WorkspaceView;
@@ -223,7 +236,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           />
           <TableContentModeControl viewId={view.id} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
-          <PlaybooksManager workspaceId={workspaceId} />
+          <RunPlaybookControl workspaceId={workspaceId} />
           <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
         </>
       )}
@@ -450,6 +463,122 @@ const getExportFileName = (
     /(?:^|;)\s*filename=(?<name>[^;]+)/iu.exec(contentDisposition)?.groups?.[
       "name"
     ] ?? null
+  );
+};
+
+type RunPlaybookControlProps = {
+  workspaceId: string;
+};
+
+/**
+ * Runs an org playbook over the current table. The picker lists the
+ * organization's playbooks; selecting one materializes the playbook's ASK +
+ * verdict columns and starts extraction, so the new columns appear once the
+ * properties query refreshes.
+ */
+const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
+  const t = useTranslations();
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const [open, setOpen] = useState(false);
+  const [runningPlaybookId, setRunningPlaybookId] = useState<string | null>(
+    null,
+  );
+
+  // Deferred until the menu opens: the org playbook list isn't needed to render
+  // the toolbar, and useQuery (not useSuspenseQuery) keeps a cache miss from
+  // suspending the toolbar chrome.
+  const {
+    data: playbooksData,
+    isLoading,
+    isError,
+  } = useQuery({
+    ...playbooksOptions(activeOrganizationId),
+    enabled: open,
+  });
+  const playbooks =
+    playbooksData && "items" in playbooksData ? playbooksData.items : [];
+
+  const handleRun = async (playbookId: string) => {
+    setRunningPlaybookId(playbookId);
+    const response = await api
+      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
+      .run.post({ queryKey: propertiesKeys.all(workspaceId) });
+    setRunningPlaybookId(null);
+
+    if (response.error) {
+      analytics.captureError(toAPIError(response.error));
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    setOpen(false);
+    await queryClient.invalidateQueries({
+      queryKey: propertiesKeys.all(workspaceId),
+    });
+    stellaToast.add({
+      type: "success",
+      title: t("workspaces.playbooks.runStarted", {
+        count: response.data.runPropertyCount,
+      }),
+    });
+  };
+
+  const isRunning = runningPlaybookId !== null;
+
+  return (
+    <Menu onOpenChange={setOpen} open={open}>
+      <MenuTrigger
+        render={
+          <Button
+            aria-label={t("workspaces.playbooks.run")}
+            disabled={isRunning}
+            size="xs"
+            title={t("workspaces.playbooks.run")}
+            variant="outline"
+          />
+        }
+      >
+        <PlayIcon className="size-3.5" />
+        <span className="hidden sm:inline">
+          {t("workspaces.playbooks.run")}
+        </span>
+      </MenuTrigger>
+      <MenuPopup>
+        {isLoading && (
+          <MenuItem disabled>{t("knowledge.playbooks.loading")}</MenuItem>
+        )}
+        {isError && (
+          <MenuItem disabled>{t("knowledge.playbooks.loadFailed")}</MenuItem>
+        )}
+        {!isLoading && !isError && playbooks.length === 0 && (
+          <MenuItem disabled>{t("knowledge.playbooks.empty")}</MenuItem>
+        )}
+        {playbooks.map((playbook) => (
+          <MenuItem
+            closeOnClick={false}
+            disabled={isRunning}
+            key={playbook.id}
+            onClick={() => {
+              void handleRun(playbook.id);
+            }}
+          >
+            {playbook.name}
+          </MenuItem>
+        ))}
+      </MenuPopup>
+    </Menu>
   );
 };
 
@@ -689,7 +818,11 @@ const PropertiesToggle = ({
   const manualProperties = properties.filter(
     (p) => p.tool.type === "manual-input",
   );
-  const aiProperties = properties.filter((p) => p.tool.type === "ai-model");
+  // System-computed verdict columns are grouped with AI columns here so they
+  // stay toggleable from the visibility menu (they are otherwise read-only).
+  const aiProperties = properties.filter(
+    (p) => p.tool.type === "ai-model" || p.tool.type === "playbook-verdict",
+  );
 
   return (
     <Menu>

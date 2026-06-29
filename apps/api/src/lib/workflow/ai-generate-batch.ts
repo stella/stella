@@ -20,7 +20,7 @@ import {
 import type { Answer } from "@/api/lib/workflow/ai-prompts";
 import type { PreparedInputFile } from "@/api/lib/workflow/generate-batch";
 import type { TextInput } from "@/api/lib/workflow/generate-batch-shared";
-import type { BatchProperty } from "@/api/lib/workflow/get-execution-plan";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import type {
   AIJustificationOutput,
   JustificationFilenames,
@@ -30,7 +30,7 @@ import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 
 type GenerateWorkflowDataProps = {
   files: PreparedInputFile[];
-  properties: BatchProperty[];
+  properties: AIBatchProperty[];
   filenames: JustificationFilenames;
   textInputs: TextInput[];
   abortSignal: AbortSignal;

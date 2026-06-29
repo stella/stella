@@ -93,7 +93,13 @@ export const collectTemplateProperties = ({
         sourceId: property.id,
         name: property.name,
         content: property.content,
-        tool: property.tool,
+        // A view template can carry ai-model or manual-input columns only; a
+        // playbook verdict column exports as a plain single-select (manual)
+        // column, since its verdict computation is tied to a playbook run.
+        tool:
+          property.tool.type === "playbook-verdict"
+            ? { version: 1, type: "manual-input" }
+            : property.tool,
         createIfMissing: creatablePropertyIds.has(property.id),
       };
       if (propertyDeps && propertyDeps.length > 0) {

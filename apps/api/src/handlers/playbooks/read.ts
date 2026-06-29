@@ -1,117 +1,161 @@
 import { Result } from "better-result";
-import { and, asc, eq, gt, or, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { playbooks } from "@/api/db/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import type { SafeDb } from "@/api/db";
+import { playbookDefinitions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import {
   createCursorPage,
   decodePaginationCursor,
   encodePaginationCursor,
   isUuidPaginationCursorPart,
-  parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
-import { brandPersistedPlaybookId } from "@/api/lib/safe-id-boundaries";
+import { brandPersistedPlaybookDefinitionId } from "@/api/lib/safe-id-boundaries";
 
-const readPlaybooksQuerySchema = t.Object({
-  limit: t.Optional(t.Integer({ minimum: 1, maximum: 100 })),
+// ── List ────────────────────────────────────────────
+
+export const listPlaybookDefinitionsQuerySchema = t.Object({
+  limit: t.Optional(
+    t.Integer({
+      minimum: 1,
+      maximum: LIMITS.playbookDefinitionsPageSizeMax,
+    }),
+  ),
   cursor: t.Optional(t.String({ maxLength: 512 })),
 });
 
-type PlaybookCursor = {
-  createdAt: Date;
-  id: SafeId<"playbook">;
-};
-
-const playbookCreatedAtCursor = sql<Date>`date_trunc('milliseconds', ${playbooks.createdAt})`;
-
-const decodePlaybookCursor = (cursor: string): PlaybookCursor | null => {
+// The cursor is the boundary row id alone; the query resolves that row's exact
+// (created_at, id) in-DB so the comparison stays at the column's microsecond
+// precision instead of a millisecond-truncated JS Date (rows sharing a
+// millisecond cannot be skipped or duplicated).
+const decodePlaybookDefinitionCursor = (
+  cursor: string,
+): SafeId<"playbookDefinition"> | null => {
   const parts = decodePaginationCursor(cursor);
-  const createdAt = parts?.at(0);
-  const id = parts?.at(1);
-
-  const createdAtDate = parseDateTimePaginationCursorPart(createdAt);
-
-  if (!createdAtDate || !isUuidPaginationCursorPart(id)) {
+  if (!parts || parts.length !== 1) {
     return null;
   }
-
-  return { createdAt: createdAtDate, id: brandPersistedPlaybookId(id) };
+  const [rawId] = parts;
+  if (!isUuidPaginationCursorPart(rawId)) {
+    return null;
+  }
+  return brandPersistedPlaybookDefinitionId(rawId);
 };
 
-const readPlaybooks = createSafeHandler(
-  {
-    permissions: { workspace: ["read"] },
-    query: readPlaybooksQuerySchema,
-  },
-  async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? 50;
-    const conditions = [eq(playbooks.workspaceId, workspaceId)];
+type ListPlaybookDefinitionsProps = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  query: {
+    limit?: number;
+    cursor?: string;
+  };
+};
 
-    if (query.cursor) {
-      const cursor = decodePlaybookCursor(query.cursor);
+export const listPlaybookDefinitionsHandler = async function* ({
+  safeDb,
+  organizationId,
+  query,
+}: ListPlaybookDefinitionsProps) {
+  const limit = query.limit ?? LIMITS.playbookDefinitionsPageSizeDefault;
+  const conditions = [eq(playbookDefinitions.organizationId, organizationId)];
 
-      if (!cursor) {
-        return Result.err(
-          new HandlerError({ status: 400, message: "Invalid cursor" }),
-        );
-      }
-
-      const cursorCondition = or(
-        gt(playbookCreatedAtCursor, cursor.createdAt),
-        and(
-          eq(playbookCreatedAtCursor, cursor.createdAt),
-          gt(playbooks.id, cursor.id),
-        ),
+  if (query.cursor) {
+    const cursor = decodePlaybookDefinitionCursor(query.cursor);
+    if (!cursor) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
-
-      if (cursorCondition) {
-        conditions.push(cursorCondition);
-      }
     }
-
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
-          .select({
-            id: playbooks.id,
-            name: playbooks.name,
-            typePropertyId: playbooks.typePropertyId,
-            typeValue: playbooks.typeValue,
-            bundle: playbooks.bundle,
-            createdAt: playbooks.createdAt,
-            createdAtCursor: playbookCreatedAtCursor.as("created_at_cursor"),
-            updatedAt: playbooks.updatedAt,
-          })
-          .from(playbooks)
-          .where(and(...conditions))
-          .orderBy(asc(playbookCreatedAtCursor), asc(playbooks.id))
-          .limit(limit + 1),
-      ),
+    conditions.push(
+      sql`(${playbookDefinitions.createdAt}, ${playbookDefinitions.id}) < (select b.created_at, b.id from playbook_definitions b where b.id = ${cursor} and b.organization_id = ${organizationId})`,
     );
+  }
 
-    const page = createCursorPage({
-      rows,
-      limit,
-      cursorForItem: (item) =>
-        encodePaginationCursor([item.createdAtCursor.toISOString(), item.id]),
-    });
+  const rows = yield* Result.await(
+    safeDb((tx) =>
+      tx
+        .select({
+          id: playbookDefinitions.id,
+          name: playbookDefinitions.name,
+          description: playbookDefinitions.description,
+          createdAt: playbookDefinitions.createdAt,
+          updatedAt: playbookDefinitions.updatedAt,
+        })
+        .from(playbookDefinitions)
+        .where(and(...conditions))
+        .orderBy(
+          desc(playbookDefinitions.createdAt),
+          desc(playbookDefinitions.id),
+        )
+        .limit(limit + 1),
+    ),
+  );
 
-    return Result.ok({
-      ...page,
-      items: page.items.map((row) => ({
-        id: row.id,
-        name: row.name,
-        typePropertyId: row.typePropertyId,
-        typeValue: row.typeValue,
-        bundle: row.bundle,
-        createdAt: row.createdAt.toISOString(),
-        updatedAt: row.updatedAt.toISOString(),
-      })),
-    });
-  },
-);
+  const page = createCursorPage({
+    rows,
+    limit,
+    cursorForItem: (item) => encodePaginationCursor([item.id]),
+  });
 
-export default readPlaybooks;
+  return Result.ok({
+    ...page,
+    items: page.items.map((row) => ({
+      id: row.id,
+      name: row.name,
+      description: row.description,
+      createdAt: row.createdAt.toISOString(),
+      updatedAt: row.updatedAt.toISOString(),
+    })),
+  });
+};
+
+// ── Get ─────────────────────────────────────────────
+
+type GetPlaybookDefinitionProps = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  playbookId: SafeId<"playbookDefinition">;
+};
+
+export const getPlaybookDefinitionHandler = async function* ({
+  safeDb,
+  organizationId,
+  playbookId,
+}: GetPlaybookDefinitionProps) {
+  const playbook = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.playbookDefinitions.findFirst({
+        where: {
+          id: { eq: playbookId },
+          organizationId: { eq: organizationId },
+        },
+        columns: {
+          id: true,
+          name: true,
+          description: true,
+          positions: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+    ),
+  );
+
+  if (!playbook) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Playbook not found" }),
+    );
+  }
+
+  return Result.ok({
+    id: playbook.id,
+    name: playbook.name,
+    description: playbook.description,
+    positions: playbook.positions,
+    createdAt: playbook.createdAt.toISOString(),
+    updatedAt: playbook.updatedAt.toISOString(),
+  });
+};

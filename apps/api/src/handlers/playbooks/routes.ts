@@ -1,47 +1,36 @@
 import Elysia from "elysia";
 
-import applyPlaybook from "@/api/handlers/playbooks/apply";
-import createPlaybook from "@/api/handlers/playbooks/create";
-import deletePlaybookById from "@/api/handlers/playbooks/delete-by-id";
-import readPlaybooks from "@/api/handlers/playbooks/read";
-import updatePlaybookById from "@/api/handlers/playbooks/update-by-id";
-import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
-import { invalidateQuery } from "@/api/lib/invalidate-query-macro";
+import createPlaybookDefinition from "@/api/handlers/playbooks/create";
+import deletePlaybookDefinition from "@/api/handlers/playbooks/delete-by-id";
+import getPlaybookDefinition from "@/api/handlers/playbooks/read-by-id";
+import listPlaybookDefinitions from "@/api/handlers/playbooks/read-list";
+import updatePlaybookDefinition from "@/api/handlers/playbooks/update-by-id";
+import { authMacro, permissionMacro } from "@/api/lib/auth";
 
 export const playbooksRoute = new Elysia({
-  prefix: "/playbooks/:workspaceId",
+  prefix: "/playbooks",
 })
-  .use(workspaceAccessMacro)
-  .use(invalidateQuery)
+  .use(authMacro)
   .use(permissionMacro)
-  .guard({
-    validateWorkspaceAccess: true,
+  .guard({ validateAuth: true })
+  .get("/", listPlaybookDefinitions.handler, {
+    permissions: listPlaybookDefinitions.config.permissions,
+    query: listPlaybookDefinitions.config.query,
   })
-  .get("/", readPlaybooks.handler, {
-    permissions: readPlaybooks.config.permissions,
-    query: readPlaybooks.config.query,
+  .post("/", createPlaybookDefinition.handler, {
+    body: createPlaybookDefinition.config.body,
+    permissions: createPlaybookDefinition.config.permissions,
   })
-  .put("/", createPlaybook.handler, {
-    body: createPlaybook.config.body,
-    invalidateQuery: true,
-    permissions: createPlaybook.config.permissions,
+  .get("/:playbookId", getPlaybookDefinition.handler, {
+    params: getPlaybookDefinition.config.params,
+    permissions: getPlaybookDefinition.config.permissions,
   })
-  .group("/playbook/:playbookId", (app) =>
-    app
-      .post("/", updatePlaybookById.handler, {
-        body: updatePlaybookById.config.body,
-        invalidateQuery: true,
-        params: updatePlaybookById.config.params,
-        permissions: updatePlaybookById.config.permissions,
-      })
-      .delete("/", deletePlaybookById.handler, {
-        invalidateQuery: true,
-        params: deletePlaybookById.config.params,
-        permissions: deletePlaybookById.config.permissions,
-      })
-      .post("/apply", applyPlaybook.handler, {
-        invalidateQuery: true,
-        params: applyPlaybook.config.params,
-        permissions: applyPlaybook.config.permissions,
-      }),
-  );
+  .put("/:playbookId", updatePlaybookDefinition.handler, {
+    body: updatePlaybookDefinition.config.body,
+    params: updatePlaybookDefinition.config.params,
+    permissions: updatePlaybookDefinition.config.permissions,
+  })
+  .delete("/:playbookId", deletePlaybookDefinition.handler, {
+    params: deletePlaybookDefinition.config.params,
+    permissions: deletePlaybookDefinition.config.permissions,
+  });

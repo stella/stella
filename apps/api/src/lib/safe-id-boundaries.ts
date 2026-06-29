@@ -49,6 +49,11 @@ export const brandPersistedPlaybookId = (
   playbookId: string,
 ): SafeId<"playbook"> => toSafeId<"playbook">(playbookId);
 
+export const brandPersistedPlaybookDefinitionId = (
+  playbookDefinitionId: string,
+): SafeId<"playbookDefinition"> =>
+  toSafeId<"playbookDefinition">(playbookDefinitionId);
+
 export const brandPersistedUserFileId = (
   userFileId: string,
 ): SafeId<"userFile"> => toSafeId<"userFile">(userFileId);

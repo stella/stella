@@ -387,6 +387,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         ) {
           return;
         }
+        // Verdict tiers are system-defined; their colors are not user-editable.
+        if (groupByProperty.tool.type === "playbook-verdict") {
+          return;
+        }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
           opt.value === optionValue
             ? {
@@ -417,6 +421,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           groupByProperty.content.type !== "single-select" &&
           groupByProperty.content.type !== "multi-select"
         ) {
+          return;
+        }
+        // Verdict tiers are system-defined; their labels are not user-editable.
+        if (groupByProperty.tool.type === "playbook-verdict") {
           return;
         }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
@@ -464,6 +472,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       (groupByProperty.content.type === "single-select" ||
         groupByProperty.content.type === "multi-select")
     ) {
+      // Verdict tiers are system-defined; their order is not user-editable.
+      if (groupByProperty.tool.type === "playbook-verdict") {
+        return;
+      }
       const opts = [...groupByProperty.content.options];
       const srcIdx = opts.findIndex((o) => o.value === sourceValue);
       const tgtIdx = opts.findIndex((o) => o.value === targetValue);

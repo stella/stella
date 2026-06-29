@@ -1,106 +1,89 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 
-import { playbooks } from "@/api/db/schema";
-import { playbookBodySchema } from "@/api/handlers/playbooks/schema";
-import {
-  hasDuplicateColumnNames,
-  validateTypeProperty,
-} from "@/api/handlers/playbooks/validate";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { playbookDefinitions } from "@/api/db/schema";
+import { assertPositionsValid } from "@/api/handlers/playbooks/positions-validation";
+import { playbookDefinitionBodySchema } from "@/api/handlers/playbooks/schema";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { playbook: ["create"] },
-  body: playbookBodySchema,
+  body: playbookDefinitionBodySchema,
 } satisfies HandlerConfig;
 
-const createPlaybook = createSafeHandler(
+const createPlaybookDefinition = createSafeRootHandler(
   config,
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
-    if (hasDuplicateColumnNames(body.bundle)) {
+  async function* ({ safeDb, session, body, recordAuditEvent }) {
+    const organizationId = session.activeOrganizationId;
+
+    yield* Result.await(
+      assertPositionsValid({
+        safeDb,
+        organizationId,
+        positions: body.positions,
+      }),
+    );
+
+    const existingCount = yield* Result.await(
+      safeDb((tx) =>
+        tx.$count(
+          playbookDefinitions,
+          eq(playbookDefinitions.organizationId, organizationId),
+        ),
+      ),
+    );
+
+    if (existingCount >= LIMITS.playbookDefinitionsCount) {
       return Result.err(
-        new HandlerError({
-          status: 400,
-          message: "Playbook columns must have unique names",
-        }),
+        new HandlerError({ status: 400, message: "Playbook limit reached" }),
       );
     }
 
-    const txResult = yield* Result.await(
+    const playbookId = createSafeId<"playbookDefinition">();
+
+    const inserted = yield* Result.await(
       safeDb(async (tx) => {
-        const existing = await tx
-          .select({ id: playbooks.id })
-          .from(playbooks)
-          .where(eq(playbooks.workspaceId, workspaceId));
-
-        if (existing.length >= LIMITS.playbooksCount) {
-          return {
-            ok: false as const,
-            status: 400 as const,
-            message: "Playbooks limit reached",
-          };
-        }
-
-        const typeCheck = await validateTypeProperty({
-          tx,
-          workspaceId,
-          typePropertyId: body.typePropertyId,
-          typeValue: body.typeValue,
-        });
-        if (!typeCheck.ok) {
-          return typeCheck;
-        }
-
-        const [inserted] = await tx
-          .insert(playbooks)
+        const [row] = await tx
+          .insert(playbookDefinitions)
           .values({
-            workspaceId,
+            id: playbookId,
+            organizationId,
             name: body.name,
-            typePropertyId: body.typePropertyId,
-            typeValue: body.typeValue,
-            bundle: body.bundle,
+            description: body.description ?? null,
+            positions: body.positions,
           })
-          .returning({ id: playbooks.id });
-
-        if (!inserted) {
-          return {
-            ok: false as const,
-            status: 500 as const,
-            message: "Failed to create playbook",
-          };
-        }
+          .returning({ id: playbookDefinitions.id });
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.CREATE,
           resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
-          resourceId: inserted.id,
+          resourceId: playbookId,
           changes: {
             created: {
               old: null,
-              new: { name: body.name, columnCount: body.bundle.length },
+              new: {
+                name: body.name,
+                positionCount: body.positions.items.length,
+              },
             },
           },
         });
 
-        return { ok: true as const, id: inserted.id };
+        return row;
       }),
     );
 
-    if (!txResult.ok) {
-      return Result.err(
-        new HandlerError({
-          status: txResult.status,
-          message: txResult.message,
-        }),
-      );
+    if (!inserted) {
+      panic("Failed to create playbook definition");
     }
 
-    return Result.ok({ id: txResult.id });
+    return Result.ok({ id: inserted.id });
   },
 );
 
-export default createPlaybook;
+export default createPlaybookDefinition;

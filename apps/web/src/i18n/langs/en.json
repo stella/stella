@@ -797,6 +797,7 @@
     "organizationName": "Organization name",
     "pin": "Pin",
     "playVideo": "Play video",
+    "playbooks": "Playbooks",
     "preview": "Preview",
     "previous": "Previous",
     "print": "Print",
@@ -804,6 +805,7 @@
     "properties": "Properties",
     "reconnecting": "Reconnecting…",
     "reference": "Reference",
+    "refresh": "Refresh",
     "regenerate": "Regenerate",
     "remove": "Remove",
     "removeMember": "Remove member",
@@ -1455,6 +1457,80 @@
       "useInChat": "Use in chat",
       "whatIsAnMcpServer": "What is an MCP server?"
     },
+    "playbooks": {
+      "addFallback": "Add fallback",
+      "addPosition": "Add position",
+      "ask": "Ask",
+      "askContentLabel": "Answer type",
+      "askQuestionLabel": "Question",
+      "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.",
+      "clauseLabel": "Clause",
+      "clausePlaceholder": "Search clauses…",
+      "clauseRequired": "Pick a clause for each clause-backed standard.",
+      "clauseSearchEmpty": "No clauses found",
+      "conditionPlaceholder": "Configure this constraint in a later step.",
+      "confirmDelete": "This will permanently delete the playbook.",
+      "contentType": {
+        "int": "Number",
+        "singleSelect": "Single select",
+        "text": "Text"
+      },
+      "createPlaybook": "New playbook",
+      "created": "Playbook created",
+      "deleteFailed": "Failed to delete playbook",
+      "deletePlaybook": "Delete playbook",
+      "deleted": "Playbook deleted",
+      "descriptionPlaceholder": "What does this playbook check?",
+      "empty": "No playbooks yet",
+      "emptyDescription": "Create a playbook to review documents against your standards.",
+      "expect": "Expect",
+      "expectSourceLabel": "Standard",
+      "expectation": {
+        "restricted": "Restricted"
+      },
+      "expectationLabel": "Expectation",
+      "fallbackLabelPlaceholder": "Label (optional)",
+      "fallbackTextPlaceholder": "Acceptable fallback wording",
+      "fallbacksLabel": "Fallbacks",
+      "grade": "Grade",
+      "gradeRuleLabel": "Rule",
+      "guidanceLabel": "Guidance",
+      "guidancePlaceholder": "Notes for reviewers (optional)",
+      "issueLabel": "Issue",
+      "issuePlaceholder": "e.g. Limitation of liability",
+      "loadFailed": "Failed to load playbooks",
+      "loading": "Loading playbooks…",
+      "namePlaceholder": "e.g. NDA review",
+      "nameRequired": "Add a name.",
+      "noPositions": "No positions yet. Add the first one.",
+      "optionsLabel": "Options",
+      "optionsPlaceholder": "One option per line",
+      "positionIssueRequired": "Each position needs an issue.",
+      "positionLabel": "Position {index}",
+      "positions": "Positions",
+      "preferredLabel": "Preferred language",
+      "preferredPlaceholder": "Preferred wording",
+      "rule": {
+        "extractOnly": "Extract only",
+        "positionMatch": "Position match",
+        "presence": "Presence",
+        "propertyConstraint": "Value constraint"
+      },
+      "saveFailed": "Failed to save playbook",
+      "severity": {
+        "blocker": "Blocker",
+        "high": "High",
+        "low": "Low",
+        "medium": "Medium"
+      },
+      "severityLabel": "Severity",
+      "source": {
+        "clause": "Clause library",
+        "inline": "Inline text",
+        "none": "No standard"
+      },
+      "updated": "Playbook updated"
+    },
     "sections": {
       "agents": {
         "description": "Configurable assistants for repeatable work",
@@ -1469,6 +1545,9 @@
       "mcp": {
         "description": "Connect stella to external tools",
         "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Graded checklists that review documents against your standards"
       },
       "prompts": {
         "description": "Reusable skills available from / in chat",
@@ -2675,28 +2754,9 @@
       "zoomOut": "Zoom out"
     },
     "playbooks": {
-      "action": "Playbooks",
-      "addColumn": "Add column",
-      "applied": "Playbook applied",
-      "apply": "Apply",
-      "columnNamePlaceholder": "Column name",
-      "columnsLabel": "Columns",
-      "contentType": {
-        "date": "Date",
-        "int": "Number",
-        "text": "Text"
-      },
-      "create": "New playbook",
-      "description": "Bundle AI columns that fill only for a chosen document type.",
-      "duplicateColumn": "Column names must be unique.",
-      "empty": "No playbooks yet.",
-      "incomplete": "Add a name and at least one column.",
-      "nameLabel": "Name",
-      "namePlaceholder": "e.g. Lease review",
-      "promptPlaceholder": "What should this column extract?",
-      "summary": "{type} · {count, number} columns",
-      "title": "Playbooks",
-      "typeLabel": "Document type"
+      "run": "Run playbook",
+      "runFailed": "Failed to run playbook",
+      "runStarted": "Running playbook ({count, plural, one {# column} other {# columns}})"
     },
     "possibleDuplicates": "Possible duplicates",
     "properties": {

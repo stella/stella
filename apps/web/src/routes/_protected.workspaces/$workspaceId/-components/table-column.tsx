@@ -133,6 +133,37 @@ const PropertyCell = ({
     );
   }
 
+  // Playbook verdict: a system-computed single-select tier (compliant /
+  // fallback / deviation / missing). Read-only — render the colored chip via
+  // CellResult rather than the editable field, and surface the grading
+  // rationale through the provenance card when a justification exists.
+  if (property.tool.type === "playbook-verdict") {
+    const verdictCell = (
+      <span className="flex min-w-0 items-center gap-1.5">
+        <CellMetadataFlags
+          entityId={entity.entityId}
+          metadata={cellMetadata}
+          propertyId={property.id}
+          workspaceId={property.workspaceId}
+        />
+        <CellResult field={field} property={property} />
+      </span>
+    );
+
+    if (!justification) {
+      return verdictCell;
+    }
+    return (
+      <AICellSourceCard
+        cellMetadata={cellMetadata}
+        entity={entity}
+        justification={justification}
+      >
+        {verdictCell}
+      </AICellSourceCard>
+    );
+  }
+
   // AI-model property: click opens peek PDF with justification
   if (field !== undefined) {
     const firstFile = getFirstFile(entity);

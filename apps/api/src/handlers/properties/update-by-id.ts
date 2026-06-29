@@ -244,13 +244,16 @@ const updateProperty = createSafeHandler(
         const isStale = comparePropertiesForStale({
           oldProperty: {
             content: oldProperty.content,
+            // Manual-input and verdict columns both compare as a plain manual
+            // single-select; the update body cannot set a verdict tool, so an
+            // existing verdict is treated like a manual column for staleness.
             tool:
               oldProperty.tool.type === "ai-model"
                 ? {
                     ...oldProperty.tool,
                     dependencies: oldDependencies,
                   }
-                : oldProperty.tool,
+                : { version: 1, type: "manual-input" },
           },
           newProperty: { content, tool },
         });

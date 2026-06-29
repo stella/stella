@@ -489,7 +489,10 @@ const PropertyComposerBody = ({
 
     if (isEditMode && editingProperty) {
       const nextContent = buildContent(contentType, options, effectiveFallback);
-      const nextTool: WorkspaceProperty["tool"] =
+      const nextTool: Exclude<
+        WorkspaceProperty["tool"],
+        { type: "playbook-verdict" }
+      > =
         editingTool?.type === "manual-input"
           ? { version: 1, type: "manual-input" }
           : { version: 1, type: "ai-model", prompt, dependencies };

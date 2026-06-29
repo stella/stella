@@ -797,6 +797,7 @@
     "organizationName": "اسم المؤسسة",
     "pin": "تثبيت",
     "playVideo": "تشغيل الفيديو",
+    "playbooks": "أدلّة المراجعة",
     "preview": "معاينة",
     "previous": "السابق",
     "print": "طباعة",
@@ -804,6 +805,7 @@
     "properties": "الخصائص",
     "reconnecting": "جارٍ إعادة الاتصال…",
     "reference": "المرجع",
+    "refresh": "تحديث",
     "regenerate": "إعادة الإنشاء",
     "remove": "إزالة",
     "removeMember": "إزالة العضو",
@@ -1455,6 +1457,80 @@
       "useInChat": "استخدام في المحادثة",
       "whatIsAnMcpServer": "ما هو خادم MCP؟"
     },
+    "playbooks": {
+      "addFallback": "إضافة بديل",
+      "addPosition": "إضافة موقف",
+      "ask": "الاستفسار",
+      "askContentLabel": "نوع الإجابة",
+      "askQuestionLabel": "السؤال",
+      "askQuestionPlaceholder": "ما الذي ينبغي قراءته من كل مستند؟ اتركه فارغًا للإدخال اليدوي.",
+      "clauseLabel": "البند",
+      "clausePlaceholder": "ابحث في البنود…",
+      "clauseRequired": "اختر بندًا لكل معيار مستند إلى البنود.",
+      "clauseSearchEmpty": "لا توجد بنود",
+      "conditionPlaceholder": "اضبط هذا القيد في خطوة لاحقة.",
+      "confirmDelete": "سيؤدّي هذا إلى حذف دليل المراجعة نهائيًا.",
+      "contentType": {
+        "int": "رقم",
+        "singleSelect": "اختيار مفرد",
+        "text": "نص"
+      },
+      "createPlaybook": "دليل مراجعة جديد",
+      "created": "تم إنشاء دليل المراجعة",
+      "deleteFailed": "فشل حذف دليل المراجعة",
+      "deletePlaybook": "حذف دليل المراجعة",
+      "deleted": "تم حذف دليل المراجعة",
+      "descriptionPlaceholder": "ما الذي يتحقّق منه دليل المراجعة هذا؟",
+      "empty": "لا توجد أدلّة مراجعة بعد",
+      "emptyDescription": "أنشئ دليل مراجعة لفحص المستندات وفق معاييرك.",
+      "expect": "المتوقَّع",
+      "expectSourceLabel": "المعيار",
+      "expectation": {
+        "restricted": "محظور"
+      },
+      "expectationLabel": "التوقّع",
+      "fallbackLabelPlaceholder": "تسمية (اختياري)",
+      "fallbackTextPlaceholder": "صياغة بديلة مقبولة",
+      "fallbacksLabel": "البدائل",
+      "grade": "التقييم",
+      "gradeRuleLabel": "القاعدة",
+      "guidanceLabel": "الإرشادات",
+      "guidancePlaceholder": "ملاحظات للمراجعين (اختياري)",
+      "issueLabel": "المسألة",
+      "issuePlaceholder": "مثال: تحديد المسؤولية",
+      "loadFailed": "فشل تحميل أدلّة المراجعة",
+      "loading": "جارٍ تحميل أدلّة المراجعة…",
+      "namePlaceholder": "مثال: مراجعة اتفاقية عدم الإفصاح",
+      "nameRequired": "أضِف اسمًا.",
+      "noPositions": "لا توجد مواقف بعد. أضِف الأول.",
+      "optionsLabel": "الخيارات",
+      "optionsPlaceholder": "خيار واحد في كل سطر",
+      "positionIssueRequired": "كل موقف يحتاج إلى مسألة.",
+      "positionLabel": "الموقف {index}",
+      "positions": "المواقف",
+      "preferredLabel": "الصياغة المفضّلة",
+      "preferredPlaceholder": "الصياغة المفضّلة",
+      "rule": {
+        "extractOnly": "استخراج فقط",
+        "positionMatch": "مطابقة الموقف",
+        "presence": "الوجود",
+        "propertyConstraint": "قيد القيمة"
+      },
+      "saveFailed": "فشل حفظ دليل المراجعة",
+      "severity": {
+        "blocker": "حاسمة",
+        "high": "عالية",
+        "low": "منخفضة",
+        "medium": "متوسطة"
+      },
+      "severityLabel": "الخطورة",
+      "source": {
+        "clause": "مكتبة البنود",
+        "inline": "نص مباشر",
+        "none": "بدون معيار"
+      },
+      "updated": "تم تحديث دليل المراجعة"
+    },
     "sections": {
       "agents": {
         "description": "مساعدون قابلون للتهيئة للأعمال المتكررة",
@@ -1469,6 +1545,9 @@
       "mcp": {
         "description": "اربط stella بالأدوات الخارجية",
         "title": "MCP"
+      },
+      "playbooks": {
+        "description": "قوائم تحقّق مُقيَّمة تفحص المستندات وفق معاييرك"
       },
       "prompts": {
         "description": "مهارات قابلة لإعادة الاستخدام متاحة من / في المحادثة",
@@ -2675,28 +2754,9 @@
       "zoomOut": "تصغير"
     },
     "playbooks": {
-      "action": "Playbooks",
-      "addColumn": "Add column",
-      "applied": "Playbook applied",
-      "apply": "Apply",
-      "columnNamePlaceholder": "Column name",
-      "columnsLabel": "Columns",
-      "contentType": {
-        "date": "Date",
-        "int": "Number",
-        "text": "Text"
-      },
-      "create": "New playbook",
-      "description": "Bundle AI columns that fill only for a chosen document type.",
-      "duplicateColumn": "Column names must be unique.",
-      "empty": "No playbooks yet.",
-      "incomplete": "Add a name and at least one column.",
-      "nameLabel": "Name",
-      "namePlaceholder": "e.g. Lease review",
-      "promptPlaceholder": "What should this column extract?",
-      "summary": "{type} · {count, number} columns",
-      "title": "Playbooks",
-      "typeLabel": "Document type"
+      "run": "تشغيل دليل المراجعة",
+      "runFailed": "فشل تشغيل دليل المراجعة",
+      "runStarted": "جارٍ تشغيل دليل المراجعة ({count, plural, zero {لا أعمدة} one {عمود واحد} two {عمودان} few {# أعمدة} many {# عمودًا} other {# عمود}})"
     },
     "possibleDuplicates": "نسخ مكررة محتملة",
     "properties": {

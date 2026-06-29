@@ -73,6 +73,11 @@ export const extractJustificationContent = (
     if (isDocxFolioBlock(block)) {
       continue;
     }
+    // Playbook verdict rationales carry no document citations or page numbers,
+    // so they never produce bounding boxes.
+    if (block.kind === "playbook-verdict") {
+      continue;
+    }
     for (const statement of block.statements) {
       const text = statement.text.trim();
       if (text.length > 0) {

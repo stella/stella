@@ -290,6 +290,9 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
           name: property.name,
           propertyRef: refRegistry.toPropertyRef(property.id),
           status: property.status,
+          // Manual-input and system-derived verdict columns both present to the
+          // model as a plain manual-input single-select (no verdict tool
+          // internals like the ASK property id or standard text leaked).
           tool:
             property.tool.type === "ai-model"
               ? {
@@ -304,7 +307,7 @@ export const createReadonlyWorkspaceFunctionRegistry = ({
                     ),
                   })),
                 }
-              : property.tool,
+              : { version: 1 as const, type: "manual-input" as const },
           type: property.content.type,
         })),
       });

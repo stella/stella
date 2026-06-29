@@ -1,47 +1,52 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
-import { playbooks } from "@/api/db/schema";
-import { playbookParamsSchema } from "@/api/handlers/playbooks/schema";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import { playbookDefinitions } from "@/api/db/schema";
+import { playbookDefinitionParamsSchema } from "@/api/handlers/playbooks/schema";
+import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { playbook: ["delete"] },
-  params: playbookParamsSchema,
+  params: playbookDefinitionParamsSchema,
 } satisfies HandlerConfig;
 
-const deletePlaybookById = createSafeHandler(
+const deletePlaybookDefinition = createSafeRootHandler(
   config,
-  async function* ({ safeDb, workspaceId, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, recordAuditEvent }) {
+    const organizationId = session.activeOrganizationId;
+
     const deleted = yield* Result.await(
       safeDb(async (tx) => {
-        const rows = await tx
-          .delete(playbooks)
+        const [row] = await tx
+          .delete(playbookDefinitions)
           .where(
             and(
-              eq(playbooks.id, params.playbookId),
-              eq(playbooks.workspaceId, workspaceId),
+              eq(playbookDefinitions.id, params.playbookId),
+              eq(playbookDefinitions.organizationId, organizationId),
             ),
           )
-          .returning({ id: playbooks.id });
+          .returning({
+            id: playbookDefinitions.id,
+            name: playbookDefinitions.name,
+          });
 
-        if (rows.length > 0) {
+        if (row) {
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.DELETE,
             resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
             resourceId: params.playbookId,
-            changes: { deleted: { old: { id: params.playbookId }, new: null } },
+            changes: { deleted: { old: { name: row.name }, new: null } },
           });
         }
 
-        return rows;
+        return row;
       }),
     );
 
-    if (deleted.length === 0) {
+    if (!deleted) {
       return Result.err(
         new HandlerError({ status: 404, message: "Playbook not found" }),
       );
@@ -51,4 +56,4 @@ const deletePlaybookById = createSafeHandler(
   },
 );
 
-export default deletePlaybookById;
+export default deletePlaybookDefinition;

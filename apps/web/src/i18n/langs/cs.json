@@ -797,6 +797,7 @@
     "organizationName": "Název organizace",
     "pin": "Připnout",
     "playVideo": "Přehrát video",
+    "playbooks": "Playbooky",
     "preview": "Náhled",
     "previous": "Předchozí",
     "print": "Tisknout",
@@ -804,6 +805,7 @@
     "properties": "Vlastnosti",
     "reconnecting": "Obnovování spojení…",
     "reference": "Reference",
+    "refresh": "Obnovit",
     "regenerate": "Vygenerovat znovu",
     "remove": "Odebrat",
     "removeMember": "Odebrat člena",
@@ -1455,6 +1457,80 @@
       "useInChat": "Používat v chatu",
       "whatIsAnMcpServer": "Co je MCP server?"
     },
+    "playbooks": {
+      "addFallback": "Přidat náhradní znění",
+      "addPosition": "Přidat pozici",
+      "ask": "Dotaz",
+      "askContentLabel": "Typ odpovědi",
+      "askQuestionLabel": "Otázka",
+      "askQuestionPlaceholder": "Co se má z každého dokumentu vyčíst? Ponechte prázdné pro ruční zadání.",
+      "clauseLabel": "Vzorové ustanovení",
+      "clausePlaceholder": "Hledat vzorová ustanovení…",
+      "clauseRequired": "U každého standardu z knihovny ustanovení vyberte vzorové ustanovení.",
+      "clauseSearchEmpty": "Nenalezena žádná vzorová ustanovení",
+      "conditionPlaceholder": "Toto omezení nastavíte v dalším kroku.",
+      "confirmDelete": "Tato akce trvale smaže playbook.",
+      "contentType": {
+        "int": "Číslo",
+        "singleSelect": "Jednoduchý výběr",
+        "text": "Volný text"
+      },
+      "createPlaybook": "Nový playbook",
+      "created": "Playbook vytvořen",
+      "deleteFailed": "Playbook se nepodařilo smazat",
+      "deletePlaybook": "Smazat playbook",
+      "deleted": "Playbook smazán",
+      "descriptionPlaceholder": "Co tento playbook kontroluje?",
+      "empty": "Zatím žádné playbooky",
+      "emptyDescription": "Vytvořte playbook a kontrolujte dokumenty podle svých standardů.",
+      "expect": "Očekávání",
+      "expectSourceLabel": "Měřítko",
+      "expectation": {
+        "restricted": "Zakázané"
+      },
+      "expectationLabel": "Požadavek",
+      "fallbackLabelPlaceholder": "Označení (volitelné)",
+      "fallbackTextPlaceholder": "Přijatelné náhradní znění",
+      "fallbacksLabel": "Náhradní znění",
+      "grade": "Hodnocení",
+      "gradeRuleLabel": "Pravidlo",
+      "guidanceLabel": "Pokyny",
+      "guidancePlaceholder": "Poznámky pro posuzovatele (volitelné)",
+      "issueLabel": "Téma",
+      "issuePlaceholder": "např. Omezení odpovědnosti",
+      "loadFailed": "Playbooky se nepodařilo načíst",
+      "loading": "Načítám playbooky…",
+      "namePlaceholder": "např. revize NDA",
+      "nameRequired": "Zadejte název.",
+      "noPositions": "Zatím žádné pozice. Přidejte první.",
+      "optionsLabel": "Možnosti",
+      "optionsPlaceholder": "Jedna možnost na řádek",
+      "positionIssueRequired": "Každá pozice musí mít téma.",
+      "positionLabel": "Pozice {index}",
+      "positions": "Pozice",
+      "preferredLabel": "Preferované znění",
+      "preferredPlaceholder": "Preferovaná formulace",
+      "rule": {
+        "extractOnly": "Pouze extrakce",
+        "positionMatch": "Shoda s pozicí",
+        "presence": "Přítomnost",
+        "propertyConstraint": "Omezení hodnoty"
+      },
+      "saveFailed": "Playbook se nepodařilo uložit",
+      "severity": {
+        "blocker": "Blokující",
+        "high": "Vysoká",
+        "low": "Nízká",
+        "medium": "Střední"
+      },
+      "severityLabel": "Závažnost",
+      "source": {
+        "clause": "Knihovna ustanovení",
+        "inline": "Vlastní text",
+        "none": "Bez měřítka"
+      },
+      "updated": "Playbook aktualizován"
+    },
     "sections": {
       "agents": {
         "description": "Konfigurovatelní asistenti pro opakovanou práci",
@@ -1469,6 +1545,9 @@
       "mcp": {
         "description": "Připojení stelly k externím nástrojům",
         "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Hodnocené kontrolní seznamy, které porovnávají dokumenty s vašimi standardy"
       },
       "prompts": {
         "description": "Opakovaně použitelné dovednosti dostupné přes / v chatu",
@@ -2675,28 +2754,9 @@
       "zoomOut": "Oddálit"
     },
     "playbooks": {
-      "action": "Playbooks",
-      "addColumn": "Add column",
-      "applied": "Playbook applied",
-      "apply": "Apply",
-      "columnNamePlaceholder": "Column name",
-      "columnsLabel": "Columns",
-      "contentType": {
-        "date": "Date",
-        "int": "Number",
-        "text": "Text"
-      },
-      "create": "New playbook",
-      "description": "Bundle AI columns that fill only for a chosen document type.",
-      "duplicateColumn": "Column names must be unique.",
-      "empty": "No playbooks yet.",
-      "incomplete": "Add a name and at least one column.",
-      "nameLabel": "Name",
-      "namePlaceholder": "e.g. Lease review",
-      "promptPlaceholder": "What should this column extract?",
-      "summary": "{type} · {count, number} columns",
-      "title": "Playbooks",
-      "typeLabel": "Document type"
+      "run": "Spustit playbook",
+      "runFailed": "Nepodařilo se spustit playbook",
+      "runStarted": "Spouštění playbooku ({count, plural, one {# sloupec} few {# sloupce} other {# sloupců}})"
     },
     "possibleDuplicates": "Možné duplicity",
     "properties": {

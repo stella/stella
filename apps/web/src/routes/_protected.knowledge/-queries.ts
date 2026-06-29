@@ -9,8 +9,13 @@ import { toSafeId } from "@/lib/safe-id";
 // ── Key factory ─────────────────────────────────────
 
 const SKILLS_PAGE_SIZE = 100;
+const PLAYBOOKS_PAGE_SIZE = 50;
 
 type SkillsPageKey = {
+  limit: number;
+};
+
+type PlaybooksPageKey = {
   limit: number;
 };
 
@@ -119,6 +124,19 @@ export const knowledgeKeys = {
   },
   clauseCategories: {
     all: (organizationId: string) => ["clause-categories", organizationId],
+  },
+  playbooks: {
+    all: (organizationId: string) => ["playbooks", organizationId],
+    list: (organizationId: string, { limit }: PlaybooksPageKey) => [
+      ...knowledgeKeys.playbooks.all(organizationId),
+      "list",
+      { limit },
+    ],
+    detail: (organizationId: string, playbookId: string) => [
+      ...knowledgeKeys.playbooks.all(organizationId),
+      playbookId,
+      "detail",
+    ],
   },
   mcp: {
     all: (organizationId: string) => ["mcp", organizationId],
@@ -432,6 +450,49 @@ export const clauseDetailOptions = (organizationId: string, clauseId: string) =>
       const response = await api.clauses({ clauseId }).get({
         fetch: { signal },
       });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// ── Playbook queries ────────────────────────────────
+
+export const playbooksOptions = (
+  organizationId: string,
+  limit: number = PLAYBOOKS_PAGE_SIZE,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.playbooks.list(organizationId, { limit }),
+    queryFn: async ({ signal }) => {
+      const response = await api.playbooks.get({
+        query: { limit },
+        fetch: { signal },
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+export const playbookDetailOptions = (
+  organizationId: string,
+  playbookId: string,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.playbooks.detail(organizationId, playbookId),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
+        .get({ fetch: { signal } });
 
       if (response.error) {
         throw toAPIError(response.error);

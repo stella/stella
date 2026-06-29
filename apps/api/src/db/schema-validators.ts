@@ -1,6 +1,11 @@
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import {
+  positionRuleSchema,
+  positionSeveritySchema,
+  resolvedStandardSchema,
+} from "@/api/handlers/playbooks/position-facets";
 import type { JsonObject } from "@/api/lib/json-value";
 
 const v1 = t.Literal(1);
@@ -108,9 +113,25 @@ export const manualInputToolSchema = t.Object({
 });
 export type ManualInputTool = Static<typeof manualInputToolSchema>;
 
+// A derived property whose value is the GRADE verdict for a playbook position.
+// Computed after its ASK property extracts (it depends on `askPropertyId`):
+// deterministically for `presence`/`propertyConstraint` (condition AST, no LLM)
+// or via an LLM compare for `positionMatch`. `standard` is the run-time snapshot
+// of the EXPECT preferred/fallback texts used by positionMatch grading.
+export const playbookVerdictToolSchema = t.Object({
+  version: v1,
+  type: t.Literal("playbook-verdict"),
+  askPropertyId: t.String({ format: "uuid" }),
+  rule: positionRuleSchema,
+  severity: positionSeveritySchema,
+  standard: resolvedStandardSchema,
+});
+export type PlaybookVerdictTool = Static<typeof playbookVerdictToolSchema>;
+
 export const propertyToolSchema = t.Union([
   aiModelToolSchema,
   manualInputToolSchema,
+  playbookVerdictToolSchema,
 ]);
 
 export type PropertyTool = Static<typeof propertyToolSchema>;

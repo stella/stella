@@ -109,7 +109,9 @@ export const DocumentAiSourceBar = ({
         ? {
             ...justification.content,
             blocks: justification.content.blocks.filter(
-              (block) => block.fileFieldId === activeTab.id,
+              (block) =>
+                block.kind !== "playbook-verdict" &&
+                block.fileFieldId === activeTab.id,
             ),
           }
         : null,
