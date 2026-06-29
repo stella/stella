@@ -50,6 +50,7 @@
     "@stll/money": "workspace:*",
     "@stll/permissions": "workspace:*",
     "@stll/template-conditions": "workspace:*",
+    "@stll/text-normalize": "workspace:*",
     "@stll/ui": "workspace:*",
     "@streamdown/cjk": "^1.0.2",
     "@streamdown/math": "^1.0.2",
