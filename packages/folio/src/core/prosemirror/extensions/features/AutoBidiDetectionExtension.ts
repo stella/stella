@@ -50,7 +50,8 @@ type BidiUpdate = {
 // text. Text inside hyperlink marks is regular child text, so it is included.
 const paragraphDirectionalText = (node: PMNode): string => {
   let text = "";
-  node.forEach((child) => {
+  for (let i = 0; i < node.childCount; i++) {
+    const child = node.child(i);
     if (child.isText) {
       text += child.text ?? "";
     } else if (child.type.name === "field") {
@@ -59,7 +60,7 @@ const paragraphDirectionalText = (node: PMNode): string => {
         text += display;
       }
     }
-  });
+  }
   return text;
 };
 

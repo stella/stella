@@ -94,10 +94,8 @@ const normalizeBlocks = (blocks: BlockContent[]): BlockContent[] =>
     if (block.type === "table") {
       return normalizeTable(block);
     }
-    if (block.type === "blockSdt") {
-      return { ...block, content: normalizeBlocks(block.content) };
-    }
-    return block;
+    // Block content control: recurse into its block children.
+    return { ...block, content: normalizeBlocks(block.content) };
   });
 
 /**
