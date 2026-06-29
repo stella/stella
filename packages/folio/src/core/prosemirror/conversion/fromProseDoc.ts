@@ -712,15 +712,14 @@ function assignBooleanToggle(
   orig: ParagraphFormatting,
   key: BooleanToggleKey,
 ): void {
-  const value = attrs[key];
+  // Normalize the undecided sentinel to `undefined`: assigning `undefined`
+  // clears the toggle (serializes as absent) without a dynamic `delete`, while
+  // an explicit `false` is preserved.
+  const value = attrs[key] ?? undefined;
   if (value === (orig[key] ?? undefined)) {
     return;
   }
-  if (value == null) {
-    delete result[key];
-  } else {
-    result[key] = value;
-  }
+  result[key] = value;
 }
 
 function paragraphAttrsToFormatting(
