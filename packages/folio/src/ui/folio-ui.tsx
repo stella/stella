@@ -5,6 +5,7 @@ import type {
   CSSProperties,
   ReactNode,
   RefAttributes,
+  RefObject,
 } from "react";
 
 import type { Checkbox as CheckboxPrimitive } from "@base-ui/react/checkbox";
@@ -15,9 +16,12 @@ import type { Select as SelectPrimitive } from "@base-ui/react/select";
 
 import { DefaultButton } from "./defaults/button";
 import { DefaultCheckbox } from "./defaults/checkbox";
+import { DefaultColorPicker } from "./defaults/color-picker";
+import { DefaultDatePickerPopover } from "./defaults/date-picker-popover";
 import { DefaultDialog } from "./defaults/dialog";
 import { DefaultInput } from "./defaults/input";
 import { DefaultMenu } from "./defaults/menu";
+import { DefaultOutlineRail } from "./defaults/outline-rail";
 import { DefaultPopover } from "./defaults/popover";
 import { DefaultSelect } from "./defaults/select";
 
@@ -250,6 +254,93 @@ export type FolioCheckboxProps = Pick<
 > & { className?: string };
 
 // ============================================================================
+// ColorPicker
+// ============================================================================
+
+/**
+ * A color preset rendered as a swatch in the picker. Mirrors the design
+ * system's preset shape so an external ColorPicker stays assignable as an
+ * override; `color` is the optional CSS color for the swatch (falls back to
+ * `#${value}`), and `value` is what `onSelect` emits.
+ */
+export type ColorPreset = {
+  label: string;
+  value: string;
+  color?: string;
+};
+
+/**
+ * The ColorPicker prop subset folio's chrome relies on. The picker wraps a
+ * trigger (`children`) in a popover exposing the `presets` plus a custom-color
+ * input; `onSelect` fires with a preset value or a 6-char hex (no `#`), and
+ * `onClear` clears the color. The design-system ColorPicker accepts a superset
+ * (placement, expansion, className) so it stays assignable as an override.
+ */
+export type FolioColorPickerProps = {
+  value?: string | undefined;
+  onSelect?: (value: string) => void;
+  onClear?: () => void;
+  presets?: ColorPreset[];
+  columns?: number;
+  children: ReactNode;
+};
+
+// ============================================================================
+// DatePickerPopover
+// ============================================================================
+
+/**
+ * The DatePickerPopover prop subset folio's chrome relies on. `value` accepts
+ * an ISO string, a `Date`, or `null`; `onChange` emits an ISO `yyyy-mm-dd`
+ * string (or `null` when cleared). The design-system picker accepts a superset
+ * (locale, min/max, overdue styling) so it stays assignable as an override.
+ */
+export type FolioDatePickerPopoverProps = {
+  value: string | Date | null;
+  onChange: (value: string | null) => void;
+  clearLabel?: string;
+  defaultOpen?: boolean;
+  showIcon?: boolean;
+};
+
+// ============================================================================
+// OutlineRail
+// ============================================================================
+
+/**
+ * One entry in the document outline. Mirrors the design system's item shape so
+ * an external OutlineRail stays assignable as an override.
+ */
+export type OutlineItem = {
+  id: string;
+  label: string;
+  /** Nesting depth; drives indent + tick taper. */
+  level: number;
+  /** Optional trailing annotation in the panel (e.g. a page number). */
+  meta?: string;
+  /** Optional CSS custom-property name colouring this entry. */
+  color?: string;
+};
+
+/**
+ * The OutlineRail prop subset folio's chrome relies on. The rail resolves each
+ * item's vertical position via `resolvePct` and navigates via `onJump` (both
+ * receive the resolved scroll container). `activeId` controls the highlighted
+ * entry. The design-system rail accepts a superset so it stays assignable as an
+ * override.
+ */
+export type FolioOutlineRailProps = {
+  items: OutlineItem[];
+  scrollContainerRef: RefObject<HTMLElement | null>;
+  resolvePct: (id: string, container: HTMLElement) => number | null;
+  onJump: (id: string, container: HTMLElement) => void;
+  activeId?: string | null;
+  topOffset?: number;
+  panelWidth?: number;
+  ariaLabel?: string;
+};
+
+// ============================================================================
 // Contract + context
 // ============================================================================
 
@@ -261,6 +352,9 @@ export type FolioUIComponents = {
   Popover: FolioPopover;
   Input: ComponentType<FolioInputProps>;
   Checkbox: ComponentType<FolioCheckboxProps>;
+  ColorPicker: ComponentType<FolioColorPickerProps>;
+  DatePickerPopover: ComponentType<FolioDatePickerPopoverProps>;
+  OutlineRail: ComponentType<FolioOutlineRailProps>;
 };
 
 export const DEFAULT_COMPONENTS: FolioUIComponents = {
@@ -271,6 +365,9 @@ export const DEFAULT_COMPONENTS: FolioUIComponents = {
   Popover: DefaultPopover,
   Input: DefaultInput,
   Checkbox: DefaultCheckbox,
+  ColorPicker: DefaultColorPicker,
+  DatePickerPopover: DefaultDatePickerPopover,
+  OutlineRail: DefaultOutlineRail,
 };
 
 const FolioUIContext = createContext<FolioUIComponents>(DEFAULT_COMPONENTS);

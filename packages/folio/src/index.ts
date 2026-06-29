@@ -5,7 +5,12 @@ export type {
   DocxEditorRef,
 } from "./components/DocxEditor.props";
 export type { EditorMode } from "./components/hooks/useEditorMode";
-export type { FolioButtonProps, FolioUIComponents } from "./ui/folio-ui";
+export type {
+  ColorPreset,
+  FolioButtonProps,
+  FolioUIComponents,
+  OutlineItem,
+} from "./ui/folio-ui";
 // Consumers rendering folio chrome (e.g. FormattingBar) outside DocxEditor wrap
 // it in this provider to inject their own UI components.
 export { FolioUIProvider } from "./ui/folio-ui";

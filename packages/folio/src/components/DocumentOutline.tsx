@@ -1,11 +1,12 @@
 /**
  * Document outline rail for the docx editor.
  *
- * Thin adapter over the shared `@stll/ui` OutlineRail: it supplies the
+ * Thin adapter over the injected OutlineRail chrome: it supplies the
  * editor-specific position source (heading PM position over the full document
  * size, since the paged editor virtualises pages) and active-heading detection
  * (walking the rendered anchors in the virtualisation buffer). The rail itself
- * — ticks, hover popover, collapsible tree — is shared with the rest of the app.
+ * — ticks, hover popover, collapsible tree — comes from the consumer's design
+ * system (or folio's minimal default).
  */
 
 import type React from "react";
@@ -18,13 +19,10 @@ import {
   useState,
 } from "react";
 
-import {
-  OutlineRail,
-  type OutlineItem,
-} from "@stll/ui/components/outline-rail";
-
 import { findBodyPmAnchors } from "../core/layout-bridge/findBodyPmSpans";
 import type { HeadingInfo } from "../core/utils/headingCollector";
+import { useFolioUI } from "../ui/folio-ui";
+import type { OutlineItem } from "../ui/folio-ui";
 
 export type DocumentOutlineProps = {
   headings: HeadingInfo[];
@@ -43,6 +41,7 @@ export const DocumentOutline: React.FC<DocumentOutlineProps> = ({
   docSize,
   onHeadingClick,
 }) => {
+  const OutlineRail = useFolioUI().OutlineRail;
   const [activeId, setActiveId] = useState<string | null>(null);
   // Suppress the scroll-driven active detector briefly after a click so the
   // in-flight smooth-scroll doesn't revert the highlight to the prior heading.

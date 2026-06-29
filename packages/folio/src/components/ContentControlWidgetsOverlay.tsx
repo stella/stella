@@ -20,8 +20,6 @@ import { createPortal } from "react-dom";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 
-import { DatePickerPopover } from "@stll/ui/components/date-picker-popover";
-
 import {
   CONTENT_CONTROL_WIDGET_EVENT_NAME,
   dispatchDatePick,
@@ -87,7 +85,9 @@ type ContentControlWidgetsOverlayProps = {
 export function ContentControlWidgetsOverlay({
   getEditorView,
 }: ContentControlWidgetsOverlayProps) {
-  const { Item: MenuItem } = useFolioUI().Menu;
+  const folioUI = useFolioUI();
+  const { Item: MenuItem } = folioUI.Menu;
+  const DatePickerPopover = folioUI.DatePickerPopover;
   const t = useTranslations("folio");
   const tCommon = useTranslations("common");
   const [open, setOpen] = useState<OpenPicker | null>(null);
