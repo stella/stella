@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import type { QueryClient } from "@tanstack/react-query";
 import { useNavigate } from "@tanstack/react-router";
 
@@ -53,33 +55,52 @@ export const useDefaultWorkspaceViewRedirect = ({
   workspaceId,
 }: DefaultWorkspaceViewInput) => {
   const navigate = useNavigate();
+  const [viewError, setViewError] = useState<Error | null>(null);
 
   useMountEffect(() => {
     const run = { cancelled: false };
 
     void (async () => {
-      const target = await resolveDefaultWorkspaceViewTarget({
-        queryClient,
-        workspaceId,
-      });
-      if (run.cancelled) {
-        return;
-      }
+      try {
+        const target = await resolveDefaultWorkspaceViewTarget({
+          queryClient,
+          workspaceId,
+        });
+        if (run.cancelled) {
+          return;
+        }
 
-      if (target.to === "/workspaces") {
-        void navigate({ to: "/workspaces", replace: true });
-        return;
-      }
+        if (target.to === "/workspaces") {
+          void navigate({ to: "/workspaces", replace: true });
+          return;
+        }
 
-      void navigate({
-        to: "/workspaces/$workspaceId/$viewId",
-        params: target.params,
-        replace: true,
-      });
+        void navigate({
+          to: "/workspaces/$workspaceId/$viewId",
+          params: target.params,
+          replace: true,
+        });
+      } catch (error) {
+        if (!run.cancelled) {
+          setViewError(
+            error instanceof Error
+              ? error
+              : new Error("Failed to resolve the default workspace view"),
+          );
+        }
+      }
     })();
 
     return () => {
       run.cancelled = true;
     };
   });
+
+  // Surface a view-load failure to the nearest route error boundary, matching
+  // the old beforeLoad behavior (its rejection reached the boundary). Without
+  // this the route would hang on the pending splash forever. Thrown after the
+  // hooks above so hook order stays stable across the error re-render.
+  if (viewError) {
+    throw viewError;
+  }
 };
