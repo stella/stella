@@ -188,6 +188,34 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       tsconfigPaths: true,
+      // These workspace packages publish `import -> dist` exports, but are
+      // consumed from source in the monorepo. Vite's `tsconfigPaths` only
+      // rewrites imports inside apps/web's own files; folio and
+      // template-conditions sources import these transitively, so without a
+      // global alias Vite follows the export to an unbuilt dist. Regex-exact so
+      // only these specifiers are touched.
+      alias: [
+        {
+          find: /^@stll\/conditions$/u,
+          replacement: path.resolve(APP_ROOT, "../../packages/conditions/src/index.ts"),
+        },
+        {
+          find: /^@stll\/template-conditions$/u,
+          replacement: path.resolve(APP_ROOT, "../../packages/template-conditions/src/index.ts"),
+        },
+        {
+          find: /^@stll\/docx-utils$/u,
+          replacement: path.resolve(APP_ROOT, "../../packages/docx-utils/src/index.ts"),
+        },
+        {
+          find: /^@stll\/docx-core$/u,
+          replacement: path.resolve(APP_ROOT, "../../packages/docx-core/src/index.ts"),
+        },
+        {
+          find: /^@stll\/docx-core\/model$/u,
+          replacement: path.resolve(APP_ROOT, "../../packages/docx-core/src/model/document.ts"),
+        },
+      ],
       dedupe: [
         "react",
         "react-dom",
