@@ -1,12 +1,20 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { redirectToDefaultWorkspaceView } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
+import { DefaultPendingComponent } from "@/components/route-components";
+import { useDefaultWorkspaceViewRedirect } from "@/routes/_protected.workspaces/$workspaceId/-default-view-redirect";
 
 export const Route = createFileRoute("/_protected/workspaces/$workspaceId/")({
-  beforeLoad: async ({ context, params }) => {
-    await redirectToDefaultWorkspaceView({
-      queryClient: context.queryClient,
-      workspaceId: params.workspaceId,
-    });
-  },
+  component: WorkspaceIndexRedirect,
 });
+
+function WorkspaceIndexRedirect() {
+  const queryClient = Route.useRouteContext({
+    select: (context) => context.queryClient,
+  });
+  const workspaceId = Route.useParams({
+    select: (params) => params.workspaceId,
+  });
+  useDefaultWorkspaceViewRedirect({ queryClient, workspaceId });
+
+  return <DefaultPendingComponent />;
+}

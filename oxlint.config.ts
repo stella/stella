@@ -1187,6 +1187,16 @@ export default defineConfig({
       },
     },
     {
+      // Public, server-rendered law routes (isPublicSsrPath) must redirect
+      // from beforeLoad so the server emits a real HTTP redirect for crawlers
+      // and no-JS clients. The client-only blank-page race the rule guards
+      // against does not apply to SSR routes.
+      files: ["apps/web/src/routes/law/**/*.{ts,tsx}"],
+      rules: {
+        "no-beforeload-redirect/no-beforeload-redirect": "off",
+      },
+    },
+    {
       files: ["apps/**/*.{ts,tsx}", "packages/**/*.{ts,tsx}"],
       rules: {
         "sonarjs/no-all-duplicated-branches": "error",

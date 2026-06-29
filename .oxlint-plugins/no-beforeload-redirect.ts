@@ -25,6 +25,11 @@
 // non-redirect exit (e.g. `if (ok) return;` then `throw redirect(...)`, or a
 // bare `if (!session) throw redirect(...)` that falls through) protects a route
 // that otherwise renders its own component and must run before render.
+//
+// Limitation: this is a syntactic check over the handler body, so it does not
+// see a redirect thrown inside a called helper (`beforeLoad: () => helper()`).
+// Keep redirect control flow inline in the handler, or — for an alias route —
+// in a mounted component, so a helper cannot hide the dangerous shape.
 
 import { getPropertyName, isIdentifier } from "./utils.ts";
 
