@@ -153,12 +153,8 @@ describe("ensureBaseDirectionInState (initial load)", () => {
   test("ignores deleted (non-live) text when detecting direction", () => {
     // Deleted Arabic followed by live Latin: the live content is LTR, so the
     // paragraph must not be auto-flipped to RTL by the struck-through text.
-    const deletionMark = schema.marks["deletion"];
-    if (!deletionMark) {
-      throw new Error("expected a deletion mark");
-    }
     const paragraph = schema.node("paragraph", { bidi: null, bidiAuto: null }, [
-      schema.text("عربي", [deletionMark.create()]),
+      schema.text("عربي", [schema.mark("deletion")]),
       schema.text(" agreement"),
     ]);
     const state = ensureBaseDirectionInState(stateOf(paragraph));
