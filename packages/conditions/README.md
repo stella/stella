@@ -38,13 +38,16 @@ const result = evaluateCondition(condition, (operand) =>
 bun add @stll/conditions
 ```
 
-## Exports
+## API
 
-- `./schema` — the condition AST types and Valibot schemas
+Everything is exported from the package root (`@stll/conditions`). The surface
+is organised into three areas:
+
+- **schema** — the condition AST types and Valibot schemas
   (`conditionSchema`, `conditionNodeSchema`, `emptyCondition`).
-- `./evaluate` — the single evaluator (`evaluateCondition`, `OperandResolver`,
+- **evaluate** — the single evaluator (`evaluateCondition`, `OperandResolver`,
   `pruneIncomplete`).
-- `./walk` — AST traversal helpers (`conditionHasFormula`).
+- **walk** — AST traversal helpers (`conditionHasFormula`).
 
 ## License
 
