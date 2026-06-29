@@ -2187,9 +2187,9 @@ function paragraphBaseIsRtl(block: ParagraphBlock): boolean {
       return isFieldRun(r) ? (r.fallback ?? "") : "";
     })
     .join("");
-  // First strong directional character decides; nothing strong => honor w:rtl.
-  const dir = detectBaseDirection(text);
-  return dir === null ? true : dir === "rtl";
+  // First strong directional character decides; nothing strong (null) => honor
+  // w:rtl, "rtl" => RTL; only an explicit "ltr" first char stays LTR.
+  return detectBaseDirection(text) !== "ltr";
 }
 
 /**

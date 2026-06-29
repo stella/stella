@@ -1057,10 +1057,7 @@ export const ParagraphExtension = createNodeExtension({
             // `null` means "no decision" and is reserved for auto-detection;
             // a deliberate LTR must be recorded as `false` so AutoBidiDetection
             // does not re-flip an Arabic paragraph the user set to LTR.
-            return setParagraphAttr("bidi", currentBidi ? false : true)(
-              state,
-              dispatch,
-            );
+            return setParagraphAttr("bidi", !currentBidi)(state, dispatch);
           },
         setRtl: () => setParagraphAttr("bidi", true),
         // Explicit LTR is `false`, not `null`: see toggleBidi above.
