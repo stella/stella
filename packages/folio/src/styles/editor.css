@@ -1418,17 +1418,11 @@
   font-weight: 600;
 }
 
-.folio-default-dialog-close {
-  position: absolute;
-  top: 0.75rem;
-  inset-inline-end: 0.75rem;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: transparent;
-  border: none;
+/* Structurally unstyled: DialogClose wraps varied controls (a footer Cancel
+   button, an explicit close icon), so the default must not impose positioning
+   or chrome that fights the caller's className. */
+:where(.folio-default-dialog-close) {
   cursor: pointer;
-  color: var(--doc-text-muted, #6b7280);
 }
 
 /* ── Default chrome Input ──────────────────────────────────────────────
