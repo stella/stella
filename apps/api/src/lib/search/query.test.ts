@@ -164,4 +164,17 @@ describe("search query text", () => {
 
     expect(compiled.sql).toBe("plainto_tsquery('simple', '')");
   });
+
+  test("folds Arabic orthographic variants in lexeme queries", () => {
+    expect(toPrefixTsQueryText("خدمة")).toBe("خدمه:*");
+    expect(toPrefixTsQueryText("أحمد")).toBe("احمد:*");
+    expect(toAdvancedTsQueryText("خدمة AND ٢٠٢٤")).toBe("(خدمه:*) & (2024:*)");
+  });
+
+  test("normalizes Arabic on the plainto query path", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildSearchTsQuery("خدمة"));
+
+    expect(compiled.sql).toContain("arabic_normalize");
+  });
 });

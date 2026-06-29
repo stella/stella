@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 
+import { applyArabicFolds } from "@stll/text-normalize";
+
 const PREFIX_QUERY_TOKEN_LIMIT = 8;
 const ADVANCED_QUERY_OPERATOR_RE =
   /(?:^|\s)(?:AND|OR|NOT)(?:\s|$)|(?:^|\s)-(?=\S)|["()]/u;
@@ -233,10 +235,14 @@ export const validateStellaSearchQuery = (
 };
 
 const toSearchLexemes = (query: string): string[] =>
-  removeSearchDiacritics(normalizeTextForLexemes(query))
-    .normalize("NFKC")
-    .match(/[\p{L}\p{N}]+/gu)
-    ?.slice(0, PREFIX_QUERY_TOKEN_LIMIT) ?? [];
+  (
+    removeSearchDiacritics(normalizeTextForLexemes(query))
+      .normalize("NFKC")
+      .match(/[\p{L}\p{N}]+/gu) ?? []
+  )
+    .map(applyArabicFolds)
+    .filter((token) => token.length > 0)
+    .slice(0, PREFIX_QUERY_TOKEN_LIMIT);
 
 const tokenizeAdvancedQuery = (query: string): AdvancedToken[] | null => {
   const tokens: AdvancedToken[] = [];
@@ -363,7 +369,8 @@ export const buildSearchTsQuery = (query: string) => {
   }
 
   const plainQueries = variants.map(
-    (variant) => sql`plainto_tsquery('simple', unaccent(${variant}))`,
+    (variant) =>
+      sql`plainto_tsquery('simple', unaccent(arabic_normalize(${variant})))`,
   );
   const prefixQueries = [
     ...new Set(

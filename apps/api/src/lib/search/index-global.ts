@@ -1316,10 +1316,10 @@ export const upsertContactSearchDocument = async (
       ${contact.updatedAt},
       to_tsvector(
         'simple',
-        unaccent(
+        unaccent(arabic_normalize(
           coalesce(${contact.displayName}, '') || ' ' ||
           coalesce(${searchableText}, '')
-        )
+        ))
       )
     )
     ON CONFLICT (contact_id) DO UPDATE SET
@@ -1434,10 +1434,10 @@ export const upsertWorkspaceSearchDocument = async (
       ${updatedAt},
       to_tsvector(
         'simple',
-        unaccent(
+        unaccent(arabic_normalize(
           coalesce(${workspace.name}, '') || ' ' ||
           coalesce(${searchableText}, '')
-        )
+        ))
       )
     )
     ON CONFLICT (workspace_id) DO UPDATE SET
