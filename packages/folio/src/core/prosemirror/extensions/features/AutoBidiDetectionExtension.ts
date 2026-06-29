@@ -83,6 +83,15 @@ const applyBidiUpdates = (
  * Imperatively apply auto-bidi detection to a freshly built state (initial
  * load: Markdown import, DOCX import, template). `appendTransaction` does not
  * fire for the initial document, so seeded content needs this pass.
+ *
+ * Like the paraId allocator this is `ignoreTrackedChanges`, so a normalized
+ * paragraph the user never edits is not in `changedParaIds`. Full save (the
+ * default; and the only path for Markdown/template/new docs, which have no
+ * original buffer) serializes the whole PM doc, so the flag is written. The
+ * selective-save path (dark `selectiveSave` flag) intentionally preserves
+ * untouched original paragraphs byte-for-byte, so an imported DOCX whose Arabic
+ * arrived without `w:bidi` and is saved without any edit keeps the original
+ * bytes; editing the paragraph tracks it and the patch then includes `w:bidi`.
  */
 export const ensureBaseDirectionInState = (state: EditorState): EditorState => {
   const updates = collectBidiUpdates(state.doc);

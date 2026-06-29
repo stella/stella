@@ -698,6 +698,31 @@ function isStyleSourcedNumPr(attrs: ParagraphAttrs): boolean {
   );
 }
 
+// OOXML boolean paragraph toggles are tri-state: `true` (on), `false` (explicit
+// off, serialized as `w:val="0"`), and `null`/`undefined` (inherit). A
+// truthiness check (`if (attrs.key)`) silently collapses explicit `false` into
+// "inherit", dropping the user's decision on save. Branch on `== null` so every
+// toggle routed through here preserves `false` — making that drop impossible to
+// reintroduce per-attribute (the bidi/LTR round-trip depends on it).
+type BooleanToggleKey = "bidi" | "pageBreakBefore";
+
+function assignBooleanToggle(
+  result: ParagraphFormatting,
+  attrs: ParagraphAttrs,
+  orig: ParagraphFormatting,
+  key: BooleanToggleKey,
+): void {
+  const value = attrs[key];
+  if (value === (orig[key] ?? undefined)) {
+    return;
+  }
+  if (value == null) {
+    delete result[key];
+  } else {
+    result[key] = value;
+  }
+}
+
 function paragraphAttrsToFormatting(
   attrs: ParagraphAttrs,
 ): ParagraphFormatting | undefined {
@@ -790,13 +815,7 @@ function paragraphAttrsToFormatting(
         delete result.styleId;
       }
     }
-    if (attrs.pageBreakBefore !== (orig.pageBreakBefore ?? undefined)) {
-      if (attrs.pageBreakBefore) {
-        result.pageBreakBefore = attrs.pageBreakBefore;
-      } else {
-        delete result.pageBreakBefore;
-      }
-    }
+    assignBooleanToggle(result, attrs, orig, "pageBreakBefore");
     if (attrs.spacingExplicit !== orig.spacingExplicit) {
       if (attrs.spacingExplicit) {
         result.spacingExplicit = attrs.spacingExplicit;
@@ -804,13 +823,10 @@ function paragraphAttrsToFormatting(
         delete result.spacingExplicit;
       }
     }
-    if (attrs.bidi !== (orig.bidi ?? undefined)) {
-      if (attrs.bidi) {
-        result.bidi = attrs.bidi;
-      } else {
-        delete result.bidi;
-      }
-    }
+    // Persist an explicit bidi decision, including `false` (LTR forced via
+    // setLtr) so it serializes as `<w:bidi w:val="0"/>` and survives save/reload;
+    // otherwise auto-detection re-flips an Arabic paragraph back to RTL.
+    assignBooleanToggle(result, attrs, orig, "bidi");
 
     return result;
   }
@@ -836,7 +852,9 @@ function paragraphAttrsToFormatting(
     typeof outlineLevel === "number" ||
     attrs.contextualSpacing ||
     attrs.spacingExplicit ||
-    attrs.bidi;
+    // Tri-state: an explicit `false` (forced LTR) is meaningful formatting and
+    // must keep the paragraph from short-circuiting to "no formatting".
+    attrs.bidi != null;
 
   if (!hasFormatting) {
     return undefined;
@@ -900,7 +918,9 @@ function paragraphAttrsToFormatting(
   if (attrs.contextualSpacing) {
     f.contextualSpacing = attrs.contextualSpacing;
   }
-  if (attrs.bidi) {
+  // Preserve an explicit decision, including `false` (forced LTR) so it
+  // serializes as `<w:bidi w:val="0"/>`; only undecided `null` is omitted.
+  if (attrs.bidi != null) {
     f.bidi = attrs.bidi;
   }
   return f;
