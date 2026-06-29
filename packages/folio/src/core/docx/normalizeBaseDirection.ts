@@ -47,8 +47,9 @@ const hyperlinkText = (link: Hyperlink): string => {
 
 // First-strong directional text for model paragraph content. Mirrors the
 // editor's field/SDT-aware detection: it folds in field result text and recurses
-// inline content controls and insertion wrappers (deleted/moved-away content is
-// not live text, so it is skipped). Mutually recursive, hence declarations.
+// inline content controls, insertions and move-to (live) content. Deleted and
+// moved-away content (`deletion`/`moveFrom`) is not live text, so it is skipped.
+// Mutually recursive, hence declarations.
 function paragraphContentText(items: readonly ParagraphContent[]): string {
   let text = "";
   for (const item of items) {
@@ -65,6 +66,7 @@ function singleItemText(item: ParagraphContent): string {
       return hyperlinkText(item);
     case "simpleField":
     case "insertion":
+    case "moveTo":
       return paragraphContentText(item.content);
     case "complexField":
       return paragraphContentText(item.fieldResult);

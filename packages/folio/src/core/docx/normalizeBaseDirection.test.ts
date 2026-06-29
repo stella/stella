@@ -67,6 +67,35 @@ describe("normalizeBaseDirection", () => {
     expect(bidiOf(normalizeBaseDirection(doc), 0)).toBe(true);
   });
 
+  test("detects RTL inside a move-to (live) wrapper", () => {
+    const doc = docOf({
+      type: "paragraph",
+      content: [
+        {
+          type: "moveTo",
+          info: { id: 2, author: "Reviewer" },
+          content: [{ type: "run", content: [{ type: "text", text: "عربي" }] }],
+        },
+      ],
+    });
+    expect(bidiOf(normalizeBaseDirection(doc), 0)).toBe(true);
+  });
+
+  test("ignores deleted (non-live) text in the save fallback", () => {
+    const doc = docOf({
+      type: "paragraph",
+      content: [
+        {
+          type: "deletion",
+          info: { id: 3, author: "Reviewer" },
+          content: [{ type: "run", content: [{ type: "text", text: "عربي" }] }],
+        },
+        { type: "run", content: [{ type: "text", text: " agreement" }] },
+      ],
+    });
+    expect(bidiOf(normalizeBaseDirection(doc), 0)).toBeUndefined();
+  });
+
   test("detects RTL inside hyperlinked runs", () => {
     const doc = docOf({
       type: "paragraph",

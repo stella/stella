@@ -54,7 +54,12 @@ const paragraphDirectionalText = (node: PMNode): string => {
   let text = "";
   node.descendants((child) => {
     if (child.isText) {
-      text += child.text ?? "";
+      // Deleted and moved-away text both carry the `deletion` mark; it is not
+      // live content, so it must not drive base-direction detection.
+      const deleted = child.marks.some((mark) => mark.type.name === "deletion");
+      if (!deleted) {
+        text += child.text ?? "";
+      }
     } else if (child.type.name === "field") {
       const display = child.attrs["displayText"];
       if (typeof display === "string") {

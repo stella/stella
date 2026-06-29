@@ -45,6 +45,10 @@ const schema = new Schema({
     },
     text: { group: "inline" },
   },
+  marks: {
+    // Deleted / moved-away text carries this mark (mirrors the real schema).
+    deletion: { toDOM: () => ["del", 0] },
+  },
 });
 
 const runtime = AutoBidiDetectionExtension().onSchemaReady({ schema });
@@ -144,6 +148,21 @@ describe("ensureBaseDirectionInState (initial load)", () => {
   test("detects RTL from text inside an inline content control (SDT)", () => {
     const state = ensureBaseDirectionInState(stateOf(sdtLedPara("عربي")));
     expect(bidis(state)).toEqual([true]);
+  });
+
+  test("ignores deleted (non-live) text when detecting direction", () => {
+    // Deleted Arabic followed by live Latin: the live content is LTR, so the
+    // paragraph must not be auto-flipped to RTL by the struck-through text.
+    const deletionMark = schema.marks["deletion"];
+    if (!deletionMark) {
+      throw new Error("expected a deletion mark");
+    }
+    const paragraph = schema.node("paragraph", { bidi: null, bidiAuto: null }, [
+      schema.text("عربي", [deletionMark.create()]),
+      schema.text(" agreement"),
+    ]);
+    const state = ensureBaseDirectionInState(stateOf(paragraph));
+    expect(bidis(state)).toEqual([null]);
   });
 });
 
