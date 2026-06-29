@@ -12,6 +12,21 @@
       "unknownDevice": "Nežinomas įrenginys"
     }
   },
+  "agentClaim": {
+    "access": "Gaunama prieiga",
+    "accessReadSearch": "Skaitymo ir paieškos prieiga",
+    "approve": "Patvirtinti",
+    "codeLabel": "Įveskite agento rodomą kodą",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Galite grįžti prie savo agento.",
+    "connectedTitle": "Agentas prijungtas",
+    "description": "Dirbtinio intelekto agentas jūsų vardu prašo prieigos prie jūsų stella darbo srities. Patvirtinkite tik tuo atveju, jei tai pradėjote jūs.",
+    "error": "Kažkas nepavyko. Bandykite dar kartą.",
+    "errorExpired": "Šios užklausos galiojimas baigėsi. Iš naujo pradėkite ryšį iš savo agento.",
+    "errorInvalid": "Šis kodas atrodo neteisingas. Patikrinkite jį ir bandykite dar kartą.",
+    "errorNotFound": "Neradome laukiančios užklausos su šiuo kodu. Patikrinkite kodą ir bandykite dar kartą.",
+    "title": "Prijunkite savo agentą"
+  },
   "ai": {
     "analyzeWithAI": "Analizuoti su DI",
     "editWithAI": "Redaguoti su DI",

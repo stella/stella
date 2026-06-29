@@ -189,6 +189,20 @@
     "workspaces.views.layouts.calendar"
   ],
   "identicalToSource": {
+    "agentClaim.codePlaceholder": [
+      "ar",
+      "cs",
+      "de",
+      "es",
+      "et",
+      "fr",
+      "hu",
+      "lt",
+      "lv",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
     "appearance.flexoki": [
       "ar",
       "cs",

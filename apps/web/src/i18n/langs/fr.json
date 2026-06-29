@@ -12,6 +12,21 @@
       "unknownDevice": "Appareil inconnu"
     }
   },
+  "agentClaim": {
+    "access": "Accès qu'il obtiendra",
+    "accessReadSearch": "Accès en lecture et recherche",
+    "approve": "Approuver",
+    "codeLabel": "Saisissez le code affiché par votre agent",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Vous pouvez retourner à votre agent.",
+    "connectedTitle": "Agent connecté",
+    "description": "Un agent IA demande l'accès à votre espace de travail stella en votre nom. N'approuvez que si vous en êtes à l'origine.",
+    "error": "Une erreur s'est produite. Veuillez réessayer.",
+    "errorExpired": "Cette demande a expiré. Relancez la connexion depuis votre agent.",
+    "errorInvalid": "Ce code ne semble pas correct. Vérifiez-le et réessayez.",
+    "errorNotFound": "Nous n'avons trouvé aucune demande en attente pour ce code. Vérifiez le code et réessayez.",
+    "title": "Connectez votre agent"
+  },
   "ai": {
     "analyzeWithAI": "Analyser avec l’IA",
     "editWithAI": "Modifier avec l’IA",

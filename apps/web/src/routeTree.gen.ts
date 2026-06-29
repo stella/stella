@@ -13,6 +13,7 @@ import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as DevRouteImport } from './routes/dev'
 import { Route as ConsentRouteImport } from './routes/consent'
+import { Route as AgentClaimRouteImport } from './routes/agent-claim'
 import { Route as ProtectedRouteImport } from './routes/_protected'
 import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as LawRouteRouteImport } from './routes/law/route'
@@ -93,6 +94,11 @@ const DevRoute = DevRouteImport.update({
 const ConsentRoute = ConsentRouteImport.update({
   id: '/consent',
   path: '/consent',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const AgentClaimRoute = AgentClaimRouteImport.update({
+  id: '/agent-claim',
+  path: '/agent-claim',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ProtectedRoute = ProtectedRouteImport.update({
@@ -441,6 +447,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRouteRouteWithChildren
   '/law': typeof LawRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRoute
+  '/agent-claim': typeof AgentClaimRoute
   '/consent': typeof ConsentRoute
   '/dev': typeof DevRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -505,6 +512,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/onboarding': typeof OnboardingRouteRoute
+  '/agent-claim': typeof AgentClaimRoute
   '/consent': typeof ConsentRoute
   '/dev': typeof DevRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -567,6 +575,7 @@ export interface FileRoutesById {
   '/law': typeof LawRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRoute
   '/_protected': typeof ProtectedRouteWithChildren
+  '/agent-claim': typeof AgentClaimRoute
   '/consent': typeof ConsentRoute
   '/dev': typeof DevRoute
   '/robots.txt': typeof RobotsDottxtRoute
@@ -635,6 +644,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/law'
     | '/onboarding'
+    | '/agent-claim'
     | '/consent'
     | '/dev'
     | '/robots.txt'
@@ -699,6 +709,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/onboarding'
+    | '/agent-claim'
     | '/consent'
     | '/dev'
     | '/robots.txt'
@@ -760,6 +771,7 @@ export interface FileRouteTypes {
     | '/law'
     | '/onboarding'
     | '/_protected'
+    | '/agent-claim'
     | '/consent'
     | '/dev'
     | '/robots.txt'
@@ -828,6 +840,7 @@ export interface RootRouteChildren {
   LawRouteRoute: typeof LawRouteRouteWithChildren
   OnboardingRouteRoute: typeof OnboardingRouteRoute
   ProtectedRoute: typeof ProtectedRouteWithChildren
+  AgentClaimRoute: typeof AgentClaimRoute
   ConsentRoute: typeof ConsentRoute
   DevRoute: typeof DevRoute
   RobotsDottxtRoute: typeof RobotsDottxtRoute
@@ -866,6 +879,13 @@ declare module '@tanstack/react-router' {
       path: '/consent'
       fullPath: '/consent'
       preLoaderRoute: typeof ConsentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/agent-claim': {
+      id: '/agent-claim'
+      path: '/agent-claim'
+      fullPath: '/agent-claim'
+      preLoaderRoute: typeof AgentClaimRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_protected': {
@@ -1538,6 +1558,7 @@ const rootRouteChildren: RootRouteChildren = {
   LawRouteRoute: LawRouteRouteWithChildren,
   OnboardingRouteRoute: OnboardingRouteRoute,
   ProtectedRoute: ProtectedRouteWithChildren,
+  AgentClaimRoute: AgentClaimRoute,
   ConsentRoute: ConsentRoute,
   DevRoute: DevRoute,
   RobotsDottxtRoute: RobotsDottxtRoute,

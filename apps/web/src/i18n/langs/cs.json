@@ -12,6 +12,21 @@
       "unknownDevice": "Neznámé zařízení"
     }
   },
+  "agentClaim": {
+    "access": "Získá přístup",
+    "accessReadSearch": "Přístup pro čtení a vyhledávání",
+    "approve": "Schválit",
+    "codeLabel": "Zadejte kód zobrazený vaším agentem",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Můžete se vrátit ke svému agentovi.",
+    "connectedTitle": "Agent připojen",
+    "description": "Agent s umělou inteligencí žádá o přístup do vašeho pracovního prostoru stella vaším jménem. Schvalte pouze tehdy, pokud jste to zahájili vy.",
+    "error": "Něco se pokazilo. Zkuste to prosím znovu.",
+    "errorExpired": "Platnost tohoto požadavku vypršela. Spusťte připojení znovu ze svého agenta.",
+    "errorInvalid": "Tento kód nevypadá správně. Zkontrolujte jej a zkuste to znovu.",
+    "errorNotFound": "Pro tento kód jsme nenašli žádný čekající požadavek. Zkontrolujte kód a zkuste to znovu.",
+    "title": "Připojte svého agenta"
+  },
   "ai": {
     "analyzeWithAI": "Analyzovat pomocí AI",
     "editWithAI": "Upravit pomocí AI",

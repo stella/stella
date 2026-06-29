@@ -12,6 +12,21 @@
       "unknownDevice": "Unbekanntes Gerät"
     }
   },
+  "agentClaim": {
+    "access": "Erhält Zugriff",
+    "accessReadSearch": "Lese- und Suchzugriff",
+    "approve": "Genehmigen",
+    "codeLabel": "Geben Sie den von Ihrem Agenten angezeigten Code ein",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Sie können zu Ihrem Agenten zurückkehren.",
+    "connectedTitle": "Agent verbunden",
+    "description": "Ein KI-Agent fordert in Ihrem Namen Zugriff auf Ihren stella-Arbeitsbereich an. Genehmigen Sie nur, wenn Sie dies veranlasst haben.",
+    "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
+    "errorExpired": "Diese Anfrage ist abgelaufen. Starten Sie die Verbindung erneut über Ihren Agenten.",
+    "errorInvalid": "Dieser Code sieht nicht richtig aus. Überprüfen Sie ihn und versuchen Sie es erneut.",
+    "errorNotFound": "Für diesen Code wurde keine ausstehende Anfrage gefunden. Überprüfen Sie den Code und versuchen Sie es erneut.",
+    "title": "Verbinden Sie Ihren Agenten"
+  },
   "ai": {
     "analyzeWithAI": "Mit KI analysieren",
     "editWithAI": "Mit KI bearbeiten",

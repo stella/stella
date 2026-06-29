@@ -15,6 +15,21 @@ type Messages = {
       "unknownDevice": "Unknown device";
     };
   };
+  "agentClaim": {
+    "access": "Access it will get";
+    "accessReadSearch": "Read and search access";
+    "approve": "Approve";
+    "codeLabel": "Enter the code shown by your agent";
+    "codePlaceholder": "XXXX-XXXX";
+    "connectedDescription": "You can return to your agent.";
+    "connectedTitle": "Agent connected";
+    "description": "An AI agent is requesting access to your stella workspace on your behalf. Approve only if you started this.";
+    "error": "Something went wrong. Please try again.";
+    "errorExpired": "This request has expired. Start the connection again from your agent.";
+    "errorInvalid": "That code doesn't look right. Check it and try again.";
+    "errorNotFound": "We couldn't find a pending request for that code. Check the code and try again.";
+    "title": "Connect your agent";
+  };
   "ai": {
     "analyzeWithAI": "Analyze with AI";
     "editWithAI": "Edit with AI";

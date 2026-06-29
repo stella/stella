@@ -12,6 +12,21 @@
       "unknownDevice": "Nieznane urządzenie"
     }
   },
+  "agentClaim": {
+    "access": "Uzyskany dostęp",
+    "accessReadSearch": "Dostęp do odczytu i wyszukiwania",
+    "approve": "Zatwierdź",
+    "codeLabel": "Wprowadź kod wyświetlony przez Twojego agenta",
+    "codePlaceholder": "XXXX-XXXX",
+    "connectedDescription": "Możesz wrócić do swojego agenta.",
+    "connectedTitle": "Agent połączony",
+    "description": "Agent AI prosi o dostęp do Twojego obszaru roboczego stella w Twoim imieniu. Zatwierdź tylko wtedy, gdy sam to rozpocząłeś.",
+    "error": "Coś poszło nie tak. Spróbuj ponownie.",
+    "errorExpired": "To żądanie wygasło. Rozpocznij połączenie ponownie ze swojego agenta.",
+    "errorInvalid": "Ten kod wygląda na nieprawidłowy. Sprawdź go i spróbuj ponownie.",
+    "errorNotFound": "Nie znaleźliśmy oczekującego żądania dla tego kodu. Sprawdź kod i spróbuj ponownie.",
+    "title": "Połącz swojego agenta"
+  },
   "ai": {
     "analyzeWithAI": "Analizuj z AI",
     "editWithAI": "Edytuj z AI",

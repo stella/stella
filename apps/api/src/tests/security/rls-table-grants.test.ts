@@ -47,6 +47,12 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   "legislation_index_jobs",
 ]);
 
+// Post-bootstrap control-plane auth tables that deny `stella` entirely
+// (deny-all RLS policy + REVOKE ALL, like `oauth_client`). They
+// deliberately grant stella nothing, so the grant requirement does not
+// apply. Their migration must REVOKE ALL from stella instead.
+const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set(["agent_registration"]);
+
 const SQL_IDENTIFIER_PATTERN =
   /"(?<quoted>[^"]+)"|(?<unquoted>[a-z_][a-z0-9_]*)/giu;
 
@@ -167,7 +173,8 @@ const collectRlsGrantState = () => {
       if (
         rlsTable &&
         migration !== BOOTSTRAP_MIGRATION &&
-        !BOOTSTRAP_COVERED_RLS_MIGRATIONS.has(migration)
+        !BOOTSTRAP_COVERED_RLS_MIGRATIONS.has(migration) &&
+        !POST_BOOTSTRAP_DENY_STELLA_TABLES.has(rlsTable)
       ) {
         rlsTables.push({ migration, table: rlsTable });
       }
@@ -198,5 +205,32 @@ describe("RLS table grants", () => {
       .map(({ migration, table }) => `${migration}: ${table}`);
 
     expect(missingGrants).toEqual([]);
+  });
+
+  test("deny-stella control-plane tables revoke all privileges from stella", () => {
+    const revokedTables = new Set<string>();
+
+    for (const path of migrationSqlFiles()) {
+      for (const statement of sqlStatements(readFileSync(path, "utf-8"))) {
+        const upper = statement.toUpperCase();
+        if (!upper.startsWith("REVOKE ALL PRIVILEGES ON TABLE ")) {
+          continue;
+        }
+        if (!upper.endsWith(" FROM STELLA")) {
+          continue;
+        }
+        const tablesSql = statement.slice(
+          "REVOKE ALL PRIVILEGES ON TABLE ".length,
+          -" FROM stella".length,
+        );
+        for (const table of identifierNamesFromSql(tablesSql)) {
+          revokedTables.add(table);
+        }
+      }
+    }
+
+    for (const table of POST_BOOTSTRAP_DENY_STELLA_TABLES) {
+      expect(revokedTables.has(table)).toBe(true);
+    }
   });
 });

@@ -30,6 +30,7 @@
     "i18n:check": "turbo run i18n:check --",
     "i18n:sync": "turbo run i18n:sync --",
     "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts",
+    "check:auth-md-spec": "bun packages/scripts/src/auth-md-spec-drift.ts",
     "test": "turbo run test",
     "test:property": "turbo run test:property",
     "verify": "bash scripts/verify.sh",
