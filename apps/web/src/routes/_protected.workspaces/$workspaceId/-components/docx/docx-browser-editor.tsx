@@ -1357,7 +1357,7 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
 
   useLayoutEffect(() => {
     const styleLabelElement = containerRef.current?.querySelector<HTMLElement>(
-      '[data-folio-style-picker] [data-slot="select-value"]',
+      '.folio-style-picker [data-slot="select-value"]',
     );
     if (!styleLabelElement) {
       return;
