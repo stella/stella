@@ -1,13 +1,13 @@
 /**
- * The paragraph `bidi` attribute is tri-state: true (RTL), false (explicit LTR,
- * serialized as `<w:bidi w:val="0"/>`), and null/undefined (undecided — eligible
- * for auto-detection). `fromProseDoc` must preserve an explicit `false` rather
- * than collapse it into "undecided" via a truthiness check.
+ * `fromProseDoc` maps the paragraph `direction` discriminated union to the
+ * serialized OOXML `w:bidi` tri-state: a manual RTL/LTR decision becomes
+ * `true`/`false` (the latter as `<w:bidi w:val="0"/>`), and an undecided
+ * paragraph is omitted.
  *
- * Regression guard: previously `if (attrs.bidi)` dropped `false`, so a forced-LTR
- * Arabic paragraph lost `<w:bidi w:val="0"/>` on save; on reload the seed
- * auto-detector saw `null` again and re-flipped it back to RTL. These tests lock
- * the full save invariant end to end (model → serialized XML).
+ * Regression guard: a manual LTR (forced via setLtr) must survive save/reload as
+ * `bidi: false`; if it collapsed to "undecided", the seed auto-detector would
+ * re-flip an Arabic paragraph back to RTL. These tests lock the conversion end
+ * to end (PM direction → model → serialized XML).
  */
 
 import { describe, expect, test } from "bun:test";
@@ -15,13 +15,17 @@ import { EditorState } from "prosemirror-state";
 
 import { serializeParagraph } from "../../docx/serializer/paragraphSerializer";
 import type { Document } from "../../types/document";
+import type { ParagraphDirection } from "../paragraphDirection";
 import { schema } from "../schema";
 import { fromProseDoc } from "./fromProseDoc";
 import { toProseDoc } from "./toProseDoc";
 
-const paraNode = (text: string, bidi: boolean | null) =>
+const RTL: ParagraphDirection = { source: "manual", value: "rtl" };
+const LTR: ParagraphDirection = { source: "manual", value: "ltr" };
+
+const paraNode = (text: string, direction: ParagraphDirection | null) =>
   schema.node("doc", null, [
-    schema.node("paragraph", { bidi }, [schema.text(text)]),
+    schema.node("paragraph", { direction }, [schema.text(text)]),
   ]);
 
 const firstParagraphBidi = (doc: Document): unknown => {
@@ -32,27 +36,26 @@ const firstParagraphBidi = (doc: Document): unknown => {
   return block.formatting?.bidi;
 };
 
-describe("fromProseDoc bidi tri-state (new paragraphs, no original)", () => {
-  test("explicit LTR (false) is preserved, not dropped", () => {
-    const out = fromProseDoc(paraNode("عربي", false));
-    expect(firstParagraphBidi(out)).toBe(false);
+describe("fromProseDoc direction → bidi (new paragraphs, no original)", () => {
+  test("manual LTR becomes bidi=false (not dropped)", () => {
+    expect(firstParagraphBidi(fromProseDoc(paraNode("عربي", LTR)))).toBe(false);
   });
 
-  test("explicit RTL (true) is preserved", () => {
-    const out = fromProseDoc(paraNode("عربي", true));
-    expect(firstParagraphBidi(out)).toBe(true);
+  test("manual RTL becomes bidi=true", () => {
+    expect(firstParagraphBidi(fromProseDoc(paraNode("عربي", RTL)))).toBe(true);
   });
 
-  test("undecided (null) is omitted", () => {
-    const out = fromProseDoc(paraNode("Agreement", null));
-    expect(firstParagraphBidi(out)).toBeUndefined();
+  test("undecided is omitted", () => {
+    expect(
+      firstParagraphBidi(fromProseDoc(paraNode("Agreement", null))),
+    ).toBeUndefined();
   });
 });
 
-describe("fromProseDoc bidi tri-state (changed vs original)", () => {
-  // The real bug: a paragraph imported without bidi (or auto-detected RTL) that
-  // the user forces to LTR. The PM attr (false) now differs from the original,
-  // which is exactly where the old truthiness check deleted it.
+describe("fromProseDoc direction → bidi (changed vs original)", () => {
+  // An imported RTL paragraph that the user forces to LTR: the direction now
+  // differs from the original, which is where the old truthiness check dropped
+  // the explicit `false`.
   test("RTL original forced to LTR keeps bidi=false", () => {
     const original: Document = {
       package: {
@@ -73,11 +76,10 @@ describe("fromProseDoc bidi tri-state (changed vs original)", () => {
     const forcedLtr = EditorState.create({ doc: pmDoc }).tr.setNodeMarkup(
       0,
       undefined,
-      { ...pmDoc.child(0).attrs, bidi: false },
+      { ...pmDoc.child(0).attrs, direction: LTR },
     ).doc;
 
-    const out = fromProseDoc(forcedLtr, original);
-    expect(firstParagraphBidi(out)).toBe(false);
+    expect(firstParagraphBidi(fromProseDoc(forcedLtr, original))).toBe(false);
   });
 });
 
@@ -88,8 +90,7 @@ describe("pageBreakBefore tri-state (same class, fallback path)", () => {
         schema.text("Body"),
       ]),
     ]);
-    const out = fromProseDoc(doc);
-    const block = out.package.document.content.at(0);
+    const block = fromProseDoc(doc).package.document.content.at(0);
     if (block?.type !== "paragraph") {
       throw new Error("expected a paragraph");
     }
@@ -97,10 +98,11 @@ describe("pageBreakBefore tri-state (same class, fallback path)", () => {
   });
 });
 
-describe("explicit LTR survives serialization (save invariant)", () => {
-  test('bidi=false serializes as <w:bidi w:val="0"/>', () => {
-    const out = fromProseDoc(paraNode("عربي", false));
-    const block = out.package.document.content.at(0);
+describe("manual LTR survives serialization (save invariant)", () => {
+  test('direction=manual ltr serializes as <w:bidi w:val="0"/>', () => {
+    const block = fromProseDoc(
+      paraNode("عربي", LTR),
+    ).package.document.content.at(0);
     if (block?.type !== "paragraph") {
       throw new Error("expected a paragraph");
     }

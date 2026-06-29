@@ -27,6 +27,7 @@ import {
   THEME_COLOR_SLOT_VALUES,
   UNDERLINE_STYLE_VALUES,
 } from "../../types/documentEnumValues";
+import { isParagraphDirection } from "../paragraphDirection";
 import type {
   BlockSdtAttrs,
   CharacterSpacingAttrs,
@@ -375,8 +376,17 @@ export const readParagraphAttrs = (
     "paragraph.attrs.contextualSpacing",
     issues,
   );
-  optionalBoolean(attrs, "bidi", "paragraph.attrs.bidi", issues);
-  optionalBoolean(attrs, "bidiAuto", "paragraph.attrs.bidiAuto", issues);
+  const direction = attrs["direction"];
+  if (
+    direction !== undefined &&
+    direction !== null &&
+    !isParagraphDirection(direction)
+  ) {
+    issues.push({
+      path: "paragraph.attrs.direction",
+      message: "Expected a ParagraphDirection.",
+    });
+  }
   optionalOneOf(
     attrs,
     "sectionBreakType",

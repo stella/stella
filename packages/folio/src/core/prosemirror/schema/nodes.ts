@@ -36,6 +36,7 @@ import type {
 } from "../../types/document";
 import type { OutlineStyleAttr } from "../../types/documentEnumValues";
 import type { SpacingExplicit } from "../../types/formatting";
+import type { ParagraphDirection } from "../paragraphDirection";
 
 export type HardBreakAttrs = {
   breakType?: "column";
@@ -158,15 +159,13 @@ export type ParagraphAttrs = {
   // Section break type — marks end of a section
   sectionBreakType?: "nextPage" | "continuous" | "oddPage" | "evenPage";
 
-  // Text direction
-  bidi?: boolean;
   /**
-   * Ephemeral, editor-runtime-only flag: `true` when auto-detection set `bidi`
-   * (as opposed to an explicit user toggle or imported `w:bidi`). Never
-   * serialized to DOCX or DOM; it only lets auto-detection re-evaluate the
-   * paragraphs it previously decided. See AutoBidiDetectionExtension.
+   * Base text direction as a discriminated union (undecided when absent). Maps
+   * to the serialized OOXML `w:bidi` tri-state via `directionToBidi`; the
+   * `source` discriminates an authoritative manual/import decision from a
+   * re-evaluable auto-detected one. See `paragraphDirection.ts`.
    */
-  bidiAuto?: boolean;
+  direction?: ParagraphDirection | null;
 
   // Outline level for TOC (0-9)
   outlineLevel?: number;

@@ -50,6 +50,7 @@ import { mergeTextFormatting } from "../../utils/textFormattingMerge";
 import { emuToPixels } from "../../utils/units";
 import { setAutospacingBaseValue } from "../autospacingBase";
 import { buildRunFormattingOverrideAttrs } from "../extensions/marks/RunFormattingOverrideExtension";
+import { directionFromBidi } from "../paragraphDirection";
 import { schema } from "../schema";
 import type {
   ImagePositionAttrs,
@@ -637,8 +638,9 @@ function paragraphFormattingToAttrs(
     // Outline level (for TOC)
     set("outlineLevel", formatting?.outlineLevel ?? stylePpr?.outlineLevel);
 
-    // Text direction
-    set("bidi", formatting?.bidi ?? stylePpr?.bidi);
+    // Text direction — a direct or style-sourced `w:bidi` is an authoritative
+    // manual decision (auto-detection must not override it).
+    set("direction", directionFromBidi(formatting?.bidi ?? stylePpr?.bidi));
 
     set(
       "defaultTextFormatting",
@@ -676,8 +678,8 @@ function paragraphFormattingToAttrs(
     // Outline level
     set("outlineLevel", formatting?.outlineLevel);
 
-    // Text direction
-    set("bidi", formatting?.bidi);
+    // Text direction — an imported `w:bidi` is an authoritative manual decision.
+    set("direction", directionFromBidi(formatting?.bidi));
 
     // Default run properties (pPr/rPr)
     set(
