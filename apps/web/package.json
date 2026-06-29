@@ -55,7 +55,7 @@
     "@streamdown/math": "^1.0.2",
     "@streamdown/mermaid": "^1.0.2",
     "@t3-oss/env-core": "catalog:",
-    "@tanstack/devtools-vite": "^0.7.2",
+    "@tanstack/devtools-vite": "^0.8.0",
     "@tanstack/react-devtools": "^0.10.7",
     "@tanstack/react-form": "^1.33.0",
     "@tanstack/react-hotkeys": "^0.10.0",
@@ -130,7 +130,7 @@
     "@vitejs/plugin-react": "catalog:",
     "babel-plugin-react-compiler": "^1.0.0",
     "elysia": "catalog:",
-    "react-grab": "0.1.44",
+    "react-grab": "^0.1.47",
     "rollup-plugin-visualizer": "^7.0.1",
     "unified": "^11.0.5"
   }
