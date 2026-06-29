@@ -3,6 +3,7 @@ import { PgDialect } from "drizzle-orm/pg-core";
 import fc from "fast-check";
 
 import type { ConditionNode } from "@stll/conditions";
+import { propertyConfig } from "@stll/property-testing";
 
 import {
   applyFilters,
@@ -443,6 +444,7 @@ describe("applySorts (in-memory)", () => {
           }
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -470,6 +472,7 @@ describe("applySorts (in-memory)", () => {
           }
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -494,6 +497,7 @@ describe("applySorts (in-memory)", () => {
           expect(extracted).toEqual([...extracted].toSorted((a, b) => b - a));
         },
       ),
+      propertyConfig(),
     );
   });
 });

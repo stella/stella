@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import {
   buildCsvExport,
@@ -467,7 +469,7 @@ describe("table export", () => {
         );
         expect(styles).toContain(`fgColor rgb="${flagFillColors[flagId]}"`);
       }),
-      { numRuns: cellFlagIds.length },
+      propertyConfig({ numRuns: cellFlagIds.length }),
     );
   });
 
@@ -514,7 +516,7 @@ describe("table export", () => {
           );
         },
       ),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 
@@ -547,7 +549,7 @@ describe("table export", () => {
           expect(sheet).not.toContain(value);
         },
       ),
-      { numRuns: 20 },
+      propertyConfig({ numRuns: 20 }),
     );
   });
 
@@ -590,7 +592,7 @@ describe("table export", () => {
           }
         },
       ),
-      { numRuns: 50 },
+      propertyConfig({ numRuns: 50 }),
     );
   });
 });

@@ -6,6 +6,7 @@ import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
 import type { ConditionNode } from "@stll/conditions";
+import { propertyConfig } from "@stll/property-testing";
 
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
@@ -507,7 +508,7 @@ test(
           await clearRows();
         }
       }),
-      { numRuns: 300 },
+      propertyConfig({ numRuns: 300 }),
     );
   },
   { timeout: 60_000 },

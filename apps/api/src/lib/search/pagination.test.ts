@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
 import {
   GLOBAL_SEARCH_MAX_OFFSET,
@@ -111,6 +113,7 @@ describe("global search pagination — properties", () => {
           }
         },
       ),
+      propertyConfig(),
     );
   });
 
@@ -137,6 +140,7 @@ describe("global search pagination — properties", () => {
           });
         },
       ),
+      propertyConfig(),
     );
   });
 });

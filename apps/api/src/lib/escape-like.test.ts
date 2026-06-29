@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { escapeLike } from "./escape-like";
 
 const SPECIAL = new Set(["%", "_", "\\"]);
@@ -70,6 +72,7 @@ describe("escapeLike", () => {
       fc.property(fc.string(), (input) => {
         expect(hasNoUnescapedSpecial(escapeLike(input))).toBe(true);
       }),
+      propertyConfig(),
     );
   });
 
@@ -88,6 +91,7 @@ describe("escapeLike", () => {
         }
         expect(recovered).toBe(input);
       }),
+      propertyConfig(),
     );
   });
 
@@ -114,6 +118,7 @@ describe("escapeLike", () => {
         ).length;
         expect(escapeLike(input).length).toBe(input.length + metaCount);
       }),
+      propertyConfig(),
     );
   });
 });

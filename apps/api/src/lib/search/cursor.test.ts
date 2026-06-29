@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { propertyConfig } from "@stll/property-testing";
+
 import { decodeCursor, encodeCursor } from "./cursor";
 
 describe("search cursor encoding", () => {
@@ -40,6 +42,7 @@ describe("search cursor encoding — properties", () => {
       fc.property(arbScore, arbId, (score, id) => {
         expect(decodeCursor(encodeCursor(score, id))).toEqual({ score, id });
       }),
+      propertyConfig(),
     );
   });
 
@@ -54,6 +57,7 @@ describe("search cursor encoding — properties", () => {
             result.id.length > 0);
         expect(ok).toBe(true);
       }),
+      propertyConfig(),
     );
   });
 });
