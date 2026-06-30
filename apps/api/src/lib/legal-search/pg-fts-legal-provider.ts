@@ -2,7 +2,9 @@ import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { bodyPreviewJoin } from "@/api/handlers/case-law/decisions/search-sql";
+import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
 import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
+import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import type {
   LegalSearchHit,
   LegalSearchProvider,
@@ -15,7 +17,6 @@ import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
-import { buildPlainSearchTsQuery } from "@/api/lib/search/query";
 
 /**
  * Postgres FTS legal-search provider — the shipped case-law search,
@@ -30,15 +31,19 @@ type RawRows = RawRow[];
 const toNullableString = (x: unknown): string | null =>
   x === null ? null : JSON.stringify(x);
 
-// Per-document language config is mixed; 'simple' + unaccent matches the
-// index-time tsvector and the shipped handler.
 const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
 const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const limit = query.limit;
-  const tsQuery = buildPlainSearchTsQuery(query.query, {
-    regconfig: sql`sd.regconfig::regconfig`,
-  });
+  const ftsSearch = buildPgFtsSearchSql(
+    query.query,
+    await loadFtsSearchConfigs(),
+    {
+      language: sql`sd.language`,
+      regconfig: sql`sd.regconfig`,
+      vector: sql`sd.tsv`,
+    },
+  );
 
   const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
 
@@ -63,7 +68,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     ? sql`AND d.language = ${query.language}`
     : sql``;
 
-  const scoreExpr = sql`(ts_rank(sd.tsv, ${tsQuery})::float8 + 0.3 * d.citation_authority)`;
+  const scoreExpr = sql`(${ftsSearch.rank} + 0.3 * d.citation_authority)`;
 
   const cursorFilter = parsedCursor
     ? sql`AND (${scoreExpr}, sd.decision_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
@@ -93,7 +98,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
       ts_headline(
         ${headlineRegconfig},
         coalesce(nullif(body_preview.text, ''), d.fulltext, sd.searchable_text),
-        ${tsQuery},
+        ${ftsSearch.headlineQuery},
         ${TS_HEADLINE_CONFIG}
       ) AS headline,
       ${scoreExpr} AS score,
@@ -104,7 +109,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
     ${bodyPreviewJoin}
-    WHERE sd.tsv @@ ${tsQuery}
+    WHERE ${ftsSearch.predicate}
       ${allFilters}
       ${cursorFilter}
     ORDER BY score DESC, sd.decision_id DESC
@@ -118,7 +123,7 @@ const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
     SELECT d.${sql.raw(column)} AS value, count(*)::int AS count
     FROM case_law_search_documents sd
     JOIN case_law_decisions d ON d.id = sd.decision_id
-    WHERE sd.tsv @@ ${tsQuery}
+    WHERE ${ftsSearch.predicate}
       ${omit === "court" ? sql`` : courtFilter}
       ${omit === "country" ? sql`` : countryFilter}
       ${omit === "language" ? sql`` : languageFilter}

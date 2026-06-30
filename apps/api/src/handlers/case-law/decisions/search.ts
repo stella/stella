@@ -12,6 +12,7 @@ import {
   bodyPreviewJoin,
   redistributableSourceJoin,
 } from "@/api/handlers/case-law/decisions/search-sql";
+import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
 import {
   redistributableCaseLawSource,
   redistributableCaseLawSourceSqlFor,
@@ -31,6 +32,7 @@ import {
   corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
+import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
@@ -41,7 +43,6 @@ import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
-import { buildPlainSearchTsQuery } from "@/api/lib/search/query";
 
 const toNullableString = (x: unknown): string | null => {
   if (x === null || x === undefined) {
@@ -85,9 +86,15 @@ const searchPostgresDecisions = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const tsQuery = buildPlainSearchTsQuery(body.query, {
-    regconfig: sql`sd.regconfig::regconfig`,
-  });
+  const ftsSearch = buildPgFtsSearchSql(
+    body.query,
+    await loadFtsSearchConfigs(),
+    {
+      language: sql`sd.language`,
+      regconfig: sql`sd.regconfig`,
+      vector: sql`sd.tsv`,
+    },
+  );
 
   // Validate cursor early so a tampered value fails visibly
   let parsedCursor: { score: number; id: string } | null = null;
@@ -121,7 +128,7 @@ const searchPostgresDecisions = async (
 
   const cursorFilter = parsedCursor
     ? sql`AND (
-        (ts_rank(sd.tsv, ${tsQuery})::float8
+        (${ftsSearch.rank}
           + 0.3 * ln(1 + cb.boost)),
         sd.decision_id
       ) < (
@@ -181,10 +188,10 @@ const searchPostgresDecisions = async (
       ts_headline(
         ${headlineRegconfig},
         coalesce(nullif(body_preview.text, ''), d.fulltext, sd.searchable_text),
-        ${tsQuery},
+        ${ftsSearch.headlineQuery},
         ${TS_HEADLINE_CONFIG}
       ) AS headline,
-      (ts_rank(sd.tsv, ${tsQuery})::float8
+      (${ftsSearch.rank}
         + 0.3 * ln(1 + cb.boost)
       ) AS score,
       cb.cnt AS citation_count,
@@ -195,7 +202,7 @@ const searchPostgresDecisions = async (
     ${redistributableSourceJoin}
     ${bodyPreviewJoin}
     LEFT JOIN ${citationBoost} ON true
-    WHERE sd.tsv @@ ${tsQuery}
+    WHERE ${ftsSearch.predicate}
       ${allFilters}
       ${cursorFilter}
     ORDER BY score DESC, sd.decision_id DESC
@@ -208,7 +215,7 @@ const searchPostgresDecisions = async (
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
     ${redistributableSourceJoin}
-    WHERE sd.tsv @@ ${tsQuery}
+    WHERE ${ftsSearch.predicate}
       ${allFilters}
   `;
 
@@ -219,7 +226,7 @@ const searchPostgresDecisions = async (
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
     ${redistributableSourceJoin}
-    WHERE sd.tsv @@ ${tsQuery}
+    WHERE ${ftsSearch.predicate}
       ${countryFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -238,7 +245,7 @@ const searchPostgresDecisions = async (
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
     ${redistributableSourceJoin}
-    WHERE sd.tsv @@ ${tsQuery}
+    WHERE ${ftsSearch.predicate}
       ${courtFilter}
       ${dateFromFilter}
       ${dateToFilter}
@@ -257,7 +264,7 @@ const searchPostgresDecisions = async (
     JOIN case_law_decisions d
       ON d.id = sd.decision_id
     ${redistributableSourceJoin}
-    WHERE sd.tsv @@ ${tsQuery}
+    WHERE ${ftsSearch.predicate}
       ${courtFilter}
       ${countryFilter}
       ${dateFromFilter}
