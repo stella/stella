@@ -24,7 +24,8 @@ export const ARABIC_LETTER_FOLDS: Readonly<Record<string, string>> = {
 };
 
 // Codepoints folded to nothing (removed). Tatweel, the eight harakat
-// (U+064B–U+0652), superscript alef, and standalone hamza.
+// (U+064B–U+0652), decomposed hamza/madda marks, superscript alef, and
+// standalone hamza.
 export const ARABIC_REMOVED: readonly string[] = [
   "ء", // ء standalone hamza
   "ـ", // ـ tatweel / kashida
@@ -36,6 +37,9 @@ export const ARABIC_REMOVED: readonly string[] = [
   "ِ", // kasra
   "ّ", // shadda
   "ْ", // sukun
+  "ٓ", // madda above
+  "ٔ", // hamza above
+  "ٕ", // hamza below
   "ٰ", // superscript alef
 ];
 

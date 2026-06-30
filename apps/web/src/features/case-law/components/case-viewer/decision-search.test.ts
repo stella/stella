@@ -64,6 +64,18 @@ describe("buildSearchResults", () => {
     expect(result.matchCount).toBe(1);
   });
 
+  it("folds decomposed Arabic hamza marks copied from OCR", () => {
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text: "أحمد" }],
+      query: "احمد",
+    });
+
+    expect(result.matchCount).toBe(1);
+    expect(result.rangesByPieceId["p1"]).toEqual([
+      { start: 0, end: 5, matchIndex: 0 },
+    ]);
+  });
+
   it("folds Arabic alef-hamza and teh-marbuta variants", () => {
     const result = buildSearchResults({
       pieces: [{ id: "p1", text: "خدمة أحمد" }],

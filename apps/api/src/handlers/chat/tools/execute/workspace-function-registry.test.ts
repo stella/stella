@@ -27,6 +27,12 @@ describe("findHitsInText", () => {
     expect(result.hits.at(0)?.snippet.length).toBeLessThan(250);
   });
 
+  test("matches decomposed Arabic hamza forms", () => {
+    const result = findHitsInText("أحمد", "احمد", OPTIONS);
+    expect(result.totalHits).toBe(1);
+    expect(result.hits.at(0)?.snippet).toBe("أحمد");
+  });
+
   test("returns no hits when the query folds to empty", () => {
     const result = findHitsInText("نص عربي", "ـ", OPTIONS);
     expect(result.totalHits).toBe(0);

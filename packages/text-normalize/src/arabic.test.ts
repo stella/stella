@@ -45,6 +45,14 @@ describe("applyArabicFoldsWithOffsets", () => {
     expect(applyArabicFoldsWithOffsets("ﺍﺣﻤﺪ").text).toBe("احمد");
   });
 
+  test("drops decomposed Arabic hamza marks while preserving surrounding offsets", () => {
+    const { sourceEndIndex, text, sourceIndex } =
+      applyArabicFoldsWithOffsets("أحمد");
+    expect(text).toBe("احمد");
+    expect(sourceIndex).toEqual([0, 2, 3, 4, 5]);
+    expect(sourceEndIndex).toEqual([1, 3, 4, 5, 5]);
+  });
+
   test("expands a ligature and maps every unit to its source char", () => {
     // ﷲ (U+FDF2) is one code unit; NFKC expands it to الله (4 units).
     const { sourceEndIndex, text, sourceIndex } =
