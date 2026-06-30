@@ -67,6 +67,7 @@ export const ChatThreadMessages = ({
   onSendWithoutAnonymization,
   onAskUserSubmit,
   onAskUserEditAndRerun,
+  onAskUserEditingChange,
   onCreateDocumentResolve,
   onOpenCreatedDocument,
   showThinkingIndicator = false,
@@ -197,6 +198,7 @@ export const ChatThreadMessages = ({
                   }
                   message={message}
                   onAskUserEditAndRerun={onAskUserEditAndRerun}
+                  onAskUserEditingChange={onAskUserEditingChange}
                   onAskUserSubmit={onAskUserSubmit}
                   onCreateDocumentResolve={onCreateDocumentResolve}
                   onOpenCreatedDocument={onOpenCreatedDocument}
@@ -756,6 +758,11 @@ type ChatThreadMessagesProps = {
   onAskUserEditAndRerun?:
     | ((toolCallId: string, output: AskUserOutput) => void | PromiseLike<void>)
     | undefined;
+  /** Mirrors an ask-user card's local edit-mode up to the page so it can
+   *  keep treating a reopened answered card as a live clarification. */
+  onAskUserEditingChange?:
+    | ((toolCallId: string, isEditing: boolean) => void)
+    | undefined;
   onCreateDocumentResolve: (
     toolCallId: string,
     matterId: string,
@@ -854,6 +861,7 @@ const QueuedUserMessages = ({
 type AssistantMessagePartsProps = Pick<
   ChatThreadMessagesProps,
   | "onAskUserEditAndRerun"
+  | "onAskUserEditingChange"
   | "onAskUserSubmit"
   | "onCreateDocumentResolve"
   | "onOpenCreatedDocument"
@@ -879,6 +887,7 @@ const AssistantMessageParts = ({
   isLatestAssistantMessage,
   message,
   onAskUserEditAndRerun,
+  onAskUserEditingChange,
   onAskUserSubmit,
   onCreateDocumentResolve,
   onOpenCreatedDocument,
@@ -911,6 +920,7 @@ const AssistantMessageParts = ({
                   void onAskUserEditAndRerun(toolCallId, output);
                 },
               })}
+              onEditingChange={onAskUserEditingChange}
               onSubmit={(toolCallId, output) => {
                 void onAskUserSubmit(toolCallId, output);
               }}

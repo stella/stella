@@ -1,4 +1,10 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import {
   useMutation,
@@ -213,25 +219,50 @@ export const ChatThreadPage = ({
   const lastMessage = messages.at(-1);
   const lastMessageId = lastMessage?.id ?? null;
   const lastMessageRole = lastMessage?.role ?? null;
-  // A pending ask-user clarification card owns the turn: its own questions
-  // and submit button take precedence over generic follow-up suggestions, so
-  // suppress both the chips and the Tab-to-ask editor hint until it is
-  // answered. Once the card resolves (`output-available`) the assistant's
-  // continuation may live on this same message, so gate on the unanswered
-  // state, not mere presence of the part.
-  const lastMessageHasPendingAskUser =
+  // Ask-user cards report their local "edit answers" mode here: reopening an
+  // answered card turns it back into a live clarification form, which the
+  // persisted part state (`output-available`) does not reflect.
+  const [editingAskUserToolCallIds, setEditingAskUserToolCallIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set<string>());
+  const handleAskUserEditingChange = useCallback(
+    (toolCallId: string, isEditing: boolean) => {
+      setEditingAskUserToolCallIds((prev) => {
+        if (isEditing === prev.has(toolCallId)) {
+          return prev;
+        }
+        const next = new Set(prev);
+        if (isEditing) {
+          next.add(toolCallId);
+        } else {
+          next.delete(toolCallId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
+  // An ask-user clarification card owns the turn while it is awaiting input or
+  // being edited: its own questions and submit button take precedence over
+  // generic follow-up suggestions, so suppress both the chips and the
+  // Tab-to-ask editor hint. Once the card resolves (`output-available`) the
+  // assistant's continuation may live on this same message, so gate on the
+  // active state rather than mere presence of the part.
+  const lastMessageHasActiveAskUser =
     lastMessage !== undefined &&
     lastMessage.role === "assistant" &&
     lastMessage.parts.some(
       (part) =>
-        part.type === "tool-ask-user" && part.state !== "output-available",
+        part.type === "tool-ask-user" &&
+        (part.state !== "output-available" ||
+          editingAskUserToolCallIds.has(part.toolCallId)),
     );
   const editorIsEmpty = useIsChatDraftEmpty(threadRef);
   const eligibleForSuggestions =
     editorIsEmpty &&
     lastMessageId !== null &&
     lastMessageRole === "assistant" &&
-    !lastMessageHasPendingAskUser;
+    !lastMessageHasActiveAskUser;
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
@@ -421,6 +452,7 @@ export const ChatThreadPage = ({
                     messages={messages}
                     onLoadOlder={loadOlder}
                     onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                    onAskUserEditingChange={handleAskUserEditingChange}
                     onAskUserSubmit={handleAskUserSubmit}
                     onCreateDocumentResolve={handleCreateDocumentResolve}
                     onOpenCreatedDocument={handleOpenCreatedDocument}
