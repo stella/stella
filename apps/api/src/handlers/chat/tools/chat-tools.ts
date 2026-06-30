@@ -30,7 +30,10 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
-import { createTemplateTools } from "@/api/handlers/chat/tools/template-tools";
+import {
+  createTemplateAuthoringTools,
+  createTemplateTools,
+} from "@/api/handlers/chat/tools/template-tools";
 import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
@@ -86,6 +89,7 @@ type CurrentSkillEditTools = Partial<
   Record<CurrentSkillEditToolName, NonNullable<ToolSet[string]>>
 >;
 type TemplateTools = ReturnType<typeof createTemplateTools>;
+type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -99,7 +103,8 @@ type BuiltInChatTools = OrgTools &
   CreateDocumentTools &
   WebSearchTools &
   ChatHistoryTools &
-  TemplateTools;
+  TemplateTools &
+  TemplateAuthoringTools;
 
 export type ChatTools = BuiltInChatTools;
 type BuiltInChatToolPolicyName =
@@ -326,6 +331,22 @@ export const getChatTools = ({
       })
     : {};
 
+  // `suggest_template_fields` proposes turning literals into {{field}}
+  // placeholders, i.e. it assists template authoring, not filling. Gate it
+  // behind `template: ["create"]` so a fill-only role (e.g. intern, which has
+  // `use` but not `create`) cannot reach authoring assistance.
+  const canAuthorTemplates = roles[memberRole].authorize({
+    template: ["create"],
+  }).success;
+  const templateAuthoringTools = canAuthorTemplates
+    ? createTemplateAuthoringTools({
+        safeDb,
+        organizationId,
+        userId,
+        orgAIConfig,
+      })
+    : {};
+
   // create-document is client-executed (no server `execute`) — the
   // chat client picks the destination matter and posts the result
   // via the AI SDK's addToolOutput. It is always registered so the
@@ -343,6 +364,7 @@ export const getChatTools = ({
       ...infosoudTools,
       ...workspaceTools,
       ...templateTools,
+      ...templateAuthoringTools,
       ...historyTools,
       ...createDocumentTools,
       ...activeDocxEditTools,

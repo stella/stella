@@ -4,10 +4,12 @@ import type { SafeDb, ScopedDb } from "@/api/db";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import {
+  createTemplateAuthoringTools,
   createTemplateTools,
   DESCRIBE_TEMPLATE_TOOL_NAME,
   FILL_TEMPLATE_TOOL_NAME,
   LIST_TEMPLATES_TOOL_NAME,
+  SUGGEST_TEMPLATE_FIELDS_TOOL_NAME,
 } from "./template-tools.js";
 
 type TemplateRow = { id: string; name: string; fieldCount: number };
@@ -47,6 +49,20 @@ describe("createTemplateTools", () => {
     expect(tools[FILL_TEMPLATE_TOOL_NAME]).toBeDefined();
   });
 
+  // The use-gated factory must not leak the authoring tool: a fill-only role
+  // (intern: template `use` without `create`) registers these tools, so
+  // `suggest_template_fields` belongs to `createTemplateAuthoringTools` instead.
+  test("does not register the authoring-only suggest tool", () => {
+    const tools = createTemplateTools({
+      orgAIConfig: null,
+      scopedDb: stubScopedDb([]),
+      safeDb: stubSafeDb,
+      organizationId: orgId,
+      userId,
+    });
+    expect(SUGGEST_TEMPLATE_FIELDS_TOOL_NAME in tools).toBe(false);
+  });
+
   test("list_templates returns the workspace's templates", async () => {
     const rows: TemplateRow[] = [
       { id: "t1", name: "NDA", fieldCount: 4 },
@@ -68,5 +84,17 @@ describe("createTemplateTools", () => {
 
     const result = await execute({}, {});
     expect(result).toEqual({ templates: rows });
+  });
+});
+
+describe("createTemplateAuthoringTools", () => {
+  test("registers the suggest-fields authoring tool", () => {
+    const tools = createTemplateAuthoringTools({
+      orgAIConfig: null,
+      safeDb: stubSafeDb,
+      organizationId: orgId,
+      userId,
+    });
+    expect(tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]).toBeDefined();
   });
 });
