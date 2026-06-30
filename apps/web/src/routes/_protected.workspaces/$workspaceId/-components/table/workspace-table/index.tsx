@@ -127,6 +127,11 @@ export const WorkspaceTable = ({
     useState<ExpandedTableCell | null>(null);
   const [wrapperWidth, setWrapperWidth] = useState(0);
   const [verticalScrollbarWidth, setVerticalScrollbarWidth] = useState(0);
+  // Offset of this section's rows within the shared grouped scroll, so the
+  // virtualizer windows the right rows. Stays 0 for the flat table (it owns its
+  // own scroll); measured + kept current by the effect below for grouped.
+  const rowsContainerRef = useRef<HTMLDivElement>(null);
+  const [scrollMargin, setScrollMargin] = useState(0);
 
   const updateWrapperWidth = useCallback((nextWrapperWidth: number) => {
     setWrapperWidth((current) =>
@@ -255,11 +260,20 @@ export const WorkspaceTable = ({
   );
   const rowVirtualizer = useVirtualizer({
     count: rowModel.rows.length,
-    getScrollElement: () => tableWrapperRef.current,
+    getScrollElement: () => {
+      if (!inlineFlow) {
+        return tableWrapperRef.current;
+      }
+      // Grouped sections virtualize against the shared ancestor scroll, not
+      // their own (non-scrolling) wrapper.
+      const wrapper = tableWrapperRef.current;
+      return wrapper ? getScrollableAncestor(wrapper) : null;
+    },
     estimateSize: () => TABLE_ROW_ESTIMATE_PX,
     getItemKey: getVirtualRowKey,
     measureElement: (element) => element.getBoundingClientRect().height,
     overscan: TABLE_ROW_OVERSCAN,
+    scrollMargin: inlineFlow ? scrollMargin : 0,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
   const lastVirtualRow = virtualRows.at(-1);
@@ -317,17 +331,72 @@ export const WorkspaceTable = ({
     observer.observe(sentinel);
     return () => observer.disconnect();
   }, [inlineFlow, hasNextPage, isFetchingNextPage, onLoadMore]);
-  const paddingTop = virtualRows.at(0)?.start ?? 0;
+  // Grouped sections share one scroll, so each virtualizes its rows against it.
+  // `scrollMargin` is this section's row offset within the scroll content; it is
+  // scroll-invariant, so we re-measure on layout changes (other groups loading
+  // or collapsing shift this section's offset), not on scroll.
+  useExternalSyncEffect(() => {
+    const rowsContainer = rowsContainerRef.current;
+    const content = outerScrollRef?.current;
+    if (!inlineFlow || !rowsContainer || !content) {
+      return undefined;
+    }
+    const scrollEl = getScrollableAncestor(rowsContainer);
+    if (!scrollEl) {
+      return undefined;
+    }
+    const measure = () => {
+      const margin =
+        rowsContainer.getBoundingClientRect().top -
+        scrollEl.getBoundingClientRect().top +
+        scrollEl.scrollTop;
+      // Dead-band: ignore sub-row jitter so a settling measurement can't drive a
+      // measure -> re-render -> re-measure cycle.
+      setScrollMargin((previous) =>
+        Math.abs(previous - margin) < 4 ? previous : margin,
+      );
+    };
+    // Debounce through a frame: as rows settle the ResizeObserver fires in a
+    // burst; coalescing into one post-layout measurement breaks the feedback
+    // loop (measure -> setScrollMargin -> re-window -> resize -> measure) that
+    // would otherwise re-render-storm and re-mount the route while scrolling.
+    let frame = 0;
+    let scheduled = false;
+    const scheduleMeasure = () => {
+      if (scheduled) {
+        return;
+      }
+      scheduled = true;
+      frame = requestAnimationFrame(() => {
+        scheduled = false;
+        measure();
+      });
+    };
+    measure();
+    const observer = new ResizeObserver(scheduleMeasure);
+    observer.observe(content);
+    observer.observe(scrollEl);
+    return () => {
+      cancelAnimationFrame(frame);
+      observer.disconnect();
+    };
+  }, [inlineFlow, outerScrollRef]);
+  // `virtualItem.start` is measured from the scroll start and includes the
+  // scrollMargin, while the rows container already sits at scrollMargin in the
+  // DOM flow — so subtract it for the top filler and add it back for the bottom
+  // filler. Both reduce to the plain formulas when scrollMargin is 0 (flat).
+  const virtualizerScrollMargin = rowVirtualizer.options.scrollMargin;
+  const paddingTop = (virtualRows.at(0)?.start ?? 0) - virtualizerScrollMargin;
   const paddingBottom =
-    rowVirtualizer.getTotalSize() - (virtualRows.at(-1)?.end ?? 0);
-  // Inline (grouped) sections render every row in the shared scroll; virtualized
-  // sections render only the windowed rows with padding spacers.
-  const renderedRows = inlineFlow
-    ? rowModel.rows.map((row, index) => ({ row, index }))
-    : virtualRows.map((virtualRow) => ({
-        row: rowModel.rows.at(virtualRow.index),
-        index: virtualRow.index,
-      }));
+    rowVirtualizer.getTotalSize() -
+    (virtualRows.at(-1)?.end ?? 0) +
+    virtualizerScrollMargin;
+  // Every layout windows its rows now; grouped sections virtualize against the
+  // shared scroll via scrollMargin (above), the flat table against its wrapper.
+  const renderedRows = virtualRows.map((virtualRow) => ({
+    row: rowModel.rows.at(virtualRow.index),
+    index: virtualRow.index,
+  }));
   const orderedColumns = getOrderedColumns({
     leftColumns: table.getLeftLeafColumns(),
     centerColumns: table.getCenterLeafColumns(),
@@ -583,8 +652,8 @@ export const WorkspaceTable = ({
               </WorkspaceGridRow>
             ))}
           </div>
-          <div className="flex flex-1 flex-col">
-            {!inlineFlow && paddingTop > 0 && (
+          <div className="flex flex-1 flex-col" ref={rowsContainerRef}>
+            {paddingTop > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell
                   className="border-b-0"
@@ -655,15 +724,7 @@ export const WorkspaceTable = ({
                 />
               );
             })}
-            {inlineFlow && hasNextPage && (
-              <div
-                aria-hidden
-                className="pointer-events-none h-px"
-                ref={loadMoreSentinelRef}
-                style={{ gridColumn: "1 / -1" }}
-              />
-            )}
-            {!inlineFlow && paddingBottom > 0 && (
+            {paddingBottom > 0 && (
               <WorkspaceGridRow className="pointer-events-none">
                 <WorkspaceGridFillerCell
                   className="border-b-0"
@@ -676,6 +737,17 @@ export const WorkspaceTable = ({
                   <AddPropertyRailSpacer height={paddingBottom} />
                 )}
               </WorkspaceGridRow>
+            )}
+            {/* Below the bottom spacer so it marks the section's true end, not
+                the windowed end — otherwise the virtualized window keeps it near
+                the viewport and would page every group at once. */}
+            {inlineFlow && hasNextPage && (
+              <div
+                aria-hidden
+                className="pointer-events-none h-px"
+                ref={loadMoreSentinelRef}
+                style={{ gridColumn: "1 / -1" }}
+              />
             )}
             {fillHeight && (
               <TableEndFiller
