@@ -705,7 +705,11 @@ const PropertiesToggle = ({
           {metadataFields.map((meta) => {
             const isVisible = !hiddenProperties.includes(meta.id);
             return (
-              <MenuItem key={meta.id} onClick={() => toggleProperty(meta.id)}>
+              <MenuItem
+                key={meta.id}
+                closeOnClick={false}
+                onClick={() => toggleProperty(meta.id)}
+              >
                 <meta.icon className="size-4" />
                 <span className="flex-1">{meta.name}</span>
                 {isVisible && <span className="text-primary">{"\u2713"}</span>}
@@ -723,6 +727,7 @@ const PropertiesToggle = ({
                 return (
                   <MenuItem
                     key={prop.id}
+                    closeOnClick={false}
                     onClick={() => toggleProperty(prop.id)}
                   >
                     <PropertyIcon type={prop.content.type} />
@@ -749,6 +754,7 @@ const PropertiesToggle = ({
                 return (
                   <MenuItem
                     key={prop.id}
+                    closeOnClick={false}
                     onClick={() => toggleProperty(prop.id)}
                   >
                     <PropertyIcon type={prop.content.type} />
@@ -937,7 +943,11 @@ const AdditionalDatesControl = ({
           {eligible.map((item) => {
             const isSelected = additionalDatePropertyIds.includes(item.id);
             return (
-              <MenuItem key={item.id} onClick={() => toggleProperty(item.id)}>
+              <MenuItem
+                key={item.id}
+                closeOnClick={false}
+                onClick={() => toggleProperty(item.id)}
+              >
                 <CalendarIcon className="size-3.5" />
                 <span className="flex-1">{item.name}</span>
                 {isSelected && <span className="text-primary">{"\u2713"}</span>}
