@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
+  buildPlainSearchTsQuery,
   buildSearchTsQuery,
   fileNameSearchText,
   normalizeFileNameForSearch,
@@ -176,5 +177,37 @@ describe("search query text", () => {
     const compiled = dialect.sqlToQuery(buildSearchTsQuery("خدمة"));
 
     expect(compiled.sql).toContain("arabic_normalize");
+    expect(compiled.sql).toContain("plainto_tsquery('simple', unaccent($1))");
+    expect(compiled.params).toContain("خدمة");
+    expect(compiled.params).toContain("خدمة");
+    expect(compiled.params).toContain("خدمة:*");
+    expect(compiled.params).toContain("خدمه:*");
+  });
+
+  test("keeps advanced Arabic queries compatible with existing indexes", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildSearchTsQuery("خدمة AND ٢٠٢٤"));
+
+    expect(compiled.sql).toContain(" || ");
+    expect(compiled.params).toContain("(خدمة:*) & (٢٠٢٤:*)");
+    expect(compiled.params).toContain("(خدمه:*) & (2024:*)");
+  });
+
+  test("builds a plain tsquery that can match old and normalized vectors", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildPlainSearchTsQuery("خدمة"));
+
+    expect(compiled.sql).toBe(
+      "(plainto_tsquery('simple', unaccent($1)) || plainto_tsquery('simple', unaccent(arabic_normalize($2))))",
+    );
+    expect(compiled.params).toEqual(["خدمة", "خدمة"]);
+  });
+
+  test("does not duplicate plain tsqueries when folding is a no-op", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildPlainSearchTsQuery("agreement"));
+
+    expect(compiled.sql).toBe("(plainto_tsquery('simple', unaccent($1)))");
+    expect(compiled.params).toEqual(["agreement"]);
   });
 });

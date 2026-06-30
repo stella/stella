@@ -31,6 +31,7 @@ import {
   escapeAndHighlight,
   TS_HEADLINE_CONFIG,
 } from "@/api/lib/search/highlight";
+import { buildPlainSearchTsQuery } from "@/api/lib/search/query";
 
 /**
  * Legislation search. Same two-engine shape as case law (pg-fts default,
@@ -99,7 +100,7 @@ const pgSearch = async (
   scopedDb: ScopedDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const tsQuery = sql`plainto_tsquery('simple', unaccent(arabic_normalize(${body.query})))`;
+  const tsQuery = buildPlainSearchTsQuery(body.query);
 
   const filters = sql`
     ${body.jurisdiction ? sql`AND d.country = ${body.jurisdiction}` : sql``}

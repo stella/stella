@@ -6,6 +6,7 @@ const PREFIX_QUERY_TOKEN_LIMIT = 8;
 const ADVANCED_QUERY_OPERATOR_RE =
   /(?:^|\s)(?:AND|OR|NOT)(?:\s|$)|(?:^|\s)-(?=\S)|["()]/u;
 const FILE_EXTENSION_RE = /^[\p{L}\p{N}]{1,10}$/u;
+type ArabicFoldMode = "folded" | "legacy";
 
 const compact = (parts: readonly (string | null | undefined)[]): string =>
   parts
@@ -50,21 +51,33 @@ export const fileNameSearchText = (name: string): string =>
     ]),
   ]);
 
-export const toPrefixTsQueryText = (query: string): string | null => {
-  const tokens = toSearchLexemes(query);
+const toPrefixTsQueryTextForMode = (
+  query: string,
+  mode: ArabicFoldMode,
+): string | null => {
+  const tokens = toSearchLexemes(query, mode);
 
   return tokens.length > 0
     ? tokens.map((token) => `${token}:*`).join(" & ")
     : null;
 };
 
-export const toLooseTsQueryText = (query: string): string | null => {
-  const tokens = toSearchLexemes(query);
+export const toPrefixTsQueryText = (query: string): string | null =>
+  toPrefixTsQueryTextForMode(query, "folded");
+
+const toLooseTsQueryTextForMode = (
+  query: string,
+  mode: ArabicFoldMode,
+): string | null => {
+  const tokens = toSearchLexemes(query, mode);
 
   return tokens.length > 1
     ? tokens.map((token) => `${token}:*`).join(" | ")
     : null;
 };
+
+export const toLooseTsQueryText = (query: string): string | null =>
+  toLooseTsQueryTextForMode(query, "folded");
 
 type AdvancedToken =
   | { type: "and" | "lparen" | "not" | "or" | "rparen" }
@@ -77,10 +90,12 @@ type SearchAst =
 
 class AdvancedQueryParser {
   readonly #tokens: AdvancedToken[];
+  readonly #mode: ArabicFoldMode;
   #index = 0;
 
-  constructor(tokens: AdvancedToken[]) {
+  constructor(tokens: AdvancedToken[], mode: ArabicFoldMode) {
     this.#tokens = tokens;
+    this.#mode = mode;
   }
 
   parse(): SearchAst | null {
@@ -149,7 +164,7 @@ class AdvancedQueryParser {
     }
 
     this.#index += 1;
-    const lexemes = toSearchLexemes(token.value);
+    const lexemes = toSearchLexemes(token.value, this.#mode);
     return lexemes.length > 0
       ? { type: "term", lexemes, phrase: token.phrase }
       : null;
@@ -181,9 +196,12 @@ class AdvancedQueryParser {
 const isAdvancedQuery = (query: string): boolean =>
   ADVANCED_QUERY_OPERATOR_RE.test(query);
 
-const parseAdvancedSearchAst = (query: string): SearchAst | null => {
+const parseAdvancedSearchAst = (
+  query: string,
+  mode: ArabicFoldMode = "folded",
+): SearchAst | null => {
   const tokens = tokenizeAdvancedQuery(query);
-  return tokens ? new AdvancedQueryParser(tokens).parse() : null;
+  return tokens ? new AdvancedQueryParser(tokens, mode).parse() : null;
 };
 
 const hasPositiveTerm = (ast: SearchAst, negated = false): boolean => {
@@ -234,13 +252,16 @@ export const validateStellaSearchQuery = (
       };
 };
 
-const toSearchLexemes = (query: string): string[] =>
+const toSearchLexemes = (
+  query: string,
+  mode: ArabicFoldMode = "folded",
+): string[] =>
   (
     removeSearchDiacritics(normalizeTextForLexemes(query))
       .normalize("NFKC")
       .match(/[\p{L}\p{N}]+/gu) ?? []
   )
-    .map(applyArabicFolds)
+    .map((token) => (mode === "folded" ? applyArabicFolds(token) : token))
     .filter((token) => token.length > 0)
     .slice(0, PREFIX_QUERY_TOKEN_LIMIT);
 
@@ -348,10 +369,42 @@ export const toAdvancedTsQueryText = (query: string): string | null => {
   return ast && hasPositiveTerm(ast) ? astToTsQuery(ast) : null;
 };
 
+const toCompatibleAdvancedTsQueryTexts = (query: string): string[] => {
+  if (!isAdvancedQuery(query)) {
+    return [];
+  }
+
+  return [
+    parseAdvancedSearchAst(query, "legacy"),
+    parseAdvancedSearchAst(query, "folded"),
+  ].flatMap((ast) => (ast && hasPositiveTerm(ast) ? [astToTsQuery(ast)] : []));
+};
+
+const hasArabicFoldVariant = (query: string): boolean => {
+  const normalized = query.normalize("NFKC");
+  return applyArabicFolds(normalized) !== normalized;
+};
+
+const buildPlainSearchTsQueryParts = (query: string) => [
+  sql`plainto_tsquery('simple', unaccent(${query}))`,
+  ...(hasArabicFoldVariant(query)
+    ? [sql`plainto_tsquery('simple', unaccent(arabic_normalize(${query})))`]
+    : []),
+];
+
+export const buildPlainSearchTsQuery = (query: string) =>
+  sql`(${sql.join(buildPlainSearchTsQueryParts(query), sql` || `)})`;
+
 export const buildSearchTsQuery = (query: string) => {
-  const advanced = toAdvancedTsQueryText(query);
-  if (advanced) {
-    return sql`to_tsquery('simple', unaccent(${advanced}))`;
+  const advanced = toCompatibleAdvancedTsQueryTexts(query);
+  if (advanced.length > 0) {
+    return sql`(${sql.join(
+      [...new Set(advanced)].map(
+        (advancedQuery) =>
+          sql`to_tsquery('simple', unaccent(${advancedQuery}))`,
+      ),
+      sql` || `,
+    )})`;
   }
 
   if (isAdvancedQuery(query.trim())) {
@@ -368,23 +421,22 @@ export const buildSearchTsQuery = (query: string) => {
     return sql`plainto_tsquery('simple', '')`;
   }
 
-  const plainQueries = variants.map(
-    (variant) =>
-      sql`plainto_tsquery('simple', unaccent(arabic_normalize(${variant})))`,
-  );
+  const plainQueries = variants.flatMap(buildPlainSearchTsQueryParts);
   const prefixQueries = [
     ...new Set(
       variants.flatMap((variant) => {
-        const prefix = toPrefixTsQueryText(variant);
-        return prefix ? [prefix] : [];
+        const legacy = toPrefixTsQueryTextForMode(variant, "legacy");
+        const folded = toPrefixTsQueryTextForMode(variant, "folded");
+        return [legacy, folded].flatMap((prefix) => (prefix ? [prefix] : []));
       }),
     ),
   ].map((prefix) => sql`to_tsquery('simple', unaccent(${prefix}))`);
   const looseQueries = [
     ...new Set(
       variants.flatMap((variant) => {
-        const loose = toLooseTsQueryText(variant);
-        return loose ? [loose] : [];
+        const legacy = toLooseTsQueryTextForMode(variant, "legacy");
+        const folded = toLooseTsQueryTextForMode(variant, "folded");
+        return [legacy, folded].flatMap((loose) => (loose ? [loose] : []));
       }),
     ),
   ].map((loose) => sql`to_tsquery('simple', unaccent(${loose}))`);
