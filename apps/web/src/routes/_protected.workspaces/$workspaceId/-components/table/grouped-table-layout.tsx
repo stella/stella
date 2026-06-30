@@ -692,11 +692,17 @@ const GroupHeader = ({
   return (
     <div
       className={cn(
-        "bg-secondary sticky top-0 z-40 flex items-center gap-2 border-b pe-3",
+        "sticky top-0 z-40 flex items-center gap-2 border-b pe-3",
         // An empty category recedes into the background, surfacing on hover
         // so it stays scannable without competing with populated groups.
         empty && "opacity-60 transition-opacity duration-200 hover:opacity-100",
       )}
+      // Opaque header so scrolled rows don't show through. `bg-muted` and
+      // `bg-secondary` are both translucent (~4% over transparent) in this theme,
+      // so we composite that 4% tint over the opaque background by hand.
+      style={{
+        backgroundColor: "color-mix(in oklab, var(--foreground) 4%, var(--background))",
+      }}
     >
       {/* The whole header row is the toggle target, not just the chevron. */}
       <button
