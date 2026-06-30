@@ -680,36 +680,37 @@ describe("OpenAI-compatible MCP tools", () => {
       scopedDb: createScopedDb([], createExtractedContentRow()),
     });
 
-    // SAFETY: the fetch handler under test always returns this JSON shape; the
-    // cast only types the field access that the assertions below verify.
-    const first = parseToolPayload(
-      await handleMcpToolCall({
-        args: { id: "entity_1" },
-        context,
-        toolName: "fetch",
-      }),
-    ) as {
+    const first = asTestRaw<{
       text: string;
       nextCursor: string | null;
       metadata: { charCount: number; truncated: boolean };
-    };
+    }>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { id: "entity_1" },
+          context,
+          toolName: "fetch",
+        }),
+      ),
+    );
     expect(first.text).toBe("x".repeat(8000));
     expect(first.metadata.charCount).toBe(9000);
     expect(first.metadata.truncated).toBe(true);
     expect(first.nextCursor).not.toBeNull();
 
-    // SAFETY: same fixed handler response shape as the first page.
-    const second = parseToolPayload(
-      await handleMcpToolCall({
-        args: { id: "entity_1", cursor: first.nextCursor },
-        context,
-        toolName: "fetch",
-      }),
-    ) as {
+    const second = asTestRaw<{
       text: string;
       nextCursor: string | null;
       metadata: { truncated: boolean };
-    };
+    }>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { id: "entity_1", cursor: first.nextCursor },
+          context,
+          toolName: "fetch",
+        }),
+      ),
+    );
     expect(second.text).toBe("y".repeat(1000));
     expect(second.metadata.truncated).toBe(false);
     expect(second.nextCursor).toBeNull();
@@ -1098,29 +1099,30 @@ describe("OpenAI-compatible MCP tools", () => {
       };
     };
 
-    // SAFETY: the decision handler always returns this JSON shape; the cast
-    // only types the field access that the assertions below verify.
-    const page1 = parseToolPayload(
-      await handleMcpToolCall({
-        args: { decision_id: "dec_123" },
-        context: createContext(),
-        toolName: "read_case_law_decision",
-      }),
-    ) as DecisionPage;
+    const page1 = asTestRaw<DecisionPage>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { decision_id: "dec_123" },
+          context: createContext(),
+          toolName: "read_case_law_decision",
+        }),
+      ),
+    );
     expect(page1.decision.citationsFrom).toHaveLength(50);
     expect(page1.decision.citationsFromTotal).toBe(60);
     expect(page1.decision.citationsTo).toHaveLength(50);
     expect(page1.decision.citationsToTotal).toBe(70);
     expect(page1.nextCursor).not.toBeNull();
 
-    // SAFETY: same fixed handler response shape as the first page.
-    const page2 = parseToolPayload(
-      await handleMcpToolCall({
-        args: { decision_id: "dec_123", cursor: page1.nextCursor },
-        context: createContext(),
-        toolName: "read_case_law_decision",
-      }),
-    ) as DecisionPage;
+    const page2 = asTestRaw<DecisionPage>(
+      parseToolPayload(
+        await handleMcpToolCall({
+          args: { decision_id: "dec_123", cursor: page1.nextCursor },
+          context: createContext(),
+          toolName: "read_case_law_decision",
+        }),
+      ),
+    );
     expect(page2.decision.citationsFrom).toHaveLength(10);
     expect(page2.decision.citationsTo).toHaveLength(20);
     expect(page2.decision.citationsFrom.at(0)?.id).toBe("cf_50");
