@@ -2781,6 +2781,9 @@
       "zoomOut": "Tālināt"
     },
     "playbooks": {
+      "autoRun": "Automātiska palaišana",
+      "autoRunHint": "Automātiski nosaka un palaiž katru pārbaudes ceļvedi, kas atbilst dokumentu tipiem",
+      "autoRunStarted": "Notiek palaišana: {count, plural, zero {# pārbaudes ceļvežu} one {# pārbaudes ceļvedis} other {# pārbaudes ceļveži}}",
       "run": "Palaist pārbaudes ceļvedi",
       "runFailed": "Neizdevās palaist pārbaudes ceļvedi",
       "runStarted": "Tiek palaists pārbaudes ceļvedis ({count, plural, zero {# kolonnu} one {# kolonna} other {# kolonnas}})"

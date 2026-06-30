@@ -2781,6 +2781,9 @@
       "zoomOut": "Nutolinti"
     },
     "playbooks": {
+      "autoRun": "Automatinis vykdymas",
+      "autoRunHint": "Automatiškai aptinka ir vykdo kiekvieną peržiūros vadovą, atitinkantį dokumentų tipus",
+      "autoRunStarted": "Vykdoma {count, plural, one {# peržiūros vadovas} few {# peržiūros vadovai} many {# peržiūros vadovo} other {# peržiūros vadovų}}",
       "run": "Vykdyti peržiūros vadovą",
       "runFailed": "Nepavyko įvykdyti peržiūros vadovo",
       "runStarted": "Vykdomas peržiūros vadovas ({count, plural, one {# stulpelis} few {# stulpeliai} many {# stulpelio} other {# stulpelių}})"

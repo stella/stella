@@ -2781,6 +2781,9 @@
       "zoomOut": "Suumi välja"
     },
     "playbooks": {
+      "autoRun": "Automaatne käivitamine",
+      "autoRunHint": "Tuvastab ja käivitab automaatselt iga playbooki, mis vastab dokumentide tüüpidele",
+      "autoRunStarted": "Käivitatakse {count, plural, one {# playbook} other {# playbooki}}",
       "run": "Käivita playbook",
       "runFailed": "Playbooki käivitamine ebaõnnestus",
       "runStarted": "Playbooki käivitamine ({count, plural, one {# veerg} other {# veergu}})"

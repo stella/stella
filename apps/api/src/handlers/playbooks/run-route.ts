@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import autoRunPlaybooks from "@/api/handlers/playbooks/auto-run";
 import reviewPlaybook from "@/api/handlers/playbooks/review";
 import runPlaybook from "@/api/handlers/playbooks/run";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
@@ -22,6 +23,15 @@ export const playbookRunsRoute = new Elysia({
     params: runPlaybook.config.params,
     invalidateQuery: true,
     permissions: runPlaybook.config.permissions,
+  })
+  // Auto-run: materialize every applicable playbook over the files table in one
+  // pass (each still gated to its document-type subset). Workspace-scoped, so it
+  // lives here alongside the single run rather than the org-scoped definition
+  // CRUD in `routes.ts`.
+  .post("/auto-run", autoRunPlaybooks.handler, {
+    params: autoRunPlaybooks.config.params,
+    invalidateQuery: true,
+    permissions: autoRunPlaybooks.config.permissions,
   })
   // Single-document review: synchronous, returns Findings inline. No
   // `invalidateQuery` — it persists no columns/findings, so there is no

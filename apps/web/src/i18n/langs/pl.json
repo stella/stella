@@ -2781,6 +2781,9 @@
       "zoomOut": "Pomniejsz"
     },
     "playbooks": {
+      "autoRun": "Automatyczne uruchamianie",
+      "autoRunHint": "Automatycznie wykrywa i uruchamia każdy playbook pasujący do typów dokumentów",
+      "autoRunStarted": "Uruchamianie {count, plural, one {# playbook} few {# playbooki} many {# playbooków} other {# playbooka}}",
       "run": "Uruchom playbook",
       "runFailed": "Nie udało się uruchomić playbooka",
       "runStarted": "Uruchamianie playbooka ({count, plural, one {# kolumna} few {# kolumny} many {# kolumn} other {# kolumny}})"

@@ -2781,6 +2781,9 @@
       "zoomOut": "Zoom arrière"
     },
     "playbooks": {
+      "autoRun": "Exécution automatique",
+      "autoRunHint": "Détecte et exécute automatiquement chaque playbook correspondant aux types des documents",
+      "autoRunStarted": "Exécution de {count, plural, one {# playbook} other {# playbooks}}",
       "run": "Exécuter le playbook",
       "runFailed": "Échec de l’exécution du playbook",
       "runStarted": "Exécution du playbook ({count, plural, one {# colonne} other {# colonnes}})"

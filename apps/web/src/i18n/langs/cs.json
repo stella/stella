@@ -2781,6 +2781,9 @@
       "zoomOut": "Oddálit"
     },
     "playbooks": {
+      "autoRun": "Automatické spuštění",
+      "autoRunHint": "Automaticky rozpozná a spustí každý playbook odpovídající typům dokumentů",
+      "autoRunStarted": "Spouští se {count, plural, one {# playbook} few {# playbooky} other {# playbooků}}",
       "run": "Spustit playbook",
       "runFailed": "Nepodařilo se spustit playbook",
       "runStarted": "Spouštění playbooku ({count, plural, one {# sloupec} few {# sloupce} other {# sloupců}})"

@@ -15,6 +15,7 @@ import {
   Rows3Icon,
   SparklesIcon,
   UserIcon,
+  WandSparklesIcon,
   WrapTextIcon,
 } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
@@ -471,10 +472,11 @@ type RunPlaybookControlProps = {
 };
 
 /**
- * Runs an org playbook over the current table. The picker lists the
- * organization's playbooks; selecting one materializes the playbook's ASK +
- * verdict columns and starts extraction, so the new columns appear once the
- * properties query refreshes.
+ * Runs an org playbook over the current table. The top "Auto run" entry
+ * auto-detects which playbooks apply to the documents present in the matter and
+ * materializes them all at once; each individual entry materializes a single
+ * playbook's ASK + verdict columns and starts extraction. New columns appear
+ * once the properties query refreshes.
  */
 const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
   const t = useTranslations();
@@ -487,6 +489,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
   const [runningPlaybookId, setRunningPlaybookId] = useState<string | null>(
     null,
   );
+  const [isAutoRunning, setIsAutoRunning] = useState(false);
 
   // Deferred until the menu opens: the org playbook list isn't needed to render
   // the toolbar, and useQuery (not useSuspenseQuery) keeps a cache miss from
@@ -501,6 +504,38 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
   });
   const playbooks =
     playbooksData && "items" in playbooksData ? playbooksData.items : [];
+
+  const handleAutoRun = async () => {
+    setIsAutoRunning(true);
+    const response = await api
+      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+      .playbooks["auto-run"].post({ queryKey: propertiesKeys.all(workspaceId) });
+    setIsAutoRunning(false);
+
+    if (response.error) {
+      analytics.captureError(toAPIError(response.error));
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    setOpen(false);
+    await queryClient.invalidateQueries({
+      queryKey: propertiesKeys.all(workspaceId),
+    });
+    stellaToast.add({
+      type: "success",
+      title: t("workspaces.playbooks.autoRunStarted", {
+        count: response.data.playbooksRun,
+      }),
+    });
+  };
 
   const handleRun = async (playbookId: string) => {
     setRunningPlaybookId(playbookId);
@@ -535,7 +570,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     });
   };
 
-  const isRunning = runningPlaybookId !== null;
+  const isRunning = runningPlaybookId !== null || isAutoRunning;
 
   return (
     <Menu onOpenChange={setOpen} open={open}>
@@ -544,18 +579,31 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
           <Button
             aria-label={t("workspaces.playbooks.run")}
             disabled={isRunning}
-            size="xs"
+            size="icon-xs"
             title={t("workspaces.playbooks.run")}
-            variant="outline"
+            variant="ghost"
           />
         }
       >
         <PlayIcon className="size-3.5" />
-        <span className="hidden sm:inline">
-          {t("workspaces.playbooks.run")}
-        </span>
       </MenuTrigger>
       <MenuPopup>
+        <MenuItem
+          closeOnClick={false}
+          disabled={isRunning}
+          onClick={() => {
+            void handleAutoRun();
+          }}
+        >
+          <WandSparklesIcon className="size-3.5" />
+          <span className="flex flex-col">
+            <span>{t("workspaces.playbooks.autoRun")}</span>
+            <span className="text-muted-foreground text-xs">
+              {t("workspaces.playbooks.autoRunHint")}
+            </span>
+          </span>
+        </MenuItem>
+        <MenuSeparator />
         {isLoading && (
           <MenuItem disabled>{t("knowledge.playbooks.loading")}</MenuItem>
         )}
@@ -818,11 +866,10 @@ const PropertiesToggle = ({
   const manualProperties = properties.filter(
     (p) => p.tool.type === "manual-input",
   );
-  // System-computed verdict columns are grouped with AI columns here so they
-  // stay toggleable from the visibility menu (they are otherwise read-only).
-  const aiProperties = properties.filter(
-    (p) => p.tool.type === "ai-model" || p.tool.type === "playbook-verdict",
-  );
+  // Verdict properties render as a badge inside their ASK column rather than a
+  // column of their own, so they're omitted here: toggling them would target a
+  // column that no longer exists. Their visibility follows the ASK column.
+  const aiProperties = properties.filter((p) => p.tool.type === "ai-model");
 
   return (
     <Menu>

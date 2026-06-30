@@ -2781,6 +2781,9 @@
       "zoomOut": "Verkleinern"
     },
     "playbooks": {
+      "autoRun": "Automatisch ausführen",
+      "autoRunHint": "Automatisch jedes zu den Dokumenttypen passende Playbook erkennen und ausführen",
+      "autoRunStarted": "{count, plural, one {# Playbook wird ausgeführt} other {# Playbooks werden ausgeführt}}",
       "run": "Playbook ausführen",
       "runFailed": "Playbook konnte nicht ausgeführt werden",
       "runStarted": "Playbook wird ausgeführt ({count, plural, one {# Spalte} other {# Spalten}})"

@@ -2781,6 +2781,9 @@
       "zoomOut": "Kicsinyítés"
     },
     "playbooks": {
+      "autoRun": "Automatikus futtatás",
+      "autoRunHint": "Automatikusan felismeri és futtatja az összes playbookot, amely megfelel a dokumentumok típusainak",
+      "autoRunStarted": "{count, plural, one {# playbook futtatása} other {# playbook futtatása}}",
       "run": "Playbook futtatása",
       "runFailed": "Nem sikerült futtatni a playbookot",
       "runStarted": "Playbook futtatása ({count, plural, one {# oszlop} other {# oszlop}})"
