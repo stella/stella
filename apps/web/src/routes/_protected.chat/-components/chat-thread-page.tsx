@@ -242,27 +242,28 @@ export const ChatThreadPage = ({
     },
     [],
   );
-  // An ask-user clarification card owns the turn while it is awaiting input or
-  // being edited: its own questions and submit button take precedence over
-  // generic follow-up suggestions, so suppress both the chips and the
-  // Tab-to-ask editor hint. Once the card resolves (`output-available`) the
-  // assistant's continuation may live on this same message, so gate on the
-  // active state rather than mere presence of the part.
-  const lastMessageHasActiveAskUser =
+  // An ask-user clarification card owns the turn, and its own questions and
+  // submit button take precedence over generic follow-up suggestions, so
+  // suppress both the chips and the Tab-to-ask editor hint while one is live.
+  // A card is live when it is still awaiting input (always the last message),
+  // or when any card has been reopened via Edit — including an earlier card
+  // with downstream replies, where the persisted `output-available` state no
+  // longer reflects the live edit-and-rerun form.
+  const lastMessageHasPendingAskUser =
     lastMessage !== undefined &&
     lastMessage.role === "assistant" &&
     lastMessage.parts.some(
       (part) =>
-        part.type === "tool-ask-user" &&
-        (part.state !== "output-available" ||
-          editingAskUserToolCallIds.has(part.toolCallId)),
+        part.type === "tool-ask-user" && part.state !== "output-available",
     );
+  const askUserOwnsTurn =
+    lastMessageHasPendingAskUser || editingAskUserToolCallIds.size > 0;
   const editorIsEmpty = useIsChatDraftEmpty(threadRef);
   const eligibleForSuggestions =
     editorIsEmpty &&
     lastMessageId !== null &&
     lastMessageRole === "assistant" &&
-    !lastMessageHasActiveAskUser;
+    !askUserOwnsTurn;
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
