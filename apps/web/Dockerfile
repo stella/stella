@@ -34,6 +34,7 @@ RUN bun install --filter @stll/web --production --frozen-lockfile --ignore-scrip
 FROM deps AS builder
 ARG STELLA_VERSION=dev
 ARG STELLA_COMMIT_SHA=dev
+ARG RAILWAY_GIT_COMMIT_SHA=dev
 ARG PUBLIC_API_URL
 ARG PUBLIC_APP_URL
 ARG PUBLIC_GOOGLE_LOGIN_ENABLED
@@ -64,6 +65,7 @@ ARG VITE_TERMS_URL
 ENV NODE_ENV=production
 ENV STELLA_VERSION=${STELLA_VERSION}
 ENV STELLA_COMMIT_SHA=${STELLA_COMMIT_SHA}
+ENV RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}
 COPY --from=pruner /app/out/full/ .
 COPY --from=pruner /app/VERSION ./VERSION
 RUN test -n "${PUBLIC_API_URL}" || (echo "PUBLIC_API_URL build arg is required" >&2; exit 1)

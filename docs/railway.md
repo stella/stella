@@ -154,6 +154,35 @@ publishing. Check these items before the first publish:
 - Both public domains pass `/health`.
 - The marketplace overview uses `railway/template-readme.md`.
 
+## Source-Backed Smoke Verification
+
+Use `.github/workflows/railway-smoke.yml` to verify the GitHub-backed Railway
+shape after deployment. The workflow has two entry points:
+
+- `deployment_status`: runs after Railway reports a successful GitHub-backed
+  deployment, when `RAILWAY_SMOKE_DEPLOYMENT_ENVIRONMENT` matches the
+  deployment environment.
+- `workflow_dispatch`: runs manually against supplied URLs, useful before
+  publishing or updating the template.
+
+Set these GitHub repository variables for automatic checks:
+
+```bash
+RAILWAY_SMOKE_DEPLOYMENT_ENVIRONMENT=<Railway environment name>
+RAILWAY_SMOKE_API_URL=https://<api-domain>
+RAILWAY_SMOKE_WEB_URL=https://<web-domain>
+```
+
+For the default Railway environment, the deployment environment is usually
+`production`. If the variable is unset, automatic post-deploy checks are skipped
+and manual dispatch still works.
+
+The smoke checks `api` `/health`, `web` `/health`, and, when GitHub provides a
+deployment SHA, the exact commit reported by API `/health` and web
+`/version.json`. The API and web builds both honor Railway's
+`RAILWAY_GIT_COMMIT_SHA` so source-backed deploys can be tied back to the
+GitHub commit that triggered them.
+
 Publish or update the template with:
 
 ```bash

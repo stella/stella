@@ -6,6 +6,12 @@ const WEB_CONFIG_PATH = "railway/web.railway.json";
 const RAILWAY_DOC_PATH = "docs/railway.md";
 const TEMPLATE_README_PATH = "railway/template-readme.md";
 const DOCKERIGNORE_PATH = ".dockerignore";
+const RAILWAY_SMOKE_WORKFLOW_PATH = ".github/workflows/railway-smoke.yml";
+const RAILWAY_SMOKE_SCRIPT_PATH = "scripts/check-railway-smoke.ts";
+const API_HEALTH_ROUTE_PATH = "apps/api/src/handlers/health/routes.ts";
+const WEB_VITE_CONFIG_PATH = "apps/web/vite.config.ts";
+const API_DOCKERFILE_PATH = "apps/api/Dockerfile";
+const WEB_DOCKERFILE_PATH = "apps/web/Dockerfile";
 
 const failures: string[] = [];
 
@@ -137,6 +143,10 @@ expect(
   !railwayDoc.includes("railway/api.railway.json"),
   "Railway docs must not reference the removed API config path",
 );
+expect(
+  railwayDoc.includes("## Source-Backed Smoke Verification"),
+  "Railway docs must describe the source-backed smoke workflow",
+);
 
 const templateReadme = readText(TEMPLATE_README_PATH);
 for (const heading of [
@@ -173,6 +183,54 @@ expect(
   dockerignore.includes("**/.env*"),
   ".dockerignore must exclude env files from Railway/Docker uploads",
 );
+
+const railwaySmokeWorkflow = readText(RAILWAY_SMOKE_WORKFLOW_PATH);
+for (const requiredText of [
+  "deployment_status:",
+  "workflow_dispatch:",
+  "RAILWAY_SMOKE_DEPLOYMENT_ENVIRONMENT",
+  "RAILWAY_SMOKE_API_URL",
+  "RAILWAY_SMOKE_WEB_URL",
+  "scripts/check-railway-smoke.ts",
+]) {
+  expect(
+    railwaySmokeWorkflow.includes(requiredText),
+    `Railway smoke workflow must include ${requiredText}`,
+  );
+}
+
+const railwaySmokeScript = readText(RAILWAY_SMOKE_SCRIPT_PATH);
+for (const requiredText of [
+  "RAILWAY_SMOKE_API_URL",
+  "RAILWAY_SMOKE_WEB_URL",
+  "RAILWAY_SMOKE_EXPECTED_COMMIT",
+  "/health",
+  "/version.json",
+]) {
+  expect(
+    railwaySmokeScript.includes(requiredText),
+    `Railway smoke checker must include ${requiredText}`,
+  );
+}
+
+const apiHealthRoute = readText(API_HEALTH_ROUTE_PATH);
+expect(
+  apiHealthRoute.includes("RAILWAY_GIT_COMMIT_SHA"),
+  "API health route must expose Railway source deploy commit SHAs",
+);
+
+const webViteConfig = readText(WEB_VITE_CONFIG_PATH);
+expect(
+  webViteConfig.includes("RAILWAY_GIT_COMMIT_SHA"),
+  "web version manifest must expose Railway source deploy commit SHAs",
+);
+
+for (const path of [API_DOCKERFILE_PATH, WEB_DOCKERFILE_PATH]) {
+  expect(
+    readText(path).includes("RAILWAY_GIT_COMMIT_SHA"),
+    `${path} must preserve Railway source deploy commit SHAs`,
+  );
+}
 
 if (failures.length > 0) {
   for (const failure of failures) {

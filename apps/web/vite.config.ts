@@ -18,8 +18,13 @@ const APP_VERSION = readFileSync(
 
 const readCommitSha = () => {
   const explicitSha = process.env["STELLA_COMMIT_SHA"];
-  if (explicitSha) {
+  if (explicitSha && explicitSha !== "dev") {
     return explicitSha;
+  }
+
+  const railwaySha = process.env["RAILWAY_GIT_COMMIT_SHA"];
+  if (railwaySha) {
+    return railwaySha;
   }
 
   try {
@@ -28,7 +33,7 @@ const readCommitSha = () => {
       encoding: "utf-8",
     }).trim();
   } catch {
-    return "dev";
+    return explicitSha ?? "dev";
   }
 };
 
