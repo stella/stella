@@ -8,8 +8,7 @@ import type {
 } from "elysia";
 import { status } from "elysia";
 
-import type { PermissionInput } from "@stll/permissions";
-import { roles } from "@stll/permissions";
+import type { PermissionInput, roles } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
@@ -40,6 +39,7 @@ import {
 } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
+import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import { assertUsageAvailable } from "@/api/lib/usage";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
 
@@ -348,11 +348,7 @@ const createSafeScopedHandler = <
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
-    const hasPermission = roles[ctx.memberRole.role].authorize(
-      config.permissions,
-    );
-
-    if (!hasPermission.success) {
+    if (!hasMemberPermission(ctx.memberRole, config.permissions)) {
       return toSafeStatusResponse(403, { message: "Forbidden" });
     }
 

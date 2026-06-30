@@ -50,6 +50,10 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
+import {
+  hasMemberPermission,
+  readAuthorizedMemberRole,
+} from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
   getMcpResourceUrl,
@@ -807,27 +811,15 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
 export const permissionMacro = new Elysia({ name: "permissionMacro" })
   .use(authMacro)
   .macro("permissions", (permissions: PermissionInput) => ({
-    // `validateAuth` resolves the caller's member role (once) before this hook
-    // runs, so the check below reads `ctx.memberRole` instead of a second
-    // session + membership round-trip via better-auth's `hasPermission`. That
-    // round-trip duplicated the authorization the safe-handler factories
-    // already perform; being unguarded, it also let a transient membership read
-    // surface as an uncaught 500 rather than the intended 403.
+    // Reuse authMacro's resolved member role instead of asking better-auth to
+    // perform the same permission check through a second session read.
     validateAuth: true,
     // Without this, when this macro is used with another macro that extends the body,
     // the final merged body would not include the first macro's body extension.
     body: t.Object({}),
     beforeHandle(ctx) {
-      // SAFETY: `validateAuth: true` runs authMacro's resolve before this hook,
-      // and that resolve returns 401 unless a member role is present, so
-      // `memberRole` always exists here at runtime. Elysia's parameterized
-      // macro form does not propagate authMacro's resolved fields into the
-      // hook's ctx type (the documented function-form inference gap), so read
-      // the role through a narrow typed view instead of the untyped ctx.
-      const { memberRole } = ctx as typeof ctx & {
-        memberRole: { role: keyof typeof roles };
-      };
-      if (!roles[memberRole.role].authorize(permissions).success) {
+      const memberRole = readAuthorizedMemberRole(ctx);
+      if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
         return ctx.status(403);
       }
 
