@@ -101,15 +101,15 @@ const pgSearch = async (
   scopedDb: ScopedDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const ftsSearch = buildPgFtsSearchSql(
-    body.query,
-    await loadFtsSearchConfigs(),
-    {
+  const ftsSearch = buildPgFtsSearchSql({
+    configs: await loadFtsSearchConfigs(),
+    query: body.query,
+    refs: {
       language: sql`sd.language`,
       regconfig: sql`sd.regconfig`,
       vector: sql`sd.tsv`,
     },
-  );
+  });
 
   const filters = sql`
     ${body.jurisdiction ? sql`AND d.country = ${body.jurisdiction}` : sql``}

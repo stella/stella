@@ -7,7 +7,43 @@ const PREFIX_QUERY_TOKEN_LIMIT = 8;
 const ADVANCED_QUERY_OPERATOR_RE =
   /(?:^|\s)(?:AND|OR|NOT)(?:\s|$)|(?:^|\s)-(?=\S)|["()]/u;
 const FILE_EXTENSION_RE = /^[\p{L}\p{N}]{1,10}$/u;
+const ARABIC_COMPATIBLE_VARIANT_LIMIT = 64;
 type ArabicFoldMode = "compatible" | "folded" | "legacy";
+
+const ARABIC_FOLD_TARGET_ALTERNATES: Readonly<
+  Record<string, readonly string[]>
+> = {
+  ا: ["آ", "أ", "إ", "ٱ"],
+  و: ["ؤ"],
+  ي: ["ئ", "ى"],
+  ه: ["ة"],
+};
+
+const ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
+  "0": "٠",
+  "1": "١",
+  "2": "٢",
+  "3": "٣",
+  "4": "٤",
+  "5": "٥",
+  "6": "٦",
+  "7": "٧",
+  "8": "٨",
+  "9": "٩",
+};
+
+const EXTENDED_ARABIC_INDIC_DIGITS: Readonly<Record<string, string>> = {
+  "0": "۰",
+  "1": "۱",
+  "2": "۲",
+  "3": "۳",
+  "4": "۴",
+  "5": "۵",
+  "6": "۶",
+  "7": "۷",
+  "8": "۸",
+  "9": "۹",
+};
 
 const compact = (parts: readonly (string | null | undefined)[]): string =>
   parts
@@ -274,14 +310,66 @@ const toSearchLexemeGroups = (
     return toSearchLexemes(query, mode).map((lexeme) => [lexeme]);
   }
 
-  return toSearchLexemes(query, "legacy").map((lexeme) => {
-    const variants = [lexeme];
-    const folded = applyArabicFolds(lexeme);
-    if (folded && folded !== lexeme) {
-      variants.push(folded);
+  return toSearchLexemes(query, "legacy").map(toCompatibleArabicLexemes);
+};
+
+const toCompatibleArabicLexemes = (lexeme: string): string[] => {
+  const variants = new Set([lexeme]);
+  const folded = applyArabicFolds(lexeme);
+  if (folded) {
+    variants.add(folded);
+    for (const variant of expandArabicFoldTargetVariants(folded)) {
+      variants.add(variant);
     }
-    return variants;
-  });
+  }
+  return [...variants];
+};
+
+const expandArabicFoldTargetVariants = (text: string): string[] => {
+  const variants = new Set([text]);
+
+  for (let index = 0; index < text.length; index += 1) {
+    const char = text.at(index);
+    if (!char) {
+      continue;
+    }
+
+    const alternates = ARABIC_FOLD_TARGET_ALTERNATES[char];
+    if (!alternates) {
+      continue;
+    }
+
+    for (const variant of [...variants]) {
+      for (const alternate of alternates) {
+        variants.add(
+          `${variant.slice(0, index)}${alternate}${variant.slice(index + char.length)}`,
+        );
+        if (variants.size >= ARABIC_COMPATIBLE_VARIANT_LIMIT) {
+          return [...variants];
+        }
+      }
+    }
+  }
+
+  for (const variant of expandAsciiDigitVariants(text)) {
+    variants.add(variant);
+  }
+
+  return [...variants];
+};
+
+const expandAsciiDigitVariants = (text: string): string[] => {
+  if (!/[0-9]/u.test(text)) {
+    return [];
+  }
+
+  return [
+    text.replace(/[0-9]/gu, (digit) => ARABIC_INDIC_DIGITS[digit] ?? digit),
+    text.replace(
+      /[0-9]/gu,
+      (digit) => EXTENDED_ARABIC_INDIC_DIGITS[digit] ?? digit,
+    ),
+  ].filter((variant) => variant !== text);
 };
 
 const tokenizeAdvancedQuery = (query: string): AdvancedToken[] | null => {
@@ -427,17 +515,25 @@ const buildPlainSearchTsQueryParts = (
     regconfig = SIMPLE_REGCONFIG,
     useUnaccent = true,
   }: PlainSearchTsQueryOptions,
-) => [
-  sql`plainto_tsquery(${regconfig}, ${plainSearchText(query, useUnaccent)})`,
-  ...(normalizeSearchText(query) === query
-    ? []
-    : [
-        sql`plainto_tsquery(${regconfig}, ${normalizedPlainSearchText(
-          query,
-          useUnaccent,
-        )})`,
-      ]),
-];
+) => {
+  const legacyVariants = expandArabicFoldTargetVariants(query);
+  const normalized = normalizeSearchText(query);
+  const plainQueries = legacyVariants.map(
+    (variant) =>
+      sql`plainto_tsquery(${regconfig}, ${plainSearchText(variant, useUnaccent)})`,
+  );
+
+  if (normalized !== query) {
+    plainQueries.push(
+      sql`plainto_tsquery(${regconfig}, ${normalizedPlainSearchText(
+        query,
+        useUnaccent,
+      )})`,
+    );
+  }
+
+  return plainQueries;
+};
 
 export const buildPlainSearchTsQuery = (
   query: string,

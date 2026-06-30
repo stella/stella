@@ -16,11 +16,17 @@ type PgFtsSearchSql = {
   rank: SQL;
 };
 
-export const buildPgFtsSearchSql = (
-  query: string,
-  configs: readonly FtsSearchConfig[],
-  refs: PgFtsSearchSqlRefs,
-): PgFtsSearchSql => {
+type BuildPgFtsSearchSqlArgs = {
+  configs: readonly FtsSearchConfig[];
+  query: string;
+  refs: PgFtsSearchSqlRefs;
+};
+
+export const buildPgFtsSearchSql = ({
+  configs,
+  query,
+  refs,
+}: BuildPgFtsSearchSqlArgs): PgFtsSearchSql => {
   const knownLanguages = [
     ...new Set(configs.flatMap((config) => config.languages)),
   ];

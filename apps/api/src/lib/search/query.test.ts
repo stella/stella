@@ -190,7 +190,7 @@ describe("search query text", () => {
 
     expect(compiled.sql).toBe("to_tsquery('simple', unaccent($1))");
     expect(compiled.params).toEqual([
-      "((خدمة:* | خدمه:*)) & ((٢٠٢٤:* | 2024:*))",
+      "((خدمة:* | خدمه:*)) & ((٢٠٢٤:* | 2024:* | ۲۰۲۴:*))",
     ]);
   });
 
@@ -204,6 +204,27 @@ describe("search query text", () => {
     expect(compiled.params).toEqual(["(agreement:*) & (!((خدمة:* | خدمه:*)))"]);
   });
 
+  test("keeps already-folded Arabic queries compatible with legacy vectors", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildSearchTsQuery("احمد"));
+
+    expect(compiled.sql).toContain("plainto_tsquery('simple', unaccent($1))");
+    expect(compiled.params).toContain("احمد");
+    expect(compiled.params).toContain("أحمد");
+  });
+
+  test("keeps already-folded negated Arabic terms compatible", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(
+      buildSearchTsQuery("agreement NOT احمد"),
+    );
+
+    expect(compiled.sql).toBe("to_tsquery('simple', unaccent($1))");
+    expect(compiled.params).toEqual([
+      "(agreement:*) & (!((احمد:* | آحمد:* | أحمد:* | إحمد:* | ٱحمد:*)))",
+    ]);
+  });
+
   test("builds a plain tsquery that can match old and normalized vectors", () => {
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(buildPlainSearchTsQuery("خدمة"));
@@ -212,6 +233,16 @@ describe("search query text", () => {
       "(plainto_tsquery('simple', unaccent($1)) || plainto_tsquery('simple', unaccent(arabic_normalize($2))))",
     );
     expect(compiled.params).toEqual(["خدمة", "خدمة"]);
+  });
+
+  test("builds plain tsqueries for folded-to-legacy Arabic variants", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildPlainSearchTsQuery("احمد"));
+
+    expect(compiled.sql).toBe(
+      "(plainto_tsquery('simple', unaccent($1)) || plainto_tsquery('simple', unaccent($2)) || plainto_tsquery('simple', unaccent($3)) || plainto_tsquery('simple', unaccent($4)) || plainto_tsquery('simple', unaccent($5)))",
+    );
+    expect(compiled.params).toEqual(["احمد", "آحمد", "أحمد", "إحمد", "ٱحمد"]);
   });
 
   test("does not duplicate plain tsqueries when folding is a no-op", () => {

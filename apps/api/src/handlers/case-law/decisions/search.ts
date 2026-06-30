@@ -86,15 +86,6 @@ const searchPostgresDecisions = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const ftsSearch = buildPgFtsSearchSql(
-    body.query,
-    await loadFtsSearchConfigs(),
-    {
-      language: sql`sd.language`,
-      regconfig: sql`sd.regconfig`,
-      vector: sql`sd.tsv`,
-    },
-  );
 
   // Validate cursor early so a tampered value fails visibly
   let parsedCursor: { score: number; id: string } | null = null;
@@ -104,6 +95,16 @@ const searchPostgresDecisions = async (
       return status(400, { message: "Invalid cursor" });
     }
   }
+
+  const ftsSearch = buildPgFtsSearchSql({
+    configs: await loadFtsSearchConfigs(),
+    query: body.query,
+    refs: {
+      language: sql`sd.language`,
+      regconfig: sql`sd.regconfig`,
+      vector: sql`sd.tsv`,
+    },
+  });
 
   // Optional filters on the decisions table
   const courtFilter = body.court ? sql`AND d.court = ${body.court}` : sql``;

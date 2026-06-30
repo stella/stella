@@ -66,16 +66,16 @@ export const resolveFtsConfig = async (
 
 export const loadFtsSearchConfigs = async (): Promise<FtsSearchConfig[]> => {
   const configs = await loadFtsConfigs();
-  const groups = new Map<string, FtsSearchConfig>();
+  const groups = new Map<
+    string,
+    FtsConfig & { includeDefault: boolean; languages: string[] }
+  >();
 
   for (const [language, config] of configs) {
     const key = `${config.regconfig}:${config.useUnaccent}`;
     const existing = groups.get(key);
     if (existing) {
-      groups.set(key, {
-        ...existing,
-        languages: [...existing.languages, language],
-      });
+      existing.languages.push(language);
       continue;
     }
 

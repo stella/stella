@@ -30,7 +30,7 @@ describe("buildPgFtsSearchSql", () => {
   test("keeps FTS predicates indexable with constant regconfig tsqueries", () => {
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(
-      buildPgFtsSearchSql("HELLO", configs, refs).predicate,
+      buildPgFtsSearchSql({ configs, query: "HELLO", refs }).predicate,
     );
 
     expect(compiled.sql).not.toContain("plainto_tsquery(sd.regconfig");
@@ -45,7 +45,7 @@ describe("buildPgFtsSearchSql", () => {
   test("preserves use-unaccent per FTS config branch", () => {
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(
-      buildPgFtsSearchSql("خدمة", configs, refs).predicate,
+      buildPgFtsSearchSql({ configs, query: "خدمة", refs }).predicate,
     );
 
     expect(compiled.sql).toBe(

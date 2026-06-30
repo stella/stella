@@ -35,15 +35,15 @@ const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
 const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const limit = query.limit;
-  const ftsSearch = buildPgFtsSearchSql(
-    query.query,
-    await loadFtsSearchConfigs(),
-    {
+  const ftsSearch = buildPgFtsSearchSql({
+    configs: await loadFtsSearchConfigs(),
+    query: query.query,
+    refs: {
       language: sql`sd.language`,
       regconfig: sql`sd.regconfig`,
       vector: sql`sd.tsv`,
     },
-  );
+  });
 
   const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
 
