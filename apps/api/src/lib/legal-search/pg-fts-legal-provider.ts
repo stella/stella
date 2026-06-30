@@ -36,7 +36,9 @@ const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
 const search = async (query: LegalSearchQuery): Promise<LegalSearchResult> => {
   const limit = query.limit;
-  const tsQuery = buildPlainSearchTsQuery(query.query);
+  const tsQuery = buildPlainSearchTsQuery(query.query, {
+    regconfig: sql`sd.regconfig::regconfig`,
+  });
 
   const parsedCursor = query.cursor ? decodeCursor(query.cursor) : null;
 

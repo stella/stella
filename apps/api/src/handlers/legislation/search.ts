@@ -100,7 +100,9 @@ const pgSearch = async (
   scopedDb: ScopedDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const tsQuery = buildPlainSearchTsQuery(body.query);
+  const tsQuery = buildPlainSearchTsQuery(body.query, {
+    regconfig: sql`sd.regconfig::regconfig`,
+  });
 
   const filters = sql`
     ${body.jurisdiction ? sql`AND d.country = ${body.jurisdiction}` : sql``}

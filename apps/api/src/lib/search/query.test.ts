@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import {
@@ -178,8 +179,7 @@ describe("search query text", () => {
 
     expect(compiled.sql).toContain("arabic_normalize");
     expect(compiled.sql).toContain("plainto_tsquery('simple', unaccent($1))");
-    expect(compiled.params).toContain("خدمة");
-    expect(compiled.params).toContain("خدمة");
+    expect(compiled.params.filter((param) => param === "خدمة")).toHaveLength(2);
     expect(compiled.params).toContain("خدمة:*");
     expect(compiled.params).toContain("خدمه:*");
   });
@@ -188,9 +188,20 @@ describe("search query text", () => {
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(buildSearchTsQuery("خدمة AND ٢٠٢٤"));
 
-    expect(compiled.sql).toContain(" || ");
-    expect(compiled.params).toContain("(خدمة:*) & (٢٠٢٤:*)");
-    expect(compiled.params).toContain("(خدمه:*) & (2024:*)");
+    expect(compiled.sql).toBe("to_tsquery('simple', unaccent($1))");
+    expect(compiled.params).toEqual([
+      "((خدمة:* | خدمه:*)) & ((٢٠٢٤:* | 2024:*))",
+    ]);
+  });
+
+  test("keeps negated advanced Arabic terms compatible", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(
+      buildSearchTsQuery("agreement NOT خدمة"),
+    );
+
+    expect(compiled.sql).toBe("to_tsquery('simple', unaccent($1))");
+    expect(compiled.params).toEqual(["(agreement:*) & (!((خدمة:* | خدمه:*)))"]);
   });
 
   test("builds a plain tsquery that can match old and normalized vectors", () => {
@@ -209,5 +220,30 @@ describe("search query text", () => {
 
     expect(compiled.sql).toBe("(plainto_tsquery('simple', unaccent($1)))");
     expect(compiled.params).toEqual(["agreement"]);
+  });
+
+  test("duplicates plain tsqueries when search normalization changes case", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildPlainSearchTsQuery("HELLO"));
+
+    expect(compiled.sql).toBe(
+      "(plainto_tsquery('simple', unaccent($1)) || plainto_tsquery('simple', unaccent(arabic_normalize($2))))",
+    );
+    expect(compiled.params).toEqual(["HELLO", "HELLO"]);
+  });
+
+  test("builds plain tsqueries with caller-provided FTS config", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(
+      buildPlainSearchTsQuery("خدمة", {
+        regconfig: sql`sd.regconfig::regconfig`,
+        useUnaccent: false,
+      }),
+    );
+
+    expect(compiled.sql).toBe(
+      "(plainto_tsquery(sd.regconfig::regconfig, $1) || plainto_tsquery(sd.regconfig::regconfig, arabic_normalize($2)))",
+    );
+    expect(compiled.params).toEqual(["خدمة", "خدمة"]);
   });
 });

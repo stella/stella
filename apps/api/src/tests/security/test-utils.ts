@@ -1,9 +1,6 @@
-import { panic } from "better-result";
 import { pushSchema } from "drizzle-kit/api-postgres";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
-import { readdirSync, readFileSync } from "node:fs";
-import nodePath from "node:path";
 
 import * as authSchema from "@/api/db/auth-schema";
 import * as rlsExports from "@/api/db/rls";
@@ -75,28 +72,6 @@ const createTestDb = async (): Promise<TestDatabase> => {
   for (const statement of sqlStatements) {
     // oxlint-disable-next-line no-await-in-loop -- ordered DDL statements run sequentially on one test DB connection
     await testDb.execute(sql.raw(statement));
-  }
-
-  // Search-index write paths call arabic_normalize(); pushSchema only
-  // creates tables, so apply the function migration the way runtime does.
-  const drizzleDir = nodePath.resolve(import.meta.dir, "../../../drizzle");
-  const arabicFnMigration =
-    readdirSync(drizzleDir).find((name) =>
-      name.endsWith("_arabic_normalize_function"),
-    ) ?? panic("arabic_normalize_function migration not found");
-  const arabicNormalizeMigration = readFileSync(
-    nodePath.join(drizzleDir, arabicFnMigration, "migration.sql"),
-    "utf-8",
-  );
-  for (const statement of arabicNormalizeMigration.split(
-    "--> statement-breakpoint",
-  )) {
-    const trimmed = statement.trim();
-    if (trimmed.length === 0) {
-      continue;
-    }
-    // oxlint-disable-next-line no-await-in-loop -- ordered DDL statements run sequentially on one test DB connection
-    await testDb.execute(sql.raw(trimmed));
   }
 
   await testDb.execute(

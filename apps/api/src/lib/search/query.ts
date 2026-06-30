@@ -1,12 +1,13 @@
 import { sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 
-import { applyArabicFolds } from "@stll/text-normalize";
+import { applyArabicFolds, normalizeSearchText } from "@stll/text-normalize";
 
 const PREFIX_QUERY_TOKEN_LIMIT = 8;
 const ADVANCED_QUERY_OPERATOR_RE =
   /(?:^|\s)(?:AND|OR|NOT)(?:\s|$)|(?:^|\s)-(?=\S)|["()]/u;
 const FILE_EXTENSION_RE = /^[\p{L}\p{N}]{1,10}$/u;
-type ArabicFoldMode = "folded" | "legacy";
+type ArabicFoldMode = "compatible" | "folded" | "legacy";
 
 const compact = (parts: readonly (string | null | undefined)[]): string =>
   parts
@@ -86,7 +87,7 @@ type AdvancedToken =
 type SearchAst =
   | { type: "and" | "or"; left: SearchAst; right: SearchAst }
   | { type: "not"; child: SearchAst }
-  | { type: "term"; lexemes: string[]; phrase: boolean };
+  | { type: "term"; lexemes: string[][]; phrase: boolean };
 
 class AdvancedQueryParser {
   readonly #tokens: AdvancedToken[];
@@ -164,7 +165,7 @@ class AdvancedQueryParser {
     }
 
     this.#index += 1;
-    const lexemes = toSearchLexemes(token.value, this.#mode);
+    const lexemes = toSearchLexemeGroups(token.value, this.#mode);
     return lexemes.length > 0
       ? { type: "term", lexemes, phrase: token.phrase }
       : null;
@@ -265,6 +266,24 @@ const toSearchLexemes = (
     .filter((token) => token.length > 0)
     .slice(0, PREFIX_QUERY_TOKEN_LIMIT);
 
+const toSearchLexemeGroups = (
+  query: string,
+  mode: ArabicFoldMode = "folded",
+): string[][] => {
+  if (mode !== "compatible") {
+    return toSearchLexemes(query, mode).map((lexeme) => [lexeme]);
+  }
+
+  return toSearchLexemes(query, "legacy").map((lexeme) => {
+    const variants = [lexeme];
+    const folded = applyArabicFolds(lexeme);
+    if (folded && folded !== lexeme) {
+      variants.push(folded);
+    }
+    return variants;
+  });
+};
+
 const tokenizeAdvancedQuery = (query: string): AdvancedToken[] | null => {
   const tokens: AdvancedToken[] = [];
   let index = 0;
@@ -345,7 +364,7 @@ const astToTsQuery = (ast: SearchAst): string => {
   switch (ast.type) {
     case "term": {
       const operator = ast.phrase ? " <-> " : " & ";
-      return ast.lexemes.map((lexeme) => `${lexeme}:*`).join(operator);
+      return ast.lexemes.map(lexemeGroupToTsQuery).join(operator);
     }
     case "not":
       return `!(${astToTsQuery(ast.child)})`;
@@ -360,6 +379,15 @@ const astToTsQuery = (ast: SearchAst): string => {
   }
 };
 
+const lexemeGroupToTsQuery = (lexemes: string[]): string => {
+  const variants = lexemes.map((lexeme) => `${lexeme}:*`);
+  const first = variants.at(0);
+  if (!first) {
+    return "";
+  }
+  return variants.length === 1 ? first : `(${variants.join(" | ")})`;
+};
+
 export const toAdvancedTsQueryText = (query: string): string | null => {
   if (!isAdvancedQuery(query)) {
     return null;
@@ -369,42 +397,58 @@ export const toAdvancedTsQueryText = (query: string): string | null => {
   return ast && hasPositiveTerm(ast) ? astToTsQuery(ast) : null;
 };
 
-const toCompatibleAdvancedTsQueryTexts = (query: string): string[] => {
+const toCompatibleAdvancedTsQueryText = (query: string): string | null => {
   if (!isAdvancedQuery(query)) {
-    return [];
+    return null;
   }
 
-  return [
-    parseAdvancedSearchAst(query, "legacy"),
-    parseAdvancedSearchAst(query, "folded"),
-  ].flatMap((ast) => (ast && hasPositiveTerm(ast) ? [astToTsQuery(ast)] : []));
+  const ast = parseAdvancedSearchAst(query, "compatible");
+  return ast && hasPositiveTerm(ast) ? astToTsQuery(ast) : null;
 };
 
-const hasArabicFoldVariant = (query: string): boolean => {
-  const normalized = query.normalize("NFKC");
-  return applyArabicFolds(normalized) !== normalized;
+type PlainSearchTsQueryOptions = {
+  regconfig?: SQL;
+  useUnaccent?: boolean;
 };
 
-const buildPlainSearchTsQueryParts = (query: string) => [
-  sql`plainto_tsquery('simple', unaccent(${query}))`,
-  ...(hasArabicFoldVariant(query)
-    ? [sql`plainto_tsquery('simple', unaccent(arabic_normalize(${query})))`]
-    : []),
+const SIMPLE_REGCONFIG = sql`'simple'`;
+
+const plainSearchText = (query: string, useUnaccent: boolean) =>
+  useUnaccent ? sql`unaccent(${query})` : sql`${query}`;
+
+const normalizedPlainSearchText = (query: string, useUnaccent: boolean) =>
+  useUnaccent
+    ? sql`unaccent(arabic_normalize(${query}))`
+    : sql`arabic_normalize(${query})`;
+
+const buildPlainSearchTsQueryParts = (
+  query: string,
+  {
+    regconfig = SIMPLE_REGCONFIG,
+    useUnaccent = true,
+  }: PlainSearchTsQueryOptions,
+) => [
+  sql`plainto_tsquery(${regconfig}, ${plainSearchText(query, useUnaccent)})`,
+  ...(normalizeSearchText(query) === query
+    ? []
+    : [
+        sql`plainto_tsquery(${regconfig}, ${normalizedPlainSearchText(
+          query,
+          useUnaccent,
+        )})`,
+      ]),
 ];
 
-export const buildPlainSearchTsQuery = (query: string) =>
-  sql`(${sql.join(buildPlainSearchTsQueryParts(query), sql` || `)})`;
+export const buildPlainSearchTsQuery = (
+  query: string,
+  options: PlainSearchTsQueryOptions = {},
+) =>
+  sql`(${sql.join(buildPlainSearchTsQueryParts(query, options), sql` || `)})`;
 
 export const buildSearchTsQuery = (query: string) => {
-  const advanced = toCompatibleAdvancedTsQueryTexts(query);
-  if (advanced.length > 0) {
-    return sql`(${sql.join(
-      [...new Set(advanced)].map(
-        (advancedQuery) =>
-          sql`to_tsquery('simple', unaccent(${advancedQuery}))`,
-      ),
-      sql` || `,
-    )})`;
+  const advanced = toCompatibleAdvancedTsQueryText(query);
+  if (advanced) {
+    return sql`to_tsquery('simple', unaccent(${advanced}))`;
   }
 
   if (isAdvancedQuery(query.trim())) {
@@ -421,7 +465,9 @@ export const buildSearchTsQuery = (query: string) => {
     return sql`plainto_tsquery('simple', '')`;
   }
 
-  const plainQueries = variants.flatMap(buildPlainSearchTsQueryParts);
+  const plainQueries = variants.flatMap((variant) =>
+    buildPlainSearchTsQueryParts(variant, {}),
+  );
   const prefixQueries = [
     ...new Set(
       variants.flatMap((variant) => {
