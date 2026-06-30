@@ -257,9 +257,10 @@ export const createActiveDocxEditTool = () =>
       "and apply themselves; this tool does NOT write to the document. " +
       "Write document prose, not markdown: no `#` headings, list dashes, " +
       "or backticks. For a bold heading set `styleId` (e.g. ClauseHeading1). " +
-      "The only inline formatting honored in `text`/`replace` is `**bold**` " +
-      "and `***bold italic***`; any other markdown lands as literal " +
-      "characters. See each schema field for its semantics.",
+      "Inserted block `text` may use `**bold**` / `***bold italic***` for " +
+      "inline emphasis; in `replace` write plain text, since redlined " +
+      "replacements are not re-formatted. See each schema field for its " +
+      "semantics.",
     needsApproval: true,
     inputSchema: valibotSchema(
       v.strictObject({
