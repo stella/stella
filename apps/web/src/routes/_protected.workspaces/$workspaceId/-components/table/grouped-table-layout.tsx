@@ -597,8 +597,10 @@ const GroupSection = ({
   // While the up-front counts load, or a populated group is still offscreen /
   // fetching its first page, show skeleton rows instead of an empty body.
   const isLoadingCounts = count === undefined;
-  const isLoadingRows = hasRows && hasScrolledIntoView && query.isLoading;
-  const isPendingVisible = hasRows && !hasScrolledIntoView;
+  const isLoadingRows =
+    hasRows && (eager || hasScrolledIntoView) && query.isLoading;
+  // Eager sections load upfront, so they're never "pending until scrolled in".
+  const isPendingVisible = hasRows && !eager && !hasScrolledIntoView;
   const showSkeleton = isLoadingCounts || isLoadingRows || isPendingVisible;
 
   return (
@@ -625,7 +627,7 @@ const GroupSection = ({
       )}
       {!collapsed &&
         hasRows &&
-        hasScrolledIntoView &&
+        (eager || hasScrolledIntoView) &&
         !isLoadingRows && (
           // The table flows inline in the shared outer scroll (no nested scroll
           // box), so its rows render directly and the sticky group header stacks
