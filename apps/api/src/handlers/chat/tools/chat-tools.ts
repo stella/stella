@@ -30,7 +30,10 @@ import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-regi
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
-import { createTemplateTools } from "@/api/handlers/chat/tools/template-tools";
+import {
+  createTemplateAuthoringTools,
+  createTemplateTools,
+} from "@/api/handlers/chat/tools/template-tools";
 import {
   applyChatToolPolicies,
   CHAT_TOOL_POLICY_KIND,
@@ -86,6 +89,7 @@ type CurrentSkillEditTools = Partial<
   Record<CurrentSkillEditToolName, NonNullable<ToolSet[string]>>
 >;
 type TemplateTools = ReturnType<typeof createTemplateTools>;
+type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -99,7 +103,8 @@ type BuiltInChatTools = OrgTools &
   CreateDocumentTools &
   WebSearchTools &
   ChatHistoryTools &
-  TemplateTools;
+  TemplateTools &
+  TemplateAuthoringTools;
 
 export type ChatTools = BuiltInChatTools;
 type BuiltInChatToolPolicyName =
@@ -113,9 +118,9 @@ type GetChatToolsProps = {
   /**
    * Caller's workspace member role. Gates role-restricted tools so a
    * chat-capable role without the matching grant cannot reach them.
-   * Template tools require `template: ["create"]` (the same grant the
+   * Template tools require `template: ["use"]` (the same grant the
    * REST fill route enforces), so a role with `template: []` (e.g.
-   * intern) sees no template tools.
+   * external) sees no template tools.
    */
   memberRole: keyof typeof roles;
   // Required (not optional): the template tools eagerly resolve an AI model for
@@ -310,10 +315,10 @@ export const getChatTools = ({
 
   // Template library tools: list, describe, and fill templates. Their
   // execute fns rely on org RLS alone, so gate registration on the same
-  // `template: ["create"]` grant the REST fill route enforces; a
-  // chat-capable role without it (e.g. intern) sees no template tools.
+  // `template: ["use"]` grant the REST fill route enforces; a
+  // chat-capable role without it sees no template tools.
   const canUseTemplates = roles[memberRole].authorize({
-    template: ["create"],
+    template: ["use"],
   }).success;
   const templateTools = canUseTemplates
     ? createTemplateTools({
@@ -323,6 +328,22 @@ export const getChatTools = ({
         userId,
         orgAIConfig,
         recordAuditEvent,
+      })
+    : {};
+
+  // `suggest_template_fields` proposes turning literals into {{field}}
+  // placeholders, i.e. it assists template authoring, not filling. Gate it
+  // behind `template: ["create"]` so a fill-only role (e.g. intern, which has
+  // `use` but not `create`) cannot reach authoring assistance.
+  const canAuthorTemplates = roles[memberRole].authorize({
+    template: ["create"],
+  }).success;
+  const templateAuthoringTools = canAuthorTemplates
+    ? createTemplateAuthoringTools({
+        safeDb,
+        organizationId,
+        userId,
+        orgAIConfig,
       })
     : {};
 
@@ -343,6 +364,7 @@ export const getChatTools = ({
       ...infosoudTools,
       ...workspaceTools,
       ...templateTools,
+      ...templateAuthoringTools,
       ...historyTools,
       ...createDocumentTools,
       ...activeDocxEditTools,

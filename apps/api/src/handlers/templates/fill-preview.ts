@@ -265,7 +265,10 @@ const fillPreviewHandler = async function* ({
 };
 
 const config = {
-  permissions: { workspace: ["read"] },
+  // Same `use` grant as the REST fill routes: this runs the full stored-template
+  // substitution pipeline (rendering filled paragraphs and consuming AI-fill
+  // usage), so a read-only role must not reach it.
+  permissions: { template: ["use"] },
   params: fillPreviewParamsSchema,
   body: fillPreviewBodySchema,
 } satisfies HandlerConfig;

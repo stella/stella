@@ -15,7 +15,10 @@ const suggestFieldsBodySchema = t.Object({
 });
 
 const config = {
-  permissions: { workspace: ["read"] },
+  // Authoring assistance (which literals should become {{fields}}) that spends
+  // org AI, so it takes the same `template: ["create"]` grant as its chat twin
+  // `suggest_template_fields`; a fill-only or read-only role must not reach it.
+  permissions: { template: ["create"] },
   body: suggestFieldsBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

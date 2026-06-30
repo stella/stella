@@ -153,7 +153,7 @@ const extractFieldValues = async ({
 };
 
 const config = {
-  permissions: { template: ["create"] },
+  permissions: { template: ["use"] },
   params: prefillParamsSchema,
   body: prefillBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },

@@ -45,12 +45,47 @@ type CreateTemplateToolsArgs = {
   recordAuditEvent?: AuditRecorder | undefined;
 };
 
+type TemplateAiAnalyticsArgs = {
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  orgAIConfig: OrgAIConfig | null;
+  feature: string;
+};
+
+// Meter a template tool's nested AI steps alongside the rest of the chat turn.
+// workspaceId is null: a chat-driven template action is org-scoped, not bound to
+// a matter.
+const buildTemplateAiAnalytics = ({
+  safeDb,
+  organizationId,
+  userId,
+  orgAIConfig,
+  feature,
+}: TemplateAiAnalyticsArgs) =>
+  createAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId,
+      workspaceId: null,
+    },
+    feature,
+    modelRole: "fast",
+    orgAIConfig: orgAIConfig ?? null,
+    properties: { organization_id: organizationId },
+    traceId: Bun.randomUUIDv7(),
+  });
+
 /**
- * Chat (MCP) tools for the document-template library, letting the assistant
- * drive templating end to end: discover templates (`list_templates`), learn a
- * template's fields (`describe_template`), and fill one (`fill_template`),
- * including AI-fillable fields drafted from the org's model. Org-scoped via
- * RLS on `scopedDb`.
+ * Chat (MCP) tools for using the document-template library: discover templates
+ * (`list_templates`), learn a template's fields (`describe_template`), and fill
+ * one (`fill_template`), including AI-fillable fields drafted from the org's
+ * model. Org-scoped via RLS on `scopedDb`. These map to the `template: ["use"]`
+ * grant; the authoring-only `suggest_template_fields` tool lives in
+ * `createTemplateAuthoringTools`.
  */
 export const createTemplateTools = ({
   scopedDb,
@@ -60,22 +95,12 @@ export const createTemplateTools = ({
   orgAIConfig,
   recordAuditEvent,
 }: CreateTemplateToolsArgs) => {
-  // Meter the nested fill generation alongside the rest of the chat turn.
-  // workspaceId is null: a chat fill is org-scoped, not bound to a matter.
-  const aiAnalytics = createAIAnalyticsCallbacks({
-    usageMetering: {
-      actionType: "chat",
-      organizationId,
-      safeDb,
-      serviceTier: "standard",
-      userId,
-      workspaceId: null,
-    },
+  const aiAnalytics = buildTemplateAiAnalytics({
+    safeDb,
+    organizationId,
+    userId,
+    orgAIConfig,
     feature: "templates.fill",
-    modelRole: "fast",
-    orgAIConfig: orgAIConfig ?? null,
-    properties: { organization_id: organizationId },
-    traceId: Bun.randomUUIDv7(),
   });
   // Model-backed generator for AI-fillable fields (FieldMeta.aiPrompt); shared
   // with the web fill routes so AI placeholders behave identically. A failed or
@@ -203,7 +228,41 @@ export const createTemplateTools = ({
         return result;
       },
     }),
+  };
+};
 
+type CreateTemplateAuthoringToolsArgs = {
+  /** Org-scoped DB used to meter the AI suggestion step. */
+  safeDb: SafeDb;
+  organizationId: SafeId<"organization">;
+  /** Acting user for the metering ledger. */
+  userId: SafeId<"user">;
+  /** Org AI config from the chat turn; see `createTemplateTools`. */
+  orgAIConfig: OrgAIConfig | null;
+};
+
+/**
+ * Chat (MCP) tool for *authoring* templates: `suggest_template_fields` proposes
+ * which literal values in a document being authored should become `{{field}}`
+ * placeholders. Split from `createTemplateTools` because this widens a fill-only
+ * role into template authoring, so callers gate it behind a `template:
+ * ["create"]` grant rather than the broader `["use"]`.
+ */
+export const createTemplateAuthoringTools = ({
+  safeDb,
+  organizationId,
+  userId,
+  orgAIConfig,
+}: CreateTemplateAuthoringToolsArgs) => {
+  const aiAnalytics = buildTemplateAiAnalytics({
+    safeDb,
+    organizationId,
+    userId,
+    orgAIConfig,
+    feature: "templates.suggest_fields",
+  });
+
+  return {
     [SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]: tool({
       description:
         "Suggest which literal values in a template document being authored " +

@@ -60,7 +60,7 @@ const resolveDocumentFileName = (
 };
 
 const config = {
-  permissions: { template: ["create"], entity: ["create"] },
+  permissions: { template: ["use"], entity: ["create"] },
   params: fillToWorkspaceParamsSchema,
   body: fillToWorkspaceBodySchema,
 } satisfies HandlerConfig;

@@ -359,7 +359,7 @@ const fillTemplateArgsSchema = v.strictObject({
 
 const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
-    template: ["create"],
+    template: ["use"],
   });
   if (!hasPermission.success) {
     return errorResult("Forbidden");
