@@ -213,18 +213,25 @@ export const ChatThreadPage = ({
   const lastMessage = messages.at(-1);
   const lastMessageId = lastMessage?.id ?? null;
   const lastMessageRole = lastMessage?.role ?? null;
-  // The ask-user clarification card owns the turn: its own questions and
-  // submit button take precedence over generic follow-up suggestions, so
-  // suppress both the chips and the Tab-to-ask editor hint while it is live.
-  const lastMessageIsAskUser =
-    lastMessage?.role === "assistant" &&
-    lastMessage.parts.some((part) => part.type === "tool-ask-user");
+  // A pending ask-user clarification card owns the turn: its own questions
+  // and submit button take precedence over generic follow-up suggestions, so
+  // suppress both the chips and the Tab-to-ask editor hint until it is
+  // answered. Once the card resolves (`output-available`) the assistant's
+  // continuation may live on this same message, so gate on the unanswered
+  // state, not mere presence of the part.
+  const lastMessageHasPendingAskUser =
+    lastMessage !== undefined &&
+    lastMessage.role === "assistant" &&
+    lastMessage.parts.some(
+      (part) =>
+        part.type === "tool-ask-user" && part.state !== "output-available",
+    );
   const editorIsEmpty = useIsChatDraftEmpty(threadRef);
   const eligibleForSuggestions =
     editorIsEmpty &&
     lastMessageId !== null &&
     lastMessageRole === "assistant" &&
-    !lastMessageIsAskUser;
+    !lastMessageHasPendingAskUser;
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
