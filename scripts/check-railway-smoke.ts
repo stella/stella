@@ -93,6 +93,10 @@ const expectCommit = ({ value, expectedCommit, source }: ExpectCommitInput) => {
   }
 };
 
+const throwError = (error: Error): never => {
+  throw error;
+};
+
 const runProbe = async (name: string, probe: () => Promise<void>) => {
   let lastError: Error | undefined;
   for (let attempt = 1; attempt <= PROBE_ATTEMPTS; attempt += 1) {
@@ -116,7 +120,7 @@ const runProbe = async (name: string, probe: () => Promise<void>) => {
   }
 
   if (lastError) {
-    throw new RailwaySmokeError(lastError.message);
+    return throwError(lastError);
   }
   throw new RailwaySmokeError(`${name} failed`);
 };

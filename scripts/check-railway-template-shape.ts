@@ -115,12 +115,22 @@ expect(existsSync(WEB_CONFIG_PATH), "Web config must exist");
 validateServiceConfig({
   path: API_CONFIG_PATH,
   dockerfilePath: "apps/api/Dockerfile",
-  requiredWatchPatterns: ["/apps/api/**", "/packages/**", "/bun.lock"],
+  requiredWatchPatterns: [
+    "/railway.json",
+    "/apps/api/**",
+    "/packages/**",
+    "/bun.lock",
+  ],
 });
 validateServiceConfig({
   path: WEB_CONFIG_PATH,
   dockerfilePath: "apps/web/Dockerfile",
-  requiredWatchPatterns: ["/apps/web/**", "/packages/**", "/VERSION"],
+  requiredWatchPatterns: [
+    "/railway/web.railway.json",
+    "/apps/web/**",
+    "/packages/**",
+    "/VERSION",
+  ],
 });
 
 const apiDeploy = getRecord(readJson(API_CONFIG_PATH), "deploy");

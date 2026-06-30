@@ -4,6 +4,7 @@
     "builder": "DOCKERFILE",
     "dockerfilePath": "apps/web/Dockerfile",
     "watchPatterns": [
+      "/railway/web.railway.json",
       "/apps/web/**",
       "/packages/**",
       "/bun.lock",
