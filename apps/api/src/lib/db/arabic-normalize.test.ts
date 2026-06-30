@@ -8,10 +8,17 @@ import { normalizeSearchText } from "@stll/text-normalize";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const MIGRATION_PATH = nodePath.resolve(
+const INITIAL_ARABIC_NORMALIZE_MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
   "../../../drizzle/20260629123000_arabic_normalize_function/migration.sql",
 );
+const ARABIC_NORMALIZE_MIGRATION_PATHS = [
+  INITIAL_ARABIC_NORMALIZE_MIGRATION_PATH,
+  nodePath.resolve(
+    import.meta.dir,
+    "../../../drizzle/20260630100000_arabic_normalize_combining_marks/migration.sql",
+  ),
+];
 
 // The shared search-key contract: the SQL arabic_normalize() must produce
 // the same match key as the TS normalizeSearchText for every input. The
@@ -40,20 +47,24 @@ const VECTORS: readonly string[] = [
   "a\u2007b\u3000c",
   "ﷲ", // U+FDF2 ligature -> الله via NFKC
   "ﺍﺣﻤﺪ", // presentation forms -> احمد via NFKC
+  "أحمد", // decomposed alef + hamza above -> احمد
+  "حٔمد", // uncomposed hamza mark is removed
 ];
 
 let testDb: TestDatabase;
 
 beforeAll(async () => {
   testDb = await getTestDb();
-  const migrationSql = readFileSync(MIGRATION_PATH, "utf-8");
-  for (const statement of migrationSql.split("--> statement-breakpoint")) {
-    const trimmed = statement.trim();
-    if (trimmed.length === 0 || !isPortableFunctionStatement(trimmed)) {
-      continue;
+  for (const migrationPath of ARABIC_NORMALIZE_MIGRATION_PATHS) {
+    const migrationSql = readFileSync(migrationPath, "utf-8");
+    for (const statement of migrationSql.split("--> statement-breakpoint")) {
+      const trimmed = statement.trim();
+      if (trimmed.length === 0 || !isPortableFunctionStatement(trimmed)) {
+        continue;
+      }
+      // oxlint-disable-next-line no-await-in-loop -- ordered DDL on one connection
+      await testDb.execute(sql.raw(trimmed));
     }
-    // oxlint-disable-next-line no-await-in-loop -- ordered DDL on one connection
-    await testDb.execute(sql.raw(trimmed));
   }
 });
 
@@ -73,7 +84,10 @@ describe("arabic_normalize SQL function", () => {
   });
 
   test("keeps concurrent index creation retry-safe", () => {
-    const migrationSql = readFileSync(MIGRATION_PATH, "utf-8");
+    const migrationSql = readFileSync(
+      INITIAL_ARABIC_NORMALIZE_MIGRATION_PATH,
+      "utf-8",
+    );
     const indexNames = [
       "contacts_display_name_arabic_norm_trgm_idx",
       "contacts_first_name_arabic_norm_trgm_idx",
