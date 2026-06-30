@@ -172,8 +172,7 @@ Marketplace metadata checklist:
 - Image: use a square transparent stella mark, not the wide repository banner.
 - Description: keep it short and operational; avoid unsupported claims.
 - Enable Template Queue email notifications before publishing.
-- Keep referral, payout, pricing, and private business notes out of public
-  template copy.
+- Keep private business notes out of public template copy.
 
 After publishing, use Railway's generated template code in any README or website
 button:
