@@ -33,6 +33,7 @@ import {
   brandPersistedContactId,
   brandPersistedEntityId,
 } from "@/api/lib/safe-id-boundaries";
+import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
@@ -385,11 +386,14 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
           // round-trips lastActivityAt through a millisecond JS Date;
           // matters sharing a now()-generated microsecond timestamp cannot
           // be skipped or duplicated across pages. The boundary lookup is
-          // org-scoped (defense in depth beyond RLS) so a cursor carrying a
-          // foreign workspace id cannot shift this org's page boundary.
+          // scoped to the same org and status filter as the page (defense in
+          // depth beyond RLS) so a cursor carrying a foreign or out-of-filter
+          // workspace id cannot shift this page's boundary. The status clause
+          // is conditional: comparing against the synthetic "all" value would
+          // fail to cast to the status enum.
           boundaryId === undefined
             ? undefined
-            : sql`(${workspaces.lastActivityAt}, ${workspaces.id}) < (select b.last_activity_at, b.id from workspaces b where b.id = ${boundaryId} and b.organization_id = ${context.organizationId})`,
+            : sql`(${workspaces.lastActivityAt}, ${workspaces.id}) < (select b.last_activity_at, b.id from workspaces b where b.id = ${boundaryId} and b.organization_id = ${context.organizationId}${status === "all" ? sql`` : sql` and b.status = ${status}`})`,
         ),
       )
       .orderBy(desc(workspaces.lastActivityAt), desc(workspaces.id))
@@ -507,6 +511,12 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
   const cursor = parseOptionalCursor({ args, key: "cursor" });
   if (isToolErrorResult(cursor)) {
     return cursor;
+  }
+  // Reject an undecodable provider cursor instead of forwarding it: the
+  // provider treats a malformed cursor as no cursor and silently returns the
+  // first page, which would duplicate hits or loop a paginating client.
+  if (cursor !== undefined && decodeCursor(cursor) === null) {
+    return errorResult("Invalid cursor");
   }
 
   const result = await getSearchProvider().search({

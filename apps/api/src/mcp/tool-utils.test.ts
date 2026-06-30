@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
+import { encodePaginationCursor } from "@/api/lib/pagination";
 import {
   buildCaseLawDecisionAppUrl,
   buildCaseLawDecisionUrl,
@@ -288,11 +289,16 @@ describe("windowTextByCursor", () => {
   });
 
   test("clamps an offset past the end to an empty final window", () => {
-    const first = expectWindow(
-      windowTextByCursor({ cursor: undefined, maxChars: 4, text: "abcd" }),
+    const result = expectWindow(
+      windowTextByCursor({
+        cursor: encodePaginationCursor([999]),
+        maxChars: 4,
+        text: "abcd",
+      }),
     );
-    expect(first.nextCursor).toBeNull();
-    expect(first.text).toBe("abcd");
+    expect(result.text).toBe("");
+    expect(result.nextCursor).toBeNull();
+    expect(result.truncated).toBe(false);
   });
 });
 

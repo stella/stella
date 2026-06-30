@@ -1180,6 +1180,17 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  test("search_across_matters rejects a malformed cursor instead of resetting to page 1", async () => {
+    const result = await handleMcpToolCall({
+      args: { query: "share purchase", cursor: "not-a-valid-cursor" },
+      context: createContext(),
+      toolName: "search_across_matters",
+    });
+
+    expect(result.isError).toBe(true);
+    expect(searchProviderSearchMock).not.toHaveBeenCalled();
+  });
+
   test("read_content_across_matters returns content from allowed workspaces", async () => {
     const context = createContext({
       accessibleWorkspaceIds: ["ws_1", "ws_3"],

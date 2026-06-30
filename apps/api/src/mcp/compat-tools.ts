@@ -7,6 +7,7 @@ import { loadAnonymizationGazetteerEntries } from "@/api/lib/anonymization-black
 import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -446,6 +447,12 @@ const handleCompatSearchTool: McpToolHandler = async ({
   const cursor = parseOptionalCursor({ args, key: "cursor" });
   if (isToolErrorResult(cursor)) {
     return cursor;
+  }
+  // Reject an undecodable provider cursor instead of forwarding it: the
+  // provider treats a malformed cursor as no cursor and silently returns the
+  // first page, which would duplicate hits or loop a paginating client.
+  if (cursor !== undefined && decodeCursor(cursor) === null) {
+    return errorResult("Invalid cursor");
   }
 
   // Request exactly the page size and pass the provider cursor through so
