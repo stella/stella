@@ -5,6 +5,10 @@ import { TaggedError } from "better-result";
 import { env } from "@/api/env";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 
@@ -143,6 +147,96 @@ export const parseOptionalLimit = ({
     );
   }
   return value;
+};
+
+export const isToolErrorResult = (value: unknown): value is CallToolResult =>
+  typeof value === "object" &&
+  value !== null &&
+  "isError" in value &&
+  value.isError === true;
+
+const MAX_CURSOR_LENGTH = 512;
+
+export const parseOptionalCursor = ({
+  args,
+  key,
+}: {
+  args: Record<string, unknown>;
+  key: string;
+}): string | undefined | CallToolResult => {
+  const value = args[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || value.length === 0) {
+    return errorResult(
+      `Invalid parameter: ${key}. Expected an opaque cursor string`,
+    );
+  }
+  if (value.length > MAX_CURSOR_LENGTH) {
+    return errorResult(
+      `Parameter ${key} exceeds maximum length of ${MAX_CURSOR_LENGTH}`,
+    );
+  }
+  return value;
+};
+
+export type TextWindowResult = {
+  text: string;
+  charCount: number;
+  nextCursor: string | null;
+  truncated: boolean;
+};
+
+const decodeTextWindowOffset = (
+  cursor: string | undefined,
+): number | CallToolResult => {
+  if (cursor === undefined) {
+    return 0;
+  }
+  const candidate = decodePaginationCursor(cursor)?.[0];
+  if (
+    typeof candidate !== "number" ||
+    !Number.isInteger(candidate) ||
+    candidate < 0
+  ) {
+    return errorResult("Invalid cursor");
+  }
+  return candidate;
+};
+
+/**
+ * Return a `maxChars` window of `text` starting at the offset encoded in
+ * `cursor` (absent cursor = start). `nextCursor` is the opaque cursor for the
+ * next window, or null when the window reaches the end. Callers paginate long
+ * content by passing the returned `nextCursor` back as `cursor`.
+ */
+export const windowTextByCursor = ({
+  cursor,
+  maxChars,
+  text,
+}: {
+  cursor: string | undefined;
+  maxChars: number;
+  text: string;
+}): TextWindowResult | CallToolResult => {
+  const offset = decodeTextWindowOffset(cursor);
+  if (typeof offset !== "number") {
+    return offset;
+  }
+
+  const charCount = text.length;
+  const start = Math.min(offset, charCount);
+  const windowText = text.slice(start, start + maxChars);
+  const end = start + windowText.length;
+  const nextCursor = end < charCount ? encodePaginationCursor([end]) : null;
+
+  return {
+    text: windowText,
+    charCount,
+    nextCursor,
+    truncated: nextCursor !== null,
+  };
 };
 
 export const ensureWorkspaceAccess = ({

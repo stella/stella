@@ -4,7 +4,10 @@ import { env } from "@/api/env";
 import {
   buildCaseLawDecisionAppUrl,
   buildCaseLawDecisionUrl,
+  isToolErrorResult,
+  parseOptionalCursor,
   slugifyCaseLawPathSegment,
+  windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 
 // FRONTEND_URL is "http://localhost:3000" (no trailing slash) from
@@ -216,5 +219,104 @@ describe("buildCaseLawDecisionAppUrl gate", () => {
     expect(buildCaseLawDecisionAppUrl(input)).toBe(
       `${BASE}/law/cze/cases/ns/s`,
     );
+  });
+});
+
+const expectWindow = (value: ReturnType<typeof windowTextByCursor>) => {
+  if (isToolErrorResult(value)) {
+    throw new Error("expected a text window, got a tool error");
+  }
+  return value;
+};
+
+describe("windowTextByCursor", () => {
+  test("returns the whole text with no nextCursor when it fits one window", () => {
+    const window = expectWindow(
+      windowTextByCursor({ cursor: undefined, maxChars: 100, text: "hello" }),
+    );
+
+    expect(window.text).toBe("hello");
+    expect(window.charCount).toBe(5);
+    expect(window.truncated).toBe(false);
+    expect(window.nextCursor).toBeNull();
+  });
+
+  test("pages through long text without dropping or duplicating characters", () => {
+    const text = "abcdefghijklmnopqrstuvwxyz0123456789";
+    const maxChars = 8;
+
+    let cursor: string | undefined;
+    let assembled = "";
+    let pages = 0;
+    do {
+      const window = expectWindow(
+        windowTextByCursor({ cursor, maxChars, text }),
+      );
+      expect(window.text.length).toBeLessThanOrEqual(maxChars);
+      expect(window.charCount).toBe(text.length);
+      assembled += window.text;
+      cursor = window.nextCursor ?? undefined;
+      pages += 1;
+      if (pages > 100) {
+        throw new Error("pagination did not terminate");
+      }
+    } while (cursor !== undefined);
+
+    expect(assembled).toBe(text);
+    expect(pages).toBe(Math.ceil(text.length / maxChars));
+  });
+
+  test("marks truncated and emits a nextCursor on the first of several windows", () => {
+    const window = expectWindow(
+      windowTextByCursor({ cursor: undefined, maxChars: 4, text: "abcdefgh" }),
+    );
+
+    expect(window.text).toBe("abcd");
+    expect(window.truncated).toBe(true);
+    expect(window.nextCursor).not.toBeNull();
+  });
+
+  test("rejects a malformed cursor", () => {
+    const result = windowTextByCursor({
+      cursor: "not-a-real-cursor",
+      maxChars: 8,
+      text: "abcdefgh",
+    });
+
+    expect(isToolErrorResult(result)).toBe(true);
+  });
+
+  test("clamps an offset past the end to an empty final window", () => {
+    const first = expectWindow(
+      windowTextByCursor({ cursor: undefined, maxChars: 4, text: "abcd" }),
+    );
+    expect(first.nextCursor).toBeNull();
+    expect(first.text).toBe("abcd");
+  });
+});
+
+describe("parseOptionalCursor", () => {
+  test("returns undefined when the cursor arg is absent", () => {
+    expect(parseOptionalCursor({ args: {}, key: "cursor" })).toBeUndefined();
+  });
+
+  test("passes a well-formed cursor through unchanged", () => {
+    const cursor = "eyJhIjoxfQ";
+    expect(parseOptionalCursor({ args: { cursor }, key: "cursor" })).toBe(
+      cursor,
+    );
+  });
+
+  test("rejects a non-string cursor", () => {
+    const result = parseOptionalCursor({ args: { cursor: 42 }, key: "cursor" });
+    expect(isToolErrorResult(result)).toBe(true);
+  });
+
+  test("rejects an over-long cursor", () => {
+    const result = parseOptionalCursor({
+      args: { cursor: "x".repeat(513) },
+      key: "cursor",
+    });
+    expect(isToolErrorResult(result)).toBe(true);
   });
 });

@@ -1,10 +1,12 @@
 import type { CallToolResult } from "@modelcontextprotocol/sdk/types.js";
+import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { COUNTRY_CODES } from "@stll/country-codes";
 import { roles } from "@stll/permissions";
 
 import type { PracticeJurisdiction } from "@/api/db/schema";
+import { workspaces } from "@/api/db/schema";
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/read-by-id";
 import { searchDecisionsHandler } from "@/api/handlers/case-law/decisions/search";
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
@@ -19,6 +21,12 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { isUuid } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+  isUuidPaginationCursorPart,
+} from "@/api/lib/pagination";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
@@ -37,16 +45,22 @@ import {
   errorResult,
   getAppBaseUrl,
   intProp,
+  isToolErrorResult,
   MAX_LIST_LIMIT,
   MAX_SEARCH_LIMIT,
+  parseOptionalCursor,
   parseOptionalEnum,
   parseOptionalLimit,
   parseRequiredString,
   stringProp,
   textResult,
+  windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
+// Citation lists are capped per call. Paging the citation lists themselves is
+// a separate follow-up; the decision text is paged via the cursor.
+const MCP_CASE_LAW_CITATIONS_PER_DECISION = 50;
 type StellaToolName =
   | "get_matter_overview"
   | "list_matters"
@@ -73,6 +87,10 @@ export const STELLA_TOOL_DEFINITIONS = [
           min: 1,
           max: MAX_LIST_LIMIT,
         }),
+        cursor: stringProp(
+          "Opaque cursor from a previous list_matters call to fetch the next page",
+          { maxLength: 512 },
+        ),
       },
     },
     name: "list_matters",
@@ -108,6 +126,10 @@ export const STELLA_TOOL_DEFINITIONS = [
           min: 1,
           max: MAX_SEARCH_LIMIT,
         }),
+        cursor: stringProp(
+          "Opaque cursor from a previous search_across_matters call to fetch the next page",
+          { maxLength: 512 },
+        ),
       },
       required: ["query"],
     },
@@ -159,11 +181,16 @@ export const STELLA_TOOL_DEFINITIONS = [
     annotations: { readOnlyHint: true },
     description:
       "Read extracted text from a document found anywhere in your accessible " +
-      "matters. Use after search_across_matters.",
+      "matters. Use after search_across_matters. Long documents are returned " +
+      "in windows; pass the returned nextCursor back as cursor to read more.",
     inputSchema: {
       type: "object",
       properties: {
         entity_id: stringProp("Entity ID"),
+        cursor: stringProp(
+          "Opaque cursor from a previous call to read the next window of text",
+          { maxLength: 512 },
+        ),
       },
       required: ["entity_id"],
     },
@@ -174,11 +201,16 @@ export const STELLA_TOOL_DEFINITIONS = [
     annotations: { readOnlyHint: true },
     description:
       "Read a single case-law decision by its decision ID. Returns metadata, " +
-      "plain text, citation links, and source URLs.",
+      "plain text, citation links, and source URLs. Long decision text is " +
+      "returned in windows; pass the returned nextCursor back as cursor to read more.",
     inputSchema: {
       type: "object",
       properties: {
         decision_id: stringProp("Case-law decision ID"),
+        cursor: stringProp(
+          "Opaque cursor from a previous call to read the next window of decision text",
+          { maxLength: 512 },
+        ),
       },
       required: ["decision_id"],
     },
@@ -285,6 +317,18 @@ const withOnboardingHintIfApplicable = async ({
   };
 };
 
+// The list_matters cursor is the boundary matter id alone; the query
+// resolves its (lastActivityAt, id) in-DB. A malformed id is rejected here
+// so it never reaches the SQL comparison.
+const decodeMatterPageCursor = (cursor: string): string | null => {
+  const parts = decodePaginationCursor(cursor);
+  if (!parts || parts.length !== 1) {
+    return null;
+  }
+  const [rawId] = parts;
+  return isUuidPaginationCursorPart(rawId) ? rawId : null;
+};
+
 const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
   const status = parseOptionalEnum({
     args,
@@ -306,27 +350,56 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
     return limit;
   }
 
-  const matters = await context.scopedDb((tx) =>
-    tx.query.workspaces.findMany({
-      where: {
-        organizationId: { eq: context.organizationId },
-        ...(status === "all" ? {} : { status }),
-      },
-      columns: {
-        id: true,
-        name: true,
-        reference: true,
-        status: true,
-        lastActivityAt: true,
-        createdAt: true,
-      },
-      orderBy: { lastActivityAt: "desc" },
-      limit,
-    }),
+  const cursor = parseOptionalCursor({ args, key: "cursor" });
+  if (isToolErrorResult(cursor)) {
+    return cursor;
+  }
+  let boundaryId: string | undefined;
+  if (cursor !== undefined) {
+    const decoded = decodeMatterPageCursor(cursor);
+    if (decoded === null) {
+      return errorResult("Invalid cursor");
+    }
+    boundaryId = decoded;
+  }
+
+  const rows = await context.scopedDb((tx) =>
+    tx
+      .select({
+        id: workspaces.id,
+        name: workspaces.name,
+        reference: workspaces.reference,
+        status: workspaces.status,
+        lastActivityAt: workspaces.lastActivityAt,
+        createdAt: workspaces.createdAt,
+      })
+      .from(workspaces)
+      .where(
+        and(
+          eq(workspaces.organizationId, context.organizationId),
+          status === "all" ? undefined : eq(workspaces.status, status),
+          // Compare the full-precision (lastActivityAt, id) tuple in-DB
+          // against the boundary row (looked up by id) so the cursor never
+          // round-trips lastActivityAt through a millisecond JS Date;
+          // matters sharing a now()-generated microsecond timestamp cannot
+          // be skipped or duplicated across pages.
+          boundaryId === undefined
+            ? undefined
+            : sql`(${workspaces.lastActivityAt}, ${workspaces.id}) < (select b.last_activity_at, b.id from workspaces b where b.id = ${boundaryId})`,
+        ),
+      )
+      .orderBy(desc(workspaces.lastActivityAt), desc(workspaces.id))
+      .limit(limit + 1),
   );
 
+  const page = createCursorPage({
+    rows,
+    limit,
+    cursorForItem: (item) => encodePaginationCursor([item.id]),
+  });
+
   const result = textResult({
-    matters: matters.map((matter) => ({
+    matters: page.items.map((matter) => ({
       id: matter.id,
       name: matter.name,
       reference: matter.reference,
@@ -334,12 +407,12 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
       lastActivityAt: matter.lastActivityAt.toISOString(),
       createdAt: matter.createdAt.toISOString(),
     })),
-    totalCountLimit: LIMITS.workspacesCount,
+    nextCursor: page.nextCursor,
   });
 
   return await withOnboardingHintIfApplicable({
     context,
-    isEmpty: matters.length === 0,
+    isEmpty: page.items.length === 0,
     result,
   });
 };
@@ -427,15 +500,22 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
     return limit;
   }
 
+  const cursor = parseOptionalCursor({ args, key: "cursor" });
+  if (isToolErrorResult(cursor)) {
+    return cursor;
+  }
+
   const result = await getSearchProvider().search({
     query,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,
     limit,
+    ...(cursor === undefined ? {} : { cursor }),
   });
 
   return textResult({
     totalCount: result.totalCount,
+    nextCursor: result.nextCursor,
     hits: result.hits.map((hit) => ({
       entityId: hit.entityId,
       workspaceId: hit.workspaceId,
@@ -498,14 +578,6 @@ const parseOptionalDateArg = ({
   }
   return value;
 };
-
-const isToolErrorResult = (
-  value: unknown,
-): value is ReturnType<typeof errorResult> =>
-  typeof value === "object" &&
-  value !== null &&
-  "isError" in value &&
-  value.isError === true;
 
 const getResultMessage = (value: unknown): string | null => {
   if (typeof value !== "object" || value === null) {
@@ -591,6 +663,11 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
 
   const entityId = brandPersistedEntityId(rawEntityId);
 
+  const cursor = parseOptionalCursor({ args, key: "cursor" });
+  if (isToolErrorResult(cursor)) {
+    return cursor;
+  }
+
   if (context.accessibleWorkspaceIds.length === 0) {
     return errorResult("No extracted content available for this entity.");
   }
@@ -623,15 +700,24 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
     row.ciphertext,
     row.iv,
   );
-  const truncated = plaintext.length > MCP_CONTENT_MAX_CHARS;
+
+  const textWindow = windowTextByCursor({
+    cursor,
+    maxChars: MCP_CONTENT_MAX_CHARS,
+    text: plaintext,
+  });
+  if (isToolErrorResult(textWindow)) {
+    return textWindow;
+  }
 
   return textResult({
-    charCount: row.charCount,
+    charCount: textWindow.charCount,
     entityId,
     kind: row.entity.kind,
     name: row.entity.name,
-    text: truncated ? plaintext.slice(0, MCP_CONTENT_MAX_CHARS) : plaintext,
-    truncated,
+    text: textWindow.text,
+    truncated: textWindow.truncated,
+    nextCursor: textWindow.nextCursor,
     workspaceId: row.entity.workspaceId,
   });
 };
@@ -780,6 +866,11 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
     return decisionId;
   }
 
+  const cursor = parseOptionalCursor({ args, key: "cursor" });
+  if (isToolErrorResult(cursor)) {
+    return cursor;
+  }
+
   const result = await readDecisionHandler(
     brandPersistedCaseLawDecisionId(decisionId),
     caseLawPublicReadDb,
@@ -797,7 +888,26 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   // model, which is exactly this tool's context.
   const aiTextAllowed = result.source.allowsDerivedAi;
 
+  const plainText = aiTextAllowed
+    ? toPlainDecisionText({
+        documentAst: result.documentAst,
+        fulltext: result.fulltext,
+      })
+    : null;
+  const textWindow =
+    plainText === null || plainText === undefined
+      ? null
+      : windowTextByCursor({
+          cursor,
+          maxChars: MCP_CONTENT_MAX_CHARS,
+          text: plainText,
+        });
+  if (textWindow !== null && isToolErrorResult(textWindow)) {
+    return textWindow;
+  }
+
   return textResult({
+    nextCursor: textWindow === null ? null : textWindow.nextCursor,
     decision: {
       appUrl: buildCaseLawDecisionAppUrl({
         caseNumber: result.caseNumber,
@@ -808,9 +918,15 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
         slug: result.slug,
       }),
       caseNumber: result.caseNumber,
-      citationsFrom: result.citationsFrom.slice(0, 50),
+      citationsFrom: result.citationsFrom.slice(
+        0,
+        MCP_CASE_LAW_CITATIONS_PER_DECISION,
+      ),
       citationsFromTotal: result.citationsFrom.length,
-      citationsTo: result.citationsTo.slice(0, 50),
+      citationsTo: result.citationsTo.slice(
+        0,
+        MCP_CASE_LAW_CITATIONS_PER_DECISION,
+      ),
       citationsToTotal: result.citationsTo.length,
       country: result.country,
       court: result.court,
@@ -823,12 +939,9 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
       metadata: result.metadata,
       source: result.source,
       sourceUrl: result.sourceUrl,
-      text: aiTextAllowed
-        ? toPlainDecisionText({
-            documentAst: result.documentAst,
-            fulltext: result.fulltext,
-          })
-        : null,
+      text: textWindow === null ? null : textWindow.text,
+      charCount: textWindow === null ? null : textWindow.charCount,
+      truncated: textWindow === null ? false : textWindow.truncated,
       ...(aiTextAllowed
         ? {}
         : {

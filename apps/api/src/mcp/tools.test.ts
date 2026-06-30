@@ -445,6 +445,12 @@ describe("OpenAI-compatible MCP tools", () => {
           description: "Search query",
           maxLength: 500,
         },
+        cursor: {
+          type: "string",
+          description:
+            "Opaque cursor from a previous search call to fetch the next page",
+          maxLength: 512,
+        },
       },
       required: ["query"],
     });
@@ -619,7 +625,7 @@ describe("OpenAI-compatible MCP tools", () => {
 
     expect(searchAcrossMattersExecute).toHaveBeenCalledWith(
       {
-        limit: 16,
+        limit: 8,
         query: "share purchase",
       },
       {
@@ -657,13 +663,56 @@ describe("OpenAI-compatible MCP tools", () => {
       title: "Share Purchase Agreement",
       text: "Full document text",
       url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      nextCursor: null,
       metadata: {
-        charCount: 321,
+        charCount: "Full document text".length,
         source: "stella",
         truncated: false,
         workspaceId: "ws_1",
       },
     });
+  });
+
+  test("fetch pages long document text via the returned cursor", async () => {
+    const longText = "x".repeat(8000) + "y".repeat(1000);
+    decryptContentMock.mockResolvedValue(longText);
+    const context = createContext({
+      scopedDb: createScopedDb([], createExtractedContentRow()),
+    });
+
+    // SAFETY: the fetch handler under test always returns this JSON shape; the
+    // cast only types the field access that the assertions below verify.
+    const first = parseToolPayload(
+      await handleMcpToolCall({
+        args: { id: "entity_1" },
+        context,
+        toolName: "fetch",
+      }),
+    ) as {
+      text: string;
+      nextCursor: string | null;
+      metadata: { charCount: number; truncated: boolean };
+    };
+    expect(first.text).toBe("x".repeat(8000));
+    expect(first.metadata.charCount).toBe(9000);
+    expect(first.metadata.truncated).toBe(true);
+    expect(first.nextCursor).not.toBeNull();
+
+    // SAFETY: same fixed handler response shape as the first page.
+    const second = parseToolPayload(
+      await handleMcpToolCall({
+        args: { id: "entity_1", cursor: first.nextCursor },
+        context,
+        toolName: "fetch",
+      }),
+    ) as {
+      text: string;
+      nextCursor: string | null;
+      metadata: { truncated: boolean };
+    };
+    expect(second.text).toBe("y".repeat(1000));
+    expect(second.metadata.truncated).toBe(false);
+    expect(second.nextCursor).toBeNull();
   });
 
   test("search_case_law maps filters and returns decision links", async () => {
@@ -929,6 +978,7 @@ describe("OpenAI-compatible MCP tools", () => {
     );
 
     expect(parseToolPayload(result)).toEqual({
+      nextCursor: null,
       decision: {
         appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
@@ -953,6 +1003,8 @@ describe("OpenAI-compatible MCP tools", () => {
         },
         sourceUrl: "https://example.test/decision",
         text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
+        charCount: "29 Cdo 123/2024\n\nThe court dismissed the appeal.".length,
+        truncated: false,
       },
     });
   });
@@ -990,6 +1042,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
+      nextCursor: null,
       decision: {
         appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/stable-official-slug`,
         caseNumber: "29 Cdo 123/2024",
@@ -1014,6 +1067,8 @@ describe("OpenAI-compatible MCP tools", () => {
         },
         sourceUrl: "https://example.test/decision",
         text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
+        charCount: "29 Cdo 123/2024\n\nThe court dismissed the appeal.".length,
+        truncated: false,
       },
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
@@ -1081,12 +1136,13 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     expect(parseToolPayload(result)).toEqual({
-      charCount: 321,
+      charCount: "Full document text".length,
       entityId: "entity_1",
       kind: "document",
       name: "Share Purchase Agreement",
       text: "Full document text",
       truncated: false,
+      nextCursor: null,
       workspaceId: "ws_1",
     });
   });
@@ -1310,10 +1366,11 @@ describe("OpenAI-compatible MCP tools", () => {
       title: "[PERSON_1] SPA",
       text: "[PERSON_1] signed the agreement",
       url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      nextCursor: null,
       metadata: {
         anonymized: true,
         anonymizedEntityCount: 2,
-        charCount: 321,
+        charCount: "[PERSON_1] signed the agreement".length,
         source: "stella",
         truncated: false,
         workspaceId: "ws_1",
@@ -1348,10 +1405,11 @@ describe("OpenAI-compatible MCP tools", () => {
       title: "",
       text: "",
       url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      nextCursor: null,
       metadata: {
         anonymized: true,
         anonymizedEntityCount: 1,
-        charCount: 42,
+        charCount: 0,
         source: "stella",
         truncated: false,
         workspaceId: "ws_1",
@@ -1386,10 +1444,11 @@ describe("OpenAI-compatible MCP tools", () => {
       title: "[REDACTED]",
       text: "[REDACTED]",
       url: `${APP_BASE_URL}/workspaces/ws_1/all/pdf?entity=entity_1&field=field_1`,
+      nextCursor: null,
       metadata: {
         anonymized: true,
         anonymizedEntityCount: 1,
-        charCount: 42,
+        charCount: "[REDACTED]".length,
         source: "stella",
         truncated: false,
         workspaceId: "ws_1",

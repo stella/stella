@@ -61,7 +61,15 @@ type MattersRow = {
   status: string;
 };
 
-type ScopedTx = {
+type SelectChain = {
+  select: () => SelectChain;
+  from: () => SelectChain;
+  where: () => SelectChain;
+  orderBy: () => SelectChain;
+  limit: () => Promise<MattersRow[]>;
+};
+
+type ScopedTx = SelectChain & {
   insert: ReturnType<typeof mock>;
   query: {
     organizationSettings: {
@@ -94,8 +102,18 @@ const createScopedDb = ({
   practiceJurisdictions = [],
 }: ScopedDbOptions = {}) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
-    mock(async (callback: (tx: ScopedTx) => Promise<unknown>) =>
-      callback({
+    mock(async (callback: (tx: ScopedTx) => Promise<unknown>) => {
+      // list_matters now uses the core query builder; the chain ignores its
+      // column/where/order arguments and resolves to the seeded matters.
+      const builder: SelectChain = {
+        select: () => builder,
+        from: () => builder,
+        where: () => builder,
+        orderBy: () => builder,
+        limit: async () => matters,
+      };
+      return await callback({
+        ...builder,
         insert,
         query: {
           organizationSettings: {
@@ -106,8 +124,8 @@ const createScopedDb = ({
             findMany: async () => matters,
           },
         },
-      }),
-    ),
+      });
+    }),
   );
 
 const createContext = ({
