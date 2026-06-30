@@ -1418,6 +1418,72 @@ describe("Folio AI edit operations", () => {
     expect(boldRun).toContain("bold");
   });
 
+  test("replaceBlock **bold** becomes a real bold run and keeps block attrs (direct mode)", () => {
+    const state = makeState([{ text: "Old line.", paraId: "AAAA0001" }]);
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+    const view = makeView(state);
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "replaceBlock",
+          blockId: snapshot.blocks[0]?.id ?? "",
+          text: "**Date:** 2026",
+        },
+      ],
+      mode: "direct",
+    });
+
+    expect(result.skipped).toEqual([]);
+    const block = view.state.doc.child(0);
+    expect(block.textContent).toBe("Date: 2026");
+    expect(block.attrs["paraId"]).toBe("AAAA0001");
+    const runs: { text: string; marks: string[] }[] = [];
+    block.descendants((node) => {
+      if (node.isText) {
+        runs.push({
+          text: node.text ?? "",
+          marks: node.marks.map((m) => m.type.name),
+        });
+      }
+    });
+    expect(runs).toEqual([
+      { text: "Date:", marks: ["bold"] },
+      { text: " 2026", marks: [] },
+    ]);
+  });
+
+  test("replaceBlock strips markdown markers in tracked-changes mode (no literal asterisks)", () => {
+    const state = makeState([{ text: "Old line.", paraId: "AAAA0001" }]);
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+    const view = makeView(state);
+
+    applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "replaceBlock",
+          blockId: snapshot.blocks[0]?.id ?? "",
+          text: "**Date:** 2026",
+        },
+      ],
+      mode: "tracked-changes",
+    });
+
+    // The word-diff redline interleaves the deleted old text with the new
+    // run, so the new text is present but not contiguous. The point here is
+    // that the markdown markers never reach the document as literal text.
+    const text = view.state.doc.textContent;
+    expect(text).toContain("Date:");
+    expect(text).toContain("2026");
+    expect(text).not.toContain("*");
+  });
+
   test("page-break-only inserts are skipped in tracked-changes mode", () => {
     const view = makeView(makeState(["Anchor block."]));
     const snapshot = createFolioAIEditSnapshot(view.state.doc);

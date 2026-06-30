@@ -72,9 +72,16 @@ describe("parseInlineEmphasisRuns", () => {
     ]);
   });
 
-  test("escaped markers stay literal", () => {
+  test("backslashes are ordinary characters (no markdown escapes)", () => {
     expect(parseInlineEmphasisRuns("price \\*per unit\\*")).toEqual([
-      { text: "price *per unit*", bold: false, italic: false },
+      { text: "price \\*per unit\\*", bold: false, italic: false },
+    ]);
+  });
+
+  test("a backslash path survives next to a bold span", () => {
+    expect(parseInlineEmphasisRuns("**Note:** path C:\\*.txt")).toEqual([
+      { text: "Note:", bold: true, italic: false },
+      { text: " path C:\\*.txt", bold: false, italic: false },
     ]);
   });
 });
@@ -84,7 +91,13 @@ describe("stripInlineEmphasisMarkers", () => {
     expect(stripInlineEmphasisMarkers("**Date:** 2026")).toBe("Date: 2026");
   });
 
-  test("returns plain prose verbatim (escapes untouched)", () => {
+  test("keeps a backslash path when stripping an adjacent bold span", () => {
+    expect(stripInlineEmphasisMarkers("**Note:** path C:\\*.txt")).toBe(
+      "Note: path C:\\*.txt",
+    );
+  });
+
+  test("returns plain prose verbatim", () => {
     for (const input of [
       "Date: {{date}}",
       "quantity 5*3*2 units",

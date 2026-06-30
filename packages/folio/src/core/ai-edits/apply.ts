@@ -4,6 +4,7 @@ import type { EditorState, Transaction } from "prosemirror-state";
 import { getFolioParaIdFromBlockId } from "../types/block-id";
 import { buildCleanBlockText } from "./clean-text";
 import {
+  hasInlineEmphasis,
   parseInlineEmphasisRuns,
   stripInlineEmphasisMarkers,
 } from "./inline-emphasis";
@@ -500,6 +501,27 @@ export const applyFolioAIEditOperations = ({
             tr = tr.replaceWith(item.blockFrom, item.blockTo, node);
             break;
           }
+        }
+        // Direct mode, formatting preserved (the default): when the replacement
+        // carries inline emphasis, rebuild the block node keeping its own attrs
+        // so `**bold**` becomes real marks. The tracked-changes path can't carry
+        // inline marks through its word-diff redline, so it still strips them;
+        // plain replacements fall through to the text-only swap below unchanged.
+        if (mode === "direct" && hasInlineEmphasis(item.operation.text)) {
+          const attrs: Record<string, unknown> =
+            item.operation.styleId !== undefined
+              ? { ...item.blockNode.attrs, styleId: item.operation.styleId }
+              : { ...item.blockNode.attrs };
+          const node = item.blockNode.type.create(
+            attrs,
+            buildEmphasisInlineContent(
+              view.state.schema,
+              item.operation.text,
+              commentMark ? [commentMark] : [],
+            ),
+          );
+          tr = tr.replaceWith(item.blockFrom, item.blockTo, node);
+          break;
         }
         tr = applyTextReplacement({
           tr,

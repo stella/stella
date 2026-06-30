@@ -12,7 +12,8 @@
  * (`***`, `___`) markers with non-space inner content count as emphasis. A lone
  * `*` or `_` stays literal — in legal prose it is far more likely a
  * multiplication sign or an identifier than an italic delimiter. Nesting is not
- * interpreted; inner content is taken verbatim.
+ * interpreted; inner content is taken verbatim. Backslashes are ordinary
+ * characters (no markdown escapes), so Windows paths and regex survive intact.
  */
 
 export type InlineEmphasisRun = {
@@ -61,16 +62,6 @@ export const parseInlineEmphasisRuns = (input: string): InlineEmphasisRun[] => {
 
   while (i < input.length) {
     const ch = input[i];
-
-    // A backslash escapes a following emphasis char so it stays literal,
-    // matching markdown's `\*` convention.
-    const next = input[i + 1];
-    if (ch === "\\" && (next === "*" || next === "_" || next === "\\")) {
-      buffer += next;
-      i += 2;
-      continue;
-    }
-
     const matched = matchMarkerAt(input, i);
     if (!matched) {
       buffer += ch;
@@ -107,6 +98,11 @@ export const parseInlineEmphasisRuns = (input: string): InlineEmphasisRun[] => {
 
 const hasEmphasis = (runs: readonly InlineEmphasisRun[]): boolean =>
   runs.some((run) => run.bold || run.italic);
+
+/** True when `input` contains at least one bold / italic span worth promoting
+ *  to real marks; lets callers skip the run rebuild for plain text. */
+export const hasInlineEmphasis = (input: string): boolean =>
+  hasEmphasis(parseInlineEmphasisRuns(input));
 
 /**
  * Drop emphasis markers without reconstructing formatting. Used on the
