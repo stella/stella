@@ -15,7 +15,10 @@ const prepareBodySchema = t.Object({
 });
 
 const config = {
-  permissions: { workspace: ["read"] },
+  // Authoring an entire template from a document (AI-marks fields, rewrites the
+  // docx), so it needs `template: ["create"]` like `/create`, not bare workspace
+  // read; this also keeps a read-only role from spending org AI here.
+  permissions: { template: ["create"] },
   body: prepareBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;
