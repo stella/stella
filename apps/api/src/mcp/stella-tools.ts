@@ -52,14 +52,15 @@ import {
   parseOptionalEnum,
   parseOptionalLimit,
   parseRequiredString,
+  resolveWindowBounds,
   stringProp,
   textResult,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
-// Citation lists are capped per call. Paging the citation lists themselves is
-// a separate follow-up; the decision text is paged via the cursor.
+// Page size for each citation list on read_case_law_decision. The decision
+// text and both citation lists are paged together by a single compound cursor.
 const MCP_CASE_LAW_CITATIONS_PER_DECISION = 50;
 type StellaToolName =
   | "get_matter_overview"
@@ -201,14 +202,15 @@ export const STELLA_TOOL_DEFINITIONS = [
     annotations: { readOnlyHint: true },
     description:
       "Read a single case-law decision by its decision ID. Returns metadata, " +
-      "plain text, citation links, and source URLs. Long decision text is " +
-      "returned in windows; pass the returned nextCursor back as cursor to read more.",
+      "plain text, citation links, and source URLs. Long decision text and " +
+      "large citation lists are returned in windows; pass the returned " +
+      "nextCursor back as cursor to read more.",
     inputSchema: {
       type: "object",
       properties: {
         decision_id: stringProp("Case-law decision ID"),
         cursor: stringProp(
-          "Opaque cursor from a previous call to read the next window of decision text",
+          "Opaque cursor from a previous call to read the next window of decision text and citations",
           { maxLength: 512 },
         ),
       },
@@ -860,6 +862,37 @@ const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
   });
 };
 
+type DecisionCursorOffsets = { text: number; from: number; to: number };
+
+// read_case_law_decision pages the decision text and both citation lists with
+// a single compound cursor encoding [textOffset, fromOffset, toOffset].
+const decodeDecisionCursor = (
+  cursor: string | undefined,
+): DecisionCursorOffsets | null => {
+  if (cursor === undefined) {
+    return { text: 0, from: 0, to: 0 };
+  }
+  const parts = decodePaginationCursor(cursor);
+  if (!parts || parts.length !== 3) {
+    return null;
+  }
+  const [text, from, to] = parts;
+  if (
+    typeof text !== "number" ||
+    !Number.isInteger(text) ||
+    text < 0 ||
+    typeof from !== "number" ||
+    !Number.isInteger(from) ||
+    from < 0 ||
+    typeof to !== "number" ||
+    !Number.isInteger(to) ||
+    to < 0
+  ) {
+    return null;
+  }
+  return { text, from, to };
+};
+
 const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   const decisionId = parseRequiredString(args, "decision_id");
   if (typeof decisionId !== "string") {
@@ -869,6 +902,10 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   const cursor = parseOptionalCursor({ args, key: "cursor" });
   if (isToolErrorResult(cursor)) {
     return cursor;
+  }
+  const offsets = decodeDecisionCursor(cursor);
+  if (offsets === null) {
+    return errorResult("Invalid cursor");
   }
 
   const result = await readDecisionHandler(
@@ -889,25 +926,41 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
   const aiTextAllowed = result.source.allowsDerivedAi;
 
   const plainText = aiTextAllowed
-    ? toPlainDecisionText({
+    ? (toPlainDecisionText({
         documentAst: result.documentAst,
         fulltext: result.fulltext,
-      })
+      }) ?? null)
     : null;
-  const textWindow =
-    plainText === null || plainText === undefined
-      ? null
-      : windowTextByCursor({
-          cursor,
-          maxChars: MCP_CONTENT_MAX_CHARS,
-          text: plainText,
-        });
-  if (textWindow !== null && isToolErrorResult(textWindow)) {
-    return textWindow;
-  }
+  const textLength = plainText === null ? 0 : plainText.length;
+
+  const textBounds = resolveWindowBounds(
+    textLength,
+    offsets.text,
+    MCP_CONTENT_MAX_CHARS,
+  );
+  const fromBounds = resolveWindowBounds(
+    result.citationsFrom.length,
+    offsets.from,
+    MCP_CASE_LAW_CITATIONS_PER_DECISION,
+  );
+  const toBounds = resolveWindowBounds(
+    result.citationsTo.length,
+    offsets.to,
+    MCP_CASE_LAW_CITATIONS_PER_DECISION,
+  );
+
+  // One compound cursor advances all three streams together; it resolves to
+  // null only once the text and both citation lists are fully consumed.
+  const hasMore =
+    textBounds.nextOffset !== null ||
+    fromBounds.nextOffset !== null ||
+    toBounds.nextOffset !== null;
+  const nextCursor = hasMore
+    ? encodePaginationCursor([textBounds.end, fromBounds.end, toBounds.end])
+    : null;
 
   return textResult({
-    nextCursor: textWindow === null ? null : textWindow.nextCursor,
+    nextCursor,
     decision: {
       appUrl: buildCaseLawDecisionAppUrl({
         caseNumber: result.caseNumber,
@@ -919,14 +972,11 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
       }),
       caseNumber: result.caseNumber,
       citationsFrom: result.citationsFrom.slice(
-        0,
-        MCP_CASE_LAW_CITATIONS_PER_DECISION,
+        fromBounds.start,
+        fromBounds.end,
       ),
       citationsFromTotal: result.citationsFrom.length,
-      citationsTo: result.citationsTo.slice(
-        0,
-        MCP_CASE_LAW_CITATIONS_PER_DECISION,
-      ),
+      citationsTo: result.citationsTo.slice(toBounds.start, toBounds.end),
       citationsToTotal: result.citationsTo.length,
       country: result.country,
       court: result.court,
@@ -939,9 +989,12 @@ const handleReadCaseLawDecisionTool: McpToolHandler = async ({ args }) => {
       metadata: result.metadata,
       source: result.source,
       sourceUrl: result.sourceUrl,
-      text: textWindow === null ? null : textWindow.text,
-      charCount: textWindow === null ? null : textWindow.charCount,
-      truncated: textWindow === null ? false : textWindow.truncated,
+      text:
+        plainText === null
+          ? null
+          : plainText.slice(textBounds.start, textBounds.end),
+      charCount: plainText === null ? null : textLength,
+      truncated: textBounds.nextOffset !== null,
       ...(aiTextAllowed
         ? {}
         : {

@@ -1074,6 +1074,60 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
   });
 
+  test("read_case_law_decision pages citation lists via the compound cursor", async () => {
+    const base = createReadDecisionResult();
+    readDecisionHandlerMock.mockResolvedValue({
+      ...base,
+      citationsFrom: Array.from({ length: 60 }, (_unused, i) => ({
+        citationText: `from-${i}`,
+        id: `cf_${i}`,
+      })),
+      citationsTo: Array.from({ length: 70 }, (_unused, i) => ({
+        citationText: `to-${i}`,
+        id: `ct_${i}`,
+      })),
+    });
+
+    type DecisionPage = {
+      nextCursor: string | null;
+      decision: {
+        citationsFrom: { id: string }[];
+        citationsFromTotal: number;
+        citationsTo: { id: string }[];
+        citationsToTotal: number;
+      };
+    };
+
+    // SAFETY: the decision handler always returns this JSON shape; the cast
+    // only types the field access that the assertions below verify.
+    const page1 = parseToolPayload(
+      await handleMcpToolCall({
+        args: { decision_id: "dec_123" },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      }),
+    ) as DecisionPage;
+    expect(page1.decision.citationsFrom).toHaveLength(50);
+    expect(page1.decision.citationsFromTotal).toBe(60);
+    expect(page1.decision.citationsTo).toHaveLength(50);
+    expect(page1.decision.citationsToTotal).toBe(70);
+    expect(page1.nextCursor).not.toBeNull();
+
+    // SAFETY: same fixed handler response shape as the first page.
+    const page2 = parseToolPayload(
+      await handleMcpToolCall({
+        args: { decision_id: "dec_123", cursor: page1.nextCursor },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      }),
+    ) as DecisionPage;
+    expect(page2.decision.citationsFrom).toHaveLength(10);
+    expect(page2.decision.citationsTo).toHaveLength(20);
+    expect(page2.decision.citationsFrom.at(0)?.id).toBe("cf_50");
+    expect(page2.decision.citationsTo.at(0)?.id).toBe("ct_50");
+    expect(page2.nextCursor).toBeNull();
+  });
+
   test("fetch rejects documents outside the MCP workspace allowlist", async () => {
     const result = await handleMcpToolCall({
       args: { id: "entity_1" },

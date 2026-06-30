@@ -188,6 +188,30 @@ export type TextWindowResult = {
   truncated: boolean;
 };
 
+export type WindowBounds = {
+  start: number;
+  end: number;
+  /** Offset to resume at for the next window, or null when fully consumed. */
+  nextOffset: number | null;
+};
+
+/**
+ * Resolve a half-open `[start, end)` window of `size` items into a stream of
+ * `length` items, starting at `offset` (clamped into range). `nextOffset` is
+ * the resume point for the next window, or null when the window reaches the
+ * end. Works for any positional stream (string chars, array items).
+ */
+export const resolveWindowBounds = (
+  length: number,
+  offset: number,
+  size: number,
+): WindowBounds => {
+  const start = Math.min(Math.max(offset, 0), length);
+  const end = Math.min(start + size, length);
+
+  return { start, end, nextOffset: end < length ? end : null };
+};
+
 const decodeTextWindowOffset = (
   cursor: string | undefined,
 ): number | CallToolResult => {
@@ -225,17 +249,18 @@ export const windowTextByCursor = ({
     return offset;
   }
 
-  const charCount = text.length;
-  const start = Math.min(offset, charCount);
-  const windowText = text.slice(start, start + maxChars);
-  const end = start + windowText.length;
-  const nextCursor = end < charCount ? encodePaginationCursor([end]) : null;
+  const { start, end, nextOffset } = resolveWindowBounds(
+    text.length,
+    offset,
+    maxChars,
+  );
 
   return {
-    text: windowText,
-    charCount,
-    nextCursor,
-    truncated: nextCursor !== null,
+    text: text.slice(start, end),
+    charCount: text.length,
+    nextCursor:
+      nextOffset === null ? null : encodePaginationCursor([nextOffset]),
+    truncated: nextOffset !== null,
   };
 };
 

@@ -6,6 +6,7 @@ import {
   buildCaseLawDecisionUrl,
   isToolErrorResult,
   parseOptionalCursor,
+  resolveWindowBounds,
   slugifyCaseLawPathSegment,
   windowTextByCursor,
 } from "@/api/mcp/tool-utils";
@@ -318,5 +319,31 @@ describe("parseOptionalCursor", () => {
       key: "cursor",
     });
     expect(isToolErrorResult(result)).toBe(true);
+  });
+});
+
+describe("resolveWindowBounds", () => {
+  test("returns a full window with no next offset when everything fits", () => {
+    expect(resolveWindowBounds(5, 0, 50)).toEqual({
+      start: 0,
+      end: 5,
+      nextOffset: null,
+    });
+  });
+
+  test("emits the resume offset when the stream has more", () => {
+    expect(resolveWindowBounds(10, 0, 4)).toEqual({
+      start: 0,
+      end: 4,
+      nextOffset: 4,
+    });
+  });
+
+  test("clamps an offset past the end to an empty terminal window", () => {
+    expect(resolveWindowBounds(5, 99, 4)).toEqual({
+      start: 5,
+      end: 5,
+      nextOffset: null,
+    });
   });
 });
