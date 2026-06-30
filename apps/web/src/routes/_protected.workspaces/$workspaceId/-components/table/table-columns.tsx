@@ -58,10 +58,25 @@ export const useTableColumns = ({
       },
     ];
 
+    // A graded playbook position materializes two sibling properties: the ASK
+    // (ai-model / manual-input) and its verdict (playbook-verdict, carrying the
+    // ASK's id in `askPropertyId`). Pair them so each ASK column renders one
+    // compliance-matrix cell and the verdict never gets a column of its own.
+    const verdictByAskPropertyId = new Map<string, WorkspaceProperty>();
     for (const property of properties) {
+      if (property.tool.type === "playbook-verdict") {
+        verdictByAskPropertyId.set(property.tool.askPropertyId, property);
+      }
+    }
+
+    for (const property of properties) {
+      if (property.tool.type === "playbook-verdict") {
+        continue;
+      }
       const col = getPropertyColumn({
         filters: view.layout.filters,
         property,
+        verdictProperty: verdictByAskPropertyId.get(property.id),
       });
       columnDefs.push(col);
     }

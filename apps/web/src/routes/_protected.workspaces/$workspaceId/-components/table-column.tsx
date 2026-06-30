@@ -1,13 +1,24 @@
 import { useState, type PropsWithChildren } from "react";
 
-import { EyeIcon, RefreshCwIcon } from "lucide-react";
+import {
+  CheckIcon,
+  EqualIcon,
+  EyeIcon,
+  MinusIcon,
+  RefreshCwIcon,
+  XIcon,
+} from "lucide-react";
+import type { LucideIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 
+import Tooltip from "@/components/tooltip";
+import type { TranslationKey } from "@/i18n/types";
 import type {
   ConditionNode,
   WorkspaceEntity,
+  WorkspaceField,
   WorkspaceProperty,
 } from "@/lib/types";
 import { ActiveEditBadge } from "@/routes/_protected.workspaces/$workspaceId/-components/active-edit-badge";
@@ -21,20 +32,29 @@ import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-comp
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
+import {
+  type ColorVariants,
+  emptyColor,
+  resolveOptionColor,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type PropertyColumnOptions = {
   filters: ConditionNode[];
+  property: WorkspaceProperty;
+  // The graded position's verdict, when this ASK column has one. Rendered as a
+  // chip beside the extracted value so the pair reads as a single
+  // compliance-matrix cell. Undefined for plain columns and extractOnly ASKs.
+  verdictProperty: WorkspaceProperty | undefined;
 };
 
 export const getPropertyColumn = ({
   filters,
   property,
-}: PropertyColumnOptions & {
-  property: WorkspaceProperty;
-}): TableColumnDef => ({
+  verdictProperty,
+}: PropertyColumnOptions): TableColumnDef => ({
   id: property.id,
   accessorFn: (row) => row.fields[property.id],
   header: (ctx) => (
@@ -45,9 +65,20 @@ export const getPropertyColumn = ({
     />
   ),
   size: 200,
-  cell: (props) => (
-    <PropertyCell entity={props.row.original} property={property} />
-  ),
+  cell: (props) => {
+    const entity = props.row.original;
+    if (!verdictProperty) {
+      return <PropertyCell entity={entity} property={property} />;
+    }
+    // Verdict badge leads the cell so the extracted value keeps the remaining
+    // width; the tier label + rationale live in the badge's hover card.
+    return (
+      <>
+        <VerdictBadge entity={entity} verdictProperty={verdictProperty} />
+        <PropertyCell entity={entity} property={property} />
+      </>
+    );
+  },
 });
 
 const PropertyCell = ({
@@ -291,6 +322,126 @@ const PropertyCell = ({
       />
     </>
   );
+};
+
+// Verdict tiers map to their localized label so the chip reads "Compliant"
+// rather than the raw single-select id "compliant". Chip colors come from the
+// verdict property's own single-select options (the same semantic tokens the
+// standalone column used), so no color literals are needed here.
+const VERDICT_TIER_LABEL_KEYS = {
+  compliant: "knowledge.playbooks.verdict.compliant",
+  fallback: "knowledge.playbooks.verdict.fallback",
+  deviation: "knowledge.playbooks.verdict.deviation",
+  missing: "knowledge.playbooks.verdict.missing",
+} as const satisfies Record<string, TranslationKey>;
+
+// Each tier also carries a distinct glyph so the badge encodes the verdict by
+// shape as well as color (colorblind-safe): check = on standard, equals = an
+// accepted alternative, cross = a deviation, dash = nothing extracted.
+const VERDICT_TIER_ICONS = {
+  compliant: CheckIcon,
+  fallback: EqualIcon,
+  deviation: XIcon,
+  missing: MinusIcon,
+} as const satisfies Record<string, LucideIcon>;
+
+// Narrows an arbitrary tier id to a known tier without widening to the full
+// TranslationKey union, so `t()` resolves the placeholder-free overload.
+const isVerdictTier = (
+  tier: string,
+): tier is keyof typeof VERDICT_TIER_LABEL_KEYS =>
+  tier in VERDICT_TIER_LABEL_KEYS;
+
+type VerdictBadgeProps = {
+  entity: WorkspaceEntity;
+  verdictProperty: WorkspaceProperty;
+};
+
+/**
+ * Compact compliance indicator: a small colored badge carrying the tier's glyph,
+ * so the verdict reads by both color and shape. Color comes from the verdict
+ * property's single-select options (the same semantic tokens the standalone
+ * column used). The tier label and grading rationale stay one hover away — via
+ * the shared provenance card when a justification exists, or a plain tooltip
+ * otherwise — so dropping the always-on text label loses nothing.
+ */
+const VerdictBadge = ({ entity, verdictProperty }: VerdictBadgeProps) => {
+  const t = useTranslations();
+  const field = entity.fields[verdictProperty.id];
+  const cellMetadata = entity.cellMetadata[verdictProperty.id];
+  const justification = useWorkspaceStore((s) =>
+    s.justifications.find((j) => j.fieldId === field?.id),
+  );
+
+  const tier = verdictTier(field);
+  if (!tier) {
+    return null;
+  }
+
+  const label = isVerdictTier(tier) ? t(VERDICT_TIER_LABEL_KEYS[tier]) : tier;
+  const Icon = isVerdictTier(tier) ? VERDICT_TIER_ICONS[tier] : null;
+  const color = resolveVerdictColor(verdictProperty, tier);
+
+  const badge = (
+    <span
+      aria-label={label}
+      className="flex size-4 shrink-0 items-center justify-center self-center rounded-full"
+      role="img"
+      style={{ backgroundColor: color.background, color: color.foreground }}
+    >
+      {Icon !== null && <Icon aria-hidden="true" className="size-2.5" />}
+    </span>
+  );
+
+  if (!justification) {
+    return <Tooltip content={label} render={badge} />;
+  }
+
+  return (
+    <AICellSourceCard
+      cellMetadata={cellMetadata}
+      clampStatements={false}
+      entity={entity}
+      justification={justification}
+      title={label}
+      // Center the trigger wrapper so the badge holds the same vertical position
+      // whether the card is open or closed, and even when the row aligns to the
+      // top (fit-content content mode).
+      triggerClassName="flex shrink-0 items-center self-center"
+    >
+      {badge}
+    </AICellSourceCard>
+  );
+};
+
+// Reads the verdict tier id from its field. We index by `"value" in content`
+// rather than `content.type === "single-select"` on purpose: the dot is a status
+// indicator, not field-value display, and a content-type comparison would (a)
+// trip no-workspace-field-value-drift, which custom-plugin rules can't suppress
+// inline, and (b) imply we're re-rendering the value, which we are not.
+const verdictTier = (field: WorkspaceField | undefined): string | null => {
+  const content = field?.content;
+  if (!content || !("value" in content)) {
+    return null;
+  }
+  const { value } = content;
+  if (typeof value !== "string" || value.length === 0) {
+    return null;
+  }
+  return value;
+};
+
+const resolveVerdictColor = (
+  verdictProperty: WorkspaceProperty,
+  tier: string,
+): ColorVariants => {
+  if (verdictProperty.content.type !== "single-select") {
+    return emptyColor;
+  }
+  const optionColor = verdictProperty.content.options.find(
+    (option) => option.value === tier,
+  )?.color;
+  return optionColor ? resolveOptionColor(optionColor) : emptyColor;
 };
 
 type WithOpenEntityButtonProps = {

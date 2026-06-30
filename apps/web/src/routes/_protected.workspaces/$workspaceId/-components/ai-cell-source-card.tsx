@@ -6,6 +6,7 @@ import {
   PreviewCardPopup,
   PreviewCardTrigger,
 } from "@stll/ui/components/preview-card";
+import { cn } from "@stll/ui/lib/utils";
 
 import { UserAvatar } from "@/components/user-avatar";
 import { formatRelativeTime } from "@/lib/relative-time";
@@ -32,6 +33,25 @@ type AICellSourceCardProps = React.PropsWithChildren<{
    * open; the card then renders as a static (non-clickable) popover.
    */
   onOpen?: () => void;
+  /**
+   * Overrides the trigger wrapper sizing. Defaults to filling the cell
+   * (`w-full min-w-0`); a verdict dot beside an ASK value passes `shrink-0` so
+   * the card hugs the dot instead of stretching across the merged cell.
+   */
+  triggerClassName?: string;
+  /**
+   * Optional heading rendered above the statements. The verdict dot passes the
+   * tier label here so the always-on text label can be dropped from the cell
+   * without losing it from the provenance card.
+   */
+  title?: string;
+  /**
+   * Clamp each statement to three lines (default). The verdict card passes
+   * false so the full grading rationale (up to ~1000 chars) is readable; it
+   * scrolls inside the popup instead of being truncated. Document-citation
+   * cells keep clamping so a long extraction can't push the evidence away.
+   */
+  clampStatements?: boolean;
 }>;
 
 /**
@@ -46,6 +66,9 @@ export const AICellSourceCard = ({
   justification,
   cellMetadata,
   onOpen,
+  triggerClassName,
+  title,
+  clampStatements = true,
   children,
 }: AICellSourceCardProps) => {
   const t = useTranslations();
@@ -61,9 +84,19 @@ export const AICellSourceCard = ({
   const statements = flattenStatements(justification.content);
   const visibleStatements = statements.slice(0, MAX_STATEMENTS);
   const hiddenStatementCount = statements.length - visibleStatements.length;
+  const statementTextClassName = cn(
+    "text-justify text-xs leading-relaxed text-wrap hyphens-auto",
+    // Unclamped rationale scrolls within the popup rather than truncating.
+    clampStatements ? "line-clamp-3" : "max-h-64 overflow-y-auto",
+  );
 
   const cardContent = (
     <>
+      {title !== undefined && (
+        <span className="text-foreground-strong text-xs font-semibold">
+          {title}
+        </span>
+      )}
       {showSourceFile && primaryFile && (
         <span className="flex min-w-0 items-center gap-1.5 text-xs font-medium">
           <EntityKindIcon
@@ -84,7 +117,7 @@ export const AICellSourceCard = ({
       )}
       {visibleStatements.map((statement) => (
         <span className="flex w-full flex-col gap-1" key={statement.key}>
-          <span className="line-clamp-3 text-justify text-xs leading-relaxed text-wrap hyphens-auto">
+          <span className={statementTextClassName}>
             {statement.text}
             {statement.pages.map((page) => (
               <span
@@ -131,7 +164,7 @@ export const AICellSourceCard = ({
       <PreviewCardTrigger
         closeDelay={100}
         delay={650}
-        render={<div className="w-full min-w-0" />}
+        render={<div className={triggerClassName ?? "w-full min-w-0"} />}
       >
         {children}
       </PreviewCardTrigger>

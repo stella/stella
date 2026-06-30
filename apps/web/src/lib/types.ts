@@ -75,11 +75,15 @@ type AIModelTool = {
 
 // A system-computed playbook verdict column. The value is a single-select tier
 // (compliant / fallback / deviation / missing) written by the verdict engine;
-// the cell is read-only on the client, so the frontend only needs the
-// discriminant (the rule/standard/severity that drive grading live server-side).
+// the cell is read-only on the client. `askPropertyId` is the ASK property this
+// verdict grades: the table pairs the two back together into one
+// compliance-matrix cell (extracted value + verdict badge) instead of rendering
+// two disjoint columns. The rest of the grading inputs (rule/standard/severity)
+// live server-side and the client never reads them.
 type PlaybookVerdictTool = {
   version: 1;
   type: "playbook-verdict";
+  askPropertyId: string;
 };
 
 export type WorkspaceProperty = {
