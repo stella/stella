@@ -406,10 +406,19 @@ export const WorkspaceTable = ({
     }
 
     return combine(
-      autoScrollForElements({
-        element,
-        getAllowedAxis: () => "horizontal",
-      }),
+      // Horizontal auto-scroll only when this table owns its scroll (flat
+      // layout). In the grouped layout the table shares the outer scroller, so
+      // this element is not scrollable; Atlaskit then warns on every drag tick
+      // and Vite serializes the whole element into the terminal, ballooning the
+      // dev log to gigabytes and OOM-killing the dev server.
+      ...(fillHeight
+        ? [
+            autoScrollForElements({
+              element,
+              getAllowedAxis: () => "horizontal",
+            }),
+          ]
+        : []),
       dropTargetForElements({
         element,
         canDrop: ({ source }) => source.data["type"] === ENTITY_DRAG_TYPE,
@@ -465,7 +474,7 @@ export const WorkspaceTable = ({
         },
       }),
     );
-  }, [handleColumnReorder, t]);
+  }, [handleColumnReorder, t, fillHeight]);
 
   useExternalSyncEffect(() => {
     const element = tableWrapperRef.current;
