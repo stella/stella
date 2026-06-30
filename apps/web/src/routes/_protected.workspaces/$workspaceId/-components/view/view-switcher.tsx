@@ -223,9 +223,17 @@ export const ViewSwitcher = ({
 
             return (
               <ViewTab
+                actions={
+                  view.id === activeViewId
+                    ? viewActions.renderActions({
+                        view,
+                        canDelete: !isLastOfLayout,
+                      })
+                    : null
+                }
                 isRenaming={renamingViewId === view.id}
                 key={view.id}
-                onOpenMenu={(event) =>
+                onOpenContextMenu={(event) =>
                   viewActions.openFor({
                     view,
                     canDelete: !isLastOfLayout,
@@ -240,7 +248,6 @@ export const ViewSwitcher = ({
                     current === view.id ? null : current,
                   )
                 }
-                showActions={view.id === activeViewId && viewActions.hasActions}
                 view={view}
                 workspaceId={workspaceId}
               />
@@ -346,24 +353,24 @@ type ViewTabProps = {
   workspaceId: string;
   view: WorkspaceView;
   isRenaming: boolean;
-  showActions: boolean;
+  actions: React.ReactNode;
   onSelect: () => void;
   onReorder: (draggedId: string, targetId: string) => void;
   onStartRename: () => void;
   onStopRename: () => void;
-  onOpenMenu: (event: React.MouseEvent<HTMLElement>) => void;
+  onOpenContextMenu: (event: React.MouseEvent<HTMLElement>) => void;
 };
 
 const ViewTab = ({
   workspaceId,
   view,
   isRenaming,
-  showActions,
+  actions,
   onSelect,
   onReorder,
   onStartRename,
   onStopRename,
-  onOpenMenu,
+  onOpenContextMenu,
 }: ViewTabProps) => {
   const { id, name, layout } = view;
   const t = useTranslations();
@@ -472,7 +479,7 @@ const ViewTab = ({
       <TabsTab
         className="pe-6.5"
         onClick={onSelect}
-        onContextMenu={onOpenMenu}
+        onContextMenu={onOpenContextMenu}
         onDoubleClick={(e) => {
           if (!canUpdateView) {
             return;
@@ -485,18 +492,7 @@ const ViewTab = ({
         <Icon className="size-3.5 shrink-0" />
         <span className="max-w-36 truncate">{name}</span>
       </TabsTab>
-      {showActions && (
-        <Button
-          aria-haspopup="menu"
-          aria-label={t("common.actions")}
-          className="absolute inset-e-0 top-1/2 -translate-y-1/2"
-          onClick={onOpenMenu}
-          size="icon-xs"
-          variant="ghost"
-        >
-          <EllipsisVerticalIcon />
-        </Button>
-      )}
+      {actions}
     </div>
   );
 };
@@ -682,6 +678,39 @@ const useViewActionsMenu = ({
     contextMenu.openAt(event);
   };
 
+  // The visible three-dot trigger is a real `MenuTrigger`, so Base UI
+  // anchors the popup to the button and restores focus to it on close
+  // (keyboard/AT included). The cursor-anchored `openFor` path is kept
+  // only for right-click on a tab.
+  const renderActions = ({ view, canDelete }: ViewActionsTarget) => {
+    if (!hasActions) {
+      return null;
+    }
+    return (
+      <Menu
+        onOpenChange={(open) => {
+          if (open) {
+            setTarget({ view, canDelete });
+          }
+        }}
+      >
+        <MenuTrigger
+          aria-label={t("common.actions")}
+          render={
+            <Button
+              className="absolute inset-e-0 top-1/2 -translate-y-1/2"
+              size="icon-xs"
+              variant="ghost"
+            />
+          }
+        >
+          <EllipsisVerticalIcon />
+        </MenuTrigger>
+        <MenuPopup>{renderItems({ view, canDelete })}</MenuPopup>
+      </Menu>
+    );
+  };
+
   const overlays = (
     <>
       {canCreateView && target && (
@@ -729,5 +758,5 @@ const useViewActionsMenu = ({
     </>
   );
 
-  return { hasActions, openFor, overlays };
+  return { openFor, renderActions, overlays };
 };
