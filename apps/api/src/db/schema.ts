@@ -1935,6 +1935,31 @@ export const extractedContent = p.pgTable(
   ],
 );
 
+export const documentEmbeddings = p.pgTable(
+  "document_embeddings",
+  {
+    entityId: safeUuid<"entity">("entity_id")
+      .notNull()
+      .references(() => entities.id, { onDelete: "cascade" }),
+    chunkIndex: p.integer("chunk_index").notNull(),
+    embedding: p.vector("embedding", { dimensions: 768 }).notNull(),
+    chunkText: p.text("chunk_text").notNull(),
+    metadata: jsonb().$type<{
+      startOffset?: number;
+      endOffset?: number;
+      section?: string;
+    }>(),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p.primaryKey({
+      columns: [table.entityId, table.chunkIndex],
+    }),
+    p.index("document_embeddings_entity_id_idx").on(table.entityId),
+    ...wsPolicies(),
+  ],
+);
+
 export const timeEntries = p.pgTable(
   "time_entries",
   {

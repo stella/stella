@@ -34,4 +34,5 @@ minimumReleaseAgeExcludes = [
   "@typescript/native-preview-win32-x64",
   "drizzle-kit",
   "drizzle-orm",
+  "@kreuzberg/node",
 ]

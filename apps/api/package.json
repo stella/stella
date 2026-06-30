@@ -47,6 +47,7 @@
     "@aws-sdk/s3-request-presigner": "^3.1072.0",
     "@better-auth/oauth-provider": "catalog:",
     "@elysiajs/cors": "^1.4.2",
+    "@kreuzberg/node": "5.0.0-rc.32",
     "@libpdf/core": "catalog:",
     "@litko/yara-x": "0.6.0",
     "@modelcontextprotocol/sdk": "1.29.0",
