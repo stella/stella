@@ -178,10 +178,12 @@ For the default Railway environment, the deployment environment is usually
 and manual dispatch still works.
 
 The smoke checks `api` `/health`, `web` `/health`, and, when GitHub provides a
-deployment SHA, the exact commit reported by API `/health` and web
-`/version.json`. The API and web builds both honor Railway's
-`RAILWAY_GIT_COMMIT_SHA` so source-backed deploys can be tied back to the
-GitHub commit that triggered them.
+manual `expected_commit`, the exact commit reported by API `/health` and web
+`/version.json`. Automatic `deployment_status` runs do not enforce a single
+commit across both services because API-only and web-only changes can deploy
+independently. The API and web builds both honor Railway's
+`RAILWAY_GIT_COMMIT_SHA` so source-backed deploys can be tied back to GitHub
+commits when the stricter manual check is used.
 
 Publish or update the template with:
 
