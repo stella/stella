@@ -1,3 +1,5 @@
+import { useRef, useState } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { BidiText } from "@stll/ui/components/bidi-text";
@@ -72,6 +74,16 @@ export const AICellSourceCard = ({
   children,
 }: AICellSourceCardProps) => {
   const t = useTranslations();
+  const [open, setOpen] = useState(false);
+  // The card is a hover preview: a click on the cell (to edit it) should dismiss
+  // it and keep it dismissed until the pointer leaves; re-hovering reopens it.
+  const dismissedRef = useRef(false);
+  const handleOpenChange = (next: boolean) => {
+    if (next && dismissedRef.current) {
+      return;
+    }
+    setOpen(next);
+  };
   const flags = cellMetadata?.manualFlags ?? [];
   const sourceFiles = resolveSourceFiles(entity, justification);
   const primaryFile = sourceFiles.at(0);
@@ -160,11 +172,22 @@ export const AICellSourceCard = ({
   );
 
   return (
-    <PreviewCard>
+    <PreviewCard onOpenChange={handleOpenChange} open={open}>
       <PreviewCardTrigger
         closeDelay={100}
         delay={650}
-        render={<div className={triggerClassName ?? "w-full min-w-0"} />}
+        render={
+          <div
+            className={triggerClassName ?? "w-full min-w-0"}
+            onPointerDown={() => {
+              dismissedRef.current = true;
+              setOpen(false);
+            }}
+            onPointerLeave={() => {
+              dismissedRef.current = false;
+            }}
+          />
+        }
       >
         {children}
       </PreviewCardTrigger>
