@@ -248,6 +248,16 @@ export const GroupedTableLayout = ({
     () => allTreeData.map((node) => node.entityId),
     [allTreeData],
   );
+  // The cross-group row-id union grows as each group's first page lands, so
+  // passing it as a prop re-renders every section on every group load (each
+  // rebuilding its table). Sections only read it inside the "select all"
+  // handler, never during render, so mirror it into a ref: the prop stays
+  // referentially stable and the per-load re-render fan-out disappears.
+  const allRowIdsRef = useRef(allRowIds);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mirroring a render value into a ref for event-time reads; not external-system sync nor mount-only, so neither wrapper applies
+  useEffect(() => {
+    allRowIdsRef.current = allRowIds;
+  }, [allRowIds]);
 
   if (groupByPropertyId === null || isUnsupportedGrouping) {
     return (
@@ -308,7 +318,7 @@ export const GroupedTableLayout = ({
             optionValues={optionValues}
             outerScrollRef={scrollRef}
             reportGroupTreeData={reportGroupTreeData}
-            selectAllPreservableRowIds={allRowIds}
+            selectAllPreservableRowIdsRef={allRowIdsRef}
             sumProperties={sumProperties}
             tableState={tableState}
             view={view}
@@ -454,7 +464,7 @@ type GroupSectionProps = {
   tableState: ReturnType<typeof useTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
   reportGroupTreeData: (groupKey: string, nodes: TableTreeNode[]) => void;
-  selectAllPreservableRowIds: string[];
+  selectAllPreservableRowIdsRef: RefObject<string[]>;
 };
 
 const GroupSection = ({
@@ -472,7 +482,7 @@ const GroupSection = ({
   tableState,
   outerScrollRef,
   reportGroupTreeData,
-  selectAllPreservableRowIds,
+  selectAllPreservableRowIdsRef,
 }: GroupSectionProps) => {
   const [collapsed, setCollapsed] = useState(false);
 
@@ -644,7 +654,7 @@ const GroupSection = ({
                 }
               }}
               outerScrollRef={outerScrollRef}
-              selectAllPreservableRowIds={selectAllPreservableRowIds}
+              selectAllPreservableRowIdsRef={selectAllPreservableRowIdsRef}
               showAddRow={false}
               stickyColumnHeader={false}
               table={table}
