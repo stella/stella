@@ -34,9 +34,15 @@ describe("parseInlineEmphasisRuns", () => {
     ]);
   });
 
-  test("underscore double markers are bold", () => {
-    expect(parseInlineEmphasisRuns("__Party__")).toEqual([
-      { text: "Party", bold: true, italic: false },
+  test("underscore placeholders stay literal (not emphasis)", () => {
+    expect(
+      parseInlineEmphasisRuns("__Borrower__ and ___EffectiveDate___"),
+    ).toEqual([
+      {
+        text: "__Borrower__ and ___EffectiveDate___",
+        bold: false,
+        italic: false,
+      },
     ]);
   });
 
@@ -103,6 +109,7 @@ describe("stripInlineEmphasisMarkers", () => {
       "quantity 5*3*2 units",
       "path C:\\*.txt",
       "see **infra",
+      "__Borrower__ pays ___EffectiveDate___",
     ]) {
       expect(stripInlineEmphasisMarkers(input)).toBe(input);
     }

@@ -8,12 +8,13 @@
  * name mid-sentence it improvises with markdown, and because DOCX has no notion
  * of markdown those markers otherwise reach the document as literal asterisks.
  *
- * Deliberately conservative: only paired double (`**`, `__`) and triple
- * (`***`, `___`) markers with non-space inner content count as emphasis. A lone
- * `*` or `_` stays literal — in legal prose it is far more likely a
- * multiplication sign or an identifier than an italic delimiter. Nesting is not
- * interpreted; inner content is taken verbatim. Backslashes are ordinary
- * characters (no markdown escapes), so Windows paths and regex survive intact.
+ * Deliberately conservative: only paired `**bold**` and `***bold italic***`
+ * asterisk markers with non-space inner content count as emphasis. Underscores
+ * are always literal — `__Borrower__` / snake_case placeholders are common in
+ * legal templates, and a lone `*` is far more likely a multiplication sign than
+ * a delimiter. Nesting is not interpreted; inner content is taken verbatim.
+ * Backslashes are ordinary characters (no markdown escapes), so Windows paths
+ * and regex survive intact.
  */
 
 export type InlineEmphasisRun = {
@@ -24,9 +25,7 @@ export type InlineEmphasisRun = {
 
 const MARKERS: readonly { marker: string; bold: boolean; italic: boolean }[] = [
   { marker: "***", bold: true, italic: true },
-  { marker: "___", bold: true, italic: true },
   { marker: "**", bold: true, italic: false },
-  { marker: "__", bold: true, italic: false },
 ];
 
 const isSpace = (ch: string | undefined): boolean =>
