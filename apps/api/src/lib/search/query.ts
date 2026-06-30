@@ -95,7 +95,7 @@ const toPrefixTsQueryTextForMode = (
   const lexemeGroups = toSearchLexemeGroups(query, mode);
 
   return lexemeGroups.length > 0
-    ? lexemeGroups.map(lexemeGroupToTsQuery).join(" & ")
+    ? [...new Set(lexemeGroups.map(lexemeGroupToTsQuery))].join(" & ")
     : null;
 };
 
@@ -109,9 +109,13 @@ const toLooseTsQueryTextForMode = (
   const lexemeGroups = toSearchLexemeGroups(query, mode);
 
   return lexemeGroups.length > 1
-    ? lexemeGroups
-        .flatMap((lexemes) => lexemes.map((lexeme) => `${lexeme}:*`))
-        .join(" | ")
+    ? [
+        ...new Set(
+          lexemeGroups.flatMap((lexemes) =>
+            lexemes.map((lexeme) => `${lexeme}:*`),
+          ),
+        ),
+      ].join(" | ")
     : null;
 };
 

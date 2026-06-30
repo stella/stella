@@ -47,6 +47,10 @@ describe("search query text", () => {
     );
   });
 
+  test("deduplicates repeated prefix query terms", () => {
+    expect(toPrefixTsQueryText("agreement agreement")).toBe("agreement:*");
+  });
+
   test("keeps legal abbreviations after periods in prefix queries", () => {
     expect(toPrefixTsQueryText("Smith v. Jones")).toBe(
       "Smith:* & v:* & Jones:*",
@@ -55,6 +59,9 @@ describe("search query text", () => {
 
   test("builds a loose fallback so one typo does not hide useful results", () => {
     expect(toLooseTsQueryText("nterim injunctive")).toBe(
+      "nterim:* | injunctive:*",
+    );
+    expect(toLooseTsQueryText("nterim injunctive nterim")).toBe(
       "nterim:* | injunctive:*",
     );
     expect(toLooseTsQueryText("injunctive")).toBeNull();
@@ -256,6 +263,15 @@ describe("search query text", () => {
   test("keeps loose Arabic fallback prefixes compatible with legacy vectors", () => {
     const dialect = new PgDialect();
     const compiled = dialect.sqlToQuery(buildSearchTsQuery("احم agreemnt"));
+
+    expect(compiled.params).toContain(
+      "احم:* | آحم:* | أحم:* | إحم:* | ٱحم:* | agreemnt:*",
+    );
+  });
+
+  test("deduplicates compatible Arabic loose fallback prefixes", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildSearchTsQuery("احم agreemnt احم"));
 
     expect(compiled.params).toContain(
       "احم:* | آحم:* | أحم:* | إحم:* | ٱحم:* | agreemnt:*",
