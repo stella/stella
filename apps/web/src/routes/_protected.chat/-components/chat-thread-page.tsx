@@ -210,11 +210,21 @@ export const ChatThreadPage = ({
   // Fetch suggested follow-up prompts for Tab-to-ask (editor) and chips display.
   // Gated by draft store emptiness so the query does not fire when the
   // user is already typing a custom follow-up.
-  const lastMessageId = messages.at(-1)?.id ?? null;
-  const lastMessageRole = messages.at(-1)?.role ?? null;
+  const lastMessage = messages.at(-1);
+  const lastMessageId = lastMessage?.id ?? null;
+  const lastMessageRole = lastMessage?.role ?? null;
+  // The ask-user clarification card owns the turn: its own questions and
+  // submit button take precedence over generic follow-up suggestions, so
+  // suppress both the chips and the Tab-to-ask editor hint while it is live.
+  const lastMessageIsAskUser =
+    lastMessage?.role === "assistant" &&
+    lastMessage.parts.some((part) => part.type === "tool-ask-user");
   const editorIsEmpty = useIsChatDraftEmpty(threadRef);
   const eligibleForSuggestions =
-    editorIsEmpty && lastMessageId !== null && lastMessageRole === "assistant";
+    editorIsEmpty &&
+    lastMessageId !== null &&
+    lastMessageRole === "assistant" &&
+    !lastMessageIsAskUser;
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
