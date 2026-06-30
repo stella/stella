@@ -32,7 +32,6 @@ import {
   AlertDialogHeader,
   AlertDialogPopup,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@stll/ui/components/alert-dialog";
 import { Button } from "@stll/ui/components/button";
 import {
@@ -50,6 +49,7 @@ import { Tabs, TabsList, TabsTab } from "@stll/ui/components/tabs";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { useAnchoredMenu } from "@/components/inspector/use-anchored-menu";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePermissions } from "@/hooks/use-permissions";
 import type { TranslationKey } from "@/i18n/types";
@@ -343,15 +343,22 @@ const ViewTab = ({
   const { id, name, layout } = view;
   const isActive = id === activeViewId;
   const t = useTranslations();
-  const canCreateView = usePermissions({ view: ["create"] });
   const canUpdateView = usePermissions({ view: ["update"] });
-  const canDeleteView = usePermissions({ view: ["delete"] });
   const [isRenaming, setIsRenaming] = useState(false);
   const [renameValue, setRenameValue] = useState(name);
   const [isDropTarget, setIsDropTarget] = useState(false);
   const updateView = useUpdateView(workspaceId);
   const containerRef = useRef<HTMLDivElement>(null);
   const handleReorder = useEffectEvent(onReorder);
+  const tabMenu = useViewTabMenu({
+    workspaceId,
+    view,
+    canDelete,
+    onRename: () => {
+      setIsRenaming(true);
+      setRenameValue(name);
+    },
+  });
 
   useExternalSyncEffect(() => {
     const el = containerRef.current;
@@ -441,6 +448,7 @@ const ViewTab = ({
       <TabsTab
         className="pe-6.5"
         onClick={onSelect}
+        onContextMenu={tabMenu.openContextMenu}
         onDoubleClick={(e) => {
           if (!canUpdateView) {
             return;
@@ -454,37 +462,31 @@ const ViewTab = ({
         <Icon className="size-3.5 shrink-0" />
         <span className="max-w-36 truncate">{name}</span>
       </TabsTab>
-      {isActive && (canUpdateView || canCreateView || canDeleteView) && (
-        <ViewTabMenu
-          canDelete={canDelete}
-          className="absolute inset-e-0 top-1/2 -translate-y-1/2"
-          onRename={() => {
-            setIsRenaming(true);
-            setRenameValue(name);
-          }}
-          view={view}
-          workspaceId={workspaceId}
-        />
-      )}
+      {isActive && tabMenu.triggerButton}
+      {tabMenu.overlays}
     </div>
   );
 };
 
-type ViewTabMenuProps = {
+type UseViewTabMenuOptions = {
   workspaceId: string;
   view: WorkspaceView;
   canDelete: boolean;
   onRename: () => void;
-  className: string;
 };
 
-const ViewTabMenu = ({
+/**
+ * Shared view-tab actions, surfaced both from the three-dot trigger
+ * (`triggerButton`) and a cursor-anchored right-click menu
+ * (`openContextMenu` + `overlays`), so both gestures open the same
+ * rename/duplicate/convert/delete actions.
+ */
+const useViewTabMenu = ({
   workspaceId,
   view,
   canDelete,
   onRename,
-  className,
-}: ViewTabMenuProps) => {
+}: UseViewTabMenuOptions) => {
   const { id, name, layout } = view;
   const t = useTranslations();
   const canCreateView = usePermissions({ view: ["create"] });
@@ -494,11 +496,13 @@ const ViewTabMenu = ({
   const convertView = useConvertView(workspaceId);
   const deleteView = useDeleteView(workspaceId);
   const [isSaveTemplateOpen, setIsSaveTemplateOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [convertPreview, setConvertPreview] = useState<ViewLayoutType | null>(
     null,
   );
 
   const Icon = layoutIcons[layout.type];
+  const hasActions = canUpdateView || canCreateView || canDeleteView;
 
   const handleDuplicate = () => {
     const newId = crypto.randomUUID();
@@ -535,7 +539,124 @@ const ViewTabMenu = ({
     );
   };
 
-  return (
+  const items = (
+    <>
+      {canUpdateView && (
+        <MenuItem onClick={onRename}>
+          <PencilIcon />
+          {t("common.rename")}
+        </MenuItem>
+      )}
+      {canCreateView && layout.type !== "overview" && (
+        <MenuItem onClick={handleDuplicate}>
+          <CopyIcon />
+          {t("common.duplicate")}
+        </MenuItem>
+      )}
+      {canCreateView && (
+        <MenuItem onClick={() => setIsSaveTemplateOpen(true)}>
+          <BookmarkPlusIcon />
+          {t("workspaces.views.saveAsTemplate")}
+        </MenuItem>
+      )}
+      {canUpdateView && (
+        <MenuSub
+          onOpenChange={(open) => {
+            if (!open) {
+              setConvertPreview(null);
+            }
+          }}
+        >
+          <MenuSubTrigger>
+            <Icon />
+            {t("common.convertTo")}
+          </MenuSubTrigger>
+          <MenuSubPopup>
+            <MenuPreviewLayout
+              preview={
+                <ViewLayoutPreview
+                  kind={convertPreview}
+                  workspaceId={workspaceId}
+                />
+              }
+            >
+              {LAYOUT_OPTIONS.filter(
+                (l) => l !== layout.type && l !== "overview",
+              ).map((l) => {
+                const LayoutIcon = layoutIcons[l];
+                return (
+                  <MenuItem
+                    key={l}
+                    onClick={() => {
+                      convertView.mutate(
+                        {
+                          viewId: id,
+                          targetType: l,
+                        },
+                        {
+                          onError: () => {
+                            stellaToast.add({
+                              title: t("errors.failedToChangeViewType"),
+                              type: "error",
+                            });
+                          },
+                        },
+                      );
+                    }}
+                    onFocus={() => setConvertPreview(l)}
+                    onMouseEnter={() => setConvertPreview(l)}
+                  >
+                    <LayoutIcon />
+                    {t(LAYOUT_LABEL_KEYS[l])}
+                  </MenuItem>
+                );
+              })}
+            </MenuPreviewLayout>
+          </MenuSubPopup>
+        </MenuSub>
+      )}
+      {(canUpdateView || canCreateView) && canDeleteView && <MenuSeparator />}
+      {canDeleteView && (
+        <MenuItem
+          disabled={!canDelete}
+          onClick={() => setIsDeleteOpen(true)}
+          variant="destructive"
+        >
+          <Trash2Icon />
+          {t("common.delete")}
+        </MenuItem>
+      )}
+    </>
+  );
+
+  const contextMenu = useAnchoredMenu({ children: items });
+
+  const openContextMenu = (event: React.MouseEvent<HTMLElement>) => {
+    if (!hasActions) {
+      return;
+    }
+    contextMenu.openAt(event);
+  };
+
+  const triggerButton = hasActions ? (
+    <Menu>
+      <MenuTrigger
+        aria-label={t("common.actions")}
+        render={
+          <Button
+            className="absolute inset-e-0 top-1/2 -translate-y-1/2"
+            size="icon-xs"
+            variant="ghost"
+          />
+        }
+      >
+        <EllipsisVerticalIcon />
+      </MenuTrigger>
+      <MenuPopup>{items}</MenuPopup>
+    </Menu>
+  ) : null;
+
+  const overlays = (
     <>
       {canCreateView && (
         <SaveAsTemplateDialog
@@ -546,131 +667,35 @@ const ViewTabMenu = ({
           workspaceId={workspaceId}
         />
       )}
-      <Menu>
-        <MenuTrigger
-          aria-label={t("common.actions")}
-          render={
-            <Button className={className} size="icon-xs" variant="ghost" />
-          }
-        >
-          <EllipsisVerticalIcon />
-        </MenuTrigger>
-        <MenuPopup>
-          {canUpdateView && (
-            <MenuItem onClick={onRename}>
-              <PencilIcon />
-              {t("common.rename")}
-            </MenuItem>
-          )}
-          {canCreateView && layout.type !== "overview" && (
-            <MenuItem onClick={handleDuplicate}>
-              <CopyIcon />
-              {t("common.duplicate")}
-            </MenuItem>
-          )}
-          {canCreateView && (
-            <MenuItem onClick={() => setIsSaveTemplateOpen(true)}>
-              <BookmarkPlusIcon />
-              {t("workspaces.views.saveAsTemplate")}
-            </MenuItem>
-          )}
-          {canUpdateView && (
-            <MenuSub
-              onOpenChange={(open) => {
-                if (!open) {
-                  setConvertPreview(null);
-                }
-              }}
-            >
-              <MenuSubTrigger>
-                <Icon />
-                {t("common.convertTo")}
-              </MenuSubTrigger>
-              <MenuSubPopup>
-                <MenuPreviewLayout
-                  preview={
-                    <ViewLayoutPreview
-                      kind={convertPreview}
-                      workspaceId={workspaceId}
-                    />
-                  }
-                >
-                  {LAYOUT_OPTIONS.filter(
-                    (l) => l !== layout.type && l !== "overview",
-                  ).map((l) => {
-                    const LayoutIcon = layoutIcons[l];
-                    return (
-                      <MenuItem
-                        key={l}
-                        onClick={() => {
-                          convertView.mutate(
-                            {
-                              viewId: id,
-                              targetType: l,
-                            },
-                            {
-                              onError: () => {
-                                stellaToast.add({
-                                  title: t("errors.failedToChangeViewType"),
-                                  type: "error",
-                                });
-                              },
-                            },
-                          );
-                        }}
-                        onFocus={() => setConvertPreview(l)}
-                        onMouseEnter={() => setConvertPreview(l)}
-                      >
-                        <LayoutIcon />
-                        {t(LAYOUT_LABEL_KEYS[l])}
-                      </MenuItem>
-                    );
-                  })}
-                </MenuPreviewLayout>
-              </MenuSubPopup>
-            </MenuSub>
-          )}
-          {(canUpdateView || canCreateView) && canDeleteView && (
-            <MenuSeparator />
-          )}
-          {canDeleteView && (
-            <AlertDialog>
-              <AlertDialogTrigger
-                disabled={!canDelete}
-                nativeButton={false}
-                render={<MenuItem closeOnClick={false} variant="destructive" />}
+      {canDeleteView && (
+        <AlertDialog onOpenChange={setIsDeleteOpen} open={isDeleteOpen}>
+          <AlertDialogPopup>
+            <AlertDialogHeader>
+              <AlertDialogTitle>
+                {t("workspaces.views.deleteView")}
+              </AlertDialogTitle>
+              <AlertDialogDescription>
+                {t("common.deleteConfirmDescription", {
+                  name,
+                })}
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <AlertDialogFooter>
+              <AlertDialogClose render={<Button variant="ghost" />}>
+                {t("common.cancel")}
+              </AlertDialogClose>
+              <AlertDialogClose
+                render={<Button onClick={handleDelete} variant="destructive" />}
               >
-                <Trash2Icon />
                 {t("common.delete")}
-              </AlertDialogTrigger>
-              <AlertDialogPopup>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>
-                    {t("workspaces.views.deleteView")}
-                  </AlertDialogTitle>
-                  <AlertDialogDescription>
-                    {t("common.deleteConfirmDescription", {
-                      name,
-                    })}
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogClose render={<Button variant="ghost" />}>
-                    {t("common.cancel")}
-                  </AlertDialogClose>
-                  <AlertDialogClose
-                    render={
-                      <Button onClick={handleDelete} variant="destructive" />
-                    }
-                  >
-                    {t("common.delete")}
-                  </AlertDialogClose>
-                </AlertDialogFooter>
-              </AlertDialogPopup>
-            </AlertDialog>
-          )}
-        </MenuPopup>
-      </Menu>
+              </AlertDialogClose>
+            </AlertDialogFooter>
+          </AlertDialogPopup>
+        </AlertDialog>
+      )}
+      {contextMenu.element}
     </>
   );
+
+  return { openContextMenu, triggerButton, overlays };
 };
