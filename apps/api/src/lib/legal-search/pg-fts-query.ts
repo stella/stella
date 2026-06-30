@@ -31,14 +31,22 @@ export const buildPgFtsSearchSql = ({
     ...new Set(configs.flatMap((config) => config.languages)),
   ];
 
-  const branches = configs.map((config) => {
-    const condition = buildConfigCondition(config, knownLanguages, refs);
+  const branches = configs.flatMap((config) => {
     const tsQuery = buildPlainSearchTsQuery(query, {
       regconfig: sql`${config.regconfig}::regconfig`,
       useUnaccent: config.useUnaccent,
     });
 
-    return { condition, tsQuery };
+    return [
+      {
+        condition: buildConfigCondition(config, knownLanguages, refs),
+        tsQuery,
+      },
+      {
+        condition: buildStoredRegconfigCompatibilityCondition(config, refs),
+        tsQuery,
+      },
+    ];
   });
 
   const fallbackQuery = buildPlainSearchTsQuery("", {});
@@ -65,6 +73,20 @@ export const buildPgFtsSearchSql = ({
       sql` `,
     )} ELSE 0::float8 END)`,
   };
+};
+
+const buildStoredRegconfigCompatibilityCondition = (
+  config: FtsSearchConfig,
+  refs: PgFtsSearchSqlRefs,
+): SQL => {
+  if (config.languages.length === 0) {
+    return sql`false`;
+  }
+
+  return sql`${refs.regconfig} = ${config.regconfig} AND (${refs.language} IS NULL OR ${refs.language} NOT IN (${sql.join(
+    config.languages.map((language) => sql`${language}`),
+    sql`, `,
+  )}))`;
 };
 
 const buildConfigCondition = (
