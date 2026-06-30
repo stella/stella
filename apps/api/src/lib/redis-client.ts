@@ -39,6 +39,8 @@ export const createBullMqConnection = (): ReturnType<
   // are preserved by the subclass constructor.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- bridges BullMQ vs Bun RedisClient structural callback mismatch (see above)
   return createBunRedisClient(raw as unknown as BunRedisRawClient, {
+    // Railway's Redis proxy can trigger Bun's eager adapter read path before
+    // BullMQ has completed its own readiness flow. Let BullMQ connect lazily.
     lazyConnect: true,
   });
 };
