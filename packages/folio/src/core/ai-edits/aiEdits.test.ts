@@ -1353,6 +1353,71 @@ describe("Folio AI edit operations", () => {
     expect(view.state.doc.child(2).type.name).toBe("table");
   });
 
+  test("inserted **bold** markdown becomes a real bold run (direct mode)", () => {
+    const state = makeState(["Anchor."]);
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+    const view = makeView(state);
+
+    const result = applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "insertAfterBlock",
+          blockId: snapshot.blocks[0]?.id ?? "",
+          text: "**Date:** 2026",
+          inheritFormatting: false,
+        },
+      ],
+      mode: "direct",
+    });
+
+    expect(result.skipped).toEqual([]);
+    const inserted = view.state.doc.child(1);
+    expect(inserted.textContent).toBe("Date: 2026");
+    const runs: { text: string; marks: string[] }[] = [];
+    inserted.descendants((node) => {
+      if (node.isText) {
+        runs.push({
+          text: node.text ?? "",
+          marks: node.marks.map((m) => m.type.name),
+        });
+      }
+    });
+    expect(runs).toEqual([
+      { text: "Date:", marks: ["bold"] },
+      { text: " 2026", marks: [] },
+    ]);
+  });
+
+  test("inserted **bold** markdown carries both insertion and bold marks (tracked changes)", () => {
+    const state = makeState(["Anchor."]);
+    const snapshot = createFolioAIEditSnapshot(state.doc);
+    const view = makeView(state);
+
+    applyFolioAIEditOperations({
+      view,
+      snapshot,
+      operations: [
+        {
+          id: "op-1",
+          type: "insertAfterBlock",
+          blockId: snapshot.blocks[0]?.id ?? "",
+          text: "**Date:** 2026",
+          inheritFormatting: false,
+        },
+      ],
+      mode: "tracked-changes",
+    });
+
+    const inserted = view.state.doc.child(1);
+    expect(inserted.textContent).toBe("Date: 2026");
+    const boldRun = collectMarksByText(view.state)["Date:"];
+    expect(boldRun).toContain("insertion");
+    expect(boldRun).toContain("bold");
+  });
+
   test("page-break-only inserts are skipped in tracked-changes mode", () => {
     const view = makeView(makeState(["Anchor block."]));
     const snapshot = createFolioAIEditSnapshot(view.state.doc);

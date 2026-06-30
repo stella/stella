@@ -3,6 +3,10 @@ import type { EditorState, Transaction } from "prosemirror-state";
 
 import { getFolioParaIdFromBlockId } from "../types/block-id";
 import { buildCleanBlockText } from "./clean-text";
+import {
+  parseInlineEmphasisRuns,
+  stripInlineEmphasisMarkers,
+} from "./inline-emphasis";
 import { hashFolioAIBlockText, normalizeFolioAIBlockText } from "./snapshot";
 import type {
   FolioAIEditAppliedOperation,
@@ -314,6 +318,42 @@ const buildSignatureTableNode = ({
   return tableType.create({}, row);
 };
 
+/**
+ * Build the inline content for an inserted or replaced block, promoting the
+ * model's `**bold**` / `***bold italic***` markdown into real Word marks (the
+ * edit-tool schema has no inline-format channel, so the model improvises with
+ * markdown that would otherwise land as literal asterisks). Falls back to a
+ * single verbatim text node when no emphasis is present, so plain prose is
+ * never reshaped. `baseMarks` (insertion / comment) ride on every run.
+ */
+const buildEmphasisInlineContent = (
+  schema: Schema,
+  text: string,
+  baseMarks: readonly Mark[],
+): PMNode[] => {
+  const runs = parseInlineEmphasisRuns(text);
+  if (!runs.some((run) => run.bold || run.italic)) {
+    return [schema.text(text, [...baseMarks])];
+  }
+  const boldType = schema.marks["bold"];
+  const italicType = schema.marks["italic"];
+  const nodes: PMNode[] = [];
+  for (const run of runs) {
+    if (run.text.length === 0) {
+      continue;
+    }
+    const marks: Mark[] = [...baseMarks];
+    if (run.bold && boldType) {
+      marks.push(boldType.create());
+    }
+    if (run.italic && italicType) {
+      marks.push(italicType.create());
+    }
+    nodes.push(schema.text(run.text, marks));
+  }
+  return nodes.length > 0 ? nodes : [schema.text(text, [...baseMarks])];
+};
+
 export const applyFolioAIEditOperations = ({
   view,
   snapshot,
@@ -451,7 +491,11 @@ export const applyFolioAIEditOperations = ({
               replaceAttrs,
               replacement.length === 0
                 ? null
-                : view.state.schema.text(replacement),
+                : buildEmphasisInlineContent(
+                    view.state.schema,
+                    replacement,
+                    [],
+                  ),
             );
             tr = tr.replaceWith(item.blockFrom, item.blockTo, node);
             break;
@@ -504,7 +548,11 @@ export const applyFolioAIEditOperations = ({
         }
         const content =
           item.insertText && item.insertText.length > 0
-            ? view.state.schema.text(item.insertText, marks)
+            ? buildEmphasisInlineContent(
+                view.state.schema,
+                item.insertText,
+                marks,
+              )
             : null;
         // Inherit formatting attrs (listMarker, styleId, …) from
         // the source block but never reuse identity attrs — a new
@@ -665,15 +713,17 @@ const applyTextReplacement = ({
   commentMark,
 }: TextReplacementOptions): Transaction => {
   let nextTr = tr;
-  const replacement = (() => {
-    if (item.operation.type === "replaceInBlock") {
-      return item.operation.replace;
-    }
-    if (item.operation.type === "replaceBlock") {
-      return item.operation.text;
-    }
-    return "";
-  })();
+  const replacement = stripInlineEmphasisMarkers(
+    (() => {
+      if (item.operation.type === "replaceInBlock") {
+        return item.operation.replace;
+      }
+      if (item.operation.type === "replaceBlock") {
+        return item.operation.text;
+      }
+      return "";
+    })(),
+  );
 
   if (mode === "direct") {
     nextTr = nextTr.insertText(replacement, item.from, item.to);
