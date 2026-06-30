@@ -27,9 +27,15 @@ export const useAnchoredMenu = ({ children }: { children: ReactNode }) => {
     event.stopPropagation();
     const x = event.clientX;
     const y = event.clientY;
-    setAnchor({
-      getBoundingClientRect: () => new DOMRect(x, y, 0, 0),
-    });
+    const trigger = event.currentTarget;
+    // Keyboard / assistive-tech activations dispatch a click with no
+    // pointer position (clientX/clientY are 0); anchor to the triggering
+    // element so the menu opens beside it instead of the viewport corner.
+    const anchorRect: AnchorRect =
+      x !== 0 || y !== 0
+        ? { getBoundingClientRect: () => new DOMRect(x, y, 0, 0) }
+        : { getBoundingClientRect: () => trigger.getBoundingClientRect() };
+    setAnchor(anchorRect);
     setOpen(true);
   };
 
