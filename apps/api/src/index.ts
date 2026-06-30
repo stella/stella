@@ -431,60 +431,73 @@ const startS3RefreshLoop = () => {
   timer.unref();
 };
 
-// Schema-drift fail-fast. If the runtime expects migrations
-// the database has not received, exit before serving any
-// request against a stale schema.
-await assertMigrationsApplied();
+// Booting (migration check, S3 warmup, BullMQ workers, bound port) runs
+// only when this module is the process entry point: `bun src/index.ts` in
+// dev and the `bun build --compile` binary in prod. Importing the module
+// instead — as the exact-mirror CI guard in
+// `apps/api/scripts/exact-mirror-guard.ts` does to build every route's
+// schema mirror — must yield the fully constructed `api` without any of
+// these side effects (no DB, no Redis, no listen).
+const startServer = async (): Promise<void> => {
+  // Schema-drift fail-fast. If the runtime expects migrations
+  // the database has not received, exit before serving any
+  // request against a stale schema.
+  await assertMigrationsApplied();
 
-await refreshS3();
-await refreshCorpusS3();
-startS3RefreshLoop();
+  await refreshS3();
+  await refreshCorpusS3();
+  startS3RefreshLoop();
 
-// BullMQ worker for asynchronous file derivatives.
-const fileDerivativeWorker = initFileDerivativeWorker();
+  // BullMQ worker for asynchronous file derivatives.
+  const fileDerivativeWorker = initFileDerivativeWorker();
 
-// BullMQ workflow worker for AI extraction.
-const workflowWorker = initWorkflowWorker();
+  // BullMQ workflow worker for AI extraction.
+  const workflowWorker = initWorkflowWorker();
 
-// BullMQ worker for durable account-deletion storage cleanup.
-const accountDeletionCleanupWorker = initAccountDeletionCleanupWorker();
+  // BullMQ worker for durable account-deletion storage cleanup.
+  const accountDeletionCleanupWorker = initAccountDeletionCleanupWorker();
 
-api.listen(getApiPort());
+  api.listen(getApiPort());
 
-// Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ
-// workers on SIGTERM/SIGINT (deploy, container stop, or a local
-// `bun --watch` restart) so an in-flight job is not abandoned mid-write.
-// An abandoned job strands its workflow lock and leaves cells stuck
-// `pending` until the next boot reconciles them; draining avoids creating
-// that orphan in the common case. Worker draining is bounded so a slow job
-// can't hang shutdown; anything still in flight past the timeout is
-// reclaimed by the next boot's reconciler.
-let shuttingDown = false;
-const shutdownWorkers = async (signal: string): Promise<void> => {
-  if (shuttingDown) {
-    return;
-  }
-  shuttingDown = true;
-  logger.info("api.shutdown_started", { signal });
-  await api.stop().catch((error: unknown) => {
-    logger.error("api.stop_failed", {
-      "error.type": errorTag(error),
+  // Graceful shutdown: stop accepting HTTP requests, then drain the BullMQ
+  // workers on SIGTERM/SIGINT (deploy, container stop, or a local
+  // `bun --watch` restart) so an in-flight job is not abandoned mid-write.
+  // An abandoned job strands its workflow lock and leaves cells stuck
+  // `pending` until the next boot reconciles them; draining avoids creating
+  // that orphan in the common case. Worker draining is bounded so a slow job
+  // can't hang shutdown; anything still in flight past the timeout is
+  // reclaimed by the next boot's reconciler.
+  let shuttingDown = false;
+  const shutdownWorkers = async (signal: string): Promise<void> => {
+    if (shuttingDown) {
+      return;
+    }
+    shuttingDown = true;
+    logger.info("api.shutdown_started", { signal });
+    await api.stop().catch((error: unknown) => {
+      logger.error("api.stop_failed", {
+        "error.type": errorTag(error),
+      });
     });
+    await Promise.race([
+      Promise.allSettled([
+        workflowWorker.close(),
+        fileDerivativeWorker.close(),
+        accountDeletionCleanupWorker.close(),
+      ]),
+      Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
+    ]);
+    logger.info("api.shutdown_complete", { signal });
+    process.exit(0);
+  };
+  process.once("SIGTERM", () => {
+    void shutdownWorkers("SIGTERM");
   });
-  await Promise.race([
-    Promise.allSettled([
-      workflowWorker.close(),
-      fileDerivativeWorker.close(),
-      accountDeletionCleanupWorker.close(),
-    ]),
-    Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
-  ]);
-  logger.info("api.shutdown_complete", { signal });
-  process.exit(0);
+  process.once("SIGINT", () => {
+    void shutdownWorkers("SIGINT");
+  });
 };
-process.once("SIGTERM", () => {
-  void shutdownWorkers("SIGTERM");
-});
-process.once("SIGINT", () => {
-  void shutdownWorkers("SIGINT");
-});
+
+if (import.meta.main) {
+  await startServer();
+}

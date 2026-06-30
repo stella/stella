@@ -108,6 +108,15 @@ run_typecheck() {
   fi
 }
 
+run_exact_mirror_guard() {
+  # Build the real app and force every route's Elysia exactMirror to compile;
+  # fail if any route's schema cannot be mirrored (recursive schemas fall back
+  # to slow serialization and have taken the API down at boot). The --self-test
+  # run first proves the detector still catches a known recursive schema.
+  bun apps/api/scripts/exact-mirror-guard.ts --self-test || return 1
+  bun apps/api/scripts/exact-mirror-guard.ts
+}
+
 run_knip() {
   local workspace
   for workspace in apps/api apps/legal-atlas-runner apps/web; do
@@ -133,6 +142,7 @@ run_step "Lint" run_lint
 run_step "Format" run_format
 run_step "Rust format" run_rust_format
 run_step "Typecheck" run_typecheck
+run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "Knip production deps" run_knip
 run_step "Test" run_test
 run_step "Bridge-version guard self-test" bash scripts/check-bridge-version.test.sh
