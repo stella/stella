@@ -26,6 +26,14 @@ export type AutocompleteCaretRect = {
   y: number;
   /** Line height in pixels at the anchor. */
   lineHeight: number;
+  /**
+   * Available width from the caret to the page's right content margin,
+   * in the overlay's coordinate space. Bounds the ghost text so it wraps
+   * within the page instead of running off the right edge. Omitted when
+   * the page geometry can't be resolved (the ghost then renders unbounded,
+   * matching the legacy behavior).
+   */
+  maxWidth?: number | undefined;
 };
 
 export type AutocompleteCaretOverlayProps = {
@@ -69,6 +77,9 @@ export const AutocompleteCaretOverlay = ({
           left: caret.x,
           top: caret.y,
           lineHeight: `${caret.lineHeight}px`,
+          ...(caret.maxWidth !== undefined
+            ? { maxWidth: `${caret.maxWidth}px` }
+            : {}),
         }}
       >
         {text}

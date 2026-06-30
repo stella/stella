@@ -785,6 +785,21 @@ const FileChatOverlayInner = ({
   const [editorReady, setEditorReady] = useState(() =>
     Boolean(docxEditorRef?.current?.createAIEditSnapshot()),
   );
+  // Reset readiness when the active file changes (the new doc has its
+  // own mount cycle). Done during render rather than in an effect: the
+  // editor now creates its hidden view synchronously inside
+  // `ensureEditorView`, so the probe below flips `editorReady` true in
+  // the same commit. A separate reset effect runs after that probe and
+  // would clobber it back to false (the `false -> true -> false` batch
+  // nets to the committed value, so React bails and the probe never
+  // re-runs), leaving the bar stuck on "loading" with no fallback armed.
+  const [readyForEntityId, setReadyForEntityId] = useState(
+    activeFile?.entityId,
+  );
+  if (activeFile?.entityId !== readyForEntityId) {
+    setReadyForEntityId(activeFile?.entityId);
+    setEditorReady(false);
+  }
   useExternalSyncEffect(() => {
     if (editorReady || !hasDocxEditSurface) {
       return undefined;
@@ -827,12 +842,6 @@ const FileChatOverlayInner = ({
       window.clearTimeout(fallback);
     };
   }, [editorReady, hasDocxEditSurface, docxEditorRef]);
-  // Reset readiness when the active file changes — the new doc has
-  // its own mount cycle.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id derived state, lift to key prop
-  useEffect(() => {
-    setEditorReady(false);
-  }, [activeFile?.entityId]);
 
   // Subscribe to the inspector chip's pulse channel so the bar
   // glows when the user clicks the AI-suggestions facet.

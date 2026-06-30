@@ -174,25 +174,30 @@ const PDFViewerContent = ({
   );
 
   return (
-    <ScrollArea>
-      <div className={className}>
-        <div
-          ref={pdfContentRef}
-          className={contentClassName}
-          style={viewportStyle}
-        >
-          {pageIds.map((pageId) => {
-            const label = attachmentLabels.get(pageId);
+    // The surround background lives on the (non-scrolling) ScrollArea
+    // root, not on an inner `h-full` wrapper. A wrapper sized to the
+    // viewport only paints the first viewport-rect of the scroll
+    // content, so any taller/wider page (or zoom/scroll offset) let the
+    // parent's lighter background bleed through past it — a two-tone
+    // surround. Painting on the root fills the whole visible area
+    // uniformly at every scroll position and page size.
+    <ScrollArea className={className}>
+      <div
+        ref={pdfContentRef}
+        className={contentClassName}
+        style={viewportStyle}
+      >
+        {pageIds.map((pageId) => {
+          const label = attachmentLabels.get(pageId);
 
-            return (
-              <div key={pageId}>
-                {label && <PDFBanner label={label} />}
-                {renderPage({ pageId })}
-              </div>
-            );
-          })}
-          <div className="h-px" />
-        </div>
+          return (
+            <div key={pageId}>
+              {label && <PDFBanner label={label} />}
+              {renderPage({ pageId })}
+            </div>
+          );
+        })}
+        <div className="h-px" />
       </div>
     </ScrollArea>
   );

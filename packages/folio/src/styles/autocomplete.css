@@ -13,6 +13,7 @@
   pointer-events: none;
   user-select: none;
   white-space: pre-wrap;
+  overflow-wrap: anywhere;
   color: color-mix(in oklch, var(--doc-text, currentColor) 38%, transparent);
   font: inherit;
   letter-spacing: inherit;
