@@ -81,6 +81,21 @@ export const getFolioParaIdFromBlockId = (id: string): string | null =>
   isSequentialFolioBlockId(id) ? null : id;
 
 /**
+ * The 1-based document position encoded in a sequential fallback id
+ * (`seq-0011` -> 11), or `null` for paraId-backed ids. The number is
+ * the block's position in the same non-empty-block walk both the
+ * server DOCX extractor and `createFolioAIEditSnapshot` use, so it
+ * indexes a snapshot's ordered `blocks` array directly.
+ */
+export const getSequentialFolioBlockIdIndex = (id: string): number | null => {
+  if (!SEQUENTIAL_BLOCK_ID_PATTERN.test(id)) {
+    return null;
+  }
+  const index = Number(id.slice(SEQUENTIAL_BLOCK_ID_PREFIX.length));
+  return Number.isInteger(index) && index > 0 ? index : null;
+};
+
+/**
  * Runtime refinement for ids coming back from the DB / API. Accepts
  * the same two shapes {@link deriveBlockId} produces and nothing
  * else — so legacy `b-NNNN` rows stop counting as valid here.

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   deriveBlockId,
   getFolioParaIdFromBlockId,
+  getSequentialFolioBlockIdIndex,
   isFolioBlockId,
   isSequentialFolioBlockId,
 } from "./block-id";
@@ -144,5 +145,24 @@ describe("isFolioBlockId", () => {
     expect(isFolioBlockId(undefined)).toBe(false);
     expect(isFolioBlockId(null)).toBe(false);
     expect(isFolioBlockId(42)).toBe(false);
+  });
+});
+
+describe("getSequentialFolioBlockIdIndex", () => {
+  test("returns the 1-based position encoded in a sequential id", () => {
+    expect(getSequentialFolioBlockIdIndex("seq-0001")).toBe(1);
+    expect(getSequentialFolioBlockIdIndex("seq-0011")).toBe(11);
+    expect(getSequentialFolioBlockIdIndex("seq-9999")).toBe(9999);
+  });
+
+  test("handles ids wider than the minimum padding", () => {
+    expect(getSequentialFolioBlockIdIndex("seq-12345")).toBe(12_345);
+  });
+
+  test("returns null for paraId-backed and malformed ids", () => {
+    expect(getSequentialFolioBlockIdIndex("AAAA0001")).toBeNull();
+    expect(getSequentialFolioBlockIdIndex("seq-")).toBeNull();
+    expect(getSequentialFolioBlockIdIndex("seq-abc")).toBeNull();
+    expect(getSequentialFolioBlockIdIndex("seq-001")).toBeNull();
   });
 });

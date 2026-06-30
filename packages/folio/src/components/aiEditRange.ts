@@ -9,9 +9,15 @@
 import type { Node as PMNode } from "prosemirror-model";
 
 import { createFolioAIEditSnapshot } from "../core/ai-edits/snapshot";
-import type { FolioAIEditSnapshot } from "../core/ai-edits/types";
+import type {
+  FolioAIBlockAnchor,
+  FolioAIEditSnapshot,
+} from "../core/ai-edits/types";
 import { findParagraphByParaId } from "../core/prosemirror/utils/findParagraphByParaId";
-import { getFolioParaIdFromBlockId } from "../core/types/block-id";
+import {
+  getFolioParaIdFromBlockId,
+  getSequentialFolioBlockIdIndex,
+} from "../core/types/block-id";
 
 export type DocPositionRange = { from: number; to: number };
 
@@ -35,11 +41,39 @@ export const resolveFolioAIBlockRange = ({
   }
 
   const resolvedSnapshot = snapshot ?? createFolioAIEditSnapshot(doc);
-  const anchor = resolvedSnapshot.anchors[blockId];
+  const anchor =
+    resolvedSnapshot.anchors[blockId] ??
+    resolveSequentialBlockAnchor(blockId, resolvedSnapshot);
   if (!anchor) {
     return null;
   }
   return clampRangeToDocSize(doc.content.size, anchor);
+};
+
+/**
+ * Resolve a `seq-NNNN` fallback id by document position.
+ *
+ * A sequential id is only minted for a paragraph the source DOCX left
+ * without a `w14:paraId`. The live editor's `ParaIdAllocator` fills
+ * that gap with a fresh random hex paraId, so a snapshot of the live
+ * document keys the block by that hex and never reproduces the
+ * server's `seq-NNNN`: the direct anchor lookup misses, and a
+ * paraId-based live lookup can't match either (no node carries a
+ * `seq-` paraId). The seq number is the block's 1-based position in
+ * the same non-empty-block walk the server extractor and
+ * `createFolioAIEditSnapshot` share, so it indexes the snapshot's
+ * ordered `blocks` directly.
+ */
+const resolveSequentialBlockAnchor = (
+  blockId: string,
+  snapshot: FolioAIEditSnapshot,
+): FolioAIBlockAnchor | undefined => {
+  const index = getSequentialFolioBlockIdIndex(blockId);
+  if (index === null) {
+    return undefined;
+  }
+  const block = snapshot.blocks.at(index - 1);
+  return block ? snapshot.anchors[block.id] : undefined;
 };
 
 /**
