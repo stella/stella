@@ -36,6 +36,7 @@ export type SafeIdType =
   | "desktopEditSession"
   | "document"
   | "documentCounter"
+  | "documentType"
   | "entity"
   | "entityVersionAiSummary"
   | "entityVersion"

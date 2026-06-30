@@ -55,6 +55,7 @@ const createPlaybookDefinition = createSafeRootHandler(
             organizationId,
             name: body.name,
             description: body.description ?? null,
+            scope: body.scope ?? null,
             positions: body.positions,
           })
           .returning({ id: playbookDefinitions.id });

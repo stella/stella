@@ -38,6 +38,7 @@ const updatePlaybookDefinition = createSafeRootHandler(
           .set({
             name: body.name,
             description: body.description ?? null,
+            scope: body.scope ?? null,
             positions: body.positions,
             updatedAt: new Date(),
           })
@@ -58,7 +59,10 @@ const updatePlaybookDefinition = createSafeRootHandler(
           resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
           resourceId: params.playbookId,
           changes: {
-            fields: { old: null, new: ["name", "description", "positions"] },
+            fields: {
+              old: null,
+              new: ["name", "description", "scope", "positions"],
+            },
           },
         });
 

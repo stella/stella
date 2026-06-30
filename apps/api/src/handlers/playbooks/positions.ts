@@ -60,6 +60,21 @@ export const playbookPositionsSchema = t.Object({
 });
 export type PlaybookPositions = Static<typeof playbookPositionsSchema>;
 
+// ── Scope: what the playbook targets ──────────────────
+// Binds a playbook to a document TYPE (a stable slug from the org-owned
+// document-type taxonomy) and a review PERSPECTIVE. When `documentTypeKey` is
+// set, a files-table run gates each materialized column on the workspace's
+// "Document Type" classifier so only matching documents are extracted/graded.
+export const playbookScopeSchema = t.Object({
+  documentTypeKey: t.Optional(t.String({ maxLength: 128 })),
+  // t.Union([t.Literal(...)]) rather than t.Optional(t.UnionEnum(...)): an
+  // absent optional UnionEnum coerces to its first member instead of undefined.
+  perspective: t.Optional(
+    t.Union([t.Literal("buyer"), t.Literal("seller"), t.Literal("neutral")]),
+  ),
+});
+export type PlaybookScope = Static<typeof playbookScopeSchema>;
+
 // ── Migration compat: lift a legacy bundle column to a position ──
 // A pre-positions "playbook bundle" column is a pure extraction column; it maps
 // to an ASK-only position with no standard and no grade. Kept as one canonical

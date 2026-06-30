@@ -41,6 +41,10 @@ export const LIMITS = {
   playbookDefinitionsCount: 100,
   playbookDefinitionsPageSizeDefault: 50,
   playbookDefinitionsPageSizeMax: 100,
+  /** Per-org cap on the editable document-type taxonomy. The taxonomy is
+   *  inherently bounded (a few dozen contract categories), so the list
+   *  endpoint returns a plain ordered array rather than a paginated page. */
+  documentTypesCount: 100,
   templatesCount: 50,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,

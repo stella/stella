@@ -59,7 +59,10 @@ import type {
 import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
-import type { PlaybookPositions } from "@/api/handlers/playbooks/positions";
+import type {
+  PlaybookPositions,
+  PlaybookScope,
+} from "@/api/handlers/playbooks/positions";
 import type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
@@ -855,7 +858,7 @@ export const playbookDefinitions = p.pgTable(
       .references(() => organization.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
     description: p.text(),
-    scope: jsonb(),
+    scope: jsonb().$type<PlaybookScope>(),
     positions: jsonb().$type<PlaybookPositions>().notNull(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
@@ -870,6 +873,40 @@ export const playbookDefinitions = p.pgTable(
     p
       .unique("playbook_definitions_id_org_unq")
       .on(table.id, table.organizationId),
+    ...orgPolicies(),
+  ],
+);
+
+// -- Document types --
+
+/**
+ * An org-owned, editable taxonomy of document TYPES (e.g. "Share
+ * Purchase Agreement"). `key` is a stable slug that playbook scopes and
+ * run-time gating reference; `label` is the human-facing name shown in
+ * the workspace "Document Type" classifier. Seeded from
+ * `DEFAULT_DOCUMENT_TYPES` and editable per org. RLS mirrors
+ * `playbookDefinitions`.
+ */
+export const documentTypes = p.pgTable(
+  "document_types",
+  {
+    id: pUuid<"documentType">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    key: p.varchar({ length: 128 }).notNull(),
+    label: p.varchar({ length: 256 }).notNull(),
+    sortOrder: p.integer("sort_order").notNull().default(0),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("document_types_org_sort_idx")
+      .on(table.organizationId, table.sortOrder),
+    p
+      .unique("document_types_org_key_unq")
+      .on(table.organizationId, table.key),
     ...orgPolicies(),
   ],
 );
@@ -4428,6 +4465,7 @@ export const relations = defineRelations(
     properties,
     propertyDependencies,
     playbookDefinitions,
+    documentTypes,
     entities,
     taskAssignees,
     entityLinks,
