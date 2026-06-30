@@ -76,6 +76,12 @@ import {
 
 const GROUP_TABLE_PAGE_SIZE = 200;
 
+// Grouped views with at most this many sections load every section's rows
+// upfront (a few parallel fetches) instead of the lazy scroll-gate, so small
+// grouped tables appear at once and an already-visible section can't stall
+// behind its IntersectionObserver. Larger views keep the lazy per-section load.
+const GROUP_EAGER_LOAD_MAX = 8;
+
 // A grouped document table never lists folders or tasks as rows, matching the
 // flat window query; passed to the kanban-group endpoint so its rows (and the
 // group-counts) stay in sync.
@@ -248,6 +254,7 @@ export const GroupedTableLayout = ({
   // group server-side (the row/count queries treat "no current-option value" as
   // uncategorized), so the sections are just the option groups plus uncategorized.
   const groups = getEntityGroups(options, t("common.uncategorized"));
+  const eagerLoadSections = groups.length <= GROUP_EAGER_LOAD_MAX;
 
   return (
     // Flex column so empty categories can sink below populated ones via
@@ -266,6 +273,7 @@ export const GroupedTableLayout = ({
             count={
               countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
             }
+            eager={eagerLoadSections}
             fieldIds={fieldIds}
             group={group}
             groupByPropertyId={groupByPropertyId}
@@ -407,6 +415,8 @@ type GroupSectionProps = {
   // Authoritative row count from the one upfront group-counts query;
   // `undefined` while that query is still loading.
   count: number | undefined;
+  // Skip the lazy scroll-gate and load this section's rows upfront.
+  eager: boolean;
   fieldIds: string[];
   columns: TableColumnDef[];
   sumProperties: WorkspaceProperty[];
@@ -423,6 +433,7 @@ const GroupSection = ({
   groupByPropertyId,
   optionValues,
   count,
+  eager,
   fieldIds,
   columns,
   sumProperties,
@@ -446,7 +457,7 @@ const GroupSection = ({
   const [hasScrolledIntoView, setHasScrolledIntoView] = useState(false);
   useExternalSyncEffect(() => {
     const section = sectionRef.current;
-    if (hasScrolledIntoView || !hasRows || !section) {
+    if (eager || hasScrolledIntoView || !hasRows || !section) {
       return undefined;
     }
     const observer = new IntersectionObserver(
@@ -459,7 +470,7 @@ const GroupSection = ({
     );
     observer.observe(section);
     return () => observer.disconnect();
-  }, [hasScrolledIntoView, hasRows]);
+  }, [eager, hasScrolledIntoView, hasRows]);
 
   const query = useInfiniteQuery({
     ...useKanbanGroupOptions({
@@ -474,7 +485,7 @@ const GroupSection = ({
       groupValue: group.value,
       ...(optionValues !== undefined && { optionValues }),
     }),
-    enabled: hasRows && hasScrolledIntoView,
+    enabled: hasRows && (eager || hasScrolledIntoView),
   });
 
   // When a group empties (its last row moved/deleted), the count is 0 and the
