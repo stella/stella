@@ -79,6 +79,8 @@ Redis or Valkey, S3-compatible storage, `GOTENBERG_URL`, and Gotenberg
 credentials in `apps/api/.env`. The frontend is a TanStack Start SSR app:
 build and run `apps/web/Dockerfile`, or run `bun --filter @stll/web build`
 followed by `HOST=0.0.0.0 PORT=3002 bun apps/web/start-runtime.js`.
+Railway-specific service configuration is documented in
+[docs/railway.md](docs/railway.md).
 
 ### Prerequisites
 
