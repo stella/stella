@@ -37,6 +37,11 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import type { EntityGroup } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
+import {
+  buildDocTypeGateLabels,
+  isDocumentTypeClassifier,
+  selectGroupColumns,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import { MobileTableOrientationGate } from "@/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate";
 import {
@@ -92,6 +97,10 @@ const GROUPED_TABLE_EXCLUDED_KINDS: EntityKind[] = ["folder", "task"];
 // can't collide with the null bucket.
 const groupKeyFor = (value: string | null): string =>
   value === null ? "uncategorized" : `value:${value}`;
+
+// Stable empty gate map for groupings other than the "Document Type" classifier,
+// where every section shares the full column set (no per-section filtering).
+const EMPTY_DOC_TYPE_GATE = new Map<string, Set<string>>();
 
 type GroupedTableLayoutProps = {
   workspaceId: string;
@@ -152,6 +161,31 @@ export const GroupedTableLayout = ({
           !view.layout.hiddenProperties.includes(property.id),
       ),
     [properties, groupByPropertyId, view.layout.hiddenProperties],
+  );
+
+  // When grouped by the workspace's "Document Type" classifier, each section
+  // renders the common columns plus only the playbook columns scoped to that
+  // section's document type, read from each column's materialized doc-type gate.
+  // Any other grouping keeps the shared column set.
+  const isDocTypeGrouping =
+    groupByProperty !== null && isDocumentTypeClassifier(groupByProperty);
+  const gateLabelsByColumnId = useMemo(
+    () =>
+      isDocTypeGrouping && groupByPropertyId !== null
+        ? buildDocTypeGateLabels({
+            properties,
+            classifierPropertyId: groupByPropertyId,
+          })
+        : EMPTY_DOC_TYPE_GATE,
+    [isDocTypeGrouping, properties, groupByPropertyId],
+  );
+  // The whole-view "+ new document" row carries the common (ungated) columns: a
+  // freshly created, unclassified document has no document type, so no playbook
+  // column applies to it yet.
+  const addRowColumns = useMemo(
+    () =>
+      selectGroupColumns({ columns, gateLabelsByColumnId, groupValue: null }),
+    [columns, gateLabelsByColumnId],
   );
 
   // Only "kind" and single/multi-select property groupings are supported for a
@@ -275,6 +309,7 @@ export const GroupedTableLayout = ({
             }
             eager={eagerLoadSections}
             fieldIds={fieldIds}
+            gateLabelsByColumnId={gateLabelsByColumnId}
             group={group}
             groupByPropertyId={groupByPropertyId}
             key={groupKeyFor(group.value)}
@@ -289,7 +324,7 @@ export const GroupedTableLayout = ({
           />
         ))}
         <GroupedAddRow
-          columns={columns}
+          columns={addRowColumns}
           tableState={tableState}
           workspaceId={workspaceId}
         />
@@ -419,6 +454,10 @@ type GroupSectionProps = {
   eager: boolean;
   fieldIds: string[];
   columns: TableColumnDef[];
+  // propertyId -> document-type labels its column is gated to, for per-section
+  // column selection when grouped by the "Document Type" classifier. Empty for
+  // other groupings (every section then renders the full column set).
+  gateLabelsByColumnId: Map<string, Set<string>>;
   sumProperties: WorkspaceProperty[];
   tableState: ReturnType<typeof useTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
@@ -436,6 +475,7 @@ const GroupSection = ({
   eager,
   fieldIds,
   columns,
+  gateLabelsByColumnId,
   sumProperties,
   tableState,
   outerScrollRef,
@@ -443,6 +483,20 @@ const GroupSection = ({
   selectAllPreservableRowIds,
 }: GroupSectionProps) => {
   const [collapsed, setCollapsed] = useState(false);
+
+  // This section's columns: common columns plus the playbook columns scoped to
+  // this group's document type (see selectGroupColumns). Sections legitimately
+  // differ in columns and grid width when grouped by the "Document Type"
+  // classifier; for other groupings this returns the shared columns unchanged.
+  const sectionColumns = useMemo(
+    () =>
+      selectGroupColumns({
+        columns,
+        gateLabelsByColumnId,
+        groupValue: group.value,
+      }),
+    [columns, gateLabelsByColumnId, group.value],
+  );
 
   // A category with no rows (an option no document carries yet) collapses to a
   // slim header; only groups known to have rows fire their row query.
@@ -528,7 +582,7 @@ const GroupSection = ({
     features: workspaceTableFeatures,
     columnResizeMode: "onChange",
     data: treeData,
-    columns,
+    columns: sectionColumns,
     defaultColumn: {
       minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
     },
@@ -564,7 +618,7 @@ const GroupSection = ({
       />
       {!collapsed && showSkeleton && (
         <GroupSkeleton
-          columns={columns}
+          columns={sectionColumns}
           rows={Math.min(count ?? 3, 5)}
           tableState={tableState}
         />
@@ -662,8 +716,11 @@ const GroupHeader = ({
         type="button"
       >
         {/* The label stays pinned at the left while the band scrolls
-            horizontally with the columns. */}
-        <span className="bg-muted sticky start-0 flex items-center gap-2 ps-3">
+            horizontally with the columns. The full-width `bg-muted` band lives
+            on the row wrapper, so the pinned label adds no second layer (a
+            second translucent `bg-muted` here darkened only the label's span,
+            reading as a partial band that stopped mid-row). */}
+        <span className="sticky start-0 flex items-center gap-2 ps-3">
           {empty ? (
             <span aria-hidden className="size-3.5 shrink-0" />
           ) : (
