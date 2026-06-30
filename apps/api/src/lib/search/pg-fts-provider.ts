@@ -28,6 +28,7 @@ import type {
   SearchQuery,
   SearchResult,
 } from "@/api/lib/search/types";
+import { hybridSearch, type SearchMode } from "./hybrid-search";
 
 const REINDEX_BATCH_SIZE = 100;
 
@@ -206,8 +207,28 @@ const CONTENT_HEADLINE_CONFIG =
 
 const searchContent = async (
   query: ContentSearchQuery,
+  mode: SearchMode = "keyword",
 ): Promise<ContentSearchResult> => {
   const { organizationId, workspaceId, limit } = query;
+
+  if (mode === "hybrid" || mode === "semantic") {
+    const hybridResults = await hybridSearch({
+      query: query.query,
+      mode,
+      workspaceId,
+      limit,
+    });
+
+    const hits: ContentSearchHit[] = hybridResults.map((r) => ({
+      entityId: r.id,
+      kind: parseEntityKind(r.kind),
+      title: r.name,
+      passage: r.snippet ?? "",
+    }));
+
+    return { hits, totalCount: hits.length };
+  }
+
   const tsQuery = buildSearchTsQuery(query.query);
 
   const [hitsResult, countResult] = await Promise.all([

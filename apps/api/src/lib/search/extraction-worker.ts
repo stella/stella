@@ -18,6 +18,7 @@
 import { PDF } from "@libpdf/core";
 import { load } from "cheerio";
 
+import { extractWithXberg, isXbergSupported } from "@/api/lib/search/xberg-extractor";
 import {
   EMAIL_MIME_TYPES,
   EML_MIME_TYPE,
@@ -175,12 +176,30 @@ const extract = async (
   const normalizedMimeType = normalizeMimeType(mimeType);
   let text: string | null = null;
 
-  if (normalizedMimeType === PDF_MIME_TYPE) {
-    text = await extractPdfPlaintext(fileBytes);
+  if (isXbergSupported(normalizedMimeType)) {
+    const xbergResult = await extractWithXberg(fileBytes, normalizedMimeType, {
+      useCache: true,
+      enableQualityProcessing: true,
+      outputFormat: "plain",
+      chunking: {
+        maxChars: 1000,
+        maxOverlap: 100,
+        embedding: {
+          preset: "balanced",
+        },
+      },
+      ocr: {
+        backend: "tesseract",
+        language: "eng",
+      },
+      transcription: {
+        enabled: true,
+      },
+    });
+
+    text = xbergResult.text;
   } else if (normalizedMimeType === DOCX_MIME_TYPE) {
     text = await extractFolioBlockTextFromDocxBuffer(fileBytes);
-  } else if (isDirectTextMimeType(normalizedMimeType)) {
-    text = extractDirectText(fileBytes, normalizedMimeType);
   } else if (normalizedMimeType in EMAIL_MIME_TYPES) {
     text = await extractEmailPlaintext({
       fileBytes,

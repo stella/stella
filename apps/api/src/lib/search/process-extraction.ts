@@ -21,7 +21,9 @@ import {
   extractFileText,
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
+import { generateEmbeddings } from "@/api/lib/search/embedding-generator";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { enqueueReindexJob } from "@/api/lib/search/reindex-embeddings-queue";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const findFileField = (
@@ -146,6 +148,12 @@ export const processExtraction = async (
               extractedAt: new Date(),
             },
           });
+
+        await enqueueReindexJob({
+          entityId,
+          text,
+          workspaceId: wsId,
+        });
       }
     } catch (error) {
       // Extraction failures must not prevent search
