@@ -92,10 +92,10 @@ const toPrefixTsQueryTextForMode = (
   query: string,
   mode: ArabicFoldMode,
 ): string | null => {
-  const tokens = toSearchLexemes(query, mode);
+  const lexemeGroups = toSearchLexemeGroups(query, mode);
 
-  return tokens.length > 0
-    ? tokens.map((token) => `${token}:*`).join(" & ")
+  return lexemeGroups.length > 0
+    ? [...new Set(lexemeGroups.map(lexemeGroupToTsQuery))].join(" & ")
     : null;
 };
 
@@ -106,10 +106,16 @@ const toLooseTsQueryTextForMode = (
   query: string,
   mode: ArabicFoldMode,
 ): string | null => {
-  const tokens = toSearchLexemes(query, mode);
+  const lexemeGroups = toSearchLexemeGroups(query, mode);
 
-  return tokens.length > 1
-    ? tokens.map((token) => `${token}:*`).join(" | ")
+  return lexemeGroups.length > 1
+    ? [
+        ...new Set(
+          lexemeGroups.flatMap((lexemes) =>
+            lexemes.map((lexeme) => `${lexeme}:*`),
+          ),
+        ),
+      ].join(" | ")
     : null;
 };
 
@@ -567,18 +573,16 @@ export const buildSearchTsQuery = (query: string) => {
   const prefixQueries = [
     ...new Set(
       variants.flatMap((variant) => {
-        const legacy = toPrefixTsQueryTextForMode(variant, "legacy");
-        const folded = toPrefixTsQueryTextForMode(variant, "folded");
-        return [legacy, folded].flatMap((prefix) => (prefix ? [prefix] : []));
+        const compatible = toPrefixTsQueryTextForMode(variant, "compatible");
+        return compatible ? [compatible] : [];
       }),
     ),
   ].map((prefix) => sql`to_tsquery('simple', unaccent(${prefix}))`);
   const looseQueries = [
     ...new Set(
       variants.flatMap((variant) => {
-        const legacy = toLooseTsQueryTextForMode(variant, "legacy");
-        const folded = toLooseTsQueryTextForMode(variant, "folded");
-        return [legacy, folded].flatMap((loose) => (loose ? [loose] : []));
+        const compatible = toLooseTsQueryTextForMode(variant, "compatible");
+        return compatible ? [compatible] : [];
       }),
     ),
   ].map((loose) => sql`to_tsquery('simple', unaccent(${loose}))`);

@@ -47,6 +47,10 @@ describe("search query text", () => {
     );
   });
 
+  test("deduplicates repeated prefix query terms", () => {
+    expect(toPrefixTsQueryText("agreement agreement")).toBe("agreement:*");
+  });
+
   test("keeps legal abbreviations after periods in prefix queries", () => {
     expect(toPrefixTsQueryText("Smith v. Jones")).toBe(
       "Smith:* & v:* & Jones:*",
@@ -55,6 +59,9 @@ describe("search query text", () => {
 
   test("builds a loose fallback so one typo does not hide useful results", () => {
     expect(toLooseTsQueryText("nterim injunctive")).toBe(
+      "nterim:* | injunctive:*",
+    );
+    expect(toLooseTsQueryText("nterim injunctive nterim")).toBe(
       "nterim:* | injunctive:*",
     );
     expect(toLooseTsQueryText("injunctive")).toBeNull();
@@ -180,8 +187,7 @@ describe("search query text", () => {
     expect(compiled.sql).toContain("arabic_normalize");
     expect(compiled.sql).toContain("plainto_tsquery('simple', unaccent($1))");
     expect(compiled.params.filter((param) => param === "خدمة")).toHaveLength(2);
-    expect(compiled.params).toContain("خدمة:*");
-    expect(compiled.params).toContain("خدمه:*");
+    expect(compiled.params).toContain("(خدمة:* | خدمه:*)");
   });
 
   test("keeps advanced Arabic queries compatible with existing indexes", () => {
@@ -243,6 +249,33 @@ describe("search query text", () => {
       "(plainto_tsquery('simple', unaccent($1)) || plainto_tsquery('simple', unaccent($2)) || plainto_tsquery('simple', unaccent($3)) || plainto_tsquery('simple', unaccent($4)) || plainto_tsquery('simple', unaccent($5)))",
     );
     expect(compiled.params).toEqual(["احمد", "آحمد", "أحمد", "إحمد", "ٱحمد"]);
+  });
+
+  test("keeps already-folded Arabic prefixes compatible with legacy vectors", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildSearchTsQuery("احم"));
+
+    expect(compiled.params).toContain(
+      "(احم:* | آحم:* | أحم:* | إحم:* | ٱحم:*)",
+    );
+  });
+
+  test("keeps loose Arabic fallback prefixes compatible with legacy vectors", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildSearchTsQuery("احم agreemnt"));
+
+    expect(compiled.params).toContain(
+      "احم:* | آحم:* | أحم:* | إحم:* | ٱحم:* | agreemnt:*",
+    );
+  });
+
+  test("deduplicates compatible Arabic loose fallback prefixes", () => {
+    const dialect = new PgDialect();
+    const compiled = dialect.sqlToQuery(buildSearchTsQuery("احم agreemnt احم"));
+
+    expect(compiled.params).toContain(
+      "احم:* | آحم:* | أحم:* | إحم:* | ٱحم:* | agreemnt:*",
+    );
   });
 
   test("does not duplicate plain tsqueries when folding is a no-op", () => {
