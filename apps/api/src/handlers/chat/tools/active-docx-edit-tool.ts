@@ -255,7 +255,12 @@ export const createActiveDocxEditTool = () =>
       "replace, rewrite, revise, or update text in the open DOCX, or asks " +
       "for a review/redline. Operations are queued for the user to review " +
       "and apply themselves; this tool does NOT write to the document. " +
-      "See each schema field for its semantics.",
+      "Write document prose, not markdown: no `#` headings, list dashes, " +
+      "or backticks. For a bold heading set `styleId` (e.g. ClauseHeading1). " +
+      "Inserted block `text` may use `**bold**` / `***bold italic***` for " +
+      "inline emphasis; in `replace` write plain text, since redlined " +
+      "replacements are not re-formatted. See each schema field for its " +
+      "semantics.",
     needsApproval: true,
     inputSchema: valibotSchema(
       v.strictObject({
