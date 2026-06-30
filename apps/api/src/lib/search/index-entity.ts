@@ -197,10 +197,10 @@ export const upsertSearchDocument = async (
       now(),
       to_tsvector(
         ${regconfig}::regconfig,
-        unaccent(
+        unaccent(arabic_normalize(
           coalesce(${doc.title}, '') || ' ' ||
           coalesce(${doc.searchableText}, '')
-        )
+        ))
       )
     )
     ON CONFLICT (entity_id) DO UPDATE SET

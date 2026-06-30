@@ -82,8 +82,8 @@ export const indexDecision = async (
   const fts = await resolveFtsConfig(decision.language);
 
   const textExpr = fts.useUnaccent
-    ? sql`unaccent(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`
-    : sql`coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')`;
+    ? sql`unaccent(arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, '')))`
+    : sql`arabic_normalize(coalesce(${title}, '') || ' ' || coalesce(${searchableText}, ''))`;
 
   const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 

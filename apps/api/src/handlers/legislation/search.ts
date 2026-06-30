@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import type { ScopedDb } from "@/api/db";
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import { loadFtsSearchConfigs } from "@/api/handlers/case-law/fts-config";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
 // eslint-disable-next-line no-restricted-imports -- search boundary: brands document ids returned by the corpus index before re-hydrating from Postgres
 import { toSafeId } from "@/api/lib/branded-types";
@@ -21,6 +22,7 @@ import {
   corpusIndexPattern,
   isCorpusIndexJurisdiction,
 } from "@/api/lib/legal-search/index-naming";
+import { buildPgFtsSearchSql } from "@/api/lib/legal-search/pg-fts-query";
 import {
   blendStableCitationAuthority,
   stableBlendUpperBound,
@@ -99,7 +101,15 @@ const pgSearch = async (
   scopedDb: ScopedDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
   const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
-  const tsQuery = sql`plainto_tsquery('simple', unaccent(${body.query}))`;
+  const ftsSearch = buildPgFtsSearchSql({
+    configs: await loadFtsSearchConfigs(),
+    query: body.query,
+    refs: {
+      language: sql`sd.language`,
+      regconfig: sql`sd.regconfig`,
+      vector: sql`sd.tsv`,
+    },
+  });
 
   const filters = sql`
     ${body.jurisdiction ? sql`AND d.country = ${body.jurisdiction}` : sql``}
@@ -111,7 +121,7 @@ const pgSearch = async (
     ${body.dateTo ? sql`AND d.effective_date <= ${body.dateTo}` : sql``}
   `;
 
-  const scoreExpr = sql`(ts_rank(sd.tsv, ${tsQuery})::float8 + 0.3 * d.citation_authority)`;
+  const scoreExpr = sql`(${ftsSearch.rank} + 0.3 * d.citation_authority)`;
   const cursorFilter = parsedCursor
     ? sql`AND (${scoreExpr}, sd.document_id) < (${parsedCursor.score}::float8, ${parsedCursor.id})`
     : sql``;
@@ -131,7 +141,7 @@ const pgSearch = async (
       ts_headline(
         ${headlineRegconfig},
         coalesce(nullif(d.fulltext, ''), sd.searchable_text),
-        ${tsQuery},
+        ${ftsSearch.headlineQuery},
         ${TS_HEADLINE_CONFIG}
       ) AS headline,
       ${scoreExpr} AS score
@@ -140,7 +150,7 @@ const pgSearch = async (
     JOIN legislation_sources
       ON legislation_sources.id = d.source_id
      AND ${redistributableLegislationSource}
-    WHERE sd.tsv @@ ${tsQuery}
+    WHERE ${ftsSearch.predicate}
       ${filters}
       ${cursorFilter}
     ORDER BY score DESC, sd.document_id DESC

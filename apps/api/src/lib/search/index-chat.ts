@@ -113,8 +113,10 @@ export const upsertChatThreadSearchDocument = async (
       to_tsvector(
         'simple',
         unaccent(
-          coalesce(${thread.title}, '') || ' ' ||
-          coalesce(${searchableText}, '')
+          arabic_normalize(
+            coalesce(${thread.title}, '') || ' ' ||
+            coalesce(${searchableText}, '')
+          )
         )
       )
     )
@@ -235,7 +237,7 @@ const upsertChatMessageSearchDocuments = async ({
       ${threadId},
       ${message.role},
       ${searchableText},
-      to_tsvector('simple', unaccent(coalesce(${searchableText}, ''))),
+      to_tsvector('simple', unaccent(arabic_normalize(coalesce(${searchableText}, '')))),
       ${message.createdAt},
       ${threadUpdatedAt}
     )`;

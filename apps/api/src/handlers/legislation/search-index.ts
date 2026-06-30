@@ -73,8 +73,8 @@ export const indexLegislationDocument = async (
   const fts = await resolveFtsConfig(document.language);
 
   const textExpr = fts.useUnaccent
-    ? sql`unaccent(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, ''))`
-    : sql`coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, '')`;
+    ? sql`unaccent(arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, '')))`
+    : sql`arabic_normalize(coalesce(${document.title}, '') || ' ' || coalesce(${searchableText}, ''))`;
   const tsvExpr = sql`to_tsvector(${fts.regconfig}, ${textExpr})`;
 
   await scopedDb(async (tx) => {
