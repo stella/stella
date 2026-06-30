@@ -55,6 +55,51 @@ describe("buildSearchResults", () => {
     ]);
   });
 
+  it("folds Arabic presentation forms copied from a PDF", () => {
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text: "ﺍﺣﻤﺪ" }],
+      query: "احمد",
+    });
+
+    expect(result.matchCount).toBe(1);
+  });
+
+  it("folds decomposed Arabic hamza marks copied from OCR", () => {
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text: "أحمد" }],
+      query: "احمد",
+    });
+
+    expect(result.matchCount).toBe(1);
+    expect(result.rangesByPieceId["p1"]).toEqual([
+      { start: 0, end: 5, matchIndex: 0 },
+    ]);
+  });
+
+  it("folds Arabic alef-hamza and teh-marbuta variants", () => {
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text: "خدمة أحمد" }],
+      query: "خدمه احمد",
+    });
+
+    expect(result.matchCount).toBe(1);
+    expect(result.rangesByPieceId["p1"]).toEqual([
+      { start: 0, end: 9, matchIndex: 0 },
+    ]);
+  });
+
+  it("ignores Arabic tatweel and folds Arabic-Indic digits", () => {
+    const result = buildSearchResults({
+      pieces: [{ id: "p1", text: "رقم ٢٠٢٤" }],
+      query: "2024",
+    });
+
+    expect(result.matchCount).toBe(1);
+    expect(result.rangesByPieceId["p1"]).toEqual([
+      { start: 4, end: 8, matchIndex: 0 },
+    ]);
+  });
+
   it("locates matches after astral-plane characters", () => {
     // U+10348 (Gothic letter hwair, "𐍈") is a non-BMP letter
     // encoded as a UTF-16 surrogate pair. `String.indexOf`

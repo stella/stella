@@ -24,7 +24,8 @@ export const ARABIC_LETTER_FOLDS: Readonly<Record<string, string>> = {
 };
 
 // Codepoints folded to nothing (removed). Tatweel, the eight harakat
-// (U+064B–U+0652), superscript alef, and standalone hamza.
+// (U+064B–U+0652), decomposed hamza/madda marks, superscript alef, and
+// standalone hamza.
 export const ARABIC_REMOVED: readonly string[] = [
   "ء", // ء standalone hamza
   "ـ", // ـ tatweel / kashida
@@ -36,6 +37,9 @@ export const ARABIC_REMOVED: readonly string[] = [
   "ِ", // kasra
   "ّ", // shadda
   "ْ", // sukun
+  "ٓ", // madda above
+  "ٔ", // hamza above
+  "ٕ", // hamza below
   "ٰ", // superscript alef
 ];
 
@@ -86,4 +90,45 @@ export const applyArabicFolds = (text: string): string => {
     out.push(FOLD_MAP.get(char) ?? char);
   }
   return out.join("");
+};
+
+export type FoldedText = {
+  // For each UTF-16 code-unit index `i` in `text`, the code-unit index in
+  // the original input immediately after that unit's source character.
+  sourceEndIndex: number[];
+  text: string;
+  // For each UTF-16 code-unit index `i` in `text`, the code-unit index in
+  // the original input where that unit's source character began.
+  // `sourceIndex[text.length]` is the original length (end sentinel), so a
+  // match's [start, end) in folded space maps back to original offsets.
+  sourceIndex: number[];
+};
+
+/**
+ * Like applyArabicFolds, but also returns an offset map so callers that
+ * match against the folded text (e.g. find-in-page) can slice the original
+ * text at the right positions.
+ */
+export const applyArabicFoldsWithOffsets = (input: string): FoldedText => {
+  const parts: string[] = [];
+  const sourceEndIndex: number[] = [];
+  const sourceIndex: number[] = [];
+  let originalUnit = 0;
+  for (const char of input) {
+    const replacement = applyArabicFolds(char.normalize("NFKC"));
+    const originalEnd = originalUnit + char.length;
+    parts.push(replacement);
+    // One offset entry per UTF-16 code unit of the replacement; folds are
+    // BMP, but an unfolded astral passthrough spans two code units.
+    let unit = 0;
+    while (unit < replacement.length) {
+      sourceIndex.push(originalUnit);
+      sourceEndIndex.push(originalEnd);
+      unit += 1;
+    }
+    originalUnit = originalEnd;
+  }
+  sourceIndex.push(originalUnit);
+  sourceEndIndex.push(originalUnit);
+  return { sourceEndIndex, text: parts.join(""), sourceIndex };
 };

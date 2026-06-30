@@ -12,6 +12,7 @@ const EQUIVALENCE_GROUPS: readonly (readonly string[])[] = [
   ["يكفى", "يكفي"], // alef maksura -> yeh
   ["مُحَمَّد", "محمد"], // tashkeel stripped
   ["مـحـمـد", "محمد"], // tatweel removed
+  ["أحمد", "احمد"], // decomposed hamza mark removed
   ["مؤمن", "مومن"], // waw hamza -> waw
   ["مسئول", "مسيول"], // yeh hamza -> yeh
   ["٢٠٢٤", "2024"], // Arabic-Indic digits
@@ -26,6 +27,8 @@ const GOLDEN: readonly (readonly [string, string])[] = [
   ["يكفى", "يكفي"],
   ["مُحَمَّد", "محمد"],
   ["مـحـمـد", "محمد"],
+  ["أحمد", "احمد"],
+  ["حٔمد", "حمد"],
   ["مؤمن", "مومن"],
   ["مسئول", "مسيول"],
   ["ء", ""], // standalone hamza dropped

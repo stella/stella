@@ -1,3 +1,5 @@
+import { applyArabicFolds } from "@stll/text-normalize";
+
 export type SearchPiece = {
   id: string;
   text: string;
@@ -75,7 +77,13 @@ const normalizeSearchText = (text: string): NormalizedText => {
   };
 
   for (const rawChar of text) {
-    const normalizedChar = rawChar.normalize("NFD").replace(DIACRITIC_RE, "");
+    // NFKC folds presentation forms to canonical letters; applyArabicFolds
+    // then folds Arabic variants (before NFD, so a composed alef-hamza is
+    // not split first); NFD + mark removal strips remaining Latin/Arabic
+    // combining diacritics.
+    const normalizedChar = applyArabicFolds(rawChar.normalize("NFKC"))
+      .normalize("NFD")
+      .replace(DIACRITIC_RE, "");
     const origStart = originalIndex;
     const origEnd = originalIndex + rawChar.length;
 
