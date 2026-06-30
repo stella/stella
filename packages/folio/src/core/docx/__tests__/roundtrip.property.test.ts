@@ -320,17 +320,21 @@ describe("DOCX round-trip property tests", () => {
     propertyTestTimeout(15_000),
   );
 
-  test("round-trip preserves document structure", () => {
-    fc.assert(
-      fc.property(arbDocument(), (doc) => {
-        const result = roundTrip(doc);
-        const originalNorm = normalizeDoc(doc);
-        const resultNorm = normalizeDoc(result);
-        expect(resultNorm).toEqual(originalNorm);
-      }),
-      propertyConfig({ numRuns: 200 }),
-    );
-  });
+  test(
+    "round-trip preserves document structure",
+    () => {
+      fc.assert(
+        fc.property(arbDocument(), (doc) => {
+          const result = roundTrip(doc);
+          const originalNorm = normalizeDoc(doc);
+          const resultNorm = normalizeDoc(result);
+          expect(resultNorm).toEqual(originalNorm);
+        }),
+        propertyConfig({ numRuns: 200 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
 
   test(
     "round-trip preserves text content exactly",
@@ -349,253 +353,295 @@ describe("DOCX round-trip property tests", () => {
     propertyTestTimeout(15_000),
   );
 
-  test("round-trip preserves bold marks", () => {
-    // Targeted test: paragraphs with bold text
-    const boldDoc = fc
-      .array(safeText, { minLength: 1, maxLength: 5 })
-      .map((texts) => {
-        const nodes = texts.map((t) =>
-          schema.text(t, [schema.marks.bold.create()]),
-        );
-        return schema.nodes.doc.create(null, [
-          schema.nodes.paragraph.create(null, nodes),
-        ]);
-      });
-
-    fc.assert(
-      fc.property(boldDoc, (doc) => {
-        const result = roundTrip(doc);
-        // Every text node should still be bold
-        result.forEach((node) => {
-          if (node.type.name === "paragraph") {
-            node.forEach((child) => {
-              if (child.isText && child.text?.trim()) {
-                const hasBold = child.marks.some((m) => m.type.name === "bold");
-                expect(hasBold).toBe(true);
-              }
-            });
-          }
+  test(
+    "round-trip preserves bold marks",
+    () => {
+      // Targeted test: paragraphs with bold text
+      const boldDoc = fc
+        .array(safeText, { minLength: 1, maxLength: 5 })
+        .map((texts) => {
+          const nodes = texts.map((t) =>
+            schema.text(t, [schema.marks.bold.create()]),
+          );
+          return schema.nodes.doc.create(null, [
+            schema.nodes.paragraph.create(null, nodes),
+          ]);
         });
-      }),
-      propertyConfig({ numRuns: 200 }),
-    );
-  });
 
-  test("round-trip preserves italic marks", () => {
-    const italicDoc = fc
-      .array(safeText, { minLength: 1, maxLength: 5 })
-      .map((texts) => {
-        const nodes = texts.map((t) =>
-          schema.text(t, [schema.marks.italic.create()]),
-        );
-        return schema.nodes.doc.create(null, [
-          schema.nodes.paragraph.create(null, nodes),
-        ]);
-      });
+      fc.assert(
+        fc.property(boldDoc, (doc) => {
+          const result = roundTrip(doc);
+          // Every text node should still be bold
+          result.forEach((node) => {
+            if (node.type.name === "paragraph") {
+              node.forEach((child) => {
+                if (child.isText && child.text?.trim()) {
+                  const hasBold = child.marks.some(
+                    (m) => m.type.name === "bold",
+                  );
+                  expect(hasBold).toBe(true);
+                }
+              });
+            }
+          });
+        }),
+        propertyConfig({ numRuns: 200 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
 
-    fc.assert(
-      fc.property(italicDoc, (doc) => {
-        const result = roundTrip(doc);
-        result.forEach((node) => {
-          if (node.type.name === "paragraph") {
-            node.forEach((child) => {
-              if (child.isText && child.text?.trim()) {
-                const hasItalic = child.marks.some(
-                  (m) => m.type.name === "italic",
-                );
-                expect(hasItalic).toBe(true);
-              }
-            });
-          }
+  test(
+    "round-trip preserves italic marks",
+    () => {
+      const italicDoc = fc
+        .array(safeText, { minLength: 1, maxLength: 5 })
+        .map((texts) => {
+          const nodes = texts.map((t) =>
+            schema.text(t, [schema.marks.italic.create()]),
+          );
+          return schema.nodes.doc.create(null, [
+            schema.nodes.paragraph.create(null, nodes),
+          ]);
         });
-      }),
-      propertyConfig({ numRuns: 200 }),
-    );
-  });
 
-  test("empty paragraphs survive round-trip", () => {
-    const emptyParaDoc = fc.integer({ min: 1, max: 10 }).map((count) =>
-      schema.nodes.doc.create(
-        null,
-        Array.from({ length: count }, () => schema.nodes.paragraph.create()),
-      ),
-    );
+      fc.assert(
+        fc.property(italicDoc, (doc) => {
+          const result = roundTrip(doc);
+          result.forEach((node) => {
+            if (node.type.name === "paragraph") {
+              node.forEach((child) => {
+                if (child.isText && child.text?.trim()) {
+                  const hasItalic = child.marks.some(
+                    (m) => m.type.name === "italic",
+                  );
+                  expect(hasItalic).toBe(true);
+                }
+              });
+            }
+          });
+        }),
+        propertyConfig({ numRuns: 200 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
 
-    fc.assert(
-      fc.property(emptyParaDoc, (doc) => {
-        const result = roundTrip(doc);
-        expect(result.childCount).toBe(doc.childCount);
-      }),
-      propertyConfig({ numRuns: 100 }),
-    );
-  });
-
-  test("alignment attribute survives round-trip", () => {
-    const alignedDoc = fc
-      .tuple(safeText, fc.constantFrom("left", "center", "right", "both"))
-      .map(([text, alignment]) =>
-        schema.nodes.doc.create(null, [
-          schema.nodes.paragraph.create({ alignment }, [schema.text(text)]),
-        ]),
+  test(
+    "empty paragraphs survive round-trip",
+    () => {
+      const emptyParaDoc = fc.integer({ min: 1, max: 10 }).map((count) =>
+        schema.nodes.doc.create(
+          null,
+          Array.from({ length: count }, () => schema.nodes.paragraph.create()),
+        ),
       );
 
-    fc.assert(
-      fc.property(alignedDoc, (doc) => {
-        const result = roundTrip(doc);
-        const originalAlign = doc.firstChild?.attrs.alignment;
-        const resultAlign = result.firstChild?.attrs.alignment;
-        expect(resultAlign).toBe(originalAlign);
-      }),
-      propertyConfig({ numRuns: 100 }),
-    );
-  });
+      fc.assert(
+        fc.property(emptyParaDoc, (doc) => {
+          const result = roundTrip(doc);
+          expect(result.childCount).toBe(doc.childCount);
+        }),
+        propertyConfig({ numRuns: 100 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
 
-  test("tables survive round-trip", () => {
-    const tableDoc = arbTable().map((table) =>
-      schema.nodes.doc.create(null, [table]),
-    );
+  test(
+    "alignment attribute survives round-trip",
+    () => {
+      const alignedDoc = fc
+        .tuple(safeText, fc.constantFrom("left", "center", "right", "both"))
+        .map(([text, alignment]) =>
+          schema.nodes.doc.create(null, [
+            schema.nodes.paragraph.create({ alignment }, [schema.text(text)]),
+          ]),
+        );
 
-    fc.assert(
-      fc.property(tableDoc, (doc) => {
-        const result = roundTrip(doc);
-        // The document should contain a table
-        let hasTable = false;
-        result.forEach((node) => {
-          if (node.type.name === "table") {
-            hasTable = true;
-          }
-        });
-        expect(hasTable).toBe(true);
-      }),
-      propertyConfig({ numRuns: 100 }),
-    );
-  });
+      fc.assert(
+        fc.property(alignedDoc, (doc) => {
+          const result = roundTrip(doc);
+          const originalAlign = doc.firstChild?.attrs.alignment;
+          const resultAlign = result.firstChild?.attrs.alignment;
+          expect(resultAlign).toBe(originalAlign);
+        }),
+        propertyConfig({ numRuns: 100 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
 
-  test("table text content preserved through round-trip", () => {
-    const tableDoc = arbTable().map((table) =>
-      schema.nodes.doc.create(null, [table]),
-    );
-
-    fc.assert(
-      fc.property(tableDoc, (doc) => {
-        const result = roundTrip(doc);
-        expect(result.textContent).toBe(doc.textContent);
-      }),
-      propertyConfig({ numRuns: 100 }),
-    );
-  });
-
-  test("documents with mixed paragraphs and tables round-trip", () => {
-    fc.assert(
-      fc.property(arbDocument(), (doc) => {
-        const result = roundTrip(doc);
-        expect(result.textContent).toBe(doc.textContent);
-      }),
-      propertyConfig({ numRuns: 200 }),
-    );
-  });
-
-  test("tracked change marks survive round-trip", () => {
-    fc.assert(
-      fc.property(arbTrackedChangeDocument(), (doc) => {
-        const result = roundTrip(doc);
-        // Count tracked change marks in original
-        let originalChanges = 0;
-        doc.descendants((node) => {
-          if (node.isText) {
-            for (const mark of node.marks) {
-              if (
-                mark.type.name === "insertion" ||
-                mark.type.name === "deletion"
-              ) {
-                originalChanges++;
-              }
-            }
-          }
-        });
-
-        // Count tracked change marks in result
-        let resultChanges = 0;
-        result.descendants((node) => {
-          if (node.isText) {
-            for (const mark of node.marks) {
-              if (
-                mark.type.name === "insertion" ||
-                mark.type.name === "deletion"
-              ) {
-                resultChanges++;
-              }
-            }
-          }
-        });
-
-        // Same number of tracked changes
-        expect(resultChanges).toBe(originalChanges);
-      }),
-      propertyConfig({ numRuns: 200 }),
-    );
-  });
-
-  test("tracked change author preserved through round-trip", () => {
-    fc.assert(
-      fc.property(arbTrackedChangeDocument(), (doc) => {
-        const result = roundTrip(doc);
-
-        // Collect all authors from original
-        const originalAuthors: string[] = [];
-        doc.descendants((node) => {
-          if (node.isText) {
-            for (const mark of node.marks) {
-              if (
-                mark.type.name === "insertion" ||
-                mark.type.name === "deletion"
-              ) {
-                originalAuthors.push(mark.attrs.author as string);
-              }
-            }
-          }
-        });
-
-        // Collect all authors from result
-        const resultAuthors: string[] = [];
-        result.descendants((node) => {
-          if (node.isText) {
-            for (const mark of node.marks) {
-              if (
-                mark.type.name === "insertion" ||
-                mark.type.name === "deletion"
-              ) {
-                resultAuthors.push(mark.attrs.author as string);
-              }
-            }
-          }
-        });
-
-        expect(resultAuthors).toEqual(originalAuthors);
-      }),
-      propertyConfig({ numRuns: 200 }),
-    );
-  });
-
-  test("multiple mark combinations survive round-trip", () => {
-    // Generate text with 2-3 marks simultaneously
-    const multiMarkDoc = fc
-      .tuple(safeText, arbMarks())
-      .filter(([, marks]) => marks.length >= 2)
-      .map(([text, marks]) =>
-        schema.nodes.doc.create(null, [
-          schema.nodes.paragraph.create(null, [schema.text(text, marks)]),
-        ]),
+  test(
+    "tables survive round-trip",
+    () => {
+      const tableDoc = arbTable().map((table) =>
+        schema.nodes.doc.create(null, [table]),
       );
 
-    fc.assert(
-      fc.property(multiMarkDoc, (doc) => {
-        const result = roundTrip(doc);
-        const originalNorm = normalizeDoc(doc);
-        const resultNorm = normalizeDoc(result);
-        expect(resultNorm).toEqual(originalNorm);
-      }),
-      propertyConfig({ numRuns: 200 }),
-    );
-  });
+      fc.assert(
+        fc.property(tableDoc, (doc) => {
+          const result = roundTrip(doc);
+          // The document should contain a table
+          let hasTable = false;
+          result.forEach((node) => {
+            if (node.type.name === "table") {
+              hasTable = true;
+            }
+          });
+          expect(hasTable).toBe(true);
+        }),
+        propertyConfig({ numRuns: 100 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
+
+  test(
+    "table text content preserved through round-trip",
+    () => {
+      const tableDoc = arbTable().map((table) =>
+        schema.nodes.doc.create(null, [table]),
+      );
+
+      fc.assert(
+        fc.property(tableDoc, (doc) => {
+          const result = roundTrip(doc);
+          expect(result.textContent).toBe(doc.textContent);
+        }),
+        propertyConfig({ numRuns: 100 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
+
+  test(
+    "documents with mixed paragraphs and tables round-trip",
+    () => {
+      fc.assert(
+        fc.property(arbDocument(), (doc) => {
+          const result = roundTrip(doc);
+          expect(result.textContent).toBe(doc.textContent);
+        }),
+        propertyConfig({ numRuns: 200 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
+
+  test(
+    "tracked change marks survive round-trip",
+    () => {
+      fc.assert(
+        fc.property(arbTrackedChangeDocument(), (doc) => {
+          const result = roundTrip(doc);
+          // Count tracked change marks in original
+          let originalChanges = 0;
+          doc.descendants((node) => {
+            if (node.isText) {
+              for (const mark of node.marks) {
+                if (
+                  mark.type.name === "insertion" ||
+                  mark.type.name === "deletion"
+                ) {
+                  originalChanges++;
+                }
+              }
+            }
+          });
+
+          // Count tracked change marks in result
+          let resultChanges = 0;
+          result.descendants((node) => {
+            if (node.isText) {
+              for (const mark of node.marks) {
+                if (
+                  mark.type.name === "insertion" ||
+                  mark.type.name === "deletion"
+                ) {
+                  resultChanges++;
+                }
+              }
+            }
+          });
+
+          // Same number of tracked changes
+          expect(resultChanges).toBe(originalChanges);
+        }),
+        propertyConfig({ numRuns: 200 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
+
+  test(
+    "tracked change author preserved through round-trip",
+    () => {
+      fc.assert(
+        fc.property(arbTrackedChangeDocument(), (doc) => {
+          const result = roundTrip(doc);
+
+          // Collect all authors from original
+          const originalAuthors: string[] = [];
+          doc.descendants((node) => {
+            if (node.isText) {
+              for (const mark of node.marks) {
+                if (
+                  mark.type.name === "insertion" ||
+                  mark.type.name === "deletion"
+                ) {
+                  originalAuthors.push(mark.attrs.author as string);
+                }
+              }
+            }
+          });
+
+          // Collect all authors from result
+          const resultAuthors: string[] = [];
+          result.descendants((node) => {
+            if (node.isText) {
+              for (const mark of node.marks) {
+                if (
+                  mark.type.name === "insertion" ||
+                  mark.type.name === "deletion"
+                ) {
+                  resultAuthors.push(mark.attrs.author as string);
+                }
+              }
+            }
+          });
+
+          expect(resultAuthors).toEqual(originalAuthors);
+        }),
+        propertyConfig({ numRuns: 200 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
+
+  test(
+    "multiple mark combinations survive round-trip",
+    () => {
+      // Generate text with 2-3 marks simultaneously
+      const multiMarkDoc = fc
+        .tuple(safeText, arbMarks())
+        .filter(([, marks]) => marks.length >= 2)
+        .map(([text, marks]) =>
+          schema.nodes.doc.create(null, [
+            schema.nodes.paragraph.create(null, [schema.text(text, marks)]),
+          ]),
+        );
+
+      fc.assert(
+        fc.property(multiMarkDoc, (doc) => {
+          const result = roundTrip(doc);
+          const originalNorm = normalizeDoc(doc);
+          const resultNorm = normalizeDoc(result);
+          expect(resultNorm).toEqual(originalNorm);
+        }),
+        propertyConfig({ numRuns: 200 }),
+      );
+    },
+    propertyTestTimeout(10_000),
+  );
 });
