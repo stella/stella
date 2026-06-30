@@ -11,6 +11,11 @@ import {
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
+import {
+  emptyCondition,
+  pruneIncomplete,
+  type ConditionNode,
+} from "@stll/conditions";
 import { Button } from "@stll/ui/components/button";
 import {
   Combobox,
@@ -31,6 +36,8 @@ import {
 } from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
 
+import { ConditionBuilder } from "@/components/conditions/condition-builder";
+import type { FieldOption } from "@/components/conditions/condition-builder-logic";
 import type { TranslationKey } from "@/i18n/types";
 import {
   type Position,
@@ -780,10 +787,85 @@ const GradeSection = ({
       )}
 
       {rule.kind === "propertyConstraint" && (
-        <p className="text-muted-foreground rounded-md border border-dashed p-3 text-sm">
-          {t("knowledge.playbooks.conditionPlaceholder")}
-        </p>
+        <PropertyConstraintEditor
+          condition={rule.condition}
+          onChange={(condition) =>
+            onChange({
+              ...position,
+              rule: { kind: "propertyConstraint", condition },
+            })
+          }
+          position={position}
+        />
       )}
     </fieldset>
+  );
+};
+
+// ── propertyConstraint condition editor ───────────────
+// Reuses the shared @stll/conditions visual builder. The only field offered is
+// THIS position's own extracted value (operand keyed by the position sourceId),
+// so the author writes "the answer {op} {value}" (e.g. cap ≤ 12). The stored
+// condition is always pruned + valid (an all-incomplete tree collapses to the
+// empty-AND group); the builder keeps the in-progress draft locally.
+
+const askFieldOption = (
+  position: Position,
+  label: string,
+): FieldOption | null => {
+  const content = position.ask.content;
+  if (content.type === "file") {
+    return null;
+  }
+  const operand = { type: "property" as const, propertyId: position.sourceId };
+  if (content.type === "single-select" || content.type === "multi-select") {
+    return {
+      operand,
+      label,
+      valueType: content.type,
+      type: content.type,
+      options: content.options.map((option) => ({
+        value: option.value,
+        label: option.value,
+        color: option.color,
+      })),
+    };
+  }
+  return { operand, label, valueType: content.type, type: content.type };
+};
+
+const PropertyConstraintEditor = ({
+  position,
+  condition,
+  onChange,
+}: {
+  position: Position;
+  condition: ConditionNode;
+  onChange: (condition: ConditionNode) => void;
+}) => {
+  const t = useTranslations();
+  const [draft, setDraft] = useState<ConditionNode | null>(condition);
+  const field = askFieldOption(
+    position,
+    position.issue.trim() || t("knowledge.playbooks.issueLabel"),
+  );
+
+  if (!field) {
+    return (
+      <p className="text-muted-foreground rounded-md border border-dashed p-3 text-sm">
+        {t("knowledge.playbooks.conditionPlaceholder")}
+      </p>
+    );
+  }
+
+  return (
+    <ConditionBuilder
+      capabilities={{ fields: [field] }}
+      onChange={(next) => {
+        setDraft(next);
+        onChange(pruneIncomplete(next) ?? emptyCondition());
+      }}
+      value={draft}
+    />
   );
 };
