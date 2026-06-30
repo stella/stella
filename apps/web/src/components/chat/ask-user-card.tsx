@@ -24,6 +24,7 @@ import type {
 } from "@/components/chat/chat-ui-tools";
 import { EntityLink } from "@/components/chat/entity-link";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 
 type AskUserPart = ToolUIPart<Pick<ChatUITools, "ask-user">>;
 
@@ -41,6 +42,14 @@ type AskUserCardProps = {
    */
   onEditAndRerun?:
     | ((toolCallId: string, output: AskUserOutput) => void | Promise<void>)
+    | undefined;
+  /**
+   * Reports the card's local edit-mode lifecycle to the parent so it can
+   * treat a reopened-for-editing card like a live clarification (e.g. hide
+   * competing follow-up suggestions). Reports `false` on unmount.
+   */
+  onEditingChange?:
+    | ((toolCallId: string, isEditing: boolean) => void)
     | undefined;
   discardsDownstream?: boolean | undefined;
   workspaceId?: string | undefined;
@@ -128,6 +137,7 @@ export const AskUserCard = ({
   part,
   onSubmit,
   onEditAndRerun,
+  onEditingChange,
   discardsDownstream,
   workspaceId,
   restorationPairs,
@@ -206,6 +216,13 @@ export const AskUserCard = ({
   const canRerun = onEditAndRerun !== undefined;
   const isAnswered = answeredOutput !== null || submitted;
   const isDone = isAnswered && !isEditing;
+
+  // Mirror local edit-mode to the parent: a reopened answered card is a live
+  // clarification again, so the parent can suppress competing affordances.
+  useExternalSyncEffect(() => {
+    onEditingChange?.(part.toolCallId, isEditing);
+    return () => onEditingChange?.(part.toolCallId, false);
+  }, [isEditing, onEditingChange, part.toolCallId]);
 
   const setAnswer = useCallback(
     (idx: number, value: string) =>

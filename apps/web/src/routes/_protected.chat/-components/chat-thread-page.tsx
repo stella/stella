@@ -1,4 +1,10 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useEffectEvent,
+  useRef,
+  useState,
+} from "react";
 
 import {
   useMutation,
@@ -210,11 +216,54 @@ export const ChatThreadPage = ({
   // Fetch suggested follow-up prompts for Tab-to-ask (editor) and chips display.
   // Gated by draft store emptiness so the query does not fire when the
   // user is already typing a custom follow-up.
-  const lastMessageId = messages.at(-1)?.id ?? null;
-  const lastMessageRole = messages.at(-1)?.role ?? null;
+  const lastMessage = messages.at(-1);
+  const lastMessageId = lastMessage?.id ?? null;
+  const lastMessageRole = lastMessage?.role ?? null;
+  // Ask-user cards report their local "edit answers" mode here: reopening an
+  // answered card turns it back into a live clarification form, which the
+  // persisted part state (`output-available`) does not reflect.
+  const [editingAskUserToolCallIds, setEditingAskUserToolCallIds] = useState<
+    ReadonlySet<string>
+  >(() => new Set<string>());
+  const handleAskUserEditingChange = useCallback(
+    (toolCallId: string, isEditing: boolean) => {
+      setEditingAskUserToolCallIds((prev) => {
+        if (isEditing === prev.has(toolCallId)) {
+          return prev;
+        }
+        const next = new Set(prev);
+        if (isEditing) {
+          next.add(toolCallId);
+        } else {
+          next.delete(toolCallId);
+        }
+        return next;
+      });
+    },
+    [],
+  );
+  // An ask-user clarification card owns the turn, and its own questions and
+  // submit button take precedence over generic follow-up suggestions, so
+  // suppress both the chips and the Tab-to-ask editor hint while one is live.
+  // A card is live when it is still awaiting input (always the last message),
+  // or when any card has been reopened via Edit — including an earlier card
+  // with downstream replies, where the persisted `output-available` state no
+  // longer reflects the live edit-and-rerun form.
+  const lastMessageHasPendingAskUser =
+    lastMessage !== undefined &&
+    lastMessage.role === "assistant" &&
+    lastMessage.parts.some(
+      (part) =>
+        part.type === "tool-ask-user" && part.state !== "output-available",
+    );
+  const askUserOwnsTurn =
+    lastMessageHasPendingAskUser || editingAskUserToolCallIds.size > 0;
   const editorIsEmpty = useIsChatDraftEmpty(threadRef);
   const eligibleForSuggestions =
-    editorIsEmpty && lastMessageId !== null && lastMessageRole === "assistant";
+    editorIsEmpty &&
+    lastMessageId !== null &&
+    lastMessageRole === "assistant" &&
+    !askUserOwnsTurn;
   const { data: suggestedPromptsData } = useQuery(
     chatThreadSuggestedPromptsOptions({
       activeOrganizationId,
@@ -404,6 +453,7 @@ export const ChatThreadPage = ({
                     messages={messages}
                     onLoadOlder={loadOlder}
                     onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                    onAskUserEditingChange={handleAskUserEditingChange}
                     onAskUserSubmit={handleAskUserSubmit}
                     onCreateDocumentResolve={handleCreateDocumentResolve}
                     onOpenCreatedDocument={handleOpenCreatedDocument}
