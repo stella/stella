@@ -1,4 +1,3 @@
-import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { pushSchema } from "drizzle-kit/api-postgres";
 import { and, eq, sql } from "drizzle-orm";
@@ -15,6 +14,10 @@ import { entities, entityVersions, fields, properties } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import { applyFilters, buildFilterConditions } from "@/api/lib/entity-filters";
+import {
+  createSchemaPglite,
+  installPgliteSchemaPrerequisites,
+} from "@/api/tests/pglite-schema";
 
 // ── Differential property test ──────────────────────────────
 //
@@ -30,7 +33,7 @@ const allSchema = { ...schema, ...authSchema, ...rlsExports };
 
 type RawDb = ReturnType<typeof drizzle>;
 
-let client: PGlite;
+let client: Awaited<ReturnType<typeof createSchemaPglite>>;
 let db: RawDb;
 
 const ORG_ID = toSafeId<"organization">(Bun.randomUUIDv7());
@@ -91,12 +94,13 @@ const ENTITY_KINDS: readonly EntityKind[] = [
 ];
 
 beforeAll(async () => {
-  client = await PGlite.create();
+  client = await createSchemaPglite();
   db = drizzle({ client });
   const pushDb = drizzle({ client });
 
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
+  await installPgliteSchemaPrerequisites(db);
 
   const { sqlStatements } = await pushSchema(allSchema, pushDb);
   // Schema DDL must apply in dependency order, so these run sequentially.

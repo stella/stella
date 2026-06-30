@@ -85,6 +85,7 @@
         "@stll/permissions": "workspace:*",
         "@stll/skills": "workspace:*",
         "@stll/template-conditions": "workspace:*",
+        "@stll/text-normalize": "workspace:*",
         "@stll/transactional": "workspace:*",
         "@t3-oss/env-core": "catalog:",
         "@valibot/to-json-schema": "^1.7.1",
@@ -607,6 +608,14 @@
         "@types/bun": "catalog:",
         "fast-check": "catalog:",
         "tsdown": "catalog:",
+      },
+    },
+    "packages/text-normalize": {
+      "name": "@stll/text-normalize",
+      "version": "0.1.0",
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "@types/bun": "catalog:",
       },
     },
     "packages/transactional": {
@@ -1746,6 +1755,8 @@
     "@stll/stdnum": ["@stll/stdnum@2.1.1", "", {}, "sha512-VV+9w+u3tLYjos2Z0idJBsl+iCmE171u4rhUNEh/QDqljPBjKETKyLkf81Z1sR0QeaAcn3rg+0Y4vauPVU566w=="],
 
     "@stll/template-conditions": ["@stll/template-conditions@workspace:packages/template-conditions"],
+
+    "@stll/text-normalize": ["@stll/text-normalize@workspace:packages/text-normalize"],
 
     "@stll/text-search-wasm": ["@stll/text-search-wasm@1.0.5", "", { "dependencies": { "@stll/aho-corasick-wasm": "^1.0.3", "@stll/fuzzy-search-wasm": "^1.1.1", "@stll/regex-set-wasm": "^1.0.4" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-ZY3nPQ7Zm/KpbeaodQdJMuzShHE9QPJBvRGpZxoGXo7AKOt2t32beZZ6HWG+yvfzMp/loLKY4dGrY8sbIRDf/A=="],
 
