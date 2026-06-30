@@ -2,11 +2,16 @@ import { Result } from "better-result";
 import { t } from "elysia";
 import JSZip from "jszip";
 
-import type { FieldContent } from "@/api/db/schema-validators";
+import type { JustificationContent } from "@/api/db/schema";
+import type { FieldContent, PropertyTool } from "@/api/db/schema-validators";
+import { env } from "@/api/env";
 import { queryEntities } from "@/api/handlers/entities/query-entities";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+// eslint-disable-next-line no-restricted-imports -- export boundary: brands field ids returned by queryEntities (server-validated, workspace-scoped) to re-hydrate their justifications from Postgres
+import { toSafeId } from "@/api/lib/branded-types";
+import type { SafeId } from "@/api/lib/branded-types";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { escapeCSV } from "@/api/lib/csv";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -17,8 +22,24 @@ import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import type { ViewLayout } from "@/api/lib/views-schema";
 import { parseViewLayout } from "@/api/lib/views-schema";
 
+// Postgres caps bound parameters per statement; chunk the justification
+// lookup so an export at the row ceiling cannot overflow a single `IN (...)`.
+const JUSTIFICATION_FIELD_ID_BATCH = 1000;
+
+// Author shown on every exported cell note. Brand copy keeps "stella"
+// lowercase.
+const EXPORT_COMMENT_AUTHOR = "stella";
+
 const XLSX_MIME_TYPE =
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+
+const chunkArray = <T>(items: T[], size: number): T[][] => {
+  const chunks: T[][] = [];
+  for (let index = 0; index < items.length; index += size) {
+    chunks.push(items.slice(index, index + size));
+  }
+  return chunks;
+};
 
 export const SPREADSHEET_EXPORT_LIMITS = {
   /**
@@ -68,6 +89,7 @@ type CellFlagId = (typeof CELL_FLAG_IDS)[number];
 type ExportProperty = {
   id: string;
   name: string;
+  tool: PropertyTool;
 };
 
 type ExportColumn =
@@ -76,6 +98,13 @@ type ExportColumn =
       id: string;
       propertyId: string;
       header: string;
+      // A graded playbook position renders its ASK column merged with the
+      // tier from this paired `playbook-verdict` property; the verdict never
+      // gets its own column.
+      verdictPropertyId?: string;
+      // The property whose field justification annotates this cell as a note:
+      // the verdict for a merged position, otherwise the AI extraction itself.
+      commentPropertyId?: string;
     }
   | {
       type: "metadata";
@@ -88,12 +117,28 @@ export type ExportTable = {
   rows: ExportRow[];
 };
 
+// Absolute-URL context for turning a document cell into a folio deep link.
+type ExportLinkContext = {
+  baseUrl: string;
+  workspaceId: string;
+  viewId: string;
+};
+
+type BuildExportTableOptions = {
+  link: ExportLinkContext;
+  justificationByFieldId: Map<string, JustificationContent>;
+};
+
 type ExportCellStyle = "default" | CellFlagId;
 
 type ExportTextCell = {
   type: "text";
   value: string;
   style: ExportCellStyle;
+  // Absolute folio URL when the cell is a document file name.
+  hyperlink?: string;
+  // Rationale/citation note surfaced as an Excel cell comment.
+  comment?: string;
 };
 
 type ExportNumberCell = {
@@ -102,6 +147,7 @@ type ExportNumberCell = {
   displayValue: string;
   currency: string | null;
   style: ExportCellStyle;
+  comment?: string;
 };
 
 type ExportCell = ExportTextCell | ExportNumberCell;
@@ -167,14 +213,38 @@ export const buildExportColumns = (
   properties: ExportProperty[],
 ): ExportColumn[] => {
   const hiddenIds = new Set(layout.hiddenProperties);
+  const verdictByAskPropertyId = new Map<string, ExportProperty>();
+  const verdictPropertyIds = new Set<string>();
+  for (const property of properties) {
+    if (property.tool.type === "playbook-verdict") {
+      verdictByAskPropertyId.set(property.tool.askPropertyId, property);
+      verdictPropertyIds.add(property.id);
+    }
+  }
+
   const propertyColumns = properties
-    .filter((property) => !hiddenIds.has(property.id))
-    .map((property) => ({
-      type: "property" as const,
-      id: property.id,
-      propertyId: property.id,
-      header: property.name,
-    }));
+    .filter(
+      (property) =>
+        !hiddenIds.has(property.id) && !verdictPropertyIds.has(property.id),
+    )
+    .map((property) => {
+      const column: Extract<ExportColumn, { type: "property" }> = {
+        type: "property",
+        id: property.id,
+        propertyId: property.id,
+        header: property.name,
+      };
+
+      const verdict = verdictByAskPropertyId.get(property.id);
+      if (verdict) {
+        column.verdictPropertyId = verdict.id;
+        column.commentPropertyId = verdict.id;
+      } else if (property.tool.type === "ai-model") {
+        column.commentPropertyId = property.id;
+      }
+
+      return column;
+    });
   const metadataColumns = METADATA_COLUMNS.filter(
     (column) => !hiddenIds.has(column.id),
   ).map((column) => ({
@@ -293,43 +363,164 @@ const formatMetadataColumn = (
   }
 };
 
+type ExportTextCellOptions = {
+  hyperlink?: string | undefined;
+  comment?: string | undefined;
+};
+
 const buildTextExportCell = (
   value: string,
   style: ExportCellStyle = "default",
-): ExportTextCell => ({
-  type: "text",
-  value: sanitizeSpreadsheetCell(value),
-  style,
-});
+  options: ExportTextCellOptions = {},
+): ExportTextCell => {
+  const cell: ExportTextCell = {
+    type: "text",
+    value: sanitizeSpreadsheetCell(value),
+    style,
+  };
+  if (options.hyperlink) {
+    cell.hyperlink = options.hyperlink;
+  }
+  if (options.comment) {
+    cell.comment = sanitizeSpreadsheetCell(options.comment);
+  }
+  return cell;
+};
 
 const buildNumberExportCell = (
   value: number,
   displayValue: string,
   currency: string | null,
   style: ExportCellStyle = "default",
-): ExportNumberCell => ({
-  type: "number",
-  value,
-  displayValue: sanitizeSpreadsheetCell(displayValue),
-  currency,
-  style,
-});
+  comment?: string,
+): ExportNumberCell => {
+  const cell: ExportNumberCell = {
+    type: "number",
+    value,
+    displayValue: sanitizeSpreadsheetCell(displayValue),
+    currency,
+    style,
+  };
+  if (comment) {
+    cell.comment = sanitizeSpreadsheetCell(comment);
+  }
+  return cell;
+};
 
-const buildPropertyExportCell = (
-  content: FieldContent | undefined,
-  locale: string,
-  style: ExportCellStyle,
-): ExportCell => {
-  if (content?.type !== "int") {
-    return buildTextExportCell(formatFieldContent(content, locale), style);
+// Folio deep link to the document behind a file cell. Mirrors the route the
+// app itself navigates to when opening a file from a table row
+// (`/workspaces/:workspaceId/:viewId/document?entity=&field=`). The target is
+// always built from the configured app base URL, never from cell text.
+const buildDocumentUrl = ({
+  link,
+  entityId,
+  fieldId,
+}: {
+  link: ExportLinkContext;
+  entityId: string;
+  fieldId: string;
+}): string =>
+  `${link.baseUrl}/workspaces/${link.workspaceId}/${link.viewId}/document` +
+  `?entity=${encodeURIComponent(entityId)}&field=${encodeURIComponent(fieldId)}`;
+
+// Folds a graded position's extracted value and its verdict tier into one
+// readable cell, e.g. `Net 30 (deviation)`. The tier is the verdict
+// single-select value; the export is not label-localized, so that value is the
+// stable label.
+const mergeVerdictValue = (askValue: string, tier: string): string => {
+  if (tier.length === 0) {
+    return askValue;
+  }
+  if (askValue.length === 0) {
+    return tier;
+  }
+  return `${askValue} (${tier})`;
+};
+
+const justificationToComment = (
+  content: JustificationContent | undefined,
+): string => {
+  if (!content) {
+    return "";
   }
 
-  return buildNumberExportCell(
-    content.value,
-    formatFieldContent(content, locale),
-    content.currency,
-    style,
-  );
+  const parts: string[] = [];
+  for (const block of content.blocks) {
+    if (block.kind === "playbook-verdict") {
+      if (block.rationale.length > 0) {
+        parts.push(block.rationale);
+      }
+      continue;
+    }
+    for (const statement of block.statements) {
+      if (statement.text.length > 0) {
+        parts.push(statement.text);
+      }
+    }
+  }
+
+  return parts.join("\n");
+};
+
+type BuildPropertyCellParams = {
+  column: Extract<ExportColumn, { type: "property" }>;
+  fieldByPropertyId: Map<string, QueryEntityResult["fields"][number]>;
+  entityId: string;
+  locale: string;
+  style: ExportCellStyle;
+  link: ExportLinkContext;
+  justificationByFieldId: Map<string, JustificationContent>;
+};
+
+const buildPropertyCell = ({
+  column,
+  fieldByPropertyId,
+  entityId,
+  locale,
+  style,
+  link,
+  justificationByFieldId,
+}: BuildPropertyCellParams): ExportCell => {
+  const field = fieldByPropertyId.get(column.propertyId);
+  const content = field?.content;
+
+  const commentField = column.commentPropertyId
+    ? fieldByPropertyId.get(column.commentPropertyId)
+    : undefined;
+  const comment = commentField
+    ? justificationToComment(justificationByFieldId.get(commentField.id))
+    : "";
+  const commentOption = comment.length > 0 ? comment : undefined;
+
+  if (column.verdictPropertyId) {
+    const tier = formatFieldContent(
+      fieldByPropertyId.get(column.verdictPropertyId)?.content,
+      locale,
+    );
+    const merged = mergeVerdictValue(formatFieldContent(content, locale), tier);
+    return buildTextExportCell(merged, style, { comment: commentOption });
+  }
+
+  if (content?.type === "file" && field) {
+    return buildTextExportCell(formatFieldContent(content, locale), style, {
+      hyperlink: buildDocumentUrl({ link, entityId, fieldId: field.id }),
+      comment: commentOption,
+    });
+  }
+
+  if (content?.type === "int") {
+    return buildNumberExportCell(
+      content.value,
+      formatFieldContent(content, locale),
+      content.currency,
+      style,
+      commentOption,
+    );
+  }
+
+  return buildTextExportCell(formatFieldContent(content, locale), style, {
+    comment: commentOption,
+  });
 };
 
 const buildMetadataExportCell = (
@@ -365,11 +556,12 @@ export const buildExportTable = (
   columns: ExportColumn[],
   entities: QueryEntityResult[],
   locale: string,
+  options: BuildExportTableOptions,
 ): ExportTable => ({
   columns,
   rows: entities.map((entity) => {
     const fieldByPropertyId = new Map(
-      entity.fields.map((field) => [field.propertyId, field.content]),
+      entity.fields.map((field) => [field.propertyId, field]),
     );
     const metadataByPropertyId = new Map(
       entity.cellMetadata.map((entry) => [entry.propertyId, entry.metadata]),
@@ -377,12 +569,15 @@ export const buildExportTable = (
 
     return columns.map((column) => {
       if (column.type === "property") {
-        const metadata = metadataByPropertyId.get(column.propertyId);
-        return buildPropertyExportCell(
-          fieldByPropertyId.get(column.propertyId),
+        return buildPropertyCell({
+          column,
+          fieldByPropertyId,
+          entityId: entity.entityId,
           locale,
-          getExportCellStyle(metadata),
-        );
+          style: getExportCellStyle(metadataByPropertyId.get(column.propertyId)),
+          link: options.link,
+          justificationByFieldId: options.justificationByFieldId,
+        });
       }
 
       return buildMetadataExportCell(column, entity, locale);
@@ -402,6 +597,49 @@ export const buildCsvExport = ({ columns, rows }: ExportTable): string => {
   return lines.join("\n");
 };
 
+type CellHyperlink = { ref: string; url: string; relId: string };
+type CellComment = { ref: string; text: string; row: number; column: number };
+
+const collectCellAnnotations = (
+  columns: ExportColumn[],
+  rows: ExportRow[],
+): { hyperlinks: CellHyperlink[]; comments: CellComment[] } => {
+  const hyperlinks: CellHyperlink[] = [];
+  const comments: CellComment[] = [];
+
+  for (let rowIndex = 0; rowIndex < rows.length; rowIndex++) {
+    const row = rows[rowIndex];
+    if (!row) {
+      continue;
+    }
+    const excelRow = rowIndex + 2;
+    for (let columnIndex = 0; columnIndex < columns.length; columnIndex++) {
+      const cell = row.at(columnIndex);
+      if (!cell) {
+        continue;
+      }
+      const ref = `${columnName(columnIndex)}${excelRow}`;
+      if (cell.type === "text" && cell.hyperlink) {
+        hyperlinks.push({
+          ref,
+          url: cell.hyperlink,
+          relId: `rId${hyperlinks.length + 1}`,
+        });
+      }
+      if (cell.comment) {
+        comments.push({
+          ref,
+          text: cell.comment,
+          row: excelRow - 1,
+          column: columnIndex,
+        });
+      }
+    }
+  }
+
+  return { hyperlinks, comments };
+};
+
 export const buildXlsxExport = async ({
   columns,
   rows,
@@ -409,16 +647,42 @@ export const buildXlsxExport = async ({
 }: ExportTable & { worksheetName?: string }): Promise<ArrayBuffer> => {
   const zip = new JSZip();
   const styleRegistry = buildStyleRegistry(rows);
+  const { hyperlinks, comments } = collectCellAnnotations(columns, rows);
+  const hasComments = comments.length > 0;
+  const commentsRelId = `rId${hyperlinks.length + 1}`;
+  const vmlRelId = `rId${hyperlinks.length + 2}`;
 
-  zip.file("[Content_Types].xml", contentTypesXml);
+  zip.file("[Content_Types].xml", buildContentTypesXml(hasComments));
   zip.file("_rels/.rels", rootRelsXml);
   zip.file("xl/workbook.xml", buildWorkbookXml(worksheetName ?? "Table"));
   zip.file("xl/_rels/workbook.xml.rels", workbookRelsXml);
   zip.file("xl/styles.xml", buildStylesXml(styleRegistry));
   zip.file(
     "xl/worksheets/sheet1.xml",
-    buildSheetXml({ columns, rows, styleRegistry }),
+    buildSheetXml({
+      columns,
+      rows,
+      styleRegistry,
+      hyperlinks,
+      vmlRelId: hasComments ? vmlRelId : null,
+    }),
   );
+
+  if (hyperlinks.length > 0 || hasComments) {
+    zip.file(
+      "xl/worksheets/_rels/sheet1.xml.rels",
+      buildWorksheetRelsXml({
+        hyperlinks,
+        hasComments,
+        commentsRelId,
+        vmlRelId,
+      }),
+    );
+  }
+  if (hasComments) {
+    zip.file("xl/comments1.xml", buildCommentsXml(comments));
+    zip.file("xl/drawings/vmlDrawing1.vml", buildVmlDrawingXml(comments));
+  }
 
   return await zip.generateAsync({
     type: "arraybuffer",
@@ -484,6 +748,7 @@ const exportTableView = createSafeHandler(
           columns: {
             id: true,
             name: true,
+            tool: true,
           },
           orderBy: { createdAt: "asc" },
           limit: LIMITS.propertiesCount,
@@ -492,13 +757,20 @@ const exportTableView = createSafeHandler(
     );
 
     const columns = buildExportColumns(layout, properties);
-    const visiblePropertyColumnIds = new Set(
-      columns
-        .filter((column) => column.type === "property")
-        .map((column) => column.propertyId),
+    const propertyColumns = columns.filter(
+      (column) => column.type === "property",
     );
+    // Verdict properties have no column of their own, but their field values
+    // are merged into the paired ASK cell, so they must still be fetched.
+    const loadedPropertyIds = new Set<string>();
+    for (const column of propertyColumns) {
+      loadedPropertyIds.add(column.propertyId);
+      if (column.verdictPropertyId) {
+        loadedPropertyIds.add(column.verdictPropertyId);
+      }
+    }
     const fieldIds = properties
-      .filter((property) => visiblePropertyColumnIds.has(property.id))
+      .filter((property) => loadedPropertyIds.has(property.id))
       .map((property) => property.id);
 
     // Export the same persisted table shape the user sees: visible
@@ -521,8 +793,64 @@ const exportTableView = createSafeHandler(
       }),
     );
 
+    // Each annotated cell takes its note from one property's field
+    // justification: the verdict's rationale for a merged position, otherwise
+    // the AI extraction's own reasoning/citations.
+    const commentPropertyIds = new Set<string>();
+    for (const column of propertyColumns) {
+      if (column.commentPropertyId) {
+        commentPropertyIds.add(column.commentPropertyId);
+      }
+    }
+    const commentFieldIds: SafeId<"field">[] = [];
+    if (commentPropertyIds.size > 0) {
+      for (const entity of queryResult.entities) {
+        for (const field of entity.fields) {
+          if (commentPropertyIds.has(field.propertyId)) {
+            commentFieldIds.push(toSafeId<"field">(field.id));
+          }
+        }
+      }
+    }
+
+    const justificationByFieldId = new Map<string, JustificationContent>();
+    if (commentFieldIds.length > 0) {
+      const justificationRows = yield* Result.await(
+        safeDb(async (tx) => {
+          const rows: { fieldId: string; content: JustificationContent }[] = [];
+          for (const fieldIdBatch of chunkArray(
+            commentFieldIds,
+            JUSTIFICATION_FIELD_ID_BATCH,
+          )) {
+            // oxlint-disable-next-line no-await-in-loop -- sequential reads on the same transaction connection (one in-flight query per tx); the batch caps each `IN (...)` below the bound-parameter limit
+            const batchRows = await tx.query.justifications.findMany({
+              where: {
+                workspaceId: { eq: workspaceId },
+                fieldId: { in: fieldIdBatch },
+              },
+              columns: { fieldId: true, content: true },
+              limit: JUSTIFICATION_FIELD_ID_BATCH,
+            });
+            rows.push(...batchRows);
+          }
+          return rows;
+        }),
+      );
+      for (const row of justificationRows) {
+        justificationByFieldId.set(row.fieldId, row.content);
+      }
+    }
+
     const locale = extractFormattingLocale(request);
-    const table = buildExportTable(columns, queryResult.entities, locale);
+    const link: ExportLinkContext = {
+      baseUrl: env.FRONTEND_URL.replace(/\/$/u, ""),
+      workspaceId,
+      viewId,
+    };
+    const table = buildExportTable(columns, queryResult.entities, locale, {
+      link,
+      justificationByFieldId,
+    });
     const exportName = workspace?.name ?? view.name;
     const body =
       query.format === "csv"
@@ -743,21 +1071,37 @@ type BuildSheetXmlParams = {
   columns: ExportColumn[];
   rows: ExportRow[];
   styleRegistry: StyleRegistry;
+  hyperlinks: CellHyperlink[];
+  vmlRelId: string | null;
 };
 
 const buildSheetXml = ({
   columns,
   rows,
   styleRegistry,
+  hyperlinks,
+  vmlRelId,
 }: BuildSheetXmlParams): string => {
   const autoFilterRef =
     columns.length > 0 ? `A1:${columnName(columns.length - 1)}1` : "";
   const autoFilterXml =
     autoFilterRef.length > 0 ? `<autoFilter ref="${autoFilterRef}"/>` : "";
   const sheetRowsXml = `${buildHeaderRowXml(columns)}${buildBodyRowsXml(rows, styleRegistry)}`;
+  const hyperlinksXml =
+    hyperlinks.length > 0
+      ? `<hyperlinks>${hyperlinks
+          .map(
+            (hyperlink) =>
+              `<hyperlink ref="${hyperlink.ref}" r:id="${hyperlink.relId}"/>`,
+          )
+          .join("")}</hyperlinks>`
+      : "";
+  const legacyDrawingXml = vmlRelId
+    ? `<legacyDrawing r:id="${vmlRelId}"/>`
+    : "";
 
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
-<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
   <sheetViews>
     <sheetView workbookViewId="0">
       <pane ySplit="1" topLeftCell="A2" activePane="bottomLeft" state="frozen"/>
@@ -768,17 +1112,98 @@ const buildSheetXml = ({
   ${buildColumnsXml(columns, rows)}
   <sheetData>${sheetRowsXml}</sheetData>
   ${autoFilterXml}
+  ${hyperlinksXml}
+  ${legacyDrawingXml}
 </worksheet>`;
 };
 
-const contentTypesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+const RELATIONSHIP_TYPE_BASE =
+  "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+const buildContentTypesXml = (hasComments: boolean): string => {
+  const commentDefaults = hasComments
+    ? '\n  <Default Extension="vml" ContentType="application/vnd.openxmlformats-officedocument.vmlDrawing"/>'
+    : "";
+  const commentOverride = hasComments
+    ? '\n  <Override PartName="/xl/comments1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.comments+xml"/>'
+    : "";
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
-  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>${commentDefaults}
   <Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
   <Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
-  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>
+  <Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${commentOverride}
 </Types>`;
+};
+
+type BuildWorksheetRelsParams = {
+  hyperlinks: CellHyperlink[];
+  hasComments: boolean;
+  commentsRelId: string;
+  vmlRelId: string;
+};
+
+// Document cells link to their folio deep link via per-cell external
+// relationships. These are the only `TargetMode="External"` parts the export
+// emits, and every target is built from the configured app base URL, never
+// from user-supplied cell text.
+const buildWorksheetRelsXml = ({
+  hyperlinks,
+  hasComments,
+  commentsRelId,
+  vmlRelId,
+}: BuildWorksheetRelsParams): string => {
+  const hyperlinkRels = hyperlinks
+    .map(
+      (hyperlink) =>
+        `<Relationship Id="${hyperlink.relId}" Type="${RELATIONSHIP_TYPE_BASE}/hyperlink" Target="${escapeXml(
+          hyperlink.url,
+        )}" TargetMode="External"/>`,
+    )
+    .join("");
+  const commentRels = hasComments
+    ? `<Relationship Id="${commentsRelId}" Type="${RELATIONSHIP_TYPE_BASE}/comments" Target="../comments1.xml"/><Relationship Id="${vmlRelId}" Type="${RELATIONSHIP_TYPE_BASE}/vmlDrawing" Target="../drawings/vmlDrawing1.vml"/>`
+    : "";
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${hyperlinkRels}${commentRels}</Relationships>`;
+};
+
+const buildCommentsXml = (comments: CellComment[]): string => {
+  const commentXml = comments
+    .map(
+      (comment) =>
+        `<comment ref="${comment.ref}" authorId="0"><text><r><t xml:space="preserve">${escapeXml(
+          comment.text,
+        )}</t></r></text></comment>`,
+    )
+    .join("");
+
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<comments xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><authors><author>${escapeXml(
+    EXPORT_COMMENT_AUTHOR,
+  )}</author></authors><commentList>${commentXml}</commentList></comments>`;
+};
+
+// Excel renders cell notes from a legacy VML drawing: one hidden text box per
+// comment, anchored to its cell.
+const buildVmlDrawingXml = (comments: CellComment[]): string => {
+  const shapes = comments
+    .map((comment, index) => {
+      const shapeId = `_x0000_s${1025 + index}`;
+      const anchor = `${comment.column + 1}, 15, ${comment.row}, 2, ${
+        comment.column + 3
+      }, 15, ${comment.row + 4}, 4`;
+      return `<v:shape id="${shapeId}" type="#_x0000_t202" style="position:absolute;margin-left:60pt;margin-top:1.5pt;width:144pt;height:75.75pt;z-index:${
+        index + 1
+      };visibility:hidden" fillcolor="#ffffe1" o:insetmode="auto"><v:fill color2="#ffffe1"/><v:shadow on="t" color="black" obscured="t"/><v:path o:connecttype="none"/><v:textbox style="mso-direction-alt:auto"><div style="text-align:left"></div></v:textbox><x:ClientData ObjectType="Note"><x:MoveWithCells/><x:SizeWithCells/><x:Anchor>${anchor}</x:Anchor><x:AutoFill>False</x:AutoFill><x:Row>${comment.row}</x:Row><x:Column>${comment.column}</x:Column></x:ClientData></v:shape>`;
+    })
+    .join("");
+
+  return `<xml xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel"><o:shapelayout v:ext="edit"><o:idmap v:ext="edit" data="1"/></o:shapelayout><v:shapetype id="_x0000_t202" coordsize="21600,21600" o:spt="202" path="m,l,21600r21600,l21600,xe"><v:stroke joinstyle="miter"/><v:path gradientshapeok="t" o:connecttype="rect"/></v:shapetype>${shapes}</xml>`;
+};
 
 const rootRelsXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
