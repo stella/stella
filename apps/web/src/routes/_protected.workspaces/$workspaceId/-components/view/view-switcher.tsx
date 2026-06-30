@@ -226,7 +226,11 @@ export const ViewSwitcher = ({
                 isRenaming={renamingViewId === view.id}
                 key={view.id}
                 onOpenMenu={(event) =>
-                  viewActions.openFor(view, !isLastOfLayout, event)
+                  viewActions.openFor({
+                    view,
+                    canDelete: !isLastOfLayout,
+                    event,
+                  })
                 }
                 onReorder={handleReorder}
                 onSelect={() => onViewChange(view.id)}
@@ -507,6 +511,10 @@ type ViewActionsTarget = {
   canDelete: boolean;
 };
 
+type OpenViewActionsArgs = ViewActionsTarget & {
+  event: React.MouseEvent<HTMLElement>;
+};
+
 /**
  * Single, shared view-actions menu for the whole switcher. One
  * instance owns the mutations, dialogs, and cursor-anchored menu;
@@ -666,11 +674,7 @@ const useViewActionsMenu = ({
     children: target ? renderItems(target) : null,
   });
 
-  const openFor = (
-    view: WorkspaceView,
-    canDelete: boolean,
-    event: React.MouseEvent<HTMLElement>,
-  ) => {
+  const openFor = ({ view, canDelete, event }: OpenViewActionsArgs) => {
     if (!hasActions) {
       return;
     }
@@ -682,6 +686,7 @@ const useViewActionsMenu = ({
     <>
       {canCreateView && target && (
         <SaveAsTemplateDialog
+          key={target.view.id}
           defaultName={target.view.name}
           layout={target.view.layout}
           onOpenChange={setIsSaveTemplateOpen}

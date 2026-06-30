@@ -943,7 +943,11 @@ const AdditionalDatesControl = ({
           {eligible.map((item) => {
             const isSelected = additionalDatePropertyIds.includes(item.id);
             return (
-              <MenuItem key={item.id} onClick={() => toggleProperty(item.id)}>
+              <MenuItem
+                key={item.id}
+                closeOnClick={false}
+                onClick={() => toggleProperty(item.id)}
+              >
                 <CalendarIcon className="size-3.5" />
                 <span className="flex-1">{item.name}</span>
                 {isSelected && <span className="text-primary">{"\u2713"}</span>}
