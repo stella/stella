@@ -384,10 +384,12 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
           // against the boundary row (looked up by id) so the cursor never
           // round-trips lastActivityAt through a millisecond JS Date;
           // matters sharing a now()-generated microsecond timestamp cannot
-          // be skipped or duplicated across pages.
+          // be skipped or duplicated across pages. The boundary lookup is
+          // org-scoped (defense in depth beyond RLS) so a cursor carrying a
+          // foreign workspace id cannot shift this org's page boundary.
           boundaryId === undefined
             ? undefined
-            : sql`(${workspaces.lastActivityAt}, ${workspaces.id}) < (select b.last_activity_at, b.id from workspaces b where b.id = ${boundaryId})`,
+            : sql`(${workspaces.lastActivityAt}, ${workspaces.id}) < (select b.last_activity_at, b.id from workspaces b where b.id = ${boundaryId} and b.organization_id = ${context.organizationId})`,
         ),
       )
       .orderBy(desc(workspaces.lastActivityAt), desc(workspaces.id))

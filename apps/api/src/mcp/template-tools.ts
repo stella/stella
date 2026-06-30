@@ -347,10 +347,12 @@ const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
           eq(templates.organizationId, context.organizationId),
           // Resolve the full-precision (createdAt, id) boundary in-DB by id
           // so the cursor never round-trips createdAt through a millisecond
-          // JS Date.
+          // JS Date. The boundary lookup is org-scoped (defense in depth
+          // beyond RLS) so a cursor carrying a foreign template id cannot
+          // shift this org's page boundary.
           boundaryId === undefined
             ? undefined
-            : sql`(${templates.createdAt}, ${templates.id}) < (select b.created_at, b.id from templates b where b.id = ${boundaryId})`,
+            : sql`(${templates.createdAt}, ${templates.id}) < (select b.created_at, b.id from templates b where b.id = ${boundaryId} and b.organization_id = ${context.organizationId})`,
         ),
       )
       .orderBy(desc(templates.createdAt), desc(templates.id))
