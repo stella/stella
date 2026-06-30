@@ -148,6 +148,10 @@ jobs:
         if: steps.changed-files.outputs.package_checks_required == 'true'
         run: bun run lint:ws
 
+      - name: Railway template shape
+        if: steps.changed-files.outputs.package_checks_required == 'true'
+        run: bun run check:railway-template
+
       - name: Prepare environment
         if: steps.changed-files.outputs.package_checks_required == 'true'
         run: |

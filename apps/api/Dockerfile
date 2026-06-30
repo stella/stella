@@ -71,8 +71,10 @@ FROM deps AS runner
 # Defaults to "dev" for local `docker build` outside the release flow.
 ARG STELLA_VERSION=dev
 ARG STELLA_COMMIT_SHA=dev
+ARG RAILWAY_GIT_COMMIT_SHA=dev
 ENV STELLA_VERSION=${STELLA_VERSION}
 ENV STELLA_COMMIT_SHA=${STELLA_COMMIT_SHA}
+ENV RAILWAY_GIT_COMMIT_SHA=${RAILWAY_GIT_COMMIT_SHA}
 ENV STELLA_WORKER_DIR=/\$bunfs/root/workers
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella

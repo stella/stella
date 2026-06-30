@@ -7,7 +7,14 @@ import type { ProbeOutcome } from "@/api/lib/health/probe-cache";
 import { probeDatabase } from "@/api/lib/health/probe-database";
 
 const APP_VERSION = process.env["STELLA_VERSION"] ?? "dev";
-const APP_COMMIT_SHA = process.env["STELLA_COMMIT_SHA"] ?? "dev";
+const resolveCommitSha = () => {
+  const explicitSha = process.env["STELLA_COMMIT_SHA"];
+  if (explicitSha && explicitSha !== "dev") {
+    return explicitSha;
+  }
+  return process.env["RAILWAY_GIT_COMMIT_SHA"] ?? explicitSha ?? "dev";
+};
+const APP_COMMIT_SHA = resolveCommitSha();
 const BUILD_METADATA = {
   version: APP_VERSION,
   commit: APP_COMMIT_SHA,

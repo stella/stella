@@ -1,0 +1,99 @@
+name: Railway Smoke
+
+on:
+  deployment_status:
+  workflow_dispatch:
+    inputs:
+      api_url:
+        description: "API origin to smoke, for example https://api-production.up.railway.app"
+        required: false
+        type: string
+      web_url:
+        description: "Web origin to smoke, for example https://web-production.up.railway.app"
+        required: false
+        type: string
+      expected_commit:
+        description: "Optional commit SHA expected from /health and /version.json"
+        required: false
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: railway-smoke-${{ github.event_name }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  smoke:
+    name: Check Railway deployment
+    if: >-
+      github.event_name == 'workflow_dispatch'
+      || github.event.deployment_status.state == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Resolve target
+        id: target
+        env:
+          API_URL_INPUT: ${{ inputs.api_url || '' }}
+          WEB_URL_INPUT: ${{ inputs.web_url || '' }}
+          EXPECTED_COMMIT_INPUT: ${{ inputs.expected_commit || '' }}
+          API_URL_VAR: ${{ vars.RAILWAY_SMOKE_API_URL || '' }}
+          WEB_URL_VAR: ${{ vars.RAILWAY_SMOKE_WEB_URL || '' }}
+          EXPECTED_ENVIRONMENT: ${{ vars.RAILWAY_SMOKE_DEPLOYMENT_ENVIRONMENT || '' }}
+          EVENT_NAME: ${{ github.event_name }}
+          DEPLOYMENT_ENVIRONMENT: ${{ github.event.deployment.environment || '' }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "deployment_status" ]]; then
+            if [[ -z "$EXPECTED_ENVIRONMENT" ]]; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Set RAILWAY_SMOKE_DEPLOYMENT_ENVIRONMENT to enable automatic Railway post-deploy smoke checks."
+              exit 0
+            fi
+
+            if [[ "$DEPLOYMENT_ENVIRONMENT" != "$EXPECTED_ENVIRONMENT" ]]; then
+              echo "run=false" >> "$GITHUB_OUTPUT"
+              echo "::notice::Ignoring deployment environment '${DEPLOYMENT_ENVIRONMENT}'. Expected '${EXPECTED_ENVIRONMENT}'."
+              exit 0
+            fi
+          fi
+
+          api_url="${API_URL_INPUT:-$API_URL_VAR}"
+          web_url="${WEB_URL_INPUT:-$WEB_URL_VAR}"
+          expected_commit="$EXPECTED_COMMIT_INPUT"
+
+          if [[ -z "$api_url" || -z "$web_url" ]]; then
+            echo "::error::Set RAILWAY_SMOKE_API_URL and RAILWAY_SMOKE_WEB_URL repository variables, or pass api_url/web_url when dispatching manually."
+            exit 1
+          fi
+
+          {
+            echo "run=true"
+            echo "api_url=$api_url"
+            echo "web_url=$web_url"
+            echo "expected_commit=$expected_commit"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Checkout
+        if: steps.target.outputs.run == 'true'
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        if: steps.target.outputs.run == 'true'
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Check Railway smoke deployment
+        if: steps.target.outputs.run == 'true'
+        env:
+          RAILWAY_SMOKE_API_URL: ${{ steps.target.outputs.api_url }}
+          RAILWAY_SMOKE_WEB_URL: ${{ steps.target.outputs.web_url }}
+          RAILWAY_SMOKE_EXPECTED_COMMIT: ${{ steps.target.outputs.expected_commit }}
+        run: bun scripts/check-railway-smoke.ts

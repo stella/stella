@@ -105,7 +105,7 @@ const STATUS_BY_ELYSIA_CODE: Partial<Record<string, number>> = {
 };
 
 const getApiPort = () => {
-  const rawPort = process.env["STELLA_API_PORT"];
+  const rawPort = process.env["STELLA_API_PORT"] ?? process.env["PORT"];
   if (!rawPort) {
     return DEFAULT_API_PORT;
   }

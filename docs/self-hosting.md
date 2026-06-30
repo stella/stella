@@ -16,6 +16,7 @@ services, existing self-hosted services, or a platform such as
 [Dokploy](https://docs.dokploy.com/docs/core). Dokploy's
 [template catalog](https://docs.dokploy.com/docs/templates) is a practical way
 to deploy common dependencies such as Postgres, Valkey or Redis, and MinIO.
+For Railway, see the dedicated [Railway deployment guide](./railway.md).
 
 Deploy the API and Gotenberg with `docker-compose.selfhost.yml` (see below).
 Deploy the web app as its own long-running server process. The web app is a
