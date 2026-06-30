@@ -6,6 +6,7 @@ import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/
 import {
   buildReadonlyFunctionTypeDeclarations,
   createReadonlyFunctionContract,
+  findReadonlyFunctionManifestEntry,
 } from "@/api/handlers/chat/tools/execute/readonly-manifest";
 import {
   buildReadonlyWorkspaceFunctionManifest,
@@ -47,6 +48,24 @@ describe("workspace manifest helpers", () => {
       expect(entry.value.inputSchema.type).toBe("object");
       expect(entry.value.outputSchema.type).toBe("object");
       expect(entry.value.outputSchema.properties).toHaveProperty("items");
+    }
+  });
+
+  test("resolves a function name passed with the read. namespace prefix", () => {
+    const bare = findReadonlyFunctionManifestEntry({
+      contracts: readonlyWorkspaceFunctionContracts,
+      name: "getMatterEntityContents",
+    });
+    const namespaced = findReadonlyFunctionManifestEntry({
+      contracts: readonlyWorkspaceFunctionContracts,
+      name: "read.getMatterEntityContents",
+    });
+
+    expect(Result.isOk(bare)).toBe(true);
+    expect(Result.isOk(namespaced)).toBe(true);
+    if (Result.isOk(bare) && Result.isOk(namespaced)) {
+      expect(bare.value?.name).toBe("getMatterEntityContents");
+      expect(namespaced.value?.name).toBe("getMatterEntityContents");
     }
   });
 

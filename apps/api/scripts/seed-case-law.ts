@@ -25,15 +25,15 @@ import * as v from "valibot";
 import type { PersistedDecisionAnalysis } from "@stll/legal-ast/analysis";
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 
-import { createScopedDb } from "@/api/db";
+import { createIngestionDb } from "@/api/db";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
+import { backfillCaseLawSlugs } from "@/api/handlers/case-law/decisions/slug-backfill";
 import type { EmptyAst } from "@/api/handlers/case-law/ingestion/adapter";
 import { indexDecision } from "@/api/handlers/case-law/search-index";
 import type { DecisionSection } from "@/api/handlers/case-law/types";
-import { toSafeId } from "@/api/lib/branded-types";
 
-import { DEFAULT_ORG_ID, DEFAULT_USER_ID, seedId } from "./seed-utils";
+import { seedId } from "./seed-utils";
 
 const FIXTURES_DIR = path.join(import.meta.dir, "__fixtures__", "case-law");
 
@@ -156,12 +156,11 @@ export async function seedCaseLaw() {
     panic("Refusing to run: NODE_ENV must not be 'production'.");
   }
 
-  const scopedDb = createScopedDb(
-    rlsDb,
-    [],
-    DEFAULT_ORG_ID,
-    toSafeId<"user">(DEFAULT_USER_ID),
-  );
+  // Index + slug writes target the global `case_law_*` tables, which only
+  // the `stella_ingestion` role may write under RLS. The decision rows below
+  // go in via `rootDb` (table owner), but `indexDecision` and the slug
+  // backfill run their writes through this ingestion-scoped handle.
+  const ingestionDb = createIngestionDb(rlsDb);
 
   await ensureSearchPreviewConfig();
 
@@ -272,8 +271,18 @@ export async function seedCaseLaw() {
         );
       }
 
-      // oxlint-disable-next-line no-await-in-loop -- depends on the decision id resolved earlier this iteration
-      await indexDecision(decisionId, scopedDb);
+      // Search-index projection is non-essential for the public read path
+      // (decisions are read from `case_law_decisions`, not the search table).
+      // A failure here (e.g. local schema drift in `case_law_search_documents`)
+      // must not abort the loop and leave the remaining decisions unseeded.
+      try {
+        // oxlint-disable-next-line no-await-in-loop -- depends on the decision id resolved earlier this iteration
+        await indexDecision(decisionId, ingestionDb);
+      } catch (error) {
+        console.warn(
+          `  search-index skipped for ${adapterKey} ${d.case_number} (${d.language}): ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
 
       if (result.length > 0) {
         inserted++;
@@ -290,6 +299,17 @@ export async function seedCaseLaw() {
   console.log(
     `\nDecisions: ${totalInserted} inserted, ${totalDecisions - totalInserted} skipped.`,
   );
+
+  // The fixtures carry null slugs (the prod snapshots predate slug-at-ingest),
+  // but the public reader resolves decisions by slug
+  // (`/case/decisions/by-slug/:slug`). Without a slug the preview's "open"
+  // 404s. Assign slugs with the same helper the ingestion pipeline and the
+  // backfill CLI use; idempotent, so re-runs repair any null-slug rows.
+  const slugResult = await backfillCaseLawSlugs(ingestionDb);
+  console.log(
+    `Slugs: ${slugResult.written} assigned, ${slugResult.failed} failed.`,
+  );
+
   console.log("Done. Case law data seeded successfully.");
 }
 
