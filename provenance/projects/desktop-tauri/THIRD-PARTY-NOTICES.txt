@@ -525,7 +525,7 @@ Project: desktop-tauri
 - urlpattern 0.3.0 — MIT
 - utf-8 0.7.6 — Apache-2.0 OR MIT
 - utf8_iter 1.0.4 — Apache-2.0 OR MIT
-- uuid 1.23.3 — Apache-2.0 OR MIT
+- uuid 1.23.4 — Apache-2.0 OR MIT
 - valuable 0.1.1 — MIT
 - version-compare 0.2.1 — MIT
 - version_check 0.9.5 — MIT/Apache-2.0

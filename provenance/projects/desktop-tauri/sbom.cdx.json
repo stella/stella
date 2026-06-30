@@ -24006,7 +24006,7 @@
       "version": "1.0.4"
     },
     {
-      "bom-ref": "pkg:cargo/uuid@1.23.3",
+      "bom-ref": "pkg:cargo/uuid@1.23.4",
       "evidence": {
         "identity": [
           {
@@ -24027,7 +24027,7 @@
       "hashes": [
         {
           "alg": "SHA-256",
-          "content": "144d6b123cef80b301b8f72a9e2ca4370ddec21950d0a103dd22c437006d2db7"
+          "content": "bf80a72845275afea99e7f2b434723d3bc7e38470fcd1c7ed39a599c73319a53"
         }
       ],
       "licenses": [
@@ -24049,9 +24049,9 @@
           "value": "Cargo.lock"
         }
       ],
-      "purl": "pkg:cargo/uuid@1.23.3",
+      "purl": "pkg:cargo/uuid@1.23.4",
       "type": "library",
-      "version": "1.23.3"
+      "version": "1.23.4"
     },
     {
       "bom-ref": "pkg:cargo/valuable@0.1.1",
@@ -30282,7 +30282,7 @@
       "dependsOn": [
         "pkg:cargo/byteorder@1.5.0",
         "pkg:cargo/fnv@1.0.7",
-        "pkg:cargo/uuid@1.23.3"
+        "pkg:cargo/uuid@1.23.4"
       ],
       "ref": "pkg:cargo/cfb@0.7.3"
     },
@@ -32889,7 +32889,7 @@
         "pkg:cargo/tower@0.5.3",
         "pkg:cargo/tracing-subscriber@0.3.23",
         "pkg:cargo/tracing@0.1.44",
-        "pkg:cargo/uuid@1.23.3",
+        "pkg:cargo/uuid@1.23.4",
         "pkg:cargo/windows-native-keyring-store@1.1.0",
         "pkg:cargo/zbus-secret-service-keyring-store@1.0.0"
       ],
@@ -33125,7 +33125,7 @@
         "pkg:cargo/thiserror@2.0.18",
         "pkg:cargo/time@0.3.47",
         "pkg:cargo/url@2.5.8",
-        "pkg:cargo/uuid@1.23.3",
+        "pkg:cargo/uuid@1.23.4",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-codegen@2.6.3"
@@ -33355,7 +33355,7 @@
         "pkg:cargo/toml@1.1.2+spec-1.1.0",
         "pkg:cargo/url@2.5.8",
         "pkg:cargo/urlpattern@0.3.0",
-        "pkg:cargo/uuid@1.23.3",
+        "pkg:cargo/uuid@1.23.4",
         "pkg:cargo/walkdir@2.5.0"
       ],
       "ref": "pkg:cargo/tauri-utils@2.9.3"
@@ -33380,7 +33380,7 @@
     {
       "dependsOn": [
         "pkg:cargo/fastrand@2.4.1",
-        "pkg:cargo/getrandom@0.4.2",
+        "pkg:cargo/getrandom@0.3.4",
         "pkg:cargo/once_cell@1.21.4",
         "pkg:cargo/rustix@1.1.4",
         "pkg:cargo/windows-sys@0.52.0"
@@ -33759,7 +33759,7 @@
         "pkg:cargo/serde_core@1.0.228",
         "pkg:cargo/wasm-bindgen@0.2.122"
       ],
-      "ref": "pkg:cargo/uuid@1.23.3"
+      "ref": "pkg:cargo/uuid@1.23.4"
     },
     {
       "dependsOn": [],
@@ -34444,7 +34444,7 @@
         "pkg:cargo/serde_repr@0.1.20",
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/uds_windows@1.2.1",
-        "pkg:cargo/uuid@1.23.3",
+        "pkg:cargo/uuid@1.23.4",
         "pkg:cargo/windows-sys@0.61.2",
         "pkg:cargo/winnow@1.0.3",
         "pkg:cargo/zbus_macros@5.16.0",
