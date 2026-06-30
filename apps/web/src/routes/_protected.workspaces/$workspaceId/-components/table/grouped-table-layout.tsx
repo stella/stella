@@ -150,18 +150,10 @@ export const GroupedTableLayout = ({
     [groupByProperty, view.layout.hiddenProperties, properties],
   );
 
-  // The int columns that should roll up a per-group sum: visible int
-  // properties (the grouping property itself never rolls up).
-  const sumProperties = useMemo(
-    () =>
-      properties.filter(
-        (property) =>
-          property.content.type === "int" &&
-          property.id !== groupByPropertyId &&
-          !view.layout.hiddenProperties.includes(property.id),
-      ),
-    [properties, groupByPropertyId, view.layout.hiddenProperties],
-  );
+  // Auto-summing every int column per group is misleading for non-additive
+  // columns (e.g. "Splatnost faktur (dny)" — you don't add up days), so the
+  // per-group rollups are disabled until aggregation becomes opt-in per column.
+  const sumProperties = useMemo<WorkspaceProperty[]>(() => [], []);
 
   // When grouped by the workspace's "Document Type" classifier, each section
   // renders the common columns plus only the playbook columns scoped to that
@@ -700,7 +692,7 @@ const GroupHeader = ({
   return (
     <div
       className={cn(
-        "bg-muted sticky top-0 z-40 flex items-center gap-2 border-b pe-3",
+        "bg-secondary sticky top-0 z-40 flex items-center gap-2 border-b pe-3",
         // An empty category recedes into the background, surfacing on hover
         // so it stays scannable without competing with populated groups.
         empty && "opacity-60 transition-opacity duration-200 hover:opacity-100",
