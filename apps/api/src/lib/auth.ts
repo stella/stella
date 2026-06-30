@@ -50,6 +50,10 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { enrichRequestContext } from "@/api/lib/observability/request-context";
 import { parseUserAgent } from "@/api/lib/parse-user-agent";
+import {
+  hasMemberPermission,
+  readAuthorizedMemberRole,
+} from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import {
   getMcpResourceUrl,
@@ -804,27 +808,24 @@ export const authMacro = new Elysia({ name: "authMacro" }).macro({
   },
 });
 
-export const permissionMacro = new Elysia({ name: "permissionMacro" }).macro({
-  permissions: (permissions: PermissionInput) => ({
+export const permissionMacro = new Elysia({ name: "permissionMacro" })
+  .use(authMacro)
+  .macro("permissions", (permissions: PermissionInput) => ({
+    // Reuse authMacro's resolved member role instead of asking better-auth to
+    // perform the same permission check through a second session read.
+    validateAuth: true,
     // Without this, when this macro is used with another macro that extends the body,
     // the final merged body would not include the first macro's body extension.
     body: t.Object({}),
-    async beforeHandle(ctx) {
-      const hasPermissions = await getAuth().api.hasPermission({
-        headers: ctx.request.headers,
-        body: {
-          permissions,
-        },
-      });
-
-      if (!hasPermissions.success) {
+    beforeHandle(ctx) {
+      const memberRole = readAuthorizedMemberRole(ctx);
+      if (!memberRole || !hasMemberPermission(memberRole, permissions)) {
         return ctx.status(403);
       }
 
       return undefined;
     },
-  }),
-});
+  }));
 
 const bindWorkspaceRecorder = (
   ctx: {
