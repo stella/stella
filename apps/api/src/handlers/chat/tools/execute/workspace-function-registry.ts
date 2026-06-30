@@ -51,8 +51,7 @@ const SEARCH_MAX_HITS_SCANNED = 100;
  * a regex pattern, so any regex metacharacter is neutralised.
  */
 const escapeRegExp = (value: string): string =>
-  // eslint-disable-next-line require-unicode-regexp -- u flag rejected by @valibot/to-json-schema elsewhere; keeping policy consistent here.
-  value.replaceAll(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  value.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 type SearchHit = { snippet: string };
 type SearchResult = {
@@ -74,7 +73,11 @@ export const findHitsInText = (
   if (foldedQuery.length === 0) {
     return { hits: [], totalHits: 0, totalHitsCapped: false, truncated: false };
   }
-  const { text: foldedText, sourceIndex } = applyArabicFoldsWithOffsets(text);
+  const {
+    sourceEndIndex,
+    text: foldedText,
+    sourceIndex,
+  } = applyArabicFoldsWithOffsets(text);
 
   const flags = options.caseSensitive ? "g" : "gi";
   const escaped = escapeRegExp(foldedQuery);
@@ -101,9 +104,9 @@ export const findHitsInText = (
       // then map the folded span back to original code-unit offsets so the
       // snippet is sliced from the unmodified source text.
       const foldedHitStart = match.index + (match[0].length - captured.length);
+      const foldedHitEnd = foldedHitStart + captured.length;
       const hitStart = sourceIndex[foldedHitStart] ?? 0;
-      const hitEnd =
-        sourceIndex[foldedHitStart + captured.length] ?? text.length;
+      const hitEnd = sourceEndIndex[foldedHitEnd - 1] ?? text.length;
       const snippetStart = Math.max(0, hitStart - SEARCH_SNIPPET_CONTEXT_CHARS);
       const snippetEnd = Math.min(
         text.length,

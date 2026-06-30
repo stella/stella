@@ -89,6 +89,9 @@ export const applyArabicFolds = (text: string): string => {
 };
 
 export type FoldedText = {
+  // For each UTF-16 code-unit index `i` in `text`, the code-unit index in
+  // the original input immediately after that unit's source character.
+  sourceEndIndex: number[];
   text: string;
   // For each UTF-16 code-unit index `i` in `text`, the code-unit index in
   // the original input where that unit's source character began.
@@ -104,20 +107,24 @@ export type FoldedText = {
  */
 export const applyArabicFoldsWithOffsets = (input: string): FoldedText => {
   const parts: string[] = [];
+  const sourceEndIndex: number[] = [];
   const sourceIndex: number[] = [];
   let originalUnit = 0;
   for (const char of input) {
     const replacement = applyArabicFolds(char.normalize("NFKC"));
+    const originalEnd = originalUnit + char.length;
     parts.push(replacement);
     // One offset entry per UTF-16 code unit of the replacement; folds are
     // BMP, but an unfolded astral passthrough spans two code units.
     let unit = 0;
     while (unit < replacement.length) {
       sourceIndex.push(originalUnit);
+      sourceEndIndex.push(originalEnd);
       unit += 1;
     }
-    originalUnit += char.length;
+    originalUnit = originalEnd;
   }
   sourceIndex.push(originalUnit);
-  return { text: parts.join(""), sourceIndex };
+  sourceEndIndex.push(originalUnit);
+  return { sourceEndIndex, text: parts.join(""), sourceIndex };
 };

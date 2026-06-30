@@ -17,6 +17,16 @@ describe("findHitsInText", () => {
     expect(result.hits.at(0)?.snippet).toContain("٢٠٢٤");
   });
 
+  test("bounds snippets by the matched source characters", () => {
+    const result = findHitsInText(`م${"ـ".repeat(300)}نهاية`, "م", {
+      ...OPTIONS,
+      limit: 1,
+    });
+
+    expect(result.totalHits).toBe(1);
+    expect(result.hits.at(0)?.snippet.length).toBeLessThan(250);
+  });
+
   test("returns no hits when the query folds to empty", () => {
     const result = findHitsInText("نص عربي", "ـ", OPTIONS);
     expect(result.totalHits).toBe(0);

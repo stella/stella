@@ -4,16 +4,20 @@ import { applyArabicFolds, applyArabicFoldsWithOffsets } from "./arabic.js";
 
 describe("applyArabicFoldsWithOffsets", () => {
   test("folds 1:1 and maps each unit to its source", () => {
-    const { text, sourceIndex } = applyArabicFoldsWithOffsets("أحمد");
+    const { sourceEndIndex, text, sourceIndex } =
+      applyArabicFoldsWithOffsets("أحمد");
     expect(text).toBe("احمد");
     expect(sourceIndex).toEqual([0, 1, 2, 3, 4]);
+    expect(sourceEndIndex).toEqual([1, 2, 3, 4, 4]);
   });
 
   test("drops removed chars; offsets point at the surviving sources", () => {
     // م(0) ـ(1) ح(2) ـ(3) م(4) ـ(5) د(6) -> محمد
-    const { text, sourceIndex } = applyArabicFoldsWithOffsets("مـحـمـد");
+    const { sourceEndIndex, text, sourceIndex } =
+      applyArabicFoldsWithOffsets("مـحـمـد");
     expect(text).toBe("محمد");
     expect(sourceIndex).toEqual([0, 2, 4, 6, 7]);
+    expect(sourceEndIndex).toEqual([1, 3, 5, 7, 7]);
   });
 
   test("maps Arabic-Indic digits", () => {
@@ -43,19 +47,22 @@ describe("applyArabicFoldsWithOffsets", () => {
 
   test("expands a ligature and maps every unit to its source char", () => {
     // ﷲ (U+FDF2) is one code unit; NFKC expands it to الله (4 units).
-    const { text, sourceIndex } = applyArabicFoldsWithOffsets("ﷲ");
+    const { sourceEndIndex, text, sourceIndex } =
+      applyArabicFoldsWithOffsets("ﷲ");
     expect(text).toBe("الله");
     expect(sourceIndex).toEqual([0, 0, 0, 0, 1]);
+    expect(sourceEndIndex).toEqual([1, 1, 1, 1, 1]);
   });
 
   test("a folded match maps back to the original substring", () => {
     const original = "رقم ٢٠٢٤ نهائي";
-    const { text, sourceIndex } = applyArabicFoldsWithOffsets(original);
+    const { sourceEndIndex, text, sourceIndex } =
+      applyArabicFoldsWithOffsets(original);
     const foldedStart = text.indexOf("2024");
     const foldedEnd = foldedStart + "2024".length;
     const origSlice = original.slice(
       sourceIndex[foldedStart],
-      sourceIndex[foldedEnd],
+      sourceEndIndex[foldedEnd - 1],
     );
     expect(origSlice).toBe("٢٠٢٤");
   });
