@@ -1,12 +1,27 @@
 import { applyArabicFolds } from "./arabic.js";
 
-const WHITESPACE_RE = /\s+/gu;
+const ASCII_UPPERCASE_RE = /[A-Zİ]/gu;
+const SEARCH_WHITESPACE_RE =
+  /[ \t\n\v\f\r\u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff]+/gu;
+
+const foldSearchCase = (text: string): string =>
+  text.replace(ASCII_UPPERCASE_RE, (char) => {
+    if (char === "İ") {
+      return "i";
+    }
+    const codePoint = char.codePointAt(0);
+    if (codePoint === undefined) {
+      return char;
+    }
+    return String.fromCodePoint(codePoint + 32);
+  });
 
 /**
  * Canonical search match-key normalizer. Folds Arabic orthographic
  * variants so a query matches regardless of how the text was typed
  * (alef/hamza/teh-marbuta/yeh variants, tashkeel, tatweel, Arabic-Indic
- * digits), and is a harmless NFKC + lowercase pass on other scripts.
+ * digits), then applies locale-stable ASCII case folding for mixed-script
+ * names.
  *
  * NFKC runs first so presentation forms (U+FB50–FDFF, U+FE70–FEFF) fold
  * to their canonical letters before the explicit folds apply.
@@ -15,7 +30,6 @@ const WHITESPACE_RE = /\s+/gu;
  * the golden vectors in normalize.test.ts pin the contract for both.
  */
 export const normalizeSearchText = (text: string): string =>
-  applyArabicFolds(text.normalize("NFKC"))
-    .toLowerCase()
-    .replace(WHITESPACE_RE, " ")
+  foldSearchCase(applyArabicFolds(text.normalize("NFKC")))
+    .replace(SEARCH_WHITESPACE_RE, " ")
     .trim();

@@ -33,7 +33,7 @@
     ".": {
       "types": "./src/index.ts",
       "bun": "./src/index.ts",
-      "import": "./src/index.ts"
+      "import": "./dist/index.js"
     }
   },
   "publishConfig": {

@@ -371,6 +371,21 @@ export const contacts = p.pgTable(
     p
       .index("contacts_org_org_name_idx")
       .on(table.organizationId, table.organizationName),
+    p
+      .index("contacts_display_name_arabic_norm_trgm_idx")
+      .using("gin", sql`arabic_normalize(${table.displayName}) gin_trgm_ops`),
+    p
+      .index("contacts_first_name_arabic_norm_trgm_idx")
+      .using("gin", sql`arabic_normalize(${table.firstName}) gin_trgm_ops`),
+    p
+      .index("contacts_last_name_arabic_norm_trgm_idx")
+      .using("gin", sql`arabic_normalize(${table.lastName}) gin_trgm_ops`),
+    p
+      .index("contacts_organization_name_arabic_norm_trgm_idx")
+      .using(
+        "gin",
+        sql`arabic_normalize(${table.organizationName}) gin_trgm_ops`,
+      ),
     ...orgPolicies(),
   ],
 );

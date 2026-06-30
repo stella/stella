@@ -33,7 +33,11 @@ const VECTORS: readonly string[] = [
   "٢٠٢٤",
   "۲۰۲۴",
   "HELLO Wörld",
+  "IBRAHIM İBRAHIM",
   "  a   b  ",
+  "a\tb\nc",
+  "a\u00a0b",
+  "a\u2007b\u3000c",
   "ﷲ", // U+FDF2 ligature -> الله via NFKC
   "ﺍﺣﻤﺪ", // presentation forms -> احمد via NFKC
 ];
@@ -45,7 +49,7 @@ beforeAll(async () => {
   const migrationSql = readFileSync(MIGRATION_PATH, "utf-8");
   for (const statement of migrationSql.split("--> statement-breakpoint")) {
     const trimmed = statement.trim();
-    if (trimmed.length === 0) {
+    if (trimmed.length === 0 || !isPortableFunctionStatement(trimmed)) {
       continue;
     }
     // oxlint-disable-next-line no-await-in-loop -- ordered DDL on one connection
@@ -67,4 +71,30 @@ describe("arabic_normalize SQL function", () => {
       expect(result.rows.at(0)?.out).toBe(normalizeSearchText(input));
     }
   });
+
+  test("keeps concurrent index creation retry-safe", () => {
+    const migrationSql = readFileSync(MIGRATION_PATH, "utf-8");
+    const indexNames = [
+      "contacts_display_name_arabic_norm_trgm_idx",
+      "contacts_first_name_arabic_norm_trgm_idx",
+      "contacts_last_name_arabic_norm_trgm_idx",
+      "contacts_organization_name_arabic_norm_trgm_idx",
+    ];
+
+    for (const indexName of indexNames) {
+      expect(migrationSql).toContain(
+        `DROP INDEX CONCURRENTLY IF EXISTS "${indexName}"`,
+      );
+      expect(migrationSql).toContain(
+        `CREATE INDEX CONCURRENTLY IF NOT EXISTS "${indexName}"`,
+      );
+    }
+  });
 });
+
+const isPortableFunctionStatement = (statement: string): boolean => {
+  if (statement.includes("CREATE OR REPLACE FUNCTION arabic_normalize")) {
+    return true;
+  }
+  return statement.startsWith("SET ");
+};

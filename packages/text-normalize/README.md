@@ -19,8 +19,9 @@ search miss otherwise-identical words:
 - tashkeel (harakat), superscript alef, and tatweel removed
 - Arabic-Indic and Extended Arabic-Indic digits to ASCII
 
-It also runs NFKC (folding presentation forms) plus lowercase and
-whitespace collapse, so it is a safe pass-through for non-Arabic scripts.
+It also runs NFKC (folding presentation forms), locale-stable ASCII case
+folding, and whitespace collapse, so it is a safe pass-through for
+non-Arabic scripts.
 
 The fold tables are vendored from Lucene's `ArabicNormalizer` (Apache-2.0)
 and cross-checked against CAMeL Tools (MIT), extended for the classes
@@ -33,5 +34,5 @@ normalizeSearchText("أحمد") === normalizeSearchText("احمد"); // true
 ```
 
 The same fold must be reproduced by the PostgreSQL `arabic_normalize()`
-function used for generated search-key columns; the golden vectors in
-`src/normalize.test.ts` pin the shared contract.
+function used in contacts trigram expression indexes and search predicates;
+the golden vectors in `src/normalize.test.ts` pin the shared contract.

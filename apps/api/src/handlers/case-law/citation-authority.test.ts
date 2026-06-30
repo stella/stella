@@ -1,4 +1,3 @@
-import { PGlite } from "@electric-sql/pglite";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { pushSchema } from "drizzle-kit/api-postgres";
 import { eq, sql } from "drizzle-orm";
@@ -16,6 +15,10 @@ import { recomputeCitationAuthorityForAll } from "@/api/handlers/case-law/citati
 import { citationScore } from "@/api/handlers/case-law/citation-score";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  createSchemaPglite,
+  installPgliteSchemaPrerequisites,
+} from "@/api/tests/pglite-schema";
 
 // The materialized citation_authority column must equal citationScore()
 // evaluated at the same instant, so moving the blend out of the per-query
@@ -25,7 +28,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 const allSchema = { ...schema, ...authSchema, ...rlsExports };
 const NOW = new Date("2026-06-05T00:00:00.000Z");
 
-let client: PGlite;
+let client: Awaited<ReturnType<typeof createSchemaPglite>>;
 let db: ReturnType<typeof drizzle>;
 
 const sourceId = createSafeId<"caseLawSource">();
@@ -35,10 +38,11 @@ const regionalCitingId = createSafeId<"caseLawDecision">();
 const orphanId = createSafeId<"caseLawDecision">();
 
 beforeAll(async () => {
-  client = await PGlite.create();
+  client = await createSchemaPglite();
   db = drizzle({ client });
   await db.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await db.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
+  await installPgliteSchemaPrerequisites(db);
   const { sqlStatements } = await pushSchema(allSchema, db);
   for (const statement of sqlStatements) {
     // oxlint-disable-next-line no-await-in-loop -- DDL statements must apply in emitted order (deterministic test schema setup)

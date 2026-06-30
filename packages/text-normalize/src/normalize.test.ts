@@ -30,8 +30,12 @@ const GOLDEN: readonly (readonly [string, string])[] = [
   ["مسئول", "مسيول"],
   ["ء", ""], // standalone hamza dropped
   ["٢٠٢٤", "2024"],
-  ["HELLO Wörld", "hello wörld"], // Latin: NFKC + lowercase only
+  ["HELLO Wörld", "hello wörld"], // Latin: NFKC + ASCII case folding
+  ["IBRAHIM İBRAHIM", "ibrahim ibrahim"], // locale-stable I folding
   ["  a   b  ", "a b"], // whitespace collapsed and trimmed
+  ["a\tb\nc", "a b c"], // ASCII controls collapsed
+  ["a\u00a0b", "a b"], // NBSP collapsed
+  ["a\u2007b\u3000c", "a b c"], // Unicode space separators collapsed
 ];
 
 describe("normalizeSearchText", () => {

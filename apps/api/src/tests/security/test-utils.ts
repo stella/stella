@@ -1,4 +1,3 @@
-import { PGlite } from "@electric-sql/pglite";
 import { pushSchema } from "drizzle-kit/api-postgres";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -10,6 +9,10 @@ import { createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabaseMarker, TransactionOf } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  createSchemaPglite,
+  installPgliteSchemaPrerequisites,
+} from "@/api/tests/pglite-schema";
 
 const allSchema = {
   ...schema,
@@ -52,7 +55,7 @@ export type TestDatabase = RawTestDatabase & RlsDatabaseMarker;
 export type TestDatabaseTransaction = TransactionOf<TestDatabase>;
 
 const createTestDb = async (): Promise<TestDatabase> => {
-  const client = await PGlite.create();
+  const client = await createSchemaPglite();
   const testDb = markRlsDatabase(
     drizzle({
       client,
@@ -63,6 +66,7 @@ const createTestDb = async (): Promise<TestDatabase> => {
 
   await testDb.execute(sql.raw("CREATE ROLE stella NOLOGIN"));
   await testDb.execute(sql.raw("CREATE ROLE stella_ingestion NOLOGIN"));
+  await installPgliteSchemaPrerequisites(testDb);
 
   const { sqlStatements } = await pushSchema(allSchema, pushSchemaDb);
   for (const statement of sqlStatements) {
