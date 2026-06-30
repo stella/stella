@@ -235,6 +235,8 @@ function ConsentPage() {
               <Link
                 className="text-primary text-sm font-medium hover:underline"
                 to="/settings/organization/members"
+                target="_blank"
+                rel="noopener noreferrer"
               >
                 {t("consent.completeSetup")}
               </Link>
