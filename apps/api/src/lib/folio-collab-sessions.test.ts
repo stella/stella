@@ -33,12 +33,23 @@ void mock.module("@/api/lib/root-scoped-db", () => ({
   createRootSafeDb: () => "SAFE_DB_SENTINEL",
 }));
 
-const { authorizeFolioCollabSession } =
-  await import("@/api/lib/folio-collab-sessions");
+const {
+  authorizeFolioCollabSession,
+  collectFolioCollabStoredSessionFiles,
+  computeFolioCollabTokenExpiresAt,
+  computeFolioCollabRefreshTokenExpiresAt,
+  FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+  FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS,
+  FOLIO_COLLAB_TOKEN_TTL_MS,
+  isFolioCollabSessionExpired,
+} = await import("@/api/lib/folio-collab-sessions");
+const { DOCX_MIME_TYPE } = await import("@/api/mime-types");
 
 const sessionId = toSafeId<"folioCollabSession">("fcs_1");
 const orgId = toSafeId<"organization">("org_1");
 const wsId = toSafeId<"workspace">("ws_1");
+const yjsSnapshotFileId = toSafeId<"userFile">("file_yjs");
+const docxCheckpointFileId = toSafeId<"userFile">("file_docx");
 
 type Row = Record<string, unknown>;
 
@@ -48,7 +59,9 @@ const validRow = (overrides: Row = {}): Row => ({
   fileName: "contract.docx",
   organizationId: orgId,
   organizationRole: "owner",
+  sessionCreatedAt: new Date(Date.now() - 30 * 60 * 1000),
   sessionStatus: "open",
+  tokenId: toSafeId<"folioCollabSessionToken">("fcst_1"),
   userId: "user_1",
   workspaceId: wsId,
   workspaceMemberId: null,
@@ -76,6 +89,19 @@ describe("authorizeFolioCollabSession (the collab trust boundary)", () => {
     const result = await authorize(
       validRow({ expiresAt: new Date(Date.now() - 1000) }),
     );
+    expect(result).toEqual({ status: "token-expired" });
+  });
+
+  test("an otherwise-valid token expires at the absolute session lifetime", async () => {
+    const result = await authorize(
+      validRow({
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+        sessionCreatedAt: new Date(
+          Date.now() - FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS,
+        ),
+      }),
+    );
+
     expect(result).toEqual({ status: "token-expired" });
   });
 
@@ -126,5 +152,92 @@ describe("authorizeFolioCollabSession (the collab trust boundary)", () => {
       expect(result.value.organizationId).toBe(orgId);
       expect(result.value.workspaceId).toBe(wsId);
     }
+  });
+});
+
+describe("folio collab token lifetime", () => {
+  test("caps refreshed tokens at the absolute session lifetime", () => {
+    const sessionCreatedAt = new Date("2026-01-01T00:00:00.000Z");
+    const now = new Date(
+      sessionCreatedAt.getTime() +
+        FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS -
+        5 * 60 * 1000,
+    );
+
+    expect(computeFolioCollabTokenExpiresAt(sessionCreatedAt, now)).toEqual(
+      new Date(
+        sessionCreatedAt.getTime() + FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS,
+      ),
+    );
+  });
+
+  test("keeps the normal one-hour token lifetime before the session cap", () => {
+    const sessionCreatedAt = new Date("2026-01-01T00:00:00.000Z");
+    const now = new Date(sessionCreatedAt.getTime() + 30 * 60 * 1000);
+
+    expect(computeFolioCollabTokenExpiresAt(sessionCreatedAt, now)).toEqual(
+      new Date(now.getTime() + FOLIO_COLLAB_TOKEN_TTL_MS),
+    );
+  });
+
+  test("refuses refreshes once the absolute session lifetime has elapsed", () => {
+    const sessionCreatedAt = new Date("2026-01-01T00:00:00.000Z");
+    const now = new Date(
+      sessionCreatedAt.getTime() + FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS,
+    );
+
+    expect(computeFolioCollabRefreshTokenExpiresAt(sessionCreatedAt, now)).toBe(
+      null,
+    );
+  });
+
+  test("classifies reusable open sessions by the same absolute lifetime", () => {
+    const sessionCreatedAt = new Date("2026-01-01T00:00:00.000Z");
+    const justBeforeCap = new Date(
+      sessionCreatedAt.getTime() + FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS - 1,
+    );
+    const atCap = new Date(
+      sessionCreatedAt.getTime() + FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS,
+    );
+
+    expect(isFolioCollabSessionExpired(sessionCreatedAt, justBeforeCap)).toBe(
+      false,
+    );
+    expect(isFolioCollabSessionExpired(sessionCreatedAt, atCap)).toBe(true);
+  });
+});
+
+describe("folio collab stored session files", () => {
+  test("collects only blobs that have been written", () => {
+    const writtenAt = new Date("2026-01-01T00:00:00.000Z");
+
+    expect(
+      collectFolioCollabStoredSessionFiles({
+        docxCheckpointFileId,
+        docxCheckpointUpdatedAt: null,
+        yjsSnapshotFileId,
+        yjsSnapshotUpdatedAt: writtenAt,
+      }),
+    ).toEqual([
+      {
+        fileId: yjsSnapshotFileId,
+        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+      },
+    ]);
+
+    expect(
+      collectFolioCollabStoredSessionFiles({
+        docxCheckpointFileId,
+        docxCheckpointUpdatedAt: writtenAt,
+        yjsSnapshotFileId,
+        yjsSnapshotUpdatedAt: writtenAt,
+      }),
+    ).toEqual([
+      {
+        fileId: yjsSnapshotFileId,
+        mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+      },
+      { fileId: docxCheckpointFileId, mimeType: DOCX_MIME_TYPE },
+    ]);
   });
 });
