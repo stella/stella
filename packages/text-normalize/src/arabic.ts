@@ -102,8 +102,9 @@ export type FoldedText = {
   truncated: boolean;
   // For each UTF-16 code-unit index `i` in `text`, the code-unit index in
   // the original input where that unit's source character began.
-  // `sourceIndex[text.length]` is the original length (end sentinel), so a
-  // match's [start, end) in folded space maps back to original offsets.
+  // `sourceIndex[text.length]` is the end of the consumed source prefix (the
+  // full original length when `truncated` is false), so a match's [start, end)
+  // in folded space maps back to original offsets.
   sourceIndex: number[];
 };
 
