@@ -271,8 +271,6 @@ jobs:
           file: apps/api/Dockerfile
           platforms: linux/arm64
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-arm64,mode=max
           build-args: |
             STELLA_VERSION=${{ needs.resolve.outputs.version }}
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.release_sha }}
@@ -323,8 +321,6 @@ jobs:
           file: apps/api/Dockerfile
           platforms: linux/amd64
           outputs: type=image,name=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }},push-by-digest=true,name-canonical=true,push=true
-          cache-from: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-amd64
-          cache-to: type=registry,ref=${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:buildcache-amd64,mode=max
           build-args: |
             STELLA_VERSION=${{ needs.resolve.outputs.version }}
             STELLA_COMMIT_SHA=${{ needs.resolve.outputs.release_sha }}
