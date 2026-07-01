@@ -62,6 +62,13 @@ type ClassifyWithLLMOptions = {
   abortSignal?: AbortSignal | undefined;
 };
 
+export const resolvePolarityClassifierCaching = (language: string) =>
+  resolveCaching({
+    promptCachingEnabled: true,
+    role: "fast",
+    scopeKey: `polarity:${language}`,
+  });
+
 /** Classify a citation's polarity using an LLM. */
 export const classifyWithLLM = async ({
   context,
@@ -88,11 +95,7 @@ export const classifyWithLLM = async ({
         orgAIConfig: null,
         organizationId: null,
         analytics: aiAnalytics,
-        caching: resolveCaching({
-          promptCachingEnabled: false,
-          role: "fast",
-          scopeKey: null,
-        }),
+        caching: resolvePolarityClassifierCaching(language),
         system: SYSTEM_PROMPT,
         messages: [
           {

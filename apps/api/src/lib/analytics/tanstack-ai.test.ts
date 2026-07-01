@@ -248,4 +248,50 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       },
     });
   });
+
+  test("keeps model metadata lookup best-effort", async () => {
+    const { env } = await import("@/api/env");
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const originalRequirePersonalAIKey = env.REQUIRE_PERSONAL_AI_KEY;
+    const events: Parameters<Analytics["capture"]>[0][] = [];
+    const analytics: Analytics = {
+      capture: (event) => {
+        events.push(event);
+      },
+      flush: async () => undefined,
+    };
+
+    try {
+      env.REQUIRE_PERSONAL_AI_KEY = true;
+
+      const callbacks = createTanStackAIAnalyticsCallbacks({
+        analytics,
+        feature: "chat.suggested-prompts",
+        traceId: "trace_missing_model",
+      });
+      const deferred: Promise<unknown>[] = [];
+      const error = new Error("provider unavailable");
+
+      callbacks.captureError(error);
+      await callbacks.middleware.onUsage?.(
+        createMiddlewareContext(deferred),
+        usage,
+      );
+
+      expect(deferred).toHaveLength(0);
+      expect(events).toHaveLength(1);
+      expect(events[0]).toMatchObject({
+        event: SERVER_ANALYTICS_EVENTS.aiGenerationFailed,
+        properties: {
+          failure_reason: "provider",
+          feature: "chat.suggested-prompts",
+        },
+      });
+      expect(events[0]?.properties).not.toHaveProperty("model");
+      expect(events[0]?.properties).not.toHaveProperty("provider");
+    } finally {
+      env.REQUIRE_PERSONAL_AI_KEY = originalRequirePersonalAIKey;
+    }
+  });
 });

@@ -226,28 +226,53 @@ export const createTanStackAIAnalyticsCallbacks = ({
 }: TanStackAIAnalyticsProps): TanStackAIAnalyticsCallbacks => {
   const distinctId = config.distinctId ?? SERVER_DISTINCT_ID;
   const modelRole = config.modelRole ?? "chat";
-  const modelInfo = getTanStackTextModelInfoForRole(
-    modelRole,
-    config.orgAIConfig,
-    {
-      organizationId: config.usageMetering?.organizationId ?? null,
-    },
-  );
+  let modelInfo: ResolvedTanStackTextModelInfo | null | undefined;
   const startedAt = performance.now();
   let hasCapturedGenerationError = false;
   let toolCount = 0;
+
+  const resolveAnalyticsModelInfo =
+    (): ResolvedTanStackTextModelInfo | null => {
+      if (modelInfo !== undefined) {
+        return modelInfo;
+      }
+
+      try {
+        modelInfo = getTanStackTextModelInfoForRole(
+          modelRole,
+          config.orgAIConfig,
+          {
+            organizationId: config.usageMetering?.organizationId ?? null,
+          },
+        );
+      } catch (error) {
+        modelInfo = null;
+        logger.warn("tanstack_ai.analytics.model_info_unavailable", {
+          "ai.feature": config.feature,
+          "ai.role": modelRole,
+          "error.type": errorTag(error),
+        });
+      }
+
+      return modelInfo;
+    };
 
   const captureGenerationError = (error: unknown) => {
     if (hasCapturedGenerationError) {
       return;
     }
     hasCapturedGenerationError = true;
+    const resolvedModelInfo = resolveAnalyticsModelInfo();
 
     logger.error("tanstack_ai.generation.failed", {
       "error.type": errorTag(error),
       "ai.feature": config.feature,
-      "ai.provider": modelInfo.provider,
-      "ai.model": modelInfo.modelId,
+      ...(resolvedModelInfo
+        ? {
+            "ai.provider": resolvedModelInfo.provider,
+            "ai.model": resolvedModelInfo.modelId,
+          }
+        : {}),
     });
     captureTelemetryError(error, {
       feature: config.feature,
@@ -267,10 +292,16 @@ export const createTanStackAIAnalyticsCallbacks = ({
         latency_bucket: bucketLatency(
           (performance.now() - startedAt) / ONE_SECOND_MS,
         ),
-        model: modelInfo.modelId,
-        model_key_source: modelInfo.keySource,
-        provider: modelInfo.provider,
-        ...(modelInfo.region ? { region: modelInfo.region } : {}),
+        ...(resolvedModelInfo
+          ? {
+              model: resolvedModelInfo.modelId,
+              model_key_source: resolvedModelInfo.keySource,
+              provider: resolvedModelInfo.provider,
+              ...(resolvedModelInfo.region
+                ? { region: resolvedModelInfo.region }
+                : {}),
+            }
+          : {}),
       },
     });
   };
@@ -289,6 +320,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
         if (!usage) {
           return;
         }
+        const resolvedModelInfo = resolveAnalyticsModelInfo();
+        if (!resolvedModelInfo) {
+          return;
+        }
 
         analytics.capture({
           distinctId,
@@ -298,22 +333,29 @@ export const createTanStackAIAnalyticsCallbacks = ({
             feature: config.feature,
             input_tokens_bucket: bucketTokenCount(usage.promptTokens),
             latency_bucket: bucketLatency(duration / ONE_SECOND_MS),
-            model: modelInfo.modelId,
-            model_key_source: modelInfo.keySource,
+            model: resolvedModelInfo.modelId,
+            model_key_source: resolvedModelInfo.keySource,
             output_tokens_bucket: bucketTokenCount(usage.completionTokens),
-            provider: modelInfo.provider,
-            ...(modelInfo.region ? { region: modelInfo.region } : {}),
+            provider: resolvedModelInfo.provider,
+            ...(resolvedModelInfo.region
+              ? { region: resolvedModelInfo.region }
+              : {}),
             tool_count_bucket: bucketCount(toolCount),
             total_tokens_bucket: bucketTokenCount(usage.totalTokens),
           },
         });
       },
       onUsage: (ctx, usage) => {
+        const resolvedModelInfo = resolveAnalyticsModelInfo();
+        if (!resolvedModelInfo) {
+          return;
+        }
+
         const consumption = recordTanStackConsumption({
           cacheReadTokens: getUsageCacheReadTokens(usage),
           completionTokens: usage.completionTokens,
           config,
-          modelInfo,
+          modelInfo: resolvedModelInfo,
           promptTokens: usage.promptTokens,
         });
         ctx.defer(consumption);
