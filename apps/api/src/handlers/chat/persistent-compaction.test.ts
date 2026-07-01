@@ -5,6 +5,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 import {
   applyChatCompactionCheckpoint,
+  chatCompactionSnapshotMessagesEqual,
   shouldInvalidateChatCompactionCheckpoint,
 } from "./persistent-compaction";
 
@@ -84,6 +85,46 @@ describe("persistent chat compaction", () => {
     });
 
     expect(applied).toBeNull();
+  });
+
+  test("rejects a checkpoint snapshot when message content changed", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+
+    expect(
+      chatCompactionSnapshotMessagesEqual(
+        [
+          {
+            id: toSafeId<"chatMessage">(id),
+            role: "user",
+            content: {
+              version: 1,
+              data: [{ type: "text", text: "edited" }],
+            },
+          },
+        ],
+        [message(id, "original")],
+      ),
+    ).toBe(false);
+  });
+
+  test("accepts a checkpoint snapshot when message ids and content still match", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+
+    expect(
+      chatCompactionSnapshotMessagesEqual(
+        [
+          {
+            id: toSafeId<"chatMessage">(id),
+            role: "user",
+            content: {
+              version: 1,
+              data: [{ type: "text", text: "original" }],
+            },
+          },
+        ],
+        [message(id, "original")],
+      ),
+    ).toBe(true);
   });
 
   test("invalidates active checkpoints when a retained message is updated", () => {

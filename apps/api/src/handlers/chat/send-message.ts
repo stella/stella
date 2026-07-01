@@ -1136,9 +1136,27 @@ const runChatCompactionCheckpoint = async ({
     return;
   }
 
+  const dataScopeResult = await safeDb((tx) =>
+    tx.query.chatThreads.findFirst({
+      where: { id: { eq: threadId } },
+      columns: { dataWorkspaceIds: true },
+    }),
+  );
+  if (Result.isError(dataScopeResult)) {
+    captureError(dataScopeResult.error, {
+      threadId,
+      feature: "chat.compaction_checkpoint_data_scope",
+    });
+    return;
+  }
+  if (!dataScopeResult.value) {
+    return;
+  }
+
   const persistResult = await persistChatCompactionCheckpoint({
     abortSignal,
     boundary,
+    dataWorkspaceIds: dataScopeResult.value.dataWorkspaceIds,
     messages: historyResult.value,
     model,
     onSummaryError: (error) => {
