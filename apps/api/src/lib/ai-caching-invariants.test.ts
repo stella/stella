@@ -1,7 +1,7 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import path from "node:path";
 
 /**
  * TanStack AI boundary enforcement: live app code must not reintroduce
@@ -11,7 +11,7 @@ import { resolve } from "node:path";
  */
 describe("TanStack AI is the only live app provider SDK boundary", () => {
   test("app source has no direct legacy provider SDK imports", async () => {
-    const repoRoot = resolve(import.meta.dir, "../../../..");
+    const repoRoot = path.resolve(import.meta.dir, "../../../..");
     const glob = new Glob("apps/{api,web}/{src,scripts}/**/*.{ts,tsx}");
     const forbiddenImport =
       /\bfrom\s+["'](?:@ai-sdk\/[^"']+|ai|ai\/[^"']+|@openrouter\/ai-sdk-provider)["']/u;
@@ -21,7 +21,10 @@ describe("TanStack AI is the only live app provider SDK boundary", () => {
       cwd: repoRoot,
       onlyFiles: true,
     })) {
-      const contents = await readFile(resolve(repoRoot, relative), "utf-8");
+      const contents = await readFile(
+        path.resolve(repoRoot, relative),
+        "utf-8",
+      );
       if (forbiddenImport.test(contents)) {
         offenders.push(relative);
       }
@@ -31,7 +34,7 @@ describe("TanStack AI is the only live app provider SDK boundary", () => {
   });
 
   test("TanStack provider adapter factories stay in tanstack-ai-models.ts", async () => {
-    const apiSrc = resolve(import.meta.dir, "..");
+    const apiSrc = path.resolve(import.meta.dir, "..");
     const glob = new Glob("**/*.ts");
     const allowed = new Set(["lib/tanstack-ai-models.ts"]);
     const forbiddenPackages = [
@@ -53,7 +56,7 @@ describe("TanStack AI is the only live app provider SDK boundary", () => {
         continue;
       }
 
-      const contents = await readFile(resolve(apiSrc, relative), "utf-8");
+      const contents = await readFile(path.resolve(apiSrc, relative), "utf-8");
       if (providerValueImport.test(contents)) {
         offenders.push(relative);
       }

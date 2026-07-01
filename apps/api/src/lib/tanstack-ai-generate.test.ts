@@ -3,6 +3,7 @@ import { afterAll, describe, expect, mock, test } from "bun:test";
 import * as v from "valibot";
 
 import type { CachingDecision } from "@/api/lib/ai-config";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 
@@ -30,8 +31,11 @@ void mock.module("@/api/lib/tanstack-ai-models", () => ({
   getTanStackTextModelForRole: () => testModel,
 }));
 
-const { generateTanStackObjectForRole, streamTanStackObjectForRole } =
-  await import("@/api/lib/tanstack-ai-generate");
+const {
+  generateTanStackObjectForRole,
+  mergeGenerationOptions,
+  streamTanStackObjectForRole,
+} = await import("@/api/lib/tanstack-ai-generate");
 
 const testModel = {
   adapter: {},
@@ -142,6 +146,29 @@ describe("TanStack AI structured output generation", () => {
     );
 
     expect(validationFailure).toBeDefined();
+  });
+
+  test("keeps call-site temperature out of fixed-sampling Anthropic requests", () => {
+    // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+    // The adapter is irrelevant for this pure option-merge test.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    const model = {
+      adapter: {},
+      keySource: "instance",
+      modelId: "claude-opus-4-8",
+      modelOptions: {},
+      provider: "anthropic",
+    } as ResolvedTanStackTextModel;
+
+    const options = mergeGenerationOptions({
+      caching: noCaching,
+      maxOutputTokens: 1000,
+      model,
+      serviceTier: "standard",
+      temperature: 0,
+    });
+
+    expect(options).toEqual({ max_tokens: 1000 });
   });
 });
 

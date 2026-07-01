@@ -36,6 +36,7 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -137,7 +138,7 @@ export const ChatThreadPage = ({
     }),
   );
   const { chat } = data;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     if (seededForThreadId === threadRef.threadId) {
       return;
     }
@@ -255,7 +256,9 @@ export const ChatThreadPage = ({
     lastMessage.role === "assistant" &&
     lastMessage.parts.some(
       (part) =>
-        part.type === "tool-ask-user" && part.state !== "output-available",
+        part.type === "tool-call" &&
+        part.name === "ask-user" &&
+        part.state !== "complete",
     );
   const askUserOwnsTurn =
     lastMessageHasPendingAskUser || editingAskUserToolCallIds.size > 0;
@@ -537,7 +540,7 @@ export const ChatThreadPage = ({
                   // Abort any live stream first: `chatThreadOptions` keeps the
                   // in-flight Chat alive in the query cache, so navigating away
                   // would leave it streaming against the abandoned thread.
-                  void stop();
+                  stop();
                   controller.setContent("");
                   if (threadRef.scope === "workspace") {
                     void navigate({

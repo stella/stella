@@ -25,6 +25,7 @@ export const PROVIDER_PROBE_VALUES = [
   "openai",
   "azure_foundry",
   "anthropic",
+  "bedrock",
   "mistral",
   "huggingface",
 ] as const;
@@ -56,6 +57,10 @@ const PROBE_TARGETS: Record<
       "anthropic-version": "2023-06-01",
     },
   }),
+  bedrock: (apiKey) => ({
+    url: new URL("https://bedrock.us-east-1.amazonaws.com/foundation-models"),
+    headers: { Authorization: `Bearer ${apiKey}` },
+  }),
   openai: (apiKey) => ({
     url: new URL("https://api.openai.com/v1/models"),
     headers: { Authorization: `Bearer ${apiKey}` },
@@ -73,6 +78,7 @@ const PROBE_TARGETS: Record<
 const PROVIDER_LABELS: Record<ProviderProbeValue, string> = {
   google: "Google",
   anthropic: "Anthropic",
+  bedrock: "Bedrock",
   openai: "OpenAI",
   azure_foundry: "Azure Foundry",
   openrouter: "OpenRouter",

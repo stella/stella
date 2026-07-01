@@ -5,6 +5,8 @@ export const PROVIDER_KEYS = [
   "anthropic",
   "openai",
   "openrouter",
+  "mistral",
+  "bedrock",
 ] as const;
 
 export const PROVIDER_LABELS = {
@@ -12,6 +14,8 @@ export const PROVIDER_LABELS = {
   anthropic: "Anthropic",
   openai: "OpenAI",
   openrouter: "OpenRouter",
+  mistral: "Mistral",
+  bedrock: "Bedrock",
 } as const satisfies Record<(typeof PROVIDER_KEYS)[number], string>;
 
 export const REGION_KEYS = ["global"] as const;

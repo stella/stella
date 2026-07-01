@@ -122,7 +122,7 @@ describe("chat thread messages", () => {
       />,
     );
 
-    expect(html).toContain(">Reasoning<");
+    expect(html).toContain(">Reasoning trace<");
     expect(html).toContain("<details");
     expect(html).not.toContain('open=""');
     expect(html).toContain("12 reasoning tokens");
@@ -163,6 +163,42 @@ describe("chat thread messages", () => {
 
     expect(html).toContain("8 reasoning tokens");
     expect(html).toContain("The answer is ready.");
+  });
+
+  test("renders non-approval tool calls when tool details are enabled", () => {
+    const chatMessages: PersistedChatMessage[] = [
+      {
+        id: "message-A",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-search",
+            name: "search-chat-history",
+            arguments: JSON.stringify({ query: "deadline" }),
+            state: "complete",
+            input: { query: "deadline" },
+            output: { query: "deadline", results: [] },
+          },
+        ],
+        role: "assistant",
+      },
+    ];
+
+    const html = renderWithProviders(
+      <ChatThreadMessages
+        approvalPendingMessageId={null}
+        messages={chatMessages}
+        onAskUserSubmit={() => {}}
+        onCreateDocumentResolve={() => {}}
+        onOpenCreatedDocument={() => {}}
+        showToolCalls
+        streamdownComponents={{
+          a: ({ children, ...props }) => <a {...props}>{children}</a>,
+        }}
+      />,
+    );
+
+    expect(html).toContain("Searching chat history");
   });
 
   test("keeps assistant reasoning visible while it is the only streaming content", () => {

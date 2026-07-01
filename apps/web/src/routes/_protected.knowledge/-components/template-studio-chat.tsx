@@ -29,6 +29,7 @@ import { Result } from "better-result";
 import { LoaderCircleIcon } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
+import { v7 as uuidv7 } from "uuid";
 
 import {
   applySuggestions,
@@ -71,7 +72,6 @@ import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useDevStore } from "@/lib/dev-store";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { inputTypeValueKind } from "@/lib/value-types";
@@ -86,6 +86,7 @@ import {
 import type {
   ApplyActiveDocxEditsInput,
   ApplyActiveDocxEditsOutput,
+  ChatUserMessageInput,
 } from "@/routes/_protected.chat/-queries";
 import { useTemplateStudioStore } from "@/routes/_protected.knowledge/-components/template-studio-store";
 import {
@@ -155,6 +156,11 @@ export const TemplateStudioChat = (props: TemplateStudioChatProps) => (
 type ScopedPresetSend = {
   text: string;
 };
+
+const createTextChatMessage = (text: string): ChatUserMessageInput => ({
+  content: text,
+  id: toSafeId<"chatMessage">(uuidv7()),
+});
 
 const ResolvedTemplateStudioChat = (props: TemplateStudioChatProps) => {
   const t = useTranslations();
@@ -261,7 +267,7 @@ const TemplateStudioChatInner = ({
   });
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
-  const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
+  const showToolCallDetails = false;
   const upsertField = useTemplateStudioStore((s) => s.upsertField);
   const markDirty = useTemplateStudioStore((s) => s.markDirty);
 
@@ -601,7 +607,7 @@ const TemplateStudioChatInner = ({
     handleOpenCreatedDocument,
     createDocumentMatters,
     isLoadingCreateDocumentMatters,
-    addToolOutput,
+    addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
@@ -645,10 +651,9 @@ const TemplateStudioChatInner = ({
       lastSentSnapshotRef.current =
         editorRef.current?.createAIEditSnapshot() ?? null;
       setPanelOpen(true);
-      void sendMessage(
-        { text: request.text },
-        { body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } },
-      );
+      void sendMessage(createTextChatMessage(request.text), {
+        body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
+      });
       return;
     });
   });
@@ -879,18 +884,24 @@ const TemplateStudioChatInner = ({
       return;
     }
     for (const part of message.parts) {
-      if (part.type !== "tool-apply-active-docx-edits") {
+      if (
+        part.type !== "tool-call" ||
+        part.name !== "apply-active-docx-edits"
+      ) {
         continue;
       }
       if (part.state === "input-streaming") {
         const operations = extractCompletedStreamingOperations(part.input);
         if (operations.length > 0) {
-          placeStreamedOperations(part.toolCallId, operations);
+          placeStreamedOperations(part.id, operations);
         }
         continue;
       }
-      if (part.state === "output-denied") {
-        discardStreamedPlacements(part.toolCallId);
+      if (
+        part.state === "approval-responded" &&
+        part.approval?.approved === false
+      ) {
+        discardStreamedPlacements(part.id);
       }
     }
   }, [messages]);
@@ -990,7 +1001,7 @@ const TemplateStudioChatInner = ({
 
   // Approving an apply-active-docx-edits call client-executes it: the
   // operations become in-document suggestions and the queued/skipped
-  // summary goes back to the model via addToolOutput. (The approval
+  // summary goes back to the model via addToolResult. (The approval
   // card auto-approves DOCX edit batches; review happens per
   // suggestion in the document.)
   const handleApproveForTemplate = async (
@@ -1000,23 +1011,20 @@ const TemplateStudioChatInner = ({
     if (toolName === "apply-active-docx-edits") {
       const part = getActiveDocxEditApprovalPart(messages, approvalId);
       if (!part) {
-        handleApprove(approvalId, toolName);
+        await handleApprove(approvalId, toolName);
         return;
       }
-      handleApprove(approvalId, toolName);
-      const output = await handleActiveDocxEditToolCall(
-        part.input,
-        part.toolCallId,
-      );
-      await addToolOutput({
+      await handleApprove(approvalId, toolName);
+      const output = await handleActiveDocxEditToolCall(part.input, part.id);
+      await addToolResult({
         output,
         tool: "apply-active-docx-edits",
-        toolCallId: part.toolCallId,
+        toolCallId: part.id,
       });
       return;
     }
 
-    handleApprove(approvalId, toolName);
+    await handleApprove(approvalId, toolName);
   };
 
   const canSubmitWithCurrentSnapshot = useEffectEvent(() => {
@@ -1189,12 +1197,12 @@ const TemplateStudioChatInner = ({
             // Abort any live stream first: the rotation remount only
             // swaps the surface, while the old Chat instance would
             // keep streaming inside the query cache.
-            void stop();
+            stop();
             setPanelOpen(false);
             onNewThread();
           }}
           onStop={() => {
-            void stop();
+            stop();
           }}
           onSubmit={({ prompt }) => {
             void ensureAIAvailable().then((available) => {
@@ -1204,7 +1212,7 @@ const TemplateStudioChatInner = ({
               // Always pop the thread open on send, even if the user
               // minimised it earlier.
               setPanelOpen(true);
-              void sendMessage({ text: prompt });
+              void sendMessage(createTextChatMessage(prompt));
               return;
             });
           }}
@@ -1278,6 +1286,46 @@ type PlaceOperationOptions = {
 // Tool-operation → spec helpers
 // ---------------------------------------------------------------------------
 
+type SuggestedTemplateFieldOutput = {
+  fieldPath: string;
+  inputType?: string | null | undefined;
+  label?: string | null | undefined;
+  aiPrompt?: string | null | undefined;
+};
+
+type SuggestedTemplateFieldsToolOutput = {
+  suggestions: SuggestedTemplateFieldOutput[];
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
+const isNullableString = (value: unknown): value is string | null | undefined =>
+  value === undefined || value === null || typeof value === "string";
+
+const isSuggestedTemplateFieldOutput = (
+  value: unknown,
+): value is SuggestedTemplateFieldOutput => {
+  if (!isRecord(value)) {
+    return false;
+  }
+  return (
+    typeof value["fieldPath"] === "string" &&
+    isNullableString(value["inputType"]) &&
+    isNullableString(value["label"]) &&
+    isNullableString(value["aiPrompt"])
+  );
+};
+
+const isSuggestedTemplateFieldsToolOutput = (
+  value: unknown,
+): value is SuggestedTemplateFieldsToolOutput => {
+  if (!isRecord(value) || !Array.isArray(value["suggestions"])) {
+    return false;
+  }
+  return value["suggestions"].every(isSuggestedTemplateFieldOutput);
+};
+
 /**
  * Field metadata by path, joined from every `suggest_template_fields`
  * output in the thread (later outputs win). Lets an
@@ -1294,17 +1342,22 @@ const collectSuggestedFieldMeta = (
     }
     for (const part of message.parts) {
       if (
-        part.type !== "tool-suggest_template_fields" ||
-        part.state !== "output-available"
+        part.type !== "tool-call" ||
+        part.name !== "suggest_template_fields" ||
+        part.state !== "complete" ||
+        part.output === undefined
       ) {
+        continue;
+      }
+      if (!isSuggestedTemplateFieldsToolOutput(part.output)) {
         continue;
       }
       for (const suggested of part.output.suggestions) {
         byPath.set(suggested.fieldPath, {
           path: suggested.fieldPath,
-          inputType: suggested.inputType,
-          label: suggested.label,
-          aiPrompt: suggested.aiPrompt,
+          inputType: suggested.inputType ?? undefined,
+          label: suggested.label ?? undefined,
+          aiPrompt: suggested.aiPrompt ?? undefined,
         });
       }
     }

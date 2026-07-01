@@ -1325,7 +1325,7 @@ const FileChatOverlayInner = ({
             // Abort any live stream first: the rotation remount only
             // swaps the surface, while the old Chat instance would
             // keep streaming inside the query cache.
-            void stop();
+            stop();
             shouldFocusComposerAfterNewThreadRef.current = true;
             setPanelOpen(false);
             onNewThread();
@@ -1338,7 +1338,7 @@ const FileChatOverlayInner = ({
             if (reservedCommand?.id === "new") {
               // Mirror the New Chat button: abort any live stream before
               // rotating, or the old Chat keeps streaming in the query cache.
-              void stop();
+              stop();
               shouldFocusComposerAfterNewThreadRef.current = true;
               setPanelOpen(false);
               onNewThread();

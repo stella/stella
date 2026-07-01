@@ -14,8 +14,8 @@ import {
   isChatPart,
   isChatTextPart,
 } from "@/api/handlers/chat/chat-message-parts";
-import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
+import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMention,
   ChatMessage,

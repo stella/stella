@@ -1,6 +1,6 @@
 import type { ComponentProps, ComponentType } from "react";
 
-import { SparklesIcon } from "lucide-react";
+import { BlocksIcon, SparklesIcon, WindIcon } from "lucide-react";
 
 import type { ProviderValue } from "@/components/ai-config-role-models.logic";
 
@@ -43,6 +43,8 @@ const PROVIDER_ICONS = {
   anthropic: AnthropicIcon,
   openai: OpenAIIcon,
   openrouter: SparklesIcon,
+  mistral: WindIcon,
+  bedrock: BlocksIcon,
 } as const satisfies Record<ProviderValue, IconComponent>;
 
 export const getProviderIcon = (provider: ProviderValue): IconComponent =>

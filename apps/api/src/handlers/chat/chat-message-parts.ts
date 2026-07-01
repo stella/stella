@@ -287,9 +287,10 @@ export const isChatPart = (part: unknown): part is ChatPart => {
       return typeof part["content"] === "string";
     case "image":
     case "document":
+      return isContentPartWithSource(part);
     case "audio":
     case "video":
-      return isContentPartWithSource(part);
+      return false;
     case "tool-call":
       return (
         typeof part["id"] === "string" &&

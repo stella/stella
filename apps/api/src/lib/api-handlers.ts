@@ -9,8 +9,7 @@ import type {
 import { status } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
-import type { PermissionInput } from "@stll/permissions";
-import { roles } from "@stll/permissions";
+import type { PermissionInput, roles } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";

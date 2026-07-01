@@ -3,8 +3,12 @@ import { createModel, extendAdapter } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
+import { createBedrockConverse } from "@tanstack/ai-bedrock";
+import type { BedrockConverseProviderOptions } from "@tanstack/ai-bedrock";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
+import { createMistralText } from "@tanstack/ai-mistral";
+import type { MistralTextProviderOptions } from "@tanstack/ai-mistral";
 import { createOpenaiChat } from "@tanstack/ai-openai";
 import type { OpenAITextProviderOptions } from "@tanstack/ai-openai";
 import {
@@ -48,7 +52,7 @@ type TanStackTextAdapterFactory = (modelId: string) => AnyTextAdapter;
 
 export type TanStackTextProvider = Exclude<
   AIProvider,
-  "azure_foundry" | "huggingface" | "mistral" | "openai_compatible"
+  "azure_foundry" | "huggingface" | "openai_compatible"
 >;
 
 export type TanStackAIProviderUnsupportedReason =
@@ -65,7 +69,9 @@ export type TanStackAIProviderSupport =
 
 type TanStackModelOptionsByProvider = {
   anthropic: AnthropicTextProviderOptions;
+  bedrock: BedrockConverseProviderOptions;
   google: GeminiTextProviderOptions;
+  mistral: MistralTextProviderOptions;
   openai: OpenAITextProviderOptions;
   openrouter: OpenRouterResponsesTextProviderOptions;
 };
@@ -127,8 +133,6 @@ export const registerTanStackMockTextAdapterFactory = (
   factory: TanStackTextAdapterFactory,
 ): void => {
   mockTextAdapterFactory = factory;
-  activeProvider = undefined;
-  instanceFactory = undefined;
 };
 
 const decodeModelOverride = (value: string): ModelOverride => {
@@ -155,14 +159,6 @@ export const resolveTanStackAIProviderSupport = ({
       reason: "provider-not-implemented",
       message:
         "Azure AI Foundry is not supported by the TanStack AI integration yet.",
-    };
-  }
-
-  if (provider === "mistral") {
-    return {
-      supported: false,
-      reason: "provider-not-implemented",
-      message: "Mistral is not supported by the TanStack AI integration yet.",
     };
   }
 
@@ -237,12 +233,13 @@ const resolveTanStackTextProvider = ({
   switch (provider) {
     case "google":
     case "anthropic":
+    case "bedrock":
+    case "mistral":
     case "openai":
     case "openrouter":
       return provider;
     case "azure_foundry":
     case "huggingface":
-    case "mistral":
     case "openai_compatible":
       return panic(
         `Unsupported TanStack AI provider passed support assertion: ${provider}`,
@@ -327,6 +324,32 @@ const createExtendedOpenRouterAdapter = (
   return openrouter(modelId, apiKey);
 };
 
+const createExtendedMistralAdapter = (
+  modelId: string,
+  apiKey: string,
+): AnyTextAdapter => {
+  const mistral = extendAdapter(createMistralText, [
+    createModel(modelId, {
+      input: ["text", "image"] as const,
+      features: ["structured_outputs"] as const,
+    }),
+  ]);
+  return mistral(modelId, apiKey);
+};
+
+const createExtendedBedrockAdapter = (
+  modelId: string,
+  apiKey: string,
+): AnyTextAdapter => {
+  const bedrock = extendAdapter(createBedrockConverse, [
+    createModel(modelId, {
+      input: ["text", "image", "document"] as const,
+      features: ["structured_outputs"] as const,
+    }),
+  ]);
+  return bedrock(modelId, apiKey);
+};
+
 const createTanStackTextAdapterFactory = ({
   provider,
   apiKey,
@@ -355,6 +378,14 @@ const createTanStackTextAdapterFactory = ({
       );
       return (modelId) => createExtendedAnthropicAdapter(modelId, key);
     }
+    case "bedrock": {
+      const key = requireCredential(
+        supportedProvider,
+        apiKey ?? env.BEDROCK_API_KEY,
+        "BEDROCK_API_KEY",
+      );
+      return (modelId) => createExtendedBedrockAdapter(modelId, key);
+    }
     case "openai": {
       const key = requireCredential(
         supportedProvider,
@@ -370,6 +401,14 @@ const createTanStackTextAdapterFactory = ({
         "OPENROUTER_API_KEY",
       );
       return (modelId) => createExtendedOpenRouterAdapter(modelId, key);
+    }
+    case "mistral": {
+      const key = requireCredential(
+        supportedProvider,
+        apiKey ?? env.MISTRAL_API_KEY,
+        "MISTRAL_API_KEY",
+      );
+      return (modelId) => createExtendedMistralAdapter(modelId, key);
     }
     default: {
       const _exhaustive: never = supportedProvider;
@@ -395,12 +434,15 @@ const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
       return !!env.OPENAI_API_KEY;
     case "anthropic":
       return !!env.ANTHROPIC_API_KEY;
+    case "bedrock":
+      return !!env.BEDROCK_API_KEY;
+    case "mistral":
+      return !!env.MISTRAL_API_KEY;
     case "openai_compatible":
       return !!(env.OPENAI_API_KEY && env.AI_PROVIDER_BASE_URL);
     case "huggingface":
       return !!(env.HUGGINGFACE_API_KEY && env.HUGGINGFACE_BASE_URL);
     case "azure_foundry":
-    case "mistral":
       return false;
     default: {
       const _exhaustive: never = provider;
@@ -427,6 +469,9 @@ const resolveProvider = (): AIProvider => {
   }
   if (env.ANTHROPIC_API_KEY) {
     return "anthropic";
+  }
+  if (env.BEDROCK_API_KEY) {
+    return "bedrock";
   }
   if (env.HUGGINGFACE_API_KEY && env.HUGGINGFACE_BASE_URL) {
     return "huggingface";
@@ -686,21 +731,12 @@ const getCachedFactory = (
   return factory;
 };
 
-let activeProvider: AIProvider | undefined;
+const getActiveProvider = (): AIProvider => resolveProvider();
 
-const getActiveProvider = (): AIProvider => {
-  activeProvider ??= resolveProvider();
-  return activeProvider;
-};
-
-let instanceFactory: TanStackTextAdapterFactory | undefined;
-
-const getInstanceFactory = (): TanStackTextAdapterFactory => {
-  instanceFactory ??= createTanStackTextAdapterFactory({
+const getInstanceFactory = (): TanStackTextAdapterFactory =>
+  createTanStackTextAdapterFactory({
     provider: getActiveProvider(),
   });
-  return instanceFactory;
-};
 
 const MODEL_OVERRIDES = {
   fast: env.AI_MODEL_FAST,
@@ -793,12 +829,25 @@ const tanStackOpenAIModelOptionsForRole = ({
 const tanStackOpenRouterModelOptionsForRole =
   (): OpenRouterResponsesTextProviderOptions => ({ temperature: 0 });
 
+const tanStackMistralModelOptionsForRole = (): MistralTextProviderOptions => ({
+  temperature: 0,
+});
+
+const tanStackBedrockModelOptionsForRole =
+  (): BedrockConverseProviderOptions => ({ temperature: 0 });
+
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"google">,
 ): GeminiTextProviderOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"anthropic">,
 ): AnthropicTextProviderOptions;
+export function tanStackModelOptionsForRole(
+  input: TanStackModelOptionsForRoleInput<"bedrock">,
+): BedrockConverseProviderOptions;
+export function tanStackModelOptionsForRole(
+  input: TanStackModelOptionsForRoleInput<"mistral">,
+): MistralTextProviderOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"openai">,
 ): OpenAITextProviderOptions;
@@ -809,34 +858,39 @@ export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<TanStackTextProvider>,
 ): TanStackModelOptions {
   const { provider } = input;
-  if (provider === "google") {
-    return tanStackGoogleModelOptionsForRole({
-      role: input.role,
-      provider,
-      modelId: input.modelId,
-      organizationId: input.organizationId,
-    });
+  switch (provider) {
+    case "google":
+      return tanStackGoogleModelOptionsForRole({
+        role: input.role,
+        provider,
+        modelId: input.modelId,
+        organizationId: input.organizationId,
+      });
+    case "anthropic":
+      return tanStackAnthropicModelOptionsForRole({
+        role: input.role,
+        provider,
+        modelId: input.modelId,
+        organizationId: input.organizationId,
+      });
+    case "bedrock":
+      return tanStackBedrockModelOptionsForRole();
+    case "mistral":
+      return tanStackMistralModelOptionsForRole();
+    case "openai":
+      return tanStackOpenAIModelOptionsForRole({
+        role: input.role,
+        provider,
+        modelId: input.modelId,
+        organizationId: input.organizationId,
+      });
+    case "openrouter":
+      return tanStackOpenRouterModelOptionsForRole();
+    default: {
+      const _exhaustive: never = provider;
+      return _exhaustive;
+    }
   }
-
-  if (provider === "anthropic") {
-    return tanStackAnthropicModelOptionsForRole({
-      role: input.role,
-      provider,
-      modelId: input.modelId,
-      organizationId: input.organizationId,
-    });
-  }
-
-  if (provider === "openai") {
-    return tanStackOpenAIModelOptionsForRole({
-      role: input.role,
-      provider,
-      modelId: input.modelId,
-      organizationId: input.organizationId,
-    });
-  }
-
-  return tanStackOpenRouterModelOptionsForRole();
 }
 
 const byokRoleNotConfiguredError = (role: ModelRole): HandlerError =>
@@ -928,6 +982,28 @@ const buildResolvedTextModel = ({
           modelId,
           organizationId,
         }),
+        ...(region === undefined ? {} : { region }),
+        role,
+      });
+    case "bedrock":
+      return buildResolvedTextModelWithOptions({
+        adapter,
+        keySource,
+        provider,
+        modelId,
+        organizationId,
+        modelOptions: tanStackBedrockModelOptionsForRole(),
+        ...(region === undefined ? {} : { region }),
+        role,
+      });
+    case "mistral":
+      return buildResolvedTextModelWithOptions({
+        adapter,
+        keySource,
+        provider,
+        modelId,
+        organizationId,
+        modelOptions: tanStackMistralModelOptionsForRole(),
         ...(region === undefined ? {} : { region }),
         role,
       });

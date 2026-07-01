@@ -46,11 +46,15 @@ export type ToolApprovalGrant =
 export type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
 export type ApprovalToolPart = ChatToolCallPart & {
   name: ApprovalToolName;
+  approval: {
+    approved?: boolean | undefined;
+    id: string;
+    needsApproval: boolean;
+  };
 };
-export type ActiveDocxEditApprovalPart = Extract<
-  ChatToolCallPart,
-  { name: "apply-active-docx-edits" }
->;
+export type ActiveDocxEditApprovalPart = ApprovalToolPart & {
+  name: "apply-active-docx-edits";
+};
 export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 type PublicOfficialToolName = Extract<
   BuiltInApprovalToolName,
@@ -257,14 +261,15 @@ export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
     return false;
   }
 
-  if (
-    toolName === "apply-active-docx-edits" ||
-    isExternalMcpToolName(toolName)
-  ) {
-    return true;
-  }
-
-  return "approval" in part;
+  return (
+    "approval" in part &&
+    typeof part.approval === "object" &&
+    part.approval !== null &&
+    "id" in part.approval &&
+    typeof part.approval.id === "string" &&
+    "needsApproval" in part.approval &&
+    typeof part.approval.needsApproval === "boolean"
+  );
 };
 
 type ApplyActiveDocxEditsToolInput =
@@ -301,18 +306,18 @@ export const getActiveDocxEditApprovalPart = (
     }
 
     for (const part of message.parts) {
-      if (part.type !== "tool-apply-active-docx-edits") {
+      if (!isApprovalPart(part) || part.name !== "apply-active-docx-edits") {
         continue;
       }
 
+      const input = part.input;
       if (
         (part.state === "approval-requested" ||
-          part.state === "approval-responded" ||
-          part.state === "output-denied") &&
+          part.state === "approval-responded") &&
         part.approval.id === approvalId &&
-        isApplyActiveDocxEditsInput(part.input)
+        isApplyActiveDocxEditsInput(input)
       ) {
-        return part;
+        return { ...part, input };
       }
     }
   }

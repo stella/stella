@@ -220,9 +220,9 @@ export const AskUserCard = ({
   // Mirror local edit-mode to the parent: a reopened answered card is a live
   // clarification again, so the parent can suppress competing affordances.
   useExternalSyncEffect(() => {
-    onEditingChange?.(part.toolCallId, isEditing);
-    return () => onEditingChange?.(part.toolCallId, false);
-  }, [isEditing, onEditingChange, part.toolCallId]);
+    onEditingChange?.(part.id, isEditing);
+    return () => onEditingChange?.(part.id, false);
+  }, [isEditing, onEditingChange, part.id]);
 
   const setAnswer = useCallback(
     (idx: number, value: string) =>

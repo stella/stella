@@ -42,6 +42,7 @@ import {
   deanonymizeFromBoundary,
   deanonymizeUnknownStringsFromBoundary,
   prepareMessagesForThirdParty,
+  prepareMcpToolSourceForThirdParty,
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
@@ -241,7 +242,12 @@ export const streamChat = async ({
     ...(externalMcpToolSource
       ? {
           mcp: {
-            clients: [externalMcpToolSource],
+            clients: [
+              prepareMcpToolSourceForThirdParty({
+                boundary: thirdPartyBoundary,
+                source: externalMcpToolSource,
+              }),
+            ],
             connection: "close",
             lazyTools: true,
           },

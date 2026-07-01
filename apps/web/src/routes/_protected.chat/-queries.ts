@@ -50,6 +50,12 @@ type ActiveFileContext = {
   supportsDocxEdits?: boolean | undefined;
 };
 
+type ActiveTemplateContext = {
+  docxEditSnapshot?: ActiveFileContext["docxEditSnapshot"];
+  fileName: string;
+  templateId: string;
+};
+
 type ActiveDecisionContext = {
   decisionId: string;
 };
@@ -77,6 +83,10 @@ type FileChatThreadKey = {
   workspaceId: string;
 };
 
+type TemplateChatThreadKey = {
+  templateId: string;
+};
+
 type GroupedChatThreadsPage = Awaited<
   ReturnType<typeof fetchGroupedChatThreads>
 >;
@@ -86,8 +96,12 @@ export type GroupedChatThreads = Pick<
 >;
 
 const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
+export const SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE =
+  "suggest-template-fields" as const;
 const CHAT_THREADS_PAGE_SIZE = 50;
 const CHAT_TRANSPORT_VERSION = 2;
+
+type ChatToolScope = typeof SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE;
 
 export type ApplyActiveDocxEditsInput =
   ChatUITools[typeof APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]["input"];
@@ -101,6 +115,7 @@ type ChatThreadOptionsContext = {
   getActiveExternal?: (() => ActiveExternalContext | undefined) | undefined;
   getActiveFile?: (() => ActiveFileContext | undefined) | undefined;
   getActiveSkill?: (() => ActiveSkillContext | undefined) | undefined;
+  getActiveTemplate?: (() => ActiveTemplateContext | undefined) | undefined;
   /**
    * Matters this chat draws context from. The transport sends the
    * current value (an empty array means "no matters pinned"). The
@@ -123,6 +138,7 @@ type ChatRuntimeContextKind =
   | "active-external"
   | "active-file"
   | "active-skill"
+  | "active-template"
   | "plain";
 
 type ChatThreadQueryKey = ChatThreadRef & {
@@ -149,6 +165,10 @@ const getChatRuntimeContextKind = (
     return "active-skill";
   }
 
+  if (context?.getActiveTemplate) {
+    return "active-template";
+  }
+
   return "plain";
 };
 
@@ -161,6 +181,15 @@ export const chatKeys = {
     key.workspaceId,
     key.entityId,
     key.fieldId,
+  ],
+  templateThread: (
+    activeOrganizationId: string,
+    key: TemplateChatThreadKey,
+  ) => [
+    ...chatKeys.all,
+    activeOrganizationId,
+    "template-thread",
+    key.templateId,
   ],
   groupedThreads: (activeOrganizationId: string) => [
     ...chatKeys.all,
@@ -268,6 +297,7 @@ export type ChatUserMessageInput = MultimodalContent & {
 export type ChatRouteHandoffMessage = ChatUserMessageInput;
 export type ChatContinuationRequestBody = {
   sendMode?: ChatSendMode | undefined;
+  toolScope?: ChatToolScope | undefined;
   truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
 };
 export type ChatSendMessageOptions = {
@@ -453,6 +483,20 @@ const fetchFileChatThread = async ({
       entityId: toSafeId<"entity">(entityId),
       fieldId: toSafeId<"field">(fieldId),
     });
+
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  return toChatThreadId(response.data.threadId);
+};
+
+const fetchTemplateChatThread = async ({
+  templateId,
+}: TemplateChatThreadKey): Promise<ChatThreadId> => {
+  const response = await api.chat["template-thread"].post({
+    templateId: toSafeId<"template">(templateId),
+  });
 
   if (response.error) {
     throw toAPIError(response.error);
@@ -934,11 +978,13 @@ export const buildSendRequestBody = ({
     activeExternal?: ActiveExternalContext | undefined;
     activeFile?: ActiveFileContext | undefined;
     activeSkill?: ActiveSkillContext | undefined;
+    activeTemplate?: ActiveTemplateContext | undefined;
     contextMatterIds?: string[] | undefined;
     devModelId?: string | undefined;
     message: PersistedChatMessage;
     sendMode: ChatSendMode;
     threadId: ChatThreadId;
+    toolScope?: ChatToolScope | undefined;
     truncateAfterMessageId?: SafeId<"chatMessage"> | undefined;
     userContext?: ChatUserContext | undefined;
     workspaceId?: string | undefined;
@@ -955,6 +1001,10 @@ export const buildSendRequestBody = ({
 
   if (requestBody?.truncateAfterMessageId !== undefined) {
     body.truncateAfterMessageId = requestBody.truncateAfterMessageId;
+  }
+
+  if (requestBody?.toolScope !== undefined) {
+    body.toolScope = requestBody.toolScope;
   }
 
   if (key.scope === "workspace") {
@@ -984,6 +1034,11 @@ export const buildSendRequestBody = ({
   const activeSkill = context?.getActiveSkill?.();
   if (activeSkill) {
     body.activeSkill = activeSkill;
+  }
+
+  const activeTemplate = context?.getActiveTemplate?.();
+  if (activeTemplate) {
+    body.activeTemplate = activeTemplate;
   }
 
   const contextMatterIds = context?.getContextMatterIds?.();
@@ -1066,6 +1121,9 @@ const normalizeChatContinuationRequestBody = (
   if (isChatSendMode(data["sendMode"])) {
     body.sendMode = data["sendMode"];
   }
+  if (data["toolScope"] === SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE) {
+    body.toolScope = data["toolScope"];
+  }
   if (typeof data["truncateAfterMessageId"] === "string") {
     body.truncateAfterMessageId = toSafeId<"chatMessage">(
       data["truncateAfterMessageId"],
@@ -1132,6 +1190,22 @@ export const fileChatThreadOptions = ({
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
     queryKey: chatKeys.fileThread(activeOrganizationId, key),
     queryFn: async () => await fetchFileChatThread(key),
+  });
+
+type TemplateChatThreadOptionsArgs = {
+  activeOrganizationId: string;
+  key: TemplateChatThreadKey;
+};
+
+export const templateChatThreadOptions = ({
+  activeOrganizationId,
+  key,
+}: TemplateChatThreadOptionsArgs) =>
+  queryOptions({
+    staleTime: STALE_TIME.FIVETEEN.MINUTES,
+    gcTime: STALE_TIME.FIVETEEN.MINUTES,
+    queryKey: chatKeys.templateThread(activeOrganizationId, key),
+    queryFn: async () => await fetchTemplateChatThread(key),
   });
 
 export type ChatThreadOptionsArgs = ChatThreadOptionsInput & {

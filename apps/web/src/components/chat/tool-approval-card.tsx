@@ -89,9 +89,9 @@ const getApprovalId = (part: ApprovalToolPart): string | null => {
       return null;
     case "approval-requested":
     case "approval-responded":
-      return part.approval?.id ?? null;
+      return part.approval.id;
     case "complete":
-      return part.approval?.id ?? null;
+      return part.approval.id;
     default:
       return null;
   }
@@ -322,7 +322,7 @@ export const ToolApprovalCard = ({
   const isApprovalResponded = part.state === "approval-responded";
   const isApproved = part.state === "complete" && part.output !== undefined;
   const isDenied =
-    part.state === "approval-responded" && part.approval?.approved === false;
+    part.state === "approval-responded" && part.approval.approved === false;
   const isProcessing =
     isApprovalResponded || (responded && isApprovalRequested);
   const isBlocked = blockedApprovalTools?.has(name) ?? false;

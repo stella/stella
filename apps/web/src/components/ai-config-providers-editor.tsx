@@ -30,6 +30,8 @@ const API_KEY_PLACEHOLDER = {
   anthropic: "sk-ant-...",
   openai: "sk-proj-...",
   openrouter: "sk-or-v1-...",
+  mistral: "...",
+  bedrock: "...",
 } as const satisfies Record<ProviderValue, string>;
 
 export type ProviderRowStatus =
@@ -216,54 +218,6 @@ export const AIConfigProvidersEditor = ({
                     </div>
                   )}
                 </div>
-
-                <div className="min-w-0">
-                  {supportsRegionalRouting && (
-                    <Select
-                      disabled={disabled}
-                      onValueChange={(value) => {
-                        if (isRegionValue(value)) {
-                          updateProvider(index, {
-                            ...providerDraft,
-                            region: value,
-                          });
-                        }
-                      }}
-                      value={providerDraft.region}
-                    >
-                      <SelectTrigger
-                        aria-label={t("aiConfig.dataRegion")}
-                        className="min-w-0"
-                      >
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectPopup alignItemWithTrigger={false}>
-                        {REGION_KEYS.map((region) => (
-                          <SelectItem key={region} value={region}>
-                            {t(`aiConfig.regions.${region}`)}
-                          </SelectItem>
-                        ))}
-                      </SelectPopup>
-                    </Select>
-                  )}
-                </div>
-
-                {needsEndpoint && (
-                  <Input
-                    aria-label={t("aiConfig.endpoint")}
-                    className="col-span-2 min-w-0 sm:col-span-2 sm:col-start-2"
-                    disabled={disabled}
-                    onChange={(event) =>
-                      updateProvider(index, {
-                        ...providerDraft,
-                        endpoint: event.target.value,
-                      })
-                    }
-                    placeholder={getEndpointPlaceholder(providerDraft.provider)}
-                    type="url"
-                    value={providerDraft.endpoint}
-                  />
-                )}
 
                 {showSaveButton ? (
                   <Button

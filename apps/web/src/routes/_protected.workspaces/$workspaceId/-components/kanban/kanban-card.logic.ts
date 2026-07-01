@@ -1,4 +1,4 @@
-import type { WorkspaceEntity } from "@/lib/types";
+import type { WorkspaceEntity, WorkspaceField } from "@/lib/types";
 import { getInternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 export type KanbanCardMetadataVisibility = {
@@ -24,7 +24,7 @@ export const getKanbanCardRenameInitialValue = (
   fallbackName: string,
 ) => {
   const textField = Object.values(entity.fields).find(
-    (field) => field.content.type === "text",
+    (field): field is WorkspaceField => field?.content.type === "text",
   );
   const textName =
     textField?.content.type === "text" ? textField.content.value.trim() : "";

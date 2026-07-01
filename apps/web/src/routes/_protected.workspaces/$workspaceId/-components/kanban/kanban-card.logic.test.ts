@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/lib/safe-id";
 import { getInternalPropertyId } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 import {
@@ -44,12 +45,15 @@ describe("kanban card metadata visibility", () => {
 });
 
 describe("kanban card rename initial value", () => {
+  const titlePropertyId = toSafeId<"property">("title");
+
   test("prefers editable text field value over the rendered fallback name", () => {
     const entity = createEntity({
       fields: {
-        title: {
-          entityId: "entity-1",
-          id: "field-1",
+        [titlePropertyId]: {
+          entityId: toSafeId<"entity">("entity-1"),
+          id: toSafeId<"field">("field-1"),
+          propertyId: titlePropertyId,
           content: { type: "text", version: 1, value: "Contract title" },
         },
       },
@@ -63,9 +67,10 @@ describe("kanban card rename initial value", () => {
   test("falls back when the text field is empty", () => {
     const entity = createEntity({
       fields: {
-        title: {
-          entityId: "entity-1",
-          id: "field-1",
+        [titlePropertyId]: {
+          entityId: toSafeId<"entity">("entity-1"),
+          id: toSafeId<"field">("field-1"),
+          propertyId: titlePropertyId,
           content: { type: "text", version: 1, value: "  " },
         },
       },
@@ -80,7 +85,7 @@ describe("kanban card rename initial value", () => {
 type EntityInput = Parameters<typeof getKanbanCardRenameInitialValue>[0];
 
 const createEntity = (overrides: Partial<EntityInput>): EntityInput => ({
-  entityId: "entity-1",
+  entityId: toSafeId<"entity">("entity-1"),
   kind: "document",
   name: null,
   parentId: null,

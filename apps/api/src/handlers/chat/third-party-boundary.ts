@@ -1,3 +1,4 @@
+import type { MCPToolSource, ServerTool } from "@tanstack/ai";
 import { Result } from "better-result";
 
 import {
@@ -852,33 +853,90 @@ export const prepareToolsForThirdParty = ({
           );
         }
 
-        const replacements: TextReplacement[] = [];
-        let outputValue: unknown = await execute(toolInput, context);
-        const anonymizedOutput = anonymizeUnknownStrings({
-          apply: (value) => {
-            outputValue = value;
-          },
-          replacements,
-          value: outputValue,
-        });
-
-        if (Result.isError(anonymizedOutput)) {
-          throw anonymizedOutput.error;
-        }
-
-        outputValue = anonymizedOutput.value;
-        const anonymizedBatch = await prepareTextBatchForThirdParty({
+        const outputValue: unknown = await execute(toolInput, context);
+        return await anonymizeToolOutputForThirdParty({
           boundary,
-          replacements,
+          outputValue,
         });
-        if (Result.isError(anonymizedBatch)) {
-          throw anonymizedBatch.error;
-        }
-
-        return outputValue;
       },
     };
   }
 
   return wrapped;
+};
+
+export const prepareMcpToolSourceForThirdParty = ({
+  boundary,
+  source,
+}: {
+  boundary: ChatThirdPartyBoundary;
+  source: MCPToolSource;
+}): MCPToolSource => {
+  if (boundary.type === "raw") {
+    return source;
+  }
+
+  return {
+    ...source,
+    tools: async (options) => {
+      const tools = await source.tools(options);
+      return tools.map((tool) =>
+        prepareMcpServerToolForThirdParty(boundary, tool),
+      );
+    },
+  };
+};
+
+const prepareMcpServerToolForThirdParty = (
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
+  tool: ServerTool,
+): ServerTool => {
+  const execute = tool.execute;
+  if (!execute) {
+    return tool;
+  }
+
+  return {
+    ...tool,
+    execute: async (input, context) => {
+      const outputValue: unknown = await execute(input, context);
+      return await anonymizeToolOutputForThirdParty({
+        boundary,
+        outputValue,
+      });
+    },
+  };
+};
+
+const anonymizeToolOutputForThirdParty = async ({
+  boundary,
+  outputValue,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  outputValue: unknown;
+}): Promise<unknown> => {
+  const replacements: TextReplacement[] = [];
+  let preparedOutput: unknown;
+  const anonymizedOutput = anonymizeUnknownStrings({
+    apply: (value) => {
+      preparedOutput = value;
+    },
+    replacements,
+    value: outputValue,
+  });
+
+  if (Result.isError(anonymizedOutput)) {
+    throw anonymizedOutput.error;
+  }
+
+  preparedOutput = anonymizedOutput.value;
+  const anonymizedBatch = await prepareTextBatchForThirdParty({
+    boundary,
+    replacements,
+  });
+  if (Result.isError(anonymizedBatch)) {
+    throw anonymizedBatch.error;
+  }
+
+  return preparedOutput;
 };

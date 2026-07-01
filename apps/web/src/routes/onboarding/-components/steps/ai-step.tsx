@@ -68,6 +68,8 @@ const INITIAL_ROW_STATES: RowStateMap = {
   anthropic: { status: "idle" },
   openai: { status: "idle" },
   openrouter: { status: "idle" },
+  mistral: { status: "idle" },
+  bedrock: { status: "idle" },
 };
 
 export const AIStep = ({
@@ -173,15 +175,6 @@ export const AIStep = ({
     const response = await api["ai-config"]["validate-provider"].post({
       provider: draft.provider,
       apiKey,
-      ...(draft.provider === "azure_foundry"
-        ? {
-            endpoint: draft.endpoint.trim(),
-            ...(draft.apiVersion ? { apiVersion: draft.apiVersion } : {}),
-          }
-        : {}),
-      ...(draft.provider === "huggingface"
-        ? { endpoint: draft.endpoint.trim() }
-        : {}),
       ...(draft.provider === "google" ? { region: draft.region } : {}),
     });
 
@@ -279,6 +272,8 @@ export const AIStep = ({
       openrouter: stillPresent.has("openrouter")
         ? prev.openrouter
         : { status: "idle" },
+      mistral: stillPresent.has("mistral") ? prev.mistral : { status: "idle" },
+      bedrock: stillPresent.has("bedrock") ? prev.bedrock : { status: "idle" },
     }));
   };
 

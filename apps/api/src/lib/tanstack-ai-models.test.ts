@@ -12,6 +12,8 @@ process.env["GOTENBERG_USERNAME"] ??= "gotenberg";
 process.env["AI_PROVIDER"] = "openai";
 process.env["OPENAI_API_KEY"] ??= "test-openai-instance-key";
 process.env["OPENROUTER_API_KEY"] ??= "test-openrouter-instance-key";
+process.env["BEDROCK_API_KEY"] ??= "test-bedrock-instance-key";
+process.env["MISTRAL_API_KEY"] ??= "test-mistral-instance-key";
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
@@ -19,6 +21,8 @@ process.env["SMTP_PORT"] ??= "1025";
 env.AI_PROVIDER = "openai";
 env.OPENAI_API_KEY = "test-openai-instance-key";
 env.OPENROUTER_API_KEY = "test-openrouter-instance-key";
+env.BEDROCK_API_KEY = "test-bedrock-instance-key";
+env.MISTRAL_API_KEY = "test-mistral-instance-key";
 
 const {
   getTanStackTextModelInfoForRole,
@@ -43,14 +47,11 @@ describe("resolveTanStackAIProviderSupport", () => {
     expect(isTanStackAIProviderSupported({ provider: "openrouter" })).toBe(
       true,
     );
+    expect(isTanStackAIProviderSupported({ provider: "bedrock" })).toBe(true);
+    expect(isTanStackAIProviderSupported({ provider: "mistral" })).toBe(true);
   });
 
   test("fails explicitly for providers without a TanStack migration path", () => {
-    expect(resolveTanStackAIProviderSupport({ provider: "mistral" })).toEqual({
-      supported: false,
-      reason: "provider-not-implemented",
-      message: "Mistral is not supported by the TanStack AI integration yet.",
-    });
     expect(
       resolveTanStackAIProviderSupport({ provider: "azure_foundry" }),
     ).toMatchObject({
@@ -98,6 +99,13 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("openrouter", "anthropic/claude-opus-4.8")).toBe(
       true,
     );
+    expect(isAllowedBYOKModel("mistral", "mistral-large-latest")).toBe(true);
+    expect(
+      isAllowedBYOKModel(
+        "bedrock",
+        "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+      ),
+    ).toBe(true);
   });
 
   test("rejects unsupported providers and models outside the catalog", () => {
@@ -105,6 +113,9 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("anthropic", "claude-2")).toBe(false);
     expect(isAllowedBYOKModel("google", "gemini-2.5-pro")).toBe(false);
     expect(isAllowedBYOKModel("mistral", "mistral-medium-3-5")).toBe(false);
+    expect(isAllowedBYOKModel("bedrock", "us.amazon.titan-text-lite-v1")).toBe(
+      false,
+    );
     expect(isAllowedBYOKModel("azure_foundry", "customer-gpt-5")).toBe(false);
     expect(isAllowedBYOKModel("huggingface", "customer-model")).toBe(false);
     expect(isAllowedBYOKModel("openai_compatible", "default")).toBe(false);
@@ -143,6 +154,12 @@ describe("TanStack service tiers", () => {
     expect(
       resolveEffectiveServiceTierForProvider({
         provider: "mistral",
+        serviceTier: "flex",
+      }),
+    ).toBe("standard");
+    expect(
+      resolveEffectiveServiceTierForProvider({
+        provider: "bedrock",
         serviceTier: "flex",
       }),
     ).toBe("standard");
@@ -211,14 +228,36 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter.model).toBe("google/gemini-3.5-flash");
   });
 
-  test("rejects Mistral BYOK selections before constructing an adapter", () => {
+  test("resolves Mistral BYOK selections through the TanStack adapter", () => {
     const orgConfig = orgConfigForProvider("mistral");
 
-    expect(() =>
-      getTanStackTextModelForRole("chat", orgConfig, {
-        organizationId: orgId,
-      }),
-    ).toThrow(HandlerError);
+    const model = getTanStackTextModelForRole("chat", orgConfig, {
+      organizationId: orgId,
+    });
+
+    expect(model).toMatchObject({
+      keySource: "byok",
+      provider: "mistral",
+      modelId: "model-chat",
+      modelOptions: { temperature: 0 },
+    });
+    expect(model.adapter.name).toBe("mistral");
+  });
+
+  test("resolves Bedrock BYOK selections through the TanStack adapter", () => {
+    const orgConfig = orgConfigForProvider("bedrock");
+
+    const model = getTanStackTextModelForRole("chat", orgConfig, {
+      organizationId: orgId,
+    });
+
+    expect(model).toMatchObject({
+      keySource: "byok",
+      provider: "bedrock",
+      modelId: "model-chat",
+      modelOptions: { temperature: 0 },
+    });
+    expect(model.adapter.name).toBe("bedrock-converse");
   });
 
   test("rejects Google regional BYOK selections before constructing an adapter", () => {
@@ -249,14 +288,14 @@ describe("TanStack text model resolution", () => {
     ).toBe(true);
 
     const unavailable = requireTanStackAIAvailableForRole({
-      orgConfig: orgConfigForProvider("mistral"),
+      orgConfig: orgConfigForProvider("openai_compatible"),
       role: "chat",
     });
 
     expect(unavailable.isErr()).toBe(true);
     if (unavailable.isErr()) {
       expect(unavailable.error.status).toBe(400);
-      expect(unavailable.error.message).toContain("Mistral");
+      expect(unavailable.error.message).toContain("OpenAI-compatible");
     }
   });
 
@@ -329,7 +368,14 @@ describe("tanStackModelOptionsForRole", () => {
 });
 
 const orgConfigForProvider = (
-  provider: "anthropic" | "google" | "mistral" | "openai" | "openrouter",
+  provider:
+    | "anthropic"
+    | "bedrock"
+    | "google"
+    | "mistral"
+    | "openai"
+    | "openai_compatible"
+    | "openrouter",
   region?: "eu" | "global" | "ch",
 ): OrgAIConfig => ({
   providers: [

@@ -37,6 +37,7 @@ export const AI_PROVIDERS = [
   "openai",
   "azure_foundry",
   "anthropic",
+  "bedrock",
   "mistral",
   "openai_compatible",
   "huggingface",
@@ -49,6 +50,8 @@ export const TANSTACK_AI_PROVIDERS = [
   "openrouter",
   "openai",
   "anthropic",
+  "bedrock",
+  "mistral",
 ] as const satisfies readonly AIProvider[];
 
 export type TanStackAIProvider = (typeof TANSTACK_AI_PROVIDERS)[number];
@@ -83,6 +86,18 @@ export const BYOK_DEFAULT_MODELS = {
     reasoning: "claude-sonnet-4-6",
     pdf: "claude-sonnet-4-6",
   },
+  bedrock: {
+    fast: "us.amazon.nova-micro-v1:0",
+    chat: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    reasoning: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    pdf: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+  },
+  mistral: {
+    fast: "mistral-small-latest",
+    chat: "mistral-large-latest",
+    reasoning: "magistral-medium-latest",
+    pdf: "mistral-large-latest",
+  },
 } as const satisfies Record<TanStackAIProvider, Record<ModelRole, string>>;
 
 /**
@@ -92,12 +107,6 @@ export const BYOK_DEFAULT_MODELS = {
  */
 export const DEFAULT_MODELS = {
   ...BYOK_DEFAULT_MODELS,
-  mistral: {
-    fast: "mistral-small-latest",
-    chat: "mistral-large-latest",
-    reasoning: "magistral-medium-latest",
-    pdf: "mistral-large-latest",
-  },
   azure_foundry: {
     fast: "gpt-5.4-nano",
     chat: "gpt-5.4-mini",
@@ -151,6 +160,24 @@ export const BYOK_MODEL_OPTIONS = {
     "anthropic/claude-sonnet-4.6",
     "openai/gpt-5.5",
     "openai/gpt-5.4-mini",
+  ],
+  bedrock: [
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "us.amazon.nova-pro-v1:0",
+    "us.amazon.nova-lite-v1:0",
+    "us.amazon.nova-micro-v1:0",
+    "openai.gpt-oss-120b-1:0",
+    "openai.gpt-oss-20b-1:0",
+    "us.deepseek.r1-v1:0",
+  ],
+  mistral: [
+    "mistral-large-latest",
+    "mistral-medium-latest",
+    "mistral-small-latest",
+    "magistral-medium-latest",
+    "magistral-small-latest",
+    "pixtral-large-latest",
   ],
 } as const satisfies Record<TanStackAIProvider, readonly string[]>;
 
@@ -214,7 +241,7 @@ export type ModelRate = {
  * legacy/custom-deployment providers are metered by their underlying
  * model IDs or the fallback rate.
  */
-type FirstPartyProvider = "google" | "openai" | "anthropic";
+type FirstPartyProvider = "google" | "openai" | "anthropic" | "mistral";
 
 type OfferedFirstPartyModelId =
   (typeof BYOK_MODEL_OPTIONS)[FirstPartyProvider][number];
@@ -322,6 +349,10 @@ export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
     inputPerMTok: 50_000,
     outputPerMTok: 150_000,
   },
+  "mistral-medium-latest": {
+    inputPerMTok: 40_000,
+    outputPerMTok: 200_000,
+  },
   "mistral-medium-3-5": {
     inputPerMTok: 150_000,
     outputPerMTok: 750_000,
@@ -329,6 +360,14 @@ export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
   "magistral-medium-latest": {
     inputPerMTok: 200_000,
     outputPerMTok: 500_000,
+  },
+  "magistral-small-latest": {
+    inputPerMTok: 50_000,
+    outputPerMTok: 150_000,
+  },
+  "pixtral-large-latest": {
+    inputPerMTok: 200_000,
+    outputPerMTok: 600_000,
   },
 } satisfies Record<OfferedFirstPartyModelId, ModelRate> &
   Record<string, ModelRate>;

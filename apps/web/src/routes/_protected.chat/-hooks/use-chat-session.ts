@@ -1,7 +1,6 @@
 import {
   createElement,
   useCallback,
-  useEffect,
   useMemo,
   useRef,
   useState,
@@ -38,6 +37,7 @@ import {
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -712,14 +712,14 @@ export const useChatSession = ({
     status === "streaming" ||
     sessionGenerating ||
     hasRunningToolCall;
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     isGeneratingRef.current = isGenerating;
   }, [isGenerating]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     queueRef.current = queuedMessages;
   }, [queuedMessages]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     conversationIdRef.current = conversationId;
     isGeneratingRef.current = false;
     replaceQueuedMessages([]);
@@ -735,7 +735,7 @@ export const useChatSession = ({
   // into a failing provider just burns quota and spams the user
   // with repeats of the same error. The next manual send (or a
   // successful `regenerate`) lifts the gate.
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const finishedTurn = wasGeneratingRef.current && !isGenerating;
     wasGeneratingRef.current = isGenerating;
     if (!finishedTurn || status === "error") {
@@ -762,13 +762,13 @@ export const useChatSession = ({
     status,
   ]);
 
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     setConversationApprovedTools(readConversationApprovedTools(conversationId));
     setAlwaysApprovedTools(
       readAlwaysApprovedTools({ organizationId, mcpConnectorIdentities }),
     );
   }, [conversationId, mcpConnectorIdentities, organizationId]);
-  useEffect(() => {
+  useExternalSyncEffect(() => {
     const handleApprovedToolsChanged = (event: Event) => {
       const detail = getApprovedToolsChangedDetail(event);
       if (!detail) {

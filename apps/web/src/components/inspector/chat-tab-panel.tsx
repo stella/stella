@@ -459,7 +459,7 @@ export const ChatTabPanel = ({
                 // Abort any live stream first: rotating the tab id remounts the
                 // panel onto a fresh thread while the old Chat would keep
                 // streaming in the query cache.
-                void stop();
+                stop();
                 resetChatTabId(tab.id, createChatThreadId());
                 editorController.setContent("");
                 return;

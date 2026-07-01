@@ -25,6 +25,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { toSafeId } from "@/lib/safe-id";
 import type {
   PropertyDependency,
   WorkspaceProperty,
@@ -480,7 +481,7 @@ const PropertyComposerBody = ({
   // properties list changes (e.g., a file property is created from
   // another tab while the dialog is open). Derived rather than mirrored
   // so the source-of-truth state never drifts out of valid options.
-  const validFileIds = new Set(fileProperties.map((p) => p.id));
+  const validFileIds = new Set<string>(fileProperties.map((p) => p.id));
   const effectiveSelectedFileIds = selectedFileIds.filter((id) =>
     validFileIds.has(id),
   );
@@ -528,7 +529,7 @@ const PropertyComposerBody = ({
         return scopeDocType === null && initialScopeDocType === null;
       })
       .map((id) => ({
-        dependsOnPropertyId: id,
+        dependsOnPropertyId: toSafeId<"property">(id),
         condition: initialDependencyConditions.get(id) ?? null,
       }));
     if (classifier && scopeDocType !== null) {
@@ -593,7 +594,7 @@ const PropertyComposerBody = ({
           const result: CreatePropertyResult = {
             property: {
               id: data.id,
-              workspaceId,
+              workspaceId: toSafeId<"workspace">(workspaceId),
               name: trimmedName,
               createdAt: new Date(),
               status: "stale",

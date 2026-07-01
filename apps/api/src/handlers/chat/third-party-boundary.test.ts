@@ -56,6 +56,7 @@ const anonymizeTextFieldsMock = mock(
 
 const {
   createChatThirdPartyBoundary,
+  prepareMcpToolSourceForThirdParty,
   prepareMessagesForThirdParty,
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
@@ -329,6 +330,33 @@ describe("chat third-party anonymization boundary", () => {
       documentId: "doc_123",
       ids: ["person_456"],
       nationalId: "[CUSTOM_1]-123",
+      participants: ["[PERSON_1]", "[CUSTOM_1]"],
+      text: "[CUSTOM_1] notes for [PERSON_1]",
+    });
+  });
+
+  test("returns anonymized external MCP source tool output values", async () => {
+    const boundary = createBoundary();
+    const sourceTool = toolDefinition({
+      name: "mcp__test__read_secret",
+      description: "Read a secret fixture.",
+    }).server(async () => ({
+      documentId: "doc_123",
+      participants: ["Jan Novák", "Secret"],
+      text: "Secret notes for Jan Novák",
+    }));
+    const source = prepareMcpToolSourceForThirdParty({
+      boundary,
+      source: {
+        close: async () => {},
+        tools: async () => [sourceTool],
+      },
+    });
+    const [preparedTool] = await source.tools();
+    const executable = asTestExecutable<unknown, unknown>(preparedTool);
+
+    expect(await executable?.execute?.(undefined)).toEqual({
+      documentId: "doc_123",
       participants: ["[PERSON_1]", "[CUSTOM_1]"],
       text: "[CUSTOM_1] notes for [PERSON_1]",
     });

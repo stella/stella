@@ -452,7 +452,7 @@ type Messages = {
     };
     "queuedAttachmentCount": "{count, plural, one {# attachment} other {# attachments}}";
     "queuedNotice": "Queued — sends when the current response finishes";
-    "reasoning": "Reasoning";
+    "reasoning": "Reasoning trace";
     "reasoningTokens": "{count, plural, one {# reasoning token} other {# reasoning tokens}}";
     "recapLoading": "Recapping the conversation…";
     "removeSuggestion": "(remove)";

@@ -37,7 +37,6 @@ describe("BYOK_MODEL_OPTIONS", () => {
     expect("openai_compatible" in BYOK_MODEL_OPTIONS).toBe(false);
     expect("azure_foundry" in BYOK_MODEL_OPTIONS).toBe(false);
     expect("huggingface" in BYOK_MODEL_OPTIONS).toBe(false);
-    expect("mistral" in BYOK_MODEL_OPTIONS).toBe(false);
     for (const models of Object.values(BYOK_MODEL_OPTIONS)) {
       expect(models.length).toBeGreaterThan(0);
     }

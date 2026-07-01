@@ -1,5 +1,5 @@
 import * as realTanStackAI from "@tanstack/ai";
-import { describe, expect, mock, test } from "bun:test";
+import { afterAll, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -54,11 +54,14 @@ void mock.module("@tanstack/ai", () => ({
 void mock.module("@/api/lib/tanstack-ai-models", () => ({
   ...realTanStackAIModels,
   getTanStackTextModelForRole: () => testModel,
-  hasTanStackInstanceProvider: () => false,
 }));
 
 const { buildAiFieldGenerator, buildAiOccurrenceAdapter } =
   await import("@/api/handlers/docx/ai-field-generator");
+
+afterAll(() => {
+  mock.restore();
+});
 
 // SAFETY: only used as a non-null truthiness gate in the builders; the model
 // is mocked, so the config's contents are never read.

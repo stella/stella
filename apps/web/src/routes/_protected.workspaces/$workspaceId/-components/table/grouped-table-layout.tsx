@@ -22,6 +22,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import type {
   EntityKind,
+  PropertyId,
   WorkspaceEntity,
   WorkspaceProperty,
   WorkspaceView,
@@ -773,7 +774,7 @@ const GroupHeader = ({
 
 const sumIntProperty = (
   entities: readonly WorkspaceEntity[],
-  propertyId: string,
+  propertyId: PropertyId,
 ): number => {
   let total = 0;
   for (const entity of entities) {

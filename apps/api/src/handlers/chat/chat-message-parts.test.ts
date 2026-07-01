@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   chatMessageFromPersisted,
   isChatAttachmentPart,
+  isChatPart,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMessageContent } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -40,5 +41,16 @@ describe("persisted chat message parts", () => {
 describe("chat attachment parts", () => {
   test("rejects malformed attachment parts with null source", () => {
     expect(isChatAttachmentPart({ type: "image", source: null })).toBe(false);
+  });
+
+  test("rejects unvalidated audio and video content parts", () => {
+    const source = {
+      type: "url",
+      value: "stella://file::file_test123",
+      mimeType: "audio/mpeg",
+    };
+
+    expect(isChatPart({ type: "audio", source })).toBe(false);
+    expect(isChatPart({ type: "video", source })).toBe(false);
   });
 });

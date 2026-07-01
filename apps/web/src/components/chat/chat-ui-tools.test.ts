@@ -398,11 +398,12 @@ describe("isChatTurnInFlight", () => {
       id: "message-1",
       parts: [
         {
+          arguments: JSON.stringify({ query: "consumer credit" }),
+          id: "tool-call-1",
           input: { query: "consumer credit" },
+          name: "mcp__salvia__search_decisions",
           state: "input-streaming",
-          toolCallId: "tool-call-1",
-          toolName: "mcp__salvia__search_decisions",
-          type: "dynamic-tool",
+          type: "tool-call",
         },
       ],
       role: "assistant",

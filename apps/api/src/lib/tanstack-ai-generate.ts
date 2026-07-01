@@ -463,7 +463,27 @@ export const mergeGenerationOptions = ({
         ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
         ...(temperature === undefined ? {} : { temperature }),
       };
-    case "anthropic":
+    case "anthropic": {
+      const anthropicOptions = {
+        ...model.modelOptions,
+        ...(maxOutputTokens === undefined
+          ? {}
+          : { max_tokens: maxOutputTokens }),
+      };
+      if (temperature === undefined || !("temperature" in model.modelOptions)) {
+        return anthropicOptions;
+      }
+      return { ...anthropicOptions, temperature };
+    }
+    case "bedrock":
+      return {
+        ...model.modelOptions,
+        ...(maxOutputTokens === undefined
+          ? {}
+          : { max_completion_tokens: maxOutputTokens }),
+        ...(temperature === undefined ? {} : { temperature }),
+      };
+    case "mistral":
       return {
         ...model.modelOptions,
         ...(maxOutputTokens === undefined
