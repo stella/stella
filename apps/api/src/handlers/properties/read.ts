@@ -31,23 +31,43 @@ const readProperties = createSafeHandler(
     );
 
     return Result.ok(
-      propertiesResult.map(({ dependencies, ...property }) => ({
-        id: property.id,
-        workspaceId,
-        name: property.name,
-        status: property.status,
-        content: property.content,
-        tool:
-          property.tool.type === "ai-model"
-            ? deserializeAITool({
-                ...property.tool,
-                dependencies,
-              })
-            : property.tool.type === "manual-input"
-              ? { ...property.tool, dependencies }
-              : property.tool,
-        createdAt: property.createdAt,
-      })),
+      propertiesResult.map(({ dependencies, ...property }) => {
+        if (property.tool.type === "ai-model") {
+          return {
+            id: property.id,
+            workspaceId,
+            name: property.name,
+            status: property.status,
+            content: property.content,
+            tool: deserializeAITool({
+              ...property.tool,
+              dependencies,
+            }),
+            createdAt: property.createdAt,
+          };
+        }
+        if (property.tool.type === "manual-input") {
+          return {
+            id: property.id,
+            workspaceId,
+            name: property.name,
+            status: property.status,
+            content: property.content,
+            tool: { ...property.tool, dependencies },
+            createdAt: property.createdAt,
+          };
+        }
+
+        return {
+          id: property.id,
+          workspaceId,
+          name: property.name,
+          status: property.status,
+          content: property.content,
+          tool: property.tool,
+          createdAt: property.createdAt,
+        };
+      }),
     );
   },
 );
