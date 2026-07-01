@@ -6,12 +6,26 @@
 
 use std::{
   collections::HashMap,
+  error::Error as StdError,
+  fmt,
   sync::{Mutex, OnceLock},
 };
 
 use keyring_core::{Entry, Error};
 
 const SERVICE_NAME: &str = "stella-desktop";
+
+#[derive(Debug)]
+pub struct KeychainReadUnavailable;
+
+impl fmt::Display for KeychainReadUnavailable {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    f.write_str("keychain read unavailable")
+  }
+}
+
+impl StdError for KeychainReadUnavailable {}
+
 static KEYRING_INIT: OnceLock<()> = OnceLock::new();
 static KEYRING_INIT_LOCK: Mutex<()> = Mutex::new(());
 
@@ -94,25 +108,6 @@ pub fn store_token(session_id: &str, token: &str) -> Result<(), String> {
     .map_err(|e| format!("keychain store error: {e}"))
 }
 
-/// Retrieve a session token from the OS keychain.
-/// Returns `None` if the entry does not exist.
-pub fn get_token(session_id: &str) -> Option<String> {
-  match entry(session_id) {
-    Ok(e) => match e.get_password() {
-      Ok(token) => Some(token),
-      Err(Error::NoEntry) => None,
-      Err(e) => {
-        tracing::warn!(session_id, error = %e, "keychain read failed, falling back");
-        None
-      }
-    },
-    Err(e) => {
-      tracing::warn!(session_id, error = %e, "keychain entry creation failed");
-      None
-    }
-  }
-}
-
 /// Retrieve a session token without letting a blocked keychain call wedge the
 /// caller. Platform keychain reads can stall on user authorization (e.g. when
 /// the binary changed and the OS re-prompts); the read runs on a blocking
@@ -121,18 +116,31 @@ pub fn get_token(session_id: &str) -> Option<String> {
 pub async fn get_token_with_timeout(
   session_id: &str,
   timeout: std::time::Duration,
-) -> Option<String> {
+) -> Result<Option<String>, KeychainReadUnavailable> {
   let id = session_id.to_string();
-  let read = tokio::task::spawn_blocking(move || get_token(&id));
+  let read = tokio::task::spawn_blocking(move || match entry(&id) {
+    Ok(e) => match e.get_password() {
+      Ok(token) => Ok(Some(token)),
+      Err(Error::NoEntry) => Ok(None),
+      Err(e) => {
+        tracing::warn!(session_id = %id, error = %e, "keychain read failed");
+        Err(KeychainReadUnavailable)
+      }
+    },
+    Err(e) => {
+      tracing::warn!(session_id = %id, error = %e, "keychain entry creation failed");
+      Err(KeychainReadUnavailable)
+    }
+  });
   match tokio::time::timeout(timeout, read).await {
-    Ok(Ok(token)) => token,
+    Ok(Ok(result)) => result,
     Ok(Err(e)) => {
       tracing::warn!(session_id, error = %e, "keychain read task failed");
-      None
+      Err(KeychainReadUnavailable)
     }
     Err(_) => {
       tracing::warn!(session_id, "keychain read timed out");
-      None
+      Err(KeychainReadUnavailable)
     }
   }
 }

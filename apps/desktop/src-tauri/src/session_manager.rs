@@ -1,4 +1,4 @@
-use futures_util::StreamExt;
+use futures_util::{StreamExt, future::join_all};
 use notify::{
   Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::AccessKind,
 };
@@ -164,6 +164,7 @@ impl DesktopSession {
 pub struct SessionManager {
   sessions: HashMap<String, DesktopSession>,
   session_ids_by_key: HashMap<String, String>,
+  unconfirmed_sessions: HashMap<String, PersistedDesktopSession>,
   cleanup_paths: HashSet<String>,
   linked_account: Option<LinkedAccountSnapshot>,
   notification_preferences: DesktopNotificationPreferences,
@@ -497,6 +498,7 @@ impl SessionManager {
     Self {
       sessions: HashMap::new(),
       session_ids_by_key: HashMap::new(),
+      unconfirmed_sessions: HashMap::new(),
       cleanup_paths: HashSet::new(),
       linked_account: None,
       notification_preferences: DesktopNotificationPreferences::default(),
@@ -539,25 +541,52 @@ impl SessionManager {
       self.cleanup_paths.insert(path);
     }
 
-    for persisted in store.sessions {
-      if !Path::new(&persisted.file_path).exists() {
-        continue;
-      }
+    self.unconfirmed_sessions.clear();
 
-      // Token lives in OS keychain; skip sessions without one. The timeout
-      // keeps a stalled keychain (pending authorization prompt) from holding
-      // the session manager lock indefinitely during startup.
-      let Some(session_token) = crate::keychain::get_token_with_timeout(
-        &persisted.id,
-        KEYCHAIN_RESTORE_TIMEOUT,
+    let persisted_sessions: Vec<PersistedDesktopSession> = store
+      .sessions
+      .into_iter()
+      .filter(|persisted| Path::new(&persisted.file_path).exists())
+      .collect();
+    let restored_tokens = join_all(persisted_sessions.iter().map(|persisted| async {
+      (
+        persisted.id.clone(),
+        crate::keychain::get_token_with_timeout(
+          &persisted.id,
+          KEYCHAIN_RESTORE_TIMEOUT,
+        )
+        .await,
       )
-      .await
-      else {
-        tracing::warn!(
-            session_id = %persisted.id,
-            "session token missing from keychain, skipping restore"
-        );
-        continue;
+    }))
+    .await;
+    let mut token_restore_unavailable = false;
+
+    for (persisted, (_, restored_token)) in
+      persisted_sessions.into_iter().zip(restored_tokens)
+    {
+      // Token lives in OS keychain. A confirmed missing token prunes the
+      // session, but an inconclusive keychain read must retain the persisted
+      // metadata for a later retry.
+      let session_token = match restored_token {
+        Ok(Some(token)) => token,
+        Ok(None) => {
+          tracing::warn!(
+              session_id = %persisted.id,
+              "session token missing from keychain, skipping restore"
+          );
+          continue;
+        }
+        Err(crate::keychain::KeychainReadUnavailable) => {
+          token_restore_unavailable = true;
+          tracing::warn!(
+              session_id = %persisted.id,
+              "session token could not be confirmed, retaining persisted session for retry"
+          );
+          self
+            .unconfirmed_sessions
+            .insert(persisted.id.clone(), persisted);
+          continue;
+        }
       };
 
       let session = DesktopSession {
@@ -592,10 +621,17 @@ impl SessionManager {
 
       let key = session.key.clone();
       let id = session.id.clone();
+      self.unconfirmed_sessions.remove(&id);
       self.sessions.insert(id.clone(), session);
       self.session_ids_by_key.insert(key, id);
     }
 
+    if token_restore_unavailable {
+      tracing::warn!(
+        "session store persistence skipped because one or more keychain reads were inconclusive"
+      );
+      return;
+    }
     self.retry_pending_cleanup().await;
     self.persist_sessions().await;
   }
@@ -823,6 +859,7 @@ impl SessionManager {
       );
     }
 
+    self.unconfirmed_sessions.remove(&session_id);
     self.sessions.insert(session_id.clone(), session);
     self.session_ids_by_key.insert(key, session_id.clone());
     self.persist_sessions().await;
@@ -1860,8 +1897,15 @@ impl SessionManager {
     let active_folders: HashSet<String> = self
       .sessions
       .values()
-      .filter_map(|s| {
-        Path::new(&s.file_path)
+      .map(|session| session.file_path.as_str())
+      .chain(
+        self
+          .unconfirmed_sessions
+          .values()
+          .map(|session| session.file_path.as_str()),
+      )
+      .filter_map(|file_path| {
+        Path::new(file_path)
           .parent()
           .map(|p| p.to_string_lossy().to_string())
       })
@@ -1955,8 +1999,14 @@ impl SessionManager {
   }
 
   async fn persist_sessions(&self) {
-    let persisted: Vec<PersistedDesktopSession> =
-      self.sessions.values().map(|s| s.to_persisted()).collect();
+    let mut persisted: Vec<PersistedDesktopSession> = self
+      .unconfirmed_sessions
+      .values()
+      .filter(|session| !self.sessions.contains_key(&session.id))
+      .cloned()
+      .collect();
+    persisted.extend(self.sessions.values().map(|s| s.to_persisted()));
+    persisted.sort_by(|a, b| a.id.cmp(&b.id));
 
     let cleanup: Vec<String> = {
       let mut v: Vec<String> = self.cleanup_paths.iter().cloned().collect();
@@ -2380,6 +2430,65 @@ mod tests {
   use std::io::{Cursor, Write};
   use zip::write::SimpleFileOptions;
 
+  fn persisted_session_for_test(id: &str) -> PersistedDesktopSession {
+    PersistedDesktopSession {
+      api_base_url: "https://api.example.com".to_string(),
+      base_version_number: 1,
+      entity_id: format!("entity-{id}"),
+      file_name: format!("{id}.docx"),
+      file_path: std::env::temp_dir()
+        .join(format!("{id}.docx"))
+        .to_string_lossy()
+        .to_string(),
+      id: id.to_string(),
+      key: format!("workspace-{id}:entity-{id}:property-{id}"),
+      last_checkpoint_at: None,
+      last_checkpoint_sha: None,
+      last_error: None,
+      last_local_sha: "local-sha".to_string(),
+      pending_finalize: false,
+      property_id: format!("property-{id}"),
+      status: SessionStatus::Ready,
+      takeover_detected: false,
+      workspace_id: format!("workspace-{id}"),
+    }
+  }
+
+  fn desktop_session_for_test(
+    persisted: PersistedDesktopSession,
+    session_token: &str,
+  ) -> DesktopSession {
+    DesktopSession {
+      api_base_url: persisted.api_base_url,
+      base_version_number: persisted.base_version_number,
+      entity_id: persisted.entity_id,
+      file_name: persisted.file_name,
+      file_path: persisted.file_path,
+      id: persisted.id,
+      key: persisted.key,
+      last_checkpoint_at: persisted.last_checkpoint_at,
+      last_checkpoint_sha: persisted.last_checkpoint_sha,
+      last_error: persisted.last_error,
+      last_local_sha: persisted.last_local_sha,
+      pending_finalize: persisted.pending_finalize,
+      property_id: persisted.property_id,
+      session_token: session_token.to_string(),
+      status: persisted.status,
+      takeover_detected: persisted.takeover_detected,
+      workspace_id: persisted.workspace_id,
+      changed_during_remote_save: false,
+      checkpoint_in_flight: false,
+      finalize_in_flight: false,
+      local_open_seen: false,
+      closed_recheck_count: 0,
+      retry_notice_shown: false,
+      watcher: None,
+      checkpoint_timer: None,
+      open_poll_timer: None,
+      sse_listener: None,
+    }
+  }
+
   #[test]
   fn is_word_lock_file_for_matches_replacement_and_prefixed_owner_files() {
     assert!(is_word_lock_file_for("~$cument.docx", "document.docx"));
@@ -2460,6 +2569,58 @@ mod tests {
     assert!(target.exists());
 
     tokio::fs::remove_dir_all(dir).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn persist_sessions_keeps_unconfirmed_sessions() {
+    let path = std::env::temp_dir().join(format!(
+      "stella-desktop-sessions-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    let mut manager = SessionManager::new();
+    manager.store_path = path.clone();
+    manager.unconfirmed_sessions.insert(
+      "session-unconfirmed".to_string(),
+      persisted_session_for_test("session-unconfirmed"),
+    );
+
+    manager.persist_sessions().await;
+
+    let loaded = session_store::load_session_store(&path).await;
+    let session_ids: Vec<String> = loaded
+      .sessions
+      .into_iter()
+      .map(|session| session.id)
+      .collect();
+    assert_eq!(session_ids, vec!["session-unconfirmed"]);
+
+    tokio::fs::remove_file(path).await.unwrap();
+  }
+
+  #[tokio::test]
+  async fn active_session_supersedes_unconfirmed_copy_on_persist() {
+    let path = std::env::temp_dir().join(format!(
+      "stella-desktop-sessions-{}.json",
+      uuid::Uuid::new_v4()
+    ));
+    let mut manager = SessionManager::new();
+    manager.store_path = path.clone();
+    let persisted = persisted_session_for_test("session-restored");
+    manager
+      .unconfirmed_sessions
+      .insert(persisted.id.clone(), persisted.clone());
+    manager.sessions.insert(
+      persisted.id.clone(),
+      desktop_session_for_test(persisted, "restored-token"),
+    );
+
+    manager.persist_sessions().await;
+
+    let loaded = session_store::load_session_store(&path).await;
+    assert_eq!(loaded.sessions.len(), 1);
+    assert_eq!(loaded.sessions[0].id, "session-restored");
+
+    tokio::fs::remove_file(path).await.unwrap();
   }
 
   fn zip_bytes(entries: &[&str]) -> Vec<u8> {
