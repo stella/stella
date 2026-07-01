@@ -116,11 +116,21 @@ export const blockDirectiveLinePattern = (): RegExp =>
 
 // Anchored forms used to classify the inner text of one marker.
 const FIELD_PATH_RE = /^[\p{L}\p{N}_.-]+$/u;
+const UNSAFE_FIELD_PATH_SEGMENTS = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
 
 /** Whether `value` is a valid field path per the marker grammar (dotted
  *  segments of letters/digits/underscore/dash — no brackets or spaces). */
 export const isFieldPath = (value: string): boolean =>
   FIELD_PATH_RE.test(value);
+
+/** Whether `value` is safe to use as a dotted object path. */
+export const isSafeFieldPath = (value: string): boolean =>
+  isFieldPath(value) &&
+  value.split(".").every((segment) => !UNSAFE_FIELD_PATH_SEGMENTS.has(segment));
 const CLAUSE_INNER_RE = /^@clause:(?<name>[^:}\s]+)(?::(?<version>[^}\s]+))?$/u;
 const NUM_INNER_RE = /^@num:(?<key>[\p{L}\p{N}_.-]+)$/u;
 const REF_INNER_RE = /^@ref:(?<key>[\p{L}\p{N}_.-]+)$/u;

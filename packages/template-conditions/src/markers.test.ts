@@ -5,8 +5,31 @@ import {
   classifyMarker,
   DIRECTIVE_KINDS,
   isBlockDirectiveKind,
+  isFieldPath,
+  isSafeFieldPath,
   scanMarkers,
 } from "./markers.js";
+
+describe("isSafeFieldPath", () => {
+  test("keeps valid dotted marker paths that cannot mutate prototypes", () => {
+    expect(isFieldPath("party.name")).toBe(true);
+    expect(isSafeFieldPath("party.name")).toBe(true);
+    expect(isSafeFieldPath("line-item.value_2")).toBe(true);
+  });
+
+  test("rejects prototype-polluting path segments", () => {
+    const unsafePaths = [
+      "__proto__.polluted",
+      "client.constructor.polluted",
+      "client.prototype.polluted",
+    ];
+
+    for (const path of unsafePaths) {
+      expect(isFieldPath(path)).toBe(true);
+      expect(isSafeFieldPath(path)).toBe(false);
+    }
+  });
+});
 
 describe("classifyMarker", () => {
   test("classifies each directive form", () => {

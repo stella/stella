@@ -15,7 +15,7 @@ import {
 import { useLocale, useTranslations } from "use-intl";
 
 import type { ConditionNode, Operand } from "@stll/conditions";
-import { evaluateCondition } from "@stll/template-conditions";
+import { evaluateCondition, isSafeFieldPath } from "@stll/template-conditions";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import {
@@ -1167,7 +1167,7 @@ const buildSubmitValues = (
   fields: ResolvedField[],
   conditions: NamedCondition[],
 ): Record<string, unknown> => {
-  const result: Record<string, unknown> = {};
+  const result = createNullRecord();
 
   for (const field of fields) {
     // Skip hidden fields
@@ -1182,11 +1182,15 @@ const buildSubmitValues = (
       const arrayValues: Record<string, unknown>[] = [];
 
       for (let i = 0; i < items.length; i++) {
-        const itemObj: Record<string, unknown> = {};
+        const itemObj = createNullRecord();
         for (const subField of itemFields) {
           const path = `${field.path}[${i}].${subField.path}`;
           const val = values[path];
-          if (val !== undefined && val !== "") {
+          if (
+            val !== undefined &&
+            val !== "" &&
+            isSafeFieldPath(subField.path)
+          ) {
             itemObj[subField.path] = coerceValue(subField, val);
           }
         }
@@ -1238,11 +1242,17 @@ const coerceValue = (field: ResolvedField, value: unknown): unknown => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const createNullRecord = (): Record<string, unknown> => ({ __proto__: null });
+
 const setNestedValue = (
   obj: Record<string, unknown>,
   path: string,
   value: unknown,
 ) => {
+  if (!isSafeFieldPath(path)) {
+    return;
+  }
+
   const parts = path.split(".");
   const last = parts.at(-1);
   if (!last) {
@@ -1251,12 +1261,12 @@ const setNestedValue = (
   let current = obj;
 
   for (const part of parts.slice(0, -1)) {
-    const next = current[part];
+    const next = Object.hasOwn(current, part) ? current[part] : undefined;
     if (isRecord(next)) {
       current = next;
       continue;
     }
-    const child: Record<string, unknown> = {};
+    const child = createNullRecord();
     current[part] = child;
     current = child;
   }
