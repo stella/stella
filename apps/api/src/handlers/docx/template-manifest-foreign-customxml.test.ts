@@ -20,6 +20,7 @@ import type { TemplateManifest } from "./types";
 
 const FOREIGN_ITEM1 =
   '<b:Sources SelectedStyle="/APA.XSL" StyleName="APA" xmlns:b="http://schemas.openxmlformats.org/officeDocument/2006/bibliography"></b:Sources>';
+const UNSAFE_MANIFEST_INDEX = "9007199254740992";
 
 /** A DOCX that already occupies custom XML slot 1 with a foreign part, mirroring
  *  a Word document that carries a bibliography data store. */
@@ -45,6 +46,59 @@ const createDocxWithForeignCustomXml = async (): Promise<Buffer> => {
 const sampleManifest: TemplateManifest = {
   version: 1,
   fields: [{ path: "clientName", label: "Client Name", inputType: "text" }],
+};
+
+const readZipText = async (zip: JSZip, path: string): Promise<string> => {
+  const entry = zip.file(path);
+  if (entry === null) {
+    throw new Error(`Missing ${path}`);
+  }
+
+  return entry.async("string");
+};
+
+const createDocxWithUnsafeManifestSlot = async (): Promise<Buffer> => {
+  const base = new JSZip();
+  base.file(
+    "word/document.xml",
+    '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:r><w:t>Hello {{clientName}}</w:t></w:r></w:p></w:body></w:document>',
+  );
+  base.file(
+    "[Content_Types].xml",
+    '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/></Types>',
+  );
+
+  const written = await writeManifest(
+    Buffer.from(await base.generateAsync({ type: "nodebuffer" })),
+    sampleManifest,
+  );
+  const zip = await JSZip.loadAsync(written);
+  const manifestXml = await readZipText(zip, "customXml/item1.xml");
+  const propsXml = await readZipText(zip, "customXml/itemProps1.xml");
+  const relsXml = await readZipText(zip, "customXml/_rels/item1.xml.rels");
+  const contentTypesXml = await readZipText(zip, "[Content_Types].xml");
+
+  zip.remove("customXml/item1.xml");
+  zip.remove("customXml/itemProps1.xml");
+  zip.remove("customXml/_rels/item1.xml.rels");
+  zip.file(`customXml/item${UNSAFE_MANIFEST_INDEX}.xml`, manifestXml);
+  zip.file(`customXml/itemProps${UNSAFE_MANIFEST_INDEX}.xml`, propsXml);
+  zip.file(
+    `customXml/_rels/item${UNSAFE_MANIFEST_INDEX}.xml.rels`,
+    relsXml.replaceAll(
+      "itemProps1.xml",
+      `itemProps${UNSAFE_MANIFEST_INDEX}.xml`,
+    ),
+  );
+  zip.file(
+    "[Content_Types].xml",
+    contentTypesXml.replaceAll(
+      "itemProps1.xml",
+      `itemProps${UNSAFE_MANIFEST_INDEX}.xml`,
+    ),
+  );
+
+  return Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
 };
 
 describe("writeManifest with a foreign custom XML slot", () => {
@@ -176,6 +230,75 @@ describe("writeManifest with a foreign custom XML slot", () => {
     expect(await zip.file("customXml/item1.xml")?.async("string")).toBe(
       FOREIGN_ITEM1,
     );
+  });
+
+  test("ignores unsafe custom XML slot indexes when choosing where to write the manifest", async () => {
+    const zip = new JSZip();
+    const hugeIndex = "9".repeat(400);
+    zip.file(
+      "word/document.xml",
+      '<?xml version="1.0"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body/></w:document>',
+    );
+    zip.file(
+      "[Content_Types].xml",
+      '<?xml version="1.0"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="xml" ContentType="application/xml"/></Types>',
+    );
+    zip.file(`customXml/item${hugeIndex}.xml`, "<foreign/>");
+    const docx = Buffer.from(await zip.generateAsync({ type: "nodebuffer" }));
+
+    const withManifest = await writeManifest(docx, sampleManifest);
+    const out = await JSZip.loadAsync(withManifest);
+
+    expect(out.file("customXml/itemInfinity.xml")).toBeNull();
+    expect(await out.file("customXml/item1.xml")?.async("string")).toContain(
+      MANIFEST_NS,
+    );
+    expect(await readManifest(withManifest)).toEqual(sampleManifest);
+
+    const stripped = await stripManifest(withManifest);
+    const strippedZip = await JSZip.loadAsync(stripped);
+    expect(await readManifest(stripped)).toBeNull();
+    expect(strippedZip.file("customXml/item1.xml")).toBeNull();
+    expect(strippedZip.file(`customXml/item${hugeIndex}.xml`)).not.toBeNull();
+  });
+
+  test("detects and removes an existing manifest in an unsafe custom XML slot", async () => {
+    const docx = await createDocxWithUnsafeManifestSlot();
+
+    expect(await readManifest(docx)).toEqual(sampleManifest);
+
+    const stripped = await stripManifest(docx);
+    const strippedZip = await JSZip.loadAsync(stripped);
+    expect(await readManifest(stripped)).toBeNull();
+    expect(
+      strippedZip.file(`customXml/item${UNSAFE_MANIFEST_INDEX}.xml`),
+    ).toBeNull();
+    expect(
+      strippedZip.file(`customXml/itemProps${UNSAFE_MANIFEST_INDEX}.xml`),
+    ).toBeNull();
+    expect(
+      strippedZip.file(`customXml/_rels/item${UNSAFE_MANIFEST_INDEX}.xml.rels`),
+    ).toBeNull();
+    const strippedContentTypes = await readZipText(
+      strippedZip,
+      "[Content_Types].xml",
+    );
+    expect(strippedContentTypes).not.toContain(
+      `itemProps${UNSAFE_MANIFEST_INDEX}.xml`,
+    );
+
+    const updatedManifest: TemplateManifest = {
+      version: 1,
+      fields: [{ path: "updated", label: "Updated" }],
+    };
+    const migrated = await writeManifest(docx, updatedManifest);
+    const migratedZip = await JSZip.loadAsync(migrated);
+    expect(await readManifest(migrated)).toEqual(updatedManifest);
+    expect(migratedZip.file("customXml/item1.xml")).not.toBeNull();
+    expect(
+      migratedZip.file(`customXml/item${UNSAFE_MANIFEST_INDEX}.xml`),
+    ).toBeNull();
+    expect(migratedZip.file("customXml/itemInfinity.xml")).toBeNull();
   });
 
   // A producer may serialize the Content_Types override with single quotes.
