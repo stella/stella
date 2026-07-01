@@ -454,8 +454,18 @@ jobs:
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: |
           manual_notes="docs/changelog/${RELEASE_REF}.md"
-          if [[ ! -f "$manual_notes" ]]; then
+          if [[ -L "$manual_notes" ]]; then
+            echo "Manual release description must be a regular file: ${manual_notes}" >&2
+            exit 1
+          fi
+
+          if [[ ! -e "$manual_notes" ]]; then
             exit 0
+          fi
+
+          if [[ ! -f "$manual_notes" ]]; then
+            echo "Manual release description must be a regular file: ${manual_notes}" >&2
+            exit 1
           fi
 
           {
