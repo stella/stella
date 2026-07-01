@@ -122,6 +122,7 @@ import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS = 120_000;
+const CHAT_METERED_AI_TIMEOUT_MS = 600_000;
 
 /**
  * Dev model overrides (`body.devModelId`) are local-only: reject them outside
@@ -362,6 +363,17 @@ const sendMessage = createSafeRootHandler(
       workspaceId: workspaceId ?? undefined,
     });
 
+    const isClientConnectionAborted = () => request.signal.aborted;
+
+    if (isClientConnectionAborted()) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Client disconnected before AI work started",
+        }),
+      );
+    }
+
     const uploadResult = yield* Result.await(
       uploadMessageFilesWithRollback({
         message: validatedMessage.message,
@@ -459,8 +471,34 @@ const sendMessage = createSafeRootHandler(
       threadId: body.threadId,
     });
 
+    // Metered provider calls must not be directly cancelled by the client
+    // connection. A disconnect can arrive after preflight succeeds but before
+    // the AI SDK emits token usage; allowing that abort to reach the provider
+    // would skip the usage ledger callback while still spending provider work.
+    const createMeteredAIAbortSignal = () =>
+      AbortSignal.timeout(CHAT_METERED_AI_TIMEOUT_MS);
+
+    if (isClientConnectionAborted()) {
+      yield* Result.await(
+        rollbackUnpersistedChatSideEffects({
+          recordAuditEvent,
+          safeDb,
+          threadId: body.threadId,
+          threadState: thread,
+          uploadedFiles: uploadResult.uploadedFiles,
+          userId: user.id,
+        }),
+      );
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Client disconnected before AI work started",
+        }),
+      );
+    }
+
     const messagesForContextResult = await compactMessagesForContext({
-      abortSignal: request.signal,
+      abortSignal: createMeteredAIAbortSignal(),
       boundary: thirdPartyBoundary,
       devModelId: body.devModelId,
       messages: messagesForContextInput,
@@ -652,8 +690,15 @@ const sendMessage = createSafeRootHandler(
       Result.tryPromise({
         try: async () => {
           try {
+            if (isClientConnectionAborted()) {
+              throw new HandlerError({
+                status: 400,
+                message: "Client disconnected before stream started",
+              });
+            }
+
             const chatResponse = await streamChat({
-              abortSignal: request.signal,
+              abortSignal: createMeteredAIAbortSignal(),
               messages: chatContext.hydratedMessages,
               latestMessageId: parsedMessage.message.id,
               onFinish: async ({ isAborted, responseMessage }) => {
@@ -669,7 +714,7 @@ const sendMessage = createSafeRootHandler(
 
                   const persistencePlan = planAssistantFinishPersistence({
                     existingIds: latestMessagePlan.existingIds,
-                    isAborted,
+                    isAborted: isAborted || isClientConnectionAborted(),
                     message: resolvedResponseMessage,
                   });
 
@@ -811,11 +856,13 @@ const sendMessage = createSafeRootHandler(
           }
         },
         catch: (cause) =>
-          new HandlerError({
-            status: 500,
-            message: "Failed to start chat response",
-            cause,
-          }),
+          cause instanceof HandlerError
+            ? cause
+            : new HandlerError({
+                status: 500,
+                message: "Failed to start chat response",
+                cause,
+              }),
       }),
     );
 
