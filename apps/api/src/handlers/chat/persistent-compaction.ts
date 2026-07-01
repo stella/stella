@@ -3,7 +3,11 @@ import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError, Transaction } from "@/api/db";
-import { chatMessages, chatThreadCompactions } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreadCompactions,
+  chatThreads,
+} from "@/api/db/schema";
 import {
   CHAT_COMPACTION_PROMPT_VERSION,
   createCompactionSummaryMessage,
@@ -182,6 +186,8 @@ export const persistChatCompactionCheckpoint = async ({
   }
 
   const persistResult = await safeDb(async (tx) => {
+    await lockChatThreadForCompaction({ threadId, tx });
+
     const snapshotIsCurrent = await isChatCompactionSnapshotCurrent({
       dataWorkspaceIds,
       messages,
@@ -216,6 +222,20 @@ export const persistChatCompactionCheckpoint = async ({
   });
 
   return persistResult.andThen(() => Result.ok());
+};
+
+const lockChatThreadForCompaction = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  await tx
+    .select({ id: chatThreads.id })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, threadId))
+    .for("update");
 };
 
 type ChatCompactionSnapshotMessageRow = {
@@ -342,10 +362,17 @@ const workspaceIdsEqual = (
   left: readonly SafeId<"workspace">[],
   right: readonly SafeId<"workspace">[],
 ): boolean => {
-  if (left.length !== right.length) {
+  const leftIds = new Set(left);
+  const rightIds = new Set(right);
+
+  if (leftIds.size !== rightIds.size) {
     return false;
   }
 
-  const rightIds = new Set(right);
-  return left.every((id) => rightIds.has(id));
+  for (const id of leftIds) {
+    if (!rightIds.has(id)) {
+      return false;
+    }
+  }
+  return true;
 };

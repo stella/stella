@@ -1127,15 +1127,6 @@ const runChatCompactionCheckpoint = async ({
   // checkpoint would be silently dropped. Never feed a synthetic compaction
   // summary message here: its id is not a real chat_messages row and would
   // violate the firstKept/firstSummarized FKs.
-  const historyResult = await loadFullThreadHistory({ safeDb, threadId });
-  if (Result.isError(historyResult)) {
-    captureError(historyResult.error, {
-      threadId,
-      feature: "chat.compaction_checkpoint_history",
-    });
-    return;
-  }
-
   const dataScopeResult = await safeDb((tx) =>
     tx.query.chatThreads.findFirst({
       where: { id: { eq: threadId } },
@@ -1150,6 +1141,15 @@ const runChatCompactionCheckpoint = async ({
     return;
   }
   if (!dataScopeResult.value) {
+    return;
+  }
+
+  const historyResult = await loadFullThreadHistory({ safeDb, threadId });
+  if (Result.isError(historyResult)) {
+    captureError(historyResult.error, {
+      threadId,
+      feature: "chat.compaction_checkpoint_history",
+    });
     return;
   }
 
