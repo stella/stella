@@ -211,6 +211,7 @@ export {
   indexPattern,
   isBlockDirectiveKind,
   isFieldPath,
+  isSafeFieldPath,
   markerPattern,
   numPattern,
   placeholderPattern,

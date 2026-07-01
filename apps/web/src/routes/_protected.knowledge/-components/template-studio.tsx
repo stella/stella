@@ -82,6 +82,7 @@ import type {
 import { displayLanguageName } from "@stll/locales";
 import {
   isFieldPath,
+  isSafeFieldPath,
   renderDeterministicFieldValue,
   serializeCondition,
 } from "@stll/template-conditions";
@@ -357,16 +358,19 @@ type SlashRows =
   | { view: "fields"; items: StudioField[] }
   | { view: "clauses"; items: SlashClause[] };
 
-/** The new field's path for a "New field" row. The slash query grammar already
- *  mirrors the field-path grammar, so a typed `party.name` / `line-item` is a
- *  valid path and is kept verbatim; only a query that is not itself a valid
- *  path falls back to the sanitizer (`slugify` would strip the `.`/`-` and
- *  mangle the name the user typed). */
+/** The new field's path for a "New field" row. Safe field paths such as
+ *  `party.name` / `line-item` are kept verbatim; unsafe or invalid queries fall
+ *  back to the sanitizer (`slugify` would strip the `.`/`-` and mangle the name
+ *  the user typed). */
 const createFieldPathFromQuery = (trimmed: string): string => {
   if (trimmed === "") {
     return "field";
   }
-  return isFieldPath(trimmed) ? trimmed : sanitizeFieldPath(trimmed);
+  if (isSafeFieldPath(trimmed)) {
+    return trimmed;
+  }
+  const sanitized = sanitizeFieldPath(trimmed);
+  return isSafeFieldPath(sanitized) ? sanitized : "field";
 };
 
 /** The first field path not already taken: `field`, then `field_2`, `field_3`…
