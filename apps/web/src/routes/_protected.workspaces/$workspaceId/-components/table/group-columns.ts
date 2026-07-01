@@ -75,11 +75,15 @@ export const buildDocTypeGateLabels = ({
 }): Map<string, Set<string>> => {
   const gateLabelsByPropertyId = new Map<string, Set<string>>();
   for (const property of properties) {
-    if (property.tool.type !== "ai-model") {
+    if (
+      property.tool.type !== "ai-model" &&
+      property.tool.type !== "manual-input"
+    ) {
       continue;
     }
+    const dependencies = property.tool.dependencies ?? [];
     const labels = new Set<string>();
-    for (const dependency of property.tool.dependencies) {
+    for (const dependency of dependencies) {
       const label = docTypeGateLabel(dependency, classifierPropertyId);
       if (label !== null) {
         labels.add(label);

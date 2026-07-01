@@ -64,6 +64,7 @@ export type PropertyDependency = {
 type ManualInputTool = {
   version: 1;
   type: "manual-input";
+  dependencies?: PropertyDependency[];
 };
 
 type AIModelTool = {

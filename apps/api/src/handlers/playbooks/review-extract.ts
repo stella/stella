@@ -4,6 +4,7 @@ import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent, PropertyContent } from "@/api/db/schema-validators";
 import { createDefaultTool } from "@/api/handlers/properties/create-schema";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
+import type { AIUsageMetering } from "@/api/lib/analytics/ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
@@ -68,6 +69,7 @@ export type ExtractAskContentsArgs = {
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
+  usageMetering?: AIUsageMetering | undefined;
 };
 
 const EMPTY_RESULT: ReviewExtractionResult = {
@@ -162,6 +164,7 @@ export const extractAskContents = async ({
   orgAIConfig,
   promptCachingEnabled,
   serviceTier,
+  usageMetering,
 }: ExtractAskContentsArgs): Promise<
   Result<ReviewExtractionResult, WorkflowIntegrationError>
 > =>
@@ -217,6 +220,7 @@ export const extractAskContents = async ({
         orgAIConfig,
         promptCachingEnabled,
         serviceTier,
+        usageMetering,
       }),
     );
 

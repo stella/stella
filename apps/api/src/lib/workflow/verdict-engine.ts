@@ -16,6 +16,7 @@ import { getModelForRole } from "@/api/lib/ai-models";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
 import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import type { AIUsageMetering } from "@/api/lib/analytics/ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
@@ -191,6 +192,7 @@ export type GradePositionMatchArgs = {
   orgAIConfig: OrgAIConfig | null | undefined;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
+  usageMetering?: AIUsageMetering | undefined;
 };
 
 export const gradePositionMatch = async ({
@@ -204,6 +206,7 @@ export const gradePositionMatch = async ({
   orgAIConfig,
   promptCachingEnabled,
   serviceTier,
+  usageMetering,
 }: GradePositionMatchArgs): Promise<
   Result<PositionMatchVerdict, WorkflowIntegrationError>
 > => {
@@ -234,6 +237,7 @@ export const gradePositionMatch = async ({
     },
     sessionId: entityVersionId,
     traceId: Bun.randomUUIDv7(),
+    ...(usageMetering ? { usageMetering } : {}),
   });
 
   return await Result.tryPromise({

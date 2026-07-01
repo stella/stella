@@ -43,7 +43,9 @@ const readProperties = createSafeHandler(
                 ...property.tool,
                 dependencies,
               })
-            : property.tool,
+            : property.tool.type === "manual-input"
+              ? { ...property.tool, dependencies }
+              : property.tool,
         createdAt: property.createdAt,
       })),
     );

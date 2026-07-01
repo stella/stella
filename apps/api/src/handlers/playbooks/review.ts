@@ -11,7 +11,10 @@ import type { ReviewAsk } from "@/api/handlers/playbooks/review-extract";
 import { buildFindings } from "@/api/handlers/playbooks/review-grade";
 import type { ReviewFinding } from "@/api/handlers/playbooks/review-grade";
 import { requireAIAvailable } from "@/api/lib/ai-models";
-import { createSafeHandler } from "@/api/lib/api-handlers";
+import {
+  assertUsageAvailableForHandler,
+  createSafeHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
@@ -47,6 +50,7 @@ const reviewPlaybook = createSafeHandler(
     orgAIConfig,
     promptCachingEnabled,
     recordAuditEvent,
+    user,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -143,6 +147,7 @@ const reviewPlaybook = createSafeHandler(
     }
 
     const asks: ReviewAsk[] = [];
+    const askSourceIds = new Set<string>();
     for (const position of positions) {
       const question = position.ask.question.trim();
       if (question.length === 0) {
@@ -153,10 +158,33 @@ const reviewPlaybook = createSafeHandler(
         continue;
       }
       asks.push({ sourceId: position.sourceId, question, content });
+      askSourceIds.add(position.sourceId);
     }
 
     const abortSignal = AbortSignal.timeout(REVIEW_TIMEOUT_MS);
     const serviceTier = "standard" as const;
+    const usageMetering = {
+      actionType: "chat" as const,
+      organizationId,
+      safeDb,
+      serviceTier,
+      userId: user.id,
+      workspaceId,
+    };
+
+    if (asks.length > 0) {
+      const preflightError = await assertUsageAvailableForHandler({
+        metering: { actionType: "chat", modelRole: "pdf" },
+        organizationId,
+        orgAIConfig,
+        workspaceId,
+        userId: user.id,
+        safeDb,
+      });
+      if (preflightError) {
+        return Result.err(preflightError);
+      }
+    }
 
     const extractionResult = await extractAskContents({
       asks,
@@ -168,6 +196,7 @@ const reviewPlaybook = createSafeHandler(
       orgAIConfig,
       promptCachingEnabled,
       serviceTier,
+      usageMetering,
     });
     if (Result.isError(extractionResult)) {
       return Result.err(
@@ -180,7 +209,9 @@ const reviewPlaybook = createSafeHandler(
     }
 
     const gradedFindings: ReviewFinding[] = await buildFindings({
-      positions,
+      positions: positions.filter((position) =>
+        askSourceIds.has(position.sourceId),
+      ),
       contentBySourceId: extractionResult.value.contentBySourceId,
       standardBySourceId,
       lastBlockId: extractionResult.value.lastBlockId,
@@ -191,6 +222,7 @@ const reviewPlaybook = createSafeHandler(
       orgAIConfig,
       promptCachingEnabled,
       serviceTier,
+      usageMetering,
     });
 
     // Only actionable verdicts are surfaced as review findings. Compliant,

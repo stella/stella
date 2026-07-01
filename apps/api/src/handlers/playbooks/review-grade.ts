@@ -12,6 +12,7 @@ import type {
 } from "@/api/handlers/playbooks/review-extract";
 import type { VerdictTier } from "@/api/handlers/playbooks/verdict-tiers";
 import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
+import type { AIUsageMetering } from "@/api/lib/analytics/ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -56,6 +57,7 @@ type AiGradingDeps = {
   orgAIConfig: OrgAIConfig | null;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
+  usageMetering?: AIUsageMetering | undefined;
 };
 
 export type BuildFindingsArgs = AiGradingDeps & {
@@ -193,6 +195,7 @@ const gradePosition = async ({
         orgAIConfig: deps.orgAIConfig,
         promptCachingEnabled: deps.promptCachingEnabled,
         serviceTier: deps.serviceTier,
+        usageMetering: deps.usageMetering,
       });
       if (Result.isError(graded)) {
         // A failed compare must not silently pass: flag it for human review,

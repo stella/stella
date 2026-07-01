@@ -788,10 +788,16 @@ export const properties = p.pgTable(
     // playbooks or with manually-created columns. Null for any property not
     // created by a playbook.
     playbookSourceId: p.uuid("playbook_source_id"),
+    playbookDefinitionId: safeUuid<"playbookDefinition">(
+      "playbook_definition_id",
+    ).references(() => playbookDefinitions.id, { onDelete: "cascade" }),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("properties_workspace_id_idx").on(table.workspaceId),
+    p
+      .index("properties_workspace_playbook_definition_idx")
+      .on(table.workspaceId, table.playbookDefinitionId),
     p.unique("properties_id_ws_unq").on(table.id, table.workspaceId),
     ...wsPolicies(),
   ],

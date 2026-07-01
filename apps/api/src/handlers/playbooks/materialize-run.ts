@@ -1,4 +1,4 @@
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { ConditionNode } from "@stll/conditions";
 
@@ -226,7 +226,13 @@ export const materializePlaybookRun = async ({
     .where(
       and(
         eq(properties.workspaceId, workspaceId),
-        inArray(properties.playbookSourceId, sourceIds),
+        or(
+          eq(properties.playbookDefinitionId, playbookId),
+          and(
+            isNull(properties.playbookDefinitionId),
+            inArray(properties.playbookSourceId, sourceIds),
+          ),
+        ),
       ),
     );
 
@@ -272,6 +278,7 @@ export const materializePlaybookRun = async ({
       tool: askTool,
       status: askTool.type === "ai-model" ? "stale" : "fresh",
       playbookSourceId: position.sourceId,
+      playbookDefinitionId: playbookId,
     });
     materializedPropertyIds.push(askId);
 
@@ -320,6 +327,7 @@ export const materializePlaybookRun = async ({
       }),
       status: "stale",
       playbookSourceId: position.sourceId,
+      playbookDefinitionId: playbookId,
     });
     materializedPropertyIds.push(verdictId);
 
@@ -345,10 +353,6 @@ export const materializePlaybookRun = async ({
     }
   }
 
-  if (existingCount + newCount > LIMITS.propertiesCount) {
-    return { ok: false, status: 400, message: "Properties limit reached" };
-  }
-
   const upsertProperties = async (rows: (typeof properties.$inferInsert)[]) => {
     if (rows.length === 0) {
       return;
@@ -365,22 +369,32 @@ export const materializePlaybookRun = async ({
           content: sql`excluded.content`,
           tool: sql`excluded.tool`,
           status: sql`excluded.status`,
+          playbookDefinitionId: sql`excluded.playbook_definition_id`,
         },
       });
   };
+
+  const emittedAskIds = new Set(askRows.map((row) => row.id));
+  const emittedVerdictIds = new Set(verdictRows.map((row) => row.id));
+  const obsoleteVerdictIds = [...verdictIdBySourceId.values()].filter(
+    (id) => !emittedVerdictIds.has(id),
+  );
+  const obsoleteAskIds = [...askIdBySourceId.values()].filter(
+    (id) => !emittedAskIds.has(id),
+  );
+  const retainedCount =
+    existingCount - obsoleteVerdictIds.length - obsoleteAskIds.length;
+  if (retainedCount + newCount > LIMITS.propertiesCount) {
+    return { ok: false, status: 400, message: "Properties limit reached" };
+  }
 
   // ASK rows first so the verdict rows' `askPropertyId` FK targets exist.
   await upsertProperties(askRows);
   await upsertProperties(verdictRows);
 
-  // Drop verdict columns this pass no longer produces — a graded position
-  // edited back to extract-only, or a position removed from the playbook — so a
-  // stale verdict badge can't linger on its ASK cell. Cascade removes the
-  // property's fields and dependency edges.
-  const emittedVerdictIds = new Set(verdictRows.map((row) => row.id));
-  const obsoleteVerdictIds = [...verdictIdBySourceId.values()].filter(
-    (id) => !emittedVerdictIds.has(id),
-  );
+  // Drop columns this pass no longer produces: verdicts for positions edited back
+  // to extract-only, and both ASK/verdict columns for removed positions. Verdicts
+  // go first because their dependency edge restricts deleting the ASK column.
   if (obsoleteVerdictIds.length > 0) {
     await tx
       .delete(properties)
@@ -388,6 +402,16 @@ export const materializePlaybookRun = async ({
         and(
           eq(properties.workspaceId, workspaceId),
           inArray(properties.id, obsoleteVerdictIds),
+        ),
+      );
+  }
+  if (obsoleteAskIds.length > 0) {
+    await tx
+      .delete(properties)
+      .where(
+        and(
+          eq(properties.workspaceId, workspaceId),
+          inArray(properties.id, obsoleteAskIds),
         ),
       );
   }
