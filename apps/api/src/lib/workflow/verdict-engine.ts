@@ -325,6 +325,7 @@ export type ComputeVerdictBatchArgs = {
   orgAIConfig?: OrgAIConfig | null;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
+  usageMetering?: AIUsageMetering | undefined;
 };
 
 /**
@@ -345,6 +346,7 @@ export const computeVerdictBatch = async ({
   orgAIConfig,
   promptCachingEnabled,
   serviceTier,
+  usageMetering,
 }: ComputeVerdictBatchArgs): Promise<VerdictBatchOutput> => {
   const inputFields = await fetchInputFieldsForBatch({
     entityVersionId,
@@ -434,6 +436,7 @@ export const computeVerdictBatch = async ({
         orgAIConfig,
         promptCachingEnabled,
         serviceTier,
+        usageMetering,
       });
       if (Result.isError(graded)) {
         erroredPropertyIds.push(property.id);

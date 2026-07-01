@@ -88,6 +88,7 @@ type StartReviewArgs = {
   workspaceId: string;
   playbookId: string;
   entityId: string;
+  fileFieldId: string;
   /** i18n fallback shown when a 5xx hides the raw server message. */
   unexpectedErrorMessage: string;
 };
@@ -129,6 +130,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     workspaceId,
     playbookId,
     entityId,
+    fileFieldId,
     unexpectedErrorMessage,
   }) => {
     const existing = get().sessions[entityId];
@@ -154,7 +156,10 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
       .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
       .review.post(
-        { entityId: toSafeId<"entity">(entityId) },
+        {
+          entityId: toSafeId<"entity">(entityId),
+          fileFieldId: toSafeId<"field">(fileFieldId),
+        },
         { fetch: { signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS) } },
       );
 

@@ -476,6 +476,7 @@ export const FileTabPanel = ({
           {tab.facet === "playbook" && (
             <PlaybookFacet
               entityId={tab.entityId}
+              fileFieldId={tab.id}
               workspaceId={tab.workspaceId}
             />
           )}
@@ -1011,6 +1012,7 @@ export const FileTabPanel = ({
           {sidepeekFacet === "playbook" && (
             <PlaybookFacet
               entityId={tab.entityId}
+              fileFieldId={tab.id}
               workspaceId={tab.workspaceId}
             />
           )}

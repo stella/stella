@@ -56,11 +56,13 @@ import { playbooksOptions } from "@/routes/_protected.knowledge/-queries";
 
 type PlaybookFacetProps = {
   entityId: string;
+  fileFieldId: string;
   workspaceId: string;
 };
 
 export const PlaybookFacet = ({
   entityId,
+  fileFieldId,
   workspaceId,
 }: PlaybookFacetProps) => {
   const t = useTranslations();
@@ -91,6 +93,7 @@ export const PlaybookFacet = ({
       workspaceId,
       playbookId,
       entityId,
+      fileFieldId,
       unexpectedErrorMessage: t("common.unexpectedError"),
     });
     if (!result.ok) {

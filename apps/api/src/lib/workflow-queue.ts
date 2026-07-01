@@ -1549,6 +1549,14 @@ const processOneBatch = async ({
     const skippedPropertyIds: SafeId<"property">[] = [];
     const unsupportedPropertyIds: SafeId<"property">[] = [];
     const erroredProperties: BatchProperty[] = [];
+    const usageMetering = {
+      actionType: "background" as const,
+      organizationId,
+      safeDb,
+      serviceTier,
+      userId,
+      workspaceId,
+    };
 
     if (aiModelProperties.length > 0) {
       const aiBatch: PropertyBatch = {
@@ -1574,14 +1582,7 @@ const processOneBatch = async ({
             orgAIConfig,
             promptCachingEnabled,
             serviceTier,
-            usageMetering: {
-              actionType: "background",
-              organizationId,
-              safeDb,
-              serviceTier,
-              userId,
-              workspaceId,
-            },
+            usageMetering,
             onPartialAnswer: previewPublisher.publish,
           }),
         onRetryError: (error, attempt) => {
@@ -1634,6 +1635,7 @@ const processOneBatch = async ({
         orgAIConfig,
         promptCachingEnabled,
         serviceTier,
+        usageMetering,
       });
       aiResults.push(...verdictOutput.aiResults);
       aiJustifications.push(...verdictOutput.aiJustifications);

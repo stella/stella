@@ -28,10 +28,13 @@ import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 const config = {
   permissions: { playbook: ["apply"] },
   params: workspaceParams({ playbookId: tSafeId("playbookDefinition") }),
-  // `entityId` is the review target inside the already-validated workspace, not
-  // an ownership id; ownership comes from the path (workspaceId) and session
-  // (organizationId).
-  body: t.Object({ entityId: tSafeId("entity") }),
+  // `entityId` and `fileFieldId` identify the active document inside the
+  // already-validated workspace, not ownership ids; ownership comes from the
+  // path (workspaceId) and session (organizationId).
+  body: t.Object({
+    entityId: tSafeId("entity"),
+    fileFieldId: tSafeId("field"),
+  }),
 } satisfies HandlerConfig;
 
 // A single-doc review is a bounded operation (one document, one playbook's
@@ -96,6 +99,28 @@ const reviewPlaybook = createSafeHandler(
             message: "Document not found",
           };
         }
+        const activeField = entity.currentVersion.fields.find(
+          (field) => field.id === body.fileFieldId,
+        );
+        if (!activeField) {
+          return {
+            ok: false as const,
+            status: 404 as const,
+            message: "Document file not found",
+          };
+        }
+        const activeContent = activeField.content;
+        if (activeContent.type !== "file") {
+          return {
+            ok: false as const,
+            status: 404 as const,
+            message: "Document file not found",
+          };
+        }
+        const activeFile = {
+          fieldId: activeField.id,
+          content: activeContent,
+        };
 
         const positions = playbook.positions.items;
         const clauseSnapshots = await loadClauseSnapshots(
@@ -108,7 +133,7 @@ const reviewPlaybook = createSafeHandler(
           ok: true as const,
           positions,
           entityVersionId: entity.currentVersion.id,
-          fieldEntries: entity.currentVersion.fields,
+          activeFile,
           clauseSnapshots,
         };
       }),
@@ -120,8 +145,7 @@ const reviewPlaybook = createSafeHandler(
       );
     }
 
-    const { positions, entityVersionId, fieldEntries, clauseSnapshots } =
-      loaded;
+    const { positions, entityVersionId, activeFile, clauseSnapshots } = loaded;
 
     const standardBySourceId = new Map<string, ResolvedStandard>();
     for (const position of positions) {
@@ -132,19 +156,14 @@ const reviewPlaybook = createSafeHandler(
     }
 
     const resolvedFiles: ResolvedFile[] = [];
-    for (const field of fieldEntries) {
-      if (field.content.type !== "file") {
-        continue;
-      }
-      resolvedFiles.push({
-        fileFieldId: field.id,
-        fileId: field.content.id,
-        mimeType: field.content.mimeType,
-        sha256Hex: field.content.sha256Hex,
-        encrypted: field.content.encrypted,
-        pdfFileId: field.content.pdfFileId,
-      });
-    }
+    resolvedFiles.push({
+      fileFieldId: activeFile.fieldId,
+      fileId: activeFile.content.id,
+      mimeType: activeFile.content.mimeType,
+      sha256Hex: activeFile.content.sha256Hex,
+      encrypted: activeFile.content.encrypted,
+      pdfFileId: activeFile.content.pdfFileId,
+    });
 
     const asks: ReviewAsk[] = [];
     const askSourceIds = new Set<string>();
