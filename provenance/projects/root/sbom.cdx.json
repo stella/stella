@@ -1287,7 +1287,7 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#1"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
@@ -3153,7 +3153,7 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#1"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
@@ -5948,7 +5948,7 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#1"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
@@ -8414,7 +8414,7 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#1"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
@@ -10615,7 +10615,7 @@
             "location": "apps/web/src/routes/__root.tsx#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#8"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#14"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#3"
@@ -11281,7 +11281,7 @@
             "location": "apps/web/src/routes/_protected.chat/$threadId.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#9"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#15"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#14"
@@ -13648,7 +13648,7 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#1"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
@@ -18697,6 +18697,12 @@
             "location": "apps/api/src/lib/legal-search/pg-fts-legal-provider.ts#1"
           },
           {
+            "location": "apps/api/src/lib/legal-search/pg-fts-query.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/legal-search/pg-fts-query.ts#2"
+          },
+          {
             "location": "apps/api/src/lib/mcp-upstream/connections.ts#9"
           },
           {
@@ -18737,6 +18743,9 @@
           },
           {
             "location": "apps/api/src/lib/search/query.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/search/query.ts#2"
           },
           {
             "location": "apps/api/src/lib/search/sql.ts#1"
@@ -20865,7 +20874,7 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#10"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#16"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#4"
@@ -23950,7 +23959,7 @@
             "location": "apps/web/src/routes/__root.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#1"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#7"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
@@ -25571,7 +25580,7 @@
             "location": "apps/web/src/routes/_protected.chat/-components/chat-anonymized-toggle.tsx#2"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#11"
+            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#17"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#5"
