@@ -284,6 +284,7 @@ const generateRefinedSearchQuery = async ({
     try: async () =>
       await generateTanStackObjectForRole({
         role: "fast",
+        serviceTier: "standard",
         orgAIConfig,
         organizationId,
         analytics,
@@ -463,6 +464,7 @@ export const summarizeSearchResults = async ({
     try: async () =>
       await generateTanStackObjectForRole({
         role: "fast",
+        serviceTier: "standard",
         orgAIConfig,
         organizationId,
         analytics: aiAnalytics,

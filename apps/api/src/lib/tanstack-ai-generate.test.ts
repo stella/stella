@@ -81,6 +81,7 @@ describe("TanStack AI structured output generation", () => {
       outputSchema: rawSchema,
       prompt: "Extract the answer.",
       role: "pdf",
+      serviceTier: "standard",
     });
 
     expect(result).toEqual({ answer: "ok" });
@@ -106,6 +107,7 @@ describe("TanStack AI structured output generation", () => {
       outputSchema: rawSchema,
       prompt: "Extract the answer.",
       role: "pdf",
+      serviceTier: "standard",
     })) {
       events.push(event);
     }
@@ -140,6 +142,7 @@ describe("TanStack AI structured output generation", () => {
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
       role: "pdf",
+      serviceTier: "standard",
     }).then(
       () => undefined,
       (error: unknown) => error,
@@ -169,6 +172,33 @@ describe("TanStack AI structured output generation", () => {
     });
 
     expect(options).toEqual({ max_tokens: 1000 });
+  });
+
+  test("forwards deferred service tiers to Gemini requests", () => {
+    // SAFETY: mergeGenerationOptions only reads provider/modelOptions/modelId.
+    // The adapter is irrelevant for this pure option-merge test.
+    // eslint-disable-next-line typescript/no-unsafe-type-assertion -- focused pure helper test
+    const model = {
+      adapter: {},
+      keySource: "instance",
+      modelId: "gemini-3-pro-preview",
+      modelOptions: {},
+      provider: "google",
+    } as ResolvedTanStackTextModel;
+
+    const options = mergeGenerationOptions({
+      caching: noCaching,
+      maxOutputTokens: 1000,
+      model,
+      serviceTier: "batch",
+      temperature: 0,
+    });
+
+    expect(options).toEqual({
+      maxOutputTokens: 1000,
+      serviceTier: "flex",
+      temperature: 0,
+    });
   });
 });
 

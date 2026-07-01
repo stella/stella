@@ -120,6 +120,7 @@ const generateSkillDraft = createSafeRootHandler(
           abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
           role: "fast",
+          serviceTier: "flex",
           orgAIConfig,
           organizationId: session.activeOrganizationId,
           analytics: aiAnalytics,

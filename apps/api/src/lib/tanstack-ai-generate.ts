@@ -48,7 +48,7 @@ type GenerateTanStackBaseOptions = {
   organizationId: SafeId<"organization"> | null;
   orgAIConfig: OrgAIConfig | null | undefined;
   role: ModelRole;
-  serviceTier?: AIRequestServiceTier | undefined;
+  serviceTier: AIRequestServiceTier;
   system?: string | undefined;
   temperature?: number | undefined;
 };
@@ -159,7 +159,7 @@ const streamTanStackTextDeltas = async function* ({
   maxOutputTokens: number | undefined;
   messages: ModelMessage[];
   model: ResolvedTanStackTextModel;
-  serviceTier: AIRequestServiceTier | undefined;
+  serviceTier: AIRequestServiceTier;
   system: string | undefined;
   temperature: number | undefined;
 }): AsyncIterable<string> {
@@ -275,7 +275,7 @@ const streamTanStackStructuredOutput = async function* <
   messages: ModelMessage[];
   model: ResolvedTanStackTextModel;
   outputSchema: TSchema;
-  serviceTier: AIRequestServiceTier | undefined;
+  serviceTier: AIRequestServiceTier;
   system: string | undefined;
   temperature: number | undefined;
 }): AsyncIterable<TanStackStructuredOutputEvent<v.InferOutput<TSchema>>> {
@@ -453,7 +453,7 @@ export const mergeGenerationOptions = ({
   caching: CachingDecision;
   model: ResolvedTanStackTextModel;
   maxOutputTokens: number | undefined;
-  serviceTier: AIRequestServiceTier | undefined;
+  serviceTier: AIRequestServiceTier;
   temperature: number | undefined;
 }): TanStackModelOptions => {
   switch (model.provider) {
@@ -462,6 +462,7 @@ export const mergeGenerationOptions = ({
         ...model.modelOptions,
         ...(maxOutputTokens === undefined ? {} : { maxOutputTokens }),
         ...(temperature === undefined ? {} : { temperature }),
+        ...googleServiceTierOptions(serviceTier),
       };
     case "anthropic": {
       const anthropicOptions = {
@@ -543,23 +544,19 @@ const openRouterCacheOptions = (
 };
 
 const openAIServiceTierOptions = (
-  serviceTier: AIRequestServiceTier | undefined,
-): Partial<Pick<OpenAITextProviderOptions, "service_tier">> => {
-  if (serviceTier === undefined) {
-    return {};
-  }
-  return {
-    service_tier: isDeferredServiceTier(serviceTier) ? "flex" : "default",
-  };
-};
+  serviceTier: AIRequestServiceTier,
+): Pick<OpenAITextProviderOptions, "service_tier"> => ({
+  service_tier: isDeferredServiceTier(serviceTier) ? "flex" : "default",
+});
 
 const openRouterServiceTierOptions = (
-  serviceTier: AIRequestServiceTier | undefined,
-): Partial<Pick<OpenRouterResponsesTextProviderOptions, "serviceTier">> => {
-  if (serviceTier === undefined) {
-    return {};
-  }
-  return {
-    serviceTier: isDeferredServiceTier(serviceTier) ? "flex" : "default",
-  };
-};
+  serviceTier: AIRequestServiceTier,
+): Pick<OpenRouterResponsesTextProviderOptions, "serviceTier"> => ({
+  serviceTier: isDeferredServiceTier(serviceTier) ? "flex" : "default",
+});
+
+const googleServiceTierOptions = (
+  serviceTier: AIRequestServiceTier,
+): Pick<TanStackModelOptions<"google">, "serviceTier"> => ({
+  serviceTier: isDeferredServiceTier(serviceTier) ? "flex" : "standard",
+});

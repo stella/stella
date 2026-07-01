@@ -100,6 +100,7 @@ export const generateBBoxData = async ({
       };
       const result = await generateTanStackObjectForRole({
         role: "pdf",
+        serviceTier: "standard",
         orgAIConfig,
         organizationId,
         analytics: aiAnalytics,

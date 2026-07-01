@@ -82,6 +82,10 @@ type StellaAnthropicTextProviderOptions = Omit<
   thinking?: StellaAnthropicThinking | undefined;
 };
 
+type StellaGeminiTextProviderOptions = GeminiTextProviderOptions & {
+  serviceTier?: "standard" | "flex" | "priority" | undefined;
+};
+
 export type TanStackAIProviderUnsupportedReason =
   | "provider-not-implemented"
   | "regional-routing-not-implemented";
@@ -97,7 +101,7 @@ export type TanStackAIProviderSupport =
 type TanStackModelOptionsByProvider = {
   anthropic: StellaAnthropicTextProviderOptions;
   bedrock: BedrockConverseProviderOptions;
-  google: GeminiTextProviderOptions;
+  google: StellaGeminiTextProviderOptions;
   mistral: MistralTextProviderOptions;
   openai: OpenAITextProviderOptions;
   openrouter: OpenRouterResponsesTextProviderOptions;

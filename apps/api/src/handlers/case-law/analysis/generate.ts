@@ -126,6 +126,7 @@ ${decisionText}`;
     });
     const result = await generateTanStackObjectForRole({
       role: "fast",
+      serviceTier: "standard",
       orgAIConfig,
       organizationId,
       analytics: aiAnalytics,

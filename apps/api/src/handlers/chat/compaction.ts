@@ -438,6 +438,7 @@ export const compactChatMessagesForModel = async ({
               transcript,
             ].join("\n"),
             role: "chat",
+            serviceTier: "standard",
             system: CHAT_COMPACTION_SYSTEM_PROMPT,
             temperature: 0,
           }),
@@ -497,6 +498,7 @@ export const summarizeChatCompactionForModel = async ({
               transcript,
             ].join("\n"),
             role: "chat",
+            serviceTier: "standard",
             system: CHAT_COMPACTION_SYSTEM_PROMPT,
             temperature: 0,
           }),
@@ -559,6 +561,7 @@ export const compactModelMessagesForModel = async ({
             ].join("\n"),
             system: COMPACTION_SYSTEM_PROMPT,
             role,
+            serviceTier: "standard",
             temperature: 0,
           }),
         catch: (error) => {

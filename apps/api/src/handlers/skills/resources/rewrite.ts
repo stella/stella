@@ -145,6 +145,7 @@ const rewriteSkillResource = createSafeRootHandler(
           abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
           maxOutputTokens: REWRITE_MAX_OUTPUT_TOKENS,
           role: "fast",
+          serviceTier: "standard",
           orgAIConfig,
           organizationId: session.activeOrganizationId,
           analytics: aiAnalytics,

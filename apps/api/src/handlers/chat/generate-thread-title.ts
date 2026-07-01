@@ -66,6 +66,7 @@ export const generateThreadTitle = async ({
       abortSignal: AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
       maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
       role: "fast",
+      serviceTier: "batch",
       orgAIConfig,
       organizationId,
       analytics: aiAnalytics,

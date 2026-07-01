@@ -71,6 +71,7 @@ const autocompleteStream = createSafeRootHandler(
       try: () =>
         streamTanStackTextForRole({
           role: "fast",
+          serviceTier: "standard",
           orgAIConfig,
           organizationId: session.activeOrganizationId,
           caching: resolveCaching({

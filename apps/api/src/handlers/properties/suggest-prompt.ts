@@ -161,6 +161,7 @@ const suggestPrompt = createSafeHandler(
       try: async () => {
         const result = await generateTanStackTextForRole({
           role: "fast",
+          serviceTier: "standard",
           orgAIConfig,
           organizationId: session.activeOrganizationId,
           analytics: aiAnalytics,

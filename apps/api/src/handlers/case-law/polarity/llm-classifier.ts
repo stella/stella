@@ -84,6 +84,7 @@ export const classifyWithLLM = async ({
     try: async () => {
       const output = await generateTanStackObjectForRole({
         role: "fast",
+        serviceTier: "standard",
         orgAIConfig: null,
         organizationId: null,
         analytics: aiAnalytics,

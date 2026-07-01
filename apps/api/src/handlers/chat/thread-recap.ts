@@ -113,6 +113,7 @@ export const generateThreadRecapText = async ({
       abortSignal: AbortSignal.timeout(RECAP_GENERATION_TIMEOUT_MS),
       maxOutputTokens: RECAP_MAX_OUTPUT_TOKENS,
       role: "fast",
+      serviceTier: "standard",
       orgAIConfig,
       organizationId,
       analytics: aiAnalytics,

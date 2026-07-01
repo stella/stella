@@ -261,6 +261,7 @@ const organizeSuggestionsHandler = async function* ({
     try: async () =>
       await generateTanStackObjectForRole({
         role: "fast",
+        serviceTier: "flex",
         orgAIConfig,
         organizationId,
         analytics: aiAnalytics,
@@ -722,6 +723,7 @@ const generateMissingSummaries = async ({
     try: async () =>
       await generateTanStackObjectForRole({
         role: "fast",
+        serviceTier: "flex",
         orgAIConfig,
         organizationId,
         analytics: aiAnalytics,
