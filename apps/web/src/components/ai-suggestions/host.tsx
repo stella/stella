@@ -34,6 +34,7 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LoaderCircleIcon,
+  SquareIcon,
   SquarePenIcon,
   UserIcon,
   WandSparklesIcon,
@@ -1508,17 +1509,12 @@ export function PromptBar(props: PromptBarProps) {
   const submitDisabled = busy || isSendBlocked;
   // With queuing enabled the composer keeps accepting input while a
   // response streams: `useChatSession` holds submitted drafts until the
-  // turn finishes. Keep the primary button as Send once a draft is ready
-  // so click/tap can queue follow-ups, not only keyboard Enter.
+  // turn finishes. Keep Send as the primary action and show Stop beside it.
   const composerSubmitDisabled = queueWhileGenerating
     ? status === "applying" || isSendBlocked
     : submitDisabled;
-  const canQueueDraft =
-    queueWhileGenerating &&
-    isGenerating &&
-    !composerSubmitDisabled &&
-    canSubmit;
-  const morphSendToStop = showStop && !canQueueDraft;
+  const morphSendToStop = showStop && !queueWhileGenerating;
+  const showQueueStopButton = showStop && queueWhileGenerating;
   // After a stop the send arrow becomes Retry until the user starts
   // a new draft (the owner also clears `onRetry` then; the `isEmpty`
   // gate just avoids a one-render flash before that state lands).
@@ -1804,6 +1800,26 @@ export function PromptBar(props: PromptBarProps) {
             }
           />
           <TooltipPopup side="top">{newThreadLabel}</TooltipPopup>
+        </Tooltip>
+      )}
+
+      {showQueueStopButton && (
+        <Tooltip>
+          <TooltipTrigger
+            render={
+              <Button
+                aria-label={t("chat.stopResponse")}
+                className="rounded-full"
+                onClick={() => onStop()}
+                size="icon-sm"
+                type="button"
+                variant="ghost"
+              >
+                <SquareIcon aria-hidden="true" className="size-3.5" />
+              </Button>
+            }
+          />
+          <TooltipPopup side="top">{t("chat.stopResponse")}</TooltipPopup>
         </Tooltip>
       )}
 
