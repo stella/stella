@@ -97,6 +97,9 @@ export type FoldedText = {
   // the original input immediately after that unit's source character.
   sourceEndIndex: number[];
   text: string;
+  // True when normalization stopped before consuming the full input because
+  // the folded text reached the caller's scan budget.
+  truncated: boolean;
   // For each UTF-16 code-unit index `i` in `text`, the code-unit index in
   // the original input where that unit's source character began.
   // `sourceIndex[text.length]` is the original length (end sentinel), so a
@@ -104,18 +107,33 @@ export type FoldedText = {
   sourceIndex: number[];
 };
 
+type ApplyArabicFoldsWithOffsetsOptions = {
+  maxFoldedUnits?: number;
+};
+
 /**
  * Like applyArabicFolds, but also returns an offset map so callers that
  * match against the folded text (e.g. find-in-page) can slice the original
  * text at the right positions.
  */
-export const applyArabicFoldsWithOffsets = (input: string): FoldedText => {
+export const applyArabicFoldsWithOffsets = (
+  input: string,
+  options: ApplyArabicFoldsWithOffsetsOptions = {},
+): FoldedText => {
   const parts: string[] = [];
   const sourceEndIndex: number[] = [];
   const sourceIndex: number[] = [];
+  const maxFoldedUnits = options.maxFoldedUnits ?? Number.POSITIVE_INFINITY;
+  let foldedUnits = 0;
   let originalUnit = 0;
+  let truncated = false;
   for (const char of input) {
     const replacement = applyArabicFolds(char.normalize("NFKC"));
+    if (foldedUnits + replacement.length > maxFoldedUnits) {
+      truncated = true;
+      break;
+    }
+
     const originalEnd = originalUnit + char.length;
     parts.push(replacement);
     // One offset entry per UTF-16 code unit of the replacement; folds are
@@ -126,9 +144,10 @@ export const applyArabicFoldsWithOffsets = (input: string): FoldedText => {
       sourceEndIndex.push(originalEnd);
       unit += 1;
     }
+    foldedUnits += replacement.length;
     originalUnit = originalEnd;
   }
   sourceIndex.push(originalUnit);
   sourceEndIndex.push(originalUnit);
-  return { sourceEndIndex, text: parts.join(""), sourceIndex };
+  return { sourceEndIndex, text: parts.join(""), truncated, sourceIndex };
 };

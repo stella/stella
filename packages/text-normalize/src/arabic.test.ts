@@ -62,6 +62,16 @@ describe("applyArabicFoldsWithOffsets", () => {
     expect(sourceEndIndex).toEqual([1, 1, 1, 1, 1]);
   });
 
+  test("caps folded units before expansion can exhaust offset maps", () => {
+    const { sourceEndIndex, text, truncated, sourceIndex } =
+      applyArabicFoldsWithOffsets("ﷺ".repeat(10), { maxFoldedUnits: 18 });
+
+    expect(text).toBe("صلي الله عليه وسلم");
+    expect(truncated).toBe(true);
+    expect(sourceIndex).toHaveLength(19);
+    expect(sourceEndIndex).toHaveLength(19);
+  });
+
   test("a folded match maps back to the original substring", () => {
     const original = "رقم ٢٠٢٤ نهائي";
     const { sourceEndIndex, text, sourceIndex } =

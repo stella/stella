@@ -46,6 +46,13 @@ const SEARCH_SNIPPET_CONTEXT_CHARS = 200;
 const SEARCH_MAX_HITS_SCANNED = 100;
 
 /**
+ * Maximum folded UTF-16 units to materialize per searched entity. NFKC can
+ * expand a single compatibility character into many units, so this caps the
+ * offset maps before regex scanning starts.
+ */
+const SEARCH_MAX_FOLDED_UNITS_SCANNED = 500_000;
+
+/**
  * Escape a literal substring so it can be embedded into a `RegExp`.
  * The caller wants to search for the user's query verbatim, not as
  * a regex pattern, so any regex metacharacter is neutralised.
@@ -76,8 +83,11 @@ export const findHitsInText = (
   const {
     sourceEndIndex,
     text: foldedText,
+    truncated: foldedTextTruncated,
     sourceIndex,
-  } = applyArabicFoldsWithOffsets(text);
+  } = applyArabicFoldsWithOffsets(text, {
+    maxFoldedUnits: SEARCH_MAX_FOLDED_UNITS_SCANNED,
+  });
 
   const flags = options.caseSensitive ? "g" : "gi";
   const escaped = escapeRegExp(foldedQuery);
@@ -134,8 +144,8 @@ export const findHitsInText = (
   return {
     hits,
     totalHits,
-    totalHitsCapped,
-    truncated: hits.length < totalHits,
+    totalHitsCapped: totalHitsCapped || foldedTextTruncated,
+    truncated: foldedTextTruncated || hits.length < totalHits,
   };
 };
 
