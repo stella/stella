@@ -80,6 +80,51 @@ const collectPropertyIds = (
   return propertyIds;
 };
 
+type PropertyMappingRow = {
+  id: SafeId<"property">;
+  name: string;
+  content: { type: string };
+  system: boolean;
+};
+
+/**
+ * Map source workspace property IDs to the target workspace's. Custom columns
+ * match by name+type. The system file property (Documents) holds the document
+ * itself and can be named differently per workspace (locale or rename), so it
+ * is matched to the target's system file property by its system+file identity;
+ * matching it by name would drop the file field and leave the copy with no
+ * clickable, typed file.
+ */
+const buildPropertyIdMap = (
+  sourceProperties: readonly PropertyMappingRow[],
+  targetProperties: readonly PropertyMappingRow[],
+): Map<SafeId<"property">, SafeId<"property">> => {
+  const propertyIdMap = new Map<SafeId<"property">, SafeId<"property">>();
+  const targetByKey = new Map<string, SafeId<"property">>();
+  let targetSystemFileId: SafeId<"property"> | undefined;
+  for (const prop of targetProperties) {
+    if (prop.system && prop.content.type === "file") {
+      targetSystemFileId = prop.id;
+    }
+    targetByKey.set(`${prop.name}:${prop.content.type}`, prop.id);
+  }
+  for (const sourceProp of sourceProperties) {
+    if (sourceProp.system && sourceProp.content.type === "file") {
+      if (targetSystemFileId) {
+        propertyIdMap.set(sourceProp.id, targetSystemFileId);
+      }
+      continue;
+    }
+    const targetId = targetByKey.get(
+      `${sourceProp.name}:${sourceProp.content.type}`,
+    );
+    if (targetId) {
+      propertyIdMap.set(sourceProp.id, targetId);
+    }
+  }
+  return propertyIdMap;
+};
+
 /**
  * Remap property IDs in entity snapshots for cross-workspace copy.
  * Properties are workspace-scoped, so we match by name+type and remap
@@ -281,7 +326,7 @@ const copyToWorkspaceHandler = async function* ({
   // properties do not exist in the target workspace are dropped, so
   // their files must not be copied either.
   const requiredPropertyIds = collectPropertyIds(sourceEntities);
-  const propertyIdMap = new Map<SafeId<"property">, SafeId<"property">>();
+  let propertyIdMap = new Map<SafeId<"property">, SafeId<"property">>();
 
   if (requiredPropertyIds.size > 0) {
     const properties = yield* Result.await(
@@ -292,12 +337,12 @@ const copyToWorkspaceHandler = async function* ({
               workspaceId: { eq: sourceWorkspaceId },
               id: { in: [...requiredPropertyIds] },
             },
-            columns: { id: true, name: true, content: true },
+            columns: { id: true, name: true, content: true, system: true },
             limit: LIMITS.propertiesCount,
           }),
           tx.query.properties.findMany({
             where: { workspaceId: { eq: targetWorkspaceId } },
-            columns: { id: true, name: true, content: true },
+            columns: { id: true, name: true, content: true, system: true },
             limit: LIMITS.propertiesCount,
           }),
         ]);
@@ -306,19 +351,10 @@ const copyToWorkspaceHandler = async function* ({
       }),
     );
 
-    const targetByKey = new Map<string, SafeId<"property">>();
-    for (const prop of properties.targetProperties) {
-      const key = `${prop.name}:${prop.content.type}`;
-      targetByKey.set(key, prop.id);
-    }
-
-    for (const sourceProp of properties.sourceProperties) {
-      const key = `${sourceProp.name}:${sourceProp.content.type}`;
-      const targetId = targetByKey.get(key);
-      if (targetId) {
-        propertyIdMap.set(sourceProp.id, targetId);
-      }
-    }
+    propertyIdMap = buildPropertyIdMap(
+      properties.sourceProperties,
+      properties.targetProperties,
+    );
   }
 
   const propertyRemappedEntities = remapPropertyIds(
