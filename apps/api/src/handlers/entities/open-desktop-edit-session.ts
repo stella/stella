@@ -27,6 +27,12 @@ import {
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  collectFolioCollabStoredSessionFiles,
+  deleteFolioCollabStoredSessionFiles,
+  isFolioCollabSessionExpired,
+} from "@/api/lib/folio-collab-sessions";
+import type { FolioCollabStoredSessionFile } from "@/api/lib/folio-collab-sessions";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { broadcast } from "@/api/lib/sse";
 
@@ -73,6 +79,11 @@ type ExistingOpenDesktopEditSession = {
   checkpointUpdatedAt: Date | null;
   fileName: string;
   id: SafeId<"desktopEditSession">;
+};
+
+type ExpiredFolioCollabSessionFiles = {
+  files: FolioCollabStoredSessionFile[];
+  sessionId: SafeId<"folioCollabSession">;
 };
 
 const readExistingOpenDesktopEditSession = async ({
@@ -163,6 +174,75 @@ const expireStaleOwnDesktopEditSessions = async ({
       metadata: { reason: "token_expired_on_open" },
     })),
   );
+};
+
+const expireStaleFolioCollabSessionConflict = async ({
+  entityId,
+  now,
+  propertyId,
+  recordAuditEvent,
+  tx,
+  workspaceId,
+}: {
+  entityId: SafeId<"entity">;
+  now: Date;
+  propertyId: SafeId<"property">;
+  recordAuditEvent: AuditRecorder;
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+}): Promise<
+  | { status: "none" }
+  | { status: "open" }
+  | ({ status: "expired" } & ExpiredFolioCollabSessionFiles)
+> => {
+  const collabSessions = await tx
+    .select({
+      createdAt: folioCollabSessions.createdAt,
+      docxCheckpointFileId: folioCollabSessions.docxCheckpointFileId,
+      docxCheckpointUpdatedAt: folioCollabSessions.docxCheckpointUpdatedAt,
+      id: folioCollabSessions.id,
+      yjsSnapshotFileId: folioCollabSessions.yjsSnapshotFileId,
+      yjsSnapshotUpdatedAt: folioCollabSessions.yjsSnapshotUpdatedAt,
+    })
+    .from(folioCollabSessions)
+    .where(
+      and(
+        eq(folioCollabSessions.entityId, entityId),
+        eq(folioCollabSessions.propertyId, propertyId),
+        eq(folioCollabSessions.workspaceId, workspaceId),
+        eq(folioCollabSessions.status, "open"),
+      ),
+    )
+    .limit(1)
+    .for("update");
+
+  const collabSession = collabSessions.at(0);
+  if (!collabSession) {
+    return { status: "none" };
+  }
+
+  if (!isFolioCollabSessionExpired(collabSession.createdAt, now)) {
+    return { status: "open" };
+  }
+
+  await tx
+    .update(folioCollabSessions)
+    .set({ closedAt: now, status: "cancelled" })
+    .where(eq(folioCollabSessions.id, collabSession.id));
+
+  await recordAuditEvent(tx, {
+    action: AUDIT_ACTION.UPDATE,
+    resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+    resourceId: collabSession.id,
+    changes: { status: { old: "open", new: "cancelled" } },
+    metadata: { reason: "session_lifetime_expired" },
+  });
+
+  return {
+    files: collectFolioCollabStoredSessionFiles(collabSession),
+    sessionId: collabSession.id,
+    status: "expired",
+  };
 };
 
 const buildExistingOpenDesktopEditSessionResponse = async ({
@@ -351,8 +431,11 @@ export const openDesktopEditSessionHandler = async function* ({
     );
   }
 
-  const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) =>
-    await safeDb(async (tx) => {
+  const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) => {
+    const result = await safeDb(async (tx) => {
+      let expiredFolioCollabSessionFiles: ExpiredFolioCollabSessionFiles | null =
+        null;
+
       await lockDocxEditTarget({
         entityId,
         propertyId,
@@ -381,20 +464,23 @@ export const openDesktopEditSessionHandler = async function* ({
       });
 
       if (existingSession) {
-        return await buildExistingOpenDesktopEditSessionResponse({
-          existingSession,
-          organizationId,
-          propertyId,
-          recordAuditEvent,
-          sessionToken,
-          sessionTokenHash,
-          tx,
-          workspaceId,
-        });
+        return {
+          expiredFolioCollabSessionFiles,
+          value: await buildExistingOpenDesktopEditSessionResponse({
+            existingSession,
+            organizationId,
+            propertyId,
+            recordAuditEvent,
+            sessionToken,
+            sessionTokenHash,
+            tx,
+            workspaceId,
+          }),
+        };
       }
 
       if (!allowInsert) {
-        return null;
+        return { expiredFolioCollabSessionFiles, value: null };
       }
 
       const currentTarget = await readCurrentDocxTarget({
@@ -406,34 +492,44 @@ export const openDesktopEditSessionHandler = async function* ({
 
       if (!currentTarget) {
         return {
-          error: {
-            message: "Target property is not an editable DOCX field.",
-            statusCode: 400 as const,
+          expiredFolioCollabSessionFiles,
+          value: {
+            error: {
+              message: "Target property is not an editable DOCX field.",
+              statusCode: 400 as const,
+            },
           },
         } as const;
       }
 
-      const collabSessions = await tx
-        .select({ id: folioCollabSessions.id })
-        .from(folioCollabSessions)
-        .where(
-          and(
-            eq(folioCollabSessions.entityId, entityId),
-            eq(folioCollabSessions.propertyId, propertyId),
-            eq(folioCollabSessions.workspaceId, workspaceId),
-            eq(folioCollabSessions.status, "open"),
-          ),
-        )
-        .limit(1);
+      const collabSessionConflict = await expireStaleFolioCollabSessionConflict(
+        {
+          entityId,
+          now,
+          propertyId,
+          recordAuditEvent,
+          tx,
+          workspaceId,
+        },
+      );
 
-      if (collabSessions.at(0)) {
+      if (collabSessionConflict.status === "open") {
         return {
-          error: {
-            message:
-              "This document already has a collaborative edit session open.",
-            statusCode: 409 as const,
+          expiredFolioCollabSessionFiles,
+          value: {
+            error: {
+              message:
+                "This document already has a collaborative edit session open.",
+              statusCode: 409 as const,
+            },
           },
         } as const;
+      }
+      if (collabSessionConflict.status === "expired") {
+        expiredFolioCollabSessionFiles = {
+          files: collabSessionConflict.files,
+          sessionId: collabSessionConflict.sessionId,
+        };
       }
 
       const sessionId = createSafeId<"desktopEditSession">();
@@ -470,20 +566,39 @@ export const openDesktopEditSessionHandler = async function* ({
       });
 
       return {
-        baseVersionNumber: currentTarget.baseVersionNumber,
-        downloadUrl: await presignDocxFieldDownload({
-          fileContent: currentTarget.fileContent,
-          organizationId,
-          workspaceId,
-        }),
-        fileName: currentTarget.fileContent.fileName,
-        lastCheckpointAt: null,
-        resumedFromCheckpoint: false,
-        sessionId,
-        sessionToken,
-        tookOverExistingSession: false,
-      } satisfies OpenDesktopEditSessionResponse;
+        expiredFolioCollabSessionFiles,
+        value: {
+          baseVersionNumber: currentTarget.baseVersionNumber,
+          downloadUrl: await presignDocxFieldDownload({
+            fileContent: currentTarget.fileContent,
+            organizationId,
+            workspaceId,
+          }),
+          fileName: currentTarget.fileContent.fileName,
+          lastCheckpointAt: null,
+          resumedFromCheckpoint: false,
+          sessionId,
+          sessionToken,
+          tookOverExistingSession: false,
+        } satisfies OpenDesktopEditSessionResponse,
+      };
     });
+
+    if (Result.isError(result)) {
+      return Result.err(result.error);
+    }
+
+    if (result.value.expiredFolioCollabSessionFiles !== null) {
+      await deleteFolioCollabStoredSessionFiles({
+        files: result.value.expiredFolioCollabSessionFiles.files,
+        organizationId,
+        sessionId: result.value.expiredFolioCollabSessionFiles.sessionId,
+        workspaceId,
+      });
+    }
+
+    return Result.ok(result.value.value);
+  };
 
   let firstAttempt = await runOpenSession({ allowInsert: true });
 

@@ -202,11 +202,14 @@ export const createCollabServer = async ({
     const tokenExpiresAtMs = parseTokenExpiresAt(tokenExpiresAt);
     const existing = sessionTokens.get(sessionId);
 
-    if (existing && existing.tokenExpiresAtMs >= tokenExpiresAtMs) {
+    if (existing && existing.tokenExpiresAtMs > tokenExpiresAtMs) {
       return existing;
     }
 
     if (existing) {
+      if (existing.token !== token) {
+        existing.refreshInFlight = null;
+      }
       existing.token = token;
       existing.tokenExpiresAtMs = tokenExpiresAtMs;
       scheduleTokenRefresh(existing);
@@ -232,15 +235,20 @@ export const createCollabServer = async ({
     }
 
     const refresh = (async () => {
+      const token = state.token;
       const refreshed = await postJson({
         apiUrl,
         body: {
           sessionId: state.sessionId,
-          token: state.token,
+          token,
         },
         path: "/folio-collab-sessions/refresh-token",
         schema: refreshTokenResponseSchema,
       });
+
+      if (state.token !== token) {
+        return state.token;
+      }
 
       state.token = refreshed.token;
       state.tokenExpiresAtMs = parseTokenExpiresAt(refreshed.tokenExpiresAt);

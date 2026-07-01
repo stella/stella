@@ -8,6 +8,7 @@ type FakeStellaApiOptions = {
   canEdit?: boolean;
   initialSnapshotBase64?: string | null;
   refreshedToken?: string;
+  replacementToken?: string;
   roomName?: string;
   token?: string;
   tokenExpiresAt?: string;
@@ -79,6 +80,7 @@ const createFakeStellaApi = ({
   canEdit = true,
   initialSnapshotBase64 = null,
   refreshedToken = "collab_token_refreshed",
+  replacementToken,
   roomName = "folio_collab_session_test",
   token = "collab_token_test",
   tokenExpiresAt = farFutureTokenExpiresAt(),
@@ -97,9 +99,17 @@ const createFakeStellaApi = ({
 
       if (url.pathname === "/v1/folio-collab-sessions/authorize") {
         authorizeRequests += 1;
+        const requestToken = body["token"];
+        const tokenAuthorized =
+          requestToken === token ||
+          (replacementToken !== undefined && requestToken === replacementToken);
 
-        if (body["sessionId"] !== roomName || body["token"] !== token) {
+        if (body["sessionId"] !== roomName || !tokenAuthorized) {
           return Response.json({ message: "Unauthorized" }, { status: 401 });
+        }
+
+        if (requestToken === replacementToken) {
+          currentToken = replacementToken;
         }
 
         return Response.json({
@@ -339,6 +349,69 @@ describe("collaboration server", () => {
     } finally {
       provider.destroy();
       ydoc.destroy();
+      await collabServer.destroy();
+      await fakeApi.destroy();
+    }
+  });
+
+  test("replaces a cached room token when a new token has the same expiry", async () => {
+    const initialToken = "collab_token_initial";
+    const replacementToken = "collab_token_replacement";
+    const fakeApi = createFakeStellaApi({
+      replacementToken,
+      token: initialToken,
+      tokenExpiresAt: farFutureTokenExpiresAt(),
+    });
+    const collabServer = await createCollabServer({
+      apiUrl: fakeApi.url,
+      debounceMs: 20,
+      maxDebounceMs: 100,
+      port: 0,
+    });
+
+    const firstDoc = new Doc();
+    const secondDoc = new Doc();
+    const firstProvider = createProvider({
+      name: "folio_collab_session_test",
+      token: initialToken,
+      url: collabServer.websocketUrl,
+      ydoc: firstDoc,
+    });
+
+    try {
+      await waitFor(
+        () => firstProvider.isAuthenticated,
+        "First provider did not authenticate.",
+      );
+
+      const secondProvider = createProvider({
+        name: "folio_collab_session_test",
+        token: replacementToken,
+        url: collabServer.websocketUrl,
+        ydoc: secondDoc,
+      });
+
+      try {
+        await waitFor(
+          () => secondProvider.isAuthenticated,
+          "Second provider did not authenticate.",
+        );
+
+        secondDoc.getText("body").insert(0, "stored with replacement token");
+
+        await waitFor(
+          () => fakeApi.storeRequests() > 0,
+          "Server did not persist a snapshot with the replacement token.",
+        );
+
+        expect(fakeApi.storeRequestTokens()).toEqual([replacementToken]);
+      } finally {
+        secondProvider.destroy();
+      }
+    } finally {
+      firstProvider.destroy();
+      firstDoc.destroy();
+      secondDoc.destroy();
       await collabServer.destroy();
       await fakeApi.destroy();
     }

@@ -13,15 +13,18 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createFileKey } from "@/api/handlers/files/utils";
+import { captureError } from "@/api/lib/analytics";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { isMemberRole } from "@/api/lib/member-roles";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** Short-lived room tokens limit damage if a browser leaks one. */
 export const FOLIO_COLLAB_TOKEN_TTL_MS = 60 * 60 * 1000;
+export const FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS = 8 * 60 * 60 * 1000;
 
 const FOLIO_COLLAB_TOKEN_PART_LENGTH = 32;
 export const FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE = "application/octet-stream";
@@ -47,16 +50,112 @@ export const createFolioCollabToken = () =>
 export const hashFolioCollabToken = (token: string) =>
   new Bun.CryptoHasher("sha256").update(token).digest("hex");
 
-export const computeFolioCollabTokenExpiresAt = () =>
-  new Date(Date.now() + FOLIO_COLLAB_TOKEN_TTL_MS);
+export const computeFolioCollabTokenExpiresAt = (
+  sessionCreatedAt: Date,
+  now = new Date(),
+) => {
+  const tokenExpiresAtMs = now.getTime() + FOLIO_COLLAB_TOKEN_TTL_MS;
+  const sessionExpiresAtMs =
+    sessionCreatedAt.getTime() + FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS;
+
+  return new Date(Math.min(tokenExpiresAtMs, sessionExpiresAtMs));
+};
+
+export const isFolioCollabSessionExpired = (
+  sessionCreatedAt: Date,
+  now = new Date(),
+) =>
+  sessionCreatedAt.getTime() + FOLIO_COLLAB_SESSION_MAX_LIFETIME_MS <=
+  now.getTime();
+
+export const computeFolioCollabRefreshTokenExpiresAt = (
+  sessionCreatedAt: Date,
+  now = new Date(),
+) => {
+  const tokenExpiresAt = computeFolioCollabTokenExpiresAt(
+    sessionCreatedAt,
+    now,
+  );
+  if (tokenExpiresAt.getTime() <= now.getTime()) {
+    return null;
+  }
+
+  return tokenExpiresAt;
+};
+
+export type FolioCollabStoredSessionFile = {
+  fileId: SafeId<"userFile">;
+  mimeType: typeof DOCX_MIME_TYPE | typeof FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE;
+};
+
+export const collectFolioCollabStoredSessionFiles = ({
+  docxCheckpointFileId,
+  docxCheckpointUpdatedAt,
+  yjsSnapshotFileId,
+  yjsSnapshotUpdatedAt,
+}: {
+  docxCheckpointFileId: SafeId<"userFile">;
+  docxCheckpointUpdatedAt: Date | null;
+  yjsSnapshotFileId: SafeId<"userFile">;
+  yjsSnapshotUpdatedAt: Date | null;
+}) => {
+  const storedFiles: FolioCollabStoredSessionFile[] = [];
+
+  if (yjsSnapshotUpdatedAt !== null) {
+    storedFiles.push({
+      fileId: yjsSnapshotFileId,
+      mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+    });
+  }
+
+  if (docxCheckpointUpdatedAt !== null) {
+    storedFiles.push({
+      fileId: docxCheckpointFileId,
+      mimeType: DOCX_MIME_TYPE,
+    });
+  }
+
+  return storedFiles;
+};
+
+export const deleteFolioCollabStoredSessionFiles = async ({
+  files,
+  organizationId,
+  sessionId,
+  workspaceId,
+}: {
+  files: FolioCollabStoredSessionFile[];
+  organizationId: SafeId<"organization">;
+  sessionId: SafeId<"folioCollabSession">;
+  workspaceId: SafeId<"workspace">;
+}) => {
+  await Promise.all(
+    files.map(async ({ fileId, mimeType }) => {
+      const key = createFileKey({
+        fileId,
+        mimeType,
+        organizationId,
+        workspaceId,
+      });
+
+      await getS3()
+        .delete(key)
+        .catch((error: unknown) => {
+          captureError(error, { sessionId, storageKey: key });
+        });
+    }),
+  );
+};
 
 export type AuthorizedFolioCollabSession = {
   canEdit: boolean;
   fileName: string;
   organizationId: SafeId<"organization">;
   scopedDb: ScopedDb;
+  sessionCreatedAt: Date;
   sessionId: SafeId<"folioCollabSession">;
   tokenExpiresAt: Date;
+  tokenId: SafeId<"folioCollabSessionToken">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace">;
   yjsSnapshotFileId: SafeId<"userFile">;
@@ -64,6 +163,7 @@ export type AuthorizedFolioCollabSession = {
 
 type IssueFolioCollabTokenOptions = {
   permissions: FolioCollabTokenPermissions;
+  sessionCreatedAt: Date;
   sessionId: SafeId<"folioCollabSession">;
   tx: Transaction;
   userId: SafeId<"user">;
@@ -72,13 +172,14 @@ type IssueFolioCollabTokenOptions = {
 
 export const issueFolioCollabToken = async ({
   permissions,
+  sessionCreatedAt,
   sessionId,
   tx,
   userId,
   workspaceId,
 }: IssueFolioCollabTokenOptions) => {
   const token = createFolioCollabToken();
-  const tokenExpiresAt = computeFolioCollabTokenExpiresAt();
+  const tokenExpiresAt = computeFolioCollabTokenExpiresAt(sessionCreatedAt);
   await tx.insert(folioCollabSessionTokens).values({
     expiresAt: tokenExpiresAt,
     id: createSafeId<"folioCollabSessionToken">(),
@@ -92,6 +193,37 @@ export const issueFolioCollabToken = async ({
   return { token, tokenExpiresAt };
 };
 
+export const refreshFolioCollabToken = async ({
+  sessionCreatedAt,
+  tokenId,
+  tx,
+}: {
+  sessionCreatedAt: Date;
+  tokenId: SafeId<"folioCollabSessionToken">;
+  tx: Transaction;
+}) => {
+  const now = new Date();
+  const tokenExpiresAt = computeFolioCollabRefreshTokenExpiresAt(
+    sessionCreatedAt,
+    now,
+  );
+  if (!tokenExpiresAt) {
+    return null;
+  }
+
+  const refreshed = await tx
+    .update(folioCollabSessionTokens)
+    .set({ expiresAt: tokenExpiresAt })
+    .where(eq(folioCollabSessionTokens.id, tokenId))
+    .returning({ id: folioCollabSessionTokens.id });
+
+  if (!refreshed.at(0)) {
+    return null;
+  }
+
+  return { tokenExpiresAt };
+};
+
 export type FolioCollabSessionAuthorizationResult =
   | { status: "authorized"; value: AuthorizedFolioCollabSession }
   | { status: "missing" }
@@ -101,6 +233,7 @@ export type FolioCollabSessionAuthorizationResult =
 type FolioCollabSessionDecisionInput = {
   expiresAt: Date;
   now: Date;
+  sessionCreatedAt: Date;
   organizationRole: string | null;
   sessionStatus: string | null | undefined;
   workspaceMemberId: string | null;
@@ -114,6 +247,7 @@ type FolioCollabSessionDecisionInput = {
 export const decideFolioCollabSessionStatus = ({
   expiresAt,
   now,
+  sessionCreatedAt,
   organizationRole,
   sessionStatus,
   workspaceMemberId,
@@ -126,7 +260,11 @@ export const decideFolioCollabSessionStatus = ({
     return "missing";
   }
 
-  if (expiresAt < now) {
+  const nowMs = now.getTime();
+  if (
+    expiresAt.getTime() <= nowMs ||
+    isFolioCollabSessionExpired(sessionCreatedAt, now)
+  ) {
     return "token-expired";
   }
 
@@ -163,7 +301,9 @@ export const authorizeFolioCollabSession = async ({
       fileName: folioCollabSessions.fileName,
       organizationId: workspaces.organizationId,
       organizationRole: member.role,
+      sessionCreatedAt: folioCollabSessions.createdAt,
       sessionStatus: folioCollabSessions.status,
+      tokenId: folioCollabSessionTokens.id,
       userId: folioCollabSessionTokens.userId,
       workspaceId: folioCollabSessions.workspaceId,
       workspaceMemberId: workspaceMembers.id,
@@ -205,6 +345,7 @@ export const authorizeFolioCollabSession = async ({
   const status = decideFolioCollabSessionStatus({
     expiresAt: row.expiresAt,
     now: new Date(),
+    sessionCreatedAt: row.sessionCreatedAt,
     organizationRole: row.organizationRole,
     sessionStatus: row.sessionStatus,
     workspaceMemberId: row.workspaceMemberId,
@@ -224,8 +365,10 @@ export const authorizeFolioCollabSession = async ({
         userId: brandPersistedUserId(row.userId),
         workspaceIds: [row.workspaceId],
       }),
+      sessionCreatedAt: row.sessionCreatedAt,
       sessionId,
       tokenExpiresAt: row.expiresAt,
+      tokenId: row.tokenId,
       userId: brandPersistedUserId(row.userId),
       workspaceId: row.workspaceId,
       yjsSnapshotFileId: row.yjsSnapshotFileId,

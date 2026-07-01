@@ -3,8 +3,6 @@ import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { folioCollabSessions } from "@/api/db/schema";
-import { createFileKey } from "@/api/handlers/files/utils";
-import { captureError } from "@/api/lib/analytics";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import {
@@ -12,21 +10,15 @@ import {
   AUDIT_RESOURCE_TYPE,
   createAuditRecorder,
 } from "@/api/lib/audit-log";
-import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   authorizeFolioCollabSession,
-  FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
+  collectFolioCollabStoredSessionFiles,
+  deleteFolioCollabStoredSessionFiles,
 } from "@/api/lib/folio-collab-sessions";
-import { getS3 } from "@/api/lib/s3";
+import type { FolioCollabStoredSessionFile } from "@/api/lib/folio-collab-sessions";
 import { broadcast } from "@/api/lib/sse";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
-
-type StoredSessionFile = {
-  fileId: SafeId<"userFile">;
-  mimeType: string;
-};
 
 const config = {
   params: t.Object({
@@ -96,7 +88,7 @@ const cancelFolioCollabSession = createSafeTokenHandler(
       server,
     });
 
-    const storedFiles: StoredSessionFile[] = [];
+    const storedFiles: FolioCollabStoredSessionFile[] = [];
     const cancelled = await scopedDb(async (tx) => {
       const sessions = await tx
         .select({
@@ -136,19 +128,7 @@ const cancelFolioCollabSession = createSafeTokenHandler(
         } as const;
       }
 
-      if (session.yjsSnapshotUpdatedAt !== null) {
-        storedFiles.push({
-          fileId: session.yjsSnapshotFileId,
-          mimeType: FOLIO_COLLAB_YJS_UPDATE_MIME_TYPE,
-        });
-      }
-
-      if (session.docxCheckpointUpdatedAt !== null) {
-        storedFiles.push({
-          fileId: session.docxCheckpointFileId,
-          mimeType: DOCX_MIME_TYPE,
-        });
-      }
+      storedFiles.push(...collectFolioCollabStoredSessionFiles(session));
 
       const closedAt = new Date();
       await tx
@@ -177,22 +157,12 @@ const cancelFolioCollabSession = createSafeTokenHandler(
       );
     }
 
-    await Promise.all(
-      storedFiles.map(async ({ fileId, mimeType }) => {
-        const key = createFileKey({
-          fileId,
-          mimeType,
-          organizationId,
-          workspaceId,
-        });
-
-        await getS3()
-          .delete(key)
-          .catch((error: unknown) => {
-            captureError(error, { sessionId, storageKey: key });
-          });
-      }),
-    );
+    await deleteFolioCollabStoredSessionFiles({
+      files: storedFiles,
+      organizationId,
+      sessionId,
+      workspaceId,
+    });
 
     broadcast(workspaceId, {
       type: "invalidate-query",

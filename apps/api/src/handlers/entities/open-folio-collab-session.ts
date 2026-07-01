@@ -20,7 +20,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { issueFolioCollabToken } from "@/api/lib/folio-collab-sessions";
+import {
+  collectFolioCollabStoredSessionFiles,
+  deleteFolioCollabStoredSessionFiles,
+  issueFolioCollabToken,
+  isFolioCollabSessionExpired,
+} from "@/api/lib/folio-collab-sessions";
+import type { FolioCollabStoredSessionFile } from "@/api/lib/folio-collab-sessions";
 
 const openFolioCollabSessionBodySchema = t.Object({
   entityId: tSafeId("entity"),
@@ -53,6 +59,11 @@ type OpenFolioCollabSessionProps = {
 
 const SEED_CLAIM_STALE_MS = 30_000;
 
+type ExpiredFolioCollabSessionFiles = {
+  files: FolioCollabStoredSessionFile[];
+  sessionId: SafeId<"folioCollabSession">;
+};
+
 const openFolioCollabSessionHandler = async function* ({
   body: { entityId, propertyId },
   organizationId,
@@ -63,6 +74,8 @@ const openFolioCollabSessionHandler = async function* ({
 }: OpenFolioCollabSessionProps) {
   const openSession = yield* Result.await(
     safeDb(async (tx) => {
+      let expiredSessionFiles: ExpiredFolioCollabSessionFiles | null = null;
+
       await lockDocxEditTarget({
         entityId,
         propertyId,
@@ -90,16 +103,23 @@ const openFolioCollabSessionHandler = async function* ({
               "This document already has a single-user edit session open.",
             status: 409,
           },
+          expiredSessionFiles,
         } as const;
       }
 
+      const now = new Date();
       const existingSessions = await tx
         .select({
           baseVersionId: folioCollabSessions.baseVersionId,
+          createdAt: folioCollabSessions.createdAt,
+          docxCheckpointFileId: folioCollabSessions.docxCheckpointFileId,
+          docxCheckpointUpdatedAt: folioCollabSessions.docxCheckpointUpdatedAt,
           fileName: folioCollabSessions.fileName,
           id: folioCollabSessions.id,
           seedClaimedAt: folioCollabSessions.seedClaimedAt,
           seededAt: folioCollabSessions.seededAt,
+          yjsSnapshotFileId: folioCollabSessions.yjsSnapshotFileId,
+          yjsSnapshotUpdatedAt: folioCollabSessions.yjsSnapshotUpdatedAt,
         })
         .from(folioCollabSessions)
         .where(
@@ -114,76 +134,102 @@ const openFolioCollabSessionHandler = async function* ({
 
       const existingSession = existingSessions.at(0);
       if (existingSession) {
-        if (existingSession.seededAt === null) {
-          const seedClaimStale =
-            existingSession.seedClaimedAt === null ||
-            existingSession.seedClaimedAt.getTime() <
-              Date.now() - SEED_CLAIM_STALE_MS;
-
-          if (!seedClaimStale) {
-            return {
-              error: {
-                message: "Collaborative edit session is still preparing.",
-                status: 409,
-              },
-            } as const;
-          }
-
-          const baseContent = await readVersionDocxTarget({
-            entityVersionId: existingSession.baseVersionId,
-            propertyId,
-            tx,
-            workspaceId,
-          });
-
-          if (!baseContent) {
-            return {
-              error: {
-                message:
-                  "Collaborative edit session source file is no longer available.",
-                status: 409,
-              },
-            } as const;
-          }
+        if (isFolioCollabSessionExpired(existingSession.createdAt, now)) {
+          expiredSessionFiles = {
+            files: collectFolioCollabStoredSessionFiles(existingSession),
+            sessionId: existingSession.id,
+          };
 
           await tx
             .update(folioCollabSessions)
-            .set({
-              seedClaimedAt: new Date(),
-              seedClaimedBy: userId,
-            })
+            .set({ closedAt: now, status: "cancelled" })
             .where(eq(folioCollabSessions.id, existingSession.id));
 
           await recordAuditEvent(tx, {
             action: AUDIT_ACTION.UPDATE,
             resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
             resourceId: existingSession.id,
-            changes: {
-              seedClaimedBy: { old: null, new: userId },
-            },
-            metadata: { reason: "seed_claim_recovered" },
+            changes: { status: { old: "open", new: "cancelled" } },
+            metadata: { reason: "session_lifetime_expired" },
           });
+        } else {
+          if (existingSession.seededAt === null) {
+            const seedClaimStale =
+              existingSession.seedClaimedAt === null ||
+              existingSession.seedClaimedAt.getTime() <
+                now.getTime() - SEED_CLAIM_STALE_MS;
+
+            if (!seedClaimStale) {
+              return {
+                error: {
+                  message: "Collaborative edit session is still preparing.",
+                  status: 409,
+                },
+                expiredSessionFiles,
+              } as const;
+            }
+
+            const baseContent = await readVersionDocxTarget({
+              entityVersionId: existingSession.baseVersionId,
+              propertyId,
+              tx,
+              workspaceId,
+            });
+
+            if (!baseContent) {
+              return {
+                error: {
+                  message:
+                    "Collaborative edit session source file is no longer available.",
+                  status: 409,
+                },
+                expiredSessionFiles,
+              } as const;
+            }
+
+            await tx
+              .update(folioCollabSessions)
+              .set({
+                seedClaimedAt: now,
+                seedClaimedBy: userId,
+              })
+              .where(eq(folioCollabSessions.id, existingSession.id));
+
+            await recordAuditEvent(tx, {
+              action: AUDIT_ACTION.UPDATE,
+              resourceType: AUDIT_RESOURCE_TYPE.FOLIO_COLLAB_SESSION,
+              resourceId: existingSession.id,
+              changes: {
+                seedClaimedBy: { old: null, new: userId },
+              },
+              metadata: { reason: "seed_claim_recovered" },
+            });
+
+            return {
+              baseVersionId: existingSession.baseVersionId,
+              collabSessionId: existingSession.id,
+              fileName: existingSession.fileName,
+              sessionCreatedAt: existingSession.createdAt,
+              seedDownloadUrl: await presignDocxFieldDownload({
+                fileContent: baseContent,
+                organizationId,
+                workspaceId,
+              }),
+              shouldSeed: true,
+              expiredSessionFiles,
+            } as const;
+          }
 
           return {
             baseVersionId: existingSession.baseVersionId,
             collabSessionId: existingSession.id,
             fileName: existingSession.fileName,
-            seedDownloadUrl: await presignDocxFieldDownload({
-              fileContent: baseContent,
-              organizationId,
-              workspaceId,
-            }),
-            shouldSeed: true,
+            sessionCreatedAt: existingSession.createdAt,
+            seedDownloadUrl: null,
+            shouldSeed: false,
+            expiredSessionFiles,
           } as const;
         }
-
-        return {
-          baseVersionId: existingSession.baseVersionId,
-          collabSessionId: existingSession.id,
-          fileName: existingSession.fileName,
-          seedDownloadUrl: null,
-          shouldSeed: false,
-        } as const;
       }
 
       const currentTarget = await readCurrentDocxTarget({
@@ -199,12 +245,15 @@ const openFolioCollabSessionHandler = async function* ({
             message: "Target property is not an editable DOCX field.",
             status: 400,
           },
+          expiredSessionFiles,
         } as const;
       }
 
       const collabSessionId = createSafeId<"folioCollabSession">();
+      const sessionCreatedAt = new Date();
       await tx.insert(folioCollabSessions).values({
         baseVersionId: currentTarget.baseVersionId,
+        createdAt: sessionCreatedAt,
         createdBy: userId,
         docxCheckpointFileId: createSafeId<"userFile">(),
         entityId,
@@ -243,10 +292,21 @@ const openFolioCollabSessionHandler = async function* ({
           organizationId,
           workspaceId,
         }),
+        sessionCreatedAt,
         shouldSeed: true,
+        expiredSessionFiles,
       } as const;
     }),
   );
+
+  if (openSession.expiredSessionFiles !== null) {
+    await deleteFolioCollabStoredSessionFiles({
+      files: openSession.expiredSessionFiles.files,
+      organizationId,
+      sessionId: openSession.expiredSessionFiles.sessionId,
+      workspaceId,
+    });
+  }
 
   if ("error" in openSession) {
     return Result.err(
@@ -262,6 +322,7 @@ const openFolioCollabSessionHandler = async function* ({
       async (tx) =>
         await issueFolioCollabToken({
           permissions: { canEdit: true },
+          sessionCreatedAt: openSession.sessionCreatedAt,
           sessionId: openSession.collabSessionId,
           tx,
           userId,
