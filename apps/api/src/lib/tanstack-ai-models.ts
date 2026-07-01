@@ -634,10 +634,21 @@ export const requireTanStackAIAvailableForRole = ({
   role: ModelRole;
 }): Result<void, HandlerError> => {
   if (!orgConfig) {
-    if (hasTanStackInstanceProvider()) {
-      return Result.ok(undefined);
+    if (!hasTanStackInstanceProvider()) {
+      return Result.err(byokRoleNotConfiguredError(role));
     }
-    return Result.err(byokRoleNotConfiguredError(role));
+
+    const provider = resolveTanStackTextProvider({
+      provider: getActiveProvider(),
+    });
+    if (!supportsTanStackProviderRole(provider, role)) {
+      if (isBYOKProvider(provider)) {
+        return Result.err(byokProviderRoleUnsupportedError(provider, role));
+      }
+      return panic("Unsupported TanStack AI role provider.");
+    }
+
+    return Result.ok(undefined);
   }
 
   const selection = orgConfig.overrideModels[role];

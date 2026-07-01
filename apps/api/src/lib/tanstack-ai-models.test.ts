@@ -328,6 +328,26 @@ describe("TanStack text model resolution", () => {
     expect(handlerError.message).toContain("document input");
   });
 
+  test("rejects unsupported instance providers in role availability preflight", () => {
+    const originalProvider = env.AI_PROVIDER;
+    try {
+      env.AI_PROVIDER = "mistral";
+
+      const unavailable = requireTanStackAIAvailableForRole({
+        orgConfig: null,
+        role: "pdf",
+      });
+
+      expect(unavailable.isErr()).toBe(true);
+      if (unavailable.isErr()) {
+        expect(unavailable.error.status).toBe(400);
+        expect(unavailable.error.message).toContain("PDF flows");
+      }
+    } finally {
+      env.AI_PROVIDER = originalProvider;
+    }
+  });
+
   test("resolves Bedrock BYOK selections through the TanStack adapter", () => {
     const orgConfig = orgConfigForProvider("bedrock");
 
