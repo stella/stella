@@ -70,6 +70,7 @@ import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
 import { usePermissions } from "@/hooks/use-permissions";
+import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { usePublicLawPreviewEnabled } from "@/hooks/use-public-law-preview";
 import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { SIDE_RAIL_ICON_BUTTON_SIZE } from "@/lib/consts";
@@ -109,6 +110,7 @@ export function AppSidebar(props: AppSidebarProps) {
   const { state, toggleSidebar, isMobile } = useSidebar();
   const isCollapsed = state === "collapsed" && !isMobile;
   const publicLawPreviewEnabled = usePublicLawPreviewEnabled();
+  const playbooksPreviewEnabled = usePlaybooksPreviewEnabled();
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includePublicLaw: publicLawPreviewEnabled,
   });
@@ -306,23 +308,25 @@ export function AppSidebar(props: AppSidebarProps) {
         void navigate({ to: "/knowledge" });
       },
       contextMenu: {
-        recents: knowledgeSections.map((s) => {
-          const Icon = s.icon;
-          return {
-            label: t(s.titleKey),
-            icon: <Icon />,
-            onClick: () => {
-              if (s.to) {
-                void navigate({ to: s.to });
-                return;
-              }
-              stellaToast.add({
-                title: t("common.comingSoon"),
-                type: "neutral",
-              });
-            },
-          };
-        }),
+        recents: knowledgeSections
+          .filter((s) => s.key !== "playbooks" || playbooksPreviewEnabled)
+          .map((s) => {
+            const Icon = s.icon;
+            return {
+              label: t(s.titleKey),
+              icon: <Icon />,
+              onClick: () => {
+                if (s.to) {
+                  void navigate({ to: s.to });
+                  return;
+                }
+                stellaToast.add({
+                  title: t("common.comingSoon"),
+                  type: "neutral",
+                });
+              },
+            };
+          }),
       },
     },
     contacts: {

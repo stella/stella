@@ -42,6 +42,7 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
@@ -482,6 +483,7 @@ type RunPlaybookControlProps = {
  */
 const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
   const t = useTranslations();
+  const playbooksEnabled = usePlaybooksPreviewEnabled();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -575,6 +577,10 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
   };
 
   const isRunning = runningPlaybookId !== null || isAutoRunning;
+
+  if (!playbooksEnabled) {
+    return null;
+  }
 
   return (
     <Menu onOpenChange={setOpen} open={open}>

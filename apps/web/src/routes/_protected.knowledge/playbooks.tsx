@@ -1,12 +1,13 @@
 import { useCallback, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createFileRoute, getRouteApi } from "@tanstack/react-router";
+import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 
+import { playbooksRouteAvailable } from "@/hooks/use-playbooks-preview";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { PlaybookEditor } from "@/routes/_protected.knowledge/-components/playbook-editor";
@@ -24,6 +25,11 @@ type View = { kind: "list" } | { kind: "editor"; playbookId: string | null };
 // ── Route ────────────────────────────────────────────
 
 export const Route = createFileRoute("/_protected/knowledge/playbooks")({
+  beforeLoad: () => {
+    if (!playbooksRouteAvailable()) {
+      throw redirect({ to: "/knowledge" });
+    }
+  },
   component: RouteComponent,
 });
 

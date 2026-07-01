@@ -22,6 +22,8 @@ function BetaFeaturesPage() {
   const t = useTranslations();
   const publicLawPreview = useDevStore((s) => s.publicLawPreview);
   const setPublicLawPreview = useDevStore((s) => s.setPublicLawPreview);
+  const playbooksPreview = useDevStore((s) => s.playbooksPreview);
+  const setPlaybooksPreview = useDevStore((s) => s.setPlaybooksPreview);
 
   return (
     <>
@@ -48,6 +50,27 @@ function BetaFeaturesPage() {
                 }}
               />
               <FieldLabel>{t("common.caseLaw")}</FieldLabel>
+            </Field>
+          </div>
+        </FramePanel>
+        <FramePanel>
+          <div className="flex flex-col gap-3 p-1">
+            <h2 className="text-sm font-medium">{t("common.playbooks")}</h2>
+            <p className="text-muted-foreground text-xs">
+              {t("knowledge.sections.playbooks.description")}
+            </p>
+            <Field className="flex-row items-center gap-2">
+              <Checkbox
+                checked={playbooksPreview}
+                onCheckedChange={(next) => {
+                  if (next === playbooksPreview) {
+                    return;
+                  }
+
+                  setPlaybooksPreview(next);
+                }}
+              />
+              <FieldLabel>{t("common.playbooks")}</FieldLabel>
             </Field>
           </div>
         </FramePanel>

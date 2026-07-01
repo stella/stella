@@ -70,6 +70,7 @@ export const env = createEnv({
     VITE_FEATURE_CASE_LAW: featureFlagSchema,
     VITE_PUBLIC_LAW_ENABLED: featureFlagSchema,
     VITE_PUBLIC_LAW_INDEXING_ENABLED: featureFlagSchema,
+    VITE_PLAYBOOKS_ENABLED: featureFlagSchema,
     VITE_FEATURE_CONTACTS: featureFlagSchema,
     VITE_FEATURE_CALENDAR: featureFlagSchema,
     VITE_FEATURE_TODOS: featureFlagSchema,
