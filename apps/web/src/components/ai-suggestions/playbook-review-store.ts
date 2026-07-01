@@ -13,6 +13,7 @@
  * entity id, cleared on document close / reload.
  */
 
+import { Result } from "better-result";
 import { create } from "zustand";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";
@@ -80,9 +81,18 @@ export type PlaybookReviewSession = {
 
 type ReviewRequestError = Parameters<typeof toAPIError>[0];
 
+// Sessions are keyed per (entity, file field): an entity can hold multiple file
+// fields, each a distinct document with its own review.
+export const reviewSessionKey = (
+  entityId: string,
+  fileFieldId: string,
+): string => `${entityId}:${fileFieldId}`;
+
 export type StartReviewResult =
   | { ok: true }
-  | { ok: false; message: string; error: ReviewRequestError };
+  // `error` is the Eden API error when the server responded, or null when the
+  // request itself threw (client timeout / network) with no response payload.
+  | { ok: false; message: string; error: ReviewRequestError | null };
 
 type StartReviewArgs = {
   workspaceId: string;
@@ -101,10 +111,11 @@ type Actions = {
   startReview: (args: StartReviewArgs) => Promise<StartReviewResult>;
   setFixState: (
     entityId: string,
+    fileFieldId: string,
     positionId: string,
     next: PlaybookFixState,
   ) => void;
-  resetSession: (entityId: string) => void;
+  resetSession: (entityId: string, fileFieldId: string) => void;
 };
 
 const EMPTY_SESSION: PlaybookReviewSession = {
@@ -133,7 +144,8 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     fileFieldId,
     unexpectedErrorMessage,
   }) => {
-    const existing = get().sessions[entityId];
+    const key = reviewSessionKey(entityId, fileFieldId);
+    const existing = get().sessions[key];
     if (existing?.status === "reviewing") {
       return { ok: true };
     }
@@ -141,7 +153,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     set((state) => ({
       sessions: {
         ...state.sessions,
-        [entityId]: {
+        [key]: {
           status: "reviewing",
           playbookId,
           findings: existing?.findings ?? [],
@@ -152,25 +164,57 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
       },
     }));
 
-    const response = await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
-      .review.post(
-        {
-          entityId: toSafeId<"entity">(entityId),
-          fileFieldId: toSafeId<"field">(fileFieldId),
-        },
-        { fetch: { signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS) } },
-      );
+    const result = await Result.tryPromise(
+      async () =>
+        await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .playbooks({
+            playbookId: toSafeId<"playbookDefinition">(playbookId),
+          })
+          .review.post(
+            {
+              entityId: toSafeId<"entity">(entityId),
+              fileFieldId: toSafeId<"field">(fileFieldId),
+            },
+            {
+              fetch: { signal: AbortSignal.timeout(REVIEW_CLIENT_TIMEOUT_MS) },
+            },
+          ),
+    );
+
+    // The request threw (client timeout / dropped connection) instead of
+    // returning an Eden response — move to the error state so the facet is not
+    // stuck on "Reviewing…". There is no Eden error payload to report.
+    if (Result.isError(result)) {
+      set((state) => {
+        const current = state.sessions[key] ?? EMPTY_SESSION;
+        return {
+          sessions: {
+            ...state.sessions,
+            [key]: {
+              status: "error",
+              playbookId,
+              findings: current.findings,
+              fixState: current.fixState,
+              error: unexpectedErrorMessage,
+              reviewedAt: current.reviewedAt,
+            },
+          },
+        };
+      });
+      return { ok: false, message: unexpectedErrorMessage, error: null };
+    }
+
+    const response = result.value;
 
     if (response.error) {
       const message = userErrorMessage(response.error, unexpectedErrorMessage);
       set((state) => {
-        const current = state.sessions[entityId] ?? EMPTY_SESSION;
+        const current = state.sessions[key] ?? EMPTY_SESSION;
         return {
           sessions: {
             ...state.sessions,
-            [entityId]: {
+            [key]: {
               status: "error",
               playbookId,
               findings: current.findings,
@@ -187,7 +231,7 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     set((state) => ({
       sessions: {
         ...state.sessions,
-        [entityId]: {
+        [key]: {
           status: "idle",
           playbookId,
           findings: response.data,
@@ -215,16 +259,17 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     return { ok: true };
   },
 
-  setFixState: (entityId, positionId, next) => {
+  setFixState: (entityId, fileFieldId, positionId, next) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
     set((state) => {
-      const current = state.sessions[entityId];
+      const current = state.sessions[key];
       if (!current) {
         return state;
       }
       return {
         sessions: {
           ...state.sessions,
-          [entityId]: {
+          [key]: {
             ...current,
             fixState: { ...current.fixState, [positionId]: next },
           },
@@ -233,9 +278,10 @@ export const usePlaybookReviewStore = create<State & Actions>()((set, get) => ({
     });
   },
 
-  resetSession: (entityId) => {
+  resetSession: (entityId, fileFieldId) => {
+    const key = reviewSessionKey(entityId, fileFieldId);
     set((state) => {
-      const { [entityId]: _removed, ...rest } = state.sessions;
+      const { [key]: _removed, ...rest } = state.sessions;
       return { sessions: rest };
     });
   },

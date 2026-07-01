@@ -37,6 +37,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import {
+  reviewSessionKey,
   SEVERITY_ORDER,
   usePlaybookReviewStore,
 } from "@/components/ai-suggestions/playbook-review-store";
@@ -53,6 +54,11 @@ import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { playbooksOptions } from "@/routes/_protected.knowledge/-queries";
+
+// The org playbook cap equals the API's max page size, so one request returns
+// every playbook; the picker needs them all selectable rather than the first
+// default page.
+const PLAYBOOK_PICKER_LIMIT = 100;
 
 type PlaybookFacetProps = {
   entityId: string;
@@ -73,13 +79,15 @@ export const PlaybookFacet = ({
   const registration = useActiveDocxStore(
     useShallow((state) => state.byEntityId[entityId]?.registration),
   );
-  const session = usePlaybookReviewStore((state) => state.sessions[entityId]);
+  const session = usePlaybookReviewStore(
+    (state) => state.sessions[reviewSessionKey(entityId, fileFieldId)],
+  );
   const startReview = usePlaybookReviewStore((state) => state.startReview);
   const setFixState = usePlaybookReviewStore((state) => state.setFixState);
   const resetSession = usePlaybookReviewStore((state) => state.resetSession);
 
   const { data: playbooksData } = useQuery(
-    playbooksOptions(user.activeOrganizationId),
+    playbooksOptions(user.activeOrganizationId, PLAYBOOK_PICKER_LIMIT),
   );
   const playbooks =
     playbooksData && "items" in playbooksData ? playbooksData.items : [];
@@ -97,7 +105,11 @@ export const PlaybookFacet = ({
       unexpectedErrorMessage: t("common.unexpectedError"),
     });
     if (!result.ok) {
-      analytics.captureError(toAPIError(result.error));
+      // A thrown request (client timeout / network) carries no Eden error to
+      // capture; still surface the toast.
+      if (result.error) {
+        analytics.captureError(toAPIError(result.error));
+      }
       stellaToast.add({
         type: "error",
         title: t("knowledge.playbooks.review.failed"),
@@ -149,7 +161,7 @@ export const PlaybookFacet = ({
       });
       return;
     }
-    setFixState(entityId, finding.positionId, {
+    setFixState(entityId, fileFieldId, finding.positionId, {
       status: "applied",
       revisionIds: applied.revisionIds ?? null,
     });
@@ -161,7 +173,7 @@ export const PlaybookFacet = ({
 
   const acceptFix = (positionId: string, revisionIds: readonly number[]) => {
     registration?.editorRef.current?.acceptAIEditOperation(revisionIds);
-    setFixState(entityId, positionId, {
+    setFixState(entityId, fileFieldId, positionId, {
       status: "accepted",
       revisionIds: null,
     });
@@ -169,7 +181,10 @@ export const PlaybookFacet = ({
 
   const rejectFix = (positionId: string, revisionIds: readonly number[]) => {
     registration?.editorRef.current?.rejectAIEditOperation(revisionIds);
-    setFixState(entityId, positionId, { status: "pending", revisionIds: null });
+    setFixState(entityId, fileFieldId, positionId, {
+      status: "pending",
+      revisionIds: null,
+    });
   };
 
   if (session?.status === "reviewing") {
@@ -180,7 +195,7 @@ export const PlaybookFacet = ({
     return (
       <ErrorState
         message={session.error ?? t("common.unexpectedError")}
-        onChangePlaybook={() => resetSession(entityId)}
+        onChangePlaybook={() => resetSession(entityId, fileFieldId)}
         onRetry={() => {
           if (session.playbookId !== null) {
             void runReview(session.playbookId);
@@ -201,7 +216,7 @@ export const PlaybookFacet = ({
           void insertFix(finding);
         }}
         onRejectFix={rejectFix}
-        onReviewAgain={() => resetSession(entityId)}
+        onReviewAgain={() => resetSession(entityId, fileFieldId)}
         onScrollToBlock={scrollToBlock}
         onScrollToFix={scrollToFix}
         playbookName={playbookName}

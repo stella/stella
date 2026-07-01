@@ -20,6 +20,7 @@ import type { PreparedInputFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { normalizeJustification } from "@/api/lib/workflow/parse-justifications";
+import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 // Non-persisting ASK extraction for the single-doc playbook review. It runs the
 // SAME AI extraction the batch workflow uses (file prep, batch schema, model
@@ -174,14 +175,22 @@ export const extractAskContents = async ({
       return Result.ok(EMPTY_RESULT);
     }
 
+    // Force DOCX block preparation: the files-table batch prefers a converted
+    // DOCX's PDF derivative (bates citations), but single-document review targets
+    // docx-folio block ids for scroll + one-click fix anchors, so a converted
+    // DOCX must still be parsed to blocks. Nulling pdfFileId selects the DOCX
+    // path in fetchAndPrepareFiles.
+    const reviewFiles: ResolvedFile[] = [];
+    for (const file of supportedFiles) {
+      reviewFiles.push(
+        file.mimeType === DOCX_MIME_TYPE ? { ...file, pdfFileId: null } : file,
+      );
+    }
+
     const preparedFiles = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await fetchAndPrepareFiles(
-            supportedFiles,
-            organizationId,
-            workspaceId,
-          ),
+          await fetchAndPrepareFiles(reviewFiles, organizationId, workspaceId),
         catch: (cause) =>
           new WorkflowIntegrationError({
             message: "Failed to prepare review input files",
