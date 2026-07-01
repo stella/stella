@@ -329,10 +329,13 @@ const CHAT_RUNTIME_BRAND: unique symbol = Symbol("StellaChatRuntime");
 
 export type ChatRuntime = {
   readonly [CHAT_RUNTIME_BRAND]: true;
-  addToolApprovalResponse: (response: {
-    approved: boolean;
-    id: string;
-  }) => Promise<void>;
+  addToolApprovalResponse: (
+    response: {
+      approved: boolean;
+      id: string;
+    },
+    options?: ChatSendMessageOptions,
+  ) => Promise<void>;
   addToolResult: (
     result: ChatToolResultInput,
     options?: ChatSendMessageOptions,
@@ -871,8 +874,10 @@ export const createChatRuntime = ({
 
   const runtime = {
     [CHAT_RUNTIME_BRAND]: true,
-    addToolApprovalResponse: async (response) => {
-      await client.addToolApprovalResponse(response);
+    addToolApprovalResponse: async (response, options) => {
+      await withBody(options, async () => {
+        await client.addToolApprovalResponse(response);
+      });
     },
     addToolResult: async (result, options) => {
       await withBody(options, async () => {
@@ -1364,6 +1369,8 @@ export const chatThreadSuggestedPromptsOptions = ({
 export const groupedChatThreadsOptions = (activeOrganizationId: string) =>
   infiniteQueryOptions({
     queryKey: chatKeys.groupedThreads(activeOrganizationId),
+    staleTime: STALE_TIME.FIVETEEN.MINUTES,
+    refetchOnWindowFocus: false,
     queryFn: async ({ pageParam, signal }): Promise<GroupedChatThreadsPage> =>
       await fetchGroupedChatThreads({ cursor: pageParam, signal }),
     initialPageParam: undefined as string | undefined,
@@ -1372,6 +1379,7 @@ export const groupedChatThreadsOptions = (activeOrganizationId: string) =>
 
 export const invalidateGroupedChatThreads = async (queryClient: QueryClient) =>
   await queryClient.invalidateQueries({
+    refetchType: "inactive",
     // Match every cached `["chat", <orgId>, "threads", "grouped"]` entry —
     // we cannot reconstruct orgId here so we walk by structural shape.
     predicate: (query) => {

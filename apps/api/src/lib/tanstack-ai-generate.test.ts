@@ -74,7 +74,7 @@ describe("TanStack AI structured output generation", () => {
     const jsonSchema = realTanStackAI.convertSchemaToJsonSchema(tanStackSchema);
 
     if (!jsonSchema) {
-      throw new Error("Expected TanStack to convert the schema.");
+      throw new TypeError("Expected TanStack to convert the schema.");
     }
     expect(jsonSchema.type).toBe("object");
     expect(jsonSchema.properties).toHaveProperty("answer");
@@ -268,7 +268,7 @@ describe("TanStack AI structured output generation", () => {
 
 const captureChatOptions = (options: unknown): CapturedChatOptions => {
   if (!isRecord(options)) {
-    throw new Error("Expected TanStack chat options object.");
+    throw new TypeError("Expected TanStack chat options object.");
   }
 
   return {
@@ -288,11 +288,11 @@ const getOnlyCapturedChatOptions = (): CapturedChatOptions => {
 
 const expectHasTanStackJsonSchema = (schema: unknown): void => {
   if (!isRecord(schema)) {
-    throw new Error("Expected a TanStack Standard JSON Schema object.");
+    throw new TypeError("Expected a TanStack Standard JSON Schema object.");
   }
   const standard = schema["~standard"];
   if (!isRecord(standard)) {
-    throw new Error("Expected schema to expose Standard Schema metadata.");
+    throw new TypeError("Expected schema to expose Standard Schema metadata.");
   }
   expect(standard["jsonSchema"]).toBeDefined();
 };

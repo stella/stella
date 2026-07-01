@@ -11,10 +11,7 @@ import * as v from "valibot";
 
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
-import {
-  normalizeOrgAIConfig,
-  type OrgAIConfig,
-} from "@/api/lib/ai-config";
+import { normalizeOrgAIConfig, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";

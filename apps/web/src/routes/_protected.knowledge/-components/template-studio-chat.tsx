@@ -1017,18 +1017,20 @@ const TemplateStudioChatInner = ({
         await handleApprove(approvalId, toolName);
         return;
       }
-      await handleApprove(approvalId, toolName);
-      const output = await handleActiveDocxEditToolCall(part.input, part.id);
       const latestUserMessageId = getLatestUserMessageId(messages);
+      const scopedContinuationOptions =
+        latestUserMessageId === activeScopedPresetTurnMessageIdRef.current
+          ? { body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } }
+          : undefined;
+      await handleApprove(approvalId, toolName, scopedContinuationOptions);
+      const output = await handleActiveDocxEditToolCall(part.input, part.id);
       await addToolResult(
         {
           output,
           tool: "apply-active-docx-edits",
           toolCallId: part.id,
         },
-        latestUserMessageId === activeScopedPresetTurnMessageIdRef.current
-          ? { body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } }
-          : undefined,
+        scopedContinuationOptions,
       );
       return;
     }

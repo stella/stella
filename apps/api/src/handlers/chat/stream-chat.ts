@@ -33,6 +33,7 @@ import type {
   ChatSafePrompt,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
+import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
   detectModelLoop,
@@ -41,7 +42,6 @@ import {
   shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
 } from "@/api/handlers/chat/loop-detector";
-import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -68,6 +68,7 @@ import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
 import { classifyAIError } from "@/api/lib/ai-error";
+import type { AIErrorKind } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
@@ -766,6 +767,33 @@ type ProcessServerChatStreamProps = {
   source: AsyncIterable<StreamChunk>;
 };
 
+type RunErrorChunk = Extract<StreamChunk, { type: EventType.RUN_ERROR }>;
+
+const runErrorMessage = (chunk: RunErrorChunk): string =>
+  chunk.message || "AI stream error";
+
+const errorFromRunErrorChunk = (chunk: RunErrorChunk): Error => {
+  const error = new Error(runErrorMessage(chunk));
+  const code = chunk.code;
+  if (code !== undefined) {
+    Object.assign(error, { code });
+  }
+  return error;
+};
+
+const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind =>
+  classifyAIError(chunk.rawEvent ?? errorFromRunErrorChunk(chunk));
+
+const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
+  const kind = classifyRunErrorChunk(chunk);
+  captureError(errorFromRunErrorChunk(chunk), { kind });
+  return {
+    ...chunk,
+    message: kind,
+    code: kind,
+  };
+};
+
 export const processServerChatStream = async function* ({
   abortSignal,
   getResponseMessage,
@@ -786,7 +814,11 @@ export const processServerChatStream = async function* ({
       }),
     });
 
-    for await (const chunk of normalizedSource) {
+    for await (const sourceChunk of normalizedSource) {
+      const chunk =
+        sourceChunk.type === EventType.RUN_ERROR
+          ? normalizeRunErrorChunk(sourceChunk)
+          : sourceChunk;
       if (chunk.type === EventType.RUN_FINISHED && chunk.usage) {
         usage = chunk.usage;
       }
@@ -796,6 +828,9 @@ export const processServerChatStream = async function* ({
         continue;
       }
       yield chunk;
+      if (chunk.type === EventType.RUN_ERROR) {
+        return;
+      }
     }
 
     await finishResponseMessage({

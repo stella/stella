@@ -198,6 +198,17 @@ export const BYOK_UNSUPPORTED_MODEL_ROLES = {
   mistral: ["pdf"],
 } as const satisfies Record<BYOKProvider, readonly ModelRole[]>;
 
+export const BYOK_MODEL_UNSUPPORTED_ROLES: Partial<
+  Record<BYOKProvider, Partial<Record<string, readonly ModelRole[]>>>
+> = {
+  bedrock: {
+    "us.amazon.nova-micro-v1:0": ["pdf"],
+    "openai.gpt-oss-120b-1:0": ["pdf"],
+    "openai.gpt-oss-20b-1:0": ["pdf"],
+    "us.deepseek.r1-v1:0": ["pdf"],
+  },
+} as const;
+
 export const isBYOKProviderRoleSupported = ({
   provider,
   role,
@@ -207,6 +218,24 @@ export const isBYOKProviderRoleSupported = ({
 }): boolean => {
   const unsupportedRoles: readonly ModelRole[] =
     BYOK_UNSUPPORTED_MODEL_ROLES[provider];
+  return !unsupportedRoles.includes(role);
+};
+
+export const isBYOKModelRoleSupported = ({
+  provider,
+  modelId,
+  role,
+}: {
+  provider: BYOKProvider;
+  modelId: string;
+  role: ModelRole;
+}): boolean => {
+  if (!isBYOKProviderRoleSupported({ provider, role })) {
+    return false;
+  }
+
+  const unsupportedRoles: readonly ModelRole[] =
+    BYOK_MODEL_UNSUPPORTED_ROLES[provider]?.[modelId] ?? [];
   return !unsupportedRoles.includes(role);
 };
 

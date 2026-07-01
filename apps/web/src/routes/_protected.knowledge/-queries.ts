@@ -584,49 +584,62 @@ export const skillsOptions = (organizationId: string) =>
 export const skillCommandsOptions = (organizationId: string) =>
   queryOptions({
     queryKey: knowledgeKeys.skills.commands(organizationId),
-    queryFn: async ({ signal }) => {
-      const commandRows: SkillCommandRow[] = [];
-      let offset = 0;
-
-      while (commandRows.length < MAX_COMMAND_SKILLS) {
-        const response = await api.skills.get({
-          query: {
-            limit: SKILLS_PAGE_SIZE,
-            offset,
-          },
-          fetch: { signal },
-        });
-        if (response.error) {
-          throw toAPIError(response.error);
-        }
-
-        for (const row of response.data.installed) {
-          if (!row.enabled || !row.command || !row.body) {
-            continue;
-          }
-          commandRows.push({
-            id: row.id,
-            scope: row.scope,
-            name: row.name,
-            description: row.description,
-            command: row.command,
-            body: row.body,
-          });
-          if (commandRows.length >= MAX_COMMAND_SKILLS) {
-            break;
-          }
-        }
-
-        if (response.data.nextOffset === null) {
-          break;
-        }
-        offset = response.data.nextOffset;
-      }
-
-      return commandRows;
-    },
+    queryFn: async ({ signal }) =>
+      await fetchSkillCommandRows({
+        commandRows: [],
+        offset: 0,
+        signal,
+      }),
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
+
+const fetchSkillCommandRows = async ({
+  commandRows,
+  offset,
+  signal,
+}: {
+  commandRows: SkillCommandRow[];
+  offset: number;
+  signal: AbortSignal;
+}): Promise<SkillCommandRow[]> => {
+  const response = await api.skills.get({
+    query: {
+      limit: SKILLS_PAGE_SIZE,
+      offset,
+    },
+    fetch: { signal },
+  });
+  if (response.error) {
+    throw toAPIError(response.error);
+  }
+
+  for (const row of response.data.installed) {
+    if (!row.enabled || !row.command || !row.body) {
+      continue;
+    }
+    commandRows.push({
+      id: row.id,
+      scope: row.scope,
+      name: row.name,
+      description: row.description,
+      command: row.command,
+      body: row.body,
+    });
+    if (commandRows.length >= MAX_COMMAND_SKILLS) {
+      return commandRows;
+    }
+  }
+
+  if (response.data.nextOffset === null) {
+    return commandRows;
+  }
+
+  return fetchSkillCommandRows({
+    commandRows,
+    offset: response.data.nextOffset,
+    signal,
+  });
+};
 
 export const skillDetailOptions = (organizationId: string, skillId: string) =>
   queryOptions({

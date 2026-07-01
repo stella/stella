@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
@@ -48,7 +50,7 @@ describe("isOrgAIConfig", () => {
     fast: { provider: "openai", modelId: "gpt-5.4-nano" },
     reasoning: { provider: "openai", modelId: "gpt-5.4" },
     pdf: { provider: "openai", modelId: "gpt-5.4" },
-  };
+  } satisfies OrgAIConfig["overrideModels"];
 
   test("accepts a valid org AI config", () => {
     expect(
@@ -66,9 +68,7 @@ describe("isOrgAIConfig", () => {
         overrideModels: fullOverrideModels,
       }),
     ).toEqual({
-      providers: [
-        { provider: "google", apiKey: "sk-test", region: "global" },
-      ],
+      providers: [{ provider: "google", apiKey: "sk-test", region: "global" }],
       overrideModels: fullOverrideModels,
     });
   });

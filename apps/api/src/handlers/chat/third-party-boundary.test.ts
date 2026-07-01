@@ -314,7 +314,7 @@ describe("chat third-party anonymization boundary", () => {
           {
             type: "tool-call",
             id: "call_1",
-            name: "ask-user",
+            name: "mcp__test__read_secret",
             arguments: JSON.stringify({ question: "Who signed?" }),
             state: "complete",
             output: {
@@ -355,7 +355,7 @@ describe("chat third-party anonymization boundary", () => {
       throw new Error("Expected prepared tool-result part");
     }
     if (typeof resultPart.content !== "string") {
-      throw new Error("Expected JSON tool-result content");
+      throw new TypeError("Expected JSON tool-result content");
     }
 
     expect(JSON.parse(resultPart.content)).toEqual({
@@ -374,7 +374,7 @@ describe("chat third-party anonymization boundary", () => {
           {
             type: "tool-call",
             id: "call_1",
-            name: "ask-user",
+            name: "mcp__test__read_secret",
             arguments: JSON.stringify({ question: "Who signed?" }),
             state: "complete",
             output: "Secret notes for Jan Novák",
@@ -401,9 +401,7 @@ describe("chat third-party anonymization boundary", () => {
 
     expect(prepared.value.at(0)?.parts.at(1)).toMatchObject({
       type: "tool-result",
-      content: [
-        { type: "text", content: "[CUSTOM_1] notes for [PERSON_1]" },
-      ],
+      content: [{ type: "text", content: "[CUSTOM_1] notes for [PERSON_1]" }],
       state: "complete",
       toolCallId: "call_1",
     });

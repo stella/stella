@@ -354,7 +354,7 @@ describe("TanStack text model resolution", () => {
     }
 
     if (!(handlerError instanceof HandlerError)) {
-      throw new Error("Expected HandlerError");
+      throw new TypeError("Expected HandlerError");
     }
     expect(handlerError.status).toBe(400);
     expect(handlerError.message).toContain("document input");
@@ -452,6 +452,7 @@ describe("TanStack text model resolution", () => {
     expect(modelInfo).toEqual({
       keySource: "byok",
       provider: "openrouter",
+      region: "global",
       modelId: "model-chat",
     });
     expect(modelInfo).not.toHaveProperty("adapter");

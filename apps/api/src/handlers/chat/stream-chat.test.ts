@@ -448,6 +448,87 @@ describe("outgoing chat stream message ids", () => {
     ]);
     expect(finishEvents).toEqual([{ isAborted: true, text: "Partial answer" }]);
   });
+
+  test("normalizes in-band provider run errors", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => null,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        throw new Error("Expected run error not to finish");
+      },
+      processor: new StreamProcessor(),
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.RUN_ERROR,
+          message: "upstream quota",
+          rawEvent: { statusCode: 429 },
+        },
+      ]),
+    });
+
+    expect(stripTimestamps(await collectChunks(stream))).toEqual([
+      { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+      {
+        type: EventType.RUN_ERROR,
+        message: "quota_exhausted",
+        code: "quota_exhausted",
+        rawEvent: { statusCode: 429 },
+      },
+    ]);
+  });
+
+  test("does not finish successfully after an in-band run error", async () => {
+    const messageId = toSafeId<"chatMessage">(
+      "11111111-1111-4111-8111-111111111111",
+    );
+    let finished = false;
+    const stream = processServerChatStream({
+      abortSignal: new AbortController().signal,
+      getResponseMessage: () => null,
+      mapMessageId: createChatMessageIdMapper(() => messageId),
+      onFinish: () => {
+        finished = true;
+      },
+      processor: new StreamProcessor(),
+      source: streamChunks([
+        { type: EventType.RUN_STARTED, runId: "run-1", threadId: "thread-1" },
+        {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId: "provider-message",
+          role: "assistant",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_CONTENT,
+          delta: "Partial answer",
+          messageId: "provider-message",
+        },
+        {
+          type: EventType.TEXT_MESSAGE_END,
+          messageId: "provider-message",
+        },
+        {
+          type: EventType.RUN_ERROR,
+          message: "upstream billing",
+          rawEvent: { statusCode: 402 },
+        },
+      ]),
+    });
+
+    const chunks = await collectChunks(stream);
+
+    expect(stripTimestamps(chunks).at(-1)).toEqual({
+      type: EventType.RUN_ERROR,
+      message: "provider_billing",
+      code: "provider_billing",
+      rawEvent: { statusCode: 402 },
+    });
+    expect(finished).toBe(false);
+  });
 });
 
 describe("chat message usage metadata", () => {
@@ -481,9 +562,7 @@ describe("chat attempt terminal classification", () => {
       messages: [],
       modelInfo: { modelId: "gpt-test", provider: "openai" },
       state,
-      threadId: toSafeId<"chatThread">(
-        "11111111-1111-4111-8111-111111111111",
-      ),
+      threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111"),
       usage: {
         completionTokens: 0,
         promptTokens: 12,
@@ -510,9 +589,7 @@ describe("chat attempt terminal classification", () => {
       messages,
       modelInfo: { modelId: "gpt-test", provider: "openai" },
       state,
-      threadId: toSafeId<"chatThread">(
-        "11111111-1111-4111-8111-111111111111",
-      ),
+      threadId: toSafeId<"chatThread">("11111111-1111-4111-8111-111111111111"),
       usage: {
         completionTokens: 50,
         promptTokens: 12,

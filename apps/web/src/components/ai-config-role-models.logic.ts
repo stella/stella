@@ -1,6 +1,7 @@
 import {
   BYOK_DEFAULT_MODELS,
   BYOK_MODEL_OPTIONS,
+  isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
 } from "@stll/ai-catalog";
 
@@ -117,7 +118,9 @@ export const getModelOptionsForRole = ({
   if (!isProviderRoleSupported(provider, role)) {
     return [];
   }
-  return MODEL_OPTIONS_BY_PROVIDER[provider];
+  return MODEL_OPTIONS_BY_PROVIDER[provider].filter((modelId) =>
+    isBYOKModelRoleSupported({ provider, modelId, role }),
+  );
 };
 
 export const isProviderValue = (value: string | null): value is ProviderValue =>

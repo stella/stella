@@ -406,8 +406,12 @@ export const useChatSession = ({
   );
 
   const handleApprove = useCallback(
-    async (id: string, _toolName?: ApprovalToolName) => {
-      await addToolApprovalResponse({ id, approved: true });
+    async (
+      id: string,
+      _toolName?: ApprovalToolName,
+      options?: ChatSendMessageOptions,
+    ) => {
+      await addToolApprovalResponse({ id, approved: true }, options);
     },
     [addToolApprovalResponse],
   );

@@ -11,19 +11,11 @@ export const FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY =
   "fallbackFromServiceTier";
 
 /**
- * Providers that support regional endpoint routing in the active TanStack AI
- * integration. Keep empty until the adapter path can actually route to
- * provider regional endpoints.
- */
-export const REGIONAL_PROVIDERS = new Set<AIProvider>();
-
-/**
  * Check whether a provider supports regional routing.
  * Used at config save time to reject unsupported
  * provider + region combinations.
  */
-export const supportsRegion = (provider: AIProvider): boolean =>
-  REGIONAL_PROVIDERS.has(provider);
+export const supportsRegion = (_provider: AIProvider): boolean => false;
 
 /**
  * Sampling temperature per logical role.

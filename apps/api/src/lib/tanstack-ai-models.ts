@@ -23,6 +23,7 @@ import {
   ANTHROPIC_FIXED_SAMPLING_MODELS,
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
+  isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
 } from "@stll/ai-catalog";
 import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
@@ -163,7 +164,8 @@ export const isAllowedBYOKModelForRole = ({
 
   const allowed: readonly string[] = BYOK_MODEL_OPTIONS[provider];
   return (
-    allowed.includes(modelId) && isBYOKProviderRoleSupported({ provider, role })
+    allowed.includes(modelId) &&
+    isBYOKModelRoleSupported({ provider, modelId, role })
   );
 };
 

@@ -5,6 +5,7 @@ import {
   ANTHROPIC_ADAPTIVE_THINKING_MODELS,
   BYOK_DEFAULT_MODELS,
   BYOK_MODEL_OPTIONS,
+  isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   DEFAULT_MODELS,
   MODEL_RATES,
@@ -51,6 +52,30 @@ describe("BYOK provider role support", () => {
     ).toBe(true);
     expect(
       isBYOKProviderRoleSupported({ provider: "mistral", role: "pdf" }),
+    ).toBe(false);
+  });
+
+  test("does not route PDF flows through Bedrock text-only models", () => {
+    expect(
+      isBYOKModelRoleSupported({
+        provider: "bedrock",
+        modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        role: "pdf",
+      }),
+    ).toBe(true);
+    expect(
+      isBYOKModelRoleSupported({
+        provider: "bedrock",
+        modelId: "openai.gpt-oss-120b-1:0",
+        role: "pdf",
+      }),
+    ).toBe(false);
+    expect(
+      isBYOKModelRoleSupported({
+        provider: "bedrock",
+        modelId: "us.deepseek.r1-v1:0",
+        role: "pdf",
+      }),
     ).toBe(false);
   });
 });
