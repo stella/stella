@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createFileRoute, getRouteApi, redirect } from "@tanstack/react-router";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { Skeleton } from "@stll/ui/components/skeleton";
@@ -113,40 +114,47 @@ function RouteComponent() {
     loadMoreAbort.current = controller;
     setLoadingMore(true);
 
-    try {
-      const response = await api.playbooks.get({
-        query: { cursor, limit: 50 },
-        fetch: { signal: controller.signal },
-      });
+    // Result.tryPromise instead of try/finally: the try/finally form trips the
+    // React Compiler bailout guard, and the request can throw on abort.
+    const result = await Result.tryPromise(
+      async () =>
+        await api.playbooks.get({
+          query: { cursor, limit: 50 },
+          fetch: { signal: controller.signal },
+        }),
+    );
 
-      if (controller.signal.aborted) {
-        return;
-      }
-
-      if (response.error) {
-        stellaToast.add({
-          type: "error",
-          title: t("knowledge.playbooks.loadFailed"),
-          description: userErrorMessage(
-            response.error,
-            t("common.unexpectedError"),
-          ),
-        });
-        return;
-      }
-
-      const { data } = response;
-      if (!("items" in data)) {
-        return;
-      }
-
-      setExtraPlaybooks((prev) => [...prev, ...data.items]);
-      setNextCursor(data.nextCursor);
-    } finally {
-      if (!controller.signal.aborted) {
-        setLoadingMore(false);
-      }
+    // A superseding load aborted this one; leave the loading state to that call.
+    if (controller.signal.aborted) {
+      return;
     }
+    setLoadingMore(false);
+
+    // A thrown request (e.g. network) is swallowed as before — the caller ignores it.
+    if (Result.isError(result)) {
+      return;
+    }
+
+    const response = result.value;
+    if (response.error) {
+      stellaToast.add({
+        type: "error",
+        title: t("knowledge.playbooks.loadFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    const { data } = response;
+    if (!("items" in data)) {
+      return;
+    }
+
+    setExtraPlaybooks((prev) => [...prev, ...data.items]);
+    setNextCursor(data.nextCursor);
   }, [currentNextCursor, t]);
 
   const handleRefresh = useCallback(() => {
