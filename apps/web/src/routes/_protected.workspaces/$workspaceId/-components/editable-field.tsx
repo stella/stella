@@ -266,7 +266,7 @@ const InlineSelectEditor = (props: InlineSelectEditorProps) => {
   if (!editing) {
     const isEmpty =
       content?.type !== props.type ||
-      (props.type === "single-select"
+      (content.type === "single-select"
         ? content.value === null
         : content.value.length === 0);
     return (

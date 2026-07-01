@@ -63,7 +63,9 @@ export const PlaybookEditor = ({
     return (
       <PlaybookEditorForm
         initialDescription=""
+        initialDocumentTypeKey={null}
         initialName=""
+        initialPerspective={null}
         initialPositions={[]}
         onBack={onBack}
         onSaved={onSaved}
