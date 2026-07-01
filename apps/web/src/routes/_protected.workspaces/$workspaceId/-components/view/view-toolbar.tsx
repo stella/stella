@@ -509,7 +509,9 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     setIsAutoRunning(true);
     const response = await api
       .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .playbooks["auto-run"].post({ queryKey: propertiesKeys.all(workspaceId) });
+      .playbooks["auto-run"].post({
+        queryKey: propertiesKeys.all(workspaceId),
+      });
     setIsAutoRunning(false);
 
     if (response.error) {
@@ -906,6 +908,7 @@ const PropertiesToggle = ({
                 const isVisible = !hiddenProperties.includes(prop.id);
                 return (
                   <MenuItem
+                    closeOnClick={false}
                     key={prop.id}
                     closeOnClick={false}
                     onClick={() => toggleProperty(prop.id)}
@@ -933,6 +936,7 @@ const PropertiesToggle = ({
                 const isVisible = !hiddenProperties.includes(prop.id);
                 return (
                   <MenuItem
+                    closeOnClick={false}
                     key={prop.id}
                     closeOnClick={false}
                     onClick={() => toggleProperty(prop.id)}
