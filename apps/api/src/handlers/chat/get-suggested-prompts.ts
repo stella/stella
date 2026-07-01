@@ -11,7 +11,10 @@ import {
 import { requireAIAvailable, getModelForRole } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
-import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import {
+  assertUsageAvailableForHandler,
+  createSafeRootHandler,
+} from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -184,7 +187,27 @@ const getSuggestedPrompts = createSafeRootHandler(
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 
+    const preflightError = await assertUsageAvailableForHandler({
+      metering: { actionType: "chat", modelRole: "fast" },
+      organizationId: session.activeOrganizationId,
+      orgAIConfig,
+      workspaceId: persistedWorkspaceId,
+      userId: user.id,
+      safeDb,
+    });
+    if (preflightError) {
+      return Result.err(preflightError);
+    }
+
     const aiAnalytics = createAIAnalyticsCallbacks({
+      usageMetering: {
+        actionType: "chat",
+        organizationId: session.activeOrganizationId,
+        safeDb,
+        serviceTier: "standard",
+        userId: user.id,
+        workspaceId: persistedWorkspaceId,
+      },
       feature: "chat.suggested_prompts",
       modelRole: "fast",
       orgAIConfig,
