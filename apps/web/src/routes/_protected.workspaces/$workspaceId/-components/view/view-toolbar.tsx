@@ -953,7 +953,6 @@ const PropertiesToggle = ({
                   <MenuItem
                     closeOnClick={false}
                     key={prop.id}
-                    closeOnClick={false}
                     onClick={() => toggleProperty(prop.id)}
                   >
                     <PropertyIcon type={prop.content.type} />
@@ -981,7 +980,6 @@ const PropertiesToggle = ({
                   <MenuItem
                     closeOnClick={false}
                     key={prop.id}
-                    closeOnClick={false}
                     onClick={() => toggleProperty(prop.id)}
                   >
                     <PropertyIcon type={prop.content.type} />
