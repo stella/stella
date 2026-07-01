@@ -97,26 +97,31 @@ export const generateTanStackTextForRole = async (
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
 
-  return await chat({
-    adapter: model.adapter,
-    messages: requestMessages,
-    stream: false,
-    ...systemPromptsPatch({
-      caching: options.caching,
-      model,
-      system: options.system,
-    }),
-    modelOptions: mergeGenerationOptions({
-      caching: options.caching,
-      model,
-      maxOutputTokens: options.maxOutputTokens,
-      serviceTier: options.serviceTier,
-      temperature: options.temperature,
-    }),
-    ...(options.analytics
-      ? { middleware: [options.analytics.middleware] }
-      : {}),
-    ...(abortController ? { abortController } : {}),
+  return await withStandardServiceTierFallback({
+    model,
+    serviceTier: options.serviceTier,
+    run: async (serviceTier) =>
+      await chat({
+        adapter: model.adapter,
+        messages: requestMessages,
+        stream: false,
+        ...systemPromptsPatch({
+          caching: options.caching,
+          model,
+          system: options.system,
+        }),
+        modelOptions: mergeGenerationOptions({
+          caching: options.caching,
+          model,
+          maxOutputTokens: options.maxOutputTokens,
+          serviceTier,
+          temperature: options.temperature,
+        }),
+        ...(options.analytics
+          ? { middleware: [options.analytics.middleware] }
+          : {}),
+        ...(abortController ? { abortController } : {}),
+      }),
   });
 };
 
@@ -163,30 +168,156 @@ const streamTanStackTextDeltas = async function* ({
   system: string | undefined;
   temperature: number | undefined;
 }): AsyncIterable<string> {
-  const stream = chat({
-    adapter: model.adapter,
-    messages,
-    ...systemPromptsPatch({ caching, model, system }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
-      maxOutputTokens,
-      serviceTier,
-      temperature,
-    }),
-    ...(analytics ? { middleware: [analytics.middleware] } : {}),
-    ...(abortController ? { abortController } : {}),
+  yield* iterateWithStandardServiceTierFallback({
+    model,
+    serviceTier,
+    stream: (requestedServiceTier) =>
+      chat({
+        adapter: model.adapter,
+        messages,
+        ...systemPromptsPatch({ caching, model, system }),
+        modelOptions: mergeGenerationOptions({
+          caching,
+          model,
+          maxOutputTokens,
+          serviceTier: requestedServiceTier,
+          temperature,
+        }),
+        ...(analytics ? { middleware: [analytics.middleware] } : {}),
+        ...(abortController ? { abortController } : {}),
+      }),
+    onChunk: (chunk) => {
+      if (
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
+        chunk.delta.length > 0
+      ) {
+        return chunk.delta;
+      }
+      return undefined;
+    },
   });
+};
 
-  for await (const chunk of stream) {
+type StandardServiceTierFallbackOptions<TResult> = {
+  model: ResolvedTanStackTextModel;
+  serviceTier: AIRequestServiceTier;
+  run: (serviceTier: AIRequestServiceTier) => Promise<TResult>;
+};
+
+const withStandardServiceTierFallback = async <TResult>({
+  model,
+  serviceTier,
+  run,
+}: StandardServiceTierFallbackOptions<TResult>): Promise<TResult> => {
+  try {
+    return await run(serviceTier);
+  } catch (error) {
+    if (!shouldRetryWithStandardServiceTier({ error, model, serviceTier })) {
+      throw error;
+    }
+
+    return await run("standard");
+  }
+};
+
+type StandardServiceTierStreamFallbackOptions<TChunk, TResult> = {
+  model: ResolvedTanStackTextModel;
+  serviceTier: AIRequestServiceTier;
+  stream: (serviceTier: AIRequestServiceTier) => AsyncIterable<TChunk>;
+  onChunk: (chunk: TChunk) => TResult | undefined;
+};
+
+const iterateWithStandardServiceTierFallback = async function* <
+  TChunk,
+  TResult,
+>({
+  model,
+  serviceTier,
+  stream,
+  onChunk,
+}: StandardServiceTierStreamFallbackOptions<
+  TChunk,
+  TResult
+>): AsyncIterable<TResult> {
+  let yielded = false;
+
+  try {
+    for await (const chunk of stream(serviceTier)) {
+      const result = onChunk(chunk);
+      if (result === undefined) {
+        continue;
+      }
+      yielded = true;
+      yield result;
+    }
+    return;
+  } catch (error) {
     if (
-      chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
-      chunk.delta.length > 0
+      yielded ||
+      !shouldRetryWithStandardServiceTier({ error, model, serviceTier })
     ) {
-      yield chunk.delta;
+      throw error;
+    }
+  }
+
+  for await (const chunk of stream("standard")) {
+    const result = onChunk(chunk);
+    if (result !== undefined) {
+      yield result;
     }
   }
 };
+
+const shouldRetryWithStandardServiceTier = ({
+  error,
+  model,
+  serviceTier,
+}: {
+  error: unknown;
+  model: ResolvedTanStackTextModel;
+  serviceTier: AIRequestServiceTier;
+}): boolean =>
+  model.provider === "openai" &&
+  isDeferredServiceTier(serviceTier) &&
+  isRetryableServiceTierFallbackError(error);
+
+const isRetryableServiceTierFallbackError = (error: unknown): boolean => {
+  if (!isRecord(error)) {
+    return false;
+  }
+
+  const statusCode = providerStatusCode(error);
+  if (statusCode === null) {
+    return false;
+  }
+
+  const isRetryable = error["isRetryable"];
+  if (isRetryable === false) {
+    return false;
+  }
+  if (isRetryable === true) {
+    return true;
+  }
+
+  return statusCode === 429 || statusCode >= 500;
+};
+
+const providerStatusCode = (error: Record<string, unknown>): number | null => {
+  const statusCode = error["statusCode"];
+  if (typeof statusCode === "number" && Number.isInteger(statusCode)) {
+    return statusCode;
+  }
+
+  const status = error["status"];
+  if (typeof status === "number" && Number.isInteger(status)) {
+    return status;
+  }
+
+  return null;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 export const generateTanStackObjectForRole = async <
   TSchema extends v.GenericSchema,
@@ -203,26 +334,31 @@ export const generateTanStackObjectForRole = async <
     : undefined;
   const tanStackOutputSchema = toTanStackValibotSchema(outputSchema);
 
-  const output = await chat({
-    adapter: model.adapter,
-    messages: requestMessages,
-    outputSchema: tanStackOutputSchema,
-    ...systemPromptsPatch({
-      caching: options.caching,
-      model,
-      system: options.system,
-    }),
-    modelOptions: mergeGenerationOptions({
-      caching: options.caching,
-      model,
-      maxOutputTokens: options.maxOutputTokens,
-      serviceTier: options.serviceTier,
-      temperature: options.temperature,
-    }),
-    ...(options.analytics
-      ? { middleware: [options.analytics.middleware] }
-      : {}),
-    ...(abortController ? { abortController } : {}),
+  const output = await withStandardServiceTierFallback({
+    model,
+    serviceTier: options.serviceTier,
+    run: async (serviceTier) =>
+      await chat({
+        adapter: model.adapter,
+        messages: requestMessages,
+        outputSchema: tanStackOutputSchema,
+        ...systemPromptsPatch({
+          caching: options.caching,
+          model,
+          system: options.system,
+        }),
+        modelOptions: mergeGenerationOptions({
+          caching: options.caching,
+          model,
+          maxOutputTokens: options.maxOutputTokens,
+          serviceTier,
+          temperature: options.temperature,
+        }),
+        ...(options.analytics
+          ? { middleware: [options.analytics.middleware] }
+          : {}),
+        ...(abortController ? { abortController } : {}),
+      }),
   });
 
   return v.parse(outputSchema, output);
@@ -282,25 +418,32 @@ const streamTanStackStructuredOutput = async function* <
   let completed = false;
   let rawJson = "";
   const tanStackOutputSchema = toTanStackValibotSchema(outputSchema);
-  const stream = chat({
-    adapter: model.adapter,
-    messages,
-    outputSchema: tanStackOutputSchema,
-    stream: true,
-    ...systemPromptsPatch({
-      caching,
-      model,
-      system,
-    }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
-      maxOutputTokens,
-      serviceTier,
-      temperature,
-    }),
-    ...(analytics ? { middleware: [analytics.middleware] } : {}),
-    ...(abortController ? { abortController } : {}),
+
+  const stream = iterateWithStandardServiceTierFallback({
+    model,
+    serviceTier,
+    stream: (requestedServiceTier) =>
+      chat({
+        adapter: model.adapter,
+        messages,
+        outputSchema: tanStackOutputSchema,
+        stream: true,
+        ...systemPromptsPatch({
+          caching,
+          model,
+          system,
+        }),
+        modelOptions: mergeGenerationOptions({
+          caching,
+          model,
+          maxOutputTokens,
+          serviceTier: requestedServiceTier,
+          temperature,
+        }),
+        ...(analytics ? { middleware: [analytics.middleware] } : {}),
+        ...(abortController ? { abortController } : {}),
+      }),
+    onChunk: (chunk) => chunk,
   });
 
   for await (const chunk of stream) {

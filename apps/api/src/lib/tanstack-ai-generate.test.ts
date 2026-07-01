@@ -8,16 +8,27 @@ import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";
 import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
 
 type CapturedChatOptions = {
+  modelOptions?: unknown;
   outputSchema?: unknown;
   stream?: unknown;
 };
 
 const capturedChatOptions: CapturedChatOptions[] = [];
 let nextChatResult: unknown = { answer: "ok" };
+let nextChatError: Error | undefined;
 
 const chat = (options: unknown): unknown => {
   capturedChatOptions.push(captureChatOptions(options));
+  if (nextChatError !== undefined) {
+    const error = nextChatError;
+    nextChatError = undefined;
+    return rejectChat(error);
+  }
   return nextChatResult;
+};
+
+const rejectChat = async (error: Error): Promise<never> => {
+  throw error;
 };
 
 void mock.module("@tanstack/ai", () => ({
@@ -200,6 +211,59 @@ describe("TanStack AI structured output generation", () => {
       temperature: 0,
     });
   });
+
+  test("retries retryable deferred OpenAI generation with the standard tier", async () => {
+    capturedChatOptions.length = 0;
+    nextChatError = Object.assign(new Error("OpenAI flex tier unavailable"), {
+      isRetryable: true,
+      statusCode: 429,
+    });
+    nextChatResult = { answer: "ok" };
+
+    const result = await generateTanStackObjectForRole({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      outputSchema: v.strictObject({ answer: v.string() }),
+      prompt: "Extract the answer.",
+      role: "chat",
+      serviceTier: "flex",
+    });
+
+    expect(result).toEqual({ answer: "ok" });
+    expect(capturedChatOptions).toHaveLength(2);
+    expect(capturedChatOptions[0]?.modelOptions).toMatchObject({
+      service_tier: "flex",
+    });
+    expect(capturedChatOptions[1]?.modelOptions).toMatchObject({
+      service_tier: "default",
+    });
+  });
+
+  test("does not retry non-retryable deferred OpenAI generation errors", async () => {
+    capturedChatOptions.length = 0;
+    const apiError = Object.assign(new Error("OpenAI request rejected"), {
+      isRetryable: false,
+      statusCode: 400,
+    });
+    nextChatError = apiError;
+
+    const caught = await generateTanStackObjectForRole({
+      caching: noCaching,
+      organizationId: null,
+      orgAIConfig: null,
+      outputSchema: v.strictObject({ answer: v.string() }),
+      prompt: "Extract the answer.",
+      role: "chat",
+      serviceTier: "flex",
+    }).then(
+      () => undefined,
+      (error: unknown) => error,
+    );
+
+    expect(caught).toBe(apiError);
+    expect(capturedChatOptions).toHaveLength(1);
+  });
 });
 
 const captureChatOptions = (options: unknown): CapturedChatOptions => {
@@ -208,6 +272,7 @@ const captureChatOptions = (options: unknown): CapturedChatOptions => {
   }
 
   return {
+    modelOptions: options["modelOptions"],
     outputSchema: options["outputSchema"],
     stream: options["stream"],
   };

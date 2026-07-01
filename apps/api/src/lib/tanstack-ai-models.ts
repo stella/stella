@@ -923,8 +923,24 @@ const tanStackOpenAIModelOptionsForRole = ({
   };
 };
 
-const tanStackOpenRouterModelOptionsForRole =
-  (): OpenRouterResponsesTextProviderOptions => ({ temperature: 0 });
+type OpenRouterReasoningEffort = "none" | "low" | "medium" | "high";
+
+const OPENROUTER_REASONING_EFFORT_BY_ROLE = {
+  fast: "none",
+  chat: null,
+  reasoning: "high",
+  pdf: null,
+} as const satisfies Record<ModelRole, OpenRouterReasoningEffort | null>;
+
+const tanStackOpenRouterModelOptionsForRole = ({
+  role,
+}: TanStackModelOptionsForRoleInput<"openrouter">): OpenRouterResponsesTextProviderOptions => {
+  const effort = OPENROUTER_REASONING_EFFORT_BY_ROLE[role];
+  return {
+    temperature: 0,
+    ...(effort === null ? {} : { reasoning: { effort } }),
+  };
+};
 
 const tanStackMistralModelOptionsForRole = (): MistralTextProviderOptions => ({
   temperature: 0,
@@ -982,7 +998,12 @@ export function tanStackModelOptionsForRole(
         organizationId: input.organizationId,
       });
     case "openrouter":
-      return tanStackOpenRouterModelOptionsForRole();
+      return tanStackOpenRouterModelOptionsForRole({
+        role: input.role,
+        provider,
+        modelId: input.modelId,
+        organizationId: input.organizationId,
+      });
     default: {
       const _exhaustive: never = provider;
       return _exhaustive;
@@ -1127,7 +1148,12 @@ const buildResolvedTextModel = ({
         provider,
         modelId,
         organizationId,
-        modelOptions: tanStackOpenRouterModelOptionsForRole(),
+        modelOptions: tanStackOpenRouterModelOptionsForRole({
+          role,
+          provider,
+          modelId,
+          organizationId,
+        }),
         ...(region === undefined ? {} : { region }),
         role,
       });

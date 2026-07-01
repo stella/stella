@@ -443,6 +443,31 @@ describe("tanStackModelOptionsForRole", () => {
     ).toEqual({ temperature: 0 });
   });
 
+  test("preserves OpenRouter per-role reasoning controls", () => {
+    expect(
+      tanStackModelOptionsForRole({
+        role: "fast",
+        provider: "openrouter",
+        modelId: "google/gemini-3.5-flash",
+        organizationId: null,
+      }),
+    ).toMatchObject({
+      reasoning: { effort: "none" },
+      temperature: 0,
+    });
+    expect(
+      tanStackModelOptionsForRole({
+        role: "reasoning",
+        provider: "openrouter",
+        modelId: "google/gemini-3.5-pro",
+        organizationId: null,
+      }),
+    ).toMatchObject({
+      reasoning: { effort: "high" },
+      temperature: 0,
+    });
+  });
+
   test("uses TanStack Anthropic snake_case thinking options", () => {
     expect(
       tanStackModelOptionsForRole({
