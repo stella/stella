@@ -5,6 +5,7 @@ import {
   ANTHROPIC_ADAPTIVE_THINKING_MODELS,
   BYOK_DEFAULT_MODELS,
   BYOK_MODEL_OPTIONS,
+  isBYOKProviderRoleSupported,
   DEFAULT_MODELS,
   MODEL_RATES,
   MODEL_ROLES,
@@ -40,6 +41,17 @@ describe("BYOK_MODEL_OPTIONS", () => {
     for (const models of Object.values(BYOK_MODEL_OPTIONS)) {
       expect(models.length).toBeGreaterThan(0);
     }
+  });
+});
+
+describe("BYOK provider role support", () => {
+  test("does not route PDF flows through Mistral document-unsupported models", () => {
+    expect(
+      isBYOKProviderRoleSupported({ provider: "mistral", role: "chat" }),
+    ).toBe(true);
+    expect(
+      isBYOKProviderRoleSupported({ provider: "mistral", role: "pdf" }),
+    ).toBe(false);
   });
 });
 

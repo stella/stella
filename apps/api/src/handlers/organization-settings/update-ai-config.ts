@@ -26,7 +26,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { isAllowedBYOKModel } from "@/api/lib/tanstack-ai-models";
+import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
 import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";
 
 const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
@@ -308,10 +308,18 @@ const normalizeRoleSelection = (
     };
   }
 
-  if (!isAllowedBYOKModel(selection.provider, modelId)) {
+  if (
+    !isAllowedBYOKModelForRole({
+      provider: selection.provider,
+      modelId,
+      role,
+    })
+  ) {
     return {
       valid: false,
-      error: `Model "${modelId}" is not offered for ${selection.provider}`,
+      error:
+        `Model "${modelId}" is not offered for ` +
+        `${selection.provider} on the ${role} role`,
     };
   }
 

@@ -8,10 +8,13 @@ import {
   ensureRoleModelsForProviders,
   getAvailableModelOptions,
   getNextAvailableProvider,
+  getModelOptionsForRole,
   getProviderValues,
   getRolePickerRows,
   hasUsableProviderDrafts,
   isKnownModelSelection,
+  isKnownModelSelectionForRole,
+  isProviderRoleSupported,
   providerDraftsFromStoredProviders,
   roleModelsFromOverrideModels,
   serializeOverrideModels,
@@ -30,6 +33,20 @@ describe("BYOK provider and model configuration", () => {
       reasoning: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
       pdf: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
     });
+  });
+
+  test("does not default PDF flows to Mistral", () => {
+    expect(createDefaultRoleModels(["mistral", "openai"])).toEqual({
+      chat: { provider: "mistral", modelId: "mistral-large-latest" },
+      fast: { provider: "mistral", modelId: "mistral-small-latest" },
+      reasoning: {
+        provider: "mistral",
+        modelId: "magistral-medium-latest",
+      },
+      pdf: { provider: "openai", modelId: "gpt-5.4" },
+    });
+
+    expect(createDefaultRoleModels(["mistral"]).pdf).toBeNull();
   });
 
   test("normalizes stored providers for editing without exposing keys", () => {
@@ -159,6 +176,31 @@ describe("BYOK provider and model configuration", () => {
       reasoning: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
       pdf: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
     });
+  });
+
+  test("blocks Mistral PDF selections", () => {
+    const roleModels: RoleModelSelections = {
+      ...createDefaultRoleModels(["mistral"]),
+      pdf: { provider: "mistral", modelId: "mistral-large-latest" },
+    };
+
+    expect(isProviderRoleSupported("mistral", "chat")).toBe(true);
+    expect(isProviderRoleSupported("mistral", "pdf")).toBe(false);
+    expect(
+      getModelOptionsForRole({ provider: "mistral", role: "pdf" }),
+    ).toEqual([]);
+    expect(
+      isKnownModelSelectionForRole({
+        role: "pdf",
+        selection: { provider: "mistral", modelId: "mistral-large-latest" },
+      }),
+    ).toBe(false);
+    expect(
+      serializeOverrideModels({
+        providers: ["mistral"],
+        roleModels,
+      }),
+    ).toBeNull();
   });
 
   test("blocks serialization when a role is missing a model", () => {
@@ -348,6 +390,31 @@ describe("BYOK provider and model configuration", () => {
       provider: "anthropic",
       modelId: "claude-opus-4-6",
       value: "anthropic::claude-opus-4-6",
+    });
+  });
+
+  test("builds role-specific picker rows", () => {
+    const rows = getRolePickerRows({
+      providers: ["mistral", "openai"],
+      roleModels: createDefaultRoleModels(["mistral", "openai"]),
+    });
+
+    const chatRow = rows.find((row) => row.role === "chat");
+    const pdfRow = rows.find((row) => row.role === "pdf");
+
+    expect(chatRow?.modelOptions).toContainEqual({
+      provider: "mistral",
+      modelId: "mistral-large-latest",
+      value: "mistral::mistral-large-latest",
+    });
+    expect(pdfRow?.selection).toEqual({
+      provider: "openai",
+      modelId: "gpt-5.4",
+    });
+    expect(pdfRow?.modelOptions).not.toContainEqual({
+      provider: "mistral",
+      modelId: "mistral-large-latest",
+      value: "mistral::mistral-large-latest",
     });
   });
 });

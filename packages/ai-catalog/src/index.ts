@@ -184,6 +184,33 @@ export const BYOK_MODEL_OPTIONS = {
 export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 
 /**
+ * Role-level provider support that is narrower than the provider's
+ * model catalog. Mistral is usable for text/image chat flows through
+ * TanStack AI, but its adapter does not accept TanStack document parts
+ * yet, so Stella must not route native PDF flows through it.
+ */
+export const BYOK_UNSUPPORTED_MODEL_ROLES = {
+  google: [],
+  anthropic: [],
+  openai: [],
+  openrouter: [],
+  bedrock: [],
+  mistral: ["pdf"],
+} as const satisfies Record<BYOKProvider, readonly ModelRole[]>;
+
+export const isBYOKProviderRoleSupported = ({
+  provider,
+  role,
+}: {
+  provider: BYOKProvider;
+  role: ModelRole;
+}): boolean => {
+  const unsupportedRoles: readonly ModelRole[] =
+    BYOK_UNSUPPORTED_MODEL_ROLES[provider];
+  return !unsupportedRoles.includes(role);
+};
+
+/**
  * Anthropic models that use the adaptive-thinking request shape
  * (`thinking: { type: "adaptive" }`). Newer Claude models reject the
  * legacy budget-based form, so every Opus 4.6+/Sonnet 4.6/Fable entry

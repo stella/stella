@@ -30,6 +30,7 @@ const {
   getTanStackTextModelForRole,
   hasTanStackInstanceProvider,
   isAllowedBYOKModel,
+  isAllowedBYOKModelForRole,
   isDeferredServiceTierAvailableForRole,
   isTanStackAIProviderSupported,
   requireTanStackAIAvailableForRole,
@@ -119,6 +120,30 @@ describe("isAllowedBYOKModel", () => {
     expect(isAllowedBYOKModel("azure_foundry", "customer-gpt-5")).toBe(false);
     expect(isAllowedBYOKModel("huggingface", "customer-model")).toBe(false);
     expect(isAllowedBYOKModel("openai_compatible", "default")).toBe(false);
+  });
+
+  test("rejects catalog models for roles their provider cannot serve", () => {
+    expect(
+      isAllowedBYOKModelForRole({
+        provider: "mistral",
+        modelId: "mistral-large-latest",
+        role: "chat",
+      }),
+    ).toBe(true);
+    expect(
+      isAllowedBYOKModelForRole({
+        provider: "mistral",
+        modelId: "mistral-large-latest",
+        role: "pdf",
+      }),
+    ).toBe(false);
+    expect(
+      isAllowedBYOKModelForRole({
+        provider: "openai",
+        modelId: "gpt-5.4",
+        role: "pdf",
+      }),
+    ).toBe(true);
   });
 });
 
@@ -244,6 +269,23 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter.name).toBe("mistral");
   });
 
+  test("rejects Mistral BYOK selections for PDF flows", () => {
+    let handlerError: unknown;
+    try {
+      getTanStackTextModelForRole("pdf", orgConfigForProvider("mistral"), {
+        organizationId: orgId,
+      });
+    } catch (error) {
+      handlerError = error;
+    }
+
+    if (!(handlerError instanceof HandlerError)) {
+      throw new Error("Expected HandlerError");
+    }
+    expect(handlerError.status).toBe(400);
+    expect(handlerError.message).toContain("document input");
+  });
+
   test("resolves Bedrock BYOK selections through the TanStack adapter", () => {
     const orgConfig = orgConfigForProvider("bedrock");
 
@@ -297,6 +339,17 @@ describe("TanStack text model resolution", () => {
       expect(unavailable.error.status).toBe(400);
       expect(unavailable.error.message).toContain("OpenAI-compatible");
     }
+
+    const unsupportedRole = requireTanStackAIAvailableForRole({
+      orgConfig: orgConfigForProvider("mistral"),
+      role: "pdf",
+    });
+
+    expect(unsupportedRole.isErr()).toBe(true);
+    if (unsupportedRole.isErr()) {
+      expect(unsupportedRole.error.status).toBe(400);
+      expect(unsupportedRole.error.message).toContain("PDF flows");
+    }
   });
 
   test("exposes TanStack model metadata without leaking the adapter", () => {
@@ -340,6 +393,21 @@ describe("tanStackModelOptionsForRole", () => {
       thinking: {
         type: "enabled",
         budget_tokens: 10_000,
+      },
+    });
+  });
+
+  test("uses adaptive Anthropic thinking for newer Claude models", () => {
+    expect(
+      tanStackModelOptionsForRole({
+        role: "reasoning",
+        provider: "anthropic",
+        modelId: "claude-opus-4-8",
+        organizationId: orgId,
+      }),
+    ).toMatchObject({
+      thinking: {
+        type: "adaptive",
       },
     });
   });

@@ -19,9 +19,11 @@ import { Result, panic } from "better-result";
 
 import {
   AI_PROVIDERS,
+  ANTHROPIC_ADAPTIVE_THINKING_MODELS,
   ANTHROPIC_FIXED_SAMPLING_MODELS,
   BYOK_MODEL_OPTIONS,
   DEFAULT_MODELS,
+  isBYOKProviderRoleSupported,
 } from "@stll/ai-catalog";
 import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
 
@@ -55,6 +57,22 @@ export type TanStackTextProvider = Exclude<
   "azure_foundry" | "huggingface" | "openai_compatible"
 >;
 
+type AnthropicAdaptiveThinking = {
+  type: "adaptive";
+  display?: "omitted" | "summarized" | undefined;
+};
+
+type StellaAnthropicThinking =
+  | NonNullable<AnthropicTextProviderOptions["thinking"]>
+  | AnthropicAdaptiveThinking;
+
+type StellaAnthropicTextProviderOptions = Omit<
+  AnthropicTextProviderOptions,
+  "thinking"
+> & {
+  thinking?: StellaAnthropicThinking | undefined;
+};
+
 export type TanStackAIProviderUnsupportedReason =
   | "provider-not-implemented"
   | "regional-routing-not-implemented";
@@ -68,7 +86,7 @@ export type TanStackAIProviderSupport =
     };
 
 type TanStackModelOptionsByProvider = {
-  anthropic: AnthropicTextProviderOptions;
+  anthropic: StellaAnthropicTextProviderOptions;
   bedrock: BedrockConverseProviderOptions;
   google: GeminiTextProviderOptions;
   mistral: MistralTextProviderOptions;
@@ -114,6 +132,25 @@ export const isAllowedBYOKModel = (
 
   const allowed: readonly string[] = BYOK_MODEL_OPTIONS[provider];
   return allowed.includes(modelId);
+};
+
+export const isAllowedBYOKModelForRole = ({
+  provider,
+  modelId,
+  role,
+}: {
+  provider: AIProvider;
+  modelId: string;
+  role: ModelRole;
+}): boolean => {
+  if (!isBYOKProvider(provider)) {
+    return false;
+  }
+
+  const allowed: readonly string[] = BYOK_MODEL_OPTIONS[provider];
+  return (
+    allowed.includes(modelId) && isBYOKProviderRoleSupported({ provider, role })
+  );
 };
 
 type ModelOverride = {
@@ -562,6 +599,38 @@ const getOrgProviderConfig = (
   findOrgProviderConfig(config, provider) ??
   panic(`Org AI config has no ${provider} provider`);
 
+const byokProviderRoleUnsupportedError = (
+  provider: BYOKProvider,
+  role: ModelRole,
+): HandlerError<400> =>
+  new HandlerError({
+    status: 400,
+    message:
+      `${provider} is not available for the "${role}" AI role. ` +
+      "Choose a provider that supports document input for PDF flows.",
+  });
+
+const supportsTanStackProviderRole = (
+  provider: TanStackTextProvider,
+  role: ModelRole,
+): boolean =>
+  isBYOKProvider(provider) && isBYOKProviderRoleSupported({ provider, role });
+
+const assertTanStackProviderRoleSupport = (
+  provider: TanStackTextProvider,
+  role: ModelRole,
+): void => {
+  if (supportsTanStackProviderRole(provider, role)) {
+    return;
+  }
+
+  if (isBYOKProvider(provider)) {
+    throw byokProviderRoleUnsupportedError(provider, role);
+  }
+
+  panic("Unsupported TanStack AI role provider.");
+};
+
 export const requireTanStackAIAvailableForRole = ({
   orgConfig,
   role,
@@ -584,6 +653,17 @@ export const requireTanStackAIAvailableForRole = ({
   });
 
   if (support.supported) {
+    if (
+      isBYOKProvider(providerConfig.provider) &&
+      !isBYOKProviderRoleSupported({
+        provider: providerConfig.provider,
+        role,
+      })
+    ) {
+      return Result.err(
+        byokProviderRoleUnsupportedError(providerConfig.provider, role),
+      );
+    }
     return Result.ok(undefined);
   }
 
@@ -769,12 +849,23 @@ const rejectsAnthropicSamplingParams = (modelId: string): boolean =>
     modelId.includes(fixedModelId),
   );
 
+const usesAnthropicAdaptiveThinking = (modelId: string): boolean =>
+  ANTHROPIC_ADAPTIVE_THINKING_MODELS.some((adaptiveModelId) =>
+    modelId.includes(adaptiveModelId),
+  );
+
 const anthropicThinkingForModel = (
-  _modelId: string,
-): NonNullable<AnthropicTextProviderOptions["thinking"]> => ({
-  type: "enabled",
-  budget_tokens: ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS,
-});
+  modelId: string,
+): StellaAnthropicThinking => {
+  if (usesAnthropicAdaptiveThinking(modelId)) {
+    return { type: "adaptive" };
+  }
+
+  return {
+    type: "enabled",
+    budget_tokens: ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS,
+  };
+};
 
 type TanStackModelOptionsForRoleInput<TProvider extends TanStackTextProvider> =
   {
@@ -798,7 +889,7 @@ const tanStackGoogleModelOptionsForRole = ({
 const tanStackAnthropicModelOptionsForRole = ({
   role,
   modelId,
-}: TanStackModelOptionsForRoleInput<"anthropic">): AnthropicTextProviderOptions => {
+}: TanStackModelOptionsForRoleInput<"anthropic">): StellaAnthropicTextProviderOptions => {
   if (role === "reasoning") {
     return {
       thinking: anthropicThinkingForModel(modelId),
@@ -841,7 +932,7 @@ export function tanStackModelOptionsForRole(
 ): GeminiTextProviderOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"anthropic">,
-): AnthropicTextProviderOptions;
+): StellaAnthropicTextProviderOptions;
 export function tanStackModelOptionsForRole(
   input: TanStackModelOptionsForRoleInput<"bedrock">,
 ): BedrockConverseProviderOptions;
@@ -1057,6 +1148,7 @@ const resolveByokTextModel = ({
     provider: providerConfig.provider,
     region,
   });
+  assertTanStackProviderRoleSupport(provider, role);
 
   const factory = getCachedFactory(providerConfig);
   return buildResolvedTextModel({
@@ -1082,6 +1174,7 @@ const resolveInstanceTextModel = ({
   organizationId: SafeId<"organization"> | null;
 }): ResolvedTanStackTextModel => {
   const supportedProvider = resolveTanStackTextProvider({ provider });
+  assertTanStackProviderRoleSupport(supportedProvider, role);
 
   return buildResolvedTextModel({
     adapter: getInstanceFactory()(modelId),
@@ -1139,6 +1232,7 @@ export const getTanStackTextModelInfoForRole = (
       provider: providerConfig.provider,
       region,
     });
+    assertTanStackProviderRoleSupport(provider, role);
 
     return {
       keySource: "byok",
@@ -1154,6 +1248,7 @@ export const getTanStackTextModelInfoForRole = (
 
   const provider = getActiveProvider();
   const supportedProvider = resolveTanStackTextProvider({ provider });
+  assertTanStackProviderRoleSupport(supportedProvider, role);
   return {
     keySource: "instance",
     modelId: MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role],

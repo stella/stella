@@ -1,4 +1,8 @@
-import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import {
+  BYOK_DEFAULT_MODELS,
+  BYOK_MODEL_OPTIONS,
+  isBYOKProviderRoleSupported,
+} from "@stll/ai-catalog";
 
 export const PROVIDER_KEYS = [
   "google",
@@ -98,6 +102,24 @@ export const MODEL_OPTIONS_BY_PROVIDER = BYOK_MODEL_OPTIONS satisfies Record<
   readonly string[]
 >;
 
+export const isProviderRoleSupported = (
+  provider: ProviderValue,
+  role: RoleValue,
+): boolean => isBYOKProviderRoleSupported({ provider, role });
+
+export const getModelOptionsForRole = ({
+  provider,
+  role,
+}: {
+  provider: ProviderValue;
+  role: RoleValue;
+}): readonly string[] => {
+  if (!isProviderRoleSupported(provider, role)) {
+    return [];
+  }
+  return MODEL_OPTIONS_BY_PROVIDER[provider];
+};
+
 export const isProviderValue = (value: string | null): value is ProviderValue =>
   value !== null && PROVIDER_VALUES.has(value);
 
@@ -146,15 +168,24 @@ export const providerDraftsFromStoredProviders = (
 
 export const createDefaultRoleModels = (
   providers: readonly ProviderValue[] = ["google"],
-): RoleModelSelections => {
-  const provider = providers.at(0);
-  return {
-    chat: getDefaultModelSelection(provider, "chat"),
-    fast: getDefaultModelSelection(provider, "fast"),
-    reasoning: getDefaultModelSelection(provider, "reasoning"),
-    pdf: getDefaultModelSelection(provider, "pdf"),
-  };
-};
+): RoleModelSelections => ({
+  chat: getDefaultModelSelection(
+    getDefaultProviderForRole(providers, "chat"),
+    "chat",
+  ),
+  fast: getDefaultModelSelection(
+    getDefaultProviderForRole(providers, "fast"),
+    "fast",
+  ),
+  reasoning: getDefaultModelSelection(
+    getDefaultProviderForRole(providers, "reasoning"),
+    "reasoning",
+  ),
+  pdf: getDefaultModelSelection(
+    getDefaultProviderForRole(providers, "pdf"),
+    "pdf",
+  ),
+});
 
 export const roleModelsFromOverrideModels = ({
   overrideModels,
@@ -177,7 +208,8 @@ export const roleModelsFromOverrideModels = ({
       selection?.provider &&
       selection.modelId &&
       isProviderValue(selection.provider) &&
-      providerSet.has(selection.provider)
+      providerSet.has(selection.provider) &&
+      isProviderRoleSupported(selection.provider, role)
     ) {
       models[role] = {
         provider: selection.provider,
@@ -201,7 +233,11 @@ export const ensureRoleModelsForProviders = ({
 
   for (const role of ROLE_KEYS) {
     const selection = roleModels[role];
-    if (selection && configuredProviders.has(selection.provider)) {
+    if (
+      selection &&
+      configuredProviders.has(selection.provider) &&
+      isProviderRoleSupported(selection.provider, role)
+    ) {
       nextModels[role] = selection;
     }
   }
@@ -227,12 +263,16 @@ export const decodeModelSelection = (value: string): ModelSelection | null => {
 
 export const getAvailableModelOptions = (
   providers: readonly ProviderValue[],
+  role?: RoleValue,
 ): ModelOption[] => {
   const options: ModelOption[] = [];
   const seen = new Set<string>();
 
   for (const provider of providers) {
-    for (const modelId of MODEL_OPTIONS_BY_PROVIDER[provider]) {
+    const modelOptions = role
+      ? getModelOptionsForRole({ provider, role })
+      : MODEL_OPTIONS_BY_PROVIDER[provider];
+    for (const modelId of modelOptions) {
       const option = {
         provider,
         modelId,
@@ -255,16 +295,13 @@ export const getRolePickerRows = ({
 }: {
   providers: readonly ProviderValue[];
   roleModels: RoleModelSelections;
-}) => {
-  const options = getAvailableModelOptions(providers);
-
-  return ROLE_KEYS.map((role) => ({
-    modelOptions: options,
+}) =>
+  ROLE_KEYS.map((role) => ({
+    modelOptions: getAvailableModelOptions(providers, role),
     role,
     selection: roleModels[role],
     value: roleModels[role] ? encodeModelSelection(roleModels[role]) : "",
   }));
-};
 
 export const isKnownModelSelection = (
   selection: ModelSelection | null,
@@ -274,6 +311,23 @@ export const isKnownModelSelection = (
   }
   const knownModels: readonly string[] =
     MODEL_OPTIONS_BY_PROVIDER[selection.provider];
+  return knownModels.includes(selection.modelId);
+};
+
+export const isKnownModelSelectionForRole = ({
+  selection,
+  role,
+}: {
+  selection: ModelSelection | null;
+  role: RoleValue;
+}): boolean => {
+  if (!selection) {
+    return false;
+  }
+  const knownModels = getModelOptionsForRole({
+    provider: selection.provider,
+    role,
+  });
   return knownModels.includes(selection.modelId);
 };
 
@@ -297,15 +351,18 @@ export const serializeOverrideModels = ({
     return null;
   }
 
-  const selections = [chat, fast, reasoning, pdf];
-  if (
-    selections.some(
-      (selection) =>
-        !providers.includes(selection.provider) ||
-        !isKnownModelSelection(selection),
-    )
-  ) {
-    return null;
+  const selections = { chat, fast, reasoning, pdf } satisfies Record<
+    RoleValue,
+    ModelSelection
+  >;
+  for (const role of ROLE_KEYS) {
+    const selection = selections[role];
+    if (
+      !providers.includes(selection.provider) ||
+      !isKnownModelSelectionForRole({ selection, role })
+    ) {
+      return null;
+    }
   }
 
   return {
@@ -392,7 +449,7 @@ export const getDefaultModelSelection = (
   provider: ProviderValue | undefined,
   role: RoleValue,
 ): ModelSelection | null => {
-  if (!provider) {
+  if (!provider || !isProviderRoleSupported(provider, role)) {
     return null;
   }
   const defaults = DEFAULT_MODELS_BY_PROVIDER[provider];
@@ -401,6 +458,12 @@ export const getDefaultModelSelection = (
     modelId: defaults[role],
   };
 };
+
+const getDefaultProviderForRole = (
+  providers: readonly ProviderValue[],
+  role: RoleValue,
+): ProviderValue | undefined =>
+  providers.find((provider) => isProviderRoleSupported(provider, role));
 
 const normalizeModelSelection = ({
   provider,

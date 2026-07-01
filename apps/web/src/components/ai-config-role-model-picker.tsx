@@ -20,9 +20,10 @@ import { cn } from "@stll/ui/lib/utils";
 
 import {
   getDefaultModelSelection,
+  getModelOptionsForRole,
   getRolePickerRows,
+  isProviderRoleSupported,
   isProviderValue,
-  MODEL_OPTIONS_BY_PROVIDER,
   PROVIDER_LABELS,
 } from "@/components/ai-config-role-models.logic";
 import type {
@@ -51,7 +52,6 @@ export const AIConfigRoleModelPicker = ({
 }: AIConfigRoleModelPickerProps) => {
   const t = useTranslations("organization");
   const rows = getRolePickerRows({ providers, roleModels });
-  const hasProviders = providers.length > 0;
 
   return (
     <Field className={className}>
@@ -65,19 +65,27 @@ export const AIConfigRoleModelPicker = ({
       <div className="w-full overflow-hidden rounded-md border">
         {rows.map((row) => {
           const roleLabel = t(`aiConfig.roles.${row.role}`);
-          const selectedProvider = row.selection?.provider ?? providers.at(0);
+          const selection = row.selection;
+          const providerOptions = providers.filter((provider) =>
+            isProviderRoleSupported(provider, row.role),
+          );
+          const selectedProvider = selection?.provider ?? providerOptions.at(0);
           const modelOptions = selectedProvider
-            ? MODEL_OPTIONS_BY_PROVIDER[selectedProvider].map((modelId) => ({
+            ? getModelOptionsForRole({
+                provider: selectedProvider,
+                role: row.role,
+              }).map((modelId) => ({
                 modelId,
                 provider: selectedProvider,
               }))
             : [];
-          const selectedModelOption =
-            modelOptions.find(
-              (option) =>
-                option.provider === row.selection?.provider &&
-                option.modelId === row.selection.modelId,
-            ) ?? null;
+          const selectedModelOption = selection
+            ? (modelOptions.find(
+                (option) =>
+                  option.provider === selection.provider &&
+                  option.modelId === selection.modelId,
+              ) ?? null)
+            : null;
 
           return (
             <div
@@ -94,9 +102,9 @@ export const AIConfigRoleModelPicker = ({
               </span>
 
               <Select
-                disabled={disabled || !hasProviders}
+                disabled={disabled || providerOptions.length === 0}
                 onValueChange={(value) => {
-                  if (!isProvider(value, providers)) {
+                  if (!isProvider(value, providerOptions)) {
                     return;
                   }
                   onModelChange(
@@ -115,7 +123,7 @@ export const AIConfigRoleModelPicker = ({
                   <SelectValue placeholder={t("aiConfig.addProviderFirst")} />
                 </SelectTrigger>
                 <SelectPopup alignItemWithTrigger={false}>
-                  {providers.map((provider) => (
+                  {providerOptions.map((provider) => (
                     <SelectItem key={provider} value={provider}>
                       {PROVIDER_LABELS[provider]}
                     </SelectItem>
