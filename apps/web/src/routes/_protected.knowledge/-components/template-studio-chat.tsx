@@ -317,6 +317,7 @@ const TemplateStudioChatInner = ({
   /** Snapshot most recently sent to the model — its block ids are the
    *  ones tool operations reference, so op→text resolution reads it. */
   const lastSentSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
+  const activeScopedPresetTurnMessageIdRef = useRef<string | null>(null);
   const getActiveTemplate = useEffectEvent(() => {
     const snapshot = editorRef.current?.createAIEditSnapshot() ?? null;
     lastSentSnapshotRef.current = snapshot;
@@ -651,7 +652,9 @@ const TemplateStudioChatInner = ({
       lastSentSnapshotRef.current =
         editorRef.current?.createAIEditSnapshot() ?? null;
       setPanelOpen(true);
-      void sendMessage(createTextChatMessage(request.text), {
+      const message = createTextChatMessage(request.text);
+      activeScopedPresetTurnMessageIdRef.current = message.id;
+      void sendMessage(message, {
         body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE },
       });
       return;
@@ -1016,11 +1019,17 @@ const TemplateStudioChatInner = ({
       }
       await handleApprove(approvalId, toolName);
       const output = await handleActiveDocxEditToolCall(part.input, part.id);
-      await addToolResult({
-        output,
-        tool: "apply-active-docx-edits",
-        toolCallId: part.id,
-      });
+      const latestUserMessageId = getLatestUserMessageId(messages);
+      await addToolResult(
+        {
+          output,
+          tool: "apply-active-docx-edits",
+          toolCallId: part.id,
+        },
+        latestUserMessageId === activeScopedPresetTurnMessageIdRef.current
+          ? { body: { toolScope: SUGGEST_TEMPLATE_FIELDS_TOOL_SCOPE } }
+          : undefined,
+      );
       return;
     }
 
@@ -1295,6 +1304,19 @@ type SuggestedTemplateFieldOutput = {
 
 type SuggestedTemplateFieldsToolOutput = {
   suggestions: SuggestedTemplateFieldOutput[];
+};
+
+const getLatestUserMessageId = (
+  messages: readonly PersistedChatMessage[],
+): string | null => {
+  for (let index = messages.length - 1; index >= 0; index -= 1) {
+    const message = messages.at(index);
+    if (message?.role === "user") {
+      return message.id;
+    }
+  }
+
+  return null;
 };
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
