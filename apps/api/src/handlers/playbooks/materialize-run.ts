@@ -146,6 +146,45 @@ export const resolveDocTypeGate = async ({
   };
 };
 
+type ScopedGateResult =
+  | { ok: true; gate: DocTypeGate | null }
+  | { ok: false; status: 400; message: string };
+
+// Resolves a playbook's document-type gate, rejecting a scoped playbook whose
+// classifier does not resolve (which would otherwise materialize ungated and
+// grade every document in the workspace).
+const resolveScopedGate = async ({
+  tx,
+  workspaceId,
+  organizationId,
+  scope,
+}: {
+  tx: Transaction;
+  workspaceId: SafeId<"workspace">;
+  organizationId: SafeId<"organization">;
+  scope: PlaybookScope | null;
+}): Promise<ScopedGateResult> => {
+  const docTypeKey = scope?.documentTypeKey;
+  if (!docTypeKey) {
+    return { ok: true, gate: null };
+  }
+  const gate = await resolveDocTypeGate({
+    tx,
+    workspaceId,
+    organizationId,
+    documentTypeKey: docTypeKey,
+  });
+  if (gate === null) {
+    return {
+      ok: false,
+      status: 400,
+      message:
+        "This playbook is scoped to a document type, but the workspace has no matching Document Type classifier to gate on.",
+    };
+  }
+  return { ok: true, gate };
+};
+
 export type MaterializePlaybookRunResult =
   | { ok: true; materializedPropertyIds: SafeId<"property">[] }
   | { ok: false; status: 400; message: string };
@@ -185,15 +224,20 @@ export const materializePlaybookRun = async ({
   // When the playbook is scoped to a document type, gate every materialized
   // column on the workspace's "Document Type" classifier so only matching
   // documents extract/grade. Null = ungated fallback.
-  const docTypeKey = scope?.documentTypeKey;
-  const docTypeGate = docTypeKey
-    ? await resolveDocTypeGate({
-        tx,
-        workspaceId,
-        organizationId,
-        documentTypeKey: docTypeKey,
-      })
-    : null;
+  // Resolve the document-type gate (null when the playbook is unscoped). A
+  // scoped playbook whose classifier does not resolve is rejected rather than
+  // materialized ungated (which would grade every document); the auto-run path
+  // already skips scoped playbooks in that case.
+  const gateResult = await resolveScopedGate({
+    tx,
+    workspaceId,
+    organizationId,
+    scope,
+  });
+  if (!gateResult.ok) {
+    return gateResult;
+  }
+  const docTypeGate = gateResult.gate;
 
   const clauseSnapshots = await loadClauseSnapshots(
     tx,
