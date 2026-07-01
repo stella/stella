@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 
-import { cleanSuggestionsText } from "./get-suggested-prompts";
+import getSuggestedPrompts, {
+  cleanSuggestionsText,
+} from "./get-suggested-prompts";
+
+describe("suggested prompts usage metering", () => {
+  test("does not run static usage preflight before no-op fallbacks", () => {
+    expect("requiresUsage" in getSuggestedPrompts.config).toBe(false);
+  });
+});
 
 describe("cleanSuggestionsText", () => {
   test("extracts clean prompts from plain lines", () => {
