@@ -1,7 +1,7 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, eq, inArray } from "drizzle-orm";
 
-import { playbookDefinitions } from "@/api/db/schema";
+import { playbookDefinitions, properties } from "@/api/db/schema";
 import { playbookDefinitionParamsSchema } from "@/api/handlers/playbooks/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
@@ -20,29 +20,58 @@ const deletePlaybookDefinition = createSafeRootHandler(
 
     const deleted = yield* Result.await(
       safeDb(async (tx) => {
-        const [row] = await tx
+        // Confirm org ownership before deleting any rows, so a foreign
+        // playbookId can't delete another org's materialized columns below.
+        const playbook = await tx.query.playbookDefinitions.findFirst({
+          where: {
+            id: { eq: params.playbookId },
+            organizationId: { eq: organizationId },
+          },
+          columns: { id: true, name: true },
+        });
+        if (!playbook) {
+          return null;
+        }
+
+        // Delete materialized columns in dependency order before the definition:
+        // a verdict property depends on its ASK via an ON DELETE RESTRICT edge,
+        // so the playbook_definition_id cascade alone fails for a playbook that
+        // has been run. Verdict rows (and their dependency edges) go first, then
+        // the ASK columns.
+        const owned = await tx
+          .select({ id: properties.id, tool: properties.tool })
+          .from(properties)
+          .where(eq(properties.playbookDefinitionId, params.playbookId));
+        const verdictIds = owned
+          .filter((property) => property.tool.type === "playbook-verdict")
+          .map((property) => property.id);
+        const askIds = owned
+          .filter((property) => property.tool.type !== "playbook-verdict")
+          .map((property) => property.id);
+        if (verdictIds.length > 0) {
+          await tx.delete(properties).where(inArray(properties.id, verdictIds));
+        }
+        if (askIds.length > 0) {
+          await tx.delete(properties).where(inArray(properties.id, askIds));
+        }
+
+        await tx
           .delete(playbookDefinitions)
           .where(
             and(
               eq(playbookDefinitions.id, params.playbookId),
               eq(playbookDefinitions.organizationId, organizationId),
             ),
-          )
-          .returning({
-            id: playbookDefinitions.id,
-            name: playbookDefinitions.name,
-          });
+          );
 
-        if (row) {
-          await recordAuditEvent(tx, {
-            action: AUDIT_ACTION.DELETE,
-            resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
-            resourceId: params.playbookId,
-            changes: { deleted: { old: { name: row.name }, new: null } },
-          });
-        }
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.DELETE,
+          resourceType: AUDIT_RESOURCE_TYPE.PLAYBOOK,
+          resourceId: params.playbookId,
+          changes: { deleted: { old: { name: playbook.name }, new: null } },
+        });
 
-        return row;
+        return playbook;
       }),
     );
 
