@@ -1167,7 +1167,7 @@ const buildSubmitValues = (
   fields: ResolvedField[],
   conditions: NamedCondition[],
 ): Record<string, unknown> => {
-  const result: Record<string, unknown> = Object.create(null);
+  const result = createNullRecord();
 
   for (const field of fields) {
     // Skip hidden fields
@@ -1182,7 +1182,7 @@ const buildSubmitValues = (
       const arrayValues: Record<string, unknown>[] = [];
 
       for (let i = 0; i < items.length; i++) {
-        const itemObj: Record<string, unknown> = Object.create(null);
+        const itemObj = createNullRecord();
         for (const subField of itemFields) {
           const path = `${field.path}[${i}].${subField.path}`;
           const val = values[path];
@@ -1242,6 +1242,8 @@ const coerceValue = (field: ResolvedField, value: unknown): unknown => {
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
+const createNullRecord = (): Record<string, unknown> => ({ __proto__: null });
+
 const setNestedValue = (
   obj: Record<string, unknown>,
   path: string,
@@ -1264,7 +1266,7 @@ const setNestedValue = (
       current = next;
       continue;
     }
-    const child: Record<string, unknown> = Object.create(null);
+    const child = createNullRecord();
     current[part] = child;
     current = child;
   }

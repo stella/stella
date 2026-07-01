@@ -130,9 +130,7 @@ export const isFieldPath = (value: string): boolean =>
 /** Whether `value` is safe to use as a dotted object path. */
 export const isSafeFieldPath = (value: string): boolean =>
   isFieldPath(value) &&
-  value
-    .split(".")
-    .every((segment) => !UNSAFE_FIELD_PATH_SEGMENTS.has(segment));
+  value.split(".").every((segment) => !UNSAFE_FIELD_PATH_SEGMENTS.has(segment));
 const CLAUSE_INNER_RE = /^@clause:(?<name>[^:}\s]+)(?::(?<version>[^}\s]+))?$/u;
 const NUM_INNER_RE = /^@num:(?<key>[\p{L}\p{N}_.-]+)$/u;
 const REF_INNER_RE = /^@ref:(?<key>[\p{L}\p{N}_.-]+)$/u;
