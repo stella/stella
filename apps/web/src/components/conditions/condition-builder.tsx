@@ -443,7 +443,7 @@ const LeafRow = ({
           value={String(fieldIndex)}
         >
           <SelectTrigger
-            className="h-7 min-h-0 w-auto max-w-44 min-w-0 text-xs"
+            className="h-7 min-h-0 w-auto max-w-56 text-xs"
             size="sm"
           >
             <SelectValue placeholder={t("templates.conditionField")}>

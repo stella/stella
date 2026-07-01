@@ -78,7 +78,10 @@ export const PropertyConditions = ({
           count: String(conditionCount),
         })}
       </DialogTrigger>
-      <DialogPopup>
+      {/* Wider than the default dialog: the rule row (When <field> is <value>)
+          otherwise shrinks its selects to their min-widths and truncates the
+          field and option labels to "…". */}
+      <DialogPopup className="max-w-2xl">
         <DialogHeader>
           <DialogTitle>{t("workspaces.properties.editConditions")}</DialogTitle>
           <p className="text-muted-foreground text-sm">
