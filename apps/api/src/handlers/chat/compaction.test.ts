@@ -18,7 +18,6 @@ import {
   shouldCompactChatMessages,
   summarizeChatCompaction,
 } from "./compaction";
-import { ANON_RESTORATIONS_DATA_PART_TYPE } from "./third-party-boundary";
 
 const textMessage = ({
   id,
@@ -183,28 +182,26 @@ describe("chat history compaction", () => {
       {
         id: "msg_1",
         role: "assistant",
+        metadata: {
+          anonRestorations: {
+            pairs: [
+              {
+                placeholder: "[ORG_1]",
+                original: "Confidential Client LLC",
+              },
+            ],
+          },
+        },
         parts: [
           {
             type: "text",
-            text: "The answer references [ORG_1].",
-          },
-          {
-            type: ANON_RESTORATIONS_DATA_PART_TYPE,
-            data: {
-              pairs: [
-                {
-                  placeholder: "[ORG_1]",
-                  original: "Confidential Client LLC",
-                },
-              ],
-            },
+            content: "The answer references [ORG_1].",
           },
         ],
       },
     ]);
 
     expect(transcript).toContain("The answer references [ORG_1].");
-    expect(transcript).not.toContain(ANON_RESTORATIONS_DATA_PART_TYPE);
     expect(transcript).not.toContain("Confidential Client LLC");
   });
 
@@ -213,21 +210,20 @@ describe("chat history compaction", () => {
       {
         id: "msg_1",
         role: "assistant",
+        metadata: {
+          anonRestorations: {
+            pairs: [
+              {
+                placeholder: "[ORG_1]",
+                original: "Confidential Client LLC ".repeat(1000),
+              },
+            ],
+          },
+        },
         parts: [
           {
             type: "text",
-            text: "The answer references [ORG_1].",
-          },
-          {
-            type: ANON_RESTORATIONS_DATA_PART_TYPE,
-            data: {
-              pairs: [
-                {
-                  placeholder: "[ORG_1]",
-                  original: "Confidential Client LLC ".repeat(1000),
-                },
-              ],
-            },
+            content: "The answer references [ORG_1].",
           },
         ],
       },
@@ -244,19 +240,17 @@ describe("chat history compaction", () => {
       {
         id: "msg_1",
         role: "assistant",
-        parts: [
-          {
-            type: ANON_RESTORATIONS_DATA_PART_TYPE,
-            data: {
-              pairs: [
-                {
-                  placeholder: "[ORG_1]",
-                  original: "Confidential Client LLC ".repeat(1000),
-                },
-              ],
-            },
+        metadata: {
+          anonRestorations: {
+            pairs: [
+              {
+                placeholder: "[ORG_1]",
+                original: "Confidential Client LLC ".repeat(1000),
+              },
+            ],
           },
-        ],
+        },
+        parts: [],
       },
     ];
 
@@ -278,19 +272,17 @@ describe("chat history compaction", () => {
       {
         id: "msg_3",
         role: "assistant",
-        parts: [
-          {
-            type: ANON_RESTORATIONS_DATA_PART_TYPE,
-            data: {
-              pairs: [
-                {
-                  placeholder: "[ORG_1]",
-                  original: "Confidential Client LLC",
-                },
-              ],
-            },
+        metadata: {
+          anonRestorations: {
+            pairs: [
+              {
+                placeholder: "[ORG_1]",
+                original: "Confidential Client LLC",
+              },
+            ],
           },
-        ],
+        },
+        parts: [],
       },
       textMessage({ id: "msg_4", role: "user", text: "latest question" }),
     ];

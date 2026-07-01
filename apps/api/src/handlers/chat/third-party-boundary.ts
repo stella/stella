@@ -75,12 +75,6 @@ export type ChatThirdPartyBoundary =
       type: "anonymized";
     };
 
-export const ANON_RESTORATIONS_DATA_PART_TYPE = "data-stella-anon-restorations";
-
-export const isProviderInvisiblePart = (
-  part: ChatMessage["parts"][number],
-): boolean => part.type === ANON_RESTORATIONS_DATA_PART_TYPE;
-
 export const createChatThirdPartyBoundary = ({
   anonymizeFields,
   anonymizationScopeId,
@@ -513,15 +507,11 @@ const removeProviderInvisibleParts = (
   const visibleMessages: ChatMessage[] = [];
 
   for (const message of messages) {
-    const parts = message.parts.filter(
-      (part) => !isProviderInvisiblePart(part),
-    );
-
-    if (parts.length === 0) {
+    if (message.parts.length === 0) {
       continue;
     }
 
-    visibleMessages.push(toProviderVisibleMessage(message, parts));
+    visibleMessages.push(toProviderVisibleMessage(message));
   }
 
   return visibleMessages;

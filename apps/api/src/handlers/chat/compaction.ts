@@ -10,10 +10,7 @@ import {
   isChatTextPart,
 } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
-import {
-  isProviderInvisiblePart,
-  prepareTextForThirdParty,
-} from "@/api/handlers/chat/third-party-boundary";
+import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
 import type {
   ChatCompactionSummary,
   ChatMessage,
@@ -785,7 +782,7 @@ const estimateMessageTokens = (message: ChatMessage): number => {
 };
 
 const getProviderVisibleParts = (message: ChatMessage): ChatMessage["parts"] =>
-  message.parts.filter((part) => !isProviderInvisiblePart(part));
+  message.parts;
 
 const getProviderVisibleMessages = (
   messages: readonly ChatMessage[],
