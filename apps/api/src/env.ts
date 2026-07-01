@@ -99,14 +99,17 @@ const envApi = createEnv({
      * "production" regardless of this value.
      */
     SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
-    EMAIL_PROVIDER: v.pipe(
-      v.picklist(["ses", "smtp"]),
-      v.check((provider) => {
-        if (provider === "ses") {
-          return !!process.env["SES_REGION"];
-        }
-        return !!(process.env["SMTP_HOST"] && process.env["SMTP_PORT"]);
-      }, "Missing required env vars for the selected EMAIL_PROVIDER"),
+    EMAIL_PROVIDER: v.optional(
+      v.pipe(
+        v.picklist(["ses", "smtp"]),
+        v.check((provider) => {
+          if (provider === "ses") {
+            return !!process.env["SES_REGION"];
+          }
+          return !!(process.env["SMTP_HOST"] && process.env["SMTP_PORT"]);
+        }, "Missing required env vars for the selected EMAIL_PROVIDER"),
+      ),
+      "smtp",
     ),
     SES_REGION: v.optional(v.string()),
     SES_ACCESS_KEY_ID: v.optional(v.string()),
