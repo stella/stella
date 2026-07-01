@@ -19,8 +19,10 @@ import {
   planModelCompaction,
   renderChatMessagesForCompaction,
   renderModelMessagesForCompaction,
+  shouldCompactChatMessages,
   summarizeChatCompaction,
 } from "./compaction";
+import { ANON_RESTORATIONS_DATA_PART_TYPE } from "./third-party-boundary";
 
 const textMessage = ({
   id,
@@ -182,6 +184,141 @@ describe("chat history compaction", () => {
     expect(transcript).toContain("contract.pdf");
     expect(transcript).toContain("old file attachments are not rehydrated");
     expect(transcript).not.toContain("stella-user-file://file_1");
+  });
+
+  test("omits anonymization restoration metadata from the transcript", () => {
+    const transcript = renderChatMessagesForCompaction([
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          {
+            type: "text",
+            text: "The answer references [ORG_1].",
+          },
+          {
+            type: ANON_RESTORATIONS_DATA_PART_TYPE,
+            data: {
+              pairs: [
+                {
+                  placeholder: "[ORG_1]",
+                  original: "Confidential Client LLC",
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(transcript).toContain("The answer references [ORG_1].");
+    expect(transcript).not.toContain(ANON_RESTORATIONS_DATA_PART_TYPE);
+    expect(transcript).not.toContain("Confidential Client LLC");
+  });
+
+  test("ignores anonymization restoration metadata when planning compaction", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          {
+            type: "text",
+            text: "The answer references [ORG_1].",
+          },
+          {
+            type: ANON_RESTORATIONS_DATA_PART_TYPE,
+            data: {
+              pairs: [
+                {
+                  placeholder: "[ORG_1]",
+                  original: "Confidential Client LLC ".repeat(1000),
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ];
+
+    expect(shouldCompactChatMessages(messages, 1000)).toBe(false);
+    expect(planChatCompaction({ messages, triggerTokens: 1000 }).type).toBe(
+      "none",
+    );
+  });
+
+  test("drops restoration-only messages from transcript and planning", () => {
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          {
+            type: ANON_RESTORATIONS_DATA_PART_TYPE,
+            data: {
+              pairs: [
+                {
+                  placeholder: "[ORG_1]",
+                  original: "Confidential Client LLC ".repeat(1000),
+                },
+              ],
+            },
+          },
+        ],
+      },
+    ];
+
+    expect(renderChatMessagesForCompaction(messages)).toBe("");
+    expect(shouldCompactChatMessages(messages, 1)).toBe(false);
+    expect(planChatCompaction({ messages, triggerTokens: 1 }).type).toBe(
+      "none",
+    );
+  });
+
+  test("ignores restoration-only messages when finding the preserved tail", () => {
+    const messages: ChatMessage[] = [
+      textMessage({ id: "msg_1", role: "user", text: "old fact ".repeat(80) }),
+      textMessage({
+        id: "msg_2",
+        role: "assistant",
+        text: "old answer ".repeat(80),
+      }),
+      {
+        id: "msg_3",
+        role: "assistant",
+        parts: [
+          {
+            type: ANON_RESTORATIONS_DATA_PART_TYPE,
+            data: {
+              pairs: [
+                {
+                  placeholder: "[ORG_1]",
+                  original: "Confidential Client LLC",
+                },
+              ],
+            },
+          },
+        ],
+      },
+      textMessage({ id: "msg_4", role: "user", text: "latest question" }),
+    ];
+
+    const plan = planChatCompaction({
+      messages,
+      preserveTokens: 20,
+      triggerTokens: 50,
+    });
+
+    expect(plan.type).toBe("compact");
+    if (plan.type === "none") {
+      return;
+    }
+
+    expect(plan.messagesToSummarize.map((message) => message.id)).toEqual([
+      "msg_1",
+      "msg_2",
+    ]);
+    expect(plan.recentMessages.map((message) => message.id)).toEqual(["msg_4"]);
   });
 
   test("falls back to the recent tail when summary generation fails", async () => {

@@ -3,7 +3,10 @@ import type { LanguageModel, ModelMessage } from "ai";
 import { Result } from "better-result";
 
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
-import { prepareTextForThirdParty } from "@/api/handlers/chat/third-party-boundary";
+import {
+  isProviderInvisiblePart,
+  prepareTextForThirdParty,
+} from "@/api/handlers/chat/third-party-boundary";
 import type {
   ChatCompactionSummary,
   ChatMessage,
@@ -106,7 +109,8 @@ export const planChatCompaction = ({
   preserveTokens = DEFAULT_PRESERVE_TOKENS,
   triggerTokens = DEFAULT_TRIGGER_TOKENS,
 }: PlanChatCompactionOptions): ChatCompactionPlan => {
-  const totalTokens = estimateMessagesTokens(messages);
+  const providerVisibleMessages = getProviderVisibleMessages(messages);
+  const totalTokens = estimateMessagesTokens(providerVisibleMessages);
   if (totalTokens <= triggerTokens) {
     return { totalTokens, type: "none" };
   }
@@ -114,8 +118,8 @@ export const planChatCompaction = ({
   const recentMessages: ChatMessage[] = [];
   let preservedTokens = 0;
 
-  for (let index = messages.length - 1; index >= 0; index -= 1) {
-    const message = messages.at(index);
+  for (let index = providerVisibleMessages.length - 1; index >= 0; index -= 1) {
+    const message = providerVisibleMessages.at(index);
     if (!message) {
       continue;
     }
@@ -133,9 +137,9 @@ export const planChatCompaction = ({
     recentMessages.unshift(message);
   }
 
-  const messagesToSummarize = messages.slice(
+  const messagesToSummarize = providerVisibleMessages.slice(
     0,
-    messages.length - recentMessages.length,
+    providerVisibleMessages.length - recentMessages.length,
   );
   if (messagesToSummarize.length === 0) {
     return { totalTokens, type: "none" };
@@ -524,16 +528,26 @@ export const compactModelMessagesForModel = async ({
 
 export const renderChatMessagesForCompaction = (
   messages: readonly ChatMessage[],
-): string =>
-  messages
-    .map((message, index) =>
+): string => {
+  const renderedMessages: string[] = [];
+
+  for (const message of messages) {
+    const visibleParts = getProviderVisibleParts(message);
+    if (visibleParts.length === 0) {
+      continue;
+    }
+
+    renderedMessages.push(
       [
-        `<message index="${index + 1}" role="${message.role}" id="${message.id}">`,
-        ...message.parts.map(renderPartForCompaction),
+        `<message index="${renderedMessages.length + 1}" role="${message.role}" id="${message.id}">`,
+        ...visibleParts.map(renderPartForCompaction),
         "</message>",
       ].join("\n"),
-    )
-    .join("\n\n");
+    );
+  }
+
+  return renderedMessages.join("\n\n");
+};
 
 export const renderModelMessagesForCompaction = (
   messages: readonly ModelMessage[],
@@ -703,11 +717,37 @@ const estimateMessagesTokens = (messages: readonly ChatMessage[]): number =>
     0,
   );
 
-const estimateMessageTokens = (message: ChatMessage): number =>
-  message.parts.reduce(
-    (total, part) => total + estimatePartTokens(part),
-    MESSAGE_OVERHEAD_TOKENS,
-  );
+const estimateMessageTokens = (message: ChatMessage): number => {
+  const visibleParts = getProviderVisibleParts(message);
+  if (visibleParts.length === 0) {
+    return 0;
+  }
+
+  let total = MESSAGE_OVERHEAD_TOKENS;
+
+  for (const part of visibleParts) {
+    total += estimatePartTokens(part);
+  }
+
+  return total;
+};
+
+const getProviderVisibleParts = (message: ChatMessage): ChatMessage["parts"] =>
+  message.parts.filter((part) => !isProviderInvisiblePart(part));
+
+const getProviderVisibleMessages = (
+  messages: readonly ChatMessage[],
+): ChatMessage[] => {
+  const visibleMessages: ChatMessage[] = [];
+
+  for (const message of messages) {
+    if (getProviderVisibleParts(message).length > 0) {
+      visibleMessages.push(message);
+    }
+  }
+
+  return visibleMessages;
+};
 
 const estimatePartTokens = (part: ChatMessage["parts"][number]): number => {
   if (isTextUIPart(part)) {
