@@ -388,7 +388,7 @@ const VerdictBadge = ({ entity, verdictProperty }: VerdictBadgeProps) => {
   const badge = (
     <span
       aria-label={label}
-      className="flex size-4 shrink-0 items-center justify-center self-center rounded-full"
+      className="flex size-4 shrink-0 items-center justify-center self-center rounded-full group-data-[expanded-cell]/cell-content:self-end"
       role="img"
       style={{ backgroundColor: color.background, color: color.foreground }}
     >
@@ -409,8 +409,10 @@ const VerdictBadge = ({ entity, verdictProperty }: VerdictBadgeProps) => {
       title={label}
       // Center the trigger wrapper so the badge holds the same vertical position
       // whether the card is open or closed, and even when the row aligns to the
-      // top (fit-content content mode).
-      triggerClassName="flex shrink-0 items-center self-center"
+      // top (fit-content content mode). When the cell is expanded into its tall
+      // editor, drop the badge to the bottom so it sits on the action row
+      // instead of floating in the middle of the box.
+      triggerClassName="flex shrink-0 items-center self-center group-data-[expanded-cell]/cell-content:self-end"
     >
       {badge}
     </AICellSourceCard>
