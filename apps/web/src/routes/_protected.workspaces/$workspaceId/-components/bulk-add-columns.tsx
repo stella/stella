@@ -2,7 +2,7 @@ import { Suspense, useCallback, useMemo, useRef, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
-import { KeyboardIcon, PlusIcon, XIcon } from "lucide-react";
+import { KeyboardIcon, PlusIcon, RouteIcon, XIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -14,11 +14,18 @@ import {
   DialogTrigger,
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import type { WorkspacePropertyOption } from "@/lib/types";
+import type { PropertyDependency, WorkspacePropertyOption } from "@/lib/types";
 import {
   COMPOSER_CARD_CLASS,
   ReadingFromRow,
@@ -33,6 +40,10 @@ import type {
 import { InlineOptionEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
+import {
+  buildDocTypeGate,
+  isDocumentTypeClassifier,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import {
@@ -41,6 +52,10 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import type { CreatePropertySpec } from "@/routes/_protected.workspaces/$workspaceId/-mutations/properties";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+
+// Sentinel for the "every document type" (ungated) scope; a Select value can't
+// be null, so it stands in and maps back to null.
+const SCOPE_ALL_VALUE = "__all__";
 
 type DraftTool = "ai-model" | "manual-input";
 
@@ -260,6 +275,18 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
     [fileProperties],
   );
 
+  // Shared "applies to" scope: gate every AI column added here to one document
+  // type (or all). Offered only when a Document Type classifier exists.
+  const classifier = useMemo(
+    () => properties.find(isDocumentTypeClassifier),
+    [properties],
+  );
+  const docTypeOptions =
+    classifier?.content.type === "single-select"
+      ? classifier.content.options
+      : [];
+  const [scopeDocType, setScopeDocType] = useState<string | null>(null);
+
   const [drafts, setDrafts] = useState<Draft[]>(() => [
     makeEmptyDraft(0, defaultFileIds),
   ]);
@@ -306,12 +333,20 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
       };
       if (d.tool === "ai-model") {
         item.prompt = d.prompt;
-        const dependencyIds = [...new Set([...d.fileIds, ...d.mentions])];
-        if (dependencyIds.length > 0) {
-          item.dependencies = dependencyIds.map((id) => ({
-            dependsOnPropertyId: id,
-            condition: null,
-          }));
+        // The scope owns the classifier dependency: drop any of it here, then
+        // append the gate when a specific document type is selected.
+        const dependencyIds = [
+          ...new Set([...d.fileIds, ...d.mentions]),
+        ].filter((id) => id !== classifier?.id);
+        const dependencies: PropertyDependency[] = dependencyIds.map((id) => ({
+          dependsOnPropertyId: id,
+          condition: null,
+        }));
+        if (classifier && scopeDocType !== null) {
+          dependencies.push(buildDocTypeGate(classifier.id, scopeDocType));
+        }
+        if (dependencies.length > 0) {
+          item.dependencies = dependencies;
         }
       }
       if (includeOptions) {
@@ -378,20 +413,57 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
         </Button>
       </div>
 
-      <div className="bg-muted/64 flex items-center justify-end gap-2 border-t px-5 py-3">
-        <DialogClose render={<Button size="sm" variant="ghost" />}>
-          {t("common.cancel")}
-        </DialogClose>
-        <Button
-          disabled={!canSubmit}
-          loading={batch.isPending}
-          onClick={() => {
-            void handleSubmit();
-          }}
-          size="sm"
-        >
-          {t("workspaces.properties.bulk.title")}
-        </Button>
+      <div className="bg-muted/64 flex items-center justify-between gap-2 border-t px-5 py-3">
+        {classifier && docTypeOptions.length > 0 ? (
+          <div className="flex min-w-0 items-center gap-2">
+            <RouteIcon className="text-muted-foreground size-4 shrink-0" />
+            <span className="text-muted-foreground shrink-0 text-sm">
+              {classifier.name}
+            </span>
+            <Select
+              onValueChange={(next) =>
+                setScopeDocType(
+                  next === null || next === SCOPE_ALL_VALUE ? null : next,
+                )
+              }
+              value={scopeDocType ?? SCOPE_ALL_VALUE}
+            >
+              <SelectTrigger
+                className="h-7 min-h-0 w-auto min-w-36 text-xs"
+                size="sm"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value={SCOPE_ALL_VALUE}>
+                  {t("common.all")}
+                </SelectItem>
+                {docTypeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.value}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </div>
+        ) : (
+          <span />
+        )}
+        <div className="flex items-center gap-2">
+          <DialogClose render={<Button size="sm" variant="ghost" />}>
+            {t("common.cancel")}
+          </DialogClose>
+          <Button
+            disabled={!canSubmit}
+            loading={batch.isPending}
+            onClick={() => {
+              void handleSubmit();
+            }}
+            size="sm"
+          >
+            {t("workspaces.properties.bulk.title")}
+          </Button>
+        </div>
       </div>
     </>
   );

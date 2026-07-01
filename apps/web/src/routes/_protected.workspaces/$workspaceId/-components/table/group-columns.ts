@@ -19,7 +19,7 @@ export const isDocumentTypeClassifier = (
 // gate `materializePlaybookRun` writes. Reading that label back lets the grouped
 // table place the column in its matching section without a separate playbooks
 // fetch (neither the list nor detail endpoint exposes the playbook scope).
-const docTypeGateLabel = (
+export const docTypeGateLabel = (
   dependency: PropertyDependency,
   classifierPropertyId: string,
 ): string | null => {
@@ -45,6 +45,23 @@ const docTypeGateLabel = (
   }
   return null;
 };
+
+// Build the dependency gate that scopes an AI column to one document type: a
+// dependency on the classifier whose condition is `classifier == <label>`. The
+// exact shape {@link docTypeGateLabel} reads back and `materializePlaybookRun`
+// writes, so a manually-scoped column lands in its section like a playbook one.
+export const buildDocTypeGate = (
+  classifierPropertyId: string,
+  label: string,
+): PropertyDependency => ({
+  dependsOnPropertyId: classifierPropertyId,
+  condition: {
+    type: "compare",
+    left: { type: "property", propertyId: classifierPropertyId },
+    op: "eq",
+    right: { type: "literal", value: label },
+  },
+});
 
 // propertyId -> the document-type labels its column is gated to. A property absent
 // from the map is ungated (no document-type scope) and shows in every section. A
