@@ -218,6 +218,48 @@ describe("TanStack text model resolution", () => {
     expect(hasTanStackInstanceProvider()).toBe(true);
   });
 
+  test("auto-detects Mistral when stale unsupported provider credentials exist", () => {
+    const originalEnv = {
+      AI_PROVIDER: env.AI_PROVIDER,
+      ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+      AZURE_API_KEY: env.AZURE_API_KEY,
+      AZURE_BASE_URL: env.AZURE_BASE_URL,
+      AZURE_RESOURCE_NAME: env.AZURE_RESOURCE_NAME,
+      BEDROCK_API_KEY: env.BEDROCK_API_KEY,
+      GOOGLE_GENERATIVE_AI_API_KEY: env.GOOGLE_GENERATIVE_AI_API_KEY,
+      HUGGINGFACE_API_KEY: env.HUGGINGFACE_API_KEY,
+      HUGGINGFACE_BASE_URL: env.HUGGINGFACE_BASE_URL,
+      MISTRAL_API_KEY: env.MISTRAL_API_KEY,
+      OPENAI_API_KEY: env.OPENAI_API_KEY,
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+    };
+
+    try {
+      env.AI_PROVIDER = undefined;
+      env.ANTHROPIC_API_KEY = undefined;
+      env.BEDROCK_API_KEY = undefined;
+      env.GOOGLE_GENERATIVE_AI_API_KEY = undefined;
+      env.OPENAI_API_KEY = undefined;
+      env.OPENROUTER_API_KEY = undefined;
+      env.AZURE_API_KEY = "test-azure-key";
+      env.AZURE_BASE_URL = "https://example.openai.azure.com/openai";
+      env.HUGGINGFACE_API_KEY = "test-hf-key";
+      env.HUGGINGFACE_BASE_URL =
+        "https://example.endpoints.huggingface.cloud/v1";
+      env.MISTRAL_API_KEY = "test-mistral-instance-key";
+
+      const model = getTanStackTextModelForRole("chat", null, {
+        organizationId: orgId,
+      });
+
+      expect(hasTanStackInstanceProvider()).toBe(true);
+      expect(model.provider).toBe("mistral");
+      expect(model.adapter.name).toBe("mistral");
+    } finally {
+      Object.assign(env, originalEnv);
+    }
+  });
+
   test("resolves instance OpenAI models through an arbitrary-id compatible adapter", () => {
     const model = getTanStackTextModelById("openai::gpt-5.4", null, {
       role: "reasoning",

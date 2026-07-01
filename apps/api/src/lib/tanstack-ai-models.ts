@@ -57,6 +57,15 @@ export type TanStackTextProvider = Exclude<
   "azure_foundry" | "huggingface" | "openai_compatible"
 >;
 
+const INSTANCE_PROVIDER_PREFERENCE = [
+  "openrouter",
+  "google",
+  "openai",
+  "anthropic",
+  "bedrock",
+  "mistral",
+] as const satisfies readonly TanStackTextProvider[];
+
 type AnthropicAdaptiveThinking = {
   type: "adaptive";
   display?: "omitted" | "summarized" | undefined;
@@ -495,29 +504,11 @@ const resolveProvider = (): AIProvider => {
   if (env.USE_MOCK_AI && mockTextAdapterFactory) {
     return "google";
   }
-  if (env.OPENROUTER_API_KEY) {
-    return "openrouter";
-  }
-  if (env.GOOGLE_GENERATIVE_AI_API_KEY) {
-    return "google";
-  }
-  if (env.OPENAI_API_KEY) {
-    return "openai";
-  }
-  if (env.ANTHROPIC_API_KEY) {
-    return "anthropic";
-  }
-  if (env.BEDROCK_API_KEY) {
-    return "bedrock";
-  }
-  if (env.HUGGINGFACE_API_KEY && env.HUGGINGFACE_BASE_URL) {
-    return "huggingface";
-  }
-  if (env.AZURE_API_KEY && (env.AZURE_RESOURCE_NAME || env.AZURE_BASE_URL)) {
-    return "azure_foundry";
-  }
-  if (env.MISTRAL_API_KEY) {
-    return "mistral";
+
+  for (const provider of INSTANCE_PROVIDER_PREFERENCE) {
+    if (hasInstanceProviderCredentials(provider)) {
+      return provider;
+    }
   }
 
   return panic(
