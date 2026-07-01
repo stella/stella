@@ -392,7 +392,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           return;
         }
         // Verdict tiers are system-defined; their colors are not user-editable.
-        if (isReadOnlyVerdictGrouping) {
+        if (groupByProperty.tool.type === "playbook-verdict") {
           return;
         }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
@@ -428,7 +428,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           return;
         }
         // Verdict tiers are system-defined; their labels are not user-editable.
-        if (isReadOnlyVerdictGrouping) {
+        if (groupByProperty.tool.type === "playbook-verdict") {
           return;
         }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
@@ -477,7 +477,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         groupByProperty.content.type === "multi-select")
     ) {
       // Verdict tiers are system-defined; their order is not user-editable.
-      if (isReadOnlyVerdictGrouping) {
+      if (groupByProperty.tool.type === "playbook-verdict") {
         return;
       }
       const opts = [...groupByProperty.content.options];
