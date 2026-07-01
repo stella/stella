@@ -409,19 +409,43 @@ const VerdictBadge = ({
   const Icon = isVerdictTier(tier) ? VERDICT_TIER_ICONS[tier] : null;
   const color = resolveVerdictColor(verdictProperty, tier);
 
+  // Compact: the badge leads the cell in flow (centered). Expanded: it leaves
+  // flow and pins to the bottom-left, on the same baseline as the Preview/Retry
+  // actions (which are absolute bottom-1.5), so the whole action row lines up.
+  const triggerAlignmentClass =
+    "flex shrink-0 items-center self-center group-data-[expanded-cell]/cell-content:absolute group-data-[expanded-cell]/cell-content:bottom-1.5 group-data-[expanded-cell]/cell-content:start-2";
+
   const badge = (
-    <span
-      aria-label={label}
-      className="flex size-4 shrink-0 items-center justify-center self-center rounded-full group-data-[expanded-cell]/cell-content:self-end"
-      role="img"
-      style={{ backgroundColor: color.background, color: color.foreground }}
-    >
-      {Icon !== null && <Icon aria-hidden="true" className="size-2.5" />}
+    <span aria-label={label} className="flex items-center" role="img">
+      {/* Compact table cell: a colored circle carrying just the tier glyph. */}
+      <span
+        className="flex size-4 items-center justify-center rounded-full group-data-[expanded-cell]/cell-content:hidden"
+        style={{ backgroundColor: color.background, color: color.foreground }}
+      >
+        {Icon !== null && <Icon aria-hidden="true" className="size-2.5" />}
+      </span>
+      {/* Expanded cell: an icon + label pill matching the Preview/Retry actions
+          on the same row, keeping the tier color on the glyph. */}
+      <span className="text-foreground-ghost hover:text-foreground hidden h-6 items-center gap-1 px-1.5 text-xs opacity-70 group-data-[expanded-cell]/cell-content:flex hover:opacity-100">
+        {Icon !== null && (
+          <Icon
+            aria-hidden="true"
+            className="size-3.5"
+            style={{ color: color.foreground }}
+          />
+        )}
+        {label}
+      </span>
     </span>
   );
 
   if (!justification) {
-    return <Tooltip content={label} render={badge} />;
+    return (
+      <Tooltip
+        content={label}
+        render={<span className={triggerAlignmentClass}>{badge}</span>}
+      />
+    );
   }
 
   return (
@@ -431,12 +455,7 @@ const VerdictBadge = ({
       entity={entity}
       justification={justification}
       title={label}
-      // Center the trigger wrapper so the badge holds the same vertical position
-      // whether the card is open or closed, and even when the row aligns to the
-      // top (fit-content content mode). When the cell is expanded into its tall
-      // editor, drop the badge to the bottom so it sits on the action row
-      // instead of floating in the middle of the box.
-      triggerClassName="flex shrink-0 items-center self-center group-data-[expanded-cell]/cell-content:self-end"
+      triggerClassName={triggerAlignmentClass}
     >
       {badge}
     </AICellSourceCard>
