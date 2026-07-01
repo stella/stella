@@ -52,12 +52,18 @@ export const MANIFEST_NS = "urn:stella:template:v1";
 // item1 (bibliography sources, custom doc properties, content-control bindings,
 // SharePoint metadata). The manifest is located by namespace and written to a
 // free slot, never assuming item1 is ours.
+const customXmlItemPathForIndex = (index: string): string =>
+  `customXml/item${index}.xml`;
+const customXmlPropsPathForIndex = (index: string): string =>
+  `customXml/itemProps${index}.xml`;
+const customXmlRelsPathForIndex = (index: string): string =>
+  `customXml/_rels/item${index}.xml.rels`;
 const customXmlItemPath = (slot: number): string =>
-  `customXml/item${String(slot)}.xml`;
+  customXmlItemPathForIndex(String(slot));
 const customXmlPropsPath = (slot: number): string =>
-  `customXml/itemProps${String(slot)}.xml`;
+  customXmlPropsPathForIndex(String(slot));
 const customXmlRelsPath = (slot: number): string =>
-  `customXml/_rels/item${String(slot)}.xml.rels`;
+  customXmlRelsPathForIndex(String(slot));
 
 /** Matches any custom XML data or props part to read its slot index
  *  (used to find the next free slot). */
@@ -66,6 +72,11 @@ const CUSTOM_XML_INDEX_RE =
 
 /** Matches only data parts (`item{N}.xml`), where a manifest can live. */
 const CUSTOM_XML_DATA_RE = /^customXml\/item(?<index>\d+)\.xml$/u;
+
+const parseCustomXmlSlotIndex = (index: string): number | null => {
+  const slot = Number(index);
+  return Number.isSafeInteger(slot) && slot > 0 ? slot : null;
+};
 
 /** Escape every regex meta-character (including `\`) for literal matching. */
 const escapeRegExp = (value: string): string =>
@@ -656,8 +667,33 @@ const parseManifestXml = (xml: string): TemplateManifest | null => {
 
 // ── Public API ───────────────────────────────────────────
 
+type CustomXmlSlot = { index: string; safeIndex: number | null };
+
 /** The Stella manifest part: its slot index plus the parsed manifest. */
-type ManifestSlot = { index: number; manifest: TemplateManifest };
+type ManifestSlot = CustomXmlSlot & { manifest: TemplateManifest };
+
+const compareCustomXmlSlots = (
+  left: CustomXmlSlot,
+  right: CustomXmlSlot,
+): number => {
+  if (left.safeIndex !== null && right.safeIndex !== null) {
+    return left.safeIndex - right.safeIndex;
+  }
+
+  if (left.safeIndex !== null) {
+    return -1;
+  }
+
+  if (right.safeIndex !== null) {
+    return 1;
+  }
+
+  if (left.index.length !== right.index.length) {
+    return left.index.length - right.index.length;
+  }
+
+  return left.index.localeCompare(right.index);
+};
 
 /**
  * Locate the Stella manifest among the DOCX's custom XML parts.
@@ -671,12 +707,17 @@ type ManifestSlot = { index: number; manifest: TemplateManifest };
 const findManifestSlot = async (zip: JSZip): Promise<ManifestSlot | null> => {
   const candidates = Object.entries(zip.files).flatMap(([path, entry]) => {
     const index = CUSTOM_XML_DATA_RE.exec(path)?.groups?.["index"];
-    return index === undefined ? [] : [{ index: Number(index), entry }];
+    if (index === undefined) {
+      return [];
+    }
+
+    return [{ index, safeIndex: parseCustomXmlSlotIndex(index), entry }];
   });
 
   const slots = await Promise.all(
     candidates.map(async (c) => ({
       index: c.index,
+      safeIndex: c.safeIndex,
       manifest: parseManifestXml(await c.entry.async("string")),
     })),
   );
@@ -684,25 +725,83 @@ const findManifestSlot = async (zip: JSZip): Promise<ManifestSlot | null> => {
   return (
     slots
       .filter((slot): slot is ManifestSlot => slot.manifest !== null)
-      .toSorted((a, b) => a.index - b.index)
+      .toSorted(compareCustomXmlSlots)
       .at(0) ?? null
   );
 };
 
 /**
- * Pick the next free custom XML slot: one past the highest existing
- * `item{N}` / `itemProps{N}` index. Using max+1 (not first-gap) keeps the
- * data and props parts paired and never reuses a foreign slot.
+ * Pick the next free safe custom XML slot among existing `item{N}` /
+ * `itemProps{N}` indexes. Ignore non-safe numeric indexes from untrusted ZIP
+ * entry names so they cannot coerce path generation to `Infinity` or
+ * exponential notation, which would make the manifest unfindable later.
  */
 const nextFreeSlot = (zip: JSZip): number => {
+  const usedSlots = new Set<number>();
   let max = 0;
   for (const path of Object.keys(zip.files)) {
     const index = CUSTOM_XML_INDEX_RE.exec(path)?.groups?.["index"];
-    if (index !== undefined) {
-      max = Math.max(max, Number(index));
+    if (index === undefined) {
+      continue;
+    }
+
+    const slot = parseCustomXmlSlotIndex(index);
+    if (slot === null) {
+      continue;
+    }
+
+    usedSlots.add(slot);
+    max = Math.max(max, slot);
+  }
+
+  const next = max + 1;
+  if (Number.isSafeInteger(next)) {
+    return next;
+  }
+
+  for (let slot = 1; slot <= usedSlots.size + 1; slot += 1) {
+    if (!usedSlots.has(slot)) {
+      return slot;
     }
   }
-  return max + 1;
+
+  return 1;
+};
+
+const removeManifestSlot = async (
+  zip: JSZip,
+  slot: CustomXmlSlot,
+): Promise<void> => {
+  const propsPath = customXmlPropsPathForIndex(slot.index);
+
+  zip.remove(customXmlItemPathForIndex(slot.index));
+  zip.remove(propsPath);
+  zip.remove(customXmlRelsPathForIndex(slot.index));
+
+  // Clean up empty customXml directory entries
+  const customXmlDir = "customXml/";
+  const remaining = zip.file(new RegExp(`^${customXmlDir}`, "u"));
+  if (remaining.length === 0) {
+    zip.remove("customXml/_rels/");
+    zip.remove(customXmlDir);
+  }
+
+  const ctEntry = zip.file(CONTENT_TYPES_PATH);
+  if (!ctEntry) {
+    return;
+  }
+
+  const ctXml = await ctEntry.async("string");
+  zip.file(
+    CONTENT_TYPES_PATH,
+    ctXml.replace(
+      new RegExp(
+        `<Override[^>]*PartName=["']/${escapeRegExp(propsPath)}["'][^>]*/>`,
+        "u",
+      ),
+      "",
+    ),
+  );
 };
 
 /**
@@ -743,7 +842,11 @@ export const writeManifest = async (
   // (Word bibliography, content-control bindings, SharePoint metadata) is
   // never overwritten.
   const existing = await findManifestSlot(zip);
-  const slot = existing?.index ?? nextFreeSlot(zip);
+  if (existing?.safeIndex === null) {
+    await removeManifestSlot(zip, existing);
+  }
+
+  const slot = existing?.safeIndex ?? nextFreeSlot(zip);
 
   const propsPath = customXmlPropsPath(slot);
 
@@ -795,39 +898,8 @@ export const stripManifest = async (docxBuffer: Buffer): Promise<Buffer> => {
     return docxBuffer;
   }
 
-  const propsPath = customXmlPropsPath(found.index);
-
   // Remove only our slot's part files; foreign custom XML parts stay intact.
-  zip.remove(customXmlItemPath(found.index));
-  zip.remove(propsPath);
-  zip.remove(customXmlRelsPath(found.index));
-
-  // Clean up empty customXml directory entries
-  const customXmlDir = "customXml/";
-  const remaining = zip.file(new RegExp(`^${customXmlDir}`, "u"));
-  if (remaining.length === 0) {
-    zip.remove("customXml/_rels/");
-    zip.remove(customXmlDir);
-  }
-
-  // Remove from [Content_Types].xml
-  const ctEntry = zip.file(CONTENT_TYPES_PATH);
-  if (ctEntry) {
-    let ctXml = await ctEntry.async("string");
-    // Remove the Override for our props part. Fully escape the path so every
-    // regex meta-character (including `\`) is matched literally, and tolerate
-    // either quote style to mirror the quote-tolerant check on the write side
-    // (otherwise a single-quoted override would be skipped on write yet left
-    // dangling here, pointing at a part we just deleted).
-    ctXml = ctXml.replace(
-      new RegExp(
-        `<Override[^>]*PartName=["']/${escapeRegExp(propsPath)}["'][^>]*/>`,
-        "u",
-      ),
-      "",
-    );
-    zip.file(CONTENT_TYPES_PATH, ctXml);
-  }
+  await removeManifestSlot(zip, found);
 
   const output = await zip.generateAsync({
     type: "nodebuffer",
