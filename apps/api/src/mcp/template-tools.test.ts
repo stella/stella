@@ -76,16 +76,21 @@ const parseToolPayload = (
 
 const createScopedDb = (templates: unknown[] = []) =>
   asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
-    mock(
-      async (
-        run: (tx: {
-          query: { templates: { findMany: () => Promise<unknown[]> } };
-        }) => unknown,
-      ) =>
-        await run({
-          query: { templates: { findMany: async () => templates } },
-        }),
-    ),
+    mock(async (run: (tx: unknown) => unknown) => {
+      // list_templates now uses the core query builder; the chain ignores its
+      // column/where/order arguments and resolves to the seeded rows.
+      const builder = {
+        select: () => builder,
+        from: () => builder,
+        where: () => builder,
+        orderBy: () => builder,
+        limit: async () => templates,
+      };
+      return await run({
+        ...builder,
+        query: { templates: { findMany: async () => templates } },
+      });
+    }),
   );
 
 const createContext = ({
@@ -234,7 +239,10 @@ describe("MCP template tools", () => {
       context: createContext({ scopedDb: createScopedDb(rows) }),
       toolName: "list_templates",
     });
-    expect(parseToolPayload(result)).toEqual({ templates: rows });
+    expect(parseToolPayload(result)).toEqual({
+      templates: rows,
+      nextCursor: null,
+    });
   });
 
   test("describe_template surfaces the full field config for round-tripping", async () => {

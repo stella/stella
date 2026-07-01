@@ -5,6 +5,10 @@ import { TaggedError } from "better-result";
 import { env } from "@/api/env";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
 import { LIMITS } from "@/api/lib/limits";
+import {
+  decodePaginationCursor,
+  encodePaginationCursor,
+} from "@/api/lib/pagination";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { getAccessibleWorkspaceId } from "@/api/mcp/context";
 
@@ -143,6 +147,121 @@ export const parseOptionalLimit = ({
     );
   }
   return value;
+};
+
+export const isToolErrorResult = (value: unknown): value is CallToolResult =>
+  typeof value === "object" &&
+  value !== null &&
+  "isError" in value &&
+  value.isError === true;
+
+const MAX_CURSOR_LENGTH = 512;
+
+export const parseOptionalCursor = ({
+  args,
+  key,
+}: {
+  args: Record<string, unknown>;
+  key: string;
+}): string | undefined | CallToolResult => {
+  const value = args[key];
+  if (value === undefined) {
+    return undefined;
+  }
+  if (typeof value !== "string" || value.length === 0) {
+    return errorResult(
+      `Invalid parameter: ${key}. Expected an opaque cursor string`,
+    );
+  }
+  if (value.length > MAX_CURSOR_LENGTH) {
+    return errorResult(
+      `Parameter ${key} exceeds maximum length of ${MAX_CURSOR_LENGTH}`,
+    );
+  }
+  return value;
+};
+
+export type TextWindowResult = {
+  text: string;
+  charCount: number;
+  nextCursor: string | null;
+  truncated: boolean;
+};
+
+export type WindowBounds = {
+  start: number;
+  end: number;
+  /** Offset to resume at for the next window, or null when fully consumed. */
+  nextOffset: number | null;
+};
+
+/**
+ * Resolve a half-open `[start, end)` window of `size` items into a stream of
+ * `length` items, starting at `offset` (clamped into range). `nextOffset` is
+ * the resume point for the next window, or null when the window reaches the
+ * end. Works for any positional stream (string chars, array items).
+ */
+export const resolveWindowBounds = (
+  length: number,
+  offset: number,
+  size: number,
+): WindowBounds => {
+  const start = Math.min(Math.max(offset, 0), length);
+  const end = Math.min(start + size, length);
+
+  return { start, end, nextOffset: end < length ? end : null };
+};
+
+const decodeTextWindowOffset = (
+  cursor: string | undefined,
+): number | CallToolResult => {
+  if (cursor === undefined) {
+    return 0;
+  }
+  const candidate = decodePaginationCursor(cursor)?.[0];
+  if (
+    typeof candidate !== "number" ||
+    !Number.isInteger(candidate) ||
+    candidate < 0
+  ) {
+    return errorResult("Invalid cursor");
+  }
+  return candidate;
+};
+
+/**
+ * Return a `maxChars` window of `text` starting at the offset encoded in
+ * `cursor` (absent cursor = start). `nextCursor` is the opaque cursor for the
+ * next window, or null when the window reaches the end. Callers paginate long
+ * content by passing the returned `nextCursor` back as `cursor`.
+ */
+export const windowTextByCursor = ({
+  cursor,
+  maxChars,
+  text,
+}: {
+  cursor: string | undefined;
+  maxChars: number;
+  text: string;
+}): TextWindowResult | CallToolResult => {
+  const offset = decodeTextWindowOffset(cursor);
+  if (typeof offset !== "number") {
+    return offset;
+  }
+
+  const { start, end, nextOffset } = resolveWindowBounds(
+    text.length,
+    offset,
+    maxChars,
+  );
+
+  return {
+    text: text.slice(start, end),
+    charCount: text.length,
+    nextCursor:
+      nextOffset === null ? null : encodePaginationCursor([nextOffset]),
+    truncated: nextOffset !== null,
+  };
 };
 
 export const ensureWorkspaceAccess = ({

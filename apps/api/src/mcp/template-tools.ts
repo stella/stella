@@ -1,8 +1,10 @@
 import { Result } from "better-result";
+import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
 import { roles } from "@stll/permissions";
 
+import { templates } from "@/api/db/schema";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -24,12 +26,20 @@ import { captureError } from "@/api/lib/analytics";
 import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
+import {
+  createCursorPage,
+  decodePaginationCursor,
+  encodePaginationCursor,
+  isUuidPaginationCursorPart,
+} from "@/api/lib/pagination";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
   enumProp,
   errorResult,
+  isToolErrorResult,
+  parseOptionalCursor,
   stringProp,
   textResult,
 } from "@/api/mcp/tool-utils";
@@ -158,7 +168,12 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       "request and skip any whose whenNotToUse applies.",
     inputSchema: {
       type: "object",
-      properties: {},
+      properties: {
+        cursor: stringProp(
+          "Opaque cursor from a previous list_templates call to fetch the next page",
+          { maxLength: 512 },
+        ),
+      },
     },
     name: "list_templates",
     scope: "stella:templates",
@@ -274,7 +289,20 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
   },
 ] as const satisfies readonly McpToolDefinition[];
 
-const listTemplatesArgsSchema = v.strictObject({});
+const listTemplatesArgsSchema = v.strictObject({
+  cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+});
+
+// The list_templates cursor is the boundary template id alone; the query
+// resolves its (createdAt, id) in-DB.
+const decodeTemplatePageCursor = (cursor: string): string | null => {
+  const parts = decodePaginationCursor(cursor);
+  if (!parts || parts.length !== 1) {
+    return null;
+  }
+  const [rawId] = parts;
+  return isUuidPaginationCursorPart(rawId) ? rawId : null;
+};
 
 const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
@@ -286,25 +314,61 @@ const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(listTemplatesArgsSchema, args);
   if (!parsed.success) {
-    return errorResult("Invalid input: list_templates takes no parameters");
+    return errorResult("Invalid input: list_templates accepts only a cursor");
   }
 
+  const cursor = parseOptionalCursor({ args, key: "cursor" });
+  if (isToolErrorResult(cursor)) {
+    return cursor;
+  }
+  let boundaryId: string | undefined;
+  if (cursor !== undefined) {
+    const decoded = decodeTemplatePageCursor(cursor);
+    if (decoded === null) {
+      return errorResult("Invalid cursor");
+    }
+    boundaryId = decoded;
+  }
+
+  const limit = LIMITS.templatesCount;
   const rows = await context.scopedDb((tx) =>
-    tx.query.templates.findMany({
-      columns: {
-        id: true,
-        name: true,
-        fieldCount: true,
-        tags: true,
-        whenToUse: true,
-        whenNotToUse: true,
-      },
-      orderBy: { createdAt: "desc" },
-      limit: LIMITS.templatesCount,
-    }),
+    tx
+      .select({
+        id: templates.id,
+        name: templates.name,
+        fieldCount: templates.fieldCount,
+        tags: templates.tags,
+        whenToUse: templates.whenToUse,
+        whenNotToUse: templates.whenNotToUse,
+      })
+      .from(templates)
+      .where(
+        and(
+          eq(templates.organizationId, context.organizationId),
+          // Resolve the full-precision (createdAt, id) boundary in-DB by id
+          // so the cursor never round-trips createdAt through a millisecond
+          // JS Date. The boundary lookup is org-scoped (defense in depth
+          // beyond RLS) so a cursor carrying a foreign template id cannot
+          // shift this org's page boundary.
+          boundaryId === undefined
+            ? undefined
+            : sql`(${templates.createdAt}, ${templates.id}) < (select b.created_at, b.id from templates b where b.id = ${boundaryId} and b.organization_id = ${context.organizationId})`,
+        ),
+      )
+      .orderBy(desc(templates.createdAt), desc(templates.id))
+      .limit(limit + 1),
   );
 
-  return textResult({ templates: rows });
+  const page = createCursorPage({
+    rows,
+    limit,
+    cursorForItem: (item) => encodePaginationCursor([item.id]),
+  });
+
+  return textResult({
+    templates: page.items,
+    nextCursor: page.nextCursor,
+  });
 };
 
 const markerReferenceArgsSchema = v.strictObject({});
