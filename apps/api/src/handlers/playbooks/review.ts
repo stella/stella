@@ -179,7 +179,7 @@ const reviewPlaybook = createSafeHandler(
       );
     }
 
-    const findings: ReviewFinding[] = await buildFindings({
+    const gradedFindings: ReviewFinding[] = await buildFindings({
       positions,
       contentBySourceId: extractionResult.value.contentBySourceId,
       standardBySourceId,
@@ -192,6 +192,15 @@ const reviewPlaybook = createSafeHandler(
       promptCachingEnabled,
       serviceTier,
     });
+
+    // Only actionable verdicts are surfaced as review findings. Compliant,
+    // fallback (an accepted alternative), and extract-only (no verdict)
+    // positions are not issues, so the inspector shows "No issues found" when a
+    // document satisfies the playbook instead of rendering non-issue cards.
+    const findings = gradedFindings.filter(
+      (finding) =>
+        finding.verdict === "deviation" || finding.verdict === "missing",
+    );
 
     yield* Result.await(
       safeDb(async (tx) => {

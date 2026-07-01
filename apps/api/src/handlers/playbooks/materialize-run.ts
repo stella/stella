@@ -392,17 +392,29 @@ export const materializePlaybookRun = async ({
       );
   }
 
-  if (dependencyRows.length > 0) {
+  // Replace the materialized columns' dependencies wholesale: clear the existing
+  // edges for every ASK/verdict id this run owns, then insert the current set.
+  // An upsert alone would leave behind edges the run no longer emits — e.g. a
+  // playbook narrowed from a document-type scope back to All keeps its stale
+  // classifier gate, or an ASK flipped AI→manual keeps its file dependency — so
+  // the workflow planner would keep gating/skipping under the old wiring.
+  const materializedIds = [
+    ...materializedPropertyIds,
+    ...verdictRows.map((row) => row.id),
+  ];
+  if (materializedIds.length > 0) {
     await tx
-      .insert(propertyDependencies)
-      .values(dependencyRows)
-      .onConflictDoUpdate({
-        target: [
-          propertyDependencies.propertyId,
-          propertyDependencies.dependsOnPropertyId,
-        ],
-        set: { condition: sql`excluded.condition` },
-      });
+      .delete(propertyDependencies)
+      .where(
+        and(
+          eq(propertyDependencies.workspaceId, workspaceId),
+          inArray(propertyDependencies.propertyId, materializedIds),
+        ),
+      );
+  }
+
+  if (dependencyRows.length > 0) {
+    await tx.insert(propertyDependencies).values(dependencyRows);
   }
 
   await recordAuditEvent(tx, {
