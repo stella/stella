@@ -273,6 +273,125 @@ describe("validateMessage", () => {
 
     expectInvalidChatMessage(result);
   });
+
+  test("accepts tool results that match the paired tool output", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_valid_tool_result"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: "contract" }),
+            input: { query: "contract" },
+            output: { text: "Found contract" },
+            state: "complete",
+          },
+          {
+            type: "tool-result",
+            toolCallId: "tool-call-1",
+            content: JSON.stringify({ text: "Found contract" }),
+            state: "complete",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_valid_tool_result"),
+      tools: searchTools,
+      userId: userId("user_valid_tool_result"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("rejects tool results without a paired tool call", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_unpaired_tool_result"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-result",
+            toolCallId: "tool-call-1",
+            content: JSON.stringify({ text: "Found contract" }),
+            state: "complete",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_unpaired_tool_result"),
+      tools: searchTools,
+      userId: userId("user_unpaired_tool_result"),
+    });
+
+    expectInvalidChatMessage(result);
+  });
+
+  test("rejects tool results that fail the paired tool output schema", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_invalid_tool_result"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: "contract" }),
+            input: { query: "contract" },
+            output: { text: "Found contract" },
+            state: "complete",
+          },
+          {
+            type: "tool-result",
+            toolCallId: "tool-call-1",
+            content: JSON.stringify({ text: 123 }),
+            state: "complete",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_invalid_tool_result"),
+      tools: searchTools,
+      userId: userId("user_invalid_tool_result"),
+    });
+
+    expectInvalidChatMessage(result);
+  });
+
+  test("rejects tool results that disagree with the paired tool output", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_mismatched_tool_result"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: "contract" }),
+            input: { query: "contract" },
+            output: { text: "Found contract" },
+            state: "complete",
+          },
+          {
+            type: "tool-result",
+            toolCallId: "tool-call-1",
+            content: JSON.stringify({ text: "Different result" }),
+            state: "complete",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_mismatched_tool_result"),
+      tools: searchTools,
+      userId: userId("user_mismatched_tool_result"),
+    });
+
+    expectInvalidChatMessage(result);
+  });
 });
 
 const expectInvalidChatMessage = (

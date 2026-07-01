@@ -301,8 +301,9 @@ export const isChatPart = (part: unknown): part is ChatPart => {
     case "tool-result":
       return (
         typeof part["toolCallId"] === "string" &&
-        "content" in part &&
-        isTanStackToolResultState(part["state"])
+        isTanStackToolResultContent(part["content"]) &&
+        isTanStackToolResultState(part["state"]) &&
+        (!("error" in part) || typeof part["error"] === "string")
       );
     case "thinking":
       return typeof part["content"] === "string";
@@ -462,6 +463,28 @@ const isTanStackToolCallState = (value: unknown): boolean =>
 
 const isTanStackToolResultState = (value: unknown): boolean =>
   value === "streaming" || value === "complete" || value === "error";
+
+const isTanStackToolResultContent = (value: unknown): boolean =>
+  typeof value === "string" ||
+  (Array.isArray(value) && value.every(isTanStackToolResultContentPart));
+
+const isTanStackToolResultContentPart = (part: unknown): boolean => {
+  if (!isRecord(part) || typeof part["type"] !== "string") {
+    return false;
+  }
+
+  if (part["type"] === "text") {
+    return typeof part["content"] === "string";
+  }
+
+  return (
+    (part["type"] === "image" ||
+      part["type"] === "audio" ||
+      part["type"] === "video" ||
+      part["type"] === "document") &&
+    isContentPartWithSource(part)
+  );
+};
 
 const mergeAnonRestorations = (
   current: ChatMessageMetadata["anonRestorations"],

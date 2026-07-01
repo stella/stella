@@ -3,7 +3,7 @@ import { createModel, extendAdapter } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
-import { createBedrockConverse } from "@tanstack/ai-bedrock";
+import { bedrockText } from "@tanstack/ai-bedrock";
 import type { BedrockConverseProviderOptions } from "@tanstack/ai-bedrock";
 import { createGeminiChat } from "@tanstack/ai-gemini";
 import type { GeminiTextProviderOptions } from "@tanstack/ai-gemini";
@@ -175,6 +175,10 @@ type TanStackModelFactoryOptions = {
   provider: AIProvider;
   apiKey?: string | undefined;
   region?: DataRegion | undefined;
+};
+
+type BedrockTextAdapterConfig = {
+  apiKey?: string;
 };
 
 let mockTextAdapterFactory: TanStackTextAdapterFactory | undefined;
@@ -387,17 +391,29 @@ const createExtendedMistralAdapter = (
   return mistral(modelId, apiKey);
 };
 
+const createBedrockTextAdapter = (
+  model: never,
+  config?: BedrockTextAdapterConfig,
+): AnyTextAdapter => {
+  const adapter = bedrockText(model, config);
+  // SAFETY: `model: never` is only a compile-time placeholder so
+  // `extendAdapter` can widen the factory to Stella's arbitrary model IDs.
+  // TanStack's Bedrock factory returns a normal text adapter at runtime.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- erase placeholder generics after adapter construction
+  return adapter as unknown as AnyTextAdapter;
+};
+
 const createExtendedBedrockAdapter = (
   modelId: string,
-  apiKey: string,
+  apiKey: string | undefined,
 ): AnyTextAdapter => {
-  const bedrock = extendAdapter(createBedrockConverse, [
+  const bedrock = extendAdapter(createBedrockTextAdapter, [
     createModel(modelId, {
       input: ["text", "image", "document"] as const,
       features: ["structured_outputs"] as const,
     }),
   ]);
-  return bedrock(modelId, apiKey);
+  return apiKey ? bedrock(modelId, { apiKey }) : bedrock(modelId);
 };
 
 const createTanStackTextAdapterFactory = ({
@@ -429,11 +445,7 @@ const createTanStackTextAdapterFactory = ({
       return (modelId) => createExtendedAnthropicAdapter(modelId, key);
     }
     case "bedrock": {
-      const key = requireCredential(
-        supportedProvider,
-        apiKey ?? env.BEDROCK_API_KEY,
-        "BEDROCK_API_KEY",
-      );
+      const key = apiKey ?? env.BEDROCK_API_KEY;
       return (modelId) => createExtendedBedrockAdapter(modelId, key);
     }
     case "openai": {
@@ -485,7 +497,7 @@ const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
     case "anthropic":
       return !!env.ANTHROPIC_API_KEY;
     case "bedrock":
-      return !!env.BEDROCK_API_KEY;
+      return env.AI_PROVIDER === "bedrock" || !!env.BEDROCK_API_KEY;
     case "mistral":
       return !!env.MISTRAL_API_KEY;
     case "openai_compatible":

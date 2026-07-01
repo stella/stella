@@ -176,6 +176,13 @@ type ValidateMessageResult = Result<
 >;
 
 type ChatToolSchema = SchemaInput | undefined;
+type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
+type ChatToolResultPart = Extract<ChatPart, { type: "tool-result" }>;
+type ValidatedToolCallPart = {
+  name: string;
+  hasOutput: boolean;
+  output: unknown;
+};
 
 export const validateMessage = async ({
   message,
@@ -286,67 +293,210 @@ const validateToolCallParts = ({
   message: ChatMessage;
   tools: ChatToolMap;
 }): Result<void, HandlerError<400>> => {
+  const toolCallsById = new Map<string, ValidatedToolCallPart>();
+
   for (const part of message.parts) {
-    if (part.type !== "tool-call") {
-      continue;
-    }
-    const tool = tools[part.name];
-    if (tool === undefined) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message: `Unknown chat tool: ${part.name}`,
-        }),
-      );
-    }
-
-    const argumentsResult = parseToolArguments(part.arguments);
-    if (Result.isError(argumentsResult)) {
-      return Result.err(argumentsResult.error);
-    }
-
-    const validatedArgumentsResult = validateToolPayload({
-      payload: argumentsResult.value,
-      payloadName: "arguments",
-      schema: tool.inputSchema,
-      toolName: part.name,
-    });
-    if (Result.isError(validatedArgumentsResult)) {
-      return Result.err(validatedArgumentsResult.error);
-    }
-
-    if (part.input !== undefined) {
-      const inputResult = validateToolPayload({
-        payload: part.input,
-        payloadName: "input",
-        schema: tool.inputSchema,
-        toolName: part.name,
-      });
-      if (Result.isError(inputResult)) {
-        return Result.err(inputResult.error);
-      }
-      if (!deepEquals(inputResult.value, validatedArgumentsResult.value)) {
+    if (part.type === "tool-call") {
+      if (toolCallsById.has(part.id)) {
         return Result.err(
           new HandlerError({
             status: 400,
-            message: `Chat tool input does not match arguments for ${part.name}`,
+            message: `Duplicate chat tool call id: ${part.id}`,
           }),
         );
       }
+
+      const toolCallResult = validateToolCallPart({ part, tools });
+      if (Result.isError(toolCallResult)) {
+        return Result.err(toolCallResult.error);
+      }
+
+      toolCallsById.set(part.id, toolCallResult.value);
+      continue;
     }
 
-    if (part.output !== undefined) {
-      const outputResult = validateToolPayload({
-        payload: part.output,
-        payloadName: "output",
-        schema: tool.outputSchema,
-        toolName: part.name,
-      });
-      if (Result.isError(outputResult)) {
-        return Result.err(outputResult.error);
-      }
+    if (part.type !== "tool-result") {
+      continue;
+    }
+
+    const toolResult = validateToolResultPart({
+      part,
+      toolCallsById,
+      tools,
+    });
+    if (Result.isError(toolResult)) {
+      return Result.err(toolResult.error);
     }
   }
+  return Result.ok();
+};
+
+const validateToolCallPart = ({
+  part,
+  tools,
+}: {
+  part: ChatToolCallPart;
+  tools: ChatToolMap;
+}): Result<ValidatedToolCallPart, HandlerError<400>> => {
+  const tool = tools[part.name];
+  if (tool === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Unknown chat tool: ${part.name}`,
+      }),
+    );
+  }
+
+  const argumentsResult = parseToolArguments(part.arguments);
+  if (Result.isError(argumentsResult)) {
+    return Result.err(argumentsResult.error);
+  }
+
+  const validatedArgumentsResult = validateToolPayload({
+    payload: argumentsResult.value,
+    payloadName: "arguments",
+    schema: tool.inputSchema,
+    toolName: part.name,
+  });
+  if (Result.isError(validatedArgumentsResult)) {
+    return Result.err(validatedArgumentsResult.error);
+  }
+
+  if (part.input !== undefined) {
+    const inputResult = validateToolPayload({
+      payload: part.input,
+      payloadName: "input",
+      schema: tool.inputSchema,
+      toolName: part.name,
+    });
+    if (Result.isError(inputResult)) {
+      return Result.err(inputResult.error);
+    }
+    if (!deepEquals(inputResult.value, validatedArgumentsResult.value)) {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: `Chat tool input does not match arguments for ${part.name}`,
+        }),
+      );
+    }
+  }
+
+  let hasOutput = false;
+  let validatedOutput: unknown = undefined;
+  if (part.output !== undefined) {
+    const outputResult = validateToolPayload({
+      payload: part.output,
+      payloadName: "output",
+      schema: tool.outputSchema,
+      toolName: part.name,
+    });
+    if (Result.isError(outputResult)) {
+      return Result.err(outputResult.error);
+    }
+    validatedOutput = outputResult.value;
+    hasOutput = true;
+  }
+
+  return Result.ok({ hasOutput, name: part.name, output: validatedOutput });
+};
+
+const validateToolResultPart = ({
+  part,
+  toolCallsById,
+  tools,
+}: {
+  part: ChatToolResultPart;
+  toolCallsById: Map<string, ValidatedToolCallPart>;
+  tools: ChatToolMap;
+}): Result<void, HandlerError<400>> => {
+  if (part.state === "streaming") {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Incomplete chat tool result: ${part.toolCallId}`,
+      }),
+    );
+  }
+
+  const toolCall = toolCallsById.get(part.toolCallId);
+  if (toolCall === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Chat tool result has no matching call: ${part.toolCallId}`,
+      }),
+    );
+  }
+
+  if (part.state === "error") {
+    return validateToolErrorResult(part);
+  }
+
+  if (!toolCall.hasOutput) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Chat tool result has no paired output: ${part.toolCallId}`,
+      }),
+    );
+  }
+
+  const tool = tools[toolCall.name];
+  if (tool === undefined) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Unknown chat tool: ${toolCall.name}`,
+      }),
+    );
+  }
+
+  const contentResult = parseToolResultContent(part.content);
+  if (Result.isError(contentResult)) {
+    return Result.err(contentResult.error);
+  }
+
+  const outputResult = validateToolPayload({
+    payload: contentResult.value,
+    payloadName: "result",
+    schema: tool.outputSchema,
+    toolName: toolCall.name,
+  });
+  if (Result.isError(outputResult)) {
+    return Result.err(outputResult.error);
+  }
+
+  if (!deepEquals(outputResult.value, toolCall.output)) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Chat tool result does not match output for ${toolCall.name}`,
+      }),
+    );
+  }
+
+  return Result.ok();
+};
+
+const validateToolErrorResult = (
+  part: ChatToolResultPart,
+): Result<void, HandlerError<400>> => {
+  const contentResult = parseToolResultContent(part.content);
+  if (Result.isError(contentResult)) {
+    return Result.err(contentResult.error);
+  }
+
+  if (contentResult.value !== null || !part.error) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: `Invalid chat tool error result: ${part.toolCallId}`,
+      }),
+    );
+  }
+
   return Result.ok();
 };
 
@@ -372,6 +522,23 @@ const parseToolArguments = (
   );
 };
 
+const parseToolResultContent = (
+  content: ChatToolResultPart["content"],
+): Result<unknown, HandlerError<400>> => {
+  if (typeof content !== "string") {
+    return Result.ok(content);
+  }
+
+  const parsed = Result.try({
+    try: () => JSON.parse(content) as unknown,
+    catch: () => content,
+  });
+  if (Result.isError(parsed)) {
+    return Result.ok(content);
+  }
+  return Result.ok(parsed.value);
+};
+
 const validateToolPayload = ({
   payload,
   payloadName,
@@ -379,7 +546,7 @@ const validateToolPayload = ({
   toolName,
 }: {
   payload: unknown;
-  payloadName: "arguments" | "input" | "output";
+  payloadName: "arguments" | "input" | "output" | "result";
   schema: ChatToolSchema;
   toolName: string;
 }): Result<unknown, HandlerError<400>> => {

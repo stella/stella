@@ -218,6 +218,38 @@ describe("TanStack text model resolution", () => {
     expect(hasTanStackInstanceProvider()).toBe(true);
   });
 
+  test("allows explicit Bedrock instance provider to use SigV4 without a bearer key", () => {
+    const originalEnv = {
+      AI_PROVIDER: env.AI_PROVIDER,
+      BEDROCK_API_KEY: env.BEDROCK_API_KEY,
+    };
+    const originalProcessBedrockApiKey = process.env["BEDROCK_API_KEY"];
+
+    try {
+      env.AI_PROVIDER = "bedrock";
+      env.BEDROCK_API_KEY = undefined;
+      delete process.env["BEDROCK_API_KEY"];
+
+      const model = getTanStackTextModelForRole("chat", null, {
+        organizationId: orgId,
+      });
+
+      expect(hasTanStackInstanceProvider()).toBe(true);
+      expect(model).toMatchObject({
+        keySource: "instance",
+        provider: "bedrock",
+      });
+      expect(model.adapter.name).toBe("bedrock-converse");
+    } finally {
+      Object.assign(env, originalEnv);
+      if (originalProcessBedrockApiKey === undefined) {
+        delete process.env["BEDROCK_API_KEY"];
+      } else {
+        process.env["BEDROCK_API_KEY"] = originalProcessBedrockApiKey;
+      }
+    }
+  });
+
   test("auto-detects Mistral when stale unsupported provider credentials exist", () => {
     const originalEnv = {
       AI_PROVIDER: env.AI_PROVIDER,
