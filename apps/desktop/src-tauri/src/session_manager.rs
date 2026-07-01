@@ -1,9 +1,11 @@
+use futures_util::StreamExt;
 use notify::{
   Event, EventKind, RecommendedWatcher, RecursiveMode, Watcher, event::AccessKind,
 };
+use reqwest::header::{CONTENT_LENGTH, CONTENT_TYPE};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
-use std::io::ErrorKind;
+use std::io::{Cursor, ErrorKind};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
@@ -17,6 +19,7 @@ use crate::config;
 pub use crate::config::normalize_api_base_url;
 use crate::session_store::{self, PersistedDesktopSession, StoreLoadIssue};
 use crate::types::*;
+use zip::ZipArchive;
 
 /// Per-dialog response senders, keyed by dialog label to avoid race conditions
 /// when multiple takeover requests arrive for different sessions.
@@ -65,6 +68,13 @@ const LIBRE_OFFICE_LOCK_SUFFIX: &str = "#";
 const WORD_LOCK_PREFIX: &str = "~$";
 const SUPPORT_EMAIL: &str = "hello@stll.app";
 const DESKTOP_HTTP_USER_AGENT: &str = "stella-desktop";
+const DOCX_EXTENSION: &str = ".docx";
+const DOCX_CONTENT_TYPES_ENTRY: &str = "[Content_Types].xml";
+const DOCX_DOCUMENT_ENTRY: &str = "word/document.xml";
+const MAX_DOCX_DOWNLOAD_BYTES: u64 = 100 * 1024 * 1024;
+const ZIP_LOCAL_FILE_HEADER_MAGIC: &[u8] = b"PK\x03\x04";
+const GENERIC_DOCX_DOWNLOAD_MIME_TYPES: &[&str] =
+  &["application/octet-stream", "binary/octet-stream"];
 
 // Internal session with runtime-only fields
 struct DesktopSession {
@@ -180,6 +190,13 @@ fn build_http_client() -> reqwest::Client {
     .unwrap_or_else(|_| reqwest::Client::new())
 }
 
+fn has_docx_extension(name: &str) -> bool {
+  Path::new(name)
+    .extension()
+    .and_then(|extension| extension.to_str())
+    .is_some_and(|extension| extension.eq_ignore_ascii_case("docx"))
+}
+
 fn sanitize_file_name(name: &str) -> String {
   let base = Path::new(name)
     .file_name()
@@ -197,10 +214,144 @@ fn sanitize_file_name(name: &str) -> String {
 
   let trimmed = sanitized.trim_matches('.');
   if trimmed.is_empty() {
-    "document.docx".to_string()
-  } else {
-    trimmed.to_string()
+    return "document.docx".to_string();
   }
+
+  if has_docx_extension(trimmed) {
+    trimmed.to_string()
+  } else {
+    format!("{trimmed}{DOCX_EXTENSION}")
+  }
+}
+
+fn oversized_docx_download_error() -> String {
+  "stella desktop refused an oversized DOCX download.".to_string()
+}
+
+fn non_docx_download_body_error() -> String {
+  "stella desktop refused a non-DOCX download body.".to_string()
+}
+
+fn is_allowed_docx_download_content_type(content_type: &str) -> bool {
+  let media_type = content_type.split(';').next().unwrap_or_default().trim();
+
+  media_type.eq_ignore_ascii_case(DOCX_MIME_TYPE)
+    || GENERIC_DOCX_DOWNLOAD_MIME_TYPES
+      .iter()
+      .any(|generic| media_type.eq_ignore_ascii_case(generic))
+}
+
+fn validate_docx_download_response(response: &reqwest::Response) -> Result<(), String> {
+  if let Some(content_length) = response.headers().get(CONTENT_LENGTH) {
+    let size = content_length
+      .to_str()
+      .ok()
+      .and_then(|value| value.parse::<u64>().ok())
+      .ok_or_else(|| {
+        "stella desktop received an invalid DOCX download size.".to_string()
+      })?;
+
+    if size > MAX_DOCX_DOWNLOAD_BYTES {
+      return Err(oversized_docx_download_error());
+    }
+  }
+
+  let Some(content_type) = response.headers().get(CONTENT_TYPE) else {
+    return Ok(());
+  };
+
+  let content_type = content_type
+    .to_str()
+    .map_err(|_| "stella desktop received an invalid DOCX content type.".to_string())?;
+
+  if is_allowed_docx_download_content_type(content_type) {
+    return Ok(());
+  }
+
+  Err("stella desktop refused a non-DOCX download response.".to_string())
+}
+
+async fn read_docx_download_bytes(
+  response: reqwest::Response,
+) -> Result<Vec<u8>, String> {
+  let mut bytes = Vec::new();
+  let mut stream = response.bytes_stream();
+
+  while let Some(chunk) = stream.next().await {
+    let chunk = chunk
+      .map_err(|e| format!("stella desktop could not read the DOCX download: {e}"))?;
+    let current_size =
+      u64::try_from(bytes.len()).map_err(|_| oversized_docx_download_error())?;
+    let chunk_size =
+      u64::try_from(chunk.len()).map_err(|_| oversized_docx_download_error())?;
+    let next_size = current_size
+      .checked_add(chunk_size)
+      .ok_or_else(oversized_docx_download_error)?;
+
+    if next_size > MAX_DOCX_DOWNLOAD_BYTES {
+      return Err(oversized_docx_download_error());
+    }
+
+    bytes.extend_from_slice(&chunk);
+  }
+
+  Ok(bytes)
+}
+
+fn validate_docx_download_bytes(bytes: &[u8]) -> Result<(), String> {
+  let size = u64::try_from(bytes.len()).map_err(|_| oversized_docx_download_error())?;
+  if size > MAX_DOCX_DOWNLOAD_BYTES {
+    return Err(oversized_docx_download_error());
+  }
+
+  if !bytes.starts_with(ZIP_LOCAL_FILE_HEADER_MAGIC) {
+    return Err(non_docx_download_body_error());
+  }
+
+  let archive =
+    ZipArchive::new(Cursor::new(bytes)).map_err(|_| non_docx_download_body_error())?;
+  let has_content_types = archive.index_for_name(DOCX_CONTENT_TYPES_ENTRY).is_some();
+  let has_document = archive.index_for_name(DOCX_DOCUMENT_ENTRY).is_some();
+
+  if has_content_types && has_document {
+    return Ok(());
+  }
+
+  Err(non_docx_download_body_error())
+}
+
+async fn align_managed_copy_file_name(
+  file_path: &str,
+  file_name: &str,
+) -> Result<String, String> {
+  let path = Path::new(file_path);
+  let current_name = path
+    .file_name()
+    .and_then(|name| name.to_str())
+    .unwrap_or_default();
+
+  if current_name == file_name {
+    return Ok(file_path.to_string());
+  }
+
+  let parent = path.parent().ok_or_else(|| {
+    "stella desktop could not resolve the managed DOCX folder.".to_string()
+  })?;
+  let aligned_path = parent.join(file_name);
+
+  if tokio::fs::try_exists(&aligned_path).await.map_err(|e| {
+    format!("stella desktop could not inspect the managed DOCX file: {e}")
+  })? {
+    return Err(
+      "stella desktop could not align the managed DOCX file name.".to_string(),
+    );
+  }
+
+  tokio::fs::rename(path, &aligned_path).await.map_err(|e| {
+    format!("stella desktop could not rename the managed DOCX file: {e}")
+  })?;
+
+  Ok(aligned_path.to_string_lossy().to_string())
 }
 
 /// Reduces a string to a single safe path segment so callers can't widen the
@@ -543,6 +694,10 @@ impl SessionManager {
 
     if can_reuse {
       let eid = existing_id.unwrap();
+      let file_path = {
+        let existing = self.sessions.get(&eid).unwrap();
+        align_managed_copy_file_name(&existing.file_path, &managed_file_name).await?
+      };
 
       // Update keychain with the (potentially refreshed) token
       if let Err(e) = crate::keychain::store_token(&eid, &remote.session_token) {
@@ -555,6 +710,7 @@ impl SessionManager {
         session.api_base_url = normalize_api_base_url(&request.api_base_url);
         session.base_version_number = remote.base_version_number;
         session.file_name = managed_file_name;
+        session.file_path = file_path;
         session.last_checkpoint_at = remote.last_checkpoint_at.clone();
         session.last_error = None;
         session.local_open_seen = false;
@@ -1771,11 +1927,11 @@ impl SessionManager {
       return Err("stella desktop could not download the DOCX draft.".to_string());
     }
 
-    response
-      .bytes()
-      .await
-      .map(|b| b.to_vec())
-      .map_err(|e| format!("stella desktop could not read the DOCX download: {e}"))
+    validate_docx_download_response(&response)?;
+
+    let bytes = read_docx_download_bytes(response).await?;
+    validate_docx_download_bytes(&bytes)?;
+    Ok(bytes)
   }
 
   async fn write_managed_copy(
@@ -2119,11 +2275,11 @@ pub async fn download_docx_standalone(
     return Err("stella desktop could not download the DOCX draft.".to_string());
   }
 
-  response
-    .bytes()
-    .await
-    .map(|b| b.to_vec())
-    .map_err(|e| format!("stella desktop could not read the DOCX download: {e}"))
+  validate_docx_download_response(&response)?;
+
+  let bytes = read_docx_download_bytes(response).await?;
+  validate_docx_download_bytes(&bytes)?;
+  Ok(bytes)
 }
 
 // --- Platform helpers ---
@@ -2221,6 +2377,8 @@ fn chrono_now() -> String {
 #[cfg(test)]
 mod tests {
   use super::*;
+  use std::io::{Cursor, Write};
+  use zip::write::SimpleFileOptions;
 
   #[test]
   fn is_word_lock_file_for_matches_replacement_and_prefixed_owner_files() {
@@ -2245,6 +2403,77 @@ mod tests {
       "document.docx",
       "document.docx"
     ));
+  }
+
+  #[test]
+  fn sanitize_file_name_preserves_only_docx_outputs() {
+    assert_eq!(sanitize_file_name("brief.docx"), "brief.docx");
+    assert_eq!(sanitize_file_name("brief.DOCX"), "brief.DOCX");
+    assert_eq!(sanitize_file_name("Agreement"), "Agreement.docx");
+    assert_eq!(sanitize_file_name("payload.sh"), "payload.sh.docx");
+    assert_eq!(sanitize_file_name("../payload.bat"), "payload.bat.docx");
+  }
+
+  #[test]
+  fn docx_download_content_type_allows_docx_and_generic_binary() {
+    assert!(is_allowed_docx_download_content_type(DOCX_MIME_TYPE));
+    assert!(is_allowed_docx_download_content_type(
+      "application/vnd.openxmlformats-officedocument.wordprocessingml.document; charset=binary"
+    ));
+    assert!(is_allowed_docx_download_content_type(
+      "application/octet-stream"
+    ));
+    assert!(is_allowed_docx_download_content_type("binary/octet-stream"));
+    assert!(!is_allowed_docx_download_content_type("text/html"));
+  }
+
+  #[test]
+  fn docx_download_bytes_require_docx_archive_entries() {
+    assert!(
+      validate_docx_download_bytes(&zip_bytes(&[
+        DOCX_CONTENT_TYPES_ENTRY,
+        DOCX_DOCUMENT_ENTRY
+      ]))
+      .is_ok()
+    );
+    assert!(validate_docx_download_bytes(&zip_bytes(&["payload.bin"])).is_err());
+    assert!(validate_docx_download_bytes(b"#!/bin/sh\n").is_err());
+  }
+
+  #[tokio::test]
+  async fn reused_managed_copy_is_renamed_to_sanitized_docx_name() {
+    let dir = std::env::temp_dir()
+      .join(format!("stella-desktop-test-{}", uuid::Uuid::new_v4()));
+    let source = dir.join("Agreement");
+    let target = dir.join("Agreement.docx");
+
+    tokio::fs::create_dir_all(&dir).await.unwrap();
+    tokio::fs::write(&source, b"test").await.unwrap();
+
+    let aligned_path =
+      align_managed_copy_file_name(&source.to_string_lossy(), "Agreement.docx")
+        .await
+        .unwrap();
+
+    assert_eq!(aligned_path, target.to_string_lossy());
+    assert!(!source.exists());
+    assert!(target.exists());
+
+    tokio::fs::remove_dir_all(dir).await.unwrap();
+  }
+
+  fn zip_bytes(entries: &[&str]) -> Vec<u8> {
+    let cursor = Cursor::new(Vec::new());
+    let mut archive = zip::ZipWriter::new(cursor);
+    let options =
+      SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+
+    for entry in entries {
+      archive.start_file(entry, options).unwrap();
+      archive.write_all(b"test").unwrap();
+    }
+
+    archive.finish().unwrap().into_inner()
   }
 
   #[test]
