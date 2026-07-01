@@ -99,6 +99,23 @@ describe("isOrgAIConfig", () => {
     ).toBe(true);
   });
 
+  test("accepts Bedrock org AI config", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [{ provider: "bedrock", apiKey: "sk-test" }],
+        overrideModels: {
+          chat: { provider: "bedrock", modelId: "anthropic.claude-4-8-sonnet" },
+          fast: { provider: "bedrock", modelId: "anthropic.claude-4-8-sonnet" },
+          reasoning: {
+            provider: "bedrock",
+            modelId: "anthropic.claude-4-8-sonnet",
+          },
+          pdf: { provider: "bedrock", modelId: "anthropic.claude-4-8-sonnet" },
+        },
+      }),
+    ).toBe(true);
+  });
+
   test("accepts Hugging Face org AI config with endpoint metadata", () => {
     expect(
       isOrgAIConfig({

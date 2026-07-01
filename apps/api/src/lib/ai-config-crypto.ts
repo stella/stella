@@ -9,29 +9,23 @@
 
 import * as v from "valibot";
 
+import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent, encryptContent } from "@/api/lib/content-encryption";
 import type { EncryptedContent } from "@/api/lib/content-encryption";
 
-const standardProviderSchema = v.picklist([
-  "google",
-  "openrouter",
-  "openai",
-  "anthropic",
-  "mistral",
-]);
+const standardProviderSchema = v.picklist(TANSTACK_AI_PROVIDERS);
+
+const modelSelectionProviderValues = [
+  ...TANSTACK_AI_PROVIDERS,
+  "azure_foundry",
+  "huggingface",
+] as const;
 
 const modelSelectionSchema = v.strictObject({
-  provider: v.picklist([
-    "google",
-    "openrouter",
-    "openai",
-    "azure_foundry",
-    "anthropic",
-    "mistral",
-    "huggingface",
-  ]),
+  provider: v.picklist(modelSelectionProviderValues),
   modelId: v.pipe(v.string(), v.minLength(1)),
 });
 
