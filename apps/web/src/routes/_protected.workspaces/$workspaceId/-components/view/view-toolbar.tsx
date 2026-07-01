@@ -35,6 +35,7 @@ import {
   Select,
   SelectItem,
   SelectPopup,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
@@ -63,6 +64,7 @@ import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$wor
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import { isDocumentTypeClassifier } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
@@ -773,6 +775,20 @@ const GroupByControl = ({
       : property.content.type === "single-select",
   );
 
+  // Grouping by "Document Type" is the primary action — it drives per-type
+  // playbook review — so it leads the menu, marked, above the basic groupings.
+  // The playbook verdict groupings are collected into their own section below so
+  // they don't drown the important choices.
+  const documentTypeProp = eligible.find(isDocumentTypeClassifier);
+  const verdictProps = eligible.filter(
+    (property) => property.tool.type === "playbook-verdict",
+  );
+  const basicProps = eligible.filter(
+    (property) =>
+      property !== documentTypeProp &&
+      property.tool.type !== "playbook-verdict",
+  );
+
   const resolvedId =
     allowNone && !groupByPropertyId
       ? GROUP_BY_NONE_VALUE
@@ -815,6 +831,17 @@ const GroupByControl = ({
           <SelectValue placeholder={resolvedLabel}>{resolvedLabel}</SelectValue>
         </SelectTrigger>
         <SelectPopup>
+          {documentTypeProp && (
+            <>
+              <SelectItem value={documentTypeProp.id}>
+                <span className="flex items-center gap-1.5 font-medium">
+                  <SparklesIcon className="text-primary size-3.5" />
+                  {documentTypeProp.name}
+                </span>
+              </SelectItem>
+              <SelectSeparator />
+            </>
+          )}
           {allowNone && (
             <SelectItem value={GROUP_BY_NONE_VALUE}>
               {t("common.none")}
@@ -823,11 +850,21 @@ const GroupByControl = ({
           <SelectItem value={getInternalPropertyId("kind")}>
             {t("common.kind")}
           </SelectItem>
-          {eligible.map((prop) => (
+          {basicProps.map((prop) => (
             <SelectItem key={prop.id} value={prop.id}>
               {prop.name}
             </SelectItem>
           ))}
+          {verdictProps.length > 0 && (
+            <>
+              <SelectSeparator />
+              {verdictProps.map((prop) => (
+                <SelectItem key={prop.id} value={prop.id}>
+                  {prop.name}
+                </SelectItem>
+              ))}
+            </>
+          )}
         </SelectPopup>
       </Select>
     </span>
