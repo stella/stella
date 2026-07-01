@@ -23,11 +23,14 @@ import type {
   ContentSearchQuery,
   ContentSearchResult,
   FacetBucket,
+  HybridSearchQuery,
+  HybridSearchResult,
   SearchHit,
   SearchProvider,
   SearchQuery,
   SearchResult,
 } from "@/api/lib/search/types";
+
 import { hybridSearch, type SearchMode } from "./hybrid-search";
 
 const REINDEX_BATCH_SIZE = 100;
@@ -335,9 +338,17 @@ const rebuildIndex = async (orgId: SafeId<"organization">): Promise<void> => {
   }
 };
 
+const hybridSearchMethod = async (
+  query: HybridSearchQuery,
+): Promise<HybridSearchResult> => {
+  const hits = await hybridSearch(query);
+  return { hits, totalCount: hits.length };
+};
+
 export const pgFtsProvider: SearchProvider = {
   search,
   searchContent,
+  hybridSearch: hybridSearchMethod,
   indexEntity,
   removeEntity,
   rebuildIndex,

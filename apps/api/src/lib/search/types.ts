@@ -5,6 +5,14 @@ import type { ContactType } from "@/api/db/schema";
 import type { EntityKind } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 
+import type {
+  HybridSearchQuery,
+  SearchMode,
+  SearchResult as HybridSearchHit,
+} from "./hybrid-search";
+
+export type { HybridSearchQuery } from "./hybrid-search";
+
 /** Narrow an unknown value to a valid EntityKind. */
 export const parseEntityKind = (value: unknown): EntityKind => {
   const s = String(value);
@@ -102,9 +110,18 @@ export type ContentSearchResult = {
   totalCount: number;
 };
 
+export type HybridSearchResult = {
+  hits: HybridSearchHit[];
+  totalCount: number;
+};
+
 export type SearchProvider = {
   search: (query: SearchQuery) => Promise<SearchResult>;
-  searchContent: (query: ContentSearchQuery) => Promise<ContentSearchResult>;
+  searchContent: (
+    query: ContentSearchQuery,
+    mode?: SearchMode,
+  ) => Promise<ContentSearchResult>;
+  hybridSearch: (query: HybridSearchQuery) => Promise<HybridSearchResult>;
   indexEntity: (entityId: SafeId<"entity">) => Promise<void>;
   removeEntity: (entityId: SafeId<"entity">) => Promise<void>;
   rebuildIndex: (orgId: SafeId<"organization">) => Promise<void>;

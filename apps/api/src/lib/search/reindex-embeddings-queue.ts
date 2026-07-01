@@ -1,7 +1,12 @@
-import { Job, Queue, Worker } from "bullmq";
+import type { Job } from "bullmq";
+import { Queue, Worker } from "bullmq";
+
+import { captureError } from "@/api/lib/analytics";
 import { createBullMqConnection } from "@/api/lib/redis-client";
-import { storeEmbeddings, deleteEntityEmbeddings } from "./vector-store";
+import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
+
 import { generateEmbeddings } from "./embedding-generator";
+import { storeEmbeddings, deleteEntityEmbeddings } from "./vector-store";
 
 export type ReindexJobData = {
   entityId: string;
@@ -27,8 +32,9 @@ export const reindexQueue = new Queue<ReindexJobData>(QUEUE_NAME, {
 
 const processReindexJob = async (job: Job<ReindexJobData>): Promise<void> => {
   const { entityId, text } = job.data;
+  const safeEntityId = brandPersistedEntityId(entityId);
 
-  await deleteEntityEmbeddings(entityId);
+  await deleteEntityEmbeddings(safeEntityId);
 
   const embeddings = await generateEmbeddings(text, {
     preset: "balanced",
@@ -44,7 +50,7 @@ const processReindexJob = async (job: Job<ReindexJobData>): Promise<void> => {
 
   await storeEmbeddings(
     embeddings.map((e) => ({
-      entityId,
+      entityId: safeEntityId,
       chunkIndex: e.chunkIndex,
       chunkText: e.text,
       embedding: e.embedding,
@@ -69,14 +75,19 @@ export const reindexWorker = new Worker<ReindexJobData>(
 );
 
 reindexWorker.on("failed", (job, error) => {
-  console.error(`reindex job ${job?.id} failed:`, error);
+  captureError(error, {
+    source: "reindex-embeddings",
+    jobId: job?.id ?? "unknown",
+  });
 });
 
-reindexWorker.on("completed", (job) => {
-  console.log(`reindex job ${job.id} completed for entity ${job.data.entityId}`);
+reindexWorker.on("completed", () => {
+  // no-op: completion handled by BullMQ dashboard
 });
 
-export const enqueueReindexJob = async (data: ReindexJobData): Promise<void> => {
+export const enqueueReindexJob = async (
+  data: ReindexJobData,
+): Promise<void> => {
   await reindexQueue.add("reindex", data, {
     jobId: `reindex-${data.entityId}-${Date.now()}`,
   });

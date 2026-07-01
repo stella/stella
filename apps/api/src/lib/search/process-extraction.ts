@@ -21,7 +21,6 @@ import {
   extractFileText,
   resolveExtractionMimeType,
 } from "@/api/lib/search/extract-content";
-import { generateEmbeddings } from "@/api/lib/search/embedding-generator";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import { enqueueReindexJob } from "@/api/lib/search/reindex-embeddings-queue";
 import { PDF_MIME_TYPE } from "@/api/mime-types";

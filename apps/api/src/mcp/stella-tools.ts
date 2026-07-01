@@ -108,6 +108,7 @@ export const STELLA_TOOL_DEFINITIONS = [
           min: 1,
           max: MAX_SEARCH_LIMIT,
         }),
+        search_mode: enumProp("Search mode", ["keyword", "semantic", "hybrid"]),
       },
       required: ["query"],
     },
@@ -427,7 +428,43 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
     return limit;
   }
 
-  const result = await getSearchProvider().search({
+  const searchMode = parseOptionalEnum({
+    args,
+    defaultValue: "hybrid",
+    key: "search_mode",
+    values: ["keyword", "semantic", "hybrid"] as const,
+  });
+  if (typeof searchMode !== "string") {
+    return searchMode;
+  }
+
+  const searchProvider = getSearchProvider();
+  const firstWorkspaceId = context.accessibleWorkspaceIds.at(0);
+
+  if (searchMode === "hybrid" || searchMode === "semantic") {
+    if (!firstWorkspaceId) {
+      return textResult({ totalCount: 0, hits: [] });
+    }
+
+    const result = await searchProvider.hybridSearch({
+      query,
+      mode: searchMode,
+      workspaceId: firstWorkspaceId,
+      limit,
+    });
+
+    return textResult({
+      totalCount: result.totalCount,
+      hits: result.hits.map((hit) => ({
+        entityId: hit.id,
+        name: hit.name,
+        kind: hit.kind,
+        headline: hit.snippet,
+      })),
+    });
+  }
+
+  const result = await searchProvider.search({
     query,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,

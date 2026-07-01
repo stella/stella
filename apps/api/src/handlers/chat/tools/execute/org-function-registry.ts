@@ -22,6 +22,7 @@ import {
   brandPersistedWorkspaceId,
 } from "@/api/lib/safe-id-boundaries";
 import { getSearchProvider } from "@/api/lib/search/provider";
+import { parseEntityKind } from "@/api/lib/search/types";
 
 type OrgFunctionContext = {
   allowedWorkspaceIds: SafeId<"workspace">[];
@@ -270,9 +271,58 @@ export const createReadonlyOrgFunctionRegistry = ({
         workspaceIds,
       });
 
+      const searchProvider = getSearchProvider();
+      const searchMode = input.searchMode;
+      const firstWorkspaceId = scopedWorkspaceIds.at(0);
+
+      if (!firstWorkspaceId) {
+        return Result.ok({ items: [] });
+      }
+
+      if (searchMode === "hybrid" || searchMode === "semantic") {
+        const hybridResult = yield* await Result.tryPromise({
+          try: async () =>
+            await searchProvider.hybridSearch({
+              query: input.query,
+              mode: searchMode,
+              workspaceId: firstWorkspaceId,
+              limit: input.limit,
+            }),
+          catch: (cause) =>
+            new ChatToolError({
+              message: "Failed to search matter documents.",
+              cause,
+            }),
+        });
+
+        return Result.ok({
+          items: hybridResult.hits.map((hit) => {
+            const entityId = brandPersistedEntityId(hit.id);
+
+            return {
+              entityRef: refRegistry.toEntityRef({
+                entityId,
+                workspaceId: firstWorkspaceId,
+              }),
+              headline: hit.snippet,
+              kind: parseEntityKind(hit.kind),
+              matterName: "",
+              matterRef: refRegistry.toMatterRef(firstWorkspaceId),
+              mention: refRegistry.toEntityMention({
+                entityId,
+                label: hit.name,
+                workspaceId: firstWorkspaceId,
+              }),
+              name: hit.name,
+              updatedAt: "",
+            };
+          }),
+        });
+      }
+
       const result = yield* await Result.tryPromise({
         try: async () =>
-          await getSearchProvider().search({
+          await searchProvider.search({
             query: input.query,
             kinds: ["document"],
             organizationId,

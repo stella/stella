@@ -1,4 +1,8 @@
-import { extractBytes, type ExtractionConfig } from "@kreuzberg/node";
+import {
+  extractBytes,
+  OutputFormat,
+  type ExtractionConfig,
+} from "@kreuzberg/node";
 
 export type EmbeddingGeneratorConfig = {
   preset?: string;
@@ -8,13 +12,12 @@ export type EmbeddingGeneratorConfig = {
   };
 };
 
-const DEFAULT_CONFIG: EmbeddingGeneratorConfig = {
-  preset: "balanced",
-  chunking: {
-    maxChars: 1000,
-    maxOverlap: 100,
-  },
-};
+const DEFAULT_CHUNKING = {
+  maxChars: 1000,
+  maxOverlap: 100,
+} as const;
+
+const DEFAULT_PRESET = "balanced";
 
 export type EmbeddingResult = {
   text: string;
@@ -31,12 +34,15 @@ export const generateEmbeddings = async (
     const mergedConfig: ExtractionConfig = {
       useCache: false,
       enableQualityProcessing: false,
-      outputFormat: "plain",
+      outputFormat: OutputFormat.Plain,
       chunking: {
-        maxChars: config?.chunking?.maxChars ?? DEFAULT_CONFIG.chunking!.maxChars!,
-        maxOverlap: config?.chunking?.maxOverlap ?? DEFAULT_CONFIG.chunking!.maxOverlap!,
+        maxCharacters: config?.chunking?.maxChars ?? DEFAULT_CHUNKING.maxChars,
+        overlap: config?.chunking?.maxOverlap ?? DEFAULT_CHUNKING.maxOverlap,
         embedding: {
-          preset: config?.preset ?? DEFAULT_CONFIG.preset!,
+          model: {
+            type: "preset",
+            name: config?.preset ?? DEFAULT_PRESET,
+          },
         },
       },
     };
@@ -47,7 +53,7 @@ export const generateEmbeddings = async (
       mergedConfig,
     );
 
-    if (!result || !result.chunks) {
+    if (!result.chunks) {
       return [];
     }
 
@@ -57,8 +63,7 @@ export const generateEmbeddings = async (
       chunkIndex: index,
       tokenCount: Math.ceil(chunk.content.length / 4),
     }));
-  } catch (error) {
-    console.error("embedding generation failed:", error);
+  } catch {
     return [];
   }
 };

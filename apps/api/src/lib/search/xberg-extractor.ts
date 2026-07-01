@@ -1,16 +1,17 @@
 import {
   extractBytes,
+  OutputFormat,
   type ExtractionConfig,
 } from "@kreuzberg/node";
 
 export type XbergExtractionResult = {
   text: string | null;
-  chunks: Array<{
+  chunks: {
     text: string;
     index: number;
     embedding?: number[];
     metadata?: Record<string, unknown>;
-  }>;
+  }[];
   language?: string;
   tables?: unknown[];
   metadata?: Record<string, unknown>;
@@ -19,17 +20,20 @@ export type XbergExtractionResult = {
 const DEFAULT_CONFIG: ExtractionConfig = {
   useCache: true,
   enableQualityProcessing: true,
-  outputFormat: "plain",
+  outputFormat: OutputFormat.Plain,
   chunking: {
-    maxChars: 1000,
-    maxOverlap: 100,
+    maxCharacters: 1000,
+    overlap: 100,
     embedding: {
-      preset: "balanced",
+      model: {
+        type: "preset",
+        name: "balanced",
+      },
     },
   },
   ocr: {
     backend: "tesseract",
-    language: "eng",
+    language: ["eng"],
   },
   transcription: {
     enabled: true,
@@ -50,31 +54,49 @@ export const extractWithXberg = async (
       mergedConfig,
     );
 
-    if (!result) {
-      return { text: null, chunks: [] };
-    }
+    const text = result.content ?? null;
 
-    const text = result.content || null;
+    const chunks =
+      result.chunks?.map((chunk, index) => {
+        const chunkMetadata: Record<string, unknown> = {
+          chunkType: chunk.chunkType,
+          ...chunk.metadata,
+        };
+        const chunkData: {
+          text: string;
+          index: number;
+          embedding?: number[];
+          metadata?: Record<string, unknown>;
+        } = {
+          text: chunk.content,
+          index,
+          metadata: chunkMetadata,
+        };
+        if (chunk.embedding) {
+          chunkData.embedding = chunk.embedding;
+        }
+        return chunkData;
+      }) ?? [];
 
-    const chunks = result.chunks?.map((chunk, index) => ({
-      text: chunk.content,
-      index,
-      embedding: chunk.embedding ?? undefined,
-      metadata: {
-        chunkType: chunk.chunkType,
-        ...chunk.metadata,
-      },
-    })) || [];
-
-    return {
+    const resultData: XbergExtractionResult = {
       text,
       chunks,
-      language: result.detectedLanguages?.[0],
-      tables: result.tables,
-      metadata: result.metadata as Record<string, unknown> | undefined,
     };
-  } catch (error) {
-    console.error("xberg extraction failed:", error);
+    if (result.detectedLanguages?.[0]) {
+      resultData.language = result.detectedLanguages[0];
+    }
+    if (result.tables) {
+      resultData.tables = result.tables;
+    }
+    if (result.metadata) {
+      const serialized: Record<string, unknown> = {};
+      for (const [key, value] of Object.entries(result.metadata)) {
+        serialized[key] = value;
+      }
+      resultData.metadata = serialized;
+    }
+    return resultData;
+  } catch {
     return { text: null, chunks: [] };
   }
 };

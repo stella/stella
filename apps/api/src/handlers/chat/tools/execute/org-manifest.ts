@@ -197,6 +197,15 @@ const searchMatterDocumentsInputSchema = v.strictObject({
     v.maxLength(LIMITS.searchQueryMaxLength),
     v.description("Search query (keywords or phrases)"),
   ),
+  searchMode: v.optional(
+    v.pipe(
+      v.picklist(["keyword", "semantic", "hybrid"]),
+      v.description(
+        "Search mode: keyword (BM25), semantic (vector), or hybrid (both)",
+      ),
+    ),
+    "hybrid",
+  ),
 });
 
 export const listMattersContract = createReadonlyFunctionContract({
