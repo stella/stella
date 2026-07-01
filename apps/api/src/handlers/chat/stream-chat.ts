@@ -2,6 +2,7 @@ import {
   convertToModelMessages,
   createUIMessageStream,
   createUIMessageStreamResponse,
+  consumeStream,
   hasToolCall,
   stepCountIs,
   streamText,
@@ -647,6 +648,16 @@ export const streamChat = async ({
   });
 
   return createUIMessageStreamResponse({
+    consumeSseStream: async ({ stream: sseStream }) =>
+      await consumeStream({
+        stream: sseStream,
+        onError: (error) => {
+          captureError(error, {
+            threadId,
+            feature: "chat.stream_drain",
+          });
+        },
+      }),
     stream,
   });
 };
