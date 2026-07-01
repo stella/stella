@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, desc, eq, or } from "drizzle-orm";
+import { and, desc, eq, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { listSkillMetadata, listSkillResources } from "@stll/skills";
@@ -54,6 +54,12 @@ const listSkills = createSafeRootHandler(
             contentHash: agentSkills.contentHash,
             enabled: agentSkills.enabled,
             command: agentSkills.command,
+            body: sql<string | null>`
+              case
+                when ${agentSkills.command} is not null then ${agentSkills.body}
+                else null
+              end
+            `.as("body"),
             userId: agentSkills.userId,
             createdAt: agentSkills.createdAt,
           })

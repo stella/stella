@@ -24,7 +24,10 @@ import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import { buildChatSlashItems } from "@/components/chat-editor-slash-items";
+import {
+  buildChatSlashItems,
+  commandShortcutRowsFromSkillPages,
+} from "@/components/chat-editor-slash-items";
 import {
   ChatMention,
   createChatSuggestion,
@@ -47,7 +50,7 @@ import {
   type SlashItem,
 } from "@/components/chat/prompt-slash-extension";
 import { createPromptEditorDocument } from "@/components/prompt-editor";
-import { useChromeQuery, useHasMounted } from "@/hooks/use-chrome-query";
+import { useHasMounted } from "@/hooks/use-chrome-query";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
@@ -61,10 +64,7 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import type { WorkspaceEntity } from "@/lib/types";
-import {
-  skillCommandsOptions,
-  skillsOptions,
-} from "@/routes/_protected.knowledge/-queries";
+import { skillsOptions } from "@/routes/_protected.knowledge/-queries";
 import { entitiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { viewsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/views";
 
@@ -747,14 +747,6 @@ export const useChatEditor = ({
     }
   });
 
-  // Slash-command skills (formerly "prompt shortcuts") feed the chat
-  // composer's slash menu. After the prompts→skills consolidation
-  // they live in `agent_skills` and the dedicated commands endpoint
-  // returns only the command-bearing subset, so the slash menu
-  // doesn't pay for resource-heavy fields it doesn't render.
-  const { data: commandSkills = [] } = useChromeQuery(
-    skillCommandsOptions(activeOrganizationId),
-  );
   // useInfiniteQuery has no chrome wrapper; gate its cold-cache fetch on mount
   // by hand so it can't resolve on a not-yet-mounted fiber (same rationale as
   // useChromeQuery).
@@ -781,26 +773,9 @@ export const useChatEditor = ({
   }, [fetchNextSkillPage, hasNextSkillPage, isFetchingNextSkillPage]);
 
   const skillPageRows = skillPages?.pages;
-  // Adapt the unified commands-endpoint shape to the legacy
-  // `SlashShortcutRow` contract `buildChatSlashItems` consumes.
-  // `body` (the prompt text) now lives on the skill row, where
-  // shortcuts called it `prompt`.
   const slashShortcutRows = useMemo(
-    () =>
-      commandSkills.flatMap((row) =>
-        row.command === null
-          ? []
-          : [
-              {
-                id: row.id,
-                scope: row.scope,
-                name: row.name,
-                command: row.command,
-                prompt: row.body,
-              },
-            ],
-      ),
-    [commandSkills],
+    () => commandShortcutRowsFromSkillPages(skillPageRows),
+    [skillPageRows],
   );
   const slashItems = useMemo<SlashItem[]>(
     () =>

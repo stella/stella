@@ -7,12 +7,15 @@ import {
 } from "@tanstack/ai";
 import type {
   ChatMiddleware,
+  ChatMiddlewareConfig,
+  ModelMessage,
   StreamChunk,
   TokenUsage,
   UIMessage,
 } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
+import type { ModelRole } from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
@@ -35,8 +38,10 @@ import {
   detectModelLoop,
   getLoopRecoveryKey,
   shouldInjectLoopRecovery,
+  shouldSurfaceFinalContentLoop,
   shouldStopLoopRecovery,
 } from "@/api/handlers/chat/loop-detector";
+import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import {
   deanonymizeFromBoundary,
@@ -65,9 +70,11 @@ import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
 import { classifyAIError } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  ChatEmptyCompletionError,
   ChatLoopDetectedError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
@@ -77,12 +84,17 @@ import {
   resolveTanStackTextModel,
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
   "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
 const STELLA_ANON_RESTORATIONS_EVENT = "stella.anon-restorations";
 const ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL = "stella-assistant-response";
+const CHAT_LOOP_DETECTED_MESSAGE =
+  "The AI model repeated the same work and could not recover. Please try again with a narrower request.";
+const CHAT_EMPTY_COMPLETION_MESSAGE =
+  "Model returned finish_reason=stop with zero output";
 
 type StoredUserFile = {
   fileName: string;
@@ -187,37 +199,25 @@ export const streamChat = async ({
     return thirdPartyBoundaryRefusalResponse(preparedMessages.error);
   }
 
-  const model = resolveTanStackTextModel({
+  const primaryModel = resolveTanStackTextModel({
     modelId: devModelId,
     organizationId,
     orgAIConfig,
     role: "chat",
   });
-  const caching = resolveCaching({
-    promptCachingEnabled,
-    role: "chat",
-    scopeKey: promptCacheKey,
-  });
+  const fallbackModel =
+    devModelId === undefined
+      ? resolveFallbackTextModel({
+          organizationId,
+          orgAIConfig,
+          primaryModel,
+          threadId,
+        })
+      : null;
   const abortController = abortControllerFromSignal(abortSignal);
-  const analytics = createTanStackAIAnalyticsCallbacks({
-    usageMetering: {
-      actionType: "chat",
-      organizationId,
-      safeDb,
-      serviceTier: "standard",
-      userId,
-      workspaceId,
-    },
-    feature: "chat.stream",
-    modelRole: "chat",
-    orgAIConfig,
-    properties: {
-      organization_id: organizationId,
-      ...(workspaceId ? { workspace_id: workspaceId } : {}),
-    },
-    sessionId: threadId,
-    traceId: Bun.randomUUIDv7(),
-  });
+  const modelTools = chatToolMapToArray(
+    prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
+  );
   const restorationPairs: ChatAnonRestoration[] = [];
   const mapAssistantMessageId = createChatMessageIdMapper();
   let responseMessage: ChatMessage | null = null;
@@ -233,41 +233,25 @@ export const streamChat = async ({
     },
   });
 
-  const stream = chat({
-    adapter: model.adapter,
-    messages: preparedMessages.value,
-    tools: chatToolMapToArray(
-      prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
-    ),
-    ...(externalMcpToolSource
-      ? {
-          mcp: {
-            clients: [
-              prepareMcpToolSourceForThirdParty({
-                boundary: thirdPartyBoundary,
-                source: externalMcpToolSource,
-              }),
-            ],
-            connection: "close",
-            lazyTools: true,
-          },
-        }
-      : {}),
-    agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
+  const stream = runChatAttempts({
     abortController,
+    abortSignal,
+    baseSystem: system,
+    devModelId,
+    externalMcpToolSource,
+    fallbackModel,
+    modelTools,
+    organizationId,
+    orgAIConfig,
+    preparedMessages: preparedMessages.value,
+    primaryModel,
+    promptCacheKey,
+    promptCachingEnabled,
+    safeDb,
+    thirdPartyBoundary,
     threadId,
-    ...systemPromptsPatch({ caching, model, system }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
-      maxOutputTokens: undefined,
-      serviceTier: "standard",
-      temperature: getTemperatureForRole("chat"),
-    }),
-    middleware: [
-      analytics.middleware,
-      createLoopRecoveryMiddleware({ baseSystem: system }),
-    ],
+    userId,
+    workspaceId,
   });
 
   const output = processServerChatStream({
@@ -307,41 +291,468 @@ const thirdPartyBoundaryRefusalResponse = (
     },
   );
 
-const createLoopRecoveryMiddleware = ({
-  baseSystem,
-}: {
+type ChatAttemptState = {
+  emptyCompletion: ChatEmptyCompletionError | null;
+  finalLoopDetection: ChatLoopDetectedError | null;
+};
+
+export const createChatAttemptState = (): ChatAttemptState => ({
+  emptyCompletion: null,
+  finalLoopDetection: null,
+});
+
+type ChatAttemptModelInfo = Pick<
+  ResolvedTanStackTextModel,
+  "modelId" | "provider"
+>;
+
+type RecordChatAttemptFinishProps = {
+  captureError?: typeof captureError | undefined;
+  finishReason: string | null;
+  messages: readonly ModelMessage[];
+  modelInfo: ChatAttemptModelInfo;
+  state: ChatAttemptState;
+  threadId: SafeId<"chatThread">;
+  usage: TokenUsage | undefined;
+};
+
+export const recordChatAttemptFinish = ({
+  captureError: captureAttemptError = captureError,
+  finishReason,
+  messages,
+  modelInfo,
+  state,
+  threadId,
+  usage,
+}: RecordChatAttemptFinishProps): void => {
+  const loopDetection = detectModelLoop(messages);
+  if (shouldSurfaceFinalContentLoop(loopDetection)) {
+    state.finalLoopDetection = new ChatLoopDetectedError({
+      message: CHAT_LOOP_DETECTED_MESSAGE,
+    });
+  }
+
+  if (finishReason !== "stop" || usage?.completionTokens !== 0) {
+    return;
+  }
+
+  state.emptyCompletion = new ChatEmptyCompletionError({
+    message: CHAT_EMPTY_COMPLETION_MESSAGE,
+  });
+  captureAttemptError(state.emptyCompletion, {
+    modelId: modelInfo.modelId,
+    provider: modelInfo.provider,
+    threadId,
+  });
+};
+
+const chatAttemptTerminalError = (
+  state: ChatAttemptState,
+): ChatLoopDetectedError | ChatEmptyCompletionError | null =>
+  state.finalLoopDetection ?? state.emptyCompletion;
+
+type ResolveFallbackTextModelProps = {
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  primaryModel: ResolvedTanStackTextModel;
+  threadId: SafeId<"chatThread">;
+};
+
+const resolveFallbackTextModel = ({
+  organizationId,
+  orgAIConfig,
+  primaryModel,
+  threadId,
+}: ResolveFallbackTextModelProps): ResolvedTanStackTextModel | null => {
+  try {
+    const fallbackModel = resolveTanStackTextModel({
+      organizationId,
+      orgAIConfig,
+      role: "reasoning",
+    });
+    if (
+      fallbackModel.provider === primaryModel.provider &&
+      fallbackModel.modelId === primaryModel.modelId
+    ) {
+      return null;
+    }
+    return fallbackModel;
+  } catch (error) {
+    captureError(error, {
+      feature: "chat.stream_fallback_resolution",
+      threadId,
+    });
+    return null;
+  }
+};
+
+type CreateChatAttemptAnalyticsProps = {
+  feature: string;
+  modelRole: ModelRole;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const createChatAttemptAnalytics = ({
+  feature,
+  modelRole,
+  organizationId,
+  orgAIConfig,
+  safeDb,
+  threadId,
+  userId,
+  workspaceId,
+}: CreateChatAttemptAnalyticsProps): TanStackAIAnalyticsCallbacks =>
+  createTanStackAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId,
+      workspaceId,
+    },
+    feature,
+    modelRole,
+    orgAIConfig,
+    properties: {
+      organization_id: organizationId,
+      ...(workspaceId ? { workspace_id: workspaceId } : {}),
+    },
+    sessionId: threadId,
+    traceId: Bun.randomUUIDv7(),
+  });
+
+type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
+
+type RunChatAttemptsProps = {
+  abortController: AbortController;
+  abortSignal: AbortSignal;
   baseSystem: string;
-}): ChatMiddleware => {
+  devModelId: string | undefined;
+  externalMcpToolSource: StellaMcpToolSource | undefined;
+  fallbackModel: ResolvedTanStackTextModel | null;
+  modelTools: ReturnType<typeof chatToolMapToArray>;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  preparedMessages: ChatMessage[];
+  primaryModel: ResolvedTanStackTextModel;
+  promptCacheKey: string;
+  promptCachingEnabled: boolean;
+  safeDb: SafeDb;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const runChatAttempts = async function* ({
+  abortController,
+  abortSignal,
+  baseSystem,
+  devModelId,
+  externalMcpToolSource,
+  fallbackModel,
+  modelTools,
+  organizationId,
+  orgAIConfig,
+  preparedMessages,
+  primaryModel,
+  promptCacheKey,
+  promptCachingEnabled,
+  safeDb,
+  thirdPartyBoundary,
+  threadId,
+  userId,
+  workspaceId,
+}: RunChatAttemptsProps): AsyncIterable<StreamChunk> {
+  const primaryState = createChatAttemptState();
+  yield* runChatAttempt({
+    abortController,
+    abortSignal,
+    baseSystem,
+    compactionFeature: "chat.step_compaction",
+    externalMcpToolSource,
+    feature: "chat.stream",
+    model: primaryModel,
+    modelId: devModelId,
+    modelTools,
+    organizationId,
+    orgAIConfig,
+    preparedMessages,
+    promptCacheKey,
+    promptCachingEnabled,
+    role: "chat",
+    safeDb,
+    state: primaryState,
+    thirdPartyBoundary,
+    threadId,
+    userId,
+    workspaceId,
+  });
+
+  const primaryError = chatAttemptTerminalError(primaryState);
+  if (primaryError === null) {
+    return;
+  }
+
+  if (
+    !(primaryError instanceof ChatEmptyCompletionError) ||
+    fallbackModel === null
+  ) {
+    throw primaryError;
+  }
+
+  const fallbackState = createChatAttemptState();
+  yield* runChatAttempt({
+    abortController,
+    abortSignal,
+    baseSystem,
+    compactionFeature: "chat.step_compaction_fallback",
+    externalMcpToolSource,
+    feature: "chat.stream_fallback",
+    model: fallbackModel,
+    modelId: undefined,
+    modelTools,
+    organizationId,
+    orgAIConfig,
+    preparedMessages,
+    promptCacheKey,
+    promptCachingEnabled,
+    role: "reasoning",
+    safeDb,
+    state: fallbackState,
+    thirdPartyBoundary,
+    threadId,
+    userId,
+    workspaceId,
+  });
+
+  const fallbackError = chatAttemptTerminalError(fallbackState);
+  if (fallbackError !== null) {
+    throw fallbackError;
+  }
+};
+
+type RunChatAttemptProps = {
+  abortController: AbortController;
+  abortSignal: AbortSignal;
+  baseSystem: string;
+  compactionFeature: string;
+  externalMcpToolSource: StellaMcpToolSource | undefined;
+  feature: string;
+  model: ResolvedTanStackTextModel;
+  modelId: string | undefined;
+  modelTools: ReturnType<typeof chatToolMapToArray>;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  preparedMessages: ChatMessage[];
+  promptCacheKey: string;
+  promptCachingEnabled: boolean;
+  role: ChatAttemptRole;
+  safeDb: SafeDb;
+  state: ChatAttemptState;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const runChatAttempt = async function* ({
+  abortController,
+  abortSignal,
+  baseSystem,
+  compactionFeature,
+  externalMcpToolSource,
+  feature,
+  model,
+  modelId,
+  modelTools,
+  organizationId,
+  orgAIConfig,
+  preparedMessages,
+  promptCacheKey,
+  promptCachingEnabled,
+  role,
+  safeDb,
+  state,
+  thirdPartyBoundary,
+  threadId,
+  userId,
+  workspaceId,
+}: RunChatAttemptProps): AsyncIterable<StreamChunk> {
+  const caching = resolveCaching({
+    promptCachingEnabled,
+    role,
+    scopeKey: promptCacheKey,
+  });
+  const analytics = createChatAttemptAnalytics({
+    feature,
+    modelRole: role,
+    organizationId,
+    orgAIConfig,
+    safeDb,
+    threadId,
+    userId,
+    workspaceId,
+  });
+  const compactionAnalytics = createChatAttemptAnalytics({
+    feature: compactionFeature,
+    modelRole: role,
+    organizationId,
+    orgAIConfig,
+    safeDb,
+    threadId,
+    userId,
+    workspaceId,
+  });
+
+  const stream = chat({
+    adapter: model.adapter,
+    messages: preparedMessages,
+    tools: modelTools,
+    ...(externalMcpToolSource
+      ? {
+          mcp: {
+            clients: [
+              prepareMcpToolSourceForThirdParty({
+                boundary: thirdPartyBoundary,
+                source: externalMcpToolSource,
+              }),
+            ],
+            connection: "close",
+            lazyTools: true,
+          },
+        }
+      : {}),
+    agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
+    abortController,
+    threadId,
+    ...systemPromptsPatch({ caching, model, system: baseSystem }),
+    modelOptions: mergeGenerationOptions({
+      caching,
+      model,
+      maxOutputTokens: undefined,
+      serviceTier: "standard",
+      temperature: getTemperatureForRole(role),
+    }),
+    middleware: [
+      analytics.middleware,
+      createChatRuntimeMiddleware({
+        abortSignal,
+        baseSystem,
+        compactionAnalytics,
+        compactionFeature,
+        model,
+        modelId,
+        organizationId,
+        orgAIConfig,
+        role,
+        state,
+        threadId,
+      }),
+    ],
+  });
+
+  yield* stream;
+};
+
+type ChatRuntimeMiddlewareProps = {
+  abortSignal: AbortSignal;
+  baseSystem: string;
+  compactionAnalytics: TanStackAIAnalyticsCallbacks;
+  compactionFeature: string;
+  model: ResolvedTanStackTextModel;
+  modelId: string | undefined;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  role: ChatAttemptRole;
+  state: ChatAttemptState;
+  threadId: SafeId<"chatThread">;
+};
+
+const createChatRuntimeMiddleware = ({
+  abortSignal,
+  baseSystem,
+  compactionAnalytics,
+  compactionFeature,
+  model,
+  modelId,
+  organizationId,
+  orgAIConfig,
+  role,
+  state,
+  threadId,
+}: ChatRuntimeMiddlewareProps): ChatMiddleware => {
   let lastLoopRecoveryKey: string | null = null;
   return {
-    name: "stella-loop-recovery",
-    onConfig: (_ctx, config) => {
+    name: "stella-chat-runtime",
+    onConfig: async (ctx, config) => {
+      if (ctx.phase !== "beforeModel") {
+        return undefined;
+      }
+
+      const patch: Partial<ChatMiddlewareConfig> = {};
       const loopDetection = detectModelLoop(config.messages);
       if (shouldStopLoopRecovery(loopDetection)) {
         throw new ChatLoopDetectedError({
-          message:
-            "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
+          message: CHAT_LOOP_DETECTED_MESSAGE,
         });
       }
 
-      if (!shouldInjectLoopRecovery(loopDetection)) {
-        return undefined;
+      if (shouldInjectLoopRecovery(loopDetection)) {
+        const recoveryKey = getLoopRecoveryKey(loopDetection);
+        if (recoveryKey !== lastLoopRecoveryKey) {
+          lastLoopRecoveryKey = recoveryKey;
+          patch.systemPrompts = [
+            createLoopRecoverySystemPrompt({
+              baseSystem,
+              detection: loopDetection,
+            }),
+          ];
+        }
       }
 
-      const recoveryKey = getLoopRecoveryKey(loopDetection);
-      if (recoveryKey === lastLoopRecoveryKey) {
-        return undefined;
+      const compactedMessages = await compactModelMessagesForModel({
+        abortSignal,
+        aiAnalytics: compactionAnalytics,
+        messages: config.messages,
+        modelId,
+        organizationId,
+        orgAIConfig,
+        role,
+        onSummaryError: (error) => {
+          captureError(error, {
+            feature: compactionFeature,
+            modelId: model.modelId,
+            provider: model.provider,
+            threadId,
+          });
+        },
+      });
+      if (Result.isError(compactedMessages)) {
+        throw compactedMessages.error;
       }
 
-      lastLoopRecoveryKey = recoveryKey;
-      return {
-        systemPrompts: [
-          createLoopRecoverySystemPrompt({
-            baseSystem,
-            detection: loopDetection,
-          }),
-        ],
-      };
+      if (compactedMessages.value !== config.messages) {
+        patch.messages = compactedMessages.value;
+      }
+
+      return Object.keys(patch).length === 0 ? undefined : patch;
+    },
+    onFinish: (ctx, info) => {
+      recordChatAttemptFinish({
+        finishReason: info.finishReason,
+        messages: ctx.messages,
+        modelInfo: model,
+        state,
+        threadId,
+        usage: info.usage,
+      });
     },
   };
 };

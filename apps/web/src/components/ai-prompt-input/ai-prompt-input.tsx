@@ -113,23 +113,15 @@ export const AIPromptInput = ({
   const { data: skillPages } = useInfiniteQuery(
     skillsOptions(activeOrganizationId),
   );
-  // See chat-editor-provider for the rationale on adapting the
-  // dedicated command-skills endpoint to the legacy slash shape.
   const slashShortcutRows = useMemo(
     () =>
-      commandSkills.flatMap((row) =>
-        row.command === null
-          ? []
-          : [
-              {
-                id: row.id,
-                scope: row.scope,
-                name: row.name,
-                command: row.command,
-                prompt: row.body,
-              },
-            ],
-      ),
+      commandSkills.map((row) => ({
+        id: row.id,
+        scope: row.scope,
+        name: row.name,
+        command: row.command,
+        prompt: row.body,
+      })),
     [commandSkills],
   );
   const slashItemsRef = useRef<SlashItem[]>([]);

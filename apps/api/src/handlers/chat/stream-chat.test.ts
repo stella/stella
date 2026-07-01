@@ -1,5 +1,5 @@
 import { EventType, StreamProcessor } from "@tanstack/ai";
-import type { StreamChunk } from "@tanstack/ai";
+import type { ModelMessage, StreamChunk } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
@@ -16,17 +16,23 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toUserFileUrl } from "@/api/handlers/user-files/types";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  ChatEmptyCompletionError,
+  ChatLoopDetectedError,
+} from "@/api/lib/errors/tagged-errors";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   chatMessageUsageFromTokenUsage,
   collectInitialRestorationPlaceholders,
+  createChatAttemptState,
   createChatMessageIdMapper,
   ensureAssistantMessageStart,
   hydrateMessages,
   normalizeFinalAssistantMessageId,
   processServerChatStream,
+  recordChatAttemptFinish,
   remapOutgoingMessageIds,
   transformOutgoingStream,
 } from "./stream-chat";
@@ -459,6 +465,63 @@ describe("chat message usage metadata", () => {
       promptTokens: 10,
       totalTokens: 32,
     });
+  });
+});
+
+describe("chat attempt terminal classification", () => {
+  test("captures empty stop completions", () => {
+    const state = createChatAttemptState();
+    const capturedErrors: unknown[] = [];
+
+    recordChatAttemptFinish({
+      captureError: (error) => {
+        capturedErrors.push(error);
+      },
+      finishReason: "stop",
+      messages: [],
+      modelInfo: { modelId: "gpt-test", provider: "openai" },
+      state,
+      threadId: toSafeId<"chatThread">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      usage: {
+        completionTokens: 0,
+        promptTokens: 12,
+        totalTokens: 12,
+      },
+    });
+
+    expect(state.emptyCompletion).toBeInstanceOf(ChatEmptyCompletionError);
+    expect(state.finalLoopDetection).toBeNull();
+    expect(capturedErrors).toEqual([state.emptyCompletion]);
+  });
+
+  test("surfaces final content loops", () => {
+    const state = createChatAttemptState();
+    const loopChunk = "abcdefghij".repeat(5);
+    const messages: ModelMessage[] = [
+      { content: "Please answer.", role: "user" },
+      { content: loopChunk.repeat(10), role: "assistant" },
+    ];
+
+    recordChatAttemptFinish({
+      captureError: () => {},
+      finishReason: "stop",
+      messages,
+      modelInfo: { modelId: "gpt-test", provider: "openai" },
+      state,
+      threadId: toSafeId<"chatThread">(
+        "11111111-1111-4111-8111-111111111111",
+      ),
+      usage: {
+        completionTokens: 50,
+        promptTokens: 12,
+        totalTokens: 62,
+      },
+    });
+
+    expect(state.finalLoopDetection).toBeInstanceOf(ChatLoopDetectedError);
+    expect(state.emptyCompletion).toBeNull();
   });
 });
 

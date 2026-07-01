@@ -10,6 +10,7 @@ import { toSafeId } from "@/lib/safe-id";
 
 const SKILLS_PAGE_SIZE = 100;
 const PLAYBOOKS_PAGE_SIZE = 50;
+const MAX_COMMAND_SKILLS = 250;
 
 type SkillsPageKey = {
   limit: number;
@@ -17,6 +18,15 @@ type SkillsPageKey = {
 
 type PlaybooksPageKey = {
   limit: number;
+};
+
+type SkillCommandRow = {
+  body: string;
+  command: string;
+  description: string;
+  id: string;
+  name: string;
+  scope: "private" | "team";
 };
 
 type ClausesListKey = {
@@ -566,19 +576,54 @@ export const skillsOptions = (organizationId: string) =>
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
-// Skills with a slash command set. Backs the chat slash menu — the
-// hook returns a stable list, but the upstream cache uses its own
-// key so editor mutations on a single skill don't invalidate this
-// page-scoped read.
+// Skills with a slash command set. Backs prompt insertion surfaces
+// that do not already have the paged skills catalogue in memory.
+// It reads through the same authenticated `/skills` list as the
+// catalogue, so prompt surfaces do not need a second command-only
+// request during protected-route cold start.
 export const skillCommandsOptions = (organizationId: string) =>
   queryOptions({
     queryKey: knowledgeKeys.skills.commands(organizationId),
     queryFn: async ({ signal }) => {
-      const response = await api.skills.commands.get({ fetch: { signal } });
-      if (response.error) {
-        throw toAPIError(response.error);
+      const commandRows: SkillCommandRow[] = [];
+      let offset = 0;
+
+      while (commandRows.length < MAX_COMMAND_SKILLS) {
+        const response = await api.skills.get({
+          query: {
+            limit: SKILLS_PAGE_SIZE,
+            offset,
+          },
+          fetch: { signal },
+        });
+        if (response.error) {
+          throw toAPIError(response.error);
+        }
+
+        for (const row of response.data.installed) {
+          if (!row.enabled || !row.command || !row.body) {
+            continue;
+          }
+          commandRows.push({
+            id: row.id,
+            scope: row.scope,
+            name: row.name,
+            description: row.description,
+            command: row.command,
+            body: row.body,
+          });
+          if (commandRows.length >= MAX_COMMAND_SKILLS) {
+            break;
+          }
+        }
+
+        if (response.data.nextOffset === null) {
+          break;
+        }
+        offset = response.data.nextOffset;
       }
-      return response.data;
+
+      return commandRows;
     },
     staleTime: STALE_TIME.FIVE.MINUTES,
   });

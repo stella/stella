@@ -13,6 +13,7 @@ type SlashShortcutRow = Pick<
 };
 
 type SlashSkillRow = {
+  body?: string | null;
   description: string;
   enabled: boolean;
   id: string;
@@ -102,6 +103,31 @@ export const buildChatSlashItems = ({
     }));
 
   return [...commandItems, ...promptItems, ...skillItems];
+};
+
+export const commandShortcutRowsFromSkillPages = (
+  skillPages: readonly SlashSkillPage[] | undefined,
+): SlashShortcutRow[] => {
+  const rows: SlashShortcutRow[] = [];
+  const installedRows = skillPages?.flatMap((page) => page.installed) ?? [];
+
+  for (const row of installedRows) {
+    if (!row.enabled || !row.command || row.body === null || !row.body) {
+      continue;
+    }
+    if (row.scope === "built-in") {
+      continue;
+    }
+    rows.push({
+      id: row.id,
+      scope: row.scope,
+      name: row.name,
+      command: row.command,
+      prompt: row.body,
+    });
+  }
+
+  return rows;
 };
 
 const getChatVisibleInstalledSkillRows = (
