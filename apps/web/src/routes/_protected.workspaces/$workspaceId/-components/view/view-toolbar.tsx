@@ -511,13 +511,27 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
 
   const handleAutoRun = async () => {
     setIsAutoRunning(true);
-    const response = await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .playbooks["auto-run"].post({
-        queryKey: propertiesKeys.all(workspaceId),
-      });
+    const result = await Result.tryPromise(
+      async () =>
+        await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .playbooks["auto-run"].post({
+            queryKey: propertiesKeys.all(workspaceId),
+          }),
+    );
     setIsAutoRunning(false);
 
+    if (Result.isError(result)) {
+      analytics.captureError(result.error);
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: t("common.unexpectedError"),
+      });
+      return;
+    }
+
+    const response = result.value;
     if (response.error) {
       analytics.captureError(toAPIError(response.error));
       stellaToast.add({
@@ -545,12 +559,26 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
 
   const handleRun = async (playbookId: string) => {
     setRunningPlaybookId(playbookId);
-    const response = await api
-      .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
-      .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
-      .run.post({ queryKey: propertiesKeys.all(workspaceId) });
+    const result = await Result.tryPromise(
+      async () =>
+        await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
+          .run.post({ queryKey: propertiesKeys.all(workspaceId) }),
+    );
     setRunningPlaybookId(null);
 
+    if (Result.isError(result)) {
+      analytics.captureError(result.error);
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: t("common.unexpectedError"),
+      });
+      return;
+    }
+
+    const response = result.value;
     if (response.error) {
       analytics.captureError(toAPIError(response.error));
       stellaToast.add({

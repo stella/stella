@@ -98,8 +98,10 @@ export const AICellSourceCard = ({
   const hiddenStatementCount = statements.length - visibleStatements.length;
   const statementTextClassName = cn(
     "text-justify text-xs leading-relaxed text-wrap hyphens-auto",
-    // Unclamped rationale scrolls within the popup rather than truncating.
-    clampStatements ? "line-clamp-3" : "max-h-64 overflow-y-auto",
+    // Unclamped rationale scrolls within the popup rather than truncating; the
+    // container must be block-level for max-height/overflow to form a scroll box
+    // (an inline span ignores both).
+    clampStatements ? "line-clamp-3" : "block max-h-64 overflow-y-auto",
   );
 
   const cardContent = (
@@ -177,16 +179,43 @@ export const AICellSourceCard = ({
         closeDelay={100}
         delay={650}
         render={
-          <div
-            className={triggerClassName ?? "w-full min-w-0"}
-            onPointerDown={() => {
-              dismissedRef.current = true;
-              setOpen(false);
-            }}
-            onPointerLeave={() => {
-              dismissedRef.current = false;
-            }}
-          />
+          onOpen === undefined ? (
+            // Static provenance card (verdict rationale): the children carry no
+            // interactive control, so without a focusable trigger keyboard users
+            // have no way to reach the popup. It stays a role="button" div rather
+            // than a real <button> because some cells nest interactive flag
+            // controls in `children`, which <button> cannot legally wrap.
+            <div
+              className={triggerClassName ?? "w-full min-w-0"}
+              onKeyDown={(event) => {
+                if (event.key === "Enter" || event.key === " ") {
+                  event.preventDefault();
+                  dismissedRef.current = false;
+                  setOpen(true);
+                }
+              }}
+              onPointerDown={() => {
+                dismissedRef.current = true;
+                setOpen(false);
+              }}
+              onPointerLeave={() => {
+                dismissedRef.current = false;
+              }}
+              role="button"
+              tabIndex={0}
+            />
+          ) : (
+            <div
+              className={triggerClassName ?? "w-full min-w-0"}
+              onPointerDown={() => {
+                dismissedRef.current = true;
+                setOpen(false);
+              }}
+              onPointerLeave={() => {
+                dismissedRef.current = false;
+              }}
+            />
+          )
         }
       >
         {children}

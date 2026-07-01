@@ -515,12 +515,18 @@ const PropertyComposerBody = ({
       return;
     }
 
-    // Preserve any per-dependency conditions configured via the
-    // conditions sub-modal. New mentions default to null. The "Applies to"
-    // scope owns the classifier dependency, so drop any existing one and re-add
-    // it as a gate below when a specific document type is chosen.
+    // Preserve any per-dependency conditions configured via the conditions
+    // sub-modal. New mentions default to null. The "Applies to" scope owns the
+    // classifier slot: drop the classifier dependency only when it is (or was)
+    // a scope gate, then re-add the gate below for the chosen document type. A
+    // plain classifier mention with no scope is preserved with its condition.
     const dependencies: PropertyDependency[] = dependencyIds
-      .filter((id) => id !== classifier?.id)
+      .filter((id) => {
+        if (id !== classifier?.id) {
+          return true;
+        }
+        return scopeDocType === null && initialScopeDocType === null;
+      })
       .map((id) => ({
         dependsOnPropertyId: id,
         condition: initialDependencyConditions.get(id) ?? null,

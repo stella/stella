@@ -49,6 +49,7 @@ import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
 import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
 import Tooltip from "@/components/tooltip";
+import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, MARKDOWN_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -173,6 +174,7 @@ export const FileTabPanel = ({
   const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorStore((s) => s.setFileFacet);
   const requestDocxEdit = useInspectorStore((s) => s.requestDocxEdit);
+  const playbooksEnabled = usePlaybooksPreviewEnabled();
   const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
   const nativePreviewKind = getFileTabNativePreviewKind({
     fileName: tab.fileName,
@@ -473,7 +475,7 @@ export const FileTabPanel = ({
           {tab.facet === "suggestions" && (
             <SuggestionsFacet entityId={tab.entityId} />
           )}
-          {tab.facet === "playbook" && (
+          {playbooksEnabled && tab.facet === "playbook" && (
             <PlaybookFacet
               entityId={tab.entityId}
               fileFieldId={tab.id}
@@ -1009,7 +1011,7 @@ export const FileTabPanel = ({
                 : {})}
             />
           )}
-          {sidepeekFacet === "playbook" && (
+          {playbooksEnabled && sidepeekFacet === "playbook" && (
             <PlaybookFacet
               entityId={tab.entityId}
               fileFieldId={tab.id}

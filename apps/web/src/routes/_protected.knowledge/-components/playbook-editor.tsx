@@ -206,7 +206,9 @@ const PlaybookEditorForm = ({
   const [name, setName] = useState(initialName);
   const [description, setDescription] = useState(initialDescription);
   const [positions, setPositions] = useState<Position[]>(() =>
-    initialPositions.length > 0 ? initialPositions : [newPosition()],
+    playbookId === null && initialPositions.length === 0
+      ? [newPosition()]
+      : initialPositions,
   );
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);

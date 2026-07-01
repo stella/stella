@@ -165,6 +165,10 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   const isBuiltInGrouping = grouping.type === "built-in";
   const groupByProperty =
     grouping.type === "property" ? grouping.property : null;
+  // Verdict tiers are system-computed; card moves and uploads into a verdict
+  // column must not overwrite the graded value.
+  const isReadOnlyVerdictGrouping =
+    groupByProperty?.tool.type === "playbook-verdict";
 
   // Fields to show on each card: all properties minus hidden ones.
   const allPropertyIds = properties.map((p) => p.id);
@@ -303,7 +307,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       updateTaskStatus.mutate({ taskId: entityId, status: targetValue });
       return;
     }
-    if (isBuiltInGrouping) {
+    if (isBuiltInGrouping || isReadOnlyVerdictGrouping) {
       stellaToast.add({
         title: t("workspaces.kanban.readOnlyGrouping"),
         type: "info",
@@ -357,7 +361,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       onError: (error) => analytics.captureError(error),
     });
 
-    if (columnValue === null) {
+    if (columnValue === null || isReadOnlyVerdictGrouping) {
       return;
     }
 
@@ -388,7 +392,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           return;
         }
         // Verdict tiers are system-defined; their colors are not user-editable.
-        if (groupByProperty.tool.type === "playbook-verdict") {
+        if (isReadOnlyVerdictGrouping) {
           return;
         }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
@@ -424,7 +428,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
           return;
         }
         // Verdict tiers are system-defined; their labels are not user-editable.
-        if (groupByProperty.tool.type === "playbook-verdict") {
+        if (isReadOnlyVerdictGrouping) {
           return;
         }
         const updatedOptions = groupByProperty.content.options.map((opt) =>
@@ -473,7 +477,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
         groupByProperty.content.type === "multi-select")
     ) {
       // Verdict tiers are system-defined; their order is not user-editable.
-      if (groupByProperty.tool.type === "playbook-verdict") {
+      if (isReadOnlyVerdictGrouping) {
         return;
       }
       const opts = [...groupByProperty.content.options];

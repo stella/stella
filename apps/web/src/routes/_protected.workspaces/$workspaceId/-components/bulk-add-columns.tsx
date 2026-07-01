@@ -333,11 +333,13 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
       };
       if (d.tool === "ai-model") {
         item.prompt = d.prompt;
-        // The scope owns the classifier dependency: drop any of it here, then
-        // append the gate when a specific document type is selected.
+        // The scope gate owns the classifier slot only when a specific
+        // document type is selected: drop the classifier there and append the
+        // gate below. With scope "All" an explicit classifier mention stays a
+        // normal dependency.
         const dependencyIds = [
           ...new Set([...d.fileIds, ...d.mentions]),
-        ].filter((id) => id !== classifier?.id);
+        ].filter((id) => scopeDocType === null || id !== classifier?.id);
         const dependencies: PropertyDependency[] = dependencyIds.map((id) => ({
           dependsOnPropertyId: id,
           condition: null,

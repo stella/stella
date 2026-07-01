@@ -153,8 +153,8 @@ export const PlaybookFacet = ({
       mode: "tracked-changes",
       ...(author.length > 0 && { author }),
     });
-    const applied = result.applied.at(0);
-    if (!applied) {
+    const revisionIds = result.applied.at(0)?.revisionIds ?? null;
+    if (revisionIds === null || revisionIds.length === 0) {
       stellaToast.add({
         type: "error",
         title: t("knowledge.playbooks.review.insertFailed"),
@@ -163,7 +163,7 @@ export const PlaybookFacet = ({
     }
     setFixState(entityId, fileFieldId, finding.positionId, {
       status: "applied",
-      revisionIds: applied.revisionIds ?? null,
+      revisionIds,
     });
   };
 
@@ -172,7 +172,11 @@ export const PlaybookFacet = ({
   };
 
   const acceptFix = (positionId: string, revisionIds: readonly number[]) => {
-    registration?.editorRef.current?.acceptAIEditOperation(revisionIds);
+    const accepted =
+      registration?.editorRef.current?.acceptAIEditOperation(revisionIds);
+    if (accepted !== true) {
+      return;
+    }
     setFixState(entityId, fileFieldId, positionId, {
       status: "accepted",
       revisionIds: null,
@@ -180,7 +184,11 @@ export const PlaybookFacet = ({
   };
 
   const rejectFix = (positionId: string, revisionIds: readonly number[]) => {
-    registration?.editorRef.current?.rejectAIEditOperation(revisionIds);
+    const rejected =
+      registration?.editorRef.current?.rejectAIEditOperation(revisionIds);
+    if (rejected !== true) {
+      return;
+    }
     setFixState(entityId, fileFieldId, positionId, {
       status: "pending",
       revisionIds: null,

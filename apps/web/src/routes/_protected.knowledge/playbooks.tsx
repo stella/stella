@@ -158,6 +158,12 @@ function RouteComponent() {
   }, [currentNextCursor, t]);
 
   const handleRefresh = useCallback(() => {
+    // Abort any in-flight page load so its result cannot append a stale page
+    // back into the list we are about to reset. handleLoadMore's abort branch
+    // intentionally leaves loadingMore set, so clear it here.
+    loadMoreAbort.current?.abort();
+    loadMoreAbort.current = null;
+    setLoadingMore(false);
     setExtraPlaybooks([]);
     setNextCursor(undefined);
     queryClient

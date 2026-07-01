@@ -793,11 +793,18 @@ const FileChatOverlayInner = ({
   // would clobber it back to false (the `false -> true -> false` batch
   // nets to the committed value, so React bails and the probe never
   // re-runs), leaving the bar stuck on "loading" with no fallback armed.
-  const [readyForEntityId, setReadyForEntityId] = useState(
-    activeFile?.entityId,
-  );
-  if (activeFile?.entityId !== readyForEntityId) {
-    setReadyForEntityId(activeFile?.entityId);
+  // Key readiness to the specific document, not just the entity: one entity can
+  // hold several file fields, so an entity-only key would keep `editorReady`
+  // true when switching to another file/version on the same entity and skip the
+  // snapshot poll for the newly mounted editor.
+  const activeDocumentKey =
+    activeFile === undefined
+      ? undefined
+      : `${activeFile.entityId}:${activeFile.fileFieldId ?? ""}`;
+  const [readyForDocumentKey, setReadyForDocumentKey] =
+    useState(activeDocumentKey);
+  if (activeDocumentKey !== readyForDocumentKey) {
+    setReadyForDocumentKey(activeDocumentKey);
     setEditorReady(false);
   }
   useExternalSyncEffect(() => {

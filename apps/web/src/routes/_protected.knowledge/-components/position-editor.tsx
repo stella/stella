@@ -369,7 +369,8 @@ const AskSection = ({
         </Select>
       </div>
 
-      {content.type === "single-select" && (
+      {(content.type === "single-select" ||
+        content.type === "multi-select") && (
         <SingleSelectOptions
           content={content}
           onChange={(next) =>
@@ -411,7 +412,7 @@ const SingleSelectOptions = ({
     }));
     onChange({
       version: 1,
-      type: "single-select",
+      type: content.type,
       options,
       fallback: content.fallback ?? null,
     });
