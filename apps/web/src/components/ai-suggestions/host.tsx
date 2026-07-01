@@ -1874,20 +1874,10 @@ type PromptBarActionButtonProps = {
   onRetry?: (() => void) | undefined;
   onSend: () => void;
   onStop?: (() => void) | undefined;
-} & Omit<
-  ComponentProps<typeof ChatComposerActionButton>,
-  | "canSend"
-  | "className"
-  | "iconClassName"
-  | "mode"
-  | "onRetry"
-  | "onSend"
-  | "onStop"
-  | "size"
->;
+} & Omit<ComponentProps<"span">, "children">;
 
 const PromptBarActionButton = forwardRef<
-  HTMLButtonElement,
+  HTMLSpanElement,
   PromptBarActionButtonProps
 >(
   (
@@ -1898,49 +1888,63 @@ const PromptBarActionButton = forwardRef<
       onRetry,
       onSend,
       onStop,
-      ...buttonProps
+      ...triggerProps
     },
     ref,
   ) => {
+    const triggerClassName = triggerProps.className;
+
     if (morphSendToStop && onStop !== undefined) {
       return (
-        <ChatComposerActionButton
-          {...buttonProps}
-          className="rounded-full"
-          iconClassName="size-4"
-          mode="stop"
-          onStop={onStop}
+        <span
+          {...triggerProps}
+          className={cn("inline-flex", triggerClassName)}
           ref={ref}
-          size="icon"
-        />
+        >
+          <ChatComposerActionButton
+            className="rounded-full"
+            iconClassName="size-4"
+            mode="stop"
+            onStop={onStop}
+            size="icon"
+          />
+        </span>
       );
     }
 
     if (morphSendToRetry && onRetry !== undefined) {
       return (
-        <ChatComposerActionButton
-          {...buttonProps}
-          className="rounded-full"
-          iconClassName="size-4"
-          mode="retry"
-          onRetry={onRetry}
+        <span
+          {...triggerProps}
+          className={cn("inline-flex", triggerClassName)}
           ref={ref}
-          size="icon"
-        />
+        >
+          <ChatComposerActionButton
+            className="rounded-full"
+            iconClassName="size-4"
+            mode="retry"
+            onRetry={onRetry}
+            size="icon"
+          />
+        </span>
       );
     }
 
     return (
-      <ChatComposerActionButton
-        {...buttonProps}
-        canSend={canSend}
-        className="rounded-full"
-        iconClassName="size-4"
-        mode="send"
-        onSend={onSend}
+      <span
+        {...triggerProps}
+        className={cn("inline-flex", triggerClassName)}
         ref={ref}
-        size="icon"
-      />
+      >
+        <ChatComposerActionButton
+          canSend={canSend}
+          className="rounded-full"
+          iconClassName="size-4"
+          mode="send"
+          onSend={onSend}
+          size="icon"
+        />
+      </span>
     );
   },
 );
