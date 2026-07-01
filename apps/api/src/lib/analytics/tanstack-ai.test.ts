@@ -45,9 +45,13 @@ const createOpenAIOrgAIConfig = (): OrgAIConfig => ({
   },
 });
 
-const createMiddlewareContext = (
-  deferred: Promise<unknown>[] = [],
-): ChatMiddlewareContext => ({
+const createMiddlewareContext = ({
+  deferred = [],
+  modelOptions,
+}: {
+  deferred?: Promise<unknown>[];
+  modelOptions?: Record<string, unknown>;
+} = {}): ChatMiddlewareContext => ({
   activity: "chat",
   requestId: "request_1",
   streamId: "stream_1",
@@ -67,7 +71,7 @@ const createMiddlewareContext = (
   streaming: true,
   systemPrompts: [],
   options: undefined,
-  modelOptions: undefined,
+  modelOptions,
   messageCount: 1,
   hasTools: true,
   currentMessageId: null,
@@ -193,7 +197,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     const deferred: Promise<unknown>[] = [];
 
     await callbacks.middleware.onUsage?.(
-      createMiddlewareContext(deferred),
+      createMiddlewareContext({ deferred }),
       usage,
     );
     await Promise.all(deferred);
@@ -210,6 +214,69 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       traceId: "trace_usage",
       userId,
       workspaceId,
+    });
+  });
+
+  test("meters standard-tier fallback usage as standard", async () => {
+    const { createTanStackAIAnalyticsCallbacks } =
+      await loadTanStackAIAnalytics();
+    const periodStart = new Date("2026-06-01T00:00:00.000Z");
+    const periodEnd = new Date("2026-07-01T00:00:00.000Z");
+    const insertedRows: unknown[] = [];
+    const tx = {
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            limit: async () => [
+              {
+                currentPeriodEnd: periodEnd,
+                currentPeriodStart: periodStart,
+                status: "active",
+              },
+            ],
+          }),
+        }),
+      }),
+      insert: () => ({
+        values: async (values: unknown) => {
+          insertedRows.push(values);
+        },
+      }),
+    };
+    const { safeDb } = createScopedDbMock(tx);
+    const analytics: Analytics = {
+      capture: () => undefined,
+      flush: async () => undefined,
+    };
+    const callbacks = createTanStackAIAnalyticsCallbacks({
+      analytics,
+      feature: "chat.stream",
+      modelRole: "chat",
+      traceId: "trace_fallback_usage",
+      usageMetering: {
+        actionType: "chat",
+        organizationId: orgId,
+        safeDb,
+        serviceTier: "flex",
+        userId,
+        workspaceId,
+      },
+    });
+    const deferred: Promise<unknown>[] = [];
+
+    await callbacks.middleware.onUsage?.(
+      createMiddlewareContext({
+        deferred,
+        modelOptions: { service_tier: "default" },
+      }),
+      usage,
+    );
+    await Promise.all(deferred);
+
+    expect(insertedRows).toHaveLength(1);
+    expect(insertedRows[0]).toMatchObject({
+      serviceTier: "standard",
+      traceId: "trace_fallback_usage",
     });
   });
 
@@ -275,7 +342,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
       callbacks.captureError(error);
       await callbacks.middleware.onUsage?.(
-        createMiddlewareContext(deferred),
+        createMiddlewareContext({ deferred }),
         usage,
       );
 

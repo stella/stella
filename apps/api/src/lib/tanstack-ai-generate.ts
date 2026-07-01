@@ -443,7 +443,16 @@ const streamTanStackStructuredOutput = async function* <
         ...(analytics ? { middleware: [analytics.middleware] } : {}),
         ...(abortController ? { abortController } : {}),
       }),
-    onChunk: (chunk) => chunk,
+    onChunk: (chunk) => {
+      if (
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT ||
+        (chunk.type === EventType.CUSTOM &&
+          chunk.name === "structured-output.complete")
+      ) {
+        return chunk;
+      }
+      return undefined;
+    },
   });
 
   for await (const chunk of stream) {
@@ -468,10 +477,7 @@ const streamTanStackStructuredOutput = async function* <
       continue;
     }
 
-    if (
-      chunk.type !== EventType.CUSTOM ||
-      chunk.name !== "structured-output.complete"
-    ) {
+    if (chunk.type !== EventType.CUSTOM) {
       continue;
     }
 

@@ -1,4 +1,4 @@
-import type { ChatMiddleware } from "@tanstack/ai";
+import type { ChatMiddleware, ChatMiddlewareContext } from "@tanstack/ai";
 import { Result } from "better-result";
 
 import type { ModelRole } from "@stll/ai-catalog";
@@ -162,27 +162,56 @@ const getUsageCacheReadTokens = (usage: {
   promptTokensDetails?: { cachedTokens?: number | undefined } | undefined;
 }): number => usage.promptTokensDetails?.cachedTokens ?? 0;
 
+const usageServiceTierFromModelOptions = ({
+  fallback,
+  modelOptions,
+}: {
+  fallback: UsageServiceTier;
+  modelOptions: ChatMiddlewareContext["modelOptions"];
+}): UsageServiceTier => {
+  if (!isRecord(modelOptions)) {
+    return fallback;
+  }
+
+  const openAIServiceTier = modelOptions["service_tier"];
+  if (openAIServiceTier === "default") {
+    return "standard";
+  }
+
+  const serviceTier = modelOptions["serviceTier"];
+  if (serviceTier === "standard") {
+    return "standard";
+  }
+
+  return fallback;
+};
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 const recordTanStackConsumption = async ({
   cacheReadTokens,
   completionTokens,
   config,
   modelInfo,
   promptTokens,
+  serviceTier,
 }: {
   cacheReadTokens: number;
   completionTokens: number;
   config: TanStackAIAnalyticsProps;
   modelInfo: ResolvedTanStackTextModelInfo;
   promptTokens: number;
+  serviceTier: UsageServiceTier;
 }): Promise<void> => {
   const metering = config.usageMetering;
   if (!metering) {
     return;
   }
 
-  const serviceTier = resolveTanStackEffectiveServiceTier({
+  const effectiveServiceTier = resolveTanStackEffectiveServiceTier({
     modelInfo,
-    serviceTier: metering.serviceTier,
+    serviceTier,
   });
   const { unitsConsumed, rawUsageMicroUnits } = usageUnitsFromTokens({
     actionType: metering.actionType,
@@ -191,7 +220,7 @@ const recordTanStackConsumption = async ({
     isByok: modelInfo.keySource === "byok",
     modelId: modelInfo.modelId,
     outputTokens: completionTokens,
-    serviceTier,
+    serviceTier: effectiveServiceTier,
   });
 
   const result = await metering.safeDb(
@@ -204,7 +233,7 @@ const recordTanStackConsumption = async ({
         modelRole: config.modelRole ?? "chat",
         organizationId: metering.organizationId,
         rawUsageMicroUnits,
-        serviceTier,
+        serviceTier: effectiveServiceTier,
         traceId: config.traceId,
         userId: metering.userId,
         workspaceId: metering.workspaceId,
@@ -346,6 +375,11 @@ export const createTanStackAIAnalyticsCallbacks = ({
         });
       },
       onUsage: (ctx, usage) => {
+        const metering = config.usageMetering;
+        if (!metering) {
+          return;
+        }
+
         const resolvedModelInfo = resolveAnalyticsModelInfo();
         if (!resolvedModelInfo) {
           return;
@@ -357,6 +391,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
           config,
           modelInfo: resolvedModelInfo,
           promptTokens: usage.promptTokens,
+          serviceTier: usageServiceTierFromModelOptions({
+            fallback: metering.serviceTier,
+            modelOptions: ctx.modelOptions,
+          }),
         });
         ctx.defer(consumption);
       },
