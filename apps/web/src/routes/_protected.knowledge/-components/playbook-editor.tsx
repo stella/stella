@@ -16,6 +16,13 @@ import {
 import { Button } from "@stll/ui/components/button";
 import { Input } from "@stll/ui/components/input";
 import { Label } from "@stll/ui/components/label";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 
@@ -32,6 +39,7 @@ import {
 } from "@/routes/_protected.knowledge/-components/playbook-types";
 import { PositionEditor } from "@/routes/_protected.knowledge/-components/position-editor";
 import {
+  documentTypesOptions,
   knowledgeKeys,
   playbookDetailOptions,
 } from "@/routes/_protected.knowledge/-queries";
@@ -115,7 +123,9 @@ const PlaybookEditorLoader = ({
   return (
     <PlaybookEditorForm
       initialDescription={detail.description ?? ""}
+      initialDocumentTypeKey={detail.scope?.documentTypeKey ?? null}
       initialName={detail.name}
+      initialPerspective={detail.scope?.perspective ?? null}
       initialPositions={detail.positions.items}
       onBack={onBack}
       onSaved={onSaved}
@@ -126,6 +136,10 @@ const PlaybookEditorLoader = ({
 };
 
 // ── Editor form ───────────────────────────────────────
+
+// Sentinel for the "every document type" (unscoped) choice; a Select value
+// can't be null, so it stands in and maps back to null.
+const SCOPE_ALL_VALUE = "__all__";
 
 const newPosition = (): Position => ({
   sourceId: crypto.randomUUID(),
@@ -154,11 +168,15 @@ const normalizePosition = (position: Position): Position => {
   };
 };
 
+type PlaybookPerspective = "buyer" | "seller" | "neutral";
+
 type PlaybookEditorFormProps = {
   organizationId: string;
   playbookId: string | null;
   initialName: string;
   initialDescription: string;
+  initialDocumentTypeKey: string | null;
+  initialPerspective: PlaybookPerspective | null;
   initialPositions: Position[];
   onBack: () => void;
   onSaved: () => void;
@@ -169,6 +187,8 @@ const PlaybookEditorForm = ({
   playbookId,
   initialName,
   initialDescription,
+  initialDocumentTypeKey,
+  initialPerspective,
   initialPositions,
   onBack,
   onSaved,
@@ -188,6 +208,16 @@ const PlaybookEditorForm = ({
   );
   const [saving, setSaving] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
+  // Which document type this playbook runs for (null = every document). A
+  // files-table run gates the materialized columns on the Document Type
+  // classifier, so this is what makes "a different playbook per type" work.
+  const [documentTypeKey, setDocumentTypeKey] = useState<string | null>(
+    initialDocumentTypeKey,
+  );
+  const { data: documentTypesData } = useQuery(
+    documentTypesOptions(organizationId),
+  );
+  const documentTypes = documentTypesData?.items ?? [];
 
   const setNavOpen = usePlaybookNavStore((s) => s.setOpen);
   const clearNav = usePlaybookNavStore((s) => s.clear);
@@ -260,6 +290,17 @@ const PlaybookEditorForm = ({
     const items = positions.map(normalizePosition);
     const positionsPayload: PlaybookPositionsValue = { version: 1, items };
     const trimmedDescription = description.trim();
+    // Rebuild the scope from the document-type picker, preserving any existing
+    // perspective. Omitted entirely when unscoped so the handler clears it.
+    const scope =
+      documentTypeKey === null && initialPerspective === null
+        ? undefined
+        : {
+            ...(documentTypeKey !== null ? { documentTypeKey } : {}),
+            ...(initialPerspective !== null
+              ? { perspective: initialPerspective }
+              : {}),
+          };
 
     setSaving(true);
     const response =
@@ -267,6 +308,7 @@ const PlaybookEditorForm = ({
         ? await api.playbooks.post({
             name: trimmedName,
             ...(trimmedDescription ? { description: trimmedDescription } : {}),
+            ...(scope ? { scope } : {}),
             positions: positionsPayload,
           })
         : await api
@@ -278,6 +320,7 @@ const PlaybookEditorForm = ({
               ...(trimmedDescription
                 ? { description: trimmedDescription }
                 : {}),
+              ...(scope ? { scope } : {}),
               positions: positionsPayload,
             });
     setSaving(false);
@@ -420,6 +463,34 @@ const PlaybookEditorForm = ({
             value={description}
           />
         </div>
+
+        {documentTypes.length > 0 && (
+          <div className="grid gap-1.5">
+            <Label htmlFor="playbook-document-type">{t("common.type")}</Label>
+            <Select
+              onValueChange={(next) =>
+                setDocumentTypeKey(
+                  next === null || next === SCOPE_ALL_VALUE ? null : next,
+                )
+              }
+              value={documentTypeKey ?? SCOPE_ALL_VALUE}
+            >
+              <SelectTrigger id="playbook-document-type">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectPopup>
+                <SelectItem value={SCOPE_ALL_VALUE}>
+                  {t("common.all")}
+                </SelectItem>
+                {documentTypes.map((documentType) => (
+                  <SelectItem key={documentType.key} value={documentType.key}>
+                    {documentType.label}
+                  </SelectItem>
+                ))}
+              </SelectPopup>
+            </Select>
+          </div>
+        )}
 
         <div className="space-y-3">
           <div className="flex items-center justify-between">

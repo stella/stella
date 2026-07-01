@@ -483,6 +483,24 @@ export const playbooksOptions = (
     staleTime: STALE_TIME.FIVE.MINUTES,
   });
 
+// Org-owned document-type taxonomy, used to scope a playbook to a document type
+// in the editor. Root-scoped API (keyed off the active org); keyed by org so a
+// switch doesn't serve a stale taxonomy.
+export const documentTypesOptions = (organizationId: string) =>
+  queryOptions({
+    queryKey: ["document-types", organizationId] as const,
+    queryFn: async ({ signal }) => {
+      const response = await api["document-types"].get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
 export const playbookDetailOptions = (
   organizationId: string,
   playbookId: string,
