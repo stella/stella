@@ -74,6 +74,7 @@ export const ChatComposerActionButton = (
       disabled={!canSend}
       onClick={handleClick}
       size={size}
+      tooltip={false}
       type="button"
       variant={variant}
     >

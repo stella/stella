@@ -1325,8 +1325,8 @@ type PromptBarProps = {
   /**
    * When true the composer keeps accepting input while a response
    * streams: pressing Enter queues a send via `useChatSession` and
-   * dispatches it once the turn finishes. The visible primary action
-   * still morphs into Stop so all chat surfaces share one affordance.
+   * dispatches it once the turn finishes. The primary action stays
+   * Send; a separate Stop button is shown alongside it.
    */
   queueWhileGenerating?: boolean | undefined;
 };
