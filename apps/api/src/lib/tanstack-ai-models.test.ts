@@ -396,23 +396,19 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter.name).toBe("bedrock-converse");
   });
 
-  test("rejects Google regional BYOK selections before constructing an adapter", () => {
+  test("normalizes existing Google regional BYOK selections to global", () => {
     const orgConfig = orgConfigForProvider("google", "eu");
 
-    let handlerError: unknown;
-    try {
-      getTanStackTextModelForRole("chat", orgConfig, {
-        organizationId: orgId,
-      });
-    } catch (error) {
-      handlerError = error;
-    }
+    const model = getTanStackTextModelForRole("chat", orgConfig, {
+      organizationId: orgId,
+    });
 
-    if (!(handlerError instanceof HandlerError)) {
-      throw new Error("Expected HandlerError");
-    }
-    expect(handlerError.status).toBe(400);
-    expect(handlerError.message).toContain("Google regional routing");
+    expect(model).toMatchObject({
+      keySource: "byok",
+      provider: "google",
+      region: "global",
+    });
+    expect(model.adapter.name).toBe("gemini");
   });
 
   test("reports TanStack availability per selected role", () => {

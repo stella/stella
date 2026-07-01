@@ -10,6 +10,7 @@ process.env["SMTP_PORT"] ??= "1025";
 
 const { isOrgAIConfig, maskApiKey } =
   await import("@/api/lib/ai-config-crypto");
+const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
 
 describe("maskApiKey", () => {
   test("shows first 8 chars for keys longer than 16 chars", () => {
@@ -56,6 +57,20 @@ describe("isOrgAIConfig", () => {
         overrideModels: fullOverrideModels,
       }),
     ).toBe(true);
+  });
+
+  test("normalizes legacy Google regional configs to global", () => {
+    expect(
+      normalizeOrgAIConfig({
+        providers: [{ provider: "google", apiKey: "sk-test", region: "eu" }],
+        overrideModels: fullOverrideModels,
+      }),
+    ).toEqual({
+      providers: [
+        { provider: "google", apiKey: "sk-test", region: "global" },
+      ],
+      overrideModels: fullOverrideModels,
+    });
   });
 
   test("accepts Azure Foundry org AI config with endpoint metadata", () => {

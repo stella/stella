@@ -4,10 +4,11 @@ import { t } from "elysia";
 import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 
 import { organizationSettings } from "@/api/db/schema";
-import type {
-  OrgAIConfig,
-  OrgAIModelSelection,
-  OrgAIProviderConfig,
+import {
+  normalizeProviderRegion,
+  type OrgAIConfig,
+  type OrgAIModelSelection,
+  type OrgAIProviderConfig,
 } from "@/api/lib/ai-config";
 import {
   decryptAIConfig,
@@ -269,7 +270,10 @@ const resolveProviderConfigs = (
     resolvedProviders.push({
       provider: providerInput.provider,
       apiKey,
-      region: providerInput.region ?? existingRegion ?? "global",
+      region: normalizeProviderRegion(
+        providerInput.provider,
+        providerInput.region ?? existingRegion,
+      ),
     });
   }
 

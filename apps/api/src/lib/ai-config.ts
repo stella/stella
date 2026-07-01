@@ -11,12 +11,11 @@ export const FALLBACK_FROM_SERVICE_TIER_PROVIDER_METADATA_KEY =
   "fallbackFromServiceTier";
 
 /**
- * Providers that support regional endpoint routing.
- * Currently only Google via Vertex AI Express Mode.
- * OpenAI (Azure), Anthropic (Bedrock) require separate
- * integration work and are not yet supported.
+ * Providers that support regional endpoint routing in the active TanStack AI
+ * integration. Keep empty until the adapter path can actually route to
+ * provider regional endpoints.
  */
-export const REGIONAL_PROVIDERS = new Set<AIProvider>(["google"]);
+export const REGIONAL_PROVIDERS = new Set<AIProvider>();
 
 /**
  * Check whether a provider supports regional routing.
@@ -130,3 +129,34 @@ export type OrgAIModelSelection = {
   provider: AIProvider;
   modelId: string;
 };
+
+export const normalizeProviderRegion = (
+  provider: AIProvider,
+  region: DataRegion | undefined,
+): DataRegion => {
+  if (supportsRegion(provider) && region) {
+    return region;
+  }
+
+  return "global";
+};
+
+export const normalizeOrgAIProviderConfig = (
+  config: OrgAIProviderConfig,
+): OrgAIProviderConfig => {
+  switch (config.provider) {
+    case "azure_foundry":
+    case "huggingface":
+      return config;
+    default:
+      return {
+        ...config,
+        region: normalizeProviderRegion(config.provider, config.region),
+      };
+  }
+};
+
+export const normalizeOrgAIConfig = (config: OrgAIConfig): OrgAIConfig => ({
+  providers: config.providers.map(normalizeOrgAIProviderConfig),
+  overrideModels: config.overrideModels,
+});

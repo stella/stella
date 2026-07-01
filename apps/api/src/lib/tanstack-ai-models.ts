@@ -28,11 +28,12 @@ import {
 import type { AIProvider, BYOKProvider, ModelRole } from "@stll/ai-catalog";
 
 import { env } from "@/api/env";
-import type {
-  AIRequestServiceTier,
-  DataRegion,
-  OrgAIConfig,
-  OrgAIProviderConfig,
+import {
+  normalizeProviderRegion,
+  type AIRequestServiceTier,
+  type DataRegion,
+  type OrgAIConfig,
+  type OrgAIProviderConfig,
 } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -558,7 +559,7 @@ const providerRegion = (
     case "huggingface":
       return undefined;
     default:
-      return config.region;
+      return normalizeProviderRegion(config.provider, config.region);
   }
 };
 
@@ -785,7 +786,7 @@ const byokCacheKey = (config: OrgAIProviderConfig): string => {
       hasher.update(config.baseURL);
       break;
     default:
-      hasher.update(config.region ?? "global");
+      hasher.update(providerRegion(config) ?? "global");
       break;
   }
   const hash = hasher.digest("hex").slice(0, 16);
@@ -800,7 +801,7 @@ const factoryExtras = (
     case "huggingface":
       return {};
     default:
-      return { region: config.region };
+      return { region: providerRegion(config) };
   }
 };
 

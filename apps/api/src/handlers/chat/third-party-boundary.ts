@@ -479,7 +479,7 @@ const preparePartForThirdParty = ({
     return anonymizePlainTextFile({ part, replacements });
   }
 
-  if (part.type === "tool-call") {
+  if (part.type === "tool-call" || part.type === "tool-result") {
     return anonymizeToolPart({ part, replacements });
   }
 
@@ -636,6 +636,7 @@ const anonymizeUnknownStrings = ({
         output[index] = yield* anonymizeUnknownStrings({
           apply: (next) => {
             output[index] = next;
+            apply?.(output);
           },
           key,
           replacements,
@@ -658,6 +659,7 @@ const anonymizeUnknownStrings = ({
       const nestedPrepared = yield* anonymizeUnknownStrings({
         apply: (next) => {
           Object.assign(output, { [nestedKey]: next });
+          apply?.(output);
         },
         key: nestedKey,
         replacements,
@@ -671,9 +673,14 @@ const anonymizeUnknownStrings = ({
 };
 
 type ToolLikePart = Extract<ChatMessage["parts"][number], { state: string }>;
+type ToolResultPart = Extract<
+  ChatMessage["parts"][number],
+  { type: "tool-result" }
+>;
 type MutableToolLikePart = ToolLikePart & {
   approval?: unknown;
   arguments?: string | undefined;
+  content?: ToolResultPart["content"] | undefined;
   errorText?: string | undefined;
   input?: unknown;
   output?: unknown;
@@ -700,6 +707,17 @@ const anonymizeToolPart = ({
         value: parsedArguments,
       });
       prepared.arguments = safeStringifyToolArguments(argumentsResult);
+    }
+
+    if (part.type === "tool-result") {
+      const content = yield* anonymizeToolResultContent({
+        apply: (value) => {
+          prepared.content = value;
+        },
+        content: part.content,
+        replacements,
+      });
+      prepared.content = content;
     }
 
     if ("input" in part) {
@@ -757,6 +775,105 @@ const anonymizeToolPart = ({
     // anonymize provider-visible text nested in input/output/error/title fields.
     return Result.ok(prepared as ToolLikePart);
   });
+
+const anonymizeToolResultContent = ({
+  apply,
+  content,
+  replacements,
+}: {
+  apply: (value: ToolResultPart["content"]) => void;
+  content: ToolResultPart["content"];
+  replacements: TextReplacement[];
+}): Result<ToolResultPart["content"], BoundaryRefusal> => {
+  if (typeof content === "string") {
+    return anonymizeToolResultTextContent({ apply, content, replacements });
+  }
+
+  const prepared = content.map((part) => {
+    if (part.type !== "text") {
+      return part;
+    }
+
+    const preparedPart = { ...part };
+    queueTextReplacement(replacements, part.content, (value) => {
+      preparedPart.content = value;
+      apply(prepared);
+    });
+    return preparedPart;
+  });
+
+  return Result.ok(prepared);
+};
+
+const anonymizeToolResultTextContent = ({
+  apply,
+  content,
+  replacements,
+}: {
+  apply: (value: string) => void;
+  content: string;
+  replacements: TextReplacement[];
+}): Result<string, BoundaryRefusal> => {
+  const parsed = parseToolResultContent(content);
+  if (parsed.type === "text") {
+    let prepared = content;
+    queueTextReplacement(replacements, content, (value) => {
+      prepared = value;
+      apply(value);
+    });
+    return Result.ok(prepared);
+  }
+
+  let prepared = safeStringifyToolResultContent({
+    fallback: content,
+    value: parsed.value,
+  });
+
+  const anonymized = anonymizeUnknownStrings({
+    apply: (value) => {
+      prepared = safeStringifyToolResultContent({ fallback: content, value });
+      apply(prepared);
+    },
+    replacements,
+    value: parsed.value,
+  });
+  if (Result.isError(anonymized)) {
+    return Result.err(anonymized.error);
+  }
+
+  prepared = safeStringifyToolResultContent({
+    fallback: content,
+    value: anonymized.value,
+  });
+  return Result.ok(prepared);
+};
+
+type ParsedToolResultContent =
+  | { type: "json"; value: unknown }
+  | { type: "text"; value: string };
+
+const parseToolResultContent = (content: string): ParsedToolResultContent => {
+  try {
+    return { type: "json", value: JSON.parse(content) as unknown };
+  } catch {
+    return { type: "text", value: content };
+  }
+};
+
+const safeStringifyToolResultContent = ({
+  fallback,
+  value,
+}: {
+  fallback: string;
+  value: unknown;
+}): string => {
+  try {
+    const serialized: unknown = JSON.stringify(value);
+    return typeof serialized === "string" ? serialized : fallback;
+  } catch {
+    return fallback;
+  }
+};
 
 const safeParseToolArguments = (argumentsJson: string): unknown => {
   try {

@@ -304,6 +304,111 @@ describe("chat third-party anonymization boundary", () => {
     });
   });
 
+  test("anonymizes JSON tool-result content before provider replay", async () => {
+    const boundary = createBoundary();
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "call_1",
+            name: "ask-user",
+            arguments: JSON.stringify({ question: "Who signed?" }),
+            state: "complete",
+            output: {
+              documentId: "doc_123",
+              text: "Secret notes for Jan Novák",
+            },
+          },
+          {
+            type: "tool-result",
+            toolCallId: "call_1",
+            content: JSON.stringify({
+              documentId: "doc_123",
+              text: "Secret notes for Jan Novák",
+            }),
+            state: "complete",
+          },
+        ],
+      },
+    ];
+
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages,
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+
+    const resultPart = prepared.value.at(0)?.parts.at(1);
+    expect(resultPart).toMatchObject({
+      type: "tool-result",
+      toolCallId: "call_1",
+      state: "complete",
+    });
+    if (!resultPart || resultPart.type !== "tool-result") {
+      throw new Error("Expected prepared tool-result part");
+    }
+    if (typeof resultPart.content !== "string") {
+      throw new Error("Expected JSON tool-result content");
+    }
+
+    expect(JSON.parse(resultPart.content)).toEqual({
+      documentId: "doc_123",
+      text: "[CUSTOM_1] notes for [PERSON_1]",
+    });
+  });
+
+  test("anonymizes text tool-result content parts before provider replay", async () => {
+    const boundary = createBoundary();
+    const messages: ChatMessage[] = [
+      {
+        id: "msg_1",
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "call_1",
+            name: "ask-user",
+            arguments: JSON.stringify({ question: "Who signed?" }),
+            state: "complete",
+            output: "Secret notes for Jan Novák",
+          },
+          {
+            type: "tool-result",
+            toolCallId: "call_1",
+            content: [{ type: "text", content: "Secret notes for Jan Novák" }],
+            state: "complete",
+          },
+        ],
+      },
+    ];
+
+    const prepared = await prepareMessagesForThirdParty({
+      boundary,
+      messages,
+    });
+
+    expect(Result.isOk(prepared)).toBe(true);
+    if (Result.isError(prepared)) {
+      throw prepared.error;
+    }
+
+    expect(prepared.value.at(0)?.parts.at(1)).toMatchObject({
+      type: "tool-result",
+      content: [
+        { type: "text", content: "[CUSTOM_1] notes for [PERSON_1]" },
+      ],
+      state: "complete",
+      toolCallId: "call_1",
+    });
+  });
+
   test("returns anonymized live tool output values", async () => {
     const boundary = createBoundary();
     const tools = {
