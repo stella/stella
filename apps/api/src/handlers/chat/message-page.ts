@@ -4,11 +4,13 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages } from "@/api/db/schema";
 import {
+  chatMessageFromPersisted,
   getChatAttachmentUrl,
   isChatAttachmentPart,
   normalizePersistedChatMessageContent,
 } from "@/api/handlers/chat/chat-message-parts";
 import type {
+  ChatMessageMetadata,
   ChatMessageRole,
   ChatPart,
   PersistedChatMessageContent,
@@ -25,6 +27,7 @@ import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 
 export type ClientMessage = {
   id: SafeId<"chatMessage">;
+  metadata?: ChatMessageMetadata | undefined;
   role: ChatMessageRole;
   parts: ChatPart[];
 };
@@ -148,18 +151,32 @@ export const loadChatMessagePage = async ({
       pageAscending.at(-1)?.createdAt.toISOString() ?? null;
 
     return Result.ok({
-      messages: pageAscending.map((row) => ({
-        id: row.id,
-        role: row.role,
-        parts: attachPlaceholders(
-          normalizePersistedChatMessageContent(row.content).parts,
-          placeholderById,
-        ),
-      })),
+      messages: pageAscending.map((row) =>
+        clientMessageFromPageRow(row, placeholderById),
+      ),
       olderCursor,
       lastActivityAt,
     });
   });
+
+type ChatMessagePageRow = {
+  content: PersistedChatMessageContent;
+  id: SafeId<"chatMessage">;
+  role: ChatMessageRole;
+};
+
+export const clientMessageFromPageRow = (
+  row: ChatMessagePageRow,
+  placeholderById: Map<string, string>,
+): ClientMessage => {
+  const message = chatMessageFromPersisted(row);
+  return {
+    id: message.id,
+    ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+    role: message.role,
+    parts: attachPlaceholders(message.parts, placeholderById),
+  };
+};
 
 type LoadPlaceholdersArgs = {
   safeDb: SafeDb;
