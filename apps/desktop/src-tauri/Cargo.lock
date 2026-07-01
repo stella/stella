@@ -4424,6 +4424,7 @@ dependencies = [
  "uuid",
  "windows-native-keyring-store",
  "zbus-secret-service-keyring-store",
+ "zip",
 ]
 
 [[package]]
