@@ -162,10 +162,11 @@ const findExactMirrorFailures = async (
 };
 
 const reportToExitCode = (report: ExactMirrorReport): number => {
-  // A zero compiled count with routes present means the trigger never
-  // exercised exactMirror: a green run would be meaningless.
-  const triggerDidNotRun =
-    report.totalRoutes > 0 && report.compiledRoutes === 0;
+  // A zero compiled count means the trigger never exercised exactMirror, so a
+  // green run would be meaningless. Discovering zero routes at all is the same
+  // failure at the discovery stage: never let 0/0 pass as clean.
+  const noRoutesDiscovered = report.totalRoutes === 0;
+  const triggerDidNotRun = noRoutesDiscovered || report.compiledRoutes === 0;
   const clean =
     report.mirrorFailures.length === 0 &&
     report.compileErrors.length === 0 &&
@@ -195,7 +196,11 @@ const reportToExitCode = (report: ExactMirrorReport): number => {
     );
   }
 
-  if (triggerDidNotRun) {
+  if (noRoutesDiscovered) {
+    console.error(
+      "\nexact-mirror-guard: discovered 0 routes — the guard did not exercise exactMirror at all. This is a guard bug, not a schema bug; fix route discovery before trusting a green run.",
+    );
+  } else if (triggerDidNotRun) {
     console.error(
       `\nexact-mirror-guard: compiled 0 of ${report.totalRoutes} routes — the guard did not actually exercise exactMirror. This is a guard bug, not a schema bug; fix the trigger before trusting a green run.`,
     );

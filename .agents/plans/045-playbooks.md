@@ -72,7 +72,8 @@ N-agnostic (1 doc or N docs) and surface-agnostic; only the renderer differs.
 - **No new engines.** Read = properties + extraction workflow; gate/grade =
   `propertyDependency` + condition AST (already powers #803 doc-type gating);
   language + versioning = clause library + `clauseVersions`; apply fix =
-  `clause-to-patch`; table render = views/grid + provenance card; tenancy /
+  Folio tracked-change edit operations (`clause-to-patch` remains server-side
+  DOCX template-fill only); table render = views/grid + provenance card; tenancy /
   pagination / audit = RLS + `Page<T>` + audit-log.
 
 - **Verdict is its own derived column** (single-select property depending on
@@ -88,7 +89,8 @@ N-agnostic (1 doc or N docs) and surface-agnostic; only the renderer differs.
 - Run on a files table (compliance matrix) and run on a single file (issue
   cards + inline redline).
 - Playbook versioning; per-matter/counterparty scope + conditional triggers.
-- Clause-linked, inline, and none standard sources; FIX via clause-to-patch.
+- Clause-linked, inline, and none standard sources; live-editor FIX via Folio
+  tracked changes (`clause-to-patch` is server-side DOCX template-fill only).
 - Migration of the existing workspace `playbooks` (column bundles) into the
   new model.
 
@@ -133,8 +135,8 @@ N-agnostic (1 doc or N docs) and surface-agnostic; only the renderer differs.
   `propertyDependency`, trigger the extraction workflow; emit Findings.
 - New evaluator module (GRADE): deterministic path via condition AST;
   `positionMatch` via LLM (reuse the AI catalog + quality-gate pattern).
-- Single-file run handler producing Findings for one document; FIX via
-  `clause-to-patch`.
+- Single-file run handler producing Findings for one document; live-editor FIX
+  via Folio tracked changes (`clause-to-patch` = server-side DOCX template-fill).
 
 ### Frontend (`apps/web/src/routes/_protected.knowledge/`)
 

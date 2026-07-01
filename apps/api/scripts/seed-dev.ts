@@ -22,7 +22,7 @@
  */
 
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { deriveBlockId } from "@stll/folio/server";
 
@@ -32,6 +32,7 @@ import {
   chatMessages,
   chatThreads,
   contacts,
+  documentTypes,
   entities,
   entityVersions,
   expenses,
@@ -107,10 +108,13 @@ const AKVIZICE_SPA_DOC_NAME = "Smlouva_o_akvizici_akcii.pdf";
 // akvizice SPA document so the gate matches. Derived from the single source of
 // truth so the field value never drifts from the taxonomy.
 const SPA_DOCUMENT_TYPE_KEY = "spa";
-const SPA_DOCUMENT_TYPE_LABEL =
-  DEFAULT_DOCUMENT_TYPES.find(
-    (documentType) => documentType.key === SPA_DOCUMENT_TYPE_KEY,
-  )?.label ?? "Share Purchase Agreement";
+const spaDocumentType = DEFAULT_DOCUMENT_TYPES.find(
+  (documentType) => documentType.key === SPA_DOCUMENT_TYPE_KEY,
+);
+if (!spaDocumentType) {
+  panic(`Missing default document type: ${SPA_DOCUMENT_TYPE_KEY}`);
+}
+const SPA_DOCUMENT_TYPE_LABEL = spaDocumentType.label;
 
 type BillingCodeId = SafeId<"billingCode">;
 type ContactId = SafeId<"contact">;
@@ -3833,11 +3837,20 @@ export const seedPlaybooks = async (
   // own extracted value, so the constraint's property operand must point back to
   // this position's sourceId. Build it once and reuse it for both.
   const paymentTermsSourceId = seedId("playbook-cz-pos-splatnost-faktur");
+  const definitionId = seedId("playbook-cz-obchodni-smlouva");
+
+  // onConflictDoNothing would keep a stale definition, so reruns must delete the
+  // prior seed playbook first to pick up position/scope changes. The
+  // properties.playbook_definition_id FK cascades, clearing any columns it
+  // materialized into workspaces.
+  await rootDb
+    .delete(playbookDefinitions)
+    .where(eq(playbookDefinitions.id, definitionId));
 
   await rootDb
     .insert(playbookDefinitions)
     .values({
-      id: seedId("playbook-cz-obchodni-smlouva"),
+      id: definitionId,
       organizationId,
       name: "Kontrola obchodní smlouvy (CZ)",
       description:
@@ -4721,7 +4734,19 @@ export async function seed(organizationId?: string, userId?: string) {
   await seedTemplates(ORG_ID, seedUserIds);
 
   // 15. Playbooks (knowledge base) + the org document-type taxonomy the
-  // type-scoped playbook references.
+  // type-scoped playbook references. ensureDefaultDocumentTypes is intentionally
+  // non-overwriting (onConflictDoNothing), so reruns must first drop the org's
+  // default-keyed taxonomy rows to pick up label changes. Custom, non-default
+  // document types (keys outside DEFAULT_DOCUMENT_TYPES) are left untouched.
+  await rootDb.delete(documentTypes).where(
+    and(
+      eq(documentTypes.organizationId, ORG_ID),
+      inArray(
+        documentTypes.key,
+        DEFAULT_DOCUMENT_TYPES.map((documentType) => documentType.key),
+      ),
+    ),
+  );
   await ensureDefaultDocumentTypes(ORG_ID, rootDb);
   await seedPlaybooks(ORG_ID);
 
@@ -4765,7 +4790,7 @@ if (import.meta.main) {
       };
     }
 
-    const { and, desc, eq, gt, isNotNull } = await import("drizzle-orm");
+    const { desc, gt, isNotNull } = await import("drizzle-orm");
     const {
       member: authMember,
       organization: authOrganization,
