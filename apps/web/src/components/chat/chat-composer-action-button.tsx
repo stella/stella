@@ -1,10 +1,14 @@
+import { forwardRef, useRef } from "react";
 import type { ComponentProps } from "react";
 
 import { ArrowUpIcon, RotateCcwIcon, SquareIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
+
+import { composeRefs } from "@/lib/slot";
 
 type ChatComposerActionButtonBaseProps = {
   className?: string;
@@ -12,6 +16,17 @@ type ChatComposerActionButtonBaseProps = {
   size?: ComponentProps<typeof Button>["size"];
   variant?: ComponentProps<typeof Button>["variant"];
 };
+
+type ButtonForwardProps = Omit<
+  ComponentProps<typeof Button>,
+  | "aria-label"
+  | "children"
+  | "className"
+  | "disabled"
+  | "onClick"
+  | "size"
+  | "variant"
+>;
 
 type ChatComposerActionButtonProps = ChatComposerActionButtonBaseProps &
   (
@@ -28,12 +43,15 @@ type ChatComposerActionButtonProps = ChatComposerActionButtonBaseProps &
         mode: "retry";
         onRetry: () => void;
       }
-  );
+  ) &
+  ButtonForwardProps;
 
-export const ChatComposerActionButton = (
-  props: ChatComposerActionButtonProps,
-) => {
+export const ChatComposerActionButton = forwardRef<
+  HTMLButtonElement,
+  ChatComposerActionButtonProps
+>((props, ref) => {
   const t = useTranslations();
+  const buttonRef = useRef<HTMLButtonElement>(null);
   const label = (() => {
     switch (props.mode) {
       case "send":
@@ -65,22 +83,24 @@ export const ChatComposerActionButton = (
     }
   };
 
+  const { className, iconClassName, size, variant } = props;
+  const buttonProps = buttonForwardProps(props);
+
   return (
     <Button
+      {...buttonProps}
       aria-label={label}
-      className={cn(props.className, !canSend && "opacity-50")}
+      className={cn(className, !canSend && "opacity-50")}
       disabled={!canSend}
-      onClick={handleClick}
-      size={props.size}
+      onClick={containedHandler(buttonRef, handleClick)}
+      ref={composeRefs(buttonRef, ref)}
+      size={size}
       type="button"
-      variant={props.variant}
+      variant={variant}
     >
       <span
         aria-hidden="true"
-        className={cn(
-          "pointer-events-none relative size-3.5",
-          props.iconClassName,
-        )}
+        className={cn("pointer-events-none relative size-3.5", iconClassName)}
       >
         <SquareIcon
           className={cn(
@@ -109,4 +129,48 @@ export const ChatComposerActionButton = (
       </span>
     </Button>
   );
+});
+
+ChatComposerActionButton.displayName = "ChatComposerActionButton";
+
+const buttonForwardProps = (
+  props: ChatComposerActionButtonProps,
+): ButtonForwardProps => {
+  if (props.mode === "send") {
+    const {
+      canSend: _canSend,
+      className: _className,
+      iconClassName: _iconClassName,
+      mode: _mode,
+      onSend: _onSend,
+      size: _size,
+      variant: _variant,
+      ...buttonProps
+    } = props;
+    return buttonProps;
+  }
+
+  if (props.mode === "stop") {
+    const {
+      className: _className,
+      iconClassName: _iconClassName,
+      mode: _mode,
+      onStop: _onStop,
+      size: _size,
+      variant: _variant,
+      ...buttonProps
+    } = props;
+    return buttonProps;
+  }
+
+  const {
+    className: _className,
+    iconClassName: _iconClassName,
+    mode: _mode,
+    onRetry: _onRetry,
+    size: _size,
+    variant: _variant,
+    ...buttonProps
+  } = props;
+  return buttonProps;
 };

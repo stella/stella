@@ -14,7 +14,14 @@
  */
 
 import "@/components/chat-editor.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   ComponentProps,
   KeyboardEvent as ReactKeyboardEvent,
@@ -1867,51 +1874,78 @@ type PromptBarActionButtonProps = {
   onRetry?: (() => void) | undefined;
   onSend: () => void;
   onStop?: (() => void) | undefined;
-};
+} & Omit<
+  ComponentProps<typeof ChatComposerActionButton>,
+  | "canSend"
+  | "className"
+  | "iconClassName"
+  | "mode"
+  | "onRetry"
+  | "onSend"
+  | "onStop"
+  | "size"
+>;
 
-const PromptBarActionButton = ({
-  canSend,
-  morphSendToRetry,
-  morphSendToStop,
-  onRetry,
-  onSend,
-  onStop,
-}: PromptBarActionButtonProps) => {
-  if (morphSendToStop && onStop !== undefined) {
+const PromptBarActionButton = forwardRef<
+  HTMLButtonElement,
+  PromptBarActionButtonProps
+>(
+  (
+    {
+      canSend,
+      morphSendToRetry,
+      morphSendToStop,
+      onRetry,
+      onSend,
+      onStop,
+      ...buttonProps
+    },
+    ref,
+  ) => {
+    if (morphSendToStop && onStop !== undefined) {
+      return (
+        <ChatComposerActionButton
+          {...buttonProps}
+          className="rounded-full"
+          iconClassName="size-4"
+          mode="stop"
+          onStop={onStop}
+          ref={ref}
+          size="icon"
+        />
+      );
+    }
+
+    if (morphSendToRetry && onRetry !== undefined) {
+      return (
+        <ChatComposerActionButton
+          {...buttonProps}
+          className="rounded-full"
+          iconClassName="size-4"
+          mode="retry"
+          onRetry={onRetry}
+          ref={ref}
+          size="icon"
+        />
+      );
+    }
+
     return (
       <ChatComposerActionButton
+        {...buttonProps}
+        canSend={canSend}
         className="rounded-full"
         iconClassName="size-4"
-        mode="stop"
-        onStop={onStop}
+        mode="send"
+        onSend={onSend}
+        ref={ref}
         size="icon"
       />
     );
-  }
+  },
+);
 
-  if (morphSendToRetry && onRetry !== undefined) {
-    return (
-      <ChatComposerActionButton
-        className="rounded-full"
-        iconClassName="size-4"
-        mode="retry"
-        onRetry={onRetry}
-        size="icon"
-      />
-    );
-  }
-
-  return (
-    <ChatComposerActionButton
-      canSend={canSend}
-      className="rounded-full"
-      iconClassName="size-4"
-      mode="send"
-      onSend={onSend}
-      size="icon"
-    />
-  );
-};
+PromptBarActionButton.displayName = "PromptBarActionButton";
 
 // ===========================================================================
 // Thread panel
