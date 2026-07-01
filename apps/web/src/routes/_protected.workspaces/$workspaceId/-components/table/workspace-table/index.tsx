@@ -102,6 +102,14 @@ type WorkspaceTableProps = {
   selectAllPreservableRowIdsRef?: RefObject<string[]>;
 };
 
+// A grouped section virtualizes against a shared ancestor scroll it does not
+// own, so it must never drive that scroll. TanStack Virtual otherwise
+// compensates for `scrollMargin` changing from its initial 0 to the measured
+// offset by calling `scrollToOffset` on mount — which yanks the whole grouped
+// view to the top. A no-op `scrollToFn` keeps the section a pure reader of the
+// scroll it shares. (The flat table owns its scroll and keeps the default.)
+const noopScrollTo = () => undefined;
+
 export const WorkspaceTable = ({
   workspaceId,
   table,
@@ -274,6 +282,7 @@ export const WorkspaceTable = ({
     measureElement: (element) => element.getBoundingClientRect().height,
     overscan: TABLE_ROW_OVERSCAN,
     scrollMargin: inlineFlow ? scrollMargin : 0,
+    ...(inlineFlow && { scrollToFn: noopScrollTo }),
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
   const lastVirtualRow = virtualRows.at(-1);
