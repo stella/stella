@@ -25,11 +25,12 @@ are selected in each service's settings.
 
 ## API Variables
 
-Use Railway reference variables for services that live in the same project:
+Use Railway reference variables for services that live in the same project.
+The API Docker image supplies `NODE_ENV=production` plus the self-host feature
+defaults used by the Railway template, so these do not need to be template
+inputs.
 
 ```bash
-NODE_ENV=production
-
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 REDIS_URL=${{Redis.REDIS_URL}}
 
@@ -37,46 +38,42 @@ FRONTEND_URL=https://${{web.RAILWAY_PUBLIC_DOMAIN}}
 BETTER_AUTH_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
 PUBLIC_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
 
-BETTER_AUTH_SECRET=${{secret(32)}}
+BETTER_AUTH_SECRET=${{secret(64, "abcdef0123456789")}}
 CONTENT_ENCRYPTION_KEY=${{secret(64, "abcdef0123456789")}}
 
-S3_ENDPOINT=<Railway bucket endpoint>
-S3_BUCKET=<Railway bucket name>
-S3_REGION=<Railway bucket region>
-S3_CREDENTIALS_PROVIDER=env
-S3_ACCESS_KEY_ID=<Railway bucket access key id>
-S3_SECRET_ACCESS_KEY=<Railway bucket secret access key>
+S3_ENDPOINT=${{stella-files.ENDPOINT}}
+S3_BUCKET=${{stella-files.BUCKET}}
+S3_REGION=${{stella-files.REGION}}
+S3_ACCESS_KEY_ID=${{stella-files.ACCESS_KEY_ID}}
+S3_SECRET_ACCESS_KEY=${{stella-files.SECRET_ACCESS_KEY}}
 
-EMAIL_PROVIDER=smtp
 SMTP_HOST=<smtp host>
+SMTP_PASSWORD=<smtp password or API key>
 SMTP_PORT=<smtp port>
-SMTP_USERNAME=<smtp username if required>
-SMTP_PASSWORD=<smtp password if required>
+SMTP_USERNAME=<smtp username>
 TRANSACTIONAL_EMAIL_FROM=noreply@example.com
 
 GOTENBERG_URL=http://${{gotenberg.RAILWAY_PRIVATE_DOMAIN}}:3000
-GOTENBERG_USERNAME=stella
-GOTENBERG_PASSWORD=${{secret(32)}}
-
-REQUIRE_PERSONAL_AI_KEY=true
-FEATURE_CHAT=true
-FEATURE_DESKTOP_EDITING=true
+GOTENBERG_USERNAME=${{gotenberg.GOTENBERG_API_BASIC_AUTH_USERNAME}}
+GOTENBERG_PASSWORD=${{gotenberg.GOTENBERG_API_BASIC_AUTH_PASSWORD}}
 ```
 
 Do not expose Gotenberg publicly. Configure the `gotenberg` service with:
 
 ```bash
-API_ENABLE_BASIC_AUTH=true
-GOTENBERG_API_BASIC_AUTH_USERNAME=${{api.GOTENBERG_USERNAME}}
-GOTENBERG_API_BASIC_AUTH_PASSWORD=${{api.GOTENBERG_PASSWORD}}
+API_ENABLE_BASIC_AUTH=${{secret(1, "t")}}${{secret(1, "r")}}${{secret(1, "u")}}${{secret(1, "e")}}
+GOTENBERG_API_BASIC_AUTH_USERNAME=${{secret(32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")}}
+GOTENBERG_API_BASIC_AUTH_PASSWORD=${{secret(64, "abcdef0123456789")}}
 ```
 
 The API Docker image now honors Railway's injected `PORT` variable, with
 `STELLA_API_PORT` still available as an explicit override.
 
-For the public template, mark SMTP and storage credential variables as required
-user inputs. Use Railway template variable functions for generated secrets, and
-Railway reference variables for same-project services.
+For the public template, only SMTP host, port, username, password, and the
+transactional sender address should be required user inputs. Use Railway
+template variable functions for generated secrets and Railway reference
+variables for same-project services. The repository source of truth for this
+shape is `railway/template-manifest.json`.
 
 Template editor checklist for `api` variables:
 
@@ -87,21 +84,21 @@ Template editor checklist for `api` variables:
 | `FRONTEND_URL`             | `https://${{web.RAILWAY_PUBLIC_DOMAIN}}`            | No           |
 | `BETTER_AUTH_URL`          | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`            | No           |
 | `PUBLIC_URL`               | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`            | No           |
-| `BETTER_AUTH_SECRET`       | `${{secret(32)}}`                                   | No           |
+| `BETTER_AUTH_SECRET`       | `${{secret(64, "abcdef0123456789")}}`               | No           |
 | `CONTENT_ENCRYPTION_KEY`   | `${{secret(64, "abcdef0123456789")}}`               | No           |
 | `SMTP_HOST`                | SMTP relay hostname                                 | Yes          |
+| `SMTP_PASSWORD`            | SMTP password or API key                            | Yes          |
 | `SMTP_PORT`                | SMTP relay port                                     | Yes          |
-| `SMTP_USERNAME`            | SMTP username, if required                          | Yes          |
-| `SMTP_PASSWORD`            | SMTP password, if required                          | Yes          |
+| `SMTP_USERNAME`            | SMTP username                                       | Yes          |
 | `TRANSACTIONAL_EMAIL_FROM` | Verified sender address                             | Yes          |
-| `S3_ENDPOINT`              | Railway bucket endpoint                             | Yes          |
-| `S3_BUCKET`                | Railway bucket name                                 | Yes          |
-| `S3_REGION`                | Railway bucket region                               | Yes          |
-| `S3_ACCESS_KEY_ID`         | Railway bucket access key ID                        | Yes          |
-| `S3_SECRET_ACCESS_KEY`     | Railway bucket secret access key                    | Yes          |
+| `S3_ENDPOINT`              | `${{stella-files.ENDPOINT}}`                        | No           |
+| `S3_BUCKET`                | `${{stella-files.BUCKET}}`                          | No           |
+| `S3_REGION`                | `${{stella-files.REGION}}`                          | No           |
+| `S3_ACCESS_KEY_ID`         | `${{stella-files.ACCESS_KEY_ID}}`                   | No           |
+| `S3_SECRET_ACCESS_KEY`     | `${{stella-files.SECRET_ACCESS_KEY}}`               | No           |
 | `GOTENBERG_URL`            | `http://${{gotenberg.RAILWAY_PRIVATE_DOMAIN}}:3000` | No           |
-| `GOTENBERG_USERNAME`       | `stella`                                            | No           |
-| `GOTENBERG_PASSWORD`       | `${{secret(32)}}`                                   | No           |
+| `GOTENBERG_USERNAME`       | `${{gotenberg.GOTENBERG_API_BASIC_AUTH_USERNAME}}`  | No           |
+| `GOTENBERG_PASSWORD`       | `${{gotenberg.GOTENBERG_API_BASIC_AUTH_PASSWORD}}`  | No           |
 
 ## Web Variables
 
@@ -111,30 +108,48 @@ service variables into the Docker build, so set them before the first deploy:
 ```bash
 PUBLIC_API_URL=https://${{api.RAILWAY_PUBLIC_DOMAIN}}
 PUBLIC_APP_URL=https://${{web.RAILWAY_PUBLIC_DOMAIN}}
-VITE_SELFHOST=true
-
-VITE_FEATURE_CHAT=true
-VITE_FEATURE_DESKTOP_EDITING=true
 ```
 
 `PUBLIC_API_URL` maps to `VITE_API_URL`; `PUBLIC_APP_URL` maps to
 `VITE_PUBLIC_APP_URL`. Because these values are baked into the web build,
 changing domains requires redeploying `web`.
 
+The web Dockerfile supplies the Railway self-host defaults for
+`VITE_SELFHOST`, chat, contacts, knowledge templates, todos, and desktop
+editing. Do not add these as template inputs unless the default changes.
+
 ## Template Publishing
 
-Build and validate the template from a clean Railway smoke project. The smoke
-project should use the same service names and variable references documented
+Build and validate the template from a clean Railway template-source project.
+The project should use the same service names and variable references documented
 above, with source services based on the GitHub repository rather than Docker
 images. GitHub-backed templates are the path Railway uses for automatic update
 notifications.
 
-Use the CLI only after the smoke project has been scrubbed of accidental
+Before generating a draft, compare the source project's service variables with
+the checked-in manifest:
+
+```bash
+bun run sync:railway-template-source -- \
+  --project <template-source-project-id> \
+  --environment production \
+  --prune
+```
+
+This syncs service variables only. It does not validate buckets, service
+networking, or config files; verify those in Railway's template editor with the
+checklist below. This is a dry run. To mutate the source project, add
+`--apply --template-source`. Use `--template-source` only for a project
+dedicated to template generation, because the manifest intentionally contains
+Railway template functions such as `secret(...)`.
+
+Use the CLI only after the template-source project's variables have been synced
+from the manifest and the full template shape has been reviewed for accidental
 hardcoded secrets:
 
 ```bash
 railway templates create \
-  --project stella-railway-smoke \
+  --project stella-railway-template-source \
   --environment production \
   --json
 ```
@@ -150,6 +165,8 @@ publishing. Check these items before the first publish:
   from the template into a fresh project.
 - Generated values use `secret(...)`; user-supplied credentials are prompted,
   not committed.
+- Only SMTP connection details and `TRANSACTIONAL_EMAIL_FROM` are required user
+  inputs.
 - Gotenberg has no public domain.
 - Both public domains pass `/health`.
 - The marketplace overview uses `railway/template-readme.md`.
@@ -236,8 +253,8 @@ database/config problem, then redeploy the API service.
 
 ## Storage Bucket
 
-Create a Railway Storage Bucket and copy its S3-compatible credential fields
-into the API variables:
+The public template provisions a Railway Storage Bucket and wires its
+S3-compatible fields into the API with reference variables:
 
 - `endpoint` -> `S3_ENDPOINT`
 - `bucketName` -> `S3_BUCKET`
@@ -245,7 +262,8 @@ into the API variables:
 - `accessKeyId` -> `S3_ACCESS_KEY_ID`
 - `secretAccessKey` -> `S3_SECRET_ACCESS_KEY`
 
-Keep `S3_CREDENTIALS_PROVIDER=env`. Do not put bucket credentials in the repo.
+Manual, non-template Railway projects can copy those values by hand, but the
+marketplace template should not prompt for them.
 
 ## Runtime Checks
 
@@ -265,12 +283,9 @@ status are the source of truth.
 
 ## Desktop Editing
 
-For the signed desktop app linking flow, keep both sides enabled:
-
-```bash
-FEATURE_DESKTOP_EDITING=true
-VITE_FEATURE_DESKTOP_EDITING=true
-```
+The API and web Dockerfiles enable the signed desktop app linking flow by
+default for Railway-style self-hosted deployments. Override the feature flags
+only when intentionally disabling desktop editing.
 
 Users install the signed stella desktop app, open the Railway-hosted web app,
 go to **Settings -> Account -> Desktop**, and click **Connect**. The desktop

@@ -41,7 +41,8 @@ because it is an internal document conversion dependency.
 
 - SMTP relay credentials are required before the first production login. stella
   uses email OTPs for sign-in, invitations, and account security emails.
-- File-storage credentials are required for uploads and document workflows.
+- The Railway storage bucket is provisioned by the template and wired to the
+  API with reference variables.
 - Generated application secrets stay in Railway variables and should not be
   copied into source control.
 
