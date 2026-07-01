@@ -277,7 +277,8 @@ const isChatCompactionSnapshotCurrent = async ({
         sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (${firstPersistedMessage.createdAt}, ${firstPersistedMessage.id})`,
       ),
     )
-    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id));
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    .limit(messages.length + 1);
 
   return chatCompactionSnapshotMessagesEqual(rows, messages);
 };
@@ -299,10 +300,43 @@ export const chatCompactionSnapshotMessagesEqual = (
     return (
       row.id === message.id &&
       row.role === message.role &&
-      JSON.stringify(row.content.data) === JSON.stringify(message.parts)
+      jsonEqual(row.content.data, message.parts)
     );
   });
 };
+
+const jsonEqual = (left: unknown, right: unknown): boolean => {
+  if (left === right) {
+    return true;
+  }
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) {
+      return false;
+    }
+    if (left.length !== right.length) {
+      return false;
+    }
+    return left.every((item, index) => jsonEqual(item, right.at(index)));
+  }
+
+  if (!isJsonRecord(left) || !isJsonRecord(right)) {
+    return false;
+  }
+
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return leftKeys.every(
+    (key) => Object.hasOwn(right, key) && jsonEqual(left[key], right[key]),
+  );
+};
+
+const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
 const workspaceIdsEqual = (
   left: readonly SafeId<"workspace">[],

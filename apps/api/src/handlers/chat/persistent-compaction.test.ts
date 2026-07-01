@@ -127,6 +127,26 @@ describe("persistent chat compaction", () => {
     ).toBe(true);
   });
 
+  test("accepts a checkpoint snapshot when JSON key order differs", () => {
+    const id = "11111111-1111-4111-8111-111111111111";
+
+    expect(
+      chatCompactionSnapshotMessagesEqual(
+        [
+          {
+            id: toSafeId<"chatMessage">(id),
+            role: "user",
+            content: {
+              version: 1,
+              data: [{ text: "original", type: "text" }],
+            },
+          },
+        ],
+        [message(id, "original")],
+      ),
+    ).toBe(true);
+  });
+
   test("invalidates active checkpoints when a retained message is updated", () => {
     expect(
       shouldInvalidateChatCompactionCheckpoint({
