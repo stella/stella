@@ -260,6 +260,7 @@ export const materializePlaybookRun = async ({
   const verdictRows: (typeof properties.$inferInsert)[] = [];
   const dependencyRows: (typeof propertyDependencies.$inferInsert)[] = [];
   const materializedPropertyIds: SafeId<"property">[] = [];
+  const verdictPropertyIds: SafeId<"property">[] = [];
   let newCount = 0;
 
   for (const position of positions) {
@@ -314,6 +315,7 @@ export const materializePlaybookRun = async ({
     if (!verdictIdBySourceId.has(position.sourceId)) {
       newCount += 1;
     }
+    verdictPropertyIds.push(verdictId);
 
     verdictRows.push({
       id: verdictId,
@@ -375,7 +377,7 @@ export const materializePlaybookRun = async ({
   };
 
   const emittedAskIds = new Set(askRows.map((row) => row.id));
-  const emittedVerdictIds = new Set(verdictRows.map((row) => row.id));
+  const emittedVerdictIds = new Set(verdictPropertyIds);
   const obsoleteVerdictIds = [...verdictIdBySourceId.values()].filter(
     (id) => !emittedVerdictIds.has(id),
   );
@@ -422,10 +424,7 @@ export const materializePlaybookRun = async ({
   // playbook narrowed from a document-type scope back to All keeps its stale
   // classifier gate, or an ASK flipped AI→manual keeps its file dependency — so
   // the workflow planner would keep gating/skipping under the old wiring.
-  const materializedIds = [
-    ...materializedPropertyIds,
-    ...verdictRows.map((row) => row.id),
-  ];
+  const materializedIds = materializedPropertyIds;
   if (materializedIds.length > 0) {
     await tx
       .delete(propertyDependencies)
