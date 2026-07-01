@@ -312,32 +312,15 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const [editingEntityId, setEditingEntityId] = useState<string | null>(null);
   const [breadcrumbEditValue, setBreadcrumbEditValue] = useState("");
   const [selectedIds, setSelectedIds] = useState(new Set<string>());
+  // Pivot for shift-range selection: the last row chosen by a plain or
+  // cmd/ctrl click; a shift-click extends from here to the clicked row.
+  const anchorIdRef = useRef<string | null>(null);
   const setFilesystemSelectedIds = useWorkspaceStore(
     (s) => s.setFilesystemSelectedIds,
   );
   const clearFilesystemSelectedIds = useWorkspaceStore(
     (s) => s.clearFilesystemSelectedIds,
   );
-
-  const handleSelect = useCallback((entityId: string, meta: boolean) => {
-    setSelectedIds((prev) => {
-      if (meta) {
-        const next = new Set(prev);
-        if (next.has(entityId)) {
-          next.delete(entityId);
-        } else {
-          next.add(entityId);
-        }
-        return next;
-      }
-      // Single click: toggle if already the sole selection,
-      // otherwise select only this item.
-      if (prev.size === 1 && prev.has(entityId)) {
-        return new Set();
-      }
-      return new Set([entityId]);
-    });
-  }, []);
 
   // Background right-click context menu
   const [bgContextAnchor, setBgContextAnchor] = useState<{
@@ -497,6 +480,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
 
   const clearSelection = useCallback(() => {
     setSelectedIds(new Set());
+    anchorIdRef.current = null;
   }, []);
 
   useHotkey("Escape", clearSelection, { ignoreInputs: true });
@@ -646,6 +630,46 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     () => flattenFilesystemRows(visibleNodes, expandedIds),
     [visibleNodes, expandedIds],
   );
+
+  const orderedEntityIds = useMemo(
+    () => flattenedRows.map((row) => row.node.entityId),
+    [flattenedRows],
+  );
+
+  // meta = cmd/ctrl (toggle a single row); shift = extend a contiguous range
+  // from the anchor to the clicked row, inclusive, over the visible order.
+  const handleSelect = useCallback(
+    (entityId: string, mods: { meta: boolean; shift: boolean }) => {
+      setSelectedIds((prev) => {
+        if (mods.shift && anchorIdRef.current !== null) {
+          const from = orderedEntityIds.indexOf(anchorIdRef.current);
+          const to = orderedEntityIds.indexOf(entityId);
+          if (from !== -1 && to !== -1) {
+            const [lo, hi] = from <= to ? [from, to] : [to, from];
+            return new Set(orderedEntityIds.slice(lo, hi + 1));
+          }
+        }
+        // A plain or cmd/ctrl click makes this row the new range anchor.
+        anchorIdRef.current = entityId;
+        if (mods.meta) {
+          const next = new Set(prev);
+          if (next.has(entityId)) {
+            next.delete(entityId);
+          } else {
+            next.add(entityId);
+          }
+          return next;
+        }
+        // Plain click: sole selection (clicking the only selected row clears it).
+        if (prev.size === 1 && prev.has(entityId)) {
+          return new Set();
+        }
+        return new Set([entityId]);
+      });
+    },
+    [orderedEntityIds],
+  );
+
   const rowsViewportRef = useRef<HTMLDivElement>(null);
   const rowVirtualizer = useVirtualizer({
     count: flattenedRows.length,
@@ -1120,7 +1144,7 @@ type FilesystemRowProps = {
   onStartEditing: (entityId: string | null) => void;
   onRename: (entityId: string, newName: string) => void;
   onClearSelection: () => void;
-  onSelect: (entityId: string, meta: boolean) => void;
+  onSelect: (entityId: string, mods: { meta: boolean; shift: boolean }) => void;
   onSubfolderCreated: (entityId: string, parentId: string) => void;
   getSelectedDragItems: (ids: Set<string>) => DragPreviewData[];
   getSelectedEntities: (ids: Set<string>) => WorkspaceEntity[];
@@ -1205,7 +1229,7 @@ const FilesystemRow = ({
     e.stopPropagation();
     // If right-clicking an unselected item, select only it.
     if (!isSelected) {
-      onSelect(node.entityId, false);
+      onSelect(node.entityId, { meta: false, shift: false });
     }
     bulkEntitiesRef.current = getBulkSelectedEntities();
     const x = e.clientX;
@@ -1588,13 +1612,19 @@ const FilesystemRow = ({
             <button
               className={rowButtonCls}
               onClick={(e) => {
+                // Shift extends a range like the file rows, taking priority
+                // over folder navigation/toggle.
+                if (e.shiftKey) {
+                  onSelect(node.entityId, { meta: false, shift: true });
+                  return;
+                }
                 const intent = getFolderClickIntent({
                   currentFolderId,
                   hasModifier: e.metaKey || e.ctrlKey,
                 });
 
                 if (intent.type === "toggle-selection") {
-                  onSelect(node.entityId, true);
+                  onSelect(node.entityId, { meta: true, shift: false });
                   return;
                 }
 
@@ -1620,7 +1650,12 @@ const FilesystemRow = ({
           >
             <button
               className={rowButtonCls}
-              onClick={(e) => onSelect(node.entityId, e.metaKey || e.ctrlKey)}
+              onClick={(e) =>
+                onSelect(node.entityId, {
+                  meta: e.metaKey || e.ctrlKey,
+                  shift: e.shiftKey,
+                })
+              }
               onDoubleClick={() => openInInspector?.()}
               style={contentSpanStyle}
               type="button"
