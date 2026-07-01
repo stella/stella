@@ -1507,13 +1507,18 @@ export function PromptBar(props: PromptBarProps) {
   const inputDisabled = isSendBlocked;
   const submitDisabled = busy || isSendBlocked;
   // With queuing enabled the composer keeps accepting input while a
-  // response streams — `useChatSession` holds Enter-submitted drafts
-  // until the turn finishes. The primary button remains Stop while
-  // streaming, matching the regular chat composer.
+  // response streams: `useChatSession` holds submitted drafts until the
+  // turn finishes. Keep the primary button as Send once a draft is ready
+  // so click/tap can queue follow-ups, not only keyboard Enter.
   const composerSubmitDisabled = queueWhileGenerating
     ? status === "applying" || isSendBlocked
     : submitDisabled;
-  const morphSendToStop = showStop;
+  const canQueueDraft =
+    queueWhileGenerating &&
+    isGenerating &&
+    !composerSubmitDisabled &&
+    canSubmit;
+  const morphSendToStop = showStop && !canQueueDraft;
   // After a stop the send arrow becomes Retry until the user starts
   // a new draft (the owner also clears `onRetry` then; the `isEmpty`
   // gate just avoids a one-render flash before that state lands).
