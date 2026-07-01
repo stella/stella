@@ -473,13 +473,6 @@ jobs:
     timeout-minutes: 25
     permissions:
       contents: read
-    env:
-      # Authenticated Docker Hub pulls (when these secrets are set) avoid the
-      # anonymous per-IP pull-rate limit that intermittently fails the docker
-      # stack bring-up on shared GitHub runners.
-      DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
-      DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
-
     steps:
       - name: Checkout
         uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
@@ -533,11 +526,26 @@ jobs:
           cd ../web
           mv .env.example .env
 
+      - name: Check Docker Hub credentials
+        id: dockerhub
+        # Keep Docker Hub secrets scoped to this trusted inline check, not the
+        # whole job environment where repository-controlled code can read them.
+        if: steps.changed.outputs.run == 'true'
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          if [[ -n "$DOCKERHUB_USERNAME" && -n "$DOCKERHUB_TOKEN" ]]; then
+            echo "available=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "available=false" >> "$GITHUB_OUTPUT"
+
       - name: Log in to Docker Hub
         # Skipped automatically until DOCKERHUB_USERNAME / DOCKERHUB_TOKEN repo
         # secrets exist; authenticated pulls raise the rate limit well above the
         # shared-runner anonymous cap that flakes the gotenberg image pull.
-        if: steps.changed.outputs.run == 'true' && env.DOCKERHUB_USERNAME != '' && env.DOCKERHUB_TOKEN != ''
+        if: steps.changed.outputs.run == 'true' && steps.dockerhub.outputs.available == 'true'
         uses: docker/login-action@650006c6eb7dba73a995cc03b0b2d7f5ca915bee # v4.2.0
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
@@ -564,6 +572,11 @@ jobs:
           done
           echo "::error::docker stack failed to start after 3 attempts"
           exit 1
+
+      - name: Log out of Docker Hub
+        # Remove credentials from the runner before executing app code and tests.
+        if: always() && steps.changed.outputs.run == 'true' && steps.dockerhub.outputs.available == 'true'
+        run: docker logout
 
       - name: Run database migrations
         if: steps.changed.outputs.run == 'true'
