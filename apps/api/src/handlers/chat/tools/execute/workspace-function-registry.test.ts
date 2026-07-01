@@ -39,6 +39,14 @@ describe("findHitsInText", () => {
     expect(result.hits).toHaveLength(0);
   });
 
+  test("caps compatibility-character expansion before scanning", () => {
+    const result = findHitsInText("ﷺ".repeat(30_000), "missing", OPTIONS);
+
+    expect(result.totalHits).toBe(0);
+    expect(result.totalHitsCapped).toBe(true);
+    expect(result.truncated).toBe(true);
+  });
+
   test("still matches plain ASCII content", () => {
     const result = findHitsInText("hello world", "WORLD", OPTIONS);
     expect(result.totalHits).toBe(1);
