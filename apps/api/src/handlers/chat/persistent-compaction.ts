@@ -1,9 +1,13 @@
 import type { LanguageModel } from "ai";
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError, Transaction } from "@/api/db";
-import { chatThreadCompactions } from "@/api/db/schema";
+import {
+  chatMessages,
+  chatThreadCompactions,
+  chatThreads,
+} from "@/api/db/schema";
 import {
   CHAT_COMPACTION_PROMPT_VERSION,
   createCompactionSummaryMessage,
@@ -14,6 +18,7 @@ import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-bou
 import type {
   ChatCompactionSummary,
   ChatMessage,
+  PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -138,6 +143,7 @@ export const markActiveChatCompactionCheckpointStale = async ({
 type PersistChatCompactionCheckpointProps = {
   abortSignal: AbortSignal;
   boundary: ChatThirdPartyBoundary;
+  dataWorkspaceIds: readonly SafeId<"workspace">[];
   messages: ChatMessage[];
   model: LanguageModel;
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
@@ -148,6 +154,7 @@ type PersistChatCompactionCheckpointProps = {
 export const persistChatCompactionCheckpoint = async ({
   abortSignal,
   boundary,
+  dataWorkspaceIds,
   messages,
   model,
   onSummaryError,
@@ -179,6 +186,18 @@ export const persistChatCompactionCheckpoint = async ({
   }
 
   const persistResult = await safeDb(async (tx) => {
+    await lockChatThreadForCompaction({ threadId, tx });
+
+    const snapshotIsCurrent = await isChatCompactionSnapshotCurrent({
+      dataWorkspaceIds,
+      messages,
+      threadId,
+      tx,
+    });
+    if (!snapshotIsCurrent) {
+      return;
+    }
+
     await markActiveChatCompactionCheckpointStale({ threadId, tx });
 
     // audit: skip — derived compaction checkpoint cache; no user-authored state change
@@ -203,4 +222,157 @@ export const persistChatCompactionCheckpoint = async ({
   });
 
   return persistResult.andThen(() => Result.ok());
+};
+
+const lockChatThreadForCompaction = async ({
+  threadId,
+  tx,
+}: {
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+}): Promise<void> => {
+  await tx
+    .select({ id: chatThreads.id })
+    .from(chatThreads)
+    .where(eq(chatThreads.id, threadId))
+    .for("update");
+};
+
+type ChatCompactionSnapshotMessageRow = {
+  id: SafeId<"chatMessage">;
+  role: ChatMessage["role"];
+  content: PersistedChatMessageContent;
+};
+
+type IsChatCompactionSnapshotCurrentProps = {
+  dataWorkspaceIds: readonly SafeId<"workspace">[];
+  messages: readonly ChatMessage[];
+  threadId: SafeId<"chatThread">;
+  tx: Transaction;
+};
+
+const isChatCompactionSnapshotCurrent = async ({
+  dataWorkspaceIds,
+  messages,
+  threadId,
+  tx,
+}: IsChatCompactionSnapshotCurrentProps): Promise<boolean> => {
+  const firstSnapshotMessage = messages.at(0);
+  if (!firstSnapshotMessage) {
+    return false;
+  }
+
+  const thread = await tx.query.chatThreads.findFirst({
+    where: { id: { eq: threadId } },
+    columns: { dataWorkspaceIds: true },
+  });
+  if (
+    !thread ||
+    !workspaceIdsEqual(thread.dataWorkspaceIds, dataWorkspaceIds)
+  ) {
+    return false;
+  }
+
+  const firstPersistedMessage = await tx.query.chatMessages.findFirst({
+    where: {
+      id: { eq: brandPersistedChatMessageId(firstSnapshotMessage.id) },
+      threadId: { eq: threadId },
+    },
+    columns: { createdAt: true, id: true },
+  });
+  if (!firstPersistedMessage) {
+    return false;
+  }
+
+  const rows = await tx
+    .select({
+      id: chatMessages.id,
+      role: chatMessages.role,
+      content: chatMessages.content,
+    })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.threadId, threadId),
+        sql`(${chatMessages.createdAt}, ${chatMessages.id}) >= (${firstPersistedMessage.createdAt}, ${firstPersistedMessage.id})`,
+      ),
+    )
+    .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id))
+    .limit(messages.length + 1);
+
+  return chatCompactionSnapshotMessagesEqual(rows, messages);
+};
+
+export const chatCompactionSnapshotMessagesEqual = (
+  rows: readonly ChatCompactionSnapshotMessageRow[],
+  messages: readonly ChatMessage[],
+): boolean => {
+  if (rows.length !== messages.length) {
+    return false;
+  }
+
+  return rows.every((row, index) => {
+    const message = messages.at(index);
+    if (!message) {
+      return false;
+    }
+
+    return (
+      row.id === message.id &&
+      row.role === message.role &&
+      jsonEqual(row.content.data, message.parts)
+    );
+  });
+};
+
+const jsonEqual = (left: unknown, right: unknown): boolean => {
+  if (left === right) {
+    return true;
+  }
+
+  if (Array.isArray(left) || Array.isArray(right)) {
+    if (!Array.isArray(left) || !Array.isArray(right)) {
+      return false;
+    }
+    if (left.length !== right.length) {
+      return false;
+    }
+    return left.every((item, index) => jsonEqual(item, right.at(index)));
+  }
+
+  if (!isJsonRecord(left) || !isJsonRecord(right)) {
+    return false;
+  }
+
+  const leftKeys = Object.keys(left);
+  const rightKeys = Object.keys(right);
+  if (leftKeys.length !== rightKeys.length) {
+    return false;
+  }
+
+  return leftKeys.every(
+    (key) => Object.hasOwn(right, key) && jsonEqual(left[key], right[key]),
+  );
+};
+
+const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const workspaceIdsEqual = (
+  left: readonly SafeId<"workspace">[],
+  right: readonly SafeId<"workspace">[],
+): boolean => {
+  const leftIds = new Set(left);
+  const rightIds = new Set(right);
+
+  if (leftIds.size !== rightIds.size) {
+    return false;
+  }
+
+  for (const id of leftIds) {
+    if (!rightIds.has(id)) {
+      return false;
+    }
+  }
+  return true;
 };
