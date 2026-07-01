@@ -5,4 +5,5 @@
 -- providers, create this role via the dashboard before migrations.
 CREATE ROLE stella NOLOGIN;
 
+CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS unaccent;

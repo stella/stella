@@ -1,5 +1,14 @@
 # Pin to digest for supply-chain integrity (oven/bun:1.3.14-slim)
 FROM oven/bun:1.3.14-slim@sha256:d56a2534ffd262e92c12fd3249d3924d296d97086da773f821d7d0477435ea04 AS base
+RUN apt-get update && apt-get install -y \
+    # kreuzberg: Tesseract OCR for scanned document support
+    tesseract-ocr \
+    tesseract-ocr-eng \
+    tesseract-ocr-deu \
+    tesseract-ocr-fra \
+    # kreuzberg: HEIC/HEIF/AVIF pixel decoding
+    libheif-dev \
+    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 
 FROM base AS install-inputs
