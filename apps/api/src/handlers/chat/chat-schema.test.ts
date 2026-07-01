@@ -1,10 +1,12 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db";
 import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import { validateMessage } from "@/api/handlers/chat/chat-schema";
 import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { toUserFileUrl } from "@/api/handlers/user-files/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -27,6 +29,22 @@ const noDbReads: SafeDb = async () => {
   throw new Error("This validation path should not read the database");
 };
 const noTools = {} satisfies ChatToolMap;
+const searchTools = {
+  "search-documents": {
+    name: "search-documents",
+    description: "Search documents",
+    inputSchema: toTanStackToolSchema(
+      v.strictObject({
+        query: v.string(),
+      }),
+    ),
+    outputSchema: toTanStackToolSchema(
+      v.strictObject({
+        text: v.string(),
+      }),
+    ),
+  },
+} satisfies ChatToolMap;
 
 const createUserFilePart = ({
   fileId,
@@ -179,7 +197,100 @@ describe("validateMessage", () => {
     expect(result.error.status).toBe(400);
     expect(result.error.message).toBe("Invalid chat message part");
   });
+
+  test("rejects tool call inputs that fail the tool schema", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_invalid_tool_input"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: 123 }),
+            input: { query: 123 },
+            state: "input-complete",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_invalid_tool_input"),
+      tools: searchTools,
+      userId: userId("user_invalid_tool_input"),
+    });
+
+    expectInvalidChatMessage(result);
+  });
+
+  test("rejects tool calls whose input disagrees with arguments", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_mismatched_tool_input"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: "contract" }),
+            input: { query: "different" },
+            state: "input-complete",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_mismatched_tool_input"),
+      tools: searchTools,
+      userId: userId("user_mismatched_tool_input"),
+    });
+
+    expectInvalidChatMessage(result);
+  });
+
+  test("rejects tool call outputs that fail the tool schema", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_invalid_tool_output"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: "contract" }),
+            input: { query: "contract" },
+            output: { text: 123 },
+            state: "complete",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_invalid_tool_output"),
+      tools: searchTools,
+      userId: userId("user_invalid_tool_output"),
+    });
+
+    expectInvalidChatMessage(result);
+  });
 });
+
+const expectInvalidChatMessage = (
+  result: Awaited<ReturnType<typeof validateMessage>>,
+): void => {
+  expect(Result.isError(result)).toBe(true);
+  if (Result.isOk(result)) {
+    return;
+  }
+
+  expect(result.error).toBeInstanceOf(HandlerError);
+  if (!(result.error instanceof HandlerError)) {
+    return;
+  }
+
+  expect(result.error.status).toBe(400);
+  expect(result.error.message).toBe("Invalid chat message");
+};
 
 describe("validateStoredFileRefs", () => {
   test("rejects missing stored files", () => {

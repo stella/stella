@@ -1,4 +1,10 @@
+import {
+  isStandardSchema,
+  parseWithStandardSchema,
+  type SchemaInput,
+} from "@tanstack/ai";
 import { Result } from "better-result";
+import { deepEquals } from "bun";
 import type { Static } from "elysia";
 import { t } from "elysia";
 
@@ -169,6 +175,8 @@ type ValidateMessageResult = Result<
   HandlerError<400 | 403 | 404> | SafeDbError
 >;
 
+type ChatToolSchema = SchemaInput | undefined;
+
 export const validateMessage = async ({
   message,
   safeDb,
@@ -282,7 +290,8 @@ const validateToolCallParts = ({
     if (part.type !== "tool-call") {
       continue;
     }
-    if (tools[part.name] === undefined) {
+    const tool = tools[part.name];
+    if (tool === undefined) {
       return Result.err(
         new HandlerError({
           status: 400,
@@ -290,8 +299,107 @@ const validateToolCallParts = ({
         }),
       );
     }
+
+    const argumentsResult = parseToolArguments(part.arguments);
+    if (Result.isError(argumentsResult)) {
+      return Result.err(argumentsResult.error);
+    }
+
+    const validatedArgumentsResult = validateToolPayload({
+      payload: argumentsResult.value,
+      payloadName: "arguments",
+      schema: tool.inputSchema,
+      toolName: part.name,
+    });
+    if (Result.isError(validatedArgumentsResult)) {
+      return Result.err(validatedArgumentsResult.error);
+    }
+
+    if (part.input !== undefined) {
+      const inputResult = validateToolPayload({
+        payload: part.input,
+        payloadName: "input",
+        schema: tool.inputSchema,
+        toolName: part.name,
+      });
+      if (Result.isError(inputResult)) {
+        return Result.err(inputResult.error);
+      }
+      if (!deepEquals(inputResult.value, validatedArgumentsResult.value)) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: `Chat tool input does not match arguments for ${part.name}`,
+          }),
+        );
+      }
+    }
+
+    if (part.output !== undefined) {
+      const outputResult = validateToolPayload({
+        payload: part.output,
+        payloadName: "output",
+        schema: tool.outputSchema,
+        toolName: part.name,
+      });
+      if (Result.isError(outputResult)) {
+        return Result.err(outputResult.error);
+      }
+    }
   }
   return Result.ok();
+};
+
+const parseToolArguments = (
+  value: string,
+): Result<unknown, HandlerError<400>> => {
+  const parsed = Result.try({
+    try: () => JSON.parse(value) as unknown,
+    catch: (cause) =>
+      new HandlerError({
+        status: 400,
+        message: "Invalid chat tool arguments",
+        cause,
+      }),
+  });
+  if (Result.isError(parsed)) {
+    return Result.err(parsed.error);
+  }
+
+  const parsedValue = parsed.value;
+  return Result.ok(
+    parsedValue !== null && typeof parsedValue === "object" ? parsedValue : {},
+  );
+};
+
+const validateToolPayload = ({
+  payload,
+  payloadName,
+  schema,
+  toolName,
+}: {
+  payload: unknown;
+  payloadName: "arguments" | "input" | "output";
+  schema: ChatToolSchema;
+  toolName: string;
+}): Result<unknown, HandlerError<400>> => {
+  if (schema === undefined || !isStandardSchema(schema)) {
+    return Result.ok(payload);
+  }
+
+  const validated = Result.try({
+    try: () => parseWithStandardSchema(schema, payload),
+    catch: (cause) =>
+      new HandlerError({
+        status: 400,
+        message: `Invalid chat tool ${payloadName} for ${toolName}`,
+        cause,
+      }),
+  });
+  if (Result.isError(validated)) {
+    return Result.err(validated.error);
+  }
+  return Result.ok(validated.value);
 };
 
 type ParseMessageProps = {
