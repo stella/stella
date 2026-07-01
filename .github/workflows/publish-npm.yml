@@ -10,8 +10,8 @@ name: Publish npm packages
 # the untrusted build (bun install, prepack, bun pm pack) with NO id-token, so a
 # compromised build/postinstall script cannot mint an OIDC credential. Only the
 # `publish` job — which just downloads the prebuilt tarballs and runs the
-# hardened action — is granted id-token: write, and it runs only when `publish`
-# is ticked.
+# hardened action — is granted id-token: write, and it runs only from main when
+# auto-release or an explicit manual publish requests it.
 #
 # Prerequisite (one-time, per package, by a maintainer on npmjs.com): configure
 # an npm "trusted publisher" for each @stll/* package pointing at this repository
@@ -127,8 +127,9 @@ jobs:
   publish:
     name: Publish @stll/${{ matrix.package }}
     needs: pack
-    # Auto-publish on a version-bump push; on manual dispatch, only when ticked.
-    if: ${{ github.event_name == 'push' || inputs.publish }}
+    # Auto-publish only from main: a version-bump push to main, or a manual
+    # dispatch from main with the publish checkbox ticked.
+    if: ${{ github.ref == 'refs/heads/main' && (github.event_name == 'push' || inputs.publish) }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
