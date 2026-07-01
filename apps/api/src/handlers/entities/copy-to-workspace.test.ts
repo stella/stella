@@ -245,11 +245,13 @@ describe("copy-to-workspace", () => {
         id: sourceFilePropertyId,
         name: "Source File",
         content: filePropertyContent,
+        system: true,
       },
       {
         id: sourceCustomPropertyId,
         name: "Custom Field",
         content: textPropertyContent,
+        system: false,
       },
     ];
 
@@ -259,6 +261,7 @@ describe("copy-to-workspace", () => {
         id: targetFilePropertyId,
         name: "Source File",
         content: filePropertyContent,
+        system: true,
       },
     ];
 
@@ -401,6 +404,7 @@ describe("copy-to-workspace", () => {
                   id: sourceFilePropertyId,
                   name: "Source File",
                   content: filePropertyContent,
+                  system: true,
                 },
               ];
             }
@@ -491,6 +495,7 @@ describe("copy-to-workspace", () => {
                   id: sourceFilePropertyId,
                   name: "Source File",
                   content: filePropertyContent,
+                  system: true,
                 },
               ];
             }
@@ -499,6 +504,7 @@ describe("copy-to-workspace", () => {
                 id: targetFilePropertyId,
                 name: "Source File",
                 content: filePropertyContent,
+                system: true,
               },
             ];
           },
@@ -714,6 +720,7 @@ describe("copy-to-workspace", () => {
                   id: sourceFilePropertyId,
                   name: "Source File",
                   content: filePropertyContent,
+                  system: true,
                 },
               ];
             }
@@ -722,6 +729,7 @@ describe("copy-to-workspace", () => {
                 id: targetFilePropertyId,
                 name: "Source File",
                 content: filePropertyContent,
+                system: true,
               },
             ];
           },
