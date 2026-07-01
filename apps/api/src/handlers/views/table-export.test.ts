@@ -7,7 +7,6 @@ import { propertyConfig } from "@stll/property-testing";
 import type { JustificationContent } from "@/api/db/schema";
 import type { PropertyTool } from "@/api/db/schema-validators";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
-import { toSafeId } from "@/api/lib/branded-types";
 import {
   buildCsvExport,
   buildExportColumns,
@@ -19,10 +18,15 @@ import {
   sanitizeWorksheetName,
   SPREADSHEET_EXPORT_LIMITS,
 } from "@/api/handlers/views/table-export";
+import { toSafeId } from "@/api/lib/branded-types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
 const manualTool: PropertyTool = { version: 1, type: "manual-input" };
-const aiTool: PropertyTool = { version: 1, type: "ai-model", prompt: "Extract" };
+const aiTool: PropertyTool = {
+  version: 1,
+  type: "ai-model",
+  prompt: "Extract",
+};
 
 const exportLink = {
   baseUrl: "https://app.example.test",
@@ -632,7 +636,9 @@ describe("table export", () => {
 
     // The standalone verdict property never gets its own column.
     expect(
-      columns.filter((column) => column.type === "property").map((c) => c.header),
+      columns
+        .filter((column) => column.type === "property")
+        .map((c) => c.header),
     ).toEqual(["Payment terms"]);
 
     const justifications = new Map<string, JustificationContent>([

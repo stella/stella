@@ -574,7 +574,9 @@ export const buildExportTable = (
           fieldByPropertyId,
           entityId: entity.entityId,
           locale,
-          style: getExportCellStyle(metadataByPropertyId.get(column.propertyId)),
+          style: getExportCellStyle(
+            metadataByPropertyId.get(column.propertyId),
+          ),
           link: options.link,
           justificationByFieldId: options.justificationByFieldId,
         });
