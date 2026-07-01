@@ -400,7 +400,7 @@ const GroupedAddRow = ({
 
   return (
     <div
-      className="bg-background sticky start-0 bottom-0 z-30 order-last"
+      className="bg-background sticky start-0 bottom-0 z-50 order-last"
       style={gridStyle}
     >
       <BottomRow table={table} workspaceId={workspaceId} />
@@ -711,7 +711,8 @@ const GroupHeader = ({
       // `bg-secondary` are both translucent (~4% over transparent) in this theme,
       // so we composite that 4% tint over the opaque background by hand.
       style={{
-        backgroundColor: "color-mix(in oklab, var(--foreground) 4%, var(--background))",
+        backgroundColor:
+          "color-mix(in oklab, var(--foreground) 4%, var(--background))",
       }}
     >
       {/* The whole header row is the toggle target, not just the chevron. */}
