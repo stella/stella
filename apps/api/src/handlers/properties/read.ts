@@ -57,6 +57,21 @@ const readProperties = createSafeHandler(
             createdAt: property.createdAt,
           };
         }
+        if (property.tool.type === "playbook-verdict") {
+          // A playbook verdict is a backend-only tool type; expose it as a
+          // plain manual-input column so consumers only ever see the
+          // ai-model | manual-input contract (mirrors view-templates and
+          // update-by-id masking).
+          return {
+            id: property.id,
+            workspaceId,
+            name: property.name,
+            status: property.status,
+            content: property.content,
+            tool: { version: 1, type: "manual-input", dependencies } as const,
+            createdAt: property.createdAt,
+          };
+        }
 
         return {
           id: property.id,

@@ -133,7 +133,11 @@ const buildFix = ({
   if (!text || text.length === 0) {
     return null;
   }
-  const primaryBlockId = citations.at(0)?.blockId;
+  // Only a deviation replaces the cited paragraph; a missing clause appends the
+  // preferred language after the last block so an unrelated citation attached to
+  // a "missing" verdict never overwrites existing document text.
+  const primaryBlockId =
+    verdict === "deviation" ? citations.at(0)?.blockId : undefined;
   if (primaryBlockId !== undefined) {
     return { kind: "replaceBlock", blockId: primaryBlockId, text };
   }

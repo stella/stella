@@ -328,6 +328,13 @@ export type ComputeVerdictBatchArgs = {
   usageMetering?: AIUsageMetering | undefined;
 };
 
+// Each positionMatch verdict issues one LLM compare. Up to
+// MAX_CONCURRENT_ENTITIES entities grade in parallel upstream, so bound the
+// per-entity fan-out here: a large playbook (many positions per document) must
+// not burst an unbounded number of external calls at once and trip provider
+// rate limits or timeouts.
+const POSITION_MATCH_CONCURRENCY = 4;
+
 /**
  * Grade a batch of verdict properties for one entity version. Deterministic
  * rules (`presence`, `propertyConstraint`) are evaluated directly from the ASK
@@ -423,44 +430,57 @@ export const computeVerdictBatch = async ({
     }
   }
 
-  await Promise.all(
-    positionMatchTasks.map(async ({ property, askValue }) => {
-      const graded = await gradePositionMatch({
-        askValue,
-        standard: property.tool.standard,
-        abortSignal,
-        organizationId,
-        workspaceId,
-        entityVersionId,
-        propertyId: property.id,
-        orgAIConfig,
-        promptCachingEnabled,
-        serviceTier,
-        usageMetering,
-      });
-      if (Result.isError(graded)) {
-        erroredPropertyIds.push(property.id);
-        return;
-      }
-      const { tier, rationale, matched } = graded.value;
-      const fieldId = createSafeId<"field">();
-      aiResults.push({
-        fieldId,
-        propertyId: property.id,
-        content: { type: "single-select", version: 1, value: tier },
-      });
-      const content: JustificationContent = {
-        version: 1,
-        blocks: [{ kind: "playbook-verdict", rationale, matched }],
-      };
-      aiJustifications.push({
-        fieldId,
-        justificationId: createSafeId<"justification">(),
-        content,
-        fileFieldIds: [],
-      });
-    }),
-  );
+  // Drain the position-match compares in bounded chunks so the per-entity LLM
+  // fan-out stays capped (see POSITION_MATCH_CONCURRENCY).
+  for (
+    let index = 0;
+    index < positionMatchTasks.length;
+    index += POSITION_MATCH_CONCURRENCY
+  ) {
+    const chunk = positionMatchTasks.slice(
+      index,
+      index + POSITION_MATCH_CONCURRENCY,
+    );
+    // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the per-entity Promise.all fan-out of LLM compares
+    await Promise.all(
+      chunk.map(async ({ property, askValue }) => {
+        const graded = await gradePositionMatch({
+          askValue,
+          standard: property.tool.standard,
+          abortSignal,
+          organizationId,
+          workspaceId,
+          entityVersionId,
+          propertyId: property.id,
+          orgAIConfig,
+          promptCachingEnabled,
+          serviceTier,
+          usageMetering,
+        });
+        if (Result.isError(graded)) {
+          erroredPropertyIds.push(property.id);
+          return;
+        }
+        const { tier, rationale, matched } = graded.value;
+        const fieldId = createSafeId<"field">();
+        aiResults.push({
+          fieldId,
+          propertyId: property.id,
+          content: { type: "single-select", version: 1, value: tier },
+        });
+        const content: JustificationContent = {
+          version: 1,
+          blocks: [{ kind: "playbook-verdict", rationale, matched }],
+        };
+        aiJustifications.push({
+          fieldId,
+          justificationId: createSafeId<"justification">(),
+          content,
+          fileFieldIds: [],
+        });
+      }),
+    );
+  }
 
   return {
     aiResults,

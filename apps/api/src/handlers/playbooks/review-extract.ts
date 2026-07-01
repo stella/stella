@@ -245,8 +245,16 @@ export const extractAskContents = async ({
         aiResult: propertyResult,
         property,
       });
+      // A schema/extraction failure must not be dropped: silently skipping it
+      // lets buildFindings grade the position as if the document had no answer,
+      // producing false "missing"/"deviation" findings. Surface it instead.
       if (Result.isError(validated)) {
-        continue;
+        return Result.err(
+          new WorkflowIntegrationError({
+            message: "Failed to validate review extraction output",
+            cause: validated.error,
+          }),
+        );
       }
 
       const justification = normalizeJustification({

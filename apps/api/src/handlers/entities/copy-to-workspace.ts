@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq } from "drizzle-orm";
 import type { Static } from "elysia";
 import { t } from "elysia";
@@ -108,11 +108,15 @@ const buildPropertyIdMap = (
     }
     targetByKey.set(`${prop.name}:${prop.content.type}`, prop.id);
   }
+  if (targetSystemFileId === undefined) {
+    // Every workspace is created with a system file property (see
+    // workspaces/create.ts); a target missing it is a structural invariant
+    // violation, not an input to silently drop the document's file field for.
+    panic("Target workspace is missing its system file property");
+  }
   for (const sourceProp of sourceProperties) {
     if (sourceProp.system && sourceProp.content.type === "file") {
-      if (targetSystemFileId) {
-        propertyIdMap.set(sourceProp.id, targetSystemFileId);
-      }
+      propertyIdMap.set(sourceProp.id, targetSystemFileId);
       continue;
     }
     const targetId = targetByKey.get(

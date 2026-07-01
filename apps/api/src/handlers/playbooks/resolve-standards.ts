@@ -1,4 +1,4 @@
-import { and, asc, eq, inArray } from "drizzle-orm";
+import { and, asc, eq, inArray, or } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db";
 import { clauses, clauseVariants, clauseVersions } from "@/api/db/schema";
@@ -50,6 +50,48 @@ export const loadClauseSnapshots = async (
     return new Map();
   }
 
+  // Only pinned `(clauseId, version)` pairs are ever read (resolveStandard uses
+  // the latest body when a standard has no pinned version), so restrict the
+  // history read to those exact pairs instead of every version of each clause.
+  const pinnedVersionPairs = positions.flatMap((position) =>
+    position.standard.source === "clause" &&
+    position.standard.clauseVersion !== undefined
+      ? [
+          {
+            clauseId: brandPersistedClauseId(position.standard.clauseId),
+            version: position.standard.clauseVersion,
+          },
+        ]
+      : [],
+  );
+  const versionConditions = pinnedVersionPairs.map((pair) =>
+    and(
+      eq(clauseVersions.clauseId, pair.clauseId),
+      eq(clauseVersions.version, pair.version),
+    ),
+  );
+  const versionRowsPromise =
+    versionConditions.length > 0
+      ? tx
+          .select({
+            clauseId: clauseVersions.clauseId,
+            version: clauseVersions.version,
+            body: clauseVersions.body,
+          })
+          .from(clauseVersions)
+          .where(
+            and(
+              eq(clauseVersions.organizationId, organizationId),
+              or(...versionConditions),
+            ),
+          )
+      : Promise.resolve<
+          Pick<
+            typeof clauseVersions.$inferSelect,
+            "clauseId" | "version" | "body"
+          >[]
+        >([]);
+
   const [clauseRows, variantRows, versionRows] = await Promise.all([
     tx
       .select({ id: clauses.id, body: clauses.body })
@@ -75,19 +117,7 @@ export const loadClauseSnapshots = async (
       )
       .orderBy(asc(clauseVariants.sortOrder))
       .limit(clauseIds.length * LIMITS.clauseVariantsPerClause),
-    tx
-      .select({
-        clauseId: clauseVersions.clauseId,
-        version: clauseVersions.version,
-        body: clauseVersions.body,
-      })
-      .from(clauseVersions)
-      .where(
-        and(
-          eq(clauseVersions.organizationId, organizationId),
-          inArray(clauseVersions.clauseId, clauseIds),
-        ),
-      ),
+    versionRowsPromise,
   ]);
 
   const snapshots = new Map<string, ClauseSnapshot>();

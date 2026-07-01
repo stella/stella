@@ -69,6 +69,25 @@ export const listPlaybookDefinitionsHandler = async function* ({
         new HandlerError({ status: 400, message: "Invalid cursor" }),
       );
     }
+    // Fail fast on a stale or cross-org boundary id: the in-DB subquery below
+    // resolves to NULL for a missing row, which would silently filter out every
+    // row and return an empty page instead of a 400.
+    const boundary = yield* Result.await(
+      safeDb((tx) =>
+        tx.query.playbookDefinitions.findFirst({
+          where: {
+            id: { eq: cursor },
+            organizationId: { eq: organizationId },
+          },
+          columns: { id: true },
+        }),
+      ),
+    );
+    if (!boundary) {
+      return Result.err(
+        new HandlerError({ status: 400, message: "Invalid cursor" }),
+      );
+    }
     conditions.push(
       sql`(${playbookDefinitions.createdAt}, ${playbookDefinitions.id}) < (select b.created_at, b.id from playbook_definitions b where b.id = ${cursor} and b.organization_id = ${organizationId})`,
     );

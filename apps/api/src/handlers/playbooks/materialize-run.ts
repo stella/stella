@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
 import type { ConditionNode } from "@stll/conditions";
@@ -256,8 +257,14 @@ export const materializePlaybookRun = async ({
     },
     columns: { id: true, content: true },
   });
-  const filePropertyId =
-    systemFileProperty?.content.type === "file" ? systemFileProperty.id : null;
+  // The workspace's system file property is a structural invariant every AI ASK
+  // column depends on to read the document; a missing or non-file one means the
+  // workspace was provisioned wrong, so fail fast rather than materialize columns
+  // that can never receive their document input.
+  if (!systemFileProperty || systemFileProperty.content.type !== "file") {
+    panic("Workspace system file property is missing or not a file column");
+  }
+  const filePropertyId = systemFileProperty.id;
 
   const sourceIds = positions.map((position) => position.sourceId);
   const owned = await tx
@@ -329,7 +336,7 @@ export const materializePlaybookRun = async ({
 
     // Wire the AI ASK column to the file column so the extraction batch
     // receives the document as input (see systemFileProperty above).
-    if (askTool.type === "ai-model" && filePropertyId !== null) {
+    if (askTool.type === "ai-model") {
       dependencyRows.push({
         workspaceId,
         propertyId: askId,

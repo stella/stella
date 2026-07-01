@@ -29,6 +29,30 @@ const createPlaybookDefinition = createSafeRootHandler(
       }),
     );
 
+    const documentTypeKey = body.scope?.documentTypeKey;
+    if (documentTypeKey !== undefined) {
+      const documentType = yield* Result.await(
+        safeDb((tx) =>
+          tx.query.documentTypes.findFirst({
+            where: {
+              organizationId: { eq: organizationId },
+              key: { eq: documentTypeKey },
+            },
+            columns: { id: true },
+          }),
+        ),
+      );
+
+      if (!documentType) {
+        return Result.err(
+          new HandlerError({
+            status: 400,
+            message: "Document type not found in this organization",
+          }),
+        );
+      }
+    }
+
     const existingCount = yield* Result.await(
       safeDb((tx) =>
         tx.$count(

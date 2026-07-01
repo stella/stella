@@ -19,6 +19,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isAISupportedFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 
 // Synchronous, ephemeral single-document review: grade one document against an
@@ -155,15 +156,15 @@ const reviewPlaybook = createSafeHandler(
       );
     }
 
-    const resolvedFiles: ResolvedFile[] = [];
-    resolvedFiles.push({
+    const resolvedFile: ResolvedFile = {
       fileFieldId: activeFile.fieldId,
       fileId: activeFile.content.id,
       mimeType: activeFile.content.mimeType,
       sha256Hex: activeFile.content.sha256Hex,
       encrypted: activeFile.content.encrypted,
       pdfFileId: activeFile.content.pdfFileId,
-    });
+    };
+    const resolvedFiles: ResolvedFile[] = [resolvedFile];
 
     const asks: ReviewAsk[] = [];
     const askSourceIds = new Set<string>();
@@ -178,6 +179,20 @@ const reviewPlaybook = createSafeHandler(
       }
       asks.push({ sourceId: position.sourceId, question, content });
       askSourceIds.add(position.sourceId);
+    }
+
+    // A document the extraction pipeline cannot read (not a PDF/DOCX and not a
+    // convertible file with a PDF derivative) would yield no extracted content,
+    // so every ASK would be graded as "missing". Reject it before grading rather
+    // than returning findings that only reflect an unreadable file.
+    if (asks.length > 0 && !isAISupportedFile(resolvedFile)) {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          message:
+            "This document format is not supported for automated review.",
+        }),
+      );
     }
 
     const abortSignal = AbortSignal.timeout(REVIEW_TIMEOUT_MS);
