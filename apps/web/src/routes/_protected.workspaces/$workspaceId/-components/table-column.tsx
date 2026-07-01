@@ -38,7 +38,10 @@ import {
   resolveOptionColor,
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { useRetryCell } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-retry-cell";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import {
+  selectJustificationByFieldId,
+  useWorkspaceStore,
+} from "@/routes/_protected.workspaces/$workspaceId/-store";
 import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type PropertyColumnOptions = {
@@ -103,7 +106,7 @@ const PropertyCell = ({
   });
 
   const justification = useWorkspaceStore((s) =>
-    s.justifications.find((j) => j.fieldId === field?.id),
+    selectJustificationByFieldId(s.justifications, field?.id),
   );
   const extractionPreview = useWorkspaceStore((s) =>
     fieldContent?.type === "pending"
@@ -370,7 +373,7 @@ const VerdictBadge = ({ entity, verdictProperty }: VerdictBadgeProps) => {
   const field = entity.fields[verdictProperty.id];
   const cellMetadata = entity.cellMetadata[verdictProperty.id];
   const justification = useWorkspaceStore((s) =>
-    s.justifications.find((j) => j.fieldId === field?.id),
+    selectJustificationByFieldId(s.justifications, field?.id),
   );
 
   const tier = verdictTier(field);
