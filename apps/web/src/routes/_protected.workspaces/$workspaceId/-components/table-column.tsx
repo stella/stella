@@ -75,9 +75,14 @@ export const getPropertyColumn = ({
     }
     // Verdict badge leads the cell so the extracted value keeps the remaining
     // width; the tier label + rationale live in the badge's hover card.
+    const valuePending = entity.fields[property.id]?.content.type === "pending";
     return (
       <>
-        <VerdictBadge entity={entity} verdictProperty={verdictProperty} />
+        <VerdictBadge
+          entity={entity}
+          loading={valuePending}
+          verdictProperty={verdictProperty}
+        />
         <PropertyCell entity={entity} property={property} />
       </>
     );
@@ -358,6 +363,9 @@ const isVerdictTier = (
 type VerdictBadgeProps = {
   entity: WorkspaceEntity;
   verdictProperty: WorkspaceProperty;
+  // The paired value cell is rerunning: show a spinner instead of the stale
+  // verdict tier until the new grade lands.
+  loading?: boolean;
 };
 
 /**
@@ -368,13 +376,29 @@ type VerdictBadgeProps = {
  * the shared provenance card when a justification exists, or a plain tooltip
  * otherwise — so dropping the always-on text label loses nothing.
  */
-const VerdictBadge = ({ entity, verdictProperty }: VerdictBadgeProps) => {
+const VerdictBadge = ({
+  entity,
+  verdictProperty,
+  loading = false,
+}: VerdictBadgeProps) => {
   const t = useTranslations();
   const field = entity.fields[verdictProperty.id];
   const cellMetadata = entity.cellMetadata[verdictProperty.id];
   const justification = useWorkspaceStore((s) =>
     selectJustificationByFieldId(s.justifications, field?.id),
   );
+
+  if (loading) {
+    return (
+      <span
+        aria-label={t("common.loading")}
+        className="text-muted-foreground flex size-4 shrink-0 items-center justify-center self-center group-data-[expanded-cell]/cell-content:self-end"
+        role="img"
+      >
+        <RefreshCwIcon aria-hidden="true" className="size-3 animate-spin" />
+      </span>
+    );
+  }
 
   const tier = verdictTier(field);
   if (!tier) {
