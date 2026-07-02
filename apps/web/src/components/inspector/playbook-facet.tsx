@@ -35,7 +35,10 @@ import {
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
-import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
+import {
+  activeDocxKey,
+  useActiveDocxStore,
+} from "@/components/ai-suggestions/active-docx-store";
 import {
   reviewSessionKey,
   SEVERITY_ORDER,
@@ -77,7 +80,10 @@ export const PlaybookFacet = ({
   const author = getWordEditAuthorName(user);
 
   const registration = useActiveDocxStore(
-    useShallow((state) => state.byEntityId[entityId]?.registration),
+    useShallow(
+      (state) =>
+        state.byKey[activeDocxKey(entityId, fileFieldId)]?.registration,
+    ),
   );
   const session = usePlaybookReviewStore(
     (state) => state.sessions[reviewSessionKey(entityId, fileFieldId)],

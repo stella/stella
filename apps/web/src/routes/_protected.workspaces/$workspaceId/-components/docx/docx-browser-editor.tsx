@@ -877,28 +877,32 @@ const DocxBrowserEditorContent = (props: DocxBrowserEditorProps) => {
   // tear down + re-create the registration on every toggle,
   // invalidating the token contract documented above.
   useExternalSyncEffect(() => {
-    const token = useActiveDocxStore.getState().registerEditor(entityId, {
-      editorRef,
-      requestEditMode,
-      editable: isUnlocked,
-    });
+    const token = useActiveDocxStore
+      .getState()
+      .registerEditor(entityId, fieldId, {
+        editorRef,
+        requestEditMode,
+        editable: isUnlocked,
+      });
     tokenRef.current = token;
     return () => {
-      useActiveDocxStore.getState().unregisterEditor(entityId, token);
+      useActiveDocxStore.getState().unregisterEditor(entityId, fieldId, token);
       if (tokenRef.current === token) {
         tokenRef.current = null;
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `isUnlocked` deliberately excluded; see block comment above.
-  }, [entityId, requestEditMode]);
+  }, [entityId, fieldId, requestEditMode]);
 
   useExternalSyncEffect(() => {
     const token = tokenRef.current;
     if (token === null) {
       return;
     }
-    useActiveDocxStore.getState().updateEditable(entityId, isUnlocked, token);
-  }, [entityId, isUnlocked]);
+    useActiveDocxStore
+      .getState()
+      .updateEditable(entityId, fieldId, isUnlocked, token);
+  }, [entityId, fieldId, isUnlocked]);
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mixes a DOM focus/rAF imperative with setAutosaveStatus + ref bookkeeping on first unlock; candidate for useExternalSyncEffect once the state write is factored out
   useEffect(() => {

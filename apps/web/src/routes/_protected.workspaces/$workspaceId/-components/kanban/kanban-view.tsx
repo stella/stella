@@ -340,6 +340,14 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
     columnValue: string | null,
     files: File[],
   ) => {
+    if (isReadOnlyVerdictGrouping) {
+      stellaToast.add({
+        title: t("workspaces.kanban.readOnlyGrouping"),
+        type: "info",
+      });
+      return;
+    }
+
     const filePropertyId = properties.find(
       (p) => p.content.type === "file",
     )?.id;
@@ -361,7 +369,7 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
       onError: (error) => analytics.captureError(error),
     });
 
-    if (columnValue === null || isReadOnlyVerdictGrouping) {
+    if (columnValue === null) {
       return;
     }
 
