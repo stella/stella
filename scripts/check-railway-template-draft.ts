@@ -28,8 +28,18 @@ const failures: string[] = [];
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
-const readJson = (filePath: string): unknown =>
-  JSON.parse(readFileSync(filePath, "utf-8"));
+const describeError = (error: unknown) =>
+  error instanceof Error ? error.message : String(error);
+
+const readJson = (filePath: string): unknown => {
+  try {
+    return JSON.parse(readFileSync(filePath, "utf-8"));
+  } catch (error) {
+    throw new RailwayTemplateDraftError(
+      `Failed to read or parse JSON file at ${filePath}: ${describeError(error)}`,
+    );
+  }
+};
 
 const getString = (value: Record<string, unknown>, key: string) => {
   const next = value[key];
@@ -119,22 +129,38 @@ const graphql = async (
   query: string,
   variables: Record<string, unknown>,
 ) => {
-  const response = await fetch(RAILWAY_GRAPHQL_URL, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${token}`,
-      "content-type": "application/json",
-    },
-    body: JSON.stringify({ query, variables }),
-    signal: AbortSignal.timeout(RAILWAY_GRAPHQL_TIMEOUT_MS),
-  });
+  let response: Response;
+  try {
+    response = await fetch(RAILWAY_GRAPHQL_URL, {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({ query, variables }),
+      signal: AbortSignal.timeout(RAILWAY_GRAPHQL_TIMEOUT_MS),
+    });
+  } catch (error) {
+    throw new RailwayTemplateDraftError(
+      `Failed to connect to Railway GraphQL API: ${describeError(error)}`,
+    );
+  }
+
   if (!response.ok) {
     throw new RailwayTemplateDraftError(
       `Railway GraphQL request failed with status ${response.status}: ${response.statusText}`,
     );
   }
 
-  const payload: unknown = await response.json();
+  let payload: unknown;
+  try {
+    payload = await response.json();
+  } catch (error) {
+    throw new RailwayTemplateDraftError(
+      `Failed to parse Railway GraphQL response as JSON: ${describeError(error)}`,
+    );
+  }
+
   if (!isRecord(payload)) {
     throw new RailwayTemplateDraftError(
       "Railway GraphQL returned invalid JSON",
@@ -200,7 +226,7 @@ const validateServiceVariables = ({
       if (!isRecord(variable)) {
         return false;
       }
-      return variable["isOptional"] === false && !("defaultValue" in variable);
+      return variable["isOptional"] !== true && !("defaultValue" in variable);
     })
     .map(([key]) => key);
 

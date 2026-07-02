@@ -503,6 +503,8 @@ const templateVariableSets: [string, Record<string, string>][] = [
   ["api", apiTemplateVariables],
   ["web", webTemplateVariables],
   ["gotenberg", gotenbergTemplateVariables],
+  ["Postgres", postgresTemplateVariables],
+  ["Redis", redisTemplateVariables],
 ];
 for (const [serviceName, variables] of templateVariableSets) {
   for (const key of Object.keys(variables)) {
