@@ -22,6 +22,9 @@ const SKIPPED_SCAN_DIRS = new Set([
 const CSS_IMPORT_PATTERN =
   /@import\s+(?:url\(\s*)?["'](?<specifier>[^"']+)["']/gu;
 const CSS_COMMENT_PATTERN = /\/\*[\s\S]*?\*\//gu;
+const TURBO_INSTALL_PATTERN =
+  /\bbun\s+install\s+-g\s+turbo@(?<version>\d+\.\d+\.\d+)\b/gu;
+const TURBO_VERSION_PATTERN = /^\^?(?<version>\d+\.\d+\.\d+)$/u;
 
 export type WorkspaceParentDir = (typeof WORKSPACE_PARENT_DIRS)[number];
 
@@ -90,6 +93,29 @@ const readDependencyNames = (packageJson: Record<string, unknown>) => {
   }
 
   return dependencyNames;
+};
+
+const readRootTurboVersion = (rootDir: string): string | null => {
+  const packageJsonPath = path.resolve(rootDir, "package.json");
+  let packageJson: unknown;
+  try {
+    packageJson = JSON.parse(readFileSync(packageJsonPath, "utf-8"));
+  } catch {
+    return null;
+  }
+
+  if (!isRecord(packageJson) || !isRecord(packageJson["devDependencies"])) {
+    return null;
+  }
+
+  const turboSpecifier = packageJson["devDependencies"]["turbo"];
+  if (typeof turboSpecifier !== "string") {
+    return null;
+  }
+
+  return (
+    TURBO_VERSION_PATTERN.exec(turboSpecifier)?.groups?.["version"] ?? null
+  );
 };
 
 export const expectedWorkspaceName = (directoryName: string) =>
@@ -182,8 +208,81 @@ const validateCssImportOwnership = (
   return issues;
 };
 
-export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
+const findFiles = (
+  directoryPath: string,
+  shouldInclude: (filePath: string) => boolean,
+): string[] => {
+  if (!existsSync(directoryPath)) {
+    return [];
+  }
+
+  const files: string[] = [];
+
+  for (const entry of readdirSync(directoryPath, { withFileTypes: true })) {
+    if (entry.isDirectory()) {
+      if (entry.name.startsWith(".") || SKIPPED_SCAN_DIRS.has(entry.name)) {
+        continue;
+      }
+
+      files.push(
+        ...findFiles(path.join(directoryPath, entry.name), shouldInclude),
+      );
+      continue;
+    }
+
+    const filePath = path.join(directoryPath, entry.name);
+    if (entry.isFile() && shouldInclude(filePath)) {
+      files.push(filePath);
+    }
+  }
+
+  return files;
+};
+
+const findTurboInstallPinFiles = (rootDir: string) => [
+  ...findFiles(path.resolve(rootDir, "apps"), (filePath) =>
+    filePath.endsWith("Dockerfile"),
+  ),
+  ...findFiles(
+    path.resolve(rootDir, ".github", "workflows"),
+    (filePath) => filePath.endsWith(".yml") || filePath.endsWith(".yaml"),
+  ),
+];
+
+const validateTurboInstallPins = (rootDir: string): WorkspaceIssue[] => {
+  const turboVersion = readRootTurboVersion(rootDir);
+  if (turboVersion === null) {
+    return [
+      {
+        message:
+          "root package.json must define devDependencies.turbo as a concrete semver version",
+        path: "package.json",
+      },
+    ];
+  }
+
   const issues: WorkspaceIssue[] = [];
+
+  for (const filePath of findTurboInstallPinFiles(rootDir)) {
+    const content = readFileSync(filePath, "utf-8");
+    for (const match of content.matchAll(TURBO_INSTALL_PATTERN)) {
+      const installVersion = match.groups?.["version"];
+      if (installVersion === turboVersion) {
+        continue;
+      }
+
+      issues.push({
+        message: `turbo install pin must match root package.json turbo ${turboVersion}; found ${installVersion}`,
+        path: `${path.relative(rootDir, filePath)}:${lineNumberForIndex(content, match.index)}`,
+      });
+    }
+  }
+
+  return issues;
+};
+
+export const validateWorkspaceRoot = (rootDir: string): WorkspaceIssue[] => {
+  const issues: WorkspaceIssue[] = validateTurboInstallPins(rootDir);
 
   for (const parentDir of WORKSPACE_PARENT_DIRS) {
     const parentPath = path.resolve(rootDir, parentDir);

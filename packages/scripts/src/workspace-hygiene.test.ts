@@ -16,8 +16,71 @@ afterEach(() => {
 });
 
 describe("workspace hygiene", () => {
+  test("requires turbo install pins to match the root package version", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "^2.10.0",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+
+    writeFileSync(
+      path.join(rootDir, "apps/web/Dockerfile"),
+      "RUN bun install -g turbo@2.9.18\n",
+    );
+    mkdirSync(path.join(rootDir, ".github/workflows"), { recursive: true });
+    writeFileSync(
+      path.join(rootDir, ".github/workflows/ci.yml"),
+      "run: bun install -g turbo@2.9.18\n",
+    );
+
+    expect(validateWorkspaceRoot(rootDir)).toEqual([
+      {
+        message:
+          "turbo install pin must match root package.json turbo 2.10.0; found 2.9.18",
+        path: "apps/web/Dockerfile:1",
+      },
+      {
+        message:
+          "turbo install pin must match root package.json turbo 2.10.0; found 2.9.18",
+        path: ".github/workflows/ci.yml:1",
+      },
+    ]);
+  });
+
+  test("accepts turbo install pins that match the root package version", () => {
+    const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "^2.10.0",
+        },
+      },
+      webPackageJson: {
+        dependencies: {},
+        name: "@stll/web",
+      },
+    });
+
+    writeFileSync(
+      path.join(rootDir, "apps/web/Dockerfile"),
+      "RUN bun install -g turbo@2.10.0\n",
+    );
+
+    expect(validateWorkspaceRoot(rootDir)).toEqual([]);
+  });
+
   test("requires CSS package imports to be owned by the importing workspace", () => {
     const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "^2.10.0",
+        },
+      },
       webPackageJson: {
         dependencies: {},
         name: "@stll/web",
@@ -40,6 +103,11 @@ describe("workspace hygiene", () => {
 
   test("accepts CSS package imports declared by the importing workspace", () => {
     const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "^2.10.0",
+        },
+      },
       webPackageJson: {
         dependencies: {
           "@fontsource-variable/source-serif-4": "^5.2.9",
@@ -58,6 +126,11 @@ describe("workspace hygiene", () => {
 
   test("ignores package imports inside CSS comments", () => {
     const rootDir = createWorkspaceRoot({
+      rootPackageJson: {
+        devDependencies: {
+          turbo: "^2.10.0",
+        },
+      },
       webPackageJson: {
         dependencies: {},
         name: "@stll/web",
@@ -74,10 +147,12 @@ describe("workspace hygiene", () => {
 });
 
 type CreateWorkspaceRootOptions = {
+  rootPackageJson: Record<string, unknown>;
   webPackageJson: Record<string, unknown>;
 };
 
 const createWorkspaceRoot = ({
+  rootPackageJson,
   webPackageJson,
 }: CreateWorkspaceRootOptions) => {
   const rootDir = mkdtempSync(path.join(tmpdir(), "stella-workspace-hygiene-"));
@@ -85,6 +160,10 @@ const createWorkspaceRoot = ({
 
   mkdirSync(path.join(rootDir, "apps/web/src"), { recursive: true });
   mkdirSync(path.join(rootDir, "packages"), { recursive: true });
+  writeFileSync(
+    path.join(rootDir, "package.json"),
+    JSON.stringify(rootPackageJson),
+  );
   writeFileSync(
     path.join(rootDir, "apps/web/package.json"),
     JSON.stringify(webPackageJson),

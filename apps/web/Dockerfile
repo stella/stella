@@ -16,7 +16,7 @@ RUN mkdir -p /json && \
 
 FROM base AS pruner
 # Keep in sync with the turbo version in the root package.json.
-RUN bun install -g turbo@2.9.18
+RUN bun install -g turbo@2.10.0
 COPY . .
 RUN turbo prune @stll/web --docker
 
