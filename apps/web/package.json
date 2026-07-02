@@ -42,6 +42,8 @@
     "@stll/catalogue": "workspace:*",
     "@stll/conditions": "workspace:*",
     "@stll/country-codes": "workspace:*",
+    "@stll/docx-core": "workspace:*",
+    "@stll/docx-utils": "workspace:*",
     "@stll/errors": "workspace:*",
     "@stll/folio-react": "^0.1.1",
     "@stll/legal-ast": "workspace:*",
