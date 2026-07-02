@@ -18,7 +18,12 @@ const config = {
   body: t.Object({
     // Accept a suggestion (-> active) or dismiss/retire it (-> archived).
     // "suggested" and "stale" are machine-only transitions.
-    status: t.Optional(t.UnionEnum(["active", "archived"])),
+    // Plain `t.Union` (not `t.UnionEnum`): an absent optional UnionEnum
+    // coerces to its first member ("active"), which would silently
+    // re-activate a memory on any PATCH that omits `status`. With
+    // `t.Union` an absent field stays `undefined`, and the handler's
+    // `status !== undefined` guards leave the persisted status unchanged.
+    status: t.Optional(t.Union([t.Literal("active"), t.Literal("archived")])),
     pinned: t.Optional(t.Boolean()),
     content: t.Optional(t.String({ minLength: 1, maxLength: 4000 })),
   }),
