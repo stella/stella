@@ -671,6 +671,7 @@
       "socialSecurityNumber": "رقم الضمان الاجتماعي",
       "taxIdentificationNumber": "الرقم الضريبي"
     },
+    "archive": "أرشفة",
     "back": "رجوع",
     "cancel": "إلغاء",
     "captions": "التسميات التوضيحية",
@@ -1653,6 +1654,37 @@
     "showFormatted": "منسَّق",
     "showRaw": "عرض المصدر الخام"
   },
+  "memory": {
+    "addPlaceholder": "أضف ملاحظة ليتذكرها المساعد…",
+    "createdToast": "تم الحفظ في الذاكرة",
+    "empty": "لا توجد ذاكرة بعد.",
+    "kinds": {
+      "decision": "قرار",
+      "fact": "حقيقة",
+      "instruction": "تعليمات",
+      "preference": "تفضيل",
+      "relationship": "علاقة"
+    },
+    "matterPicker": {
+      "empty": "اختر ملفًا لعرض ذاكرته.",
+      "placeholder": "اختر ملفًا"
+    },
+    "pageDescription": "ملاحظات وسياق يتذكرها المساعد عبر المحادثات.",
+    "pageTitle": "الذاكرة",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "مُستخرَج",
+      "tool": "أداة",
+      "user": "أضفته أنت"
+    },
+    "suggestionsDescription": "اقترح المساعد تذكُّر هذه العناصر. اقبلها للاحتفاظ بها أو ارفضها لتجاهلها.",
+    "suggestionsTitle": "اقتراحات",
+    "tabs": {
+      "firm": "مكتبة الفريق",
+      "matter": "هذا الملف",
+      "mine": "ملاحظاتي"
+    }
+  },
   "navigation": {
     "chat": "محادثة",
     "contacts": "جهات الاتصال",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "ترقيم الملفات",
       "matterNumberingDescription": "اضبط كيفية توليد أرقام مراجع الملفات الجديدة",
       "membersDescription": "أدِر من له حق الوصول إلى هذه المؤسسة وأي دعوات معلَّقة",
+      "memoryExtraction": {
+        "description": "عند التفعيل، تراجع stella في الخلفية سلاسل المحادثات المُلخَّصة وتقترح عناصر ذاكرة يجب أن يؤكدها شخص قبل أن تؤثر على المساعد. يعمل ذلك باستخدام مفتاح مزوّد الذكاء الاصطناعي الخاص بفريقك، لذا اتركه مُعطَّلاً ما لم ترغب في احتساب استخدام الذكاء الاصطناعي هذا في الخلفية على مفتاحك.",
+        "title": "استخراج الذاكرة",
+        "toggleLabel": "اقتراح عناصر الذاكرة من سجل المحادثات في الخلفية"
+      },
       "pendingInvitations": "الدعوات المعلَّقة",
       "practiceJurisdictions": "الولايات القضائية",
       "practiceJurisdictionsDescription": "اختر الولايات القضائية ذات الصلة بك.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "تم تحديث ترقيم الملفات",
     "memberAdded": "تمت إضافة العضو",
     "memberRemoved": "تمت إزالة العضو",
+    "memoryExtractionUpdated": "تم تحديث تفضيل استخراج الذاكرة",
     "organizationUpdated": "تم تحديث المؤسسة",
     "otherSessionsRevoked": "تم إبطال الجلسات الأخرى",
     "partyAdded": "تمت إضافة الطرف",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "أرشفة",
     "copyToMatter": {
       "copied": "تم النسخ إلى الملف",
       "copyOption": "نسخ (مع الاحتفاظ بالأصل)",

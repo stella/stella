@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Sociālās apdrošināšanas numurs",
       "taxIdentificationNumber": "Nodokļu maksātāja numurs"
     },
+    "archive": "Arhivēt",
     "back": "Atpakaļ",
     "cancel": "Atcelt",
     "captions": "Subtitri",
@@ -1653,6 +1654,37 @@
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
   },
+  "memory": {
+    "addPlaceholder": "Pievienojiet piezīmi, kas asistentam jāatceras…",
+    "createdToast": "Saglabāts atmiņā",
+    "empty": "Atmiņā vēl nekā nav.",
+    "kinds": {
+      "decision": "Lēmums",
+      "fact": "Fakts",
+      "instruction": "Norādījums",
+      "preference": "Vēlme",
+      "relationship": "Saistība"
+    },
+    "matterPicker": {
+      "empty": "Izvēlieties lietu, lai skatītu tās atmiņu.",
+      "placeholder": "Izvēlieties lietu"
+    },
+    "pageDescription": "Piezīmes un konteksts, ko asistents atceras visās sarunās.",
+    "pageTitle": "Atmiņa",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "Iegūts",
+      "tool": "Rīks",
+      "user": "Jūsu pievienots"
+    },
+    "suggestionsDescription": "Asistents ieteica tos iegaumēt. Pieņemiet, lai tos saglabātu, vai noraidiet, lai tos atmestu.",
+    "suggestionsTitle": "Ieteikumi",
+    "tabs": {
+      "firm": "Komandas bibliotēka",
+      "matter": "Šī lieta",
+      "mine": "Manas piezīmes"
+    }
+  },
   "navigation": {
     "chat": "Tērzēšana",
     "contacts": "Kontakti",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "Lietu numerācija",
       "matterNumberingDescription": "Konfigurējiet, kā tiek ģenerēti jauno lietu atsauces numuri",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Kad ieslēgts, stella fonā pārskata apkopotos sarunu pavedienus un ierosina atmiņas ierakstus, kas cilvēkam jāapstiprina, pirms tie ietekmē asistentu. Tas darbojas ar jūsu komandas paša AI pakalpojumu sniedzēja atslēgu, tāpēc atstājiet to izslēgtu, ja vien nevēlaties, lai šis fonā notiekošais AI lietojums tiktu attiecināts uz jūsu atslēgu.",
+        "title": "Atmiņas iegūšana",
+        "toggleLabel": "Fonā ieteikt atmiņas ierakstus no tērzēšanas vēstures"
+      },
       "pendingInvitations": "Gaidošie uzaicinājumi",
       "practiceJurisdictions": "Jurisdikcijas",
       "practiceJurisdictionsDescription": "Atlasiet jums atbilstošās jurisdikcijas.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "Lietu numerācija atjaunināta",
     "memberAdded": "Dalībnieks pievienots",
     "memberRemoved": "Dalībnieks noņemts",
+    "memoryExtractionUpdated": "Atmiņas iegūšanas iestatījums atjaunināts",
     "organizationUpdated": "Organizācija atjaunināta",
     "otherSessionsRevoked": "Pārējās sesijas beigtas",
     "partyAdded": "Puse pievienota",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Arhivēt",
     "copyToMatter": {
       "copied": "Nokopēts lietā",
       "copyOption": "Kopēt (saglabāt oriģinālu)",

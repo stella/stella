@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Socialinio draudimo numeris",
       "taxIdentificationNumber": "Mokesčių mokėtojo kodas"
     },
+    "archive": "Archyvuoti",
     "back": "Atgal",
     "cancel": "Atšaukti",
     "captions": "Subtitrai",
@@ -1653,6 +1654,37 @@
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
   },
+  "memory": {
+    "addPlaceholder": "Pridėkite pastabą, kurią asistentas turėtų įsiminti…",
+    "createdToast": "Įrašyta į atmintį",
+    "empty": "Atmintyje kol kas nieko nėra.",
+    "kinds": {
+      "decision": "Sprendimas",
+      "fact": "Faktas",
+      "instruction": "Nurodymas",
+      "preference": "Pageidavimas",
+      "relationship": "Ryšys"
+    },
+    "matterPicker": {
+      "empty": "Pasirinkite bylą, kad matytumėte jos atmintį.",
+      "placeholder": "Pasirinkite bylą"
+    },
+    "pageDescription": "Pastabos ir kontekstas, kuriuos asistentas įsimena visuose pokalbiuose.",
+    "pageTitle": "Atmintis",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "Išgauta",
+      "tool": "Įrankis",
+      "user": "Jūsų pridėta"
+    },
+    "suggestionsDescription": "Asistentas pasiūlė tai įsiminti. Priimkite, kad išsaugotumėte, arba atmeskite, kad atsisakytumėte.",
+    "suggestionsTitle": "Pasiūlymai",
+    "tabs": {
+      "firm": "Komandos biblioteka",
+      "matter": "Ši byla",
+      "mine": "Mano pastabos"
+    }
+  },
   "navigation": {
     "chat": "Pokalbis",
     "contacts": "Kontaktai",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "Bylų numeravimas",
       "matterNumberingDescription": "Nustatykite, kaip generuojami naujų bylų numeriai",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Kai įjungta, stella fone peržiūri apibendrintus pokalbius ir siūlo atminties įrašus, kuriuos žmogus turi patvirtinti, kol jie nepaveikė asistento. Tai veikia naudojant jūsų komandos pačios AI tiekėjo raktą, todėl palikite išjungtą, nebent norite, kad šis fone vykstantis AI naudojimas būtų apmokestinamas jūsų raktui.",
+        "title": "Atminties išgavimas",
+        "toggleLabel": "Fone siūlyti atminties įrašus iš pokalbių istorijos"
+      },
       "pendingInvitations": "Laukiantys kvietimai",
       "practiceJurisdictions": "Jurisdikcijos",
       "practiceJurisdictionsDescription": "Pasirinkite jums aktualias jurisdikcijas.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "Bylų numeracija atnaujinta",
     "memberAdded": "Narys pridėtas",
     "memberRemoved": "Narys pašalintas",
+    "memoryExtractionUpdated": "Atminties išgavimo nuostata atnaujinta",
     "organizationUpdated": "Organizacija atnaujinta",
     "otherSessionsRevoked": "Kitos sesijos baigtos",
     "partyAdded": "Šalis pridėta",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archyvuoti",
     "copyToMatter": {
       "copied": "Nukopijuota į bylą",
       "copyOption": "Kopijuoti (palikti originalą)",

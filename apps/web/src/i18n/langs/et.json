@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Sotsiaalkindlustuse number",
       "taxIdentificationNumber": "Maksukohustuslase number"
     },
+    "archive": "Arhiveeri",
     "back": "Tagasi",
     "cancel": "Tühista",
     "captions": "Subtiitrid",
@@ -1653,6 +1654,37 @@
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
   },
+  "memory": {
+    "addPlaceholder": "Lisage märkus, mille assistent peaks meelde jätma…",
+    "createdToast": "Mällu salvestatud",
+    "empty": "Mälus pole veel midagi.",
+    "kinds": {
+      "decision": "Otsus",
+      "fact": "Fakt",
+      "instruction": "Juhis",
+      "preference": "Eelistus",
+      "relationship": "Suhe"
+    },
+    "matterPicker": {
+      "empty": "Valige toimik, et näha selle mälu.",
+      "placeholder": "Valige toimik"
+    },
+    "pageDescription": "Märkused ja kontekst, mida assistent vestlustes meeles peab.",
+    "pageTitle": "Mälu",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "Eraldatud",
+      "tool": "Tööriist",
+      "user": "Teie lisatud"
+    },
+    "suggestionsDescription": "Assistent tegi ettepaneku need meelde jätta. Nõustuge, et need alles hoida, või lükake tagasi, et need kõrvale jätta.",
+    "suggestionsTitle": "Soovitused",
+    "tabs": {
+      "firm": "Meeskonna teek",
+      "matter": "See toimik",
+      "mine": "Minu märkused"
+    }
+  },
   "navigation": {
     "chat": "Vestlus",
     "contacts": "Kontaktid",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "Toimikute nummerdamine",
       "matterNumberingDescription": "Seadistage, kuidas uute toimikute viitenumbreid genereeritakse",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Kui see on sisse lülitatud, vaatab stella taustal kokkuvõtlikke vestlusi ja pakub mälukirjeid, mille inimene peab kinnitama, enne kui need assistenti mõjutavad. See kasutab teie meeskonna enda AI-teenusepakkuja võtit, seega jätke see välja, kui te ei soovi, et see taustal toimuv AI-kasutus arvestataks teie võtmele.",
+        "title": "Mälu ekstraktimine",
+        "toggleLabel": "Paku taustal mälukirjeid vestluste ajaloost"
+      },
       "pendingInvitations": "Ootel kutsed",
       "practiceJurisdictions": "Jurisdiktsioonid",
       "practiceJurisdictionsDescription": "Valige teile asjakohased jurisdiktsioonid.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "Toimikute nummerdamine uuendatud",
     "memberAdded": "Liige lisatud",
     "memberRemoved": "Liige eemaldatud",
+    "memoryExtractionUpdated": "Mälu ekstraktimise eelistus uuendatud",
     "organizationUpdated": "Organisatsioon uuendatud",
     "otherSessionsRevoked": "Muud seansid lõpetatud",
     "partyAdded": "Osapool lisatud",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Arhiveeri",
     "copyToMatter": {
       "copied": "Kopeeritud toimikusse",
       "copyOption": "Kopeeri (säilita originaal)",

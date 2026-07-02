@@ -674,6 +674,7 @@ type Messages = {
       "socialSecurityNumber": "Social security number";
       "taxIdentificationNumber": "Tax identification number";
     };
+    "archive": "Archive";
     "back": "Back";
     "cancel": "Cancel";
     "captions": "Captions";
@@ -1658,7 +1659,6 @@ type Messages = {
   };
   "memory": {
     "addPlaceholder": "Add a note for the assistant to remember…";
-    "archive": "Archive";
     "createdToast": "Memory saved";
     "empty": "No memory yet.";
     "kinds": {
@@ -1670,7 +1670,6 @@ type Messages = {
     };
     "matterPicker": {
       "empty": "Select a matter to view its memory.";
-      "label": "Matter";
       "placeholder": "Select a matter";
     };
     "pageDescription": "Notes and context the assistant remembers across chats.";
@@ -2023,6 +2022,11 @@ type Messages = {
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";
+      "memoryExtraction": {
+        "description": "When on, stella reviews summarized chat threads in the background and proposes memories for a human to confirm before they influence the assistant. This runs on your organization's own AI provider key, so leave it off unless you want that background AI usage billed to your key.";
+        "title": "Memory extraction";
+        "toggleLabel": "Suggest memories from chat history in the background";
+      };
       "pendingInvitations": "Pending invitations";
       "practiceJurisdictions": "Jurisdictions";
       "practiceJurisdictionsDescription": "Select the jurisdictions relevant to you.";
@@ -2076,6 +2080,7 @@ type Messages = {
     "matterNumberingUpdated": "Matter numbering updated";
     "memberAdded": "Member added";
     "memberRemoved": "Member removed";
+    "memoryExtractionUpdated": "Memory extraction preference updated";
     "organizationUpdated": "Organization updated";
     "otherSessionsRevoked": "Other sessions revoked";
     "partyAdded": "Party added";
@@ -2491,7 +2496,6 @@ type Messages = {
     };
   };
   "workspaces": {
-    "archiveMatter": "Archive";
     "copyToMatter": {
       "copied": "Copied to Matter";
       "copyOption": "Copy (keep original)";

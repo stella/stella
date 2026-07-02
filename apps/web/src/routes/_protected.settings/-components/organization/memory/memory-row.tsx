@@ -113,7 +113,7 @@ export const MemoryRow = ({ activeOrganizationId, memory }: MemoryRowProps) => {
             <PencilIcon className="size-4" />
           </Button>
           <Button
-            aria-label={t("memory.archive")}
+            aria-label={commonT("archive")}
             disabled={updateMemory.isPending}
             onClick={() => updateMemory.mutate({ status: "archived" })}
             size="icon-sm"

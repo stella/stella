@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Social security number",
       "taxIdentificationNumber": "Tax identification number"
     },
+    "archive": "Archive",
     "back": "Back",
     "cancel": "Cancel",
     "captions": "Captions",
@@ -1655,7 +1656,6 @@
   },
   "memory": {
     "addPlaceholder": "Add a note for the assistant to remember…",
-    "archive": "Archive",
     "createdToast": "Memory saved",
     "empty": "No memory yet.",
     "kinds": {
@@ -1667,7 +1667,6 @@
     },
     "matterPicker": {
       "empty": "Select a matter to view its memory.",
-      "label": "Matter",
       "placeholder": "Select a matter"
     },
     "pageDescription": "Notes and context the assistant remembers across chats.",
@@ -2494,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archive",
     "copyToMatter": {
       "copied": "Copied to Matter",
       "copyOption": "Copy (keep original)",

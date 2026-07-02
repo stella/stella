@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Numer ubezpieczenia społecznego",
       "taxIdentificationNumber": "NIP"
     },
+    "archive": "Archiwizuj",
     "back": "Wstecz",
     "cancel": "Anuluj",
     "captions": "Napisy",
@@ -1653,6 +1654,37 @@
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
   },
+  "memory": {
+    "addPlaceholder": "Dodaj notatkę, którą asystent ma zapamiętać…",
+    "createdToast": "Zapisano w pamięci",
+    "empty": "Nic jeszcze w pamięci.",
+    "kinds": {
+      "decision": "Decyzja",
+      "fact": "Fakt",
+      "instruction": "Instrukcja",
+      "preference": "Preferencja",
+      "relationship": "Relacja"
+    },
+    "matterPicker": {
+      "empty": "Wybierz sprawę, aby zobaczyć jej pamięć.",
+      "placeholder": "Wybierz sprawę"
+    },
+    "pageDescription": "Notatki i kontekst, które asystent zapamiętuje między czatami.",
+    "pageTitle": "Pamięć",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "Wyodrębnione",
+      "tool": "Narzędzie",
+      "user": "Dodane przez Ciebie"
+    },
+    "suggestionsDescription": "Asystent zaproponował zapamiętanie tych informacji. Zaakceptuj, aby je zachować, lub odrzuć, aby je odrzucić.",
+    "suggestionsTitle": "Sugestie",
+    "tabs": {
+      "firm": "Biblioteka zespołu",
+      "matter": "Ta sprawa",
+      "mine": "Moje notatki"
+    }
+  },
   "navigation": {
     "chat": "Czat",
     "contacts": "Kontakty",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "Numeracja spraw",
       "matterNumberingDescription": "Skonfiguruj sposób generowania numerów referencyjnych nowych spraw",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Gdy włączone, stella w tle analizuje podsumowane wątki czatów i proponuje wpisy do pamięci, które musi zatwierdzić człowiek, zanim wpłyną na asystenta. Działa to na własnym kluczu dostawcy AI Twojego zespołu, więc pozostaw wyłączone, chyba że chcesz, aby to działające w tle użycie AI było rozliczane na Twój klucz.",
+        "title": "Wyodrębnianie pamięci",
+        "toggleLabel": "Proponuj wpisy do pamięci z historii czatów w tle"
+      },
       "pendingInvitations": "Oczekujące zaproszenia",
       "practiceJurisdictions": "Jurysdykcje",
       "practiceJurisdictionsDescription": "Wybierz jurysdykcje, które są dla Ciebie istotne.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "Numeracja spraw zaktualizowana",
     "memberAdded": "Członek dodany",
     "memberRemoved": "Członek usunięty",
+    "memoryExtractionUpdated": "Zaktualizowano ustawienie wyodrębniania pamięci",
     "organizationUpdated": "Organizacja zaktualizowana",
     "otherSessionsRevoked": "Inne sesje zakończone",
     "partyAdded": "Strona dodana",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archiwizuj",
     "copyToMatter": {
       "copied": "Skopiowano do sprawy",
       "copyOption": "Kopiuj (zachowaj oryginał)",

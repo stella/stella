@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Sozialversicherungsnummer",
       "taxIdentificationNumber": "Steuer-Identifikationsnummer"
     },
+    "archive": "Archivieren",
     "back": "Zurück",
     "cancel": "Abbrechen",
     "captions": "Untertitel",
@@ -1653,6 +1654,37 @@
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
   },
+  "memory": {
+    "addPlaceholder": "Fügen Sie eine Notiz hinzu, die sich der Assistent merken soll…",
+    "createdToast": "Im Gedächtnis gespeichert",
+    "empty": "Noch nichts im Gedächtnis.",
+    "kinds": {
+      "decision": "Entscheidung",
+      "fact": "Tatsache",
+      "instruction": "Anweisung",
+      "preference": "Präferenz",
+      "relationship": "Beziehung"
+    },
+    "matterPicker": {
+      "empty": "Wählen Sie eine Akte, um ihr Gedächtnis anzuzeigen.",
+      "placeholder": "Akte auswählen"
+    },
+    "pageDescription": "Notizen und Kontext, die sich der Assistent über Chats hinweg merkt.",
+    "pageTitle": "Gedächtnis",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "Extrahiert",
+      "tool": "Werkzeug",
+      "user": "Von Ihnen hinzugefügt"
+    },
+    "suggestionsDescription": "Der Assistent hat vorgeschlagen, sich diese zu merken. Nehmen Sie sie an, um sie zu behalten, oder lehnen Sie sie ab, um sie zu verwerfen.",
+    "suggestionsTitle": "Vorschläge",
+    "tabs": {
+      "firm": "Team-Bibliothek",
+      "matter": "Diese Akte",
+      "mine": "Meine Notizen"
+    }
+  },
   "navigation": {
     "chat": "Chat",
     "contacts": "Kontakte",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Wenn aktiviert, prüft stella zusammengefasste Chatverläufe im Hintergrund und schlägt Erinnerungen vor, die eine Person bestätigen muss, bevor sie den Assistenten beeinflussen. Dies läuft über den eigenen KI-Anbieterschlüssel Ihres Teams, lassen Sie es daher deaktiviert, sofern Sie diese Hintergrund-KI-Nutzung nicht über Ihren Schlüssel abrechnen möchten.",
+        "title": "Gedächtnis-Extraktion",
+        "toggleLabel": "Im Hintergrund Erinnerungen aus dem Chatverlauf vorschlagen"
+      },
       "pendingInvitations": "Ausstehende Einladungen",
       "practiceJurisdictions": "Jurisdiktionen",
       "practiceJurisdictionsDescription": "Wählen Sie die für Sie relevanten Jurisdiktionen aus.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "Aktennummerierung aktualisiert",
     "memberAdded": "Mitglied hinzugefügt",
     "memberRemoved": "Mitglied entfernt",
+    "memoryExtractionUpdated": "Einstellung zur Gedächtnis-Extraktion aktualisiert",
     "organizationUpdated": "Organisation aktualisiert",
     "otherSessionsRevoked": "Andere Sitzungen beendet",
     "partyAdded": "Partei hinzugefügt",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archivieren",
     "copyToMatter": {
       "copied": "In Akte kopiert",
       "copyOption": "Kopieren (Original behalten)",

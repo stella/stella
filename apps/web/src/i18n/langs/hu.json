@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Társadalombiztosítási szám",
       "taxIdentificationNumber": "Adóazonosító"
     },
+    "archive": "Archiválás",
     "back": "Vissza",
     "cancel": "Mégse",
     "captions": "Feliratok",
@@ -1653,6 +1654,37 @@
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
   },
+  "memory": {
+    "addPlaceholder": "Adjon hozzá egy megjegyzést, amelyet az asszisztensnek meg kell jegyeznie…",
+    "createdToast": "Elmentve a memóriába",
+    "empty": "Még nincs semmi a memóriában.",
+    "kinds": {
+      "decision": "Döntés",
+      "fact": "Tény",
+      "instruction": "Utasítás",
+      "preference": "Preferencia",
+      "relationship": "Kapcsolat"
+    },
+    "matterPicker": {
+      "empty": "Válasszon ügyet a memóriájának megtekintéséhez.",
+      "placeholder": "Válasszon ügyet"
+    },
+    "pageDescription": "Megjegyzések és kontextus, amelyeket az asszisztens a beszélgetéseken át megjegyez.",
+    "pageTitle": "Memória",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "Kinyerve",
+      "tool": "Eszköz",
+      "user": "Ön által hozzáadva"
+    },
+    "suggestionsDescription": "Az asszisztens javasolta ezek megjegyzését. Fogadja el a megtartásukhoz, vagy utasítsa el az elvetésükhöz.",
+    "suggestionsTitle": "Javaslatok",
+    "tabs": {
+      "firm": "Csapat könyvtára",
+      "matter": "Ez az ügy",
+      "mine": "Saját megjegyzések"
+    }
+  },
   "navigation": {
     "chat": "Csevegés",
     "contacts": "Kapcsolatok",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "Ügyszámozás",
       "matterNumberingDescription": "Beállíthatja, hogyan generálódjanak az új ügyek hivatkozási számai",
       "membersDescription": "Manage who has access to this organization",
+      "memoryExtraction": {
+        "description": "Ha be van kapcsolva, a stella a háttérben áttekinti az összefoglalt beszélgetéseket, és memóriabejegyzéseket javasol, amelyeket egy embernek meg kell erősítenie, mielőtt befolyásolnák az asszisztenst. Ez a csapata saját AI-szolgáltatói kulcsával fut, ezért hagyja kikapcsolva, hacsak nem szeretné, hogy ezt a háttérben zajló AI-használatot az Ön kulcsára számlázzák.",
+        "title": "Memóriakinyerés",
+        "toggleLabel": "Memóriabejegyzések javaslása a beszélgetési előzményekből a háttérben"
+      },
       "pendingInvitations": "Függőben lévő meghívók",
       "practiceJurisdictions": "Joghatóságok",
       "practiceJurisdictionsDescription": "Válassza ki az Önre vonatkozó joghatóságokat.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "Ügyszámozás frissítve",
     "memberAdded": "Tag hozzáadva",
     "memberRemoved": "Tag eltávolítva",
+    "memoryExtractionUpdated": "A memóriakinyerés beállítása frissítve",
     "organizationUpdated": "Szervezet frissítve",
     "otherSessionsRevoked": "Többi munkamenet visszavonva",
     "partyAdded": "Fél hozzáadva",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archiválás",
     "copyToMatter": {
       "copied": "Másolva az ügyiratba",
       "copyOption": "Másolás (eredeti megtartása)",

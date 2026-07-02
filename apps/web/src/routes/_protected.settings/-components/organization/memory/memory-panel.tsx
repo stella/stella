@@ -98,6 +98,7 @@ const FirmMemories = ({ canManage }: FirmMemoriesProps) => {
 
 const MatterMemories = () => {
   const t = useTranslations("memory");
+  const commonT = useTranslations("common");
   const activeOrganizationId = useActiveOrganizationId();
   const { data } = useQuery(workspacesOptions(activeOrganizationId));
   const [workspaceId, setWorkspaceId] = useState<string | null>(null);
@@ -107,7 +108,7 @@ const MatterMemories = () => {
   return (
     <div className="flex flex-col gap-6 pt-4">
       <div className="flex flex-col gap-1.5">
-        <span className="text-sm font-medium">{t("matterPicker.label")}</span>
+        <span className="text-sm font-medium">{commonT("matter")}</span>
         <Select
           onValueChange={(value) => setWorkspaceId(value || null)}
           value={workspaceId ?? ""}
