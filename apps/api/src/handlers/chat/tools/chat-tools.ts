@@ -196,6 +196,7 @@ const createCreateDocumentTools = () => ({
 
 type CreateRememberToolsProps = {
   organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -203,12 +204,14 @@ type CreateRememberToolsProps = {
 
 const createRememberTools = ({
   organizationId,
+  recordAuditEvent,
   safeDb,
   userId,
   workspaceId,
 }: CreateRememberToolsProps) => ({
   [REMEMBER_TOOL_NAME]: createRememberTool({
     organizationId,
+    recordAuditEvent,
     safeDb,
     userId,
     workspaceId,
@@ -334,12 +337,19 @@ export const getChatTools = ({
     safeDb,
     threadId,
   });
-  const rememberTools = createRememberTools({
-    organizationId,
-    safeDb,
-    userId,
-    workspaceId,
-  });
+  // Memory writes audit like the REST memories handlers, so the tool
+  // needs a recorder; callers without one (schema-only construction)
+  // get no remember tool rather than an unaudited write path.
+  const rememberTools =
+    recordAuditEvent === undefined
+      ? {}
+      : createRememberTools({
+          organizationId,
+          recordAuditEvent,
+          safeDb,
+          userId,
+          workspaceId,
+        });
   const externalChatTools = applyChatToolPolicies({
     defaultPolicyKind: CHAT_TOOL_POLICY_KIND.external,
     tools: externalTools,

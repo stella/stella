@@ -18,6 +18,7 @@ import {
 } from "@/api/handlers/chat/tools/chat-history-tools";
 import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { REMEMBER_TOOL_NAME } from "@/api/handlers/chat/tools/remember-tool";
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -184,6 +185,7 @@ describe("chat tool schemas", () => {
       hasActiveDocxEditClient: false,
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
+      recordAuditEvent: noopAuditRecorder,
     });
 
     expect(tools).toHaveProperty("ask-user");
@@ -194,6 +196,7 @@ describe("chat tool schemas", () => {
     expect(tools).toHaveProperty(EXPAND_CHAT_HISTORY_TOOL_NAME);
     expect(tools).toHaveProperty("run-stella-query");
     expect(tools).toHaveProperty("create-document");
+    expect(tools).toHaveProperty(REMEMBER_TOOL_NAME);
     expect(tools).toHaveProperty("update-entity-fields");
     expect(tools).not.toHaveProperty("search-across-matters");
     expect(tools).not.toHaveProperty("read-content-across-matters");
