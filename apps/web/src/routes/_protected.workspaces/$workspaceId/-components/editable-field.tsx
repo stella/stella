@@ -27,6 +27,7 @@ import type {
   EntityKind,
   WorkspaceFieldContent,
   WorkspaceProperty,
+  WorkspacePropertyOption,
 } from "@/lib/types";
 import type { EditableFieldContent } from "@/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog";
 import {
@@ -212,9 +213,11 @@ const InlineEditor = ({
       : [];
   if (type === "single-select") {
     return (
-      <FieldValueSelect
+      <InlineSelectEditor
+        content={content}
         onChange={(value) => save({ type: "single-select", version: 1, value })}
         options={options}
+        property={property}
         type="single-select"
         value={content?.type === "single-select" ? content.value : null}
       />
@@ -222,11 +225,92 @@ const InlineEditor = ({
   }
 
   return (
-    <FieldValueSelect
+    <InlineSelectEditor
+      content={content}
       onChange={(value) => save({ type: "multi-select", version: 1, value })}
       options={options}
+      property={property}
       type="multi-select"
       value={content?.type === "multi-select" ? content.value : []}
+    />
+  );
+};
+
+// -- Select inline editor --
+//
+// Mirrors the text/int editors: a lightweight display by default, swapping to
+// the live (heavy, Base UI) select only on click. Keeping every select cell as
+// a display avoids mounting dozens of live dropdowns at once in the table.
+
+type InlineSelectEditorProps = (
+  | {
+      type: "single-select";
+      value: string | null | string[];
+      onChange: (value: string | null) => void;
+    }
+  | {
+      type: "multi-select";
+      value: string | null | string[];
+      onChange: (value: string[]) => void;
+    }
+) & {
+  options: WorkspacePropertyOption[];
+  property: WorkspaceProperty;
+  content: WorkspaceFieldContent | undefined;
+};
+
+const InlineSelectEditor = (props: InlineSelectEditorProps) => {
+  const { property, content } = props;
+  const [editing, setEditing] = useState(false);
+
+  if (!editing) {
+    const isEmpty =
+      content?.type !== props.type ||
+      (content.type === "single-select"
+        ? content.value === null
+        : content.value.length === 0);
+    return (
+      <button
+        className="hover:bg-muted block w-full truncate rounded px-2 py-1 text-start text-sm transition-colors"
+        onClick={() => setEditing(true)}
+        type="button"
+      >
+        {isEmpty ? (
+          <span className="text-muted-foreground">—</span>
+        ) : (
+          <FieldValue content={content} property={property} />
+        )}
+      </button>
+    );
+  }
+
+  const onOpenChange = (open: boolean) => {
+    if (!open) {
+      setEditing(false);
+    }
+  };
+
+  if (props.type === "single-select") {
+    return (
+      <FieldValueSelect
+        defaultOpen
+        onChange={props.onChange}
+        onOpenChange={onOpenChange}
+        options={props.options}
+        type="single-select"
+        value={props.value}
+      />
+    );
+  }
+
+  return (
+    <FieldValueSelect
+      defaultOpen
+      onChange={props.onChange}
+      onOpenChange={onOpenChange}
+      options={props.options}
+      type="multi-select"
+      value={props.value}
     />
   );
 };

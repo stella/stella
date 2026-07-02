@@ -797,6 +797,7 @@
     "organizationName": "Organisatsiooni nimi",
     "pin": "Kinnita",
     "playVideo": "Esita video",
+    "playbooks": "Playbookid",
     "preview": "Eelvaade",
     "previous": "Eelmine",
     "print": "Prindi",
@@ -804,6 +805,7 @@
     "properties": "Omadused",
     "reconnecting": "Taasühendamine…",
     "reference": "Viide",
+    "refresh": "Värskenda",
     "regenerate": "Genereeri uuesti",
     "remove": "Eemalda",
     "removeMember": "Eemalda liige",
@@ -1455,6 +1457,107 @@
       "useInChat": "Kasuta vestluses",
       "whatIsAnMcpServer": "Mis on MCP server?"
     },
+    "playbooks": {
+      "addFallback": "Lisa alternatiiv",
+      "addPosition": "Lisa seisukoht",
+      "ask": "Päring",
+      "askContentLabel": "Vastuse tüüp",
+      "askQuestionLabel": "Küsimus",
+      "askQuestionPlaceholder": "Mida peaksime igast dokumendist välja lugema? Käsitsi sisestamiseks jätke tühjaks.",
+      "clauseLabel": "Klausel",
+      "clausePlaceholder": "Otsi klausleid…",
+      "clauseRequired": "Valige iga klauslipõhise standardi jaoks klausel.",
+      "clauseSearchEmpty": "Klausleid ei leitud",
+      "conditionPlaceholder": "Seadistage see piirang hilisemas etapis.",
+      "confirmDelete": "See kustutab playbooki jäädavalt.",
+      "contentType": {
+        "int": "Arv",
+        "singleSelect": "Ühekordne valik",
+        "text": "Tekst"
+      },
+      "createPlaybook": "Uus playbook",
+      "created": "Playbook loodud",
+      "deleteFailed": "Playbooki kustutamine ebaõnnestus",
+      "deletePlaybook": "Kustuta playbook",
+      "deleted": "Playbook kustutatud",
+      "descriptionPlaceholder": "Mida see playbook kontrollib?",
+      "empty": "Playbooke veel pole",
+      "emptyDescription": "Looge playbook, et vaadata dokumente üle oma standardite alusel.",
+      "expect": "Oodatav",
+      "expectSourceLabel": "Norm",
+      "expectation": {
+        "restricted": "Keelatud"
+      },
+      "expectationLabel": "Ootus",
+      "fallbackLabelPlaceholder": "Silt (valikuline)",
+      "fallbackTextPlaceholder": "Vastuvõetav alternatiivne sõnastus",
+      "fallbacksLabel": "Alternatiivid",
+      "grade": "Hindamine",
+      "gradeRuleLabel": "Reegel",
+      "guidanceLabel": "Juhised",
+      "guidancePlaceholder": "Märkused üle vaatajatele (valikuline)",
+      "issueLabel": "Teema",
+      "issuePlaceholder": "nt Vastutuse piiramine",
+      "loadFailed": "Playbookide laadimine ebaõnnestus",
+      "loading": "Playbookide laadimine…",
+      "namePlaceholder": "nt NDA ülevaatus",
+      "nameRequired": "Lisage nimi.",
+      "noPositions": "Seisukohti veel pole. Lisage esimene.",
+      "optionsLabel": "Valikud",
+      "optionsPlaceholder": "Üks valik rea kohta",
+      "positionIssueRequired": "Iga seisukoht vajab teemat.",
+      "positionLabel": "Seisukoht {index}",
+      "positions": "Seisukohad",
+      "preferredLabel": "Eelistatud sõnastus",
+      "preferredPlaceholder": "Eelistatud sõnastus",
+      "review": {
+        "changePlaybook": "Vali teine playbook",
+        "extractedLabel": "Leitud:",
+        "facetTitle": "Ülevaatus playbookiga",
+        "failed": "Dokumendi ülevaatus ebaõnnestus",
+        "fixAccepted": "Nõustutud",
+        "insertFailed": "Eelistatud klausli lisamine ebaõnnestus",
+        "insertPreferred": "Lisa eelistatud klausel",
+        "launcherDescription": "Vaadake see dokument üle organisatsiooni playbooki alusel ja saage tulemused otse tekstis.",
+        "noFindings": "Probleeme ei leitud",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Vali playbook",
+        "reject": "Lükka tagasi",
+        "reviewAgain": "Vaata uuesti üle",
+        "reviewedAgainst": "Üle vaadatud {name} alusel",
+        "reviewing": "Ülevaatamine…",
+        "reviewingHint": "Suurte playbookide puhul võib see võtta paar minutit.",
+        "run": "Vaata üle",
+        "scrollToChange": "Mine muudatuse juurde",
+        "viewClause": "Vaata klauslit"
+      },
+      "rule": {
+        "extractOnly": "Ainult väljavõte",
+        "positionMatch": "Seisukoha vastavus",
+        "presence": "Olemasolu",
+        "propertyConstraint": "Väärtuse piirang"
+      },
+      "saveFailed": "Playbooki salvestamine ebaõnnestus",
+      "severity": {
+        "blocker": "Blokeeriv",
+        "high": "Kõrge",
+        "low": "Madal",
+        "medium": "Keskmine"
+      },
+      "severityLabel": "Raskusaste",
+      "source": {
+        "clause": "Klauslite teek",
+        "inline": "Sisestatud tekst",
+        "none": "Standard puudub"
+      },
+      "updated": "Playbook uuendatud",
+      "verdict": {
+        "compliant": "Vastav",
+        "deviation": "Kõrvalekalle",
+        "fallback": "Alternatiiv",
+        "missing": "Puudub"
+      }
+    },
     "sections": {
       "agents": {
         "description": "Seadistatavad assistendid korduvaks tööks",
@@ -1469,6 +1572,9 @@
       "mcp": {
         "description": "Ühendage stella väliste tööriistadega",
         "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Hinnatud kontroll-loendid, mis vaatavad dokumendid üle teie standardite alusel"
       },
       "prompts": {
         "description": "Taaskasutatavad oskused, mis on vestluses saadaval / kaudu",
@@ -2675,28 +2781,12 @@
       "zoomOut": "Suumi välja"
     },
     "playbooks": {
-      "action": "Playbooks",
-      "addColumn": "Add column",
-      "applied": "Playbook applied",
-      "apply": "Apply",
-      "columnNamePlaceholder": "Column name",
-      "columnsLabel": "Columns",
-      "contentType": {
-        "date": "Date",
-        "int": "Number",
-        "text": "Text"
-      },
-      "create": "New playbook",
-      "description": "Bundle AI columns that fill only for a chosen document type.",
-      "duplicateColumn": "Column names must be unique.",
-      "empty": "No playbooks yet.",
-      "incomplete": "Add a name and at least one column.",
-      "nameLabel": "Name",
-      "namePlaceholder": "e.g. Lease review",
-      "promptPlaceholder": "What should this column extract?",
-      "summary": "{type} · {count, number} columns",
-      "title": "Playbooks",
-      "typeLabel": "Document type"
+      "autoRun": "Automaatne käivitamine",
+      "autoRunHint": "Tuvastab ja käivitab automaatselt iga playbooki, mis vastab dokumentide tüüpidele",
+      "autoRunStarted": "Käivitatakse {count, plural, one {# playbook} other {# playbooki}}",
+      "run": "Käivita playbook",
+      "runFailed": "Playbooki käivitamine ebaõnnestus",
+      "runStarted": "Playbooki käivitamine ({count, plural, one {# veerg} other {# veergu}})"
     },
     "possibleDuplicates": "Võimalikud duplikaadid",
     "properties": {

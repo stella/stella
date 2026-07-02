@@ -2,7 +2,7 @@ import { Suspense, useEffect, useState } from "react";
 
 import { useSuspenseQuery } from "@tanstack/react-query";
 import type { Editor } from "@tiptap/react";
-import { PlusIcon } from "lucide-react";
+import { PlusIcon, RouteIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -14,6 +14,13 @@ import {
   DialogTrigger,
 } from "@stll/ui/components/dialog";
 import { Input } from "@stll/ui/components/input";
+import {
+  Select,
+  SelectItem,
+  SelectPopup,
+  SelectTrigger,
+  SelectValue,
+} from "@stll/ui/components/select";
 import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
@@ -37,6 +44,11 @@ import type {
 import { InlineOptionEditor } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/inline-option-editor";
 import { PropertyPromptInput } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
 import type { PropertyPromptFieldHandle } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input";
+import {
+  buildDocTypeGate,
+  docTypeGateLabel,
+  isDocumentTypeClassifier,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { usePropertiesCountLimit } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-limits";
 import { useStartWorkflow } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-start-workflow";
 import {
@@ -407,6 +419,26 @@ const PropertyComposerBody = ({
     return map;
   })();
 
+  // "Applies to" scope: gate this AI column to one Document-Type subtable by
+  // depending on the classifier with a `classifier == <label>` condition (the
+  // same gate a playbook run writes), so the column runs only for those docs and
+  // shows only in that section. Offered only when a Document Type classifier
+  // exists; null means every type (ungated).
+  const classifier = properties.find(isDocumentTypeClassifier);
+  const docTypeOptions =
+    classifier?.content.type === "single-select"
+      ? classifier.content.options
+      : [];
+  const initialScopeDocType = (() => {
+    if (!classifier || editingTool?.type !== "ai-model") {
+      return null;
+    }
+    const gate = editingTool.dependencies.find(
+      (dependency) => dependency.dependsOnPropertyId === classifier.id,
+    );
+    return gate ? docTypeGateLabel(gate, classifier.id) : null;
+  })();
+
   const [contentType, setContentType] =
     useState<CreatableContentType>(initialContentType);
   const [name, setName] = useState(editingProperty?.name ?? "");
@@ -419,6 +451,9 @@ const PropertyComposerBody = ({
   const [options, setOptions] =
     useState<WorkspacePropertyOption[]>(initialOptions);
   const [fallback, setFallback] = useState<string | null>(initialFallback);
+  const [scopeDocType, setScopeDocType] = useState<string | null>(
+    initialScopeDocType,
+  );
   const [editor, setEditor] = useState<Editor | null>(null);
 
   const trimmedName = name.trim();
@@ -480,16 +515,32 @@ const PropertyComposerBody = ({
       return;
     }
 
-    // Preserve any per-dependency conditions configured via the
-    // conditions sub-modal. New mentions default to null.
-    const dependencies: PropertyDependency[] = dependencyIds.map((id) => ({
-      dependsOnPropertyId: id,
-      condition: initialDependencyConditions.get(id) ?? null,
-    }));
+    // Preserve any per-dependency conditions configured via the conditions
+    // sub-modal. New mentions default to null. The "Applies to" scope owns the
+    // classifier slot: drop the classifier dependency only when it is (or was)
+    // a scope gate, then re-add the gate below for the chosen document type. A
+    // plain classifier mention with no scope is preserved with its condition.
+    const dependencies: PropertyDependency[] = dependencyIds
+      .filter((id) => {
+        if (id !== classifier?.id) {
+          return true;
+        }
+        return scopeDocType === null && initialScopeDocType === null;
+      })
+      .map((id) => ({
+        dependsOnPropertyId: id,
+        condition: initialDependencyConditions.get(id) ?? null,
+      }));
+    if (classifier && scopeDocType !== null) {
+      dependencies.push(buildDocTypeGate(classifier.id, scopeDocType));
+    }
 
     if (isEditMode && editingProperty) {
       const nextContent = buildContent(contentType, options, effectiveFallback);
-      const nextTool: WorkspaceProperty["tool"] =
+      const nextTool: Exclude<
+        WorkspaceProperty["tool"],
+        { type: "playbook-verdict" }
+      > =
         editingTool?.type === "manual-input"
           ? { version: 1, type: "manual-input" }
           : { version: 1, type: "ai-model", prompt, dependencies };
@@ -701,6 +752,15 @@ const PropertyComposerBody = ({
           />
         )}
 
+        {showAiSections && classifier && docTypeOptions.length > 0 && (
+          <DocumentTypeScopeRow
+            classifierName={classifier.name}
+            onChange={setScopeDocType}
+            options={docTypeOptions}
+            value={scopeDocType}
+          />
+        )}
+
         {needsOptions && (
           <InlineOptionEditor
             fallback={effectiveFallback}
@@ -814,6 +874,60 @@ const ComposerCard = ({
         showSeparator
         typeChanged={typeChanged}
       />
+    </div>
+  );
+};
+
+// Sentinel for the "every document type" (ungated) choice; a Select value can't
+// be null, so it stands in for it and maps back to null on change.
+const SCOPE_ALL_VALUE = "__all__";
+
+type DocumentTypeScopeRowProps = {
+  classifierName: string;
+  options: WorkspacePropertyOption[];
+  value: string | null;
+  onChange: (value: string | null) => void;
+};
+
+/**
+ * Scopes an AI column to one Document-Type subtable (or all). Picking a type
+ * gates the column so it only runs for — and only shows under — that document
+ * type; "All" leaves it running for every type.
+ */
+const DocumentTypeScopeRow = ({
+  classifierName,
+  options,
+  value,
+  onChange,
+}: DocumentTypeScopeRowProps) => {
+  const t = useTranslations();
+  return (
+    <div className="flex items-center gap-2 px-1">
+      <RouteIcon className="text-muted-foreground size-4 shrink-0" />
+      <span className="text-muted-foreground shrink-0 text-sm">
+        {classifierName}
+      </span>
+      <Select
+        onValueChange={(next) =>
+          onChange(next === null || next === SCOPE_ALL_VALUE ? null : next)
+        }
+        value={value ?? SCOPE_ALL_VALUE}
+      >
+        <SelectTrigger
+          className="h-7 min-h-0 w-auto min-w-40 text-xs"
+          size="sm"
+        >
+          <SelectValue />
+        </SelectTrigger>
+        <SelectPopup>
+          <SelectItem value={SCOPE_ALL_VALUE}>{t("common.all")}</SelectItem>
+          {options.map((option) => (
+            <SelectItem key={option.value} value={option.value}>
+              {option.value}
+            </SelectItem>
+          ))}
+        </SelectPopup>
+      </Select>
     </div>
   );
 };

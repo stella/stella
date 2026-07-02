@@ -231,6 +231,21 @@ jobs:
         # local loop. Regenerate: `bun scripts/rc-bailouts.ts --write-baseline`.
         run: bun scripts/rc-bailouts.ts --check
 
+      - name: exactMirror route guard
+        if: steps.changed-files.outputs.package_checks_required == 'true'
+        # Elysia builds an "exactMirror" serializer per route schema. Some
+        # schemas (recursive ones: t.Recursive, or a Type.Unsafe wrapping a
+        # self-referential TypeBox node) cannot be mirrored: Elysia logs the
+        # failure and falls back to slow per-request serialization, which has
+        # taken the API down at boot. Typecheck and lint do not catch it. The
+        # guard builds the real app and forces every route's mirror to compile,
+        # failing if any cannot. The --self-test run first proves the detector
+        # still catches a known recursive schema, so a broken guard cannot pass
+        # silently.
+        run: |
+          bun apps/api/scripts/exact-mirror-guard.ts --self-test
+          bun apps/api/scripts/exact-mirror-guard.ts
+
       - name: Knip production dependency checks
         if: steps.changed-files.outputs.package_checks_required == 'true'
         # Static gate paired with the image compile/boot smokes

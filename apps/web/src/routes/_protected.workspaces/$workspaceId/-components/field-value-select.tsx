@@ -11,25 +11,31 @@ import {
 import type { WorkspacePropertyOption } from "@/lib/types";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
 
-type FieldValueSelectProps =
+type FieldValueSelectProps = (
   | {
       type: "single-select";
       value: string | null | string[];
       onChange: (value: string | null) => void;
-      options: WorkspacePropertyOption[];
     }
   | {
       type: "multi-select";
       value: string | null | string[];
       onChange: (value: string[]) => void;
-      options: WorkspacePropertyOption[];
-    };
+    }
+) & {
+  options: WorkspacePropertyOption[];
+  /** Open the dropdown as soon as it mounts (for click-to-edit cells). */
+  defaultOpen?: boolean;
+  onOpenChange?: (open: boolean) => void;
+};
 
 export const FieldValueSelect = ({
   options,
   type,
   value,
   onChange,
+  defaultOpen,
+  onOpenChange,
 }: FieldValueSelectProps) => {
   const items = options.map((option) => ({
     label: option.value,
@@ -38,8 +44,10 @@ export const FieldValueSelect = ({
 
   return (
     <Select
+      defaultOpen={defaultOpen}
       items={items}
       multiple={type === "multi-select"}
+      onOpenChange={onOpenChange}
       onValueChange={(newValue) => {
         if (type === "multi-select" && Array.isArray(newValue)) {
           onChange(newValue);
@@ -56,7 +64,14 @@ export const FieldValueSelect = ({
           )}
         </SelectValue>
       </SelectTrigger>
-      <SelectPopup alignItemWithTrigger={false}>
+      <SelectPopup
+        alignItemWithTrigger={false}
+        collisionAvoidance={{
+          side: "flip",
+          align: "shift",
+          fallbackAxisSide: "none",
+        }}
+      >
         {items.map(({ label, value: option }) => (
           <SelectItem key={option.value} value={option.value}>
             <div className="flex items-center gap-x-1.5">

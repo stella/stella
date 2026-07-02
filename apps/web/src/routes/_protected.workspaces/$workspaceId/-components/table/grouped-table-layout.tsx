@@ -37,6 +37,11 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import type { EntityGroup } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
 import { SelectColorIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/properties/shared";
+import {
+  buildDocTypeGateLabels,
+  isDocumentTypeClassifier,
+  selectGroupColumns,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { GroupScopeProvider } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 import { MobileTableOrientationGate } from "@/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate";
 import {
@@ -76,6 +81,12 @@ import {
 
 const GROUP_TABLE_PAGE_SIZE = 200;
 
+// Grouped views with at most this many sections load every section's rows
+// upfront (a few parallel fetches) instead of the lazy scroll-gate, so small
+// grouped tables appear at once and an already-visible section can't stall
+// behind its IntersectionObserver. Larger views keep the lazy per-section load.
+const GROUP_EAGER_LOAD_MAX = 8;
+
 // A grouped document table never lists folders or tasks as rows, matching the
 // flat window query; passed to the kanban-group endpoint so its rows (and the
 // group-counts) stay in sync.
@@ -86,6 +97,10 @@ const GROUPED_TABLE_EXCLUDED_KINDS: EntityKind[] = ["folder", "task"];
 // can't collide with the null bucket.
 const groupKeyFor = (value: string | null): string =>
   value === null ? "uncategorized" : `value:${value}`;
+
+// Stable empty gate map for groupings other than the "Document Type" classifier,
+// where every section shares the full column set (no per-section filtering).
+const EMPTY_DOC_TYPE_GATE = new Map<string, Set<string>>();
 
 type GroupedTableLayoutProps = {
   workspaceId: string;
@@ -135,17 +150,34 @@ export const GroupedTableLayout = ({
     [groupByProperty, view.layout.hiddenProperties, properties],
   );
 
-  // The int columns that should roll up a per-group sum: visible int
-  // properties (the grouping property itself never rolls up).
-  const sumProperties = useMemo(
+  // Auto-summing every int column per group is misleading for non-additive
+  // columns (e.g. "Splatnost faktur (dny)" — you don't add up days), so the
+  // per-group rollups are disabled until aggregation becomes opt-in per column.
+  const sumProperties = useMemo<WorkspaceProperty[]>(() => [], []);
+
+  // When grouped by the workspace's "Document Type" classifier, each section
+  // renders the common columns plus only the playbook columns scoped to that
+  // section's document type, read from each column's materialized doc-type gate.
+  // Any other grouping keeps the shared column set.
+  const isDocTypeGrouping =
+    groupByProperty !== null && isDocumentTypeClassifier(groupByProperty);
+  const gateLabelsByColumnId = useMemo(
     () =>
-      properties.filter(
-        (property) =>
-          property.content.type === "int" &&
-          property.id !== groupByPropertyId &&
-          !view.layout.hiddenProperties.includes(property.id),
-      ),
-    [properties, groupByPropertyId, view.layout.hiddenProperties],
+      isDocTypeGrouping && groupByPropertyId !== null
+        ? buildDocTypeGateLabels({
+            properties,
+            classifierPropertyId: groupByPropertyId,
+          })
+        : EMPTY_DOC_TYPE_GATE,
+    [isDocTypeGrouping, properties, groupByPropertyId],
+  );
+  // The whole-view "+ new document" row carries the common (ungated) columns: a
+  // freshly created, unclassified document has no document type, so no playbook
+  // column applies to it yet.
+  const addRowColumns = useMemo(
+    () =>
+      selectGroupColumns({ columns, gateLabelsByColumnId, groupValue: null }),
+    [columns, gateLabelsByColumnId],
   );
 
   // Only "kind" and single/multi-select property groupings are supported for a
@@ -216,6 +248,16 @@ export const GroupedTableLayout = ({
     () => allTreeData.map((node) => node.entityId),
     [allTreeData],
   );
+  // The cross-group row-id union grows as each group's first page lands, so
+  // passing it as a prop re-renders every section on every group load (each
+  // rebuilding its table). Sections only read it inside the "select all"
+  // handler, never during render, so mirror it into a ref: the prop stays
+  // referentially stable and the per-load re-render fan-out disappears.
+  const allRowIdsRef = useRef(allRowIds);
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- mirroring a render value into a ref for event-time reads; not external-system sync nor mount-only, so neither wrapper applies
+  useEffect(() => {
+    allRowIdsRef.current = allRowIds;
+  }, [allRowIds]);
 
   if (groupByPropertyId === null || isUnsupportedGrouping) {
     return (
@@ -248,6 +290,7 @@ export const GroupedTableLayout = ({
   // group server-side (the row/count queries treat "no current-option value" as
   // uncategorized), so the sections are just the option groups plus uncategorized.
   const groups = getEntityGroups(options, t("common.uncategorized"));
+  const eagerLoadSections = groups.length <= GROUP_EAGER_LOAD_MAX;
 
   return (
     // Flex column so empty categories can sink below populated ones via
@@ -266,14 +309,16 @@ export const GroupedTableLayout = ({
             count={
               countsLoaded ? (countByValue.get(group.value) ?? 0) : undefined
             }
+            eager={eagerLoadSections}
             fieldIds={fieldIds}
+            gateLabelsByColumnId={gateLabelsByColumnId}
             group={group}
             groupByPropertyId={groupByPropertyId}
             key={groupKeyFor(group.value)}
             optionValues={optionValues}
             outerScrollRef={scrollRef}
             reportGroupTreeData={reportGroupTreeData}
-            selectAllPreservableRowIds={allRowIds}
+            selectAllPreservableRowIdsRef={allRowIdsRef}
             sumProperties={sumProperties}
             tableState={tableState}
             view={view}
@@ -281,7 +326,7 @@ export const GroupedTableLayout = ({
           />
         ))}
         <GroupedAddRow
-          columns={columns}
+          columns={addRowColumns}
           tableState={tableState}
           workspaceId={workspaceId}
         />
@@ -355,7 +400,7 @@ const GroupedAddRow = ({
 
   return (
     <div
-      className="bg-background sticky start-0 bottom-0 z-30 order-last"
+      className="bg-background sticky start-0 bottom-0 z-50 order-last"
       style={gridStyle}
     >
       <BottomRow table={table} workspaceId={workspaceId} />
@@ -407,13 +452,19 @@ type GroupSectionProps = {
   // Authoritative row count from the one upfront group-counts query;
   // `undefined` while that query is still loading.
   count: number | undefined;
+  // Skip the lazy scroll-gate and load this section's rows upfront.
+  eager: boolean;
   fieldIds: string[];
   columns: TableColumnDef[];
+  // propertyId -> document-type labels its column is gated to, for per-section
+  // column selection when grouped by the "Document Type" classifier. Empty for
+  // other groupings (every section then renders the full column set).
+  gateLabelsByColumnId: Map<string, Set<string>>;
   sumProperties: WorkspaceProperty[];
   tableState: ReturnType<typeof useTableState>;
   outerScrollRef: RefObject<HTMLDivElement | null>;
   reportGroupTreeData: (groupKey: string, nodes: TableTreeNode[]) => void;
-  selectAllPreservableRowIds: string[];
+  selectAllPreservableRowIdsRef: RefObject<string[]>;
 };
 
 const GroupSection = ({
@@ -423,15 +474,31 @@ const GroupSection = ({
   groupByPropertyId,
   optionValues,
   count,
+  eager,
   fieldIds,
   columns,
+  gateLabelsByColumnId,
   sumProperties,
   tableState,
   outerScrollRef,
   reportGroupTreeData,
-  selectAllPreservableRowIds,
+  selectAllPreservableRowIdsRef,
 }: GroupSectionProps) => {
   const [collapsed, setCollapsed] = useState(false);
+
+  // This section's columns: common columns plus the playbook columns scoped to
+  // this group's document type (see selectGroupColumns). Sections legitimately
+  // differ in columns and grid width when grouped by the "Document Type"
+  // classifier; for other groupings this returns the shared columns unchanged.
+  const sectionColumns = useMemo(
+    () =>
+      selectGroupColumns({
+        columns,
+        gateLabelsByColumnId,
+        groupValue: group.value,
+      }),
+    [columns, gateLabelsByColumnId, group.value],
+  );
 
   // A category with no rows (an option no document carries yet) collapses to a
   // slim header; only groups known to have rows fire their row query.
@@ -446,7 +513,7 @@ const GroupSection = ({
   const [hasScrolledIntoView, setHasScrolledIntoView] = useState(false);
   useExternalSyncEffect(() => {
     const section = sectionRef.current;
-    if (hasScrolledIntoView || !hasRows || !section) {
+    if (eager || hasScrolledIntoView || !hasRows || !section) {
       return undefined;
     }
     const observer = new IntersectionObserver(
@@ -459,7 +526,7 @@ const GroupSection = ({
     );
     observer.observe(section);
     return () => observer.disconnect();
-  }, [hasScrolledIntoView, hasRows]);
+  }, [eager, hasScrolledIntoView, hasRows]);
 
   const query = useInfiniteQuery({
     ...useKanbanGroupOptions({
@@ -474,7 +541,7 @@ const GroupSection = ({
       groupValue: group.value,
       ...(optionValues !== undefined && { optionValues }),
     }),
-    enabled: hasRows && hasScrolledIntoView,
+    enabled: hasRows && (eager || hasScrolledIntoView),
   });
 
   // When a group empties (its last row moved/deleted), the count is 0 and the
@@ -517,7 +584,7 @@ const GroupSection = ({
     features: workspaceTableFeatures,
     columnResizeMode: "onChange",
     data: treeData,
-    columns,
+    columns: sectionColumns,
     defaultColumn: {
       minSize: DEFAULT_TABLE_COLUMN_MIN_SIZE,
     },
@@ -532,8 +599,10 @@ const GroupSection = ({
   // While the up-front counts load, or a populated group is still offscreen /
   // fetching its first page, show skeleton rows instead of an empty body.
   const isLoadingCounts = count === undefined;
-  const isLoadingRows = hasRows && hasScrolledIntoView && query.isLoading;
-  const isPendingVisible = hasRows && !hasScrolledIntoView;
+  const isLoadingRows =
+    hasRows && (eager || hasScrolledIntoView) && query.isLoading;
+  // Eager sections load upfront, so they're never "pending until scrolled in".
+  const isPendingVisible = hasRows && !eager && !hasScrolledIntoView;
   const showSkeleton = isLoadingCounts || isLoadingRows || isPendingVisible;
 
   return (
@@ -553,14 +622,14 @@ const GroupSection = ({
       />
       {!collapsed && showSkeleton && (
         <GroupSkeleton
-          columns={columns}
+          columns={sectionColumns}
           rows={Math.min(count ?? 3, 5)}
           tableState={tableState}
         />
       )}
       {!collapsed &&
         hasRows &&
-        hasScrolledIntoView &&
+        (eager || hasScrolledIntoView) &&
         !isLoadingRows && (
           // The table flows inline in the shared outer scroll (no nested scroll
           // box), so its rows render directly and the sticky group header stacks
@@ -585,7 +654,7 @@ const GroupSection = ({
                 }
               }}
               outerScrollRef={outerScrollRef}
-              selectAllPreservableRowIds={selectAllPreservableRowIds}
+              selectAllPreservableRowIdsRef={selectAllPreservableRowIdsRef}
               showAddRow={false}
               stickyColumnHeader={false}
               table={table}
@@ -633,11 +702,18 @@ const GroupHeader = ({
   return (
     <div
       className={cn(
-        "bg-muted sticky top-0 z-40 flex items-center gap-2 border-b pe-3",
+        "sticky top-0 z-40 flex items-center gap-2 border-b pe-3",
         // An empty category recedes into the background, surfacing on hover
         // so it stays scannable without competing with populated groups.
         empty && "opacity-60 transition-opacity duration-200 hover:opacity-100",
       )}
+      // Opaque header so scrolled rows don't show through. `bg-muted` and
+      // `bg-secondary` are both translucent (~4% over transparent) in this theme,
+      // so we composite that 4% tint over the opaque background by hand.
+      style={{
+        backgroundColor:
+          "color-mix(in oklab, var(--foreground) 4%, var(--background))",
+      }}
     >
       {/* The whole header row is the toggle target, not just the chevron. */}
       <button
@@ -651,8 +727,11 @@ const GroupHeader = ({
         type="button"
       >
         {/* The label stays pinned at the left while the band scrolls
-            horizontally with the columns. */}
-        <span className="bg-muted sticky start-0 flex items-center gap-2 ps-3">
+            horizontally with the columns. The full-width `bg-muted` band lives
+            on the row wrapper, so the pinned label adds no second layer (a
+            second translucent `bg-muted` here darkened only the label's span,
+            reading as a partial band that stopped mid-row). */}
+        <span className="sticky start-0 flex items-center gap-2 ps-3">
           {empty ? (
             <span aria-hidden className="size-3.5 shrink-0" />
           ) : (

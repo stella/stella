@@ -3,6 +3,7 @@ import type { ComponentType, SVGProps } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import {
   BotIcon,
+  ClipboardCheckIcon,
   LayoutTemplateIcon,
   PackageIcon,
   TextQuoteIcon,
@@ -12,6 +13,7 @@ import { useTranslations } from "use-intl";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import type { TranslationKey } from "@/i18n/types";
 
 export const Route = createFileRoute("/_protected/knowledge/")({
@@ -23,17 +25,22 @@ export const Route = createFileRoute("/_protected/knowledge/")({
 // on the Tools page. The sidebar entry was removed so the landing
 // doesn't advertise a deleted destination.
 type KnowledgeSection = {
-  key: "templates" | "clauses" | "tools" | "agents";
+  key: "templates" | "clauses" | "playbooks" | "tools" | "agents";
   icon: ComponentType<SVGProps<SVGSVGElement>>;
-  to?: "/knowledge/templates" | "/knowledge/clauses" | "/knowledge/tools";
-  // "clauses" reuses the shared common.clauses label instead of a
-  // feature-scoped duplicate; other sections use their own section title.
+  to?:
+    | "/knowledge/templates"
+    | "/knowledge/clauses"
+    | "/knowledge/playbooks"
+    | "/knowledge/tools";
+  // "clauses" and "playbooks" reuse the shared common.* labels instead of
+  // feature-scoped duplicates; other sections use their own section title.
   titleKey: Extract<
     TranslationKey,
     | "knowledge.sections.templates.title"
     | "knowledge.sections.tools.title"
     | "knowledge.sections.agents.title"
     | "common.clauses"
+    | "common.playbooks"
   >;
 };
 
@@ -56,78 +63,87 @@ export const knowledgeSections: readonly KnowledgeSection[] = [
     to: "/knowledge/clauses",
     titleKey: "common.clauses",
   },
+  {
+    key: "playbooks",
+    icon: ClipboardCheckIcon,
+    to: "/knowledge/playbooks",
+    titleKey: "common.playbooks",
+  },
   { key: "agents", icon: BotIcon, titleKey: "knowledge.sections.agents.title" },
 ];
 
 function KnowledgeLanding() {
   const t = useTranslations();
+  const playbooksEnabled = usePlaybooksPreviewEnabled();
 
   return (
     <div className="flex flex-1 flex-col p-6">
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {knowledgeSections.map((section) => {
-          const Icon = section.icon;
-          const title = t(section.titleKey);
-          const description = t(
-            `knowledge.sections.${section.key}.description`,
-          );
-          const cardBody = (
-            <>
-              <div
-                className={cn(
-                  "flex size-10 items-center justify-center",
-                  "bg-muted rounded-lg",
-                )}
-              >
-                <Icon className="size-5" />
-              </div>
-              <div className="mt-3">
-                <h2 className="text-sm font-semibold">{title}</h2>
-                <p className="text-muted-foreground mt-1 text-sm">
-                  {description}
-                </p>
-              </div>
-            </>
-          );
+        {knowledgeSections
+          .filter((section) => section.key !== "playbooks" || playbooksEnabled)
+          .map((section) => {
+            const Icon = section.icon;
+            const title = t(section.titleKey);
+            const description = t(
+              `knowledge.sections.${section.key}.description`,
+            );
+            const cardBody = (
+              <>
+                <div
+                  className={cn(
+                    "flex size-10 items-center justify-center",
+                    "bg-muted rounded-lg",
+                  )}
+                >
+                  <Icon className="size-5" />
+                </div>
+                <div className="mt-3">
+                  <h2 className="text-sm font-semibold">{title}</h2>
+                  <p className="text-muted-foreground mt-1 text-sm">
+                    {description}
+                  </p>
+                </div>
+              </>
+            );
 
-          if (section.to) {
+            if (section.to) {
+              return (
+                <Link
+                  className={cn(
+                    "bg-card rounded-xl border p-5",
+                    "transition-colors",
+                    "hover:border-foreground/15 hover:shadow-sm",
+                  )}
+                  key={section.key}
+                  to={section.to}
+                >
+                  {cardBody}
+                </Link>
+              );
+            }
+
             return (
-              <Link
+              <button
+                type="button"
                 className={cn(
-                  "bg-card rounded-xl border p-5",
-                  "transition-colors",
-                  "hover:border-foreground/15 hover:shadow-sm",
+                  "bg-card rounded-xl border p-5 text-start",
+                  "hover:border-foreground/15 opacity-50 transition-colors",
                 )}
                 key={section.key}
-                to={section.to}
+                onClick={() => {
+                  stellaToast.add({
+                    title: t("common.comingSoon"),
+                    type: "neutral",
+                  });
+                }}
               >
                 {cardBody}
-              </Link>
+                <p className="text-muted-foreground mt-3 text-xs">
+                  {t("common.comingSoon")}
+                </p>
+              </button>
             );
-          }
-
-          return (
-            <button
-              type="button"
-              className={cn(
-                "bg-card rounded-xl border p-5 text-start",
-                "hover:border-foreground/15 opacity-50 transition-colors",
-              )}
-              key={section.key}
-              onClick={() => {
-                stellaToast.add({
-                  title: t("common.comingSoon"),
-                  type: "neutral",
-                });
-              }}
-            >
-              {cardBody}
-              <p className="text-muted-foreground mt-3 text-xs">
-                {t("common.comingSoon")}
-              </p>
-            </button>
-          );
-        })}
+          })}
       </div>
     </div>
   );

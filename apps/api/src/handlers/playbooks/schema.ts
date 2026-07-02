@@ -1,15 +1,18 @@
 import { t } from "elysia";
 
-import { playbookBundleColumnSchema } from "@/api/db/schema-validators";
-import { tSafeId } from "@/api/lib/custom-schema";
+import {
+  playbookPositionsSchema,
+  playbookScopeSchema,
+} from "@/api/handlers/playbooks/positions";
+import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 
-export const playbookBodySchema = t.Object({
-  name: t.String({ minLength: 1, maxLength: 256 }),
-  typePropertyId: tSafeId("property"),
-  typeValue: t.String({ minLength: 1, maxLength: 1000 }),
-  bundle: t.Array(playbookBundleColumnSchema, { minItems: 1, maxItems: 100 }),
+export const playbookDefinitionBodySchema = t.Object({
+  name: tDefaultVarchar,
+  description: t.Optional(t.String({ maxLength: 2000 })),
+  scope: t.Optional(playbookScopeSchema),
+  positions: playbookPositionsSchema,
 });
 
-export const playbookParamsSchema = t.Object({
-  playbookId: tSafeId("playbook"),
+export const playbookDefinitionParamsSchema = t.Object({
+  playbookId: tSafeId("playbookDefinition"),
 });

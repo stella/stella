@@ -5,6 +5,7 @@ import type { ConditionNode } from "@stll/conditions";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
+  AIBatchProperty,
   BatchProperty,
   PropertyBatch,
 } from "@/api/lib/workflow/get-execution-plan";
@@ -27,8 +28,8 @@ const propertyId = (value: string) => toSafeId<"property">(value);
 
 const createBatchProperty = (
   id: string,
-  overrides: Partial<BatchProperty> = {},
-): BatchProperty => ({
+  overrides: Partial<AIBatchProperty> = {},
+): AIBatchProperty => ({
   id: propertyId(id),
   status: "fresh",
   content: { version: 1, type: "text" },

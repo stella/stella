@@ -194,16 +194,33 @@ type FindReadonlyFunctionManifestEntryProps = {
   name: string;
 };
 
+/**
+ * The system-prompt catalog lists functions in their sandbox call
+ * shape (`read.<name>`), so the model commonly passes that namespaced
+ * form to `describe-stella-api`. Contracts are keyed by the bare name,
+ * so strip a leading `read.` before matching. The sandbox execution
+ * path is unaffected: `read.<name>(input)` resolves `<name>` as a proxy
+ * property, so the host bridge already receives the bare name.
+ */
+const READONLY_FUNCTION_NAMESPACE_PREFIX = `${SANDBOX_READ_GLOBAL}.` as const;
+
+const stripReadonlyFunctionNamespace = (name: string): string =>
+  name.startsWith(READONLY_FUNCTION_NAMESPACE_PREFIX)
+    ? name.slice(READONLY_FUNCTION_NAMESPACE_PREFIX.length)
+    : name;
+
 export const findReadonlyFunctionManifestEntry = ({
   contracts,
   name,
 }: FindReadonlyFunctionManifestEntryProps): Result<
   ReadonlyFunctionManifest | undefined,
   ChatToolValidationError
-> =>
-  buildReadonlyFunctionManifest(contracts).map((manifest) =>
-    manifest.find((entry) => entry.name === name),
+> => {
+  const bareName = stripReadonlyFunctionNamespace(name);
+  return buildReadonlyFunctionManifest(contracts).map((manifest) =>
+    manifest.find((entry) => entry.name === bareName),
   );
+};
 
 export const buildReadonlyFunctionTypeDeclarations = (
   contracts: readonly ReadonlyFunctionContract[],

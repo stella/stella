@@ -3013,10 +3013,21 @@ export function PagedEditor(
           return undefined;
         }
 
+        // Bound the ghost text to the caret's page content column so a
+        // multi-line suggestion wraps inside the page instead of running
+        // off the right edge. `caret.x` is page-left relative (same origin
+        // as the page geometry), so the right content boundary is
+        // `size.w - margins.right`; `pageOffsetX` cancels between the two.
+        const caretPage = layout.pages.at(caret.pageIndex);
+        const maxWidth = caretPage
+          ? Math.max(0, caretPage.size.w - caretPage.margins.right - caret.x)
+          : undefined;
+
         setAutocompleteCaret({
           x: caret.x + pageOffsetX,
           y: caret.y + pageOffsetY,
           lineHeight: caret.height,
+          maxWidth,
         });
         setAutocompleteText(current.text);
         setAutocompleteIsStreaming(current.status === "streaming");

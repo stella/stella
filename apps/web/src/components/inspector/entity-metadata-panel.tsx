@@ -33,7 +33,10 @@ import {
 import { entityVersionsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entity-versions";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useIsWorkflowRunning } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import {
+  selectJustificationByFieldId,
+  useWorkspaceStore,
+} from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 type AiFieldClickArgs = {
   fieldId: string;
@@ -177,12 +180,12 @@ const EntityMetadataContent = ({
   const [pendingPlaceholderIds, setPendingPlaceholderIds] = useState<
     readonly string[]
   >([]);
-  const activeJustification = useWorkspaceStore((s) =>
-    activeJustificationFieldId
-      ? (s.justifications.find(
-          (j) => j.fieldId === activeJustificationFieldId,
-        ) ?? null)
-      : null,
+  const activeJustification = useWorkspaceStore(
+    (s) =>
+      selectJustificationByFieldId(
+        s.justifications,
+        activeJustificationFieldId,
+      ) ?? null,
   );
 
   const refreshEntityFields = useCallback(async () => {

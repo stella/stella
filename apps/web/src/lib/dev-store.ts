@@ -11,6 +11,7 @@ type State = {
   showToolCallDetails: boolean;
   reactGrab: boolean;
   publicLawPreview: boolean;
+  playbooksPreview: boolean;
   simulateSlowLoad: boolean;
 };
 
@@ -21,6 +22,7 @@ type Actions = {
   setShowToolCallDetails: (value: boolean) => void;
   setReactGrab: (value: boolean) => void;
   setPublicLawPreview: (value: boolean) => void;
+  setPlaybooksPreview: (value: boolean) => void;
   setSimulateSlowLoad: (value: boolean) => void;
 };
 
@@ -39,6 +41,7 @@ export const useDevStore = create<State & Actions>()(
       showToolCallDetails: false,
       reactGrab: false,
       publicLawPreview: false,
+      playbooksPreview: false,
       simulateSlowLoad: false,
 
       setTanstackDevtools: (tanstackDevtools) => {
@@ -58,6 +61,9 @@ export const useDevStore = create<State & Actions>()(
       },
       setPublicLawPreview: (publicLawPreview) => {
         void set({ publicLawPreview });
+      },
+      setPlaybooksPreview: (playbooksPreview) => {
+        void set({ playbooksPreview });
       },
       setSimulateSlowLoad: (simulateSlowLoad) => {
         void set({ simulateSlowLoad });

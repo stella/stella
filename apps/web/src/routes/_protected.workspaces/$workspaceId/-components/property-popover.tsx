@@ -156,7 +156,11 @@ export const PropertyPopover = ({
   // design — file columns are created by upload, not by user choice,
   // and the composer has no UI for them. Hiding the entry here keeps
   // a save from silently rewriting the file column as text/manual.
-  const canEditViaComposer = property.content.type !== "file";
+  // Verdict columns are system-computed (read-only), so they are not
+  // editable via the composer either.
+  const canEditViaComposer =
+    property.content.type !== "file" &&
+    property.tool.type !== "playbook-verdict";
 
   // `useOptimistic` mirrors the server `dependencies` while a save is
   // in flight so rapid successive edits compose against the latest

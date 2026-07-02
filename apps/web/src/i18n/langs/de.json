@@ -797,6 +797,7 @@
     "organizationName": "Organisationsname",
     "pin": "Anheften",
     "playVideo": "Video abspielen",
+    "playbooks": "Playbooks",
     "preview": "Vorschau",
     "previous": "Zurück",
     "print": "Drucken",
@@ -804,6 +805,7 @@
     "properties": "Eigenschaften",
     "reconnecting": "Verbindung wird wiederhergestellt…",
     "reference": "Referenz",
+    "refresh": "Aktualisieren",
     "regenerate": "Neu generieren",
     "remove": "Entfernen",
     "removeMember": "Mitglied entfernen",
@@ -1455,6 +1457,107 @@
       "useInChat": "Im Chat verwenden",
       "whatIsAnMcpServer": "Was ist ein MCP-Server?"
     },
+    "playbooks": {
+      "addFallback": "Alternative hinzufügen",
+      "addPosition": "Standpunkt hinzufügen",
+      "ask": "Abfrage",
+      "askContentLabel": "Antworttyp",
+      "askQuestionLabel": "Frage",
+      "askQuestionPlaceholder": "Was sollen wir aus jedem Dokument lesen? Für manuelle Eingabe leer lassen.",
+      "clauseLabel": "Klausel",
+      "clausePlaceholder": "Klauseln durchsuchen…",
+      "clauseRequired": "Wählen Sie für jede klauselbasierte Vorgabe eine Klausel aus.",
+      "clauseSearchEmpty": "Keine Klauseln gefunden",
+      "conditionPlaceholder": "Konfigurieren Sie diese Beschränkung in einem späteren Schritt.",
+      "confirmDelete": "Dadurch wird das Playbook dauerhaft gelöscht.",
+      "contentType": {
+        "int": "Zahl",
+        "singleSelect": "Einfachauswahl",
+        "text": "Text"
+      },
+      "createPlaybook": "Neues Playbook",
+      "created": "Playbook erstellt",
+      "deleteFailed": "Playbook konnte nicht gelöscht werden",
+      "deletePlaybook": "Playbook löschen",
+      "deleted": "Playbook gelöscht",
+      "descriptionPlaceholder": "Was prüft dieses Playbook?",
+      "empty": "Noch keine Playbooks",
+      "emptyDescription": "Erstellen Sie ein Playbook, um Dokumente anhand Ihrer Vorgaben zu prüfen.",
+      "expect": "Erwartung",
+      "expectSourceLabel": "Vorgabe",
+      "expectation": {
+        "restricted": "Unzulässig"
+      },
+      "expectationLabel": "Anforderung",
+      "fallbackLabelPlaceholder": "Bezeichnung (optional)",
+      "fallbackTextPlaceholder": "Akzeptable Alternativformulierung",
+      "fallbacksLabel": "Alternativen",
+      "grade": "Bewertung",
+      "gradeRuleLabel": "Regel",
+      "guidanceLabel": "Hinweise",
+      "guidancePlaceholder": "Hinweise für Prüfer (optional)",
+      "issueLabel": "Thema",
+      "issuePlaceholder": "z.B. Haftungsbeschränkung",
+      "loadFailed": "Playbooks konnten nicht geladen werden",
+      "loading": "Playbooks werden geladen…",
+      "namePlaceholder": "z.B. NDA-Prüfung",
+      "nameRequired": "Fügen Sie einen Namen hinzu.",
+      "noPositions": "Noch keine Standpunkte. Fügen Sie den ersten hinzu.",
+      "optionsLabel": "Optionen",
+      "optionsPlaceholder": "Eine Option pro Zeile",
+      "positionIssueRequired": "Jeder Standpunkt benötigt ein Thema.",
+      "positionLabel": "Standpunkt {index}",
+      "positions": "Standpunkte",
+      "preferredLabel": "Bevorzugter Wortlaut",
+      "preferredPlaceholder": "Bevorzugte Formulierung",
+      "review": {
+        "changePlaybook": "Anderes Playbook wählen",
+        "extractedLabel": "Gefunden:",
+        "facetTitle": "Mit Playbook prüfen",
+        "failed": "Dokument konnte nicht geprüft werden",
+        "fixAccepted": "Angenommen",
+        "insertFailed": "Bevorzugte Klausel konnte nicht eingefügt werden",
+        "insertPreferred": "Bevorzugte Klausel einfügen",
+        "launcherDescription": "Prüfen Sie dieses Dokument anhand eines Playbooks Ihrer Organisation und erhalten Sie die Ergebnisse direkt im Dokument.",
+        "noFindings": "Keine Probleme gefunden",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Playbook auswählen",
+        "reject": "Ablehnen",
+        "reviewAgain": "Erneut prüfen",
+        "reviewedAgainst": "Geprüft anhand von {name}",
+        "reviewing": "Wird geprüft…",
+        "reviewingHint": "Bei großen Playbooks kann dies einige Minuten dauern.",
+        "run": "Prüfen",
+        "scrollToChange": "Zur Änderung",
+        "viewClause": "Klausel anzeigen"
+      },
+      "rule": {
+        "extractOnly": "Nur extrahieren",
+        "positionMatch": "Standpunktabgleich",
+        "presence": "Vorhandensein",
+        "propertyConstraint": "Wertbeschränkung"
+      },
+      "saveFailed": "Playbook konnte nicht gespeichert werden",
+      "severity": {
+        "blocker": "Kritisch",
+        "high": "Hoch",
+        "low": "Niedrig",
+        "medium": "Mittel"
+      },
+      "severityLabel": "Schweregrad",
+      "source": {
+        "clause": "Klauselbibliothek",
+        "inline": "Freitext",
+        "none": "Keine Vorgabe"
+      },
+      "updated": "Playbook aktualisiert",
+      "verdict": {
+        "compliant": "Konform",
+        "deviation": "Abweichung",
+        "fallback": "Alternative",
+        "missing": "Fehlt"
+      }
+    },
     "sections": {
       "agents": {
         "description": "Konfigurierbare Assistenten für wiederkehrende Arbeit",
@@ -1469,6 +1572,9 @@
       "mcp": {
         "description": "stella mit externen Tools verbinden",
         "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Bewertete Checklisten, die Dokumente anhand Ihrer Vorgaben prüfen"
       },
       "prompts": {
         "description": "Wiederverwendbare Skills, die im Chat über / verfügbar sind",
@@ -2675,28 +2781,12 @@
       "zoomOut": "Verkleinern"
     },
     "playbooks": {
-      "action": "Playbooks",
-      "addColumn": "Add column",
-      "applied": "Playbook applied",
-      "apply": "Apply",
-      "columnNamePlaceholder": "Column name",
-      "columnsLabel": "Columns",
-      "contentType": {
-        "date": "Date",
-        "int": "Number",
-        "text": "Text"
-      },
-      "create": "New playbook",
-      "description": "Bundle AI columns that fill only for a chosen document type.",
-      "duplicateColumn": "Column names must be unique.",
-      "empty": "No playbooks yet.",
-      "incomplete": "Add a name and at least one column.",
-      "nameLabel": "Name",
-      "namePlaceholder": "e.g. Lease review",
-      "promptPlaceholder": "What should this column extract?",
-      "summary": "{type} · {count, number} columns",
-      "title": "Playbooks",
-      "typeLabel": "Document type"
+      "autoRun": "Automatisch ausführen",
+      "autoRunHint": "Automatisch jedes zu den Dokumenttypen passende Playbook erkennen und ausführen",
+      "autoRunStarted": "{count, plural, one {# Playbook wird ausgeführt} other {# Playbooks werden ausgeführt}}",
+      "run": "Playbook ausführen",
+      "runFailed": "Playbook konnte nicht ausgeführt werden",
+      "runStarted": "Playbook wird ausgeführt ({count, plural, one {# Spalte} other {# Spalten}})"
     },
     "possibleDuplicates": "Mögliche Duplikate",
     "properties": {

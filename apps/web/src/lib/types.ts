@@ -64,6 +64,7 @@ export type PropertyDependency = {
 type ManualInputTool = {
   version: 1;
   type: "manual-input";
+  dependencies?: PropertyDependency[];
 };
 
 type AIModelTool = {
@@ -71,6 +72,19 @@ type AIModelTool = {
   type: "ai-model";
   prompt: string;
   dependencies: PropertyDependency[];
+};
+
+// A system-computed playbook verdict column. The value is a single-select tier
+// (compliant / fallback / deviation / missing) written by the verdict engine;
+// the cell is read-only on the client. `askPropertyId` is the ASK property this
+// verdict grades: the table pairs the two back together into one
+// compliance-matrix cell (extracted value + verdict badge) instead of rendering
+// two disjoint columns. The rest of the grading inputs (rule/standard/severity)
+// live server-side and the client never reads them.
+type PlaybookVerdictTool = {
+  version: 1;
+  type: "playbook-verdict";
+  askPropertyId: string;
 };
 
 export type WorkspaceProperty = {
@@ -106,7 +120,7 @@ export type WorkspaceProperty = {
         version: 1;
         type: "int";
       };
-  tool: ManualInputTool | AIModelTool;
+  tool: ManualInputTool | AIModelTool | PlaybookVerdictTool;
 };
 
 export type WorkspaceToolType = WorkspaceProperty["tool"]["type"];
@@ -306,9 +320,20 @@ export type DocxFolioJustificationBlock = {
   }[];
 };
 
+// A playbook verdict's provenance. Unlike the document-citation blocks above it
+// carries no file/page/block reference: a verdict grades the already-extracted
+// ASK value against the standard, so the provenance is the model's rationale
+// plus which tier of the standard's wording it matched.
+export type VerdictRationaleJustificationBlock = {
+  kind: "playbook-verdict";
+  rationale: string;
+  matched: "preferred" | "fallback" | "none";
+};
+
 export type JustificationBlock =
   | PdfBatesJustificationBlock
-  | DocxFolioJustificationBlock;
+  | DocxFolioJustificationBlock
+  | VerdictRationaleJustificationBlock;
 
 export type JustificationContent = {
   version: 1;

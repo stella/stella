@@ -2,6 +2,8 @@ import { lazy, Suspense } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
+import { useMountEffect } from "@/hooks/use-effect";
+import { installDevPerfBudget } from "@/lib/dev-perf-budget";
 import { useDevStore } from "@/lib/dev-store";
 
 const TanStackDevtoolsRoot = lazy(
@@ -9,6 +11,7 @@ const TanStackDevtoolsRoot = lazy(
 );
 
 export default function DevRoot() {
+  useMountEffect(() => installDevPerfBudget());
   const [tanstackDevtools, sourceInspector] = useDevStore(
     useShallow((s) => [s.tanstackDevtools, s.sourceInspector]),
   );

@@ -56,6 +56,32 @@ const versionManifestPlugin = (): Plugin => ({
   },
 });
 
+// A misbehaving client console message — e.g. a warning that serializes a DOM
+// node / circular React fiber, forwarded to the terminal through Vite's logger —
+// can balloon the dev log to gigabytes and OOM the dev server (it has). Cap
+// every logged line at the one chokepoint so no single message, from any plugin
+// or component, can ever do that again.
+const MAX_LOG_CHARS = 4000;
+const logCapPlugin = (): Plugin => ({
+  name: "stella-log-cap",
+  enforce: "pre",
+  configResolved(config) {
+    const { logger } = config;
+    const cap = (message: string) =>
+      message.length > MAX_LOG_CHARS
+        ? `${message.slice(0, MAX_LOG_CHARS)}… [${message.length - MAX_LOG_CHARS} chars truncated]`
+        : message;
+    const info = logger.info.bind(logger);
+    const warn = logger.warn.bind(logger);
+    const warnOnce = logger.warnOnce.bind(logger);
+    const error = logger.error.bind(logger);
+    logger.info = (message, options) => info(cap(message), options);
+    logger.warn = (message, options) => warn(cap(message), options);
+    logger.warnOnce = (message, options) => warnOnce(cap(message), options);
+    logger.error = (message, options) => error(cap(message), options);
+  },
+});
+
 export default defineConfig(({ mode }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
 
@@ -202,6 +228,7 @@ export default defineConfig(({ mode }) => {
       ],
     },
     plugins: [
+      logCapPlugin(),
       versionManifestPlugin(),
       devtools({ consolePiping: { enabled: false } }),
       tailwindcss(),

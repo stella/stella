@@ -44,10 +44,12 @@ import {
   MatterOriginLink,
 } from "@/components/inspector/inspector-tab-header";
 import { MeasuredPdfProvider } from "@/components/inspector/measured-pdf-provider";
+import { PlaybookFacet } from "@/components/inspector/playbook-facet";
 import { SuggestionsFacet } from "@/components/inspector/suggestions-facet";
 import { VersionsFacet } from "@/components/inspector/versions-facet";
 import { MarkdownFolioEditor } from "@/components/markdown/markdown-folio-editor";
 import Tooltip from "@/components/tooltip";
+import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { DOCX_MIME, MARKDOWN_MIME, TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
@@ -172,6 +174,7 @@ export const FileTabPanel = ({
   const replaceFileFieldId = useInspectorStore((s) => s.replaceFileFieldId);
   const setFileFacet = useInspectorStore((s) => s.setFileFacet);
   const requestDocxEdit = useInspectorStore((s) => s.requestDocxEdit);
+  const playbooksEnabled = usePlaybooksPreviewEnabled();
   const isNativeDocxDisplay = tab.mimeType === DOCX_MIME;
   const nativePreviewKind = getFileTabNativePreviewKind({
     fileName: tab.fileName,
@@ -470,7 +473,14 @@ export const FileTabPanel = ({
             />
           )}
           {tab.facet === "suggestions" && (
-            <SuggestionsFacet entityId={tab.entityId} />
+            <SuggestionsFacet entityId={tab.entityId} fileFieldId={tab.id} />
+          )}
+          {playbooksEnabled && tab.facet === "playbook" && (
+            <PlaybookFacet
+              entityId={tab.entityId}
+              fileFieldId={tab.id}
+              workspaceId={tab.workspaceId}
+            />
           )}
           {tab.facet === "anonymization" && (
             <AnonymizationFacet
@@ -945,6 +955,7 @@ export const FileTabPanel = ({
           {sidepeekFacet === "suggestions" && (
             <SuggestionsFacet
               entityId={tab.entityId}
+              fileFieldId={tab.id}
               // Quick fix: sidepeek's DOCX editor unmounts when
               // the user switches off Preview, so Accept on a
               // suggestion has no live editor to apply against.
@@ -999,6 +1010,13 @@ export const FileTabPanel = ({
                     },
                   }
                 : {})}
+            />
+          )}
+          {playbooksEnabled && sidepeekFacet === "playbook" && (
+            <PlaybookFacet
+              entityId={tab.entityId}
+              fileFieldId={tab.id}
+              workspaceId={tab.workspaceId}
             />
           )}
           {sidepeekFacet === "anonymization" && (

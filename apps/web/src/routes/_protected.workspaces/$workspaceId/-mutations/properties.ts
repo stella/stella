@@ -152,7 +152,10 @@ type UpdatePropertyVars = {
   propertyId: string;
   name: string;
   content: WorkspaceProperty["content"];
-  tool: WorkspaceProperty["tool"];
+  // Verdict columns are system-computed and read-only; the update endpoint only
+  // accepts manual/AI tools, so excluding it here makes editing one a compile
+  // error rather than a runtime rejection.
+  tool: Exclude<WorkspaceProperty["tool"], { type: "playbook-verdict" }>;
 };
 
 export const useUpdateProperty = () => {

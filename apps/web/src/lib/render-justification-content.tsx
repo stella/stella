@@ -80,6 +80,12 @@ export const renderJustificationContent = ({
       continue;
     }
 
+    // Verdict blocks have no citable document target; the rationale is
+    // surfaced separately by the cell's provenance card.
+    if (block.kind === "playbook-verdict") {
+      continue;
+    }
+
     // docx-folio
     for (const [statementIndex, statement] of block.statements.entries()) {
       const statementKey = `${blockIndex}-${statementIndex}`;

@@ -36,7 +36,15 @@ export const LIMITS = {
   entitySummariesPageSize: 200,
   viewsCount: 20,
   viewTemplatesPerUser: 50,
-  playbooksCount: 50,
+  /** Per-org cap on saved playbook definitions. Per-playbook size is bounded
+   *  by the positions schema's maxItems (200). */
+  playbookDefinitionsCount: 100,
+  playbookDefinitionsPageSizeDefault: 50,
+  playbookDefinitionsPageSizeMax: 100,
+  /** Per-org cap on the editable document-type taxonomy. The taxonomy is
+   *  inherently bounded (a few dozen contract categories), so the list
+   *  endpoint returns a plain ordered array rather than a paginated page. */
+  documentTypesCount: 100,
   templatesCount: 50,
   clauseCategoriesCount: 100,
   templateCategoriesCount: 100,

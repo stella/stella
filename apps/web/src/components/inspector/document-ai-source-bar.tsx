@@ -31,7 +31,10 @@ import { useSyncJustifications } from "@/routes/_protected.workspaces/$workspace
 import { entityOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
-import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
+import {
+  selectJustificationByFieldId,
+  useWorkspaceStore,
+} from "@/routes/_protected.workspaces/$workspaceId/-store";
 
 const BBOX_POLL_INTERVAL_MS = 1000;
 
@@ -60,7 +63,7 @@ export const DocumentAiSourceBar = ({
   });
 
   const justification = useWorkspaceStore((s) =>
-    s.justifications.find((j) => j.fieldId === fieldId),
+    selectJustificationByFieldId(s.justifications, fieldId),
   );
 
   const slots = useMemo(() => {
@@ -109,7 +112,9 @@ export const DocumentAiSourceBar = ({
         ? {
             ...justification.content,
             blocks: justification.content.blocks.filter(
-              (block) => block.fileFieldId === activeTab.id,
+              (block) =>
+                block.kind !== "playbook-verdict" &&
+                block.fileFieldId === activeTab.id,
             ),
           }
         : null,

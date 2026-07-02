@@ -22,6 +22,7 @@ import type {
   GenerateBatchResult,
   ResolvedFile,
 } from "@/api/lib/workflow/generate-batch-shared";
+import type { AIBatchProperty } from "@/api/lib/workflow/get-execution-plan";
 import { normalizeJustification } from "@/api/lib/workflow/parse-justifications";
 import type { JustificationFilenames } from "@/api/lib/workflow/parse-justifications";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
@@ -32,7 +33,11 @@ import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
  * to PDF (`pdfFileId`), or a DOCX whose folio blocks we serialise
  * into the prompt directly.
  */
-const isAISupportedFile = (file: ResolvedFile): boolean =>
+// Exported (with `fetchAndPrepareFiles` / `buildJustificationFilenames` below)
+// so the single-doc ephemeral review (`handlers/playbooks/review-extract.ts`)
+// reuses the exact same file-preparation + citation-allow-list wiring the batch
+// workflow uses, instead of forking a parallel DOCX→blocks / PDF→bates path.
+export const isAISupportedFile = (file: ResolvedFile): boolean =>
   (file.mimeType === PDF_MIME_TYPE && !file.encrypted) ||
   file.pdfFileId !== null ||
   file.mimeType === DOCX_MIME_TYPE;
@@ -102,7 +107,7 @@ export type PreparedDocxFile = {
 
 export type PreparedInputFile = PreparedPdfFile | PreparedDocxFile;
 
-const fetchAndPrepareFiles = async (
+export const fetchAndPrepareFiles = async (
   resolvedFiles: ResolvedFile[],
   organizationId: SafeId<"organization">,
   workspaceId: SafeId<"workspace">,
@@ -156,7 +161,7 @@ const fetchAndPrepareFiles = async (
     }),
   );
 
-const buildJustificationFilenames = (
+export const buildJustificationFilenames = (
   files: PreparedInputFile[],
 ): JustificationFilenames =>
   files.map((file) => {
@@ -199,7 +204,15 @@ export const generateBatch = async ({
     const { inputProperties, resolvedFiles, textInputs, skippedPropertyIds } =
       yield* prepareBatchInput(inputFields, batch);
 
-    if (inputProperties.length === 0) {
+    // The LLM extraction path only handles ai-model columns; verdict columns
+    // in the same level are graded by the verdict engine (dispatched upstream
+    // in `processOneBatch`), so they never reach here.
+    const aiInputProperties = inputProperties.filter(
+      (property): property is AIBatchProperty =>
+        property.tool.type === "ai-model",
+    );
+
+    if (aiInputProperties.length === 0) {
       return Result.ok({
         aiResults: [],
         aiJustifications: [],
@@ -217,7 +230,7 @@ export const generateBatch = async ({
         aiResults: [],
         aiJustifications: [],
         skippedPropertyIds,
-        unsupportedPropertyIds: inputProperties.map((p) => p.id),
+        unsupportedPropertyIds: aiInputProperties.map((p) => p.id),
       });
     }
 
@@ -233,7 +246,7 @@ export const generateBatch = async ({
       generateWorkflowData({
         entityVersionId,
         files: preparedFiles,
-        properties: inputProperties,
+        properties: aiInputProperties,
         filenames,
         textInputs,
         abortSignal,
@@ -250,7 +263,7 @@ export const generateBatch = async ({
     const aiResults: AIResult[] = [];
     const aiJustifications: AIJustification[] = [];
 
-    for (const property of inputProperties) {
+    for (const property of aiInputProperties) {
       const propertyResult = output[property.id];
       if (!propertyResult) {
         continue;

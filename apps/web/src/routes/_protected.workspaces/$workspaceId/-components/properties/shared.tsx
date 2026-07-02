@@ -15,7 +15,9 @@ import {
 import { resolveOptionColor } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 
 const isPropertyValid = (property: WorkspaceProperty) => {
-  if (property.tool.type === "manual-input") {
+  // Only AI columns can be "invalid" (an empty prompt extracts nothing).
+  // Manual and system-computed verdict columns have no prompt to warn about.
+  if (property.tool.type !== "ai-model") {
     return true;
   }
 

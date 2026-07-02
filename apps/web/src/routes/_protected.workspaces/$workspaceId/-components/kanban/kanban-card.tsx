@@ -162,16 +162,25 @@ export const KanbanCard = ({
 
   const isTask = entity.kind === "task";
   const visibleCardFields = cardFields ?? [];
-  const valueFields = visibleCardFields.filter(
-    (fieldId) =>
-      fieldId !== getInternalPropertyId("created-by") &&
-      fieldId !== getInternalPropertyId("updated-at") &&
-      fieldId !== getInternalPropertyId("version") &&
-      fieldId !== getInternalPropertyId("status") &&
-      fieldId !== getInternalPropertyId("priority") &&
-      fieldId !== getInternalPropertyId("due-date") &&
-      fieldId !== getInternalPropertyId("kind"),
-  );
+  const valueFields = visibleCardFields.filter((fieldId) => {
+    if (
+      fieldId === getInternalPropertyId("created-by") ||
+      fieldId === getInternalPropertyId("updated-at") ||
+      fieldId === getInternalPropertyId("version") ||
+      fieldId === getInternalPropertyId("status") ||
+      fieldId === getInternalPropertyId("priority") ||
+      fieldId === getInternalPropertyId("due-date") ||
+      fieldId === getInternalPropertyId("kind")
+    ) {
+      return false;
+    }
+    // Verdict tiers render as unlabeled compliant/deviation tags that clutter
+    // the card and can't be toggled off (verdict properties are excluded from
+    // the visibility menu). The tier is already conveyed by the column when
+    // grouping by a verdict, so keep verdict tiers off kanban cards.
+    const property = properties?.find((p) => p.id === fieldId);
+    return property?.tool.type !== "playbook-verdict";
+  });
   const showAuthor = visibleCardFields.includes(
     getInternalPropertyId("created-by"),
   );

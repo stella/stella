@@ -59,6 +59,9 @@ const STATIC_AUTHENTICATED_ROUTES: readonly SmokeRoute[] = [
   },
   { template: "/knowledge", path: "/knowledge" },
   { template: "/knowledge/clauses", path: "/knowledge/clauses" },
+  // Reachable in dev/staging (playbooks preview gate is open there); redirects
+  // to /knowledge only in production where the flag is off.
+  { template: "/knowledge/playbooks", path: "/knowledge/playbooks" },
   {
     template: "/knowledge/mcp",
     path: "/knowledge/mcp",

@@ -26,11 +26,15 @@ import { useShallow } from "zustand/react/shallow";
 
 import type { DocxEditorRef } from "@stll/folio";
 
-import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
+import {
+  activeDocxKey,
+  useActiveDocxStore,
+} from "@/components/ai-suggestions/active-docx-store";
 import { ReviewPanel } from "@/components/ai-suggestions/review-panel";
 
 type SuggestionsFacetProps = {
   entityId: string;
+  fileFieldId: string;
   /**
    * Called once when this facet renders without a registered DOCX
    * editor for the entity. Sidepeek wires this to a navigation
@@ -44,10 +48,14 @@ type SuggestionsFacetProps = {
 
 export const SuggestionsFacet = ({
   entityId,
+  fileFieldId,
   onMissingEditor,
 }: SuggestionsFacetProps) => {
   const registration = useActiveDocxStore(
-    useShallow((state) => state.byEntityId[entityId]?.registration),
+    useShallow(
+      (state) =>
+        state.byKey[activeDocxKey(entityId, fileFieldId)]?.registration,
+    ),
   );
 
   // Stable empty ref for unregistered entities — keeps the panel
@@ -74,16 +82,17 @@ export const SuggestionsFacet = ({
   const hasOnMissingEditor = onMissingEditor !== undefined;
 
   // Inspector PDF tabs reuse the same component instance when
-  // the user navigates between entities (the store swaps
+  // the user navigates between documents (the store swaps
   // `entityId` and content fields in place; see FileTab docs in
   // inspector-store.ts). Reset the dispatch latch whenever the
-  // entity changes so a previous entity's "already redirected"
-  // state doesn't suppress the redirect for the new one. Per
-  // Codex review on PR #80.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id ref latch; can't key/remount: the inspector reuses this instance across entities by swapping entityId in place (see comment above), so a key would discard the live editor/registration state
+  // target document changes — that is either a new entity or a
+  // different file field of the same entity — so a previous
+  // document's "already redirected" state doesn't suppress the
+  // redirect for the new one. Per Codex review on PR #80.
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id ref latch; can't key/remount: the inspector reuses this instance across documents by swapping entityId/fileFieldId in place (see comment above), so a key would discard the live editor/registration state
   useEffect(() => {
     hasDispatchedRef.current = false;
-  }, [entityId]);
+  }, [entityId, fileFieldId]);
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay dispatch of onMissingEditor callback; move into handler/derived guard
   useEffect(() => {
@@ -104,7 +113,7 @@ export const SuggestionsFacet = ({
     }
     hasDispatchedRef.current = true;
     dispatchMissingEditor();
-  }, [registration, hasOnMissingEditor, entityId]);
+  }, [registration, hasOnMissingEditor, entityId, fileFieldId]);
 
   return (
     <ReviewPanel

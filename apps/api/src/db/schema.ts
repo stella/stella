@@ -45,7 +45,6 @@ import type {
   ContactPhone,
   EntityKind,
   FieldContent,
-  PlaybookBundle,
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
@@ -60,6 +59,10 @@ import type {
 import type { ClauseMetadata } from "@/api/handlers/clauses/metadata";
 import type { ClauseBody } from "@/api/handlers/clauses/types";
 import type { TemplateManifest } from "@/api/handlers/docx/types";
+import type {
+  PlaybookPositions,
+  PlaybookScope,
+} from "@/api/handlers/playbooks/positions";
 import type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId, SafeIdType } from "@/api/lib/branded-types";
@@ -108,9 +111,21 @@ export type DocxFolioJustificationBlock = {
   }[];
 };
 
+// A playbook verdict's rationale. Unlike the document-citation blocks above it
+// carries no file/bates/folio reference: a `positionMatch` verdict is graded by
+// comparing the already-extracted ASK value against the standard's
+// preferred/fallback language, so the provenance is the model's explanation plus
+// which tier of the standard it matched.
+export type VerdictRationaleJustificationBlock = {
+  kind: "playbook-verdict";
+  rationale: string;
+  matched: "preferred" | "fallback" | "none";
+};
+
 export type JustificationBlock =
   | PdfBatesJustificationBlock
-  | DocxFolioJustificationBlock;
+  | DocxFolioJustificationBlock
+  | VerdictRationaleJustificationBlock;
 
 export type JustificationContent = {
   version: 1;
@@ -773,10 +788,16 @@ export const properties = p.pgTable(
     // playbooks or with manually-created columns. Null for any property not
     // created by a playbook.
     playbookSourceId: p.uuid("playbook_source_id"),
+    playbookDefinitionId: safeUuid<"playbookDefinition">(
+      "playbook_definition_id",
+    ).references(() => playbookDefinitions.id, { onDelete: "cascade" }),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
   },
   (table) => [
     p.index("properties_workspace_id_idx").on(table.workspaceId),
+    p
+      .index("properties_workspace_playbook_definition_idx")
+      .on(table.workspaceId, table.playbookDefinitionId),
     p.unique("properties_id_ws_unq").on(table.id, table.workspaceId),
     ...wsPolicies(),
   ],
@@ -824,41 +845,75 @@ export const propertyDependencies = p.pgTable(
   ],
 );
 
-// -- Playbooks --
+// -- Playbook definitions --
 
 /**
- * A playbook binds a Document Type option value to a reusable bundle
- * of AI columns. Applying it materializes each bundle column as a
- * property gated by `typePropertyId eq typeValue`, so the columns
- * auto-fill only for documents classified as that type.
+ * An org-scoped playbook definition: a saved, reusable set of graded
+ * Positions. It joins clauses and templates under the org-level
+ * knowledge area; runs (materialized columns, findings, redlines) are
+ * workspace-scoped and resolved separately. `positions` is the
+ * version-tagged JSONB container; `scope` is reserved for later
+ * doc-type / counterparty / matter targeting.
  */
-export const playbooks = p.pgTable(
-  "playbooks",
+export const playbookDefinitions = p.pgTable(
+  "playbook_definitions",
   {
-    id: pUuid<"playbook">().primaryKey(),
-    workspaceId: safeWorkspaceId("workspace_id")
+    id: pUuid<"playbookDefinition">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
       .notNull()
-      .references(() => workspaces.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "cascade" }),
     name: p.varchar({ length: 256 }).notNull(),
-    typePropertyId: safeUuid<"property">("type_property_id").notNull(),
-    typeValue: p.varchar("type_value", { length: 1000 }).notNull(),
-    bundle: jsonb().$type<PlaybookBundle>().notNull(),
+    description: p.text(),
+    scope: jsonb().$type<PlaybookScope>(),
+    positions: jsonb().$type<PlaybookPositions>().notNull(),
     createdAt: p.timestamp("created_at").notNull().defaultNow(),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   (table) => [
-    p.index("playbooks_workspace_id_idx").on(table.workspaceId),
     p
-      .index("playbooks_workspace_created_idx")
-      .on(table.workspaceId, table.createdAt, table.id),
+      .index("playbook_definitions_organization_id_idx")
+      .on(table.organizationId),
     p
-      .foreignKey({
-        name: "playbooks_type_property_fk",
-        columns: [table.typePropertyId, table.workspaceId],
-        foreignColumns: [properties.id, properties.workspaceId],
-      })
-      .onDelete("cascade"),
-    ...wsPolicies(),
+      .index("playbook_definitions_org_created_at_idx")
+      .on(table.organizationId, table.createdAt),
+    p
+      .unique("playbook_definitions_id_org_unq")
+      .on(table.id, table.organizationId),
+    ...orgPolicies(),
+  ],
+);
+
+// -- Document types --
+
+/**
+ * An org-owned, editable taxonomy of document TYPES (e.g. "Share
+ * Purchase Agreement"). `key` is a stable slug that playbook scopes and
+ * run-time gating reference; `label` is the human-facing name shown in
+ * the workspace "Document Type" classifier. Seeded from
+ * `DEFAULT_DOCUMENT_TYPES` and editable per org. RLS mirrors
+ * `playbookDefinitions`.
+ */
+export const documentTypes = p.pgTable(
+  "document_types",
+  {
+    id: pUuid<"documentType">().primaryKey(),
+    organizationId: safeOrganizationId("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    key: p.varchar({ length: 128 }).notNull(),
+    label: p.varchar({ length: 256 }).notNull(),
+    sortOrder: p.integer("sort_order").notNull().default(0),
+    createdAt: p.timestamp("created_at").notNull().defaultNow(),
+    updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
+  },
+  (table) => [
+    p
+      .index("document_types_org_sort_idx")
+      .on(table.organizationId, table.sortOrder),
+    p
+      .unique("document_types_org_key_unq")
+      .on(table.organizationId, table.key),
+    ...orgPolicies(),
   ],
 );
 
@@ -4415,7 +4470,8 @@ export const relations = defineRelations(
     infoSoudTrackedCases,
     properties,
     propertyDependencies,
-    playbooks,
+    playbookDefinitions,
+    documentTypes,
     entities,
     taskAssignees,
     entityLinks,

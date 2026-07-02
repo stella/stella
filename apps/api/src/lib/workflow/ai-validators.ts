@@ -39,7 +39,7 @@ type IntValidatedResult = {
   justification: AIJustificationOutput;
 };
 
-type ValidatedResult =
+export type ValidatedResult =
   | TextValidatedResult
   | SingleSelectValidatedResult
   | MultiSelectValidatedResult

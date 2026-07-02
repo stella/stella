@@ -797,6 +797,7 @@
     "organizationName": "Organizācijas nosaukums",
     "pin": "Piespraust",
     "playVideo": "Atskaņot video",
+    "playbooks": "Pārbaudes ceļveži",
     "preview": "Priekšskatījums",
     "previous": "Iepriekšējais",
     "print": "Drukāt",
@@ -804,6 +805,7 @@
     "properties": "Rekvizīti",
     "reconnecting": "Atkārtota savienošana…",
     "reference": "Atsauce",
+    "refresh": "Atsvaidzināt",
     "regenerate": "Ģenerēt vēlreiz",
     "remove": "Noņemt",
     "removeMember": "Noņemt dalībnieku",
@@ -1455,6 +1457,107 @@
       "useInChat": "Izmantot čatā",
       "whatIsAnMcpServer": "Kas ir MCP serveris?"
     },
+    "playbooks": {
+      "addFallback": "Pievienot alternatīvu",
+      "addPosition": "Pievienot pozīciju",
+      "ask": "Vaicājums",
+      "askContentLabel": "Atbildes tips",
+      "askQuestionLabel": "Jautājums",
+      "askQuestionPlaceholder": "Kas mums jānolasa no katra dokumenta? Atstājiet tukšu manuālai ievadei.",
+      "clauseLabel": "Klauzula",
+      "clausePlaceholder": "Meklēt klauzulas…",
+      "clauseRequired": "Izvēlieties klauzulu katram uz klauzulu balstītam standartam.",
+      "clauseSearchEmpty": "Klauzulas nav atrastas",
+      "conditionPlaceholder": "Konfigurējiet šo ierobežojumu vēlākā solī.",
+      "confirmDelete": "Tas neatgriezeniski izdzēsīs pārbaudes ceļvedi.",
+      "contentType": {
+        "int": "Skaitlis",
+        "singleSelect": "Viena izvēle",
+        "text": "Teksts"
+      },
+      "createPlaybook": "Jauns pārbaudes ceļvedis",
+      "created": "Pārbaudes ceļvedis izveidots",
+      "deleteFailed": "Neizdevās izdzēst pārbaudes ceļvedi",
+      "deletePlaybook": "Dzēst pārbaudes ceļvedi",
+      "deleted": "Pārbaudes ceļvedis izdzēsts",
+      "descriptionPlaceholder": "Ko šis pārbaudes ceļvedis pārbauda?",
+      "empty": "Vēl nav pārbaudes ceļvežu",
+      "emptyDescription": "Izveidojiet pārbaudes ceļvedi, lai pārbaudītu dokumentus atbilstoši saviem standartiem.",
+      "expect": "Sagaidāmais",
+      "expectSourceLabel": "Standarts",
+      "expectation": {
+        "restricted": "Aizliegts"
+      },
+      "expectationLabel": "Gaidas",
+      "fallbackLabelPlaceholder": "Apzīmējums (neobligāti)",
+      "fallbackTextPlaceholder": "Pieņemams alternatīvs formulējums",
+      "fallbacksLabel": "Alternatīvas",
+      "grade": "Vērtējums",
+      "gradeRuleLabel": "Noteikums",
+      "guidanceLabel": "Norādījumi",
+      "guidancePlaceholder": "Piezīmes pārbaudītājiem (neobligāti)",
+      "issueLabel": "Tēma",
+      "issuePlaceholder": "piem., Atbildības ierobežojums",
+      "loadFailed": "Neizdevās ielādēt pārbaudes ceļvežus",
+      "loading": "Ielādē pārbaudes ceļvežus…",
+      "namePlaceholder": "piem., NDA pārbaude",
+      "nameRequired": "Pievienojiet nosaukumu.",
+      "noPositions": "Vēl nav pozīciju. Pievienojiet pirmo.",
+      "optionsLabel": "Iespējas",
+      "optionsPlaceholder": "Viena iespēja katrā rindā",
+      "positionIssueRequired": "Katrai pozīcijai nepieciešama tēma.",
+      "positionLabel": "Pozīcija {index}",
+      "positions": "Pozīcijas",
+      "preferredLabel": "Vēlamais formulējums",
+      "preferredPlaceholder": "Vēlamais formulējums",
+      "review": {
+        "changePlaybook": "Izvēlēties citu pārbaudes ceļvedi",
+        "extractedLabel": "Atrasts:",
+        "facetTitle": "Pārbaude ar pārbaudes ceļvedi",
+        "failed": "Neizdevās pārbaudīt dokumentu",
+        "fixAccepted": "Pieņemts",
+        "insertFailed": "Neizdevās ievietot vēlamo klauzulu",
+        "insertPreferred": "Ievietot vēlamo klauzulu",
+        "launcherDescription": "Pārbaudiet šo dokumentu atbilstoši organizācijas pārbaudes ceļvedim un saņemiet secinājumus tieši tekstā.",
+        "noFindings": "Problēmas nav atrastas",
+        "playbookLabel": "Pārbaudes ceļvedis",
+        "playbookPlaceholder": "Izvēlieties pārbaudes ceļvedi",
+        "reject": "Noraidīt",
+        "reviewAgain": "Pārbaudīt vēlreiz",
+        "reviewedAgainst": "Pārbaudīts pēc {name}",
+        "reviewing": "Pārbauda…",
+        "reviewingHint": "Lieliem pārbaudes ceļvežiem tas var aizņemt dažas minūtes.",
+        "run": "Pārbaudīt",
+        "scrollToChange": "Pāriet uz izmaiņu",
+        "viewClause": "Skatīt klauzulu"
+      },
+      "rule": {
+        "extractOnly": "Tikai izvilkt",
+        "positionMatch": "Pozīcijas atbilstība",
+        "presence": "Esamība",
+        "propertyConstraint": "Vērtības ierobežojums"
+      },
+      "saveFailed": "Neizdevās saglabāt pārbaudes ceļvedi",
+      "severity": {
+        "blocker": "Bloķējoša",
+        "high": "Augsta",
+        "low": "Zema",
+        "medium": "Vidēja"
+      },
+      "severityLabel": "Nopietnība",
+      "source": {
+        "clause": "Klauzulu bibliotēka",
+        "inline": "Ievadīts teksts",
+        "none": "Nav standarta"
+      },
+      "updated": "Pārbaudes ceļvedis atjaunināts",
+      "verdict": {
+        "compliant": "Atbilst",
+        "deviation": "Novirze",
+        "fallback": "Alternatīva",
+        "missing": "Trūkst"
+      }
+    },
     "sections": {
       "agents": {
         "description": "Konfigurējami asistenti atkārtojamam darbam",
@@ -1469,6 +1572,9 @@
       "mcp": {
         "description": "Savienojiet stella ar ārējiem rīkiem",
         "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Novērtēti kontrolsaraksti, kas pārbauda dokumentus atbilstoši jūsu standartiem"
       },
       "prompts": {
         "description": "Atkārtoti izmantojamas prasmes, kas čatā pieejamas ar /",
@@ -2675,28 +2781,12 @@
       "zoomOut": "Tālināt"
     },
     "playbooks": {
-      "action": "Playbooks",
-      "addColumn": "Add column",
-      "applied": "Playbook applied",
-      "apply": "Apply",
-      "columnNamePlaceholder": "Column name",
-      "columnsLabel": "Columns",
-      "contentType": {
-        "date": "Date",
-        "int": "Number",
-        "text": "Text"
-      },
-      "create": "New playbook",
-      "description": "Bundle AI columns that fill only for a chosen document type.",
-      "duplicateColumn": "Column names must be unique.",
-      "empty": "No playbooks yet.",
-      "incomplete": "Add a name and at least one column.",
-      "nameLabel": "Name",
-      "namePlaceholder": "e.g. Lease review",
-      "promptPlaceholder": "What should this column extract?",
-      "summary": "{type} · {count, number} columns",
-      "title": "Playbooks",
-      "typeLabel": "Document type"
+      "autoRun": "Automātiska palaišana",
+      "autoRunHint": "Automātiski nosaka un palaiž katru pārbaudes ceļvedi, kas atbilst dokumentu tipiem",
+      "autoRunStarted": "Notiek palaišana: {count, plural, zero {# pārbaudes ceļvežu} one {# pārbaudes ceļvedis} other {# pārbaudes ceļveži}}",
+      "run": "Palaist pārbaudes ceļvedi",
+      "runFailed": "Neizdevās palaist pārbaudes ceļvedi",
+      "runStarted": "Tiek palaists pārbaudes ceļvedis ({count, plural, zero {# kolonnu} one {# kolonna} other {# kolonnas}})"
     },
     "possibleDuplicates": "Iespējamie dublikāti",
     "properties": {

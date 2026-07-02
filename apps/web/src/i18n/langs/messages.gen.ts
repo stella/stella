@@ -800,6 +800,7 @@ type Messages = {
     "organizationName": "Organization name";
     "pin": "Pin";
     "playVideo": "Play video";
+    "playbooks": "Playbooks";
     "preview": "Preview";
     "previous": "Previous";
     "print": "Print";
@@ -807,6 +808,7 @@ type Messages = {
     "properties": "Properties";
     "reconnecting": "Reconnecting…";
     "reference": "Reference";
+    "refresh": "Refresh";
     "regenerate": "Regenerate";
     "remove": "Remove";
     "removeMember": "Remove member";
@@ -1458,6 +1460,107 @@ type Messages = {
       "useInChat": "Use in chat";
       "whatIsAnMcpServer": "What is an MCP server?";
     };
+    "playbooks": {
+      "addFallback": "Add fallback";
+      "addPosition": "Add position";
+      "ask": "Ask";
+      "askContentLabel": "Answer type";
+      "askQuestionLabel": "Question";
+      "askQuestionPlaceholder": "What should we read from each document? Leave empty for manual input.";
+      "clauseLabel": "Clause";
+      "clausePlaceholder": "Search clauses…";
+      "clauseRequired": "Pick a clause for each clause-backed standard.";
+      "clauseSearchEmpty": "No clauses found";
+      "conditionPlaceholder": "Configure this constraint in a later step.";
+      "confirmDelete": "This will permanently delete the playbook.";
+      "contentType": {
+        "int": "Number";
+        "singleSelect": "Single select";
+        "text": "Text";
+      };
+      "createPlaybook": "New playbook";
+      "created": "Playbook created";
+      "deleteFailed": "Failed to delete playbook";
+      "deletePlaybook": "Delete playbook";
+      "deleted": "Playbook deleted";
+      "descriptionPlaceholder": "What does this playbook check?";
+      "empty": "No playbooks yet";
+      "emptyDescription": "Create a playbook to review documents against your standards.";
+      "expect": "Expect";
+      "expectSourceLabel": "Standard";
+      "expectation": {
+        "restricted": "Restricted";
+      };
+      "expectationLabel": "Expectation";
+      "fallbackLabelPlaceholder": "Label (optional)";
+      "fallbackTextPlaceholder": "Acceptable fallback wording";
+      "fallbacksLabel": "Fallbacks";
+      "grade": "Grade";
+      "gradeRuleLabel": "Rule";
+      "guidanceLabel": "Guidance";
+      "guidancePlaceholder": "Notes for reviewers (optional)";
+      "issueLabel": "Issue";
+      "issuePlaceholder": "e.g. Limitation of liability";
+      "loadFailed": "Failed to load playbooks";
+      "loading": "Loading playbooks…";
+      "namePlaceholder": "e.g. NDA review";
+      "nameRequired": "Add a name.";
+      "noPositions": "No positions yet. Add the first one.";
+      "optionsLabel": "Options";
+      "optionsPlaceholder": "One option per line";
+      "positionIssueRequired": "Each position needs an issue.";
+      "positionLabel": "Position {index}";
+      "positions": "Positions";
+      "preferredLabel": "Preferred language";
+      "preferredPlaceholder": "Preferred wording";
+      "review": {
+        "changePlaybook": "Choose another playbook";
+        "extractedLabel": "Found:";
+        "facetTitle": "Review with playbook";
+        "failed": "Failed to review document";
+        "fixAccepted": "Accepted";
+        "insertFailed": "Couldn't insert the preferred clause";
+        "insertPreferred": "Insert preferred clause";
+        "launcherDescription": "Check this document against an organization playbook and get findings inline.";
+        "noFindings": "No issues found";
+        "playbookLabel": "Playbook";
+        "playbookPlaceholder": "Choose a playbook";
+        "reject": "Reject";
+        "reviewAgain": "Review again";
+        "reviewedAgainst": "Reviewed against {name}";
+        "reviewing": "Reviewing…";
+        "reviewingHint": "This can take up to a couple of minutes for large playbooks.";
+        "run": "Review";
+        "scrollToChange": "Go to change";
+        "viewClause": "View clause";
+      };
+      "rule": {
+        "extractOnly": "Extract only";
+        "positionMatch": "Position match";
+        "presence": "Presence";
+        "propertyConstraint": "Value constraint";
+      };
+      "saveFailed": "Failed to save playbook";
+      "severity": {
+        "blocker": "Blocker";
+        "high": "High";
+        "low": "Low";
+        "medium": "Medium";
+      };
+      "severityLabel": "Severity";
+      "source": {
+        "clause": "Clause library";
+        "inline": "Inline text";
+        "none": "No standard";
+      };
+      "updated": "Playbook updated";
+      "verdict": {
+        "compliant": "Compliant";
+        "deviation": "Deviation";
+        "fallback": "Fallback";
+        "missing": "Missing";
+      };
+    };
     "sections": {
       "agents": {
         "description": "Configurable assistants for repeatable work";
@@ -1472,6 +1575,9 @@ type Messages = {
       "mcp": {
         "description": "Connect stella to external tools";
         "title": "MCP";
+      };
+      "playbooks": {
+        "description": "Graded checklists that review documents against your standards";
       };
       "prompts": {
         "description": "Reusable skills available from / in chat";
@@ -2678,28 +2784,12 @@ type Messages = {
       "zoomOut": "Zoom out";
     };
     "playbooks": {
-      "action": "Playbooks";
-      "addColumn": "Add column";
-      "applied": "Playbook applied";
-      "apply": "Apply";
-      "columnNamePlaceholder": "Column name";
-      "columnsLabel": "Columns";
-      "contentType": {
-        "date": "Date";
-        "int": "Number";
-        "text": "Text";
-      };
-      "create": "New playbook";
-      "description": "Bundle AI columns that fill only for a chosen document type.";
-      "duplicateColumn": "Column names must be unique.";
-      "empty": "No playbooks yet.";
-      "incomplete": "Add a name and at least one column.";
-      "nameLabel": "Name";
-      "namePlaceholder": "e.g. Lease review";
-      "promptPlaceholder": "What should this column extract?";
-      "summary": "{type} · {count, number} columns";
-      "title": "Playbooks";
-      "typeLabel": "Document type";
+      "autoRun": "Auto run";
+      "autoRunHint": "Auto-detect and run every playbook matching the documents' types";
+      "autoRunStarted": "Running {count, plural, one {# playbook} other {# playbooks}}";
+      "run": "Run playbook";
+      "runFailed": "Failed to run playbook";
+      "runStarted": "Running playbook ({count, plural, one {# column} other {# columns}})";
     };
     "possibleDuplicates": "Possible duplicates";
     "properties": {

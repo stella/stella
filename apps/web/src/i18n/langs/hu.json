@@ -797,6 +797,7 @@
     "organizationName": "Szervezet neve",
     "pin": "Rögzítés",
     "playVideo": "Videó lejátszása",
+    "playbooks": "Playbookok",
     "preview": "Előnézet",
     "previous": "Előző",
     "print": "Nyomtatás",
@@ -804,6 +805,7 @@
     "properties": "Tulajdonságok",
     "reconnecting": "Újracsatlakozás…",
     "reference": "Hivatkozás",
+    "refresh": "Frissítés",
     "regenerate": "Újragenerálás",
     "remove": "Eltávolítás",
     "removeMember": "Tag eltávolítása",
@@ -1455,6 +1457,107 @@
       "useInChat": "Használat a chatben",
       "whatIsAnMcpServer": "Mi az az MCP-szerver?"
     },
+    "playbooks": {
+      "addFallback": "Alternatív megfogalmazás hozzáadása",
+      "addPosition": "Álláspont hozzáadása",
+      "ask": "Kérdés",
+      "askContentLabel": "Válasz típusa",
+      "askQuestionLabel": "A kérdés szövege",
+      "askQuestionPlaceholder": "Mit olvassunk ki minden dokumentumból? Hagyja üresen a kézi bevitelhez.",
+      "clauseLabel": "Záradék",
+      "clausePlaceholder": "Záradékok keresése...",
+      "clauseRequired": "Minden, a záradékkönyvtárhoz kötött standardhoz válasszon záradékot.",
+      "clauseSearchEmpty": "Nem található záradék",
+      "conditionPlaceholder": "Ezt a feltételt egy későbbi lépésben állíthatja be.",
+      "confirmDelete": "Ezzel véglegesen törlődik a playbook.",
+      "contentType": {
+        "int": "Szám",
+        "singleSelect": "Egyszeres választás",
+        "text": "Szöveg"
+      },
+      "createPlaybook": "Új playbook",
+      "created": "Playbook létrehozva",
+      "deleteFailed": "A playbook törlése nem sikerült",
+      "deletePlaybook": "Playbook törlése",
+      "deleted": "Playbook törölve",
+      "descriptionPlaceholder": "Mit ellenőriz ez a playbook?",
+      "empty": "Még nincsenek playbookok",
+      "emptyDescription": "Hozzon létre egy playbookot, hogy a dokumentumokat a saját standardjaihoz mérje.",
+      "expect": "Elvárás",
+      "expectSourceLabel": "Mérce",
+      "expectation": {
+        "restricted": "Tiltott"
+      },
+      "expectationLabel": "Követelmény",
+      "fallbackLabelPlaceholder": "Felirat (opcionális)",
+      "fallbackTextPlaceholder": "Elfogadható alternatív megfogalmazás",
+      "fallbacksLabel": "Alternatív megfogalmazások",
+      "grade": "Értékelés",
+      "gradeRuleLabel": "Szabály",
+      "guidanceLabel": "Útmutató",
+      "guidancePlaceholder": "Megjegyzések az ellenőrök számára (opcionális)",
+      "issueLabel": "Téma",
+      "issuePlaceholder": "pl. Felelősség korlátozása",
+      "loadFailed": "A playbookok betöltése nem sikerült",
+      "loading": "Playbookok betöltése…",
+      "namePlaceholder": "pl. NDA felülvizsgálata",
+      "nameRequired": "Adjon meg egy nevet.",
+      "noPositions": "Még nincsenek álláspontok. Adja hozzá az elsőt.",
+      "optionsLabel": "Lehetőségek",
+      "optionsPlaceholder": "Soronként egy lehetőség",
+      "positionIssueRequired": "Minden állásponthoz témát kell megadni.",
+      "positionLabel": "{index}. álláspont",
+      "positions": "Álláspontok",
+      "preferredLabel": "Preferált megfogalmazás",
+      "preferredPlaceholder": "Preferált szövegezés",
+      "review": {
+        "changePlaybook": "Másik playbook választása",
+        "extractedLabel": "Találat:",
+        "facetTitle": "Ellenőrzés playbookkal",
+        "failed": "A dokumentum ellenőrzése nem sikerült",
+        "fixAccepted": "Elfogadva",
+        "insertFailed": "A preferált záradékot nem sikerült beszúrni",
+        "insertPreferred": "Preferált záradék beszúrása",
+        "launcherDescription": "Ellenőrizze ezt a dokumentumot egy szervezeti playbook alapján, és kapja meg a megállapításokat közvetlenül a szövegben.",
+        "noFindings": "Nem található probléma",
+        "playbookLabel": "Playbook",
+        "playbookPlaceholder": "Válasszon playbookot",
+        "reject": "Elutasítás",
+        "reviewAgain": "Újraellenőrzés",
+        "reviewedAgainst": "Ellenőrizve {name} alapján",
+        "reviewing": "Ellenőrzés…",
+        "reviewingHint": "Nagy playbookok esetén ez akár néhány percig is eltarthat.",
+        "run": "Ellenőrzés",
+        "scrollToChange": "Ugrás a módosításhoz",
+        "viewClause": "Záradék megtekintése"
+      },
+      "rule": {
+        "extractOnly": "Csak kinyerés",
+        "positionMatch": "Álláspont egyezése",
+        "presence": "Jelenlét",
+        "propertyConstraint": "Értékfeltétel"
+      },
+      "saveFailed": "A playbook mentése nem sikerült",
+      "severity": {
+        "blocker": "Blokkoló",
+        "high": "Magas",
+        "low": "Alacsony",
+        "medium": "Közepes"
+      },
+      "severityLabel": "Súlyosság",
+      "source": {
+        "clause": "Záradékkönyvtár",
+        "inline": "Egyéni szöveg",
+        "none": "Nincs mérce"
+      },
+      "updated": "Playbook frissítve",
+      "verdict": {
+        "compliant": "Megfelel",
+        "deviation": "Eltérés",
+        "fallback": "Alternatív megfogalmazás",
+        "missing": "Hiányzik"
+      }
+    },
     "sections": {
       "agents": {
         "description": "Konfigurálható asszisztensek ismételhető munkákhoz",
@@ -1469,6 +1572,9 @@
       "mcp": {
         "description": "A stella összekapcsolása külső eszközökkel",
         "title": "MCP"
+      },
+      "playbooks": {
+        "description": "Értékelt ellenőrzőlisták, amelyek a dokumentumokat az Ön standardjaihoz mérik"
       },
       "prompts": {
         "description": "A chatben / paranccsal elérhető, újrahasználható készségek",
@@ -2675,28 +2781,12 @@
       "zoomOut": "Kicsinyítés"
     },
     "playbooks": {
-      "action": "Playbooks",
-      "addColumn": "Add column",
-      "applied": "Playbook applied",
-      "apply": "Apply",
-      "columnNamePlaceholder": "Column name",
-      "columnsLabel": "Columns",
-      "contentType": {
-        "date": "Date",
-        "int": "Number",
-        "text": "Text"
-      },
-      "create": "New playbook",
-      "description": "Bundle AI columns that fill only for a chosen document type.",
-      "duplicateColumn": "Column names must be unique.",
-      "empty": "No playbooks yet.",
-      "incomplete": "Add a name and at least one column.",
-      "nameLabel": "Name",
-      "namePlaceholder": "e.g. Lease review",
-      "promptPlaceholder": "What should this column extract?",
-      "summary": "{type} · {count, number} columns",
-      "title": "Playbooks",
-      "typeLabel": "Document type"
+      "autoRun": "Automatikus futtatás",
+      "autoRunHint": "Automatikusan felismeri és futtatja az összes playbookot, amely megfelel a dokumentumok típusainak",
+      "autoRunStarted": "{count, plural, one {# playbook futtatása} other {# playbook futtatása}}",
+      "run": "Playbook futtatása",
+      "runFailed": "Nem sikerült futtatni a playbookot",
+      "runStarted": "Playbook futtatása ({count, plural, one {# oszlop} other {# oszlop}})"
     },
     "possibleDuplicates": "Lehetséges duplikátumok",
     "properties": {

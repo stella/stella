@@ -123,4 +123,38 @@ describe("resolveFolioAIBlockRange", () => {
     }
     expect(liveDoc.resolve(range.from + 1).parent.textContent).toBe("Inserted");
   });
+
+  test("resolves a seq fallback id positionally when the live doc allocated hex paraIds", () => {
+    // The docx-justification scroll path passes no snapshot, so the
+    // resolver builds one from the live doc. By then `ParaIdAllocator`
+    // has minted a fresh hex paraId for every paragraph the source DOCX
+    // left without a `w14:paraId`, so the live-doc snapshot keys those
+    // blocks by hex and never reproduces the server's `seq-NNNN`: the
+    // direct anchor lookup misses and no node carries a `seq-` paraId.
+    // The seq number is the block's 1-based document position, so it
+    // must still resolve there.
+    const liveDoc = makeDoc([
+      { paraId: "0A0A0A0A", text: "Title" },
+      { paraId: "0B0B0B0B", text: "Before" },
+      { paraId: "0C0C0C0C", text: "Target" },
+    ]);
+
+    const range = resolveFolioAIBlockRange({
+      blockId: "seq-0003",
+      doc: liveDoc,
+    });
+
+    if (range === null) {
+      throw new Error("Expected seq fallback to resolve positionally");
+    }
+    expect(liveDoc.resolve(range.from + 1).parent.textContent).toBe("Target");
+  });
+
+  test("returns null for a seq id past the end of the document", () => {
+    const liveDoc = makeDoc([{ paraId: "0A0A0A0A", text: "Only" }]);
+
+    expect(
+      resolveFolioAIBlockRange({ blockId: "seq-0009", doc: liveDoc }),
+    ).toBeNull();
+  });
 });

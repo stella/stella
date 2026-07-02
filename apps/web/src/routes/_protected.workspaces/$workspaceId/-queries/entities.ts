@@ -1,6 +1,10 @@
 import { useDeferredValue } from "react";
 
-import { infiniteQueryOptions, queryOptions } from "@tanstack/react-query";
+import {
+  infiniteQueryOptions,
+  keepPreviousData,
+  queryOptions,
+} from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
@@ -272,6 +276,11 @@ export const kanbanGroupOptions = (key: KanbanGroupOptionsInput) =>
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    // The key carries the visible fieldIds, so showing/hiding a column changes
+    // it and refetches. Keep the previous rows on screen during that refetch
+    // (and on filter/sort/paging changes) instead of dropping every group to
+    // skeleton — the rows already exist, only the column set changed.
+    placeholderData: keepPreviousData,
   });
 
 // Per-group entity counts in one query, so the grouped table can skip

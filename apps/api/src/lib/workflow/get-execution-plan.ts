@@ -4,7 +4,11 @@ import type { ConditionNode } from "@stll/conditions";
 
 import type { ScopedDb } from "@/api/db";
 import type { PropertyStatus } from "@/api/db/schema";
-import type { AIModelTool, PropertyTool } from "@/api/db/schema-validators";
+import type {
+  AIModelTool,
+  PlaybookVerdictTool,
+  PropertyTool,
+} from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { parseStoredCondition } from "@/api/lib/conditions/parse-stored";
 import { LIMITS } from "@/api/lib/limits";
@@ -41,13 +45,27 @@ export type BatchPropertyDependency = {
   condition: ConditionNode | null;
 };
 
-export type BatchProperty = {
+type BatchPropertyBase = {
   id: SafeId<"property">;
   status: PropertyStatus;
   content: Exclude<PropertyContent, { type: "file" }>;
-  tool: AIModelTool;
   dependencies: BatchPropertyDependency[];
 };
+
+// An extraction column the LLM fills from the document.
+export type AIBatchProperty = BatchPropertyBase & {
+  tool: AIModelTool;
+};
+
+// A derived verdict column graded after its ASK extraction (see
+// `playbookVerdictToolSchema`). Carried in the same batch machinery as
+// `AIBatchProperty` but dispatched to the verdict engine, never the LLM
+// extraction path.
+export type VerdictBatchProperty = BatchPropertyBase & {
+  tool: PlaybookVerdictTool;
+};
+
+export type BatchProperty = AIBatchProperty | VerdictBatchProperty;
 
 export type PropertyBatch = {
   id: string;
@@ -194,17 +212,34 @@ export const buildLevelBatches = (
     }
 
     if (
-      property.content.type !== "file" &&
-      property.tool.type === "ai-model" &&
-      needsComputation(property.status)
+      property.content.type === "file" ||
+      !needsComputation(property.status)
     ) {
-      signatureToProperties.get(signature)?.push({
-        id: property.id,
-        status: property.status,
-        content: property.content,
-        tool: property.tool,
-        dependencies: graph.propertyDependenciesMap.get(propId) ?? [],
-      });
+      continue;
+    }
+
+    const dependencies = graph.propertyDependenciesMap.get(propId) ?? [];
+    const base = {
+      id: property.id,
+      status: property.status,
+      content: property.content,
+      dependencies,
+    };
+
+    // ai-model columns run the LLM extraction; playbook-verdict columns are
+    // graded by the verdict engine after their ASK dependency resolves. Both
+    // ride the same batch/level machinery so the DAG schedules a verdict in a
+    // later level than the ASK property it depends on. manual-input columns
+    // are user-entered and never computed.
+    // Two separate narrowing branches (not a shared else-if) so TS resolves
+    // property.tool to a single discriminated-union member for each push; it
+    // cannot distribute AIModelTool | PlaybookVerdictTool across the spread.
+    const computed = signatureToProperties.get(signature);
+    if (property.tool.type === "ai-model") {
+      computed?.push({ ...base, tool: property.tool });
+    }
+    if (property.tool.type === "playbook-verdict") {
+      computed?.push({ ...base, tool: property.tool });
     }
   }
 

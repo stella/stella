@@ -1,7 +1,8 @@
 import type { ComponentType } from "react";
 import { useState } from "react";
 
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { getRouteApi } from "@tanstack/react-router";
 import { Result } from "better-result";
 import {
   AlignJustifyIcon,
@@ -10,9 +11,11 @@ import {
   DownloadIcon,
   EyeIcon,
   HashIcon,
+  PlayIcon,
   Rows3Icon,
   SparklesIcon,
   UserIcon,
+  WandSparklesIcon,
   WrapTextIcon,
 } from "lucide-react";
 import { useLocale, useTranslations } from "use-intl";
@@ -32,28 +35,40 @@ import {
   Select,
   SelectItem,
   SelectPopup,
+  SelectSeparator,
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/components/select";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { FolderExpandToggle } from "@/components/file-tree/folder-expand-toggle";
+import { usePlaybooksPreviewEnabled } from "@/hooks/use-playbooks-preview";
 import type { TranslationKey } from "@/i18n/types";
 import { useAnalytics } from "@/lib/analytics/provider";
+import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
-import { ClientOperationError } from "@/lib/errors";
+import {
+  ClientOperationError,
+  toAPIError,
+  userErrorMessage,
+} from "@/lib/errors";
+import { toSafeId } from "@/lib/safe-id";
 import type {
   ViewLayout,
   WorkspaceEntity,
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
+import {
+  PLAYBOOK_PICKER_LIMIT,
+  playbooksOptions,
+} from "@/routes/_protected.knowledge/-queries";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
-import { PlaybooksManager } from "@/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager";
 import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/property-helpers";
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
+import { isDocumentTypeClassifier } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
@@ -64,12 +79,17 @@ import {
   workspaceFilesOptions,
   workspaceFoldersOptions,
 } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
-import { propertiesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
+import {
+  propertiesKeys,
+  propertiesOptions,
+} from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 import { useWorkspaceStore } from "@/routes/_protected.workspaces/$workspaceId/-store";
 import {
   getInternalPropertyId,
   resolveKanbanGroupBy,
 } from "@/routes/_protected.workspaces/$workspaceId/-utils";
+
+const protectedRouteApi = getRouteApi("/_protected");
 
 type ViewToolbarProps = {
   view: WorkspaceView;
@@ -223,7 +243,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           />
           <TableContentModeControl viewId={view.id} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
-          <PlaybooksManager workspaceId={workspaceId} />
+          <RunPlaybookControl workspaceId={workspaceId} />
           <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
         </>
       )}
@@ -453,6 +473,204 @@ const getExportFileName = (
   );
 };
 
+type RunPlaybookControlProps = {
+  workspaceId: string;
+};
+
+/**
+ * Runs an org playbook over the current table. The top "Auto run" entry
+ * auto-detects which playbooks apply to the documents present in the matter and
+ * materializes them all at once; each individual entry materializes a single
+ * playbook's ASK + verdict columns and starts extraction. New columns appear
+ * once the properties query refreshes.
+ */
+const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
+  const t = useTranslations();
+  const playbooksEnabled = usePlaybooksPreviewEnabled();
+  const analytics = useAnalytics();
+  const queryClient = useQueryClient();
+  const activeOrganizationId = protectedRouteApi.useRouteContext({
+    select: (ctx) => ctx.user.activeOrganizationId,
+  });
+  const [open, setOpen] = useState(false);
+  const [runningPlaybookId, setRunningPlaybookId] = useState<string | null>(
+    null,
+  );
+  const [isAutoRunning, setIsAutoRunning] = useState(false);
+
+  // Deferred until the menu opens: the org playbook list isn't needed to render
+  // the toolbar, and useQuery (not useSuspenseQuery) keeps a cache miss from
+  // suspending the toolbar chrome.
+  const {
+    data: playbooksData,
+    isLoading,
+    isError,
+  } = useQuery({
+    ...playbooksOptions(activeOrganizationId, PLAYBOOK_PICKER_LIMIT),
+    enabled: open,
+  });
+  const playbooks =
+    playbooksData && "items" in playbooksData ? playbooksData.items : [];
+
+  const handleAutoRun = async () => {
+    setIsAutoRunning(true);
+    const result = await Result.tryPromise(
+      async () =>
+        await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .playbooks["auto-run"].post({
+            queryKey: propertiesKeys.all(workspaceId),
+          }),
+    );
+    setIsAutoRunning(false);
+
+    if (Result.isError(result)) {
+      analytics.captureError(result.error);
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: t("common.unexpectedError"),
+      });
+      return;
+    }
+
+    const response = result.value;
+    if (response.error) {
+      analytics.captureError(toAPIError(response.error));
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    setOpen(false);
+    await queryClient.invalidateQueries({
+      queryKey: propertiesKeys.all(workspaceId),
+    });
+    stellaToast.add({
+      type: "success",
+      title: t("workspaces.playbooks.autoRunStarted", {
+        count: response.data.playbooksRun,
+      }),
+    });
+  };
+
+  const handleRun = async (playbookId: string) => {
+    setRunningPlaybookId(playbookId);
+    const result = await Result.tryPromise(
+      async () =>
+        await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
+          .run.post({ queryKey: propertiesKeys.all(workspaceId) }),
+    );
+    setRunningPlaybookId(null);
+
+    if (Result.isError(result)) {
+      analytics.captureError(result.error);
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: t("common.unexpectedError"),
+      });
+      return;
+    }
+
+    const response = result.value;
+    if (response.error) {
+      analytics.captureError(toAPIError(response.error));
+      stellaToast.add({
+        type: "error",
+        title: t("workspaces.playbooks.runFailed"),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
+      });
+      return;
+    }
+
+    setOpen(false);
+    await queryClient.invalidateQueries({
+      queryKey: propertiesKeys.all(workspaceId),
+    });
+    stellaToast.add({
+      type: "success",
+      title: t("workspaces.playbooks.runStarted", {
+        count: response.data.runPropertyCount,
+      }),
+    });
+  };
+
+  const isRunning = runningPlaybookId !== null || isAutoRunning;
+
+  if (!playbooksEnabled) {
+    return null;
+  }
+
+  return (
+    <Menu onOpenChange={setOpen} open={open}>
+      <MenuTrigger
+        render={
+          <Button
+            aria-label={t("workspaces.playbooks.run")}
+            disabled={isRunning}
+            size="icon-xs"
+            title={t("workspaces.playbooks.run")}
+            variant="ghost"
+          />
+        }
+      >
+        <PlayIcon className="size-3.5" />
+      </MenuTrigger>
+      <MenuPopup>
+        <MenuItem
+          closeOnClick={false}
+          disabled={isRunning}
+          onClick={() => {
+            void handleAutoRun();
+          }}
+        >
+          <WandSparklesIcon className="size-3.5" />
+          <span className="flex flex-col">
+            <span>{t("workspaces.playbooks.autoRun")}</span>
+            <span className="text-muted-foreground text-xs">
+              {t("workspaces.playbooks.autoRunHint")}
+            </span>
+          </span>
+        </MenuItem>
+        <MenuSeparator />
+        {isLoading && (
+          <MenuItem disabled>{t("knowledge.playbooks.loading")}</MenuItem>
+        )}
+        {isError && (
+          <MenuItem disabled>{t("knowledge.playbooks.loadFailed")}</MenuItem>
+        )}
+        {!isLoading && !isError && playbooks.length === 0 && (
+          <MenuItem disabled>{t("knowledge.playbooks.empty")}</MenuItem>
+        )}
+        {playbooks.map((playbook) => (
+          <MenuItem
+            closeOnClick={false}
+            disabled={isRunning}
+            key={playbook.id}
+            onClick={() => {
+              void handleRun(playbook.id);
+            }}
+          >
+            {playbook.name}
+          </MenuItem>
+        ))}
+      </MenuPopup>
+    </Menu>
+  );
+};
+
 type FilesystemOrganizerActionProps = {
   workspaceId: string;
 };
@@ -594,6 +812,20 @@ const GroupByControl = ({
       : property.content.type === "single-select",
   );
 
+  // Grouping by "Document Type" is the primary action — it drives per-type
+  // playbook review — so it leads the menu, marked, above the basic groupings.
+  // The playbook verdict groupings are collected into their own section below so
+  // they don't drown the important choices.
+  const documentTypeProp = eligible.find(isDocumentTypeClassifier);
+  const verdictProps = eligible.filter(
+    (property) => property.tool.type === "playbook-verdict",
+  );
+  const basicProps = eligible.filter(
+    (property) =>
+      property !== documentTypeProp &&
+      property.tool.type !== "playbook-verdict",
+  );
+
   const resolvedId =
     allowNone && !groupByPropertyId
       ? GROUP_BY_NONE_VALUE
@@ -636,6 +868,17 @@ const GroupByControl = ({
           <SelectValue placeholder={resolvedLabel}>{resolvedLabel}</SelectValue>
         </SelectTrigger>
         <SelectPopup>
+          {documentTypeProp && (
+            <>
+              <SelectItem value={documentTypeProp.id}>
+                <span className="flex items-center gap-1.5 font-medium">
+                  <SparklesIcon className="text-primary size-3.5" />
+                  {documentTypeProp.name}
+                </span>
+              </SelectItem>
+              <SelectSeparator />
+            </>
+          )}
           {allowNone && (
             <SelectItem value={GROUP_BY_NONE_VALUE}>
               {t("common.none")}
@@ -644,11 +887,21 @@ const GroupByControl = ({
           <SelectItem value={getInternalPropertyId("kind")}>
             {t("common.kind")}
           </SelectItem>
-          {eligible.map((prop) => (
+          {basicProps.map((prop) => (
             <SelectItem key={prop.id} value={prop.id}>
               {prop.name}
             </SelectItem>
           ))}
+          {verdictProps.length > 0 && (
+            <>
+              <SelectSeparator />
+              {verdictProps.map((prop) => (
+                <SelectItem key={prop.id} value={prop.id}>
+                  {prop.name}
+                </SelectItem>
+              ))}
+            </>
+          )}
         </SelectPopup>
       </Select>
     </span>
@@ -689,6 +942,9 @@ const PropertiesToggle = ({
   const manualProperties = properties.filter(
     (p) => p.tool.type === "manual-input",
   );
+  // Verdict properties render as a badge inside their ASK column rather than a
+  // column of their own, so they're omitted here: toggling them would target a
+  // column that no longer exists. Their visibility follows the ASK column.
   const aiProperties = properties.filter((p) => p.tool.type === "ai-model");
 
   return (
@@ -726,8 +982,8 @@ const PropertiesToggle = ({
                 const isVisible = !hiddenProperties.includes(prop.id);
                 return (
                   <MenuItem
-                    key={prop.id}
                     closeOnClick={false}
+                    key={prop.id}
                     onClick={() => toggleProperty(prop.id)}
                   >
                     <PropertyIcon type={prop.content.type} />
@@ -753,8 +1009,8 @@ const PropertiesToggle = ({
                 const isVisible = !hiddenProperties.includes(prop.id);
                 return (
                   <MenuItem
-                    key={prop.id}
                     closeOnClick={false}
+                    key={prop.id}
                     onClick={() => toggleProperty(prop.id)}
                   >
                     <PropertyIcon type={prop.content.type} />

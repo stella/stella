@@ -22,7 +22,7 @@
  */
 
 import { panic } from "better-result";
-import { sql } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 
 import { deriveBlockId } from "@stll/folio/server";
 
@@ -32,6 +32,7 @@ import {
   chatMessages,
   chatThreads,
   contacts,
+  documentTypes,
   entities,
   entityVersions,
   expenses,
@@ -39,6 +40,7 @@ import {
   fields,
   invoices,
   justifications,
+  playbookDefinitions,
   properties,
   propertyDependencies,
   rateEntries,
@@ -55,6 +57,11 @@ import type {
   PropertyContent,
   PropertyTool,
 } from "@/api/db/schema-validators";
+import {
+  DEFAULT_DOCUMENT_TYPES,
+  ensureDefaultDocumentTypes,
+} from "@/api/handlers/document-types/defaults";
+import type { PlaybookPositions } from "@/api/handlers/playbooks/positions";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -92,6 +99,22 @@ const HEAVY_MATTER_FOLDER_COUNT = 25;
 const EXPORT_TABLE_MATTER_LABEL = "ws-export-review";
 const EXPORT_TABLE_FILE_COUNT = 72;
 const EXPORT_TABLE_FOLDER_COUNT = 6;
+// The akvizice matter is where the Czech (type-scoped) playbook runs; its
+// "Document Type" classifier uses the org taxonomy labels so playbook gating
+// can match the SPA document.
+const AKVIZICE_MATTER_LABEL = "ws-akvizice-energo";
+const AKVIZICE_SPA_DOC_NAME = "Smlouva_o_akvizici_akcii.pdf";
+// The taxonomy key the Czech playbook is scoped to; its label classifies the
+// akvizice SPA document so the gate matches. Derived from the single source of
+// truth so the field value never drifts from the taxonomy.
+const SPA_DOCUMENT_TYPE_KEY = "spa";
+const spaDocumentType = DEFAULT_DOCUMENT_TYPES.find(
+  (documentType) => documentType.key === SPA_DOCUMENT_TYPE_KEY,
+);
+if (!spaDocumentType) {
+  panic(`Missing default document type: ${SPA_DOCUMENT_TYPE_KEY}`);
+}
+const SPA_DOCUMENT_TYPE_LABEL = spaDocumentType.label;
 
 type BillingCodeId = SafeId<"billingCode">;
 type ContactId = SafeId<"contact">;
@@ -226,7 +249,7 @@ const pdfEscape = (s: string): string => {
  * Create a minimal but readable multi-page PDF.
  * Each page holds ~45 lines at 11pt with 14pt leading.
  */
-const createMockPdf = (title: string, bodyText?: string): Buffer => {
+export const createMockPdf = (title: string, bodyText?: string): Buffer => {
   const LINES_PER_PAGE = 45;
   const FONT_SIZE = 11;
   const LEADING = 14;
@@ -359,7 +382,7 @@ const xmlEscape = (s: string): string =>
     .replace(/>/gu, "&gt;")
     .replace(/"/gu, "&quot;");
 
-const createMockDocx = async (
+export const createMockDocx = async (
   title: string,
   bodyText?: string,
 ): Promise<Buffer> => {
@@ -2293,15 +2316,39 @@ const buildProperties = (
     },
   ];
 
-  if (wsLabel !== EXPORT_TABLE_MATTER_LABEL) {
-    return base;
-  }
-
   const aiTool = (prompt: string): PropertyTool => ({
     version: 1,
     type: "ai-model",
     prompt,
   });
+
+  if (wsLabel === AKVIZICE_MATTER_LABEL) {
+    // A single-select AI classifier whose options are the org document-type
+    // taxonomy labels; the type-scoped playbook gates its columns on this.
+    const docTypeColors = ["blue", "teal", "violet", "amber"] as const;
+    return [
+      ...base,
+      {
+        id: seedId(`${wsLabel}-prop-document-type`),
+        workspaceId: wsId,
+        name: "Document Type",
+        content: {
+          version: 1,
+          type: "single-select",
+          options: DEFAULT_DOCUMENT_TYPES.map((documentType, index) => ({
+            color: at(docTypeColors, index % docTypeColors.length),
+            value: documentType.label,
+          })),
+          fallback: null,
+        },
+        tool: aiTool("Extract the document category from the attached file."),
+      },
+    ];
+  }
+
+  if (wsLabel !== EXPORT_TABLE_MATTER_LABEL) {
+    return base;
+  }
 
   return [
     ...base,
@@ -2838,6 +2885,25 @@ const buildFields = (
 
     if (wsLabel === EXPORT_TABLE_MATTER_LABEL) {
       addExportReviewFields(result, wsLabel, doc, i);
+    }
+
+    // Classify the akvizice SPA document so the type-scoped playbook's gate
+    // (DocumentType == "Share Purchase Agreement") matches it.
+    if (
+      wsLabel === AKVIZICE_MATTER_LABEL &&
+      doc.name === AKVIZICE_SPA_DOC_NAME
+    ) {
+      result.push({
+        id: seedId(`${wsLabel}-field-document-type-${i}`),
+        workspaceId: doc.workspaceId,
+        propertyId: seedId(`${wsLabel}-prop-document-type`),
+        entityVersionId: doc.versionId,
+        content: {
+          version: 1,
+          type: "single-select",
+          value: SPA_DOCUMENT_TYPE_LABEL,
+        },
+      });
     }
   }
 
@@ -3762,6 +3828,196 @@ const MORE_WORKSPACES = [
   },
 ];
 
+// ─── Playbooks (knowledge base) ─────────────────────────
+
+export const seedPlaybooks = async (
+  organizationId: SafeId<"organization">,
+): Promise<void> => {
+  // The payment-terms position is graded by a deterministic constraint over its
+  // own extracted value, so the constraint's property operand must point back to
+  // this position's sourceId. Build it once and reuse it for both.
+  const paymentTermsSourceId = seedId("playbook-cz-pos-splatnost-faktur");
+  const definitionId = seedId("playbook-cz-obchodni-smlouva");
+
+  // onConflictDoNothing would keep a stale definition, so reruns must delete the
+  // prior seed playbook first to pick up position/scope changes. The
+  // properties.playbook_definition_id FK cascades, clearing any columns it
+  // materialized into workspaces.
+  await rootDb
+    .delete(playbookDefinitions)
+    .where(eq(playbookDefinitions.id, definitionId));
+
+  await rootDb
+    .insert(playbookDefinitions)
+    .values({
+      id: definitionId,
+      organizationId,
+      name: "Kontrola obchodní smlouvy (CZ)",
+      description:
+        "Standardní revize obchodních a akvizičních smluv podle českého práva.",
+      scope: {
+        documentTypeKey: SPA_DOCUMENT_TYPE_KEY,
+        perspective: "buyer",
+      },
+      positions: {
+        version: 1,
+        items: [
+          {
+            sourceId: seedId("playbook-cz-pos-rozhodne-pravo"),
+            issue: "Rozhodné právo",
+            ask: {
+              question: "Jakým právním řádem se smlouva řídí?",
+              content: { version: 1, type: "text" },
+            },
+            standard: {
+              source: "inline",
+              preferred: "Smlouva se řídí právním řádem České republiky.",
+              fallbacks: [
+                {
+                  rank: 0,
+                  text: "Smlouva se řídí právem jiného členského státu Evropské unie.",
+                },
+              ],
+            },
+            rule: { kind: "positionMatch" },
+            severity: "high",
+            guidance:
+              "Preferujeme volbu českého práva; jiné právo EU je akceptovatelný ústupek.",
+          },
+          {
+            sourceId: seedId("playbook-cz-pos-omezeni-odpovednosti"),
+            issue: "Omezení odpovědnosti za škodu",
+            ask: {
+              question:
+                "Je odpovědnost smluvní strany za škodu omezena? Pokud ano, jaká je maximální výše náhrady?",
+              content: { version: 1, type: "text" },
+            },
+            standard: {
+              source: "inline",
+              preferred:
+                "Odpovědnost za škodu je omezena a její celková výše nepřesahuje cenu plnění sjednanou ve smlouvě.",
+              fallbacks: [
+                {
+                  rank: 0,
+                  text: "Odpovědnost za škodu je omezena na dvojnásobek roční hodnoty plnění.",
+                },
+              ],
+            },
+            rule: { kind: "positionMatch" },
+            severity: "blocker",
+            guidance:
+              "Neomezená odpovědnost je nepřijatelná; vyžaduje eskalaci.",
+          },
+          {
+            sourceId: paymentTermsSourceId,
+            issue: "Splatnost faktur (dny)",
+            ask: {
+              question:
+                "Jaká je splatnost faktur ve dnech? Odpověz pouze číslem.",
+              content: { version: 1, type: "int" },
+            },
+            standard: { source: "none" },
+            rule: {
+              kind: "propertyConstraint",
+              condition: {
+                type: "group",
+                combinator: "and",
+                children: [
+                  {
+                    type: "compare",
+                    left: {
+                      type: "property",
+                      propertyId: paymentTermsSourceId,
+                    },
+                    op: "lte",
+                    right: { type: "literal", value: 30 },
+                  },
+                ],
+              },
+            },
+            severity: "medium",
+            guidance: "Splatnost nad 30 dnů zhoršuje cash flow.",
+          },
+          {
+            sourceId: seedId("playbook-cz-pos-mlcenlivost"),
+            issue: "Mlčenlivost",
+            ask: {
+              question:
+                "Cituj ustanovení smlouvy o mlčenlivosti / ochraně důvěrných informací, je-li ve smlouvě obsaženo.",
+              content: { version: 1, type: "text" },
+            },
+            standard: { source: "none" },
+            rule: { kind: "presence", expectation: "required" },
+            severity: "high",
+            guidance: "Smlouva musí obsahovat závazek mlčenlivosti.",
+          },
+          {
+            sourceId: seedId("playbook-cz-pos-change-of-control"),
+            issue: "Změna ovládání (change of control)",
+            ask: {
+              question:
+                "Cituj ustanovení vyžadující souhlas druhé strany při změně ovládání (change of control) jedné ze stran, existuje-li.",
+              content: { version: 1, type: "text" },
+            },
+            standard: { source: "none" },
+            rule: { kind: "presence", expectation: "restricted" },
+            severity: "high",
+            guidance:
+              "Požadavek na souhlas při change of control je riziko pro akvizici – nutno označit.",
+          },
+          {
+            sourceId: seedId("playbook-cz-pos-vypovedni-doba"),
+            issue: "Výpovědní doba",
+            ask: {
+              question: "Jaká je výpovědní doba pro ukončení smlouvy?",
+              content: { version: 1, type: "text" },
+            },
+            standard: { source: "none" },
+            rule: { kind: "extractOnly" },
+            severity: "low",
+          },
+          {
+            sourceId: seedId("playbook-cz-pos-doba-trvani"),
+            issue: "Doba trvání a automatické prodloužení",
+            ask: {
+              question:
+                "Na jakou dobu je smlouva uzavřena a obsahuje doložku o automatickém prodloužení (auto-renewal)?",
+              content: { version: 1, type: "text" },
+            },
+            standard: { source: "none" },
+            rule: { kind: "extractOnly" },
+            severity: "low",
+          },
+          {
+            sourceId: seedId("playbook-cz-pos-reseni-sporu"),
+            issue: "Řešení sporů",
+            ask: {
+              question:
+                "Jak se řeší spory ze smlouvy — příslušnými soudy ČR, nebo v rozhodčím řízení?",
+              content: { version: 1, type: "text" },
+            },
+            standard: {
+              source: "inline",
+              preferred:
+                "Spory z této smlouvy rozhodují věcně a místně příslušné soudy České republiky.",
+              fallbacks: [
+                {
+                  rank: 0,
+                  text: "Spory se řeší v rozhodčím řízení u Rozhodčího soudu při Hospodářské komoře ČR a Agrární komoře ČR.",
+                },
+              ],
+            },
+            rule: { kind: "positionMatch" },
+            severity: "medium",
+          },
+        ],
+      } satisfies PlaybookPositions,
+    })
+    .onConflictDoNothing();
+
+  console.log("  Playbooks: 1");
+};
+
 // ─── Main ───────────────────────────────────────────────
 
 export async function seed(organizationId?: string, userId?: string) {
@@ -4477,7 +4733,24 @@ export async function seed(organizationId?: string, userId?: string) {
   // 14. Templates & clauses (knowledge base)
   await seedTemplates(ORG_ID, seedUserIds);
 
-  // 15. Global case-law corpus for search and references. This pulls real prod
+  // 15. Playbooks (knowledge base) + the org document-type taxonomy the
+  // type-scoped playbook references. ensureDefaultDocumentTypes is intentionally
+  // non-overwriting (onConflictDoNothing), so reruns must first drop the org's
+  // default-keyed taxonomy rows to pick up label changes. Custom, non-default
+  // document types (keys outside DEFAULT_DOCUMENT_TYPES) are left untouched.
+  await rootDb.delete(documentTypes).where(
+    and(
+      eq(documentTypes.organizationId, ORG_ID),
+      inArray(
+        documentTypes.key,
+        DEFAULT_DOCUMENT_TYPES.map((documentType) => documentType.key),
+      ),
+    ),
+  );
+  await ensureDefaultDocumentTypes(ORG_ID, rootDb);
+  await seedPlaybooks(ORG_ID);
+
+  // 16. Global case-law corpus for search and references. This pulls real prod
   // fixtures and is the most schema-coupled step; a local schema drift here
   // (e.g. a worktree whose migrations lag the shared dev DB) must not abort the
   // whole seed or dump a giant error toast — warn and continue.
@@ -4517,7 +4790,7 @@ if (import.meta.main) {
       };
     }
 
-    const { and, desc, eq, gt, isNotNull } = await import("drizzle-orm");
+    const { desc, gt, isNotNull } = await import("drizzle-orm");
     const {
       member: authMember,
       organization: authOrganization,

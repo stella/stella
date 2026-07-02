@@ -55,6 +55,7 @@ export type FileTab = {
     | "metadata"
     | "versions"
     | "suggestions"
+    | "playbook"
     | "anonymization"
     | undefined;
   /**
@@ -832,6 +833,7 @@ const isPdfFacet = (
   value === "metadata" ||
   value === "versions" ||
   value === "suggestions" ||
+  value === "playbook" ||
   value === "anonymization";
 
 const isMetadataLane = (value: unknown): value is FileTab["metadataLane"] =>

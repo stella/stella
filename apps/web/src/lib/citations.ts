@@ -51,6 +51,10 @@ export const iterateJustificationCitations = function* (
       }
       continue;
     }
+    // Verdict blocks carry a rationale, not document citations.
+    if (block.kind === "playbook-verdict") {
+      continue;
+    }
     for (const statement of block.statements) {
       for (const citation of statement.citations) {
         yield {
