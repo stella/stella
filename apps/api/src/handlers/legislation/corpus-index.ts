@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
 import { redistributableLegislationSource } from "@/api/handlers/legislation/redistribution";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getCorpusIndexClient,
@@ -131,13 +132,106 @@ const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
 };
 
 const loadText = async (row: IndexableRow): Promise<string> => {
-  // Match the case-law indexer: when canonical text is in object storage,
-  // a transient S3 failure must abort the batch so the daemon retries instead
-  // of committing indexedHash = contentHash for fallback or empty text.
+  // Match the case-law indexer: a corpus read failure propagates so the caller
+  // can isolate this document (record it failed, drop it from the batch) and
+  // retry it next cycle, rather than committing indexedHash = contentHash for
+  // fallback or empty text.
   if (row.textS3Key !== null) {
     return await readCorpusText(row.textS3Key);
   }
   return row.fulltext ?? "";
+};
+
+type LoadedBatch = {
+  docs: { row: IndexableRow; doc: Record<string, unknown> }[];
+  readFailures: { indexId: string; job: JobInput; cause: unknown }[];
+};
+
+/**
+ * Build each row's index document from its canonical text, isolating per-row
+ * read failures. Mirrors the case-law indexer: a bounded corpus read that
+ * times out or errors fails only its own document (recorded failed, dropped
+ * from the batch, retried next cycle) while its batch-mates still commit.
+ */
+const loadDocsForBatch = async (
+  rows: readonly IndexableRow[],
+  generation: string,
+): Promise<LoadedBatch> => {
+  const docs: LoadedBatch["docs"] = [];
+  const readFailures: LoadedBatch["readFailures"] = [];
+  for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
+    const chunk = rows.slice(i, i + INDEX_CONCURRENCY);
+    // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
+    const built = await Promise.all(
+      chunk.map(async (row) => {
+        try {
+          return {
+            ok: true as const,
+            row,
+            doc: buildDoc(row, await loadText(row)),
+          };
+        } catch (error) {
+          return { ok: false as const, row, error };
+        }
+      }),
+    );
+    for (const entry of built) {
+      if (entry.ok) {
+        docs.push({ row: entry.row, doc: entry.doc });
+        continue;
+      }
+      readFailures.push({
+        indexId: corpusIndexId(generation, entry.row.country),
+        cause: entry.error,
+        job: {
+          documentId: entry.row.id,
+          contentHash: entry.row.contentHash,
+          operation: "index",
+          status: "failed",
+          errorMessage: (entry.error instanceof Error
+            ? entry.error.message
+            : String(entry.error)
+          ).slice(0, 2048),
+        },
+      });
+    }
+  }
+  return { docs, readFailures };
+};
+
+/**
+ * Fail loud, continue: record isolated per-document read failures. Mirrors the
+ * case-law indexer — captures the underlying (tagged) error with jurisdiction/
+ * generation context (never document text) and writes a failed index job under
+ * each affected jurisdiction index so a later cycle retries the rows.
+ */
+const recordReadFailures = async (
+  scopedDb: ScopedDb,
+  readFailures: LoadedBatch["readFailures"],
+  generation: string,
+): Promise<void> => {
+  const firstFailure = readFailures.at(0);
+  if (!firstFailure) {
+    return;
+  }
+  captureError(firstFailure.cause, {
+    step: "backfillLegislationCorpusIndex.loadText",
+    generation,
+    failed: String(readFailures.length),
+  });
+  const failuresByIndex = new Map<string, JobInput[]>();
+  for (const { indexId, job } of readFailures) {
+    const existing = failuresByIndex.get(indexId);
+    if (existing) {
+      existing.push(job);
+    } else {
+      failuresByIndex.set(indexId, [job]);
+    }
+  }
+  for (const [indexId, jobs] of failuresByIndex) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential per-index audit writes preserve job ordering
+    await recordJobs(scopedDb, jobs, indexId);
+  }
 };
 
 export const backfillLegislationCorpusIndex = async (
@@ -199,18 +293,10 @@ export const backfillLegislationCorpusIndex = async (
     return 0;
   }
 
-  const docs: { row: IndexableRow; doc: Record<string, unknown> }[] = [];
-  for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
-    const chunk = rows.slice(i, i + INDEX_CONCURRENCY);
-    // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
-    const built = await Promise.all(
-      chunk.map(async (row) => ({
-        row,
-        doc: buildDoc(row, await loadText(row)),
-      })),
-    );
-    docs.push(...built);
-  }
+  // A per-document read failure fails only that document; record it and let
+  // the rest still commit.
+  const { docs, readFailures } = await loadDocsForBatch(rows, generation);
+  await recordReadFailures(scopedDb, readFailures, generation);
 
   const groups = new Map<string, typeof docs>();
   for (const entry of docs) {
