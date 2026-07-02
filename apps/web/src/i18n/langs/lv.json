@@ -552,6 +552,7 @@
   },
   "clauses": {
     "addVariant": "Pievienot variantu",
+    "aiStructureChanged": "Rediģēšana ar AI mainīja klauzulas struktūru, un to nevar parādīt kā iekļautās izmaiņas. Pielāgojiet norādījumu un mēģiniet vēlreiz.",
     "allClauses": "Visas klauzulas",
     "backToList": "Atpakaļ uz klauzulu sarakstu",
     "body": "Saturs",

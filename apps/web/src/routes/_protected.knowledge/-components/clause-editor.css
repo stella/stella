@@ -78,3 +78,20 @@
 .clause-editor ::selection {
   background-color: color-mix(in srgb, var(--color-primary) 24%, transparent);
 }
+
+/* AI tracked changes: insertions underlined in the success colour, deletions
+   struck through in the destructive colour — the same redline reading as folio.
+   During review they are clickable (accept/reject), hence the pointer cursor. */
+.clause-editor .docx-insertion {
+  color: var(--color-success);
+  text-decoration: underline;
+  text-decoration-color: var(--color-success);
+  cursor: pointer;
+}
+
+.clause-editor .docx-deletion {
+  color: var(--color-destructive);
+  text-decoration: line-through;
+  text-decoration-color: var(--color-destructive);
+  cursor: pointer;
+}

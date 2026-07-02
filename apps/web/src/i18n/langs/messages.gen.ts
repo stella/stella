@@ -555,6 +555,7 @@ type Messages = {
   };
   "clauses": {
     "addVariant": "Add variant";
+    "aiStructureChanged": "The AI rewrite changed the clause structure and can't be shown as inline changes. Adjust your instruction and try again.";
     "allClauses": "All clauses";
     "backToList": "Back to clauses";
     "body": "Body";

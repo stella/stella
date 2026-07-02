@@ -552,6 +552,7 @@
   },
   "clauses": {
     "addVariant": "Přidat variantu",
+    "aiStructureChanged": "Přepis pomocí AI změnil strukturu ustanovení a nelze jej zobrazit jako vložené změny. Upravte pokyn a zkuste to znovu.",
     "allClauses": "Všechna vzorová ustanovení",
     "backToList": "Zpět na vzorová ustanovení",
     "body": "Text",
