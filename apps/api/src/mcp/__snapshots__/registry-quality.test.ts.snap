@@ -1,0 +1,1104 @@
+// Bun Snapshot v1, https://bun.sh/docs/test/snapshots
+
+exports[`MCP registry quality (default surface) tool surface snapshot (name, scope, description, annotations, inputSchema) 1`] = `
+"[
+  {
+    "name": "search",
+    "scope": "stella:search",
+    "description": "Search knowledge across accessible matters using the OpenAI-compatible search tool shape. Returns results with id, title, and url for follow-up fetch calls.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query",
+          "maxLength": 500
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search call to fetch the next page",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "fetch",
+    "scope": "stella:read",
+    "description": "Fetch a knowledge document by id using the OpenAI-compatible fetch tool shape. Use ids returned by the search tool. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document/entity ID"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous fetch call to read the next window of text",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  {
+    "name": "list_matters",
+    "scope": "stella:read",
+    "description": "List the matters you can access. Use this first when the user does not name a matter explicitly or when you need matter IDs for follow-up tools.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "all"
+          ],
+          "description": "Filter by matter status"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max matters to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_matters call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "get_matter_overview",
+    "scope": "stella:read",
+    "description": "Get a compact overview of a matter including counts, recent entities, and linked contacts. Use this to orient yourself before drilling in.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID"
+        }
+      },
+      "required": [
+        "matter_id"
+      ]
+    }
+  },
+  {
+    "name": "search_across_matters",
+    "scope": "stella:search",
+    "description": "Search across all accessible matters. Use this when the user explicitly asks to search outside a single matter or you do not yet know the right matter.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query",
+          "maxLength": 500
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max results to return",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search_across_matters call to fetch the next page",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "search_case_law",
+    "scope": "stella:search",
+    "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query",
+          "maxLength": 500
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max results to return",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search_case_law call",
+          "maxLength": 128
+        },
+        "court": {
+          "type": "string",
+          "description": "Filter by court name",
+          "maxLength": 512
+        },
+        "country": {
+          "type": "string",
+          "description": "Filter by country code",
+          "maxLength": 3
+        },
+        "language": {
+          "type": "string",
+          "description": "Filter by language code",
+          "maxLength": 8
+        },
+        "decision_type": {
+          "type": "string",
+          "description": "Filter by decision type",
+          "maxLength": 128
+        },
+        "source_id": {
+          "type": "string",
+          "description": "Filter by source ID",
+          "maxLength": 36
+        },
+        "date_from": {
+          "type": "string",
+          "description": "Filter decisions from this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "date_to": {
+          "type": "string",
+          "description": "Filter decisions up to this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "read_content_across_matters",
+    "scope": "stella:read",
+    "description": "Read extracted text from a document found anywhere in your accessible matters. Use after search_across_matters. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Entity ID"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous call to read the next window of text",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "entity_id"
+      ]
+    }
+  },
+  {
+    "name": "read_case_law_decision",
+    "scope": "stella:read",
+    "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, and source URLs. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "description": "Case-law decision ID"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous call to read the next window of decision text and citations",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "decision_id"
+      ]
+    }
+  },
+  {
+    "name": "read_contact",
+    "scope": "stella:read",
+    "description": "Read a contact by ID. Use this after matter overview or entity metadata surfaces a contact the user wants to inspect more closely.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "contact_id": {
+          "type": "string",
+          "description": "Contact ID"
+        }
+      },
+      "required": [
+        "contact_id"
+      ]
+    }
+  },
+  {
+    "name": "set_practice_jurisdictions",
+    "scope": "stella:onboarding",
+    "description": "Set the practice jurisdictions for the user's stella organization. Call this when the org's practice jurisdictions are empty (e.g., the user signed up via an OAuth client and skipped onboarding). Pass an array of {countryCode, isPrimary}; exactly one entry should be primary.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "jurisdictions": {
+          "type": "array",
+          "description": "Practice jurisdictions for this organization. countryCode is an ISO 3166-1 alpha-2 code; exactly one entry should set isPrimary to true.",
+          "minItems": 1,
+          "maxItems": 12,
+          "items": {
+            "type": "object",
+            "properties": {
+              "countryCode": {
+                "type": "string",
+                "description": "ISO 3166-1 alpha-2 country code",
+                "enum": [
+                  "AD",
+                  "AE",
+                  "AF",
+                  "AG",
+                  "AI",
+                  "AL",
+                  "AM",
+                  "AO",
+                  "AQ",
+                  "AR",
+                  "AS",
+                  "AT",
+                  "AU",
+                  "AW",
+                  "AX",
+                  "AZ",
+                  "BA",
+                  "BB",
+                  "BD",
+                  "BE",
+                  "BF",
+                  "BG",
+                  "BH",
+                  "BI",
+                  "BJ",
+                  "BL",
+                  "BM",
+                  "BN",
+                  "BO",
+                  "BQ",
+                  "BR",
+                  "BS",
+                  "BT",
+                  "BV",
+                  "BW",
+                  "BY",
+                  "BZ",
+                  "CA",
+                  "CC",
+                  "CD",
+                  "CF",
+                  "CG",
+                  "CH",
+                  "CI",
+                  "CK",
+                  "CL",
+                  "CM",
+                  "CN",
+                  "CO",
+                  "CR",
+                  "CU",
+                  "CV",
+                  "CW",
+                  "CX",
+                  "CY",
+                  "CZ",
+                  "DE",
+                  "DJ",
+                  "DK",
+                  "DM",
+                  "DO",
+                  "DZ",
+                  "EC",
+                  "EE",
+                  "EG",
+                  "EH",
+                  "ER",
+                  "ES",
+                  "ET",
+                  "FI",
+                  "FJ",
+                  "FK",
+                  "FM",
+                  "FO",
+                  "FR",
+                  "GA",
+                  "GB",
+                  "GD",
+                  "GE",
+                  "GF",
+                  "GG",
+                  "GH",
+                  "GI",
+                  "GL",
+                  "GM",
+                  "GN",
+                  "GP",
+                  "GQ",
+                  "GR",
+                  "GS",
+                  "GT",
+                  "GU",
+                  "GW",
+                  "GY",
+                  "HK",
+                  "HM",
+                  "HN",
+                  "HR",
+                  "HT",
+                  "HU",
+                  "ID",
+                  "IE",
+                  "IL",
+                  "IM",
+                  "IN",
+                  "IO",
+                  "IQ",
+                  "IR",
+                  "IS",
+                  "IT",
+                  "JE",
+                  "JM",
+                  "JO",
+                  "JP",
+                  "KE",
+                  "KG",
+                  "KH",
+                  "KI",
+                  "KM",
+                  "KN",
+                  "KP",
+                  "KR",
+                  "KW",
+                  "KY",
+                  "KZ",
+                  "LA",
+                  "LB",
+                  "LC",
+                  "LI",
+                  "LK",
+                  "LR",
+                  "LS",
+                  "LT",
+                  "LU",
+                  "LV",
+                  "LY",
+                  "MA",
+                  "MC",
+                  "MD",
+                  "ME",
+                  "MF",
+                  "MG",
+                  "MH",
+                  "MK",
+                  "ML",
+                  "MM",
+                  "MN",
+                  "MO",
+                  "MP",
+                  "MQ",
+                  "MR",
+                  "MS",
+                  "MT",
+                  "MU",
+                  "MV",
+                  "MW",
+                  "MX",
+                  "MY",
+                  "MZ",
+                  "NA",
+                  "NC",
+                  "NE",
+                  "NF",
+                  "NG",
+                  "NI",
+                  "NL",
+                  "NO",
+                  "NP",
+                  "NR",
+                  "NU",
+                  "NZ",
+                  "OM",
+                  "PA",
+                  "PE",
+                  "PF",
+                  "PG",
+                  "PH",
+                  "PK",
+                  "PL",
+                  "PM",
+                  "PN",
+                  "PR",
+                  "PS",
+                  "PT",
+                  "PW",
+                  "PY",
+                  "QA",
+                  "RE",
+                  "RO",
+                  "RS",
+                  "RU",
+                  "RW",
+                  "SA",
+                  "SB",
+                  "SC",
+                  "SD",
+                  "SE",
+                  "SG",
+                  "SH",
+                  "SI",
+                  "SJ",
+                  "SK",
+                  "SL",
+                  "SM",
+                  "SN",
+                  "SO",
+                  "SR",
+                  "SS",
+                  "ST",
+                  "SV",
+                  "SX",
+                  "SY",
+                  "SZ",
+                  "TC",
+                  "TD",
+                  "TF",
+                  "TG",
+                  "TH",
+                  "TJ",
+                  "TK",
+                  "TL",
+                  "TM",
+                  "TN",
+                  "TO",
+                  "TR",
+                  "TT",
+                  "TV",
+                  "TW",
+                  "TZ",
+                  "UA",
+                  "UG",
+                  "UM",
+                  "US",
+                  "UY",
+                  "UZ",
+                  "VA",
+                  "VC",
+                  "VE",
+                  "VG",
+                  "VI",
+                  "VN",
+                  "VU",
+                  "WF",
+                  "WS",
+                  "XK",
+                  "YE",
+                  "YT",
+                  "ZA",
+                  "ZM",
+                  "ZW"
+                ]
+              },
+              "isPrimary": {
+                "type": "boolean",
+                "description": "Whether this is the organization's primary jurisdiction"
+              }
+            },
+            "required": [
+              "countryCode",
+              "isPrimary"
+            ]
+          }
+        }
+      },
+      "required": [
+        "jurisdictions"
+      ]
+    }
+  },
+  {
+    "name": "list_templates",
+    "scope": "stella:templates",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases, and so on). Returns each template's id, name, number of fillable fields, tags, and usage guidance (whenToUse / whenNotToUse). Call this first to learn which templates exist and their ids before describing or filling one. Prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_templates call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "describe_template",
+    "scope": "stella:templates",
+    "description": "Describe a template's fillable fields so you know what to provide before filling it. Returns each field's full configuration: path, label, inputType, required, hint, select options, optionsFrom (dependent select), aiPrompt / aiAdapt (who-fills), date format, composite parts + format, and (for registry-lookup fields) the named output formats. Also returns named conditions and computed (formula) fields. The result is a complete round-trip: feed the same shape to configure_template_fields. Pass the template id from list_templates.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "description": "Template id, as returned by list_templates"
+        }
+      },
+      "required": [
+        "template_id"
+      ]
+    }
+  },
+  {
+    "name": "fill_template",
+    "scope": "stella:templates",
+    "description": "Fill a template with values and return the assembled document text plus the filled DOCX as base64. Call describe_template first to learn the field paths. 'values' maps each field path to its value, e.g. {\\"tenant.name\\": \\"ACME Sp. z o.o.\\", \\"signing_date\\": \\"2026-06-08\\"}. Registry lookups, composite fields, formula fields, and AI-fillable fields are resolved automatically; AI-fillable fields are drafted when you omit them. Returns the rendered text and any placeholders left unfilled.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "description": "Template id, as returned by list_templates"
+        },
+        "values": {
+          "type": "object",
+          "description": "Map of field path to value.",
+          "additionalProperties": true
+        }
+      },
+      "required": [
+        "template_id",
+        "values"
+      ]
+    }
+  },
+  {
+    "name": "template_marker_reference",
+    "scope": "stella:templates",
+    "description": "Return stella's \`{{...}}\` template marker grammar: how to write fillable values, conditional and repeating blocks, clause slots, and numbering inside a DOCX. Takes no arguments. Call this before create_template whenever you are unsure of the marker syntax.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
+  },
+  {
+    "name": "create_template",
+    "scope": "stella:templates",
+    "description": "Create a document template from a DOCX file containing {{markers}}. 'docx_base64' is the base64-encoded bytes of a .docx (Office Open XML) file; the {{field}} markers in it become the template's fillable fields. If you are unsure how to write the markers, call template_marker_reference first. Optionally pass 'fields' to configure the discovered fields in the same call: input type, select options, who fills each field (a person, AI via aiPrompt, Person+AI via aiAdapt, a formula, or a company-register lookup), date format, composite parts, dependent options, hint, and required. You can also configure fields later with configure_template_fields. Max ~10 MB decoded. Returns the new template id and the number of discovered fields. Use describe_template afterwards to inspect the fields.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Template display name",
+          "maxLength": 256
+        },
+        "docx_base64": {
+          "type": "string",
+          "description": "Base64-encoded DOCX file bytes (Office Open XML, max ~10 MB decoded)"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Field configuration overlay, one entry per field to configure. Each entry's 'path' must match a {{marker}} in the template. Configurable: label, hint, inputType, required, options, optionsFrom (dependent select), date format, composite parts + format, and who-fills the field — a person (default), AI (aiPrompt), Person+AI (aiAdapt), a formula, or a company-register lookup (registry + named output formats). formula is mutually exclusive with aiPrompt/aiAdapt/lookup/parts.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Field path — must match a {{marker}} in the template"
+              },
+              "label": {
+                "type": "string",
+                "description": "Human-readable field label"
+              },
+              "hint": {
+                "type": "string",
+                "description": "Short fill guidance shown to the person filling the field"
+              },
+              "inputType": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "number",
+                  "boolean",
+                  "date",
+                  "select"
+                ],
+                "description": "Input control type"
+              },
+              "required": {
+                "type": "boolean",
+                "description": "Whether a value is required"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Allowed values when inputType is 'select'"
+              },
+              "optionsFrom": {
+                "type": "string",
+                "description": "Dependent select: path of another field whose value(s) supply the options"
+              },
+              "aiPrompt": {
+                "type": "string",
+                "description": "Who-fills = AI: instruction the model uses to draft the value at fill time"
+              },
+              "aiAdapt": {
+                "type": "boolean",
+                "description": "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence"
+              },
+              "formula": {
+                "type": "string",
+                "description": "Who-fills = formula: arithmetic expression over other fields, derived at fill time"
+              },
+              "condition": {
+                "type": "string",
+                "description": "Boolean field derived by rule: a condition expression (e.g. client_type == \\"company\\"), evaluated at fill time. A {{#if field_path}} marker references it by path. Mutually exclusive with formula/aiPrompt/aiAdapt/lookup/parts."
+              },
+              "parts": {
+                "type": "array",
+                "description": "Composite field parts (joined by 'format')",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "format": {
+                "type": "string",
+                "description": "Join template over composite part keys, e.g. '{{title}} {{name}}'"
+              },
+              "dateFormat": {
+                "type": "object",
+                "description": "Locale-aware date rendering for a date field",
+                "properties": {
+                  "locale": {
+                    "type": "string",
+                    "description": "BCP-47 language tag, e.g. 'cs', 'de', 'pl'"
+                  },
+                  "style": {
+                    "type": "string",
+                    "enum": [
+                      "long",
+                      "medium",
+                      "short",
+                      "iso"
+                    ],
+                    "description": "Date style"
+                  }
+                },
+                "required": [
+                  "locale",
+                  "style"
+                ]
+              },
+              "lookup": {
+                "type": "object",
+                "description": "Who-fills = company-register lookup",
+                "properties": {
+                  "registry": {
+                    "type": "string",
+                    "description": "Registry slug, e.g. 'krs'"
+                  },
+                  "formats": {
+                    "type": "array",
+                    "description": "Named output renderings; the first is the default for the bare {{marker}}",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "description": "Marker segment after the path: {{path.key}}"
+                        },
+                        "template": {
+                          "type": "string",
+                          "description": "[token]-substituted rendering of the registry hit"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "template"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "registry",
+                  "formats"
+                ]
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "name",
+        "docx_base64"
+      ]
+    }
+  },
+  {
+    "name": "configure_template_fields",
+    "scope": "stella:templates",
+    "description": "Configure the fields of an EXISTING template: set input type, select options, who fills each field (a person, AI via aiPrompt, Person+AI via aiAdapt, a formula, or a company-register lookup with registry + named output formats), date format, composite parts, dependent options, hint, and required. Only the manifest is updated; the document's {{markers}} are left untouched. Each 'fields' entry's 'path' must be a field that exists in the template (call describe_template to list them). Returns the updated field list (same shape as describe_template).",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "description": "Template id, as returned by list_templates"
+        },
+        "fields": {
+          "type": "array",
+          "description": "Field configuration overlay, one entry per field to configure. Each entry's 'path' must match a {{marker}} in the template. Configurable: label, hint, inputType, required, options, optionsFrom (dependent select), date format, composite parts + format, and who-fills the field — a person (default), AI (aiPrompt), Person+AI (aiAdapt), a formula, or a company-register lookup (registry + named output formats). formula is mutually exclusive with aiPrompt/aiAdapt/lookup/parts.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "path": {
+                "type": "string",
+                "description": "Field path — must match a {{marker}} in the template"
+              },
+              "label": {
+                "type": "string",
+                "description": "Human-readable field label"
+              },
+              "hint": {
+                "type": "string",
+                "description": "Short fill guidance shown to the person filling the field"
+              },
+              "inputType": {
+                "type": "string",
+                "enum": [
+                  "text",
+                  "number",
+                  "boolean",
+                  "date",
+                  "select"
+                ],
+                "description": "Input control type"
+              },
+              "required": {
+                "type": "boolean",
+                "description": "Whether a value is required"
+              },
+              "options": {
+                "type": "array",
+                "items": {
+                  "type": "string"
+                },
+                "description": "Allowed values when inputType is 'select'"
+              },
+              "optionsFrom": {
+                "type": "string",
+                "description": "Dependent select: path of another field whose value(s) supply the options"
+              },
+              "aiPrompt": {
+                "type": "string",
+                "description": "Who-fills = AI: instruction the model uses to draft the value at fill time"
+              },
+              "aiAdapt": {
+                "type": "boolean",
+                "description": "Who-fills = Person+AI: the entered value is a stub AI rewrites per occurrence"
+              },
+              "formula": {
+                "type": "string",
+                "description": "Who-fills = formula: arithmetic expression over other fields, derived at fill time"
+              },
+              "condition": {
+                "type": "string",
+                "description": "Boolean field derived by rule: a condition expression (e.g. client_type == \\"company\\"), evaluated at fill time. A {{#if field_path}} marker references it by path. Mutually exclusive with formula/aiPrompt/aiAdapt/lookup/parts."
+              },
+              "parts": {
+                "type": "array",
+                "description": "Composite field parts (joined by 'format')",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "format": {
+                "type": "string",
+                "description": "Join template over composite part keys, e.g. '{{title}} {{name}}'"
+              },
+              "dateFormat": {
+                "type": "object",
+                "description": "Locale-aware date rendering for a date field",
+                "properties": {
+                  "locale": {
+                    "type": "string",
+                    "description": "BCP-47 language tag, e.g. 'cs', 'de', 'pl'"
+                  },
+                  "style": {
+                    "type": "string",
+                    "enum": [
+                      "long",
+                      "medium",
+                      "short",
+                      "iso"
+                    ],
+                    "description": "Date style"
+                  }
+                },
+                "required": [
+                  "locale",
+                  "style"
+                ]
+              },
+              "lookup": {
+                "type": "object",
+                "description": "Who-fills = company-register lookup",
+                "properties": {
+                  "registry": {
+                    "type": "string",
+                    "description": "Registry slug, e.g. 'krs'"
+                  },
+                  "formats": {
+                    "type": "array",
+                    "description": "Named output renderings; the first is the default for the bare {{marker}}",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "key": {
+                          "type": "string",
+                          "description": "Marker segment after the path: {{path.key}}"
+                        },
+                        "template": {
+                          "type": "string",
+                          "description": "[token]-substituted rendering of the registry hit"
+                        }
+                      },
+                      "required": [
+                        "key",
+                        "template"
+                      ]
+                    }
+                  }
+                },
+                "required": [
+                  "registry",
+                  "formats"
+                ]
+              }
+            },
+            "required": [
+              "path"
+            ],
+            "additionalProperties": false
+          }
+        }
+      },
+      "required": [
+        "template_id",
+        "fields"
+      ]
+    }
+  }
+]"
+`;
+
+exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, scope, description, annotations, inputSchema) 1`] = `
+"[
+  {
+    "name": "search",
+    "scope": "stella:search_anonymized",
+    "description": "Search anonymized knowledge across accessible matters using the OpenAI-compatible search tool shape. Returns anonymized titles with ids and urls for follow-up fetch calls.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query",
+          "maxLength": 500
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search call to fetch the next page",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "fetch",
+    "scope": "stella:read_anonymized",
+    "description": "Fetch anonymized document text by id using the OpenAI-compatible fetch tool shape. Use ids returned by the anonymized search tool. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Document/entity ID"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous fetch call to read the next window of text",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "id"
+      ]
+    }
+  },
+  {
+    "name": "search_case_law",
+    "scope": "stella:search_anonymized",
+    "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query",
+          "maxLength": 500
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max results to return",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search_case_law call",
+          "maxLength": 128
+        },
+        "court": {
+          "type": "string",
+          "description": "Filter by court name",
+          "maxLength": 512
+        },
+        "country": {
+          "type": "string",
+          "description": "Filter by country code",
+          "maxLength": 3
+        },
+        "language": {
+          "type": "string",
+          "description": "Filter by language code",
+          "maxLength": 8
+        },
+        "decision_type": {
+          "type": "string",
+          "description": "Filter by decision type",
+          "maxLength": 128
+        },
+        "source_id": {
+          "type": "string",
+          "description": "Filter by source ID",
+          "maxLength": 36
+        },
+        "date_from": {
+          "type": "string",
+          "description": "Filter decisions from this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "date_to": {
+          "type": "string",
+          "description": "Filter decisions up to this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
+    "name": "read_case_law_decision",
+    "scope": "stella:read_anonymized",
+    "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, and source URLs. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "decision_id": {
+          "type": "string",
+          "description": "Case-law decision ID"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous call to read the next window of decision text and citations",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "decision_id"
+      ]
+    }
+  }
+]"
+`;
