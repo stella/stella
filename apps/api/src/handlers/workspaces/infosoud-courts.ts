@@ -48,6 +48,7 @@ const toInfoSoudCourtsError = (error: unknown): HandlerError => {
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const infosoudCourts = createSafeHandler(config, async function* ({ request }) {

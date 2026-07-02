@@ -32,6 +32,7 @@ const createSkillBodySchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["create"] },
+  mcp: { type: "pending" },
   body: createSkillBodySchema,
 } satisfies HandlerConfig;
 

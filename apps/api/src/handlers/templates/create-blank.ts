@@ -61,6 +61,7 @@ const createBlankTemplateHandler = async function* ({
 
 const config = {
   permissions: { template: ["create"] },
+  mcp: { type: "covered", by: "create_template" },
   body: createBlankTemplateBodySchema,
 } satisfies HandlerConfig;
 

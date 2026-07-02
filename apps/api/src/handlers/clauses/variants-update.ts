@@ -13,6 +13,7 @@ const updateVariantParamsSchema = t.Object({
 
 const config = {
   permissions: { clause: ["update"] },
+  mcp: { type: "pending" },
   params: updateVariantParamsSchema,
   body: updateVariantBodySchema,
 } satisfies HandlerConfig;

@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const timerStop = createSafeHandler(
   {
     permissions: { timeEntry: ["update"] },
+    mcp: { type: "pending" },
   },
   async function* ({ safeDb, user, recordAuditEvent }) {
     const [activeEntry] = yield* Result.await(

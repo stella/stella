@@ -114,6 +114,7 @@ const buildDesktopEditHandoffDeepLink = ({
 const createConfig = {
   body: createDesktopEditHandoffBodySchema,
   permissions: { entity: ["update"] },
+  mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies HandlerConfig;
 
 export const createDesktopEditHandoff = createSafeHandler(
@@ -179,6 +180,7 @@ export const createDesktopEditHandoff = createSafeHandler(
 const statusConfig = {
   params: desktopEditHandoffStatusParamsSchema,
   permissions: { entity: ["update"] },
+  mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies HandlerConfig;
 
 export const readDesktopEditHandoffStatus = createSafeHandler<

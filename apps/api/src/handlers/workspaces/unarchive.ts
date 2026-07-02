@@ -8,6 +8,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 
 const config = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const unarchiveWorkspace = createSafeHandler(

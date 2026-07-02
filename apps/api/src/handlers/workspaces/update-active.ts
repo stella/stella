@@ -7,6 +7,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const updateActiveWorkspace = createSafeHandler(

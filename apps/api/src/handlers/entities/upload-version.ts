@@ -40,6 +40,7 @@ import { broadcast } from "@/api/lib/sse";
 
 const config = {
   permissions: { entity: ["update"] },
+  mcp: { type: "pending" },
   body: uploadVersionBodySchema,
 } satisfies HandlerConfig;
 

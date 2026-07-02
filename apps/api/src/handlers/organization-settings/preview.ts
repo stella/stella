@@ -69,6 +69,7 @@ const previewOrganizationSettingsHandler = async function* ({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "pending" },
   body: previewOrganizationSettingsBodySchema,
 } satisfies HandlerConfig;
 

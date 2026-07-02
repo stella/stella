@@ -102,6 +102,7 @@ const readVersionByIdHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: readVersionByIdParamsSchema,
 } satisfies HandlerConfig;
 

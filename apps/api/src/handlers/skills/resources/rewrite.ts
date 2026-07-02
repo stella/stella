@@ -28,6 +28,7 @@ const rewriteSkillResourceBodySchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["update"] },
+  mcp: { type: "pending" },
   params: rewriteSkillResourceParamsSchema,
   body: rewriteSkillResourceBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },

@@ -86,6 +86,7 @@ const buildInvoiceUpdateAuditChanges = (
 const updateInvoice = createSafeHandler(
   {
     permissions: { invoice: ["update"] },
+    mcp: { type: "pending" },
     params: invoiceParamsSchema,
     body: updateInvoiceBodySchema,
   },

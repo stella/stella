@@ -9,6 +9,7 @@ const invoiceParamsSchema = workspaceParams({ invoiceId: tSafeId("invoice") });
 const readInvoiceById = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     params: invoiceParamsSchema,
   },
   async function* ({ safeDb, workspaceId, params }) {

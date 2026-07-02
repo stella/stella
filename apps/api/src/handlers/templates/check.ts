@@ -94,6 +94,7 @@ const checkTemplateHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: checkTemplateParamsSchema,
 } satisfies HandlerConfig;
 

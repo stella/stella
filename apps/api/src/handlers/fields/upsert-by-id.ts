@@ -20,6 +20,7 @@ const config = {
   permissions: {
     entity: ["create", "update"],
   },
+  mcp: { type: "pending" },
   body: t.Object({
     propertyId: tSafeId("property"),
     entityId: tSafeId("entity"),

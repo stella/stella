@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { playbook: ["update"] },
+  mcp: { type: "pending" },
   params: playbookDefinitionParamsSchema,
   body: playbookDefinitionBodySchema,
 } satisfies HandlerConfig;

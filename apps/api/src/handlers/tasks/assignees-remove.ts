@@ -16,6 +16,7 @@ const removeAssigneeBodySchema = t.Object({
 const removeAssignee = createSafeHandler(
   {
     permissions: { entity: ["update"] },
+    mcp: { type: "pending" },
     body: removeAssigneeBodySchema,
   },
   async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {

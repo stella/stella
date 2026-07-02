@@ -15,6 +15,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { property: ["create"] },
+  mcp: { type: "pending" },
   body: createPropertyBodySchema,
 } satisfies HandlerConfig;
 

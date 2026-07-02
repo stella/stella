@@ -52,6 +52,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          mcp: { type: "pending" },
           requiresUsage: { actionType: "chat" },
         },
         async function* () {
@@ -86,6 +87,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          mcp: { type: "pending" },
           requiresUsage: { actionType: "chat" },
         },
         async function* () {
@@ -119,6 +121,7 @@ describe("createSafeRootHandler usage preflight", () => {
       const endpoint = createSafeRootHandler(
         {
           permissions: { workspace: ["read"] },
+          mcp: { type: "pending" },
           requiresUsage: { actionType: "chat", modelRole: "fast" },
         },
         async function* () {
@@ -197,7 +200,7 @@ describe("createSafeRootHandler permission gate", () => {
   test("denies the handler when the member role lacks the permission", async () => {
     let bodyRan = false;
     const endpoint = createSafeRootHandler(
-      { permissions: { organization: ["delete"] } },
+      { permissions: { organization: ["delete"] }, mcp: { type: "pending" } },
       async function* () {
         bodyRan = true;
         return Result.ok({ ok: true });
@@ -223,7 +226,7 @@ describe("createSafeRootHandler permission gate", () => {
   test("runs the handler when the role holds the permission", async () => {
     let bodyRan = false;
     const endpoint = createSafeRootHandler(
-      { permissions: { organization: ["delete"] } },
+      { permissions: { organization: ["delete"] }, mcp: { type: "pending" } },
       async function* () {
         bodyRan = true;
         return Result.ok({ ok: true });

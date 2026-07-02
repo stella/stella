@@ -15,6 +15,7 @@ const getTemplateVersionParamsSchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: getTemplateVersionParamsSchema,
 } satisfies HandlerConfig;
 

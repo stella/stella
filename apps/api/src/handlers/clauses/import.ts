@@ -277,6 +277,7 @@ const importHandler = async function* ({
 
 const config = {
   permissions: { clause: ["create"] },
+  mcp: { type: "pending" },
   body: importBodySchema,
 } satisfies HandlerConfig;
 

@@ -21,6 +21,7 @@ const updateBillingCodeBodySchema = t.Object({
 
 const config = {
   permissions: { billingCode: ["update"] },
+  mcp: { type: "pending" },
   body: updateBillingCodeBodySchema,
 } satisfies HandlerConfig;
 

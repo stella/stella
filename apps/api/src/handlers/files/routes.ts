@@ -15,6 +15,7 @@ import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 const readFileEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
     query: t.Object({
       purpose: t.UnionEnum(["download", "display", "native-display"]),
     }),
@@ -49,6 +50,7 @@ const readFileEndpoint = createSafeHandler(
 const readEmailHtmlPreviewEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies HandlerConfig,
   async function* ({ params: { fieldId }, scopedDb, session, workspaceId }) {
@@ -71,6 +73,7 @@ const readEmailHtmlPreviewEndpoint = createSafeHandler(
 const printPdfEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies HandlerConfig,
   async function* ({ params: { fieldId }, scopedDb, session, workspaceId }) {
@@ -93,6 +96,7 @@ const printPdfEndpoint = createSafeHandler(
 const stampedDownloadEndpoint = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies HandlerConfig,
   async function* ({ params: { fieldId }, scopedDb, session, workspaceId }) {

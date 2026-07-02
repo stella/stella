@@ -317,6 +317,7 @@ const downloadZipHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: downloadZipParamsSchema,
 } satisfies HandlerConfig;
 

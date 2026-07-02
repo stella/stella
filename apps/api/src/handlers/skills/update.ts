@@ -47,6 +47,7 @@ const updateSkillBodySchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["update"] },
+  mcp: { type: "pending" },
   params: updateSkillParamsSchema,
   body: updateSkillBodySchema,
 } satisfies HandlerConfig;

@@ -8,6 +8,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 /** Clear the org's stored DeepL API key. */

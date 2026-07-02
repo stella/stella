@@ -141,6 +141,7 @@ const renameEntityHandler = async function* ({
 
 const config = {
   permissions: { entity: ["update"] },
+  mcp: { type: "pending" },
   body: renameEntityBodySchema,
 } satisfies HandlerConfig;
 

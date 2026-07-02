@@ -9,6 +9,7 @@ import { authMacro } from "@/api/lib/auth";
 const myTasksEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, user }) {
     const response = yield* Result.await(

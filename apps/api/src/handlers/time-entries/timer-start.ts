@@ -25,6 +25,7 @@ const timerStartBodySchema = t.Object({
 const timerStart = createSafeHandler(
   {
     permissions: { timeEntry: ["create"] },
+    mcp: { type: "pending" },
     body: timerStartBodySchema,
   },
   async function* ({

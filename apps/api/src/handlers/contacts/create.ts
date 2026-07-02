@@ -54,6 +54,7 @@ const createContactBodySchema = t.Object({
 const createContact = createSafeRootHandler(
   {
     permissions: { contact: ["create"] },
+    mcp: { type: "pending" },
     body: createContactBodySchema,
   },
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {

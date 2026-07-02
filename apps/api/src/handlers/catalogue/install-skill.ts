@@ -34,6 +34,7 @@ const installSkillBody = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "pending" },
   body: installSkillBody,
 } satisfies HandlerConfig;
 

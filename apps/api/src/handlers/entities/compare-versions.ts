@@ -82,6 +82,7 @@ const alignParagraphs = (
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: workspaceParams({
     entityId: tSafeId("entity"),
   }),

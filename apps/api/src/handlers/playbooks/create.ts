@@ -13,6 +13,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { playbook: ["create"] },
+  mcp: { type: "pending" },
   body: playbookDefinitionBodySchema,
 } satisfies HandlerConfig;
 

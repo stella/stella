@@ -19,6 +19,7 @@ const updateRateTableBodySchema = t.Object({
 const updateRateTable = createSafeHandler(
   {
     permissions: { rate: ["update"] },
+    mcp: { type: "pending" },
     body: updateRateTableBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {

@@ -20,6 +20,7 @@ import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
 const config = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   body: t.Object({
     name: t.Optional(tDefaultVarchar),
     clientId: t.Optional(tSafeId("contact")),

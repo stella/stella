@@ -66,6 +66,7 @@ const updateContactParamsSchema = t.Object({
 const updateContactById = createSafeRootHandler(
   {
     permissions: { contact: ["update"] },
+    mcp: { type: "pending" },
     params: updateContactParamsSchema,
     body: updateContactBodySchema,
   },

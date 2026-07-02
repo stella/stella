@@ -24,6 +24,7 @@ const termSchema = t.Object({
 
 const readConfig = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 /**
@@ -60,6 +61,7 @@ export const readWorkspaceAnonymizationTerms = createSafeHandler(
 
 const createConfig = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   body: t.Object({
     entries: t.Array(termSchema, { minItems: 1, maxItems: 100 }),
   }),
@@ -168,6 +170,7 @@ export const createWorkspaceAnonymizationTerms = createSafeHandler(
 
 const deleteConfig = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   params: t.Object({
     workspaceId: tSafeId("workspace"),
     entryId: tSafeId("anonymizationBlacklistEntry"),

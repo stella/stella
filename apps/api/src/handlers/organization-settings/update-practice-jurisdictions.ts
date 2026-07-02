@@ -21,6 +21,7 @@ const practiceJurisdictionSchema = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "tool", name: "set_practice_jurisdictions" },
   body: t.Object({
     practiceJurisdictions: t.Array(practiceJurisdictionSchema, {
       maxItems: LIMITS.practiceJurisdictionsPerOrganization,

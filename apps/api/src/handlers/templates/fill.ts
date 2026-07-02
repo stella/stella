@@ -409,6 +409,7 @@ export const fillHandler = async ({
 
 const config = {
   permissions: { template: ["use"] },
+  mcp: { type: "tool", name: "fill_template" },
   body: fillBodySchema,
   query: fillQuerySchema,
 } satisfies HandlerConfig;

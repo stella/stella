@@ -19,6 +19,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { chat: ["create"] },
+  mcp: { type: "pending" },
   query: t.Object({
     cursor: t.Optional(t.String({ maxLength: 512 })),
     limit: t.Optional(

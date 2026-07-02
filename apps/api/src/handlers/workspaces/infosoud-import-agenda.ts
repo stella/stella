@@ -20,6 +20,7 @@ import {
 const config = {
   body: infosoudLookupBodySchema,
   permissions: { entity: ["create"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const infosoudImportAgenda = createSafeHandler(

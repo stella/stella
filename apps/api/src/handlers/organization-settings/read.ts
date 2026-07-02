@@ -10,6 +10,7 @@ import {
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 type OrganizationSettingsRow = {

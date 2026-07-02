@@ -22,6 +22,7 @@ const isTaskAssigneeRole = (value: string): value is TaskAssigneeRole =>
 const addAssignee = createSafeHandler(
   {
     permissions: { entity: ["update"] },
+    mcp: { type: "pending" },
     body: addAssigneeBodySchema,
   },
   async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {

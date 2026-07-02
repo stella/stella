@@ -12,6 +12,7 @@ const listEntityLinksParamsSchema = workspaceParams({
 const listEntityLinks = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     params: listEntityLinksParamsSchema,
   },
   async function* ({ workspaceId, params, safeDb }) {

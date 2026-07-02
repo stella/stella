@@ -15,6 +15,7 @@ const getSkillParamsSchema = t.Object({
 
 const config = {
   permissions: { chat: ["create"] },
+  mcp: { type: "pending" },
   params: getSkillParamsSchema,
 } satisfies HandlerConfig;
 

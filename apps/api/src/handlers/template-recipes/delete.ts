@@ -14,6 +14,7 @@ const deleteTemplateRecipeParamsSchema = t.Object({
 
 const config = {
   permissions: { template: ["delete"] },
+  mcp: { type: "pending" },
   params: deleteTemplateRecipeParamsSchema,
 } satisfies HandlerConfig;
 

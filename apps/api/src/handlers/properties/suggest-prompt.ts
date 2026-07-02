@@ -39,6 +39,7 @@ const suggestPromptBodySchema = t.Object({
 
 const config = {
   permissions: { property: ["create"] },
+  mcp: { type: "pending" },
   body: suggestPromptBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

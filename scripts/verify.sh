@@ -117,6 +117,16 @@ run_exact_mirror_guard() {
   bun apps/api/scripts/exact-mirror-guard.ts
 }
 
+run_mcp_coverage_guard() {
+  # Every safe-handler config must declare an `mcp` disposition. This guard
+  # imports every handler module, checks each disposition is well-formed, that
+  # tool/covered references name real static MCP tools, that no registry tool
+  # is orphaned, and that the `pending` baseline can only shrink. The
+  # --self-test run first proves the ratchet detectors still fire.
+  bun apps/api/scripts/mcp-coverage-guard.ts --self-test || return 1
+  bun apps/api/scripts/mcp-coverage-guard.ts
+}
+
 run_knip() {
   local workspace
   for workspace in apps/api apps/legal-atlas-runner apps/web; do
@@ -143,6 +153,7 @@ run_step "Format" run_format
 run_step "Rust format" run_rust_format
 run_step "Typecheck" run_typecheck
 run_step "exactMirror route guard" run_exact_mirror_guard
+run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "Knip production deps" run_knip
 run_step "Test" run_test
 run_step "Bridge-version guard self-test" bash scripts/check-bridge-version.test.sh

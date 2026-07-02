@@ -89,6 +89,7 @@ const buildDetachEvents = (params: {
 const removeEntries = createSafeHandler(
   {
     permissions: { invoice: ["update"] },
+    mcp: { type: "pending" },
     params: invoiceParamsSchema,
     body: removeEntriesBodySchema,
   },

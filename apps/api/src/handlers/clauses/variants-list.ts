@@ -12,6 +12,7 @@ const listVariantsParamsSchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: listVariantsParamsSchema,
 } satisfies HandlerConfig;
 

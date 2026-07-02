@@ -1040,6 +1040,7 @@ const hashSummarySource = ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   body: organizeSuggestionsBodySchema,
   // Folder-organisation is queued / "background"-shaped from the
   // user's perspective; they kick it off and read results later.

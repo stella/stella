@@ -84,6 +84,7 @@ export const readEntityByIdHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: readEntityByIdParamsSchema,
 } satisfies HandlerConfig;
 

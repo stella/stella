@@ -113,6 +113,7 @@ export const manifestHandler = async ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   body: manifestBodySchema,
 } satisfies HandlerConfig;
 

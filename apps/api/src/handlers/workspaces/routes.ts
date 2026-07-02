@@ -48,6 +48,7 @@ import { LIMITS } from "@/api/lib/limits";
 const readWorkspace = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "covered", by: "get_matter_overview" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, session, workspaceId }) {
     const response = yield* Result.await(
@@ -68,6 +69,7 @@ const readWorkspace = createSafeHandler(
 const readWorkflow = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
   } satisfies HandlerConfig,
   async function* ({ workspaceId }) {
     const response = yield* Result.await(
@@ -81,6 +83,7 @@ const readWorkflow = createSafeHandler(
 const readJustifications = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     body: t.Object({
       entityIds: t.Array(tSafeId("entity"), {
         minItems: 1,
@@ -107,6 +110,7 @@ const readJustifications = createSafeHandler(
 const readOverview = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "tool", name: "get_matter_overview" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
@@ -126,6 +130,7 @@ const readOverview = createSafeHandler(
 const readWorkspaceContacts = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "covered", by: "get_matter_overview" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(
@@ -145,6 +150,7 @@ const readWorkspaceContacts = createSafeHandler(
 const readWorkspaceMembers = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
   } satisfies HandlerConfig,
   async function* ({ scopedDb, workspaceId }) {
     const response = yield* Result.await(

@@ -33,6 +33,7 @@ const updateExpenseBodySchema = t.Object({
 
 const config = {
   permissions: { expense: ["update"] },
+  mcp: { type: "pending" },
   body: updateExpenseBodySchema,
 } satisfies HandlerConfig;
 

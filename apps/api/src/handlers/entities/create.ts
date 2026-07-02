@@ -174,6 +174,7 @@ const createEntitiesHandler = async function* ({
 
 const config = {
   permissions: { entity: ["create"] },
+  mcp: { type: "pending" },
   body: createEntityBodySchema,
 } satisfies HandlerConfig;
 

@@ -119,6 +119,7 @@ const listFilesHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   query: listFilesQuerySchema,
 } satisfies HandlerConfig;
 

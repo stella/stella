@@ -22,6 +22,7 @@ import { broadcast } from "@/api/lib/sse";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
+  mcp: { type: "internal", reason: "session_token_exchange" },
   params: t.Object({
     sessionId: tSafeId("folioCollabSession"),
   }),

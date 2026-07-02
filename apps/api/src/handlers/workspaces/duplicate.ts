@@ -48,6 +48,7 @@ import { PDF_MIME_TYPE } from "@/api/mime-types";
 
 const config = {
   permissions: { workspace: ["create"] },
+  mcp: { type: "pending" },
   body: t.Object({
     includeContent: t.Boolean(),
   }),

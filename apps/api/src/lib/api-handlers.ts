@@ -43,6 +43,66 @@ import {
 } from "@/api/lib/tanstack-ai-models";
 import { assertUsageAvailable } from "@/api/lib/usage";
 import { computeUsageUnitCost } from "@/api/lib/usage/action-weights";
+// Type-only: derive the closed tool-name union from the single MCP registry
+// so `mcp: { type: "tool", name }` typechecks against the real tools. The
+// import is erased at build time and never creates a runtime import cycle
+// (api-handlers must stay importable without pulling in the MCP graph).
+import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+
+/**
+ * The closed set of curated static MCP tool names. Every `type: "tool"` and
+ * `type: "covered"` disposition references one of these; the coverage guard
+ * (`apps/api/scripts/mcp-coverage-guard.ts`) cross-checks the runtime registry.
+ */
+export type McpToolName = (typeof MCP_STATIC_TOOL_NAMES)[number];
+
+/**
+ * Approved, permanent reasons an endpoint is intentionally not exposed as an
+ * MCP tool. This is a closed union (no freetext): a new waiver category is a
+ * deliberate, reviewed addition here, not an ad-hoc string.
+ *
+ * - `auth_plumbing`: better-auth / sign-in / verification / session routes.
+ * - `upload_mechanics`: presign / finalize / abort / preflight upload steps.
+ * - `realtime_stream`: SSE / event-stream endpoints.
+ * - `session_token_exchange`: folio-collab and desktop-edit token/session
+ *   exchange handlers that authorize themselves from a body/param token.
+ * - `webhook`: inbound webhooks from external providers.
+ * - `dev_only`: routes mounted only in development.
+ * - `account_lifecycle`: account deletion / lifecycle flows.
+ * - `hosted_billing`: hosted-billing setup and management surfaces.
+ * - `mcp_transport`: the MCP transport / connector routes themselves.
+ * - `health_infra`: health and smoke endpoints.
+ */
+export type McpInternalReason =
+  | "auth_plumbing"
+  | "upload_mechanics"
+  | "realtime_stream"
+  | "session_token_exchange"
+  | "webhook"
+  | "dev_only"
+  | "account_lifecycle"
+  | "hosted_billing"
+  | "mcp_transport"
+  | "health_infra";
+
+/**
+ * Required per-handler MCP disposition. Making this a field on every handler
+ * config (like `permissions`) means a new backend capability cannot be added
+ * without a typecheck-enforced decision about how agents reach it via MCP.
+ *
+ * - `tool`: this endpoint is the backing implementation of tool `name`.
+ * - `covered`: the capability is reachable through tool `by`, via a different
+ *   code path (e.g. a shared handler the tool re-uses).
+ * - `internal`: intentionally never an MCP tool; `reason` is an approved,
+ *   closed-union waiver category.
+ * - `pending`: no MCP decision yet. The coverage guard pins the existing set
+ *   of `pending` endpoints in a baseline that can only shrink.
+ */
+export type McpExposure =
+  | { type: "tool"; name: McpToolName }
+  | { type: "covered"; by: McpToolName }
+  | { type: "internal"; reason: McpInternalReason }
+  | { type: "pending" };
 
 /**
  * Per-handler usage metering opt-in. When set, the framework:
@@ -75,16 +135,19 @@ export type UsageMeteringConfig = {
 export type HandlerConfig = InputSchema & {
   permissions: PermissionInput;
   requiresUsage?: UsageMeteringConfig;
+  mcp: McpExposure;
 };
 
-export type SessionHandlerConfig = InputSchema;
+export type SessionHandlerConfig = InputSchema & {
+  mcp: McpExposure;
+};
 
 type ConfigRouteSchema<TConfig extends HandlerConfig> = UnwrapRoute<
-  Omit<TConfig, "permissions">
+  Omit<TConfig, "permissions" | "mcp">
 >;
 
 type SessionConfigRouteSchema<TConfig extends SessionHandlerConfig> =
-  UnwrapRoute<TConfig>;
+  UnwrapRoute<Omit<TConfig, "mcp">>;
 
 type SessionHandlerContext<
   TConfig extends SessionHandlerConfig = SessionHandlerConfig,
@@ -603,11 +666,13 @@ export const createSafeSessionHandler = <
 ): SafeHandlerDefinition<TConfig, SessionHandlerContext<TConfig>, TResult> =>
   createSafeDirectHandler(config, handler);
 
-export type TokenHandlerConfig = InputSchema;
+export type TokenHandlerConfig = InputSchema & {
+  mcp: McpExposure;
+};
 
 type TokenHandlerContext<
   TConfig extends TokenHandlerConfig = TokenHandlerConfig,
-> = Context<UnwrapRoute<TConfig>>;
+> = Context<UnwrapRoute<Omit<TConfig, "mcp">>>;
 
 /**
  * Like `createSafeSessionHandler`, but the framework does not
@@ -626,11 +691,13 @@ export const createSafeTokenHandler = <
 ): SafeHandlerDefinition<TConfig, TokenHandlerContext<TConfig>, TResult> =>
   createSafeDirectHandler(config, handler);
 
-export type PublicHandlerConfig = InputSchema;
+export type PublicHandlerConfig = InputSchema & {
+  mcp: McpExposure;
+};
 
 type PublicHandlerContext<
   TConfig extends PublicHandlerConfig = PublicHandlerConfig,
-> = Context<UnwrapRoute<TConfig>>;
+> = Context<UnwrapRoute<Omit<TConfig, "mcp">>>;
 
 /**
  * For unauthenticated routes that intentionally expose public data.

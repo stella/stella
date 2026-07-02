@@ -6,7 +6,7 @@ import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 
-const config = {} satisfies SessionHandlerConfig;
+const config = { mcp: { type: "pending" } } satisfies SessionHandlerConfig;
 
 const nativeToolDeployAvailability = createSafeSessionHandler(
   config,

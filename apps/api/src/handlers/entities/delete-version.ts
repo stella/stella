@@ -23,6 +23,7 @@ const paramsSchema = workspaceParams({
 
 const config = {
   permissions: { entity: ["update"] },
+  mcp: { type: "pending" },
   params: paramsSchema,
 } satisfies HandlerConfig;
 

@@ -21,6 +21,7 @@ const resolveFileThreadBodySchema = t.Object({
 
 const config = {
   permissions: { chat: ["create"] },
+  mcp: { type: "pending" },
   body: resolveFileThreadBodySchema,
 } satisfies HandlerConfig;
 

@@ -18,6 +18,7 @@ const createEntityLinkBodySchema = t.Object({
 const createEntityLink = createSafeHandler(
   {
     permissions: { entity: ["update"] },
+    mcp: { type: "pending" },
     body: createEntityLinkBodySchema,
   },
   async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {

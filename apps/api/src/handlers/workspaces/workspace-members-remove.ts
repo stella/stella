@@ -19,6 +19,7 @@ import { broadcast } from "@/api/lib/sse";
 
 const config = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   params: workspaceParams({ userId: tUserId }),
 } satisfies HandlerConfig;
 

@@ -30,6 +30,7 @@ import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 /**

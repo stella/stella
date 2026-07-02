@@ -36,6 +36,7 @@ type AIConfigResult = {
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 /**

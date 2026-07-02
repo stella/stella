@@ -33,6 +33,7 @@ const calendarTasksBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   body: calendarTasksBodySchema,
 } satisfies HandlerConfig;
 

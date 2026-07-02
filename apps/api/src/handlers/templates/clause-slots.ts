@@ -22,6 +22,7 @@ const clauseSlotsParamsSchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: clauseSlotsParamsSchema,
 } satisfies HandlerConfig;
 

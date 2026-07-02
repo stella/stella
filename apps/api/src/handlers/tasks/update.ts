@@ -92,6 +92,7 @@ const validateAgendaKind = (
 const updateTask = createSafeHandler(
   {
     permissions: { entity: ["update"] },
+    mcp: { type: "pending" },
     body: updateTaskBodySchema,
   },
   async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {

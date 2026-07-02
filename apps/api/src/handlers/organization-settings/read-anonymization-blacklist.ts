@@ -8,6 +8,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 // Restrict to org-wide rows (workspace_id IS NULL). Workspace-scoped

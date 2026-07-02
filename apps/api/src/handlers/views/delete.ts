@@ -13,6 +13,7 @@ import { parseViewLayout } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { view: ["delete"] },
+  mcp: { type: "pending" },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
 } satisfies HandlerConfig;
 

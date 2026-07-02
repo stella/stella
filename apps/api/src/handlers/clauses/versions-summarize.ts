@@ -18,6 +18,7 @@ const clauseVersionSummarizeParamsSchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: clauseVersionSummarizeParamsSchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

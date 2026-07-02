@@ -51,6 +51,7 @@ export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   body: discoverBodySchema,
 } satisfies HandlerConfig;
 

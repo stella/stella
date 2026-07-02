@@ -5,6 +5,7 @@ import { createCategoryBodySchema, createCategoryHandler } from "./categories";
 
 const config = {
   permissions: { clause: ["create"] },
+  mcp: { type: "pending" },
   body: createCategoryBodySchema,
 } satisfies HandlerConfig;
 

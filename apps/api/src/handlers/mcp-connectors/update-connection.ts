@@ -18,6 +18,7 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
   body: requestBody,
 } satisfies HandlerConfig;

@@ -12,6 +12,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const readUserFileThumbnail = createSafeRootHandler(
   {
     permissions: { chat: ["create"] },
+    mcp: { type: "internal", reason: "upload_mechanics" },
     params: t.Object({ fileId: tSafeId("userFile") }),
   },
   async function* ({ params: { fileId }, safeDb, user, recordAuditEvent }) {

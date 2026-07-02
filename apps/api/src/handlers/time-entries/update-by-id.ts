@@ -35,6 +35,7 @@ const updateTimeEntryBodySchema = t.Object({
 const updateTimeEntryById = createSafeHandler(
   {
     permissions: { timeEntry: ["update"] },
+    mcp: { type: "pending" },
     body: updateTimeEntryBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {

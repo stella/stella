@@ -655,6 +655,7 @@ export const openDesktopEditSessionHandler = async function* ({
 const config = {
   body: openDesktopEditSessionBodySchema,
   permissions: { entity: ["update"] },
+  mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies HandlerConfig;
 
 const openDesktopEditSession = createSafeHandler(

@@ -23,6 +23,7 @@ const lookupPreviewBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   body: lookupPreviewBodySchema,
 } satisfies HandlerConfig;
 

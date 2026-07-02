@@ -23,6 +23,7 @@ const renameSkillResourceBodySchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["update"] },
+  mcp: { type: "pending" },
   params: renameSkillResourceParamsSchema,
   body: renameSkillResourceBodySchema,
 } satisfies HandlerConfig;

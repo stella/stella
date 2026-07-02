@@ -14,6 +14,7 @@ import { parseViewLayoutSafe } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const toViewResponse = (

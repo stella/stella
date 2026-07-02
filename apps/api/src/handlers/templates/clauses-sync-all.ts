@@ -13,6 +13,7 @@ const syncAllTemplateClausesParamsSchema = t.Object({
 
 const config = {
   permissions: { template: ["update"] },
+  mcp: { type: "pending" },
   params: syncAllTemplateClausesParamsSchema,
 } satisfies HandlerConfig;
 

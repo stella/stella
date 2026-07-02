@@ -20,6 +20,7 @@ const bodySchema = t.Object({
 
 const config = {
   permissions: { entity: ["update"] },
+  mcp: { type: "pending" },
   params: paramsSchema,
   body: bodySchema,
 } satisfies HandlerConfig;

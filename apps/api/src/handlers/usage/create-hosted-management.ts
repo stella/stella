@@ -13,6 +13,7 @@ import { getApiCredentials } from "@/api/lib/hosted-usage-provider/config";
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;
 
 const createHostedManagement = createSafeRootHandler(

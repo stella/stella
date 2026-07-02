@@ -21,6 +21,7 @@ const querySchema = t.Object({
 const boeSearch = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     query: querySchema,
   },
   async function* ({ query }) {

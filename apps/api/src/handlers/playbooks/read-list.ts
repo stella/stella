@@ -8,6 +8,7 @@ import {
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   query: listPlaybookDefinitionsQuerySchema,
 } satisfies HandlerConfig;
 

@@ -15,6 +15,7 @@ const deleteTimeEntryBodySchema = t.Object({
 const deleteTimeEntryById = createSafeHandler(
   {
     permissions: { timeEntry: ["delete"] },
+    mcp: { type: "pending" },
     body: deleteTimeEntryBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {

@@ -13,6 +13,7 @@ const getClauseVersionParamsSchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: getClauseVersionParamsSchema,
 } satisfies HandlerConfig;
 

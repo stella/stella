@@ -22,6 +22,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 const searchLegislation = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     body: searchLegislationBodySchema,
   } satisfies HandlerConfig,
   async function* ({ body, scopedDb }) {
@@ -37,6 +38,7 @@ const searchLegislation = createSafeRootHandler(
 const readLegislation = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     params: t.Object({ documentId: tSafeId("legislationDocument") }),
   } satisfies HandlerConfig,
   async function* ({ params: { documentId }, scopedDb }) {

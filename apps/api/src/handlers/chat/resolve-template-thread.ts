@@ -16,6 +16,7 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
   permissions: { chat: ["create"] },
+  mcp: { type: "pending" },
   body: t.Object({
     templateId: tSafeId("template"),
   }),

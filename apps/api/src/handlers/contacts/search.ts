@@ -18,6 +18,7 @@ const searchContactsQuerySchema = t.Object({
 const searchContacts = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     query: searchContactsQuerySchema,
   },
   async function* ({ safeDb, session, query }) {

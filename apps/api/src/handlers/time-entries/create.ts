@@ -26,6 +26,7 @@ const createTimeEntryBodySchema = t.Object({
 const createTimeEntry = createSafeHandler(
   {
     permissions: { timeEntry: ["create"] },
+    mcp: { type: "pending" },
     body: createTimeEntryBodySchema,
   },
   async function* ({

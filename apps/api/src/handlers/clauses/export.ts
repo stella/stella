@@ -144,6 +144,7 @@ const exportHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   query: exportQuerySchema,
 } satisfies HandlerConfig;
 

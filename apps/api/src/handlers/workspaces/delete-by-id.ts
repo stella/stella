@@ -71,6 +71,7 @@ const extractFileRefs = (content: FieldContent): FileRef[] => {
 
 const config = {
   permissions: { workspace: ["delete"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const deleteWorkspace = createSafeHandler(

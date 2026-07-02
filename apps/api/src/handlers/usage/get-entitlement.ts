@@ -14,6 +14,10 @@ const config = {
   // hosted setup/management endpoints and the other organization-settings
   // reads. Non-managers have no settings UI for it and cannot manage it.
   permissions: { organizationSettings: ["update"] },
+  // Unlike the hosted setup/management endpoints (Stripe-session plumbing,
+  // permanently internal), reading remaining usage is a plausible future
+  // agent capability, so it stays a ratcheted gap rather than a waiver.
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const getEntitlement = createSafeRootHandler(

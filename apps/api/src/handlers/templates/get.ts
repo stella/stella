@@ -17,6 +17,7 @@ const PRESIGN_EXPIRES_IN = 900;
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "tool", name: "describe_template" },
   params: getTemplateParamsSchema,
 } satisfies HandlerConfig;
 

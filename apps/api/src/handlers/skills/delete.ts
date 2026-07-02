@@ -15,6 +15,7 @@ const deleteSkillParamsSchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["delete"] },
+  mcp: { type: "pending" },
   params: deleteSkillParamsSchema,
 } satisfies HandlerConfig;
 

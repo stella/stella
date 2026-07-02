@@ -34,6 +34,7 @@ const abortParamsSchema = t.Object({
 
 const config = {
   permissions: uploadRoutePermission,
+  mcp: { type: "internal", reason: "upload_mechanics" },
   params: abortParamsSchema,
 } satisfies HandlerConfig;
 

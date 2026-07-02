@@ -29,6 +29,7 @@ const updateAnonymizationBlacklistBodySchema = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "pending" },
   body: updateAnonymizationBlacklistBodySchema,
 } satisfies HandlerConfig;
 
