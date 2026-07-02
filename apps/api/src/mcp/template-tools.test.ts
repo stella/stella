@@ -170,14 +170,30 @@ describe("MCP template tools", () => {
     }
   });
 
-  test("template tools are absent from anonymized mode", async () => {
+  test("read/reference template tools are on the anonymized surface; writes are not", async () => {
     const names = (await listMcpTools(createContext(), "anonymized")).map(
       (tool) => tool.name,
     );
-    expect(names).not.toContain("list_templates");
+    // Read + static-reference template tools are projected (anonymized or
+    // passthrough); the mutating tools stay off the egress-only surface.
+    expect(names).toContain("list_templates");
+    expect(names).toContain("describe_template");
+    expect(names).toContain("template_marker_reference");
+    expect(names).not.toContain("fill_template");
     expect(names).not.toContain("create_template");
     expect(names).not.toContain("configure_template_fields");
-    expect(names).not.toContain("template_marker_reference");
+  });
+
+  test("projected template tools carry the anonymized templates scope", async () => {
+    for (const name of ["list_templates", "describe_template"]) {
+      // oxlint-disable-next-line no-await-in-loop -- sequential per-tool assertion; keeps the failing tool name obvious in test output
+      const definition = await getMcpToolDefinition(
+        name,
+        createContext(),
+        "anonymized",
+      );
+      expect(definition?.scope).toBe("stella:templates_anonymized");
+    }
   });
 
   test("template_marker_reference covers every canonical directive kind", async () => {

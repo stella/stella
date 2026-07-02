@@ -5,8 +5,8 @@ import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type {
-  McpCompatSearchResult,
   McpEgressPlan,
+  McpStructuredTextField,
   McpToolResponse,
 } from "@/api/mcp/tool-types";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
@@ -44,7 +44,100 @@ export const finalizeMcpEgress = async ({
     return await finalizeCompatSearch({ context, mode, plan: response });
   }
 
-  return await finalizeCompatFetch({ context, mode, plan: response });
+  if (response.egress === "compatFetch") {
+    return await finalizeCompatFetch({ context, mode, plan: response });
+  }
+
+  return await finalizeStructured({ context, mode, plan: response });
+};
+
+/**
+ * Anonymize a flat list of text fields grouped by their `workspaceId` scope.
+ * All fields sharing a scope are fed to `anonymizeTextFields` in one call so
+ * placeholders stay consistent within a workspace (and, via the shared
+ * gazetteer, across the whole payload). Each field's anonymized value is
+ * written back through its `apply`; a field the redactor drops falls back to
+ * `[REDACTED]` rather than leaking the original. Shared by `compatSearch` and
+ * the generic `structured` variant.
+ */
+const anonymizeTextFieldsByWorkspace = async ({
+  context,
+  fields,
+}: {
+  context: McpRequestContext;
+  fields: readonly McpStructuredTextField[];
+}): Promise<void> => {
+  if (fields.length === 0) {
+    return;
+  }
+
+  const gazetteerEntries = await loadAnonymizationGazetteerEntries({
+    organizationId: context.organizationId,
+    scopedDb: context.scopedDb,
+  });
+
+  const byWorkspace = new Map<string, McpStructuredTextField[]>();
+  for (const field of fields) {
+    const group = byWorkspace.get(field.workspaceId);
+    if (group) {
+      group.push(field);
+      continue;
+    }
+    byWorkspace.set(field.workspaceId, [field]);
+  }
+
+  for (const [workspaceId, group] of byWorkspace) {
+    // oxlint-disable-next-line no-await-in-loop -- per-workspace anonymization bounds gazetteer/DB load across tenants
+    const anonymized = await anonymizeTextFields({
+      fields: group.map((field) => field.value),
+      gazetteerEntries,
+      organizationId: context.organizationId,
+      scopedDb: context.scopedDb,
+      workspaceId,
+    });
+
+    for (const [index, field] of group.entries()) {
+      field.apply(
+        normalizeTextField({
+          allowEmptyFallback: false,
+          fallback: field.value,
+          missingFallback: ANONYMIZED_FIELD_MISSING_FALLBACK,
+          value: anonymized.fields[index],
+        }),
+      );
+    }
+  }
+};
+
+const finalizeStructured = async ({
+  context,
+  mode,
+  plan,
+}: {
+  context: McpRequestContext;
+  mode: McpMode;
+  plan: Extract<McpEgressPlan, { egress: "structured" }>;
+}): Promise<CallToolResult> => {
+  // Anonymize the declared text fields on the whole payload first (anonymized
+  // mode only), THEN window, so an entity name can never straddle a window edge
+  // and placeholders stay stable across windows of one field.
+  if (mode === "anonymized") {
+    await anonymizeTextFieldsByWorkspace({ context, fields: plan.textFields });
+  }
+
+  if (plan.window) {
+    const textWindow = windowTextByCursor({
+      cursor: plan.window.cursor,
+      maxChars: plan.window.maxChars,
+      text: plan.window.read(),
+    });
+    if (isToolErrorResult(textWindow)) {
+      return textWindow;
+    }
+    plan.window.apply(textWindow);
+  }
+
+  return textResult(plan.payload);
 };
 
 const finalizeCompatSearch = async ({
@@ -56,24 +149,33 @@ const finalizeCompatSearch = async ({
   mode: McpMode;
   plan: Extract<McpEgressPlan, { egress: "compatSearch" }>;
 }): Promise<CallToolResult> => {
+  // `workspaceId` is per-hit attribution the egress pipeline uses to group
+  // anonymization; it is stripped before the result reaches the client.
+  const results = plan.results.map(
+    ({ workspaceId: _workspaceId, ...hit }) => hit,
+  );
+
+  // MCP access is for authorized Stella users only. In anonymized mode we still
+  // search raw, non-anonymized indexed text so retrieval quality stays useful,
+  // then anonymize the returned titles, grouped per workspace, before they
+  // leave Stella for the AI client.
   if (mode === "anonymized") {
-    // MCP access is for authorized Stella users only. In anonymized mode we
-    // still search raw, non-anonymized indexed text so retrieval quality stays
-    // useful, then anonymize all returned corpus text before it leaves Stella
-    // for the AI client.
-    return textResult({
-      nextCursor: plan.nextCursor,
-      results: await anonymizeCompatSearchResults({
-        context,
-        results: [...plan.results],
-      }),
+    await anonymizeTextFieldsByWorkspace({
+      context,
+      fields: plan.results.map((hit, index) => ({
+        apply: (value) => {
+          const target = results[index];
+          if (target) {
+            target.title = value;
+          }
+        },
+        value: hit.title,
+        workspaceId: hit.workspaceId,
+      })),
     });
   }
 
-  return textResult({
-    nextCursor: plan.nextCursor,
-    results: plan.results.map(({ workspaceId: _workspaceId, ...hit }) => hit),
-  });
+  return textResult({ nextCursor: plan.nextCursor, results });
 };
 
 const finalizeCompatFetch = async ({
@@ -145,81 +247,6 @@ const finalizeCompatFetch = async ({
       workspaceId: plan.workspaceId,
     },
   });
-};
-
-const anonymizeCompatSearchResults = async ({
-  context,
-  results,
-}: {
-  context: McpRequestContext;
-  results: McpCompatSearchResult[];
-}) => {
-  if (results.length === 0) {
-    return [];
-  }
-
-  const gazetteerEntries = await loadAnonymizationGazetteerEntries({
-    organizationId: context.organizationId,
-    scopedDb: context.scopedDb,
-  });
-
-  const byWorkspace = new Map<
-    string,
-    { indexes: number[]; titles: string[] }
-  >();
-  for (const [index, result] of results.entries()) {
-    const group = byWorkspace.get(result.workspaceId);
-    if (group) {
-      group.indexes.push(index);
-      group.titles.push(result.title);
-      continue;
-    }
-    byWorkspace.set(result.workspaceId, {
-      indexes: [index],
-      titles: [result.title],
-    });
-  }
-
-  const output: (Omit<McpCompatSearchResult, "workspaceId"> | undefined)[] =
-    Array.from({ length: results.length });
-
-  for (const [workspaceId, group] of byWorkspace) {
-    // oxlint-disable-next-line no-await-in-loop -- per-workspace anonymization bounds gazetteer/DB load across tenants
-    const anonymized = await anonymizeTextFields({
-      fields: group.titles,
-      gazetteerEntries,
-      organizationId: context.organizationId,
-      scopedDb: context.scopedDb,
-      workspaceId,
-    });
-
-    for (const [groupIndex, resultIndex] of group.indexes.entries()) {
-      const result = results[resultIndex];
-      if (result === undefined) {
-        continue;
-      }
-      output[resultIndex] = {
-        id: result.id,
-        title: normalizeTextField({
-          allowEmptyFallback: false,
-          fallback: result.title,
-          missingFallback: ANONYMIZED_FIELD_MISSING_FALLBACK,
-          value: anonymized.fields[groupIndex],
-        }),
-        url: result.url,
-      };
-    }
-  }
-
-  const normalizedResults: Omit<McpCompatSearchResult, "workspaceId">[] = [];
-  for (const result of output) {
-    if (result === undefined) {
-      continue;
-    }
-    normalizedResults.push(result);
-  }
-
-  return normalizedResults;
 };
 
 const anonymizeCompatFetchPayload = async ({

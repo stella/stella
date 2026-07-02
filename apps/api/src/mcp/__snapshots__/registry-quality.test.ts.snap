@@ -1009,6 +1009,90 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "list_matters",
+    "scope": "stella:read_anonymized",
+    "description": "List the matters you can access. Use this first when the user does not name a matter explicitly or when you need matter IDs for follow-up tools.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "status": {
+          "type": "string",
+          "enum": [
+            "active",
+            "all"
+          ],
+          "description": "Filter by matter status"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max matters to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_matters call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "get_matter_overview",
+    "scope": "stella:read_anonymized",
+    "description": "Get a compact overview of a matter including counts, recent entities, and linked contacts. Use this to orient yourself before drilling in.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID"
+        }
+      },
+      "required": [
+        "matter_id"
+      ]
+    }
+  },
+  {
+    "name": "search_across_matters",
+    "scope": "stella:search_anonymized",
+    "description": "Search across all accessible matters. Use this when the user explicitly asks to search outside a single matter or you do not yet know the right matter.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "query": {
+          "type": "string",
+          "description": "Search query",
+          "maxLength": 500
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max results to return",
+          "minimum": 1,
+          "maximum": 20
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous search_across_matters call to fetch the next page",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "query"
+      ]
+    }
+  },
+  {
     "name": "search_case_law",
     "scope": "stella:search_anonymized",
     "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type.",
@@ -1076,6 +1160,31 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
     }
   },
   {
+    "name": "read_content_across_matters",
+    "scope": "stella:read_anonymized",
+    "description": "Read extracted text from a document found anywhere in your accessible matters. Use after search_across_matters. Long documents are returned in windows; pass the returned nextCursor back as cursor to read more.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "entity_id": {
+          "type": "string",
+          "description": "Entity ID"
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous call to read the next window of text",
+          "maxLength": 512
+        }
+      },
+      "required": [
+        "entity_id"
+      ]
+    }
+  },
+  {
     "name": "read_case_law_decision",
     "scope": "stella:read_anonymized",
     "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, and source URLs. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
@@ -1098,6 +1207,76 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
       "required": [
         "decision_id"
       ]
+    }
+  },
+  {
+    "name": "read_contact",
+    "scope": "stella:read_anonymized",
+    "description": "Read a contact by ID. Use this after matter overview or entity metadata surfaces a contact the user wants to inspect more closely.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "contact_id": {
+          "type": "string",
+          "description": "Contact ID"
+        }
+      },
+      "required": [
+        "contact_id"
+      ]
+    }
+  },
+  {
+    "name": "list_templates",
+    "scope": "stella:templates_anonymized",
+    "description": "List the document templates in this organization (NDAs, powers of attorney, leases, and so on). Returns each template's id, name, number of fillable fields, tags, and usage guidance (whenToUse / whenNotToUse). Call this first to learn which templates exist and their ids before describing or filling one. Prefer a template whose whenToUse matches the request and skip any whose whenNotToUse applies.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_templates call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "describe_template",
+    "scope": "stella:templates_anonymized",
+    "description": "Describe a template's fillable fields so you know what to provide before filling it. Returns each field's full configuration: path, label, inputType, required, hint, select options, optionsFrom (dependent select), aiPrompt / aiAdapt (who-fills), date format, composite parts + format, and (for registry-lookup fields) the named output formats. Also returns named conditions and computed (formula) fields. The result is a complete round-trip: feed the same shape to configure_template_fields. Pass the template id from list_templates.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "template_id": {
+          "type": "string",
+          "description": "Template id, as returned by list_templates"
+        }
+      },
+      "required": [
+        "template_id"
+      ]
+    }
+  },
+  {
+    "name": "template_marker_reference",
+    "scope": "stella:templates_anonymized",
+    "description": "Return stella's \`{{...}}\` template marker grammar: how to write fillable values, conditional and repeating blocks, clause slots, and numbering inside a DOCX. Takes no arguments. Call this before create_template whenever you are unsure of the marker syntax.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
     }
   }
 ]"
