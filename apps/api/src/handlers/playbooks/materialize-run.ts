@@ -74,6 +74,10 @@ const buildVerdictTool = ({
 type DocTypeGate = {
   propertyId: SafeId<"property">;
   condition: ConditionNode;
+  // The resolved taxonomy label the classifier field must equal for a row to
+  // match; ephemeral review compares the active document's classification
+  // against it directly (dependency-row consumers ignore this field).
+  label: string;
 };
 
 // The workspace's "Document Type" classifier: a single-select column computed by
@@ -144,6 +148,7 @@ export const resolveDocTypeGate = async ({
       op: "eq",
       right: { type: "literal", value: documentType.label },
     },
+    label: documentType.label,
   };
 };
 
@@ -154,7 +159,7 @@ type ScopedGateResult =
 // Resolves a playbook's document-type gate, rejecting a scoped playbook whose
 // classifier does not resolve (which would otherwise materialize ungated and
 // grade every document in the workspace).
-const resolveScopedGate = async ({
+export const resolveScopedGate = async ({
   tx,
   workspaceId,
   organizationId,

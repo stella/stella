@@ -59,7 +59,10 @@ import type {
   WorkspaceProperty,
   WorkspaceView,
 } from "@/lib/types";
-import { playbooksOptions } from "@/routes/_protected.knowledge/-queries";
+import {
+  PLAYBOOK_PICKER_LIMIT,
+  playbooksOptions,
+} from "@/routes/_protected.knowledge/-queries";
 import { BulkAddColumns } from "@/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns";
 import { ExistingFileOrganizerDialog } from "@/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog";
 import { isGroupableProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.logic";
@@ -503,7 +506,7 @@ const RunPlaybookControl = ({ workspaceId }: RunPlaybookControlProps) => {
     isLoading,
     isError,
   } = useQuery({
-    ...playbooksOptions(activeOrganizationId),
+    ...playbooksOptions(activeOrganizationId, PLAYBOOK_PICKER_LIMIT),
     enabled: open,
   });
   const playbooks =

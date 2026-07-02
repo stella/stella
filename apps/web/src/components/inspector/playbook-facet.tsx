@@ -56,12 +56,10 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { toAPIError } from "@/lib/errors";
 import { getWordEditAuthorName } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
-import { playbooksOptions } from "@/routes/_protected.knowledge/-queries";
-
-// The org playbook cap equals the API's max page size, so one request returns
-// every playbook; the picker needs them all selectable rather than the first
-// default page.
-const PLAYBOOK_PICKER_LIMIT = 100;
+import {
+  PLAYBOOK_PICKER_LIMIT,
+  playbooksOptions,
+} from "@/routes/_protected.knowledge/-queries";
 
 type PlaybookFacetProps = {
   entityId: string;

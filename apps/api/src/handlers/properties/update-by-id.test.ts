@@ -114,7 +114,8 @@ describe("updateProperty", () => {
         safeDb,
         scopedDb,
         recordAuditEvent: async (_tx, event) => {
-          auditedDependencies = event.changes?.dependencies;
+          const single = Array.isArray(event) ? event.at(0) : event;
+          auditedDependencies = single?.changes?.["dependencies"];
         },
         body: {
           name: "New name",

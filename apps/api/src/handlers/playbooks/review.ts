@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { resolveScopedGate } from "@/api/handlers/playbooks/materialize-run";
 import type { ResolvedStandard } from "@/api/handlers/playbooks/positions";
 import {
   loadClauseSnapshots,
@@ -67,7 +68,7 @@ const reviewPlaybook = createSafeHandler(
             id: { eq: params.playbookId },
             organizationId: { eq: organizationId },
           },
-          columns: { positions: true },
+          columns: { positions: true, scope: true },
         });
         if (!playbook) {
           return {
@@ -76,6 +77,25 @@ const reviewPlaybook = createSafeHandler(
             message: "Playbook not found",
           };
         }
+
+        // The ephemeral review must not widen a playbook's scope past what the
+        // materialized run would gate: a document-type-scoped playbook grades a
+        // document only when its classified type matches, so enforce that gate
+        // here too instead of reviewing any document from the inspector.
+        const gateResult = await resolveScopedGate({
+          tx,
+          workspaceId,
+          organizationId,
+          scope: playbook.scope,
+        });
+        if (!gateResult.ok) {
+          return {
+            ok: false as const,
+            status: gateResult.status,
+            message: gateResult.message,
+          };
+        }
+        const docTypeGate = gateResult.gate;
 
         // Bounded single-doc read: one entity, its current version, and that
         // version's field rows (capped by the workspace property count; the
@@ -89,7 +109,11 @@ const reviewPlaybook = createSafeHandler(
           with: {
             currentVersion: {
               columns: { id: true },
-              with: { fields: { columns: { id: true, content: true } } },
+              with: {
+                fields: {
+                  columns: { id: true, content: true, propertyId: true },
+                },
+              },
             },
           },
         });
@@ -122,6 +146,27 @@ const reviewPlaybook = createSafeHandler(
           fieldId: activeField.id,
           content: activeContent,
         };
+
+        // Gate matches the materialized run's semantics: an unclassified or
+        // differently-classified document is skipped there, so reject it here.
+        if (docTypeGate !== null) {
+          const classifierField = entity.currentVersion.fields.find(
+            (field) => field.propertyId === docTypeGate.propertyId,
+          );
+          const classifierContent = classifierField?.content;
+          const classifiedType =
+            classifierContent?.type === "single-select"
+              ? classifierContent.value
+              : null;
+          if (classifiedType !== docTypeGate.label) {
+            return {
+              ok: false as const,
+              status: 422 as const,
+              message:
+                "This playbook is scoped to a different document type than this document's classification.",
+            };
+          }
+        }
 
         const positions = playbook.positions.items;
         const clauseSnapshots = await loadClauseSnapshots(

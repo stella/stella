@@ -462,6 +462,11 @@ export const clauseDetailOptions = (organizationId: string, clauseId: string) =>
 
 // ── Playbook queries ────────────────────────────────
 
+// The org playbook cap equals the API's max page size, so one request returns
+// every playbook; pickers that launch a playbook (review facet, files-table run
+// menu) need them all selectable rather than the first default page.
+export const PLAYBOOK_PICKER_LIMIT = 100;
+
 export const playbooksOptions = (
   organizationId: string,
   limit: number = PLAYBOOKS_PAGE_SIZE,
