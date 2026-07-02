@@ -360,6 +360,41 @@ describe("TanStack text model resolution", () => {
     expect(handlerError.message).toContain("document input");
   });
 
+  test("rejects stale Bedrock text-only model selections for PDF flows", () => {
+    const orgConfig = orgConfigForProvider("bedrock");
+    orgConfig.overrideModels.pdf = {
+      provider: "bedrock",
+      modelId: "us.amazon.nova-micro-v1:0",
+    };
+
+    const unavailable = requireTanStackAIAvailableForRole({
+      orgConfig,
+      role: "pdf",
+    });
+
+    expect(unavailable.isErr()).toBe(true);
+    if (unavailable.isErr()) {
+      expect(unavailable.error.status).toBe(400);
+      expect(unavailable.error.message).toContain("document input");
+    }
+
+    let handlerError: unknown;
+    try {
+      getTanStackTextModelForRole("pdf", orgConfig, {
+        organizationId: orgId,
+      });
+    } catch (error) {
+      handlerError = error;
+    }
+
+    if (!(handlerError instanceof HandlerError)) {
+      throw new TypeError("Expected HandlerError");
+    }
+    expect(handlerError.status).toBe(400);
+    expect(handlerError.message).toContain("us.amazon.nova-micro-v1:0");
+    expect(handlerError.message).toContain("document input");
+  });
+
   test("rejects unsupported instance providers in role availability preflight", () => {
     const originalProvider = env.AI_PROVIDER;
     try {

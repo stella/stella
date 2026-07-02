@@ -620,6 +620,22 @@ const byokProviderRoleUnsupportedError = (
       "Choose a provider that supports document input for PDF flows.",
   });
 
+const byokModelRoleUnsupportedError = ({
+  provider,
+  modelId,
+  role,
+}: {
+  provider: BYOKProvider;
+  modelId: string;
+  role: ModelRole;
+}): HandlerError<400> =>
+  new HandlerError({
+    status: 400,
+    message:
+      `${provider} model "${modelId}" is not available for the "${role}" AI role. ` +
+      "Choose a model that supports document input for PDF flows.",
+  });
+
 const supportsTanStackProviderRole = (
   provider: TanStackTextProvider,
   role: ModelRole,
@@ -639,6 +655,26 @@ const assertTanStackProviderRoleSupport = (
   }
 
   panic("Unsupported TanStack AI role provider.");
+};
+
+const assertTanStackBYOKModelRoleSupport = ({
+  provider,
+  modelId,
+  role,
+}: {
+  provider: TanStackTextProvider;
+  modelId: string;
+  role: ModelRole;
+}): void => {
+  if (!isBYOKProvider(provider)) {
+    panic("Unsupported TanStack AI role provider.");
+  }
+
+  if (isBYOKModelRoleSupported({ provider, modelId, role })) {
+    return;
+  }
+
+  throw byokModelRoleUnsupportedError({ provider, modelId, role });
 };
 
 export const requireTanStackAIAvailableForRole = ({
@@ -683,6 +719,22 @@ export const requireTanStackAIAvailableForRole = ({
     ) {
       return Result.err(
         byokProviderRoleUnsupportedError(providerConfig.provider, role),
+      );
+    }
+    if (
+      isBYOKProvider(providerConfig.provider) &&
+      !isBYOKModelRoleSupported({
+        provider: providerConfig.provider,
+        modelId: selection.modelId,
+        role,
+      })
+    ) {
+      return Result.err(
+        byokModelRoleUnsupportedError({
+          provider: providerConfig.provider,
+          modelId: selection.modelId,
+          role,
+        }),
       );
     }
     return Result.ok(undefined);
@@ -1196,6 +1248,7 @@ const resolveByokTextModel = ({
     region,
   });
   assertTanStackProviderRoleSupport(provider, role);
+  assertTanStackBYOKModelRoleSupport({ provider, modelId, role });
 
   const factory = getCachedFactory(providerConfig);
   return buildResolvedTextModel({
@@ -1280,6 +1333,11 @@ export const getTanStackTextModelInfoForRole = (
       region,
     });
     assertTanStackProviderRoleSupport(provider, role);
+    assertTanStackBYOKModelRoleSupport({
+      provider,
+      modelId: selection.modelId,
+      role,
+    });
 
     return {
       keySource: "byok",
