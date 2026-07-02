@@ -7,6 +7,7 @@ import {
   recommendedSchema,
   type CatalogueEntry,
   type CatalogueKind,
+  type GithubSkillEntry,
   type Recommended,
 } from "./schema";
 
@@ -87,6 +88,34 @@ export const findCatalogueEntry = (
   slug: string,
 ): LoadedCatalogueEntry | undefined =>
   loaded.find((entry) => entry.kind === kind && entry.slug === slug);
+
+export type LoadedGithubSkillEntry = Extract<
+  LoadedCatalogueEntry,
+  { kind: "skill"; source: "github" }
+>;
+
+export const isGithubSkillEntry = (
+  entry: LoadedCatalogueEntry,
+): entry is LoadedGithubSkillEntry =>
+  entry.kind === "skill" && entry.source === "github";
+
+/**
+ * Pinned raw-content base URL for a github-sourced skill, ending in a
+ * trailing slash so callers append `SKILL.md` or a resource path. The
+ * commit SHA in `rev` makes the result immutable: an upstream
+ * force-push cannot change what these bytes resolve to.
+ */
+export const githubRawContentBaseUrl = (
+  entry: Pick<GithubSkillEntry, "repo" | "rev" | "directory">,
+): string => {
+  const directorySegment = entry.directory ? `${entry.directory}/` : "";
+  return `https://raw.githubusercontent.com/${entry.repo}/${entry.rev}/${directorySegment}`;
+};
+
+/** Pinned zip archive of the repo tree at the commit SHA. */
+export const githubArchiveUrl = (
+  entry: Pick<GithubSkillEntry, "repo" | "rev">,
+): string => `https://codeload.github.com/${entry.repo}/zip/${entry.rev}`;
 
 /**
  * Always-on baseline tools. Currently only native-tools can be pinned;

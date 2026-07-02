@@ -11,15 +11,58 @@ contributions via PR.
    kebab-case, 2–64 characters, unique across the catalogue.
 3. Add `manifest.json` (see schema below). Add a square `icon.svg`
    or `icon.png` when the entry has an official icon.
-4. For `skill` entries: add the skill body next to the manifest and
-   reference it via `entryPath` (e.g. `"SKILL.md"`). Optional
-   resources go under `entryPath`-relative paths in `resources`.
+4. For `skill` entries: pick a `source` (see "Skill sources" below).
 5. Run `bun run --filter @stll/catalogue generate` to rebuild the
    generated manifest. Commit the regenerated file alongside your
    entry.
 6. Run `bun run --filter @stll/catalogue validate` locally before
    pushing.
 7. Open a PR. CI will re-run validation. A maintainer will review.
+
+## Skill sources
+
+A `skill` entry declares a `source`. The two shapes are a discriminated
+union: only the fields listed for the chosen source are allowed.
+
+### `source: "in-tree"`
+
+The skill content lives in this repo, next to the manifest.
+
+| Field       | Required | Notes                                        |
+| ----------- | -------- | -------------------------------------------- |
+| `source`    | yes      | `"in-tree"`                                  |
+| `entryPath` | yes      | skill body path, e.g. `"SKILL.md"`           |
+| `resources` | no       | `entryPath`-relative paths to extra files    |
+
+Add the body and any resources to the entry folder. The per-entry
+folder size cap (10 MB) applies, so keep large corpora out of the repo.
+
+### `source: "github"`
+
+The skill content stays upstream on GitHub, pinned to an immutable
+commit. Use this for large community skills that should not enter this
+repo. No content files may live in the entry folder: only `manifest.json`
+and an optional icon.
+
+| Field       | Required | Notes                                              |
+| ----------- | -------- | -------------------------------------------------- |
+| `source`    | yes      | `"github"`                                         |
+| `repo`      | yes      | GitHub `owner/name` (identifier only, not a URL)   |
+| `rev`       | yes      | full 40-char lowercase hex commit SHA              |
+| `directory` | no       | skill directory in the repo; defaults to repo root |
+
+The entry file is `SKILL.md` inside `directory`. Because content at a
+pinned SHA is immutable, recommending a `github` skill still endorses
+specific bytes: an upstream force-push cannot change what is served.
+
+## Keeping `github` skills up to date
+
+A scheduled workflow checks the upstream repo of each `github`-sourced
+entry and, when the tracked branch has moved past the pinned `rev`,
+opens a PR that bumps `rev` (dependabot-style). A maintainer reviews the
+upstream diff before merging, so authors get updates through their own
+GitHub while curation over specific bytes is preserved. Merging the bump
+is a deliberate re-endorsement, not an automatic pointer.
 
 ## Manifest fields
 

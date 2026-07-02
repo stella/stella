@@ -15,7 +15,7 @@ import path from "node:path";
 import { CATALOGUE_KINDS } from "../src/schema";
 
 const packageRoot = path.join(import.meta.dirname, "..");
-const entriesRoot = path.join(packageRoot, "entries");
+const defaultEntriesRoot = path.join(packageRoot, "entries");
 const outputPath = path.join(packageRoot, "src", "catalogue.gen.ts");
 const installPayloadsOutputPath = path.join(
   packageRoot,
@@ -23,7 +23,7 @@ const installPayloadsOutputPath = path.join(
   "catalogue-install-payloads.gen.ts",
 );
 
-type GeneratedEntry = {
+export type GeneratedEntry = {
   importName: string;
   manifestPath: string;
   /** JSON-encoded string literal — already wrapped in quotes — or "null". */
@@ -43,115 +43,96 @@ type GeneratedSkillPayload = {
   slugLiteral: string;
 };
 
-const entries = CATALOGUE_KINDS.flatMap((kind) => {
-  const kindDir = path.join(entriesRoot, pluralize(kind));
-  if (!existsSync(kindDir)) {
-    return [];
-  }
-  return readdirSync(kindDir, { withFileTypes: true })
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => entry.name)
-    .sort((a, b) => a.localeCompare(b))
-    .map((slug): GeneratedEntry | null => {
-      const folder = path.join(kindDir, slug);
-      const manifest = path.join(folder, "manifest.json");
-      if (!existsSync(manifest)) {
-        return null;
-      }
-      const importName = toImportName(kind, slug);
-
-      let skillPayload: GeneratedSkillPayload | null = null;
-      if (kind === "skill") {
-        const manifestRaw: { entryPath?: string; resources?: string[] } =
-          JSON.parse(readFileSync(manifest, "utf-8"));
-        const entryPath = normalizeManifestPath(
-          manifestRaw.entryPath ?? "SKILL.md",
-        );
-        const entryDirectory = path.dirname(entryPath);
-        const resourceRoot =
-          entryDirectory === "." ? folder : path.join(folder, entryDirectory);
-        const bodyFile = path.join(folder, entryPath);
-        if (!existsSync(bodyFile)) {
-          panic(`${kind}/${slug}: entry file not found: ${entryPath}`);
+/**
+ * Scans `entriesRoot` and returns one GeneratedEntry per manifest.
+ * Every entry (including github-sourced skills) is emitted into the
+ * public catalogue bundle; only in-tree skills carry a `skillPayload`,
+ * so github content is structurally excluded from the install-payload
+ * bundle. Exported for tests; the CLI main below drives it.
+ */
+export const collectEntries = (entriesRoot: string): GeneratedEntry[] =>
+  CATALOGUE_KINDS.flatMap((kind) => {
+    const kindDir = path.join(entriesRoot, pluralize(kind));
+    if (!existsSync(kindDir)) {
+      return [];
+    }
+    return readdirSync(kindDir, { withFileTypes: true })
+      .filter((entry) => entry.isDirectory())
+      .map((entry) => entry.name)
+      .sort((a, b) => a.localeCompare(b))
+      .map((slug): GeneratedEntry | null => {
+        const folder = path.join(kindDir, slug);
+        const manifest = path.join(folder, "manifest.json");
+        if (!existsSync(manifest)) {
+          return null;
         }
-        const resourceFiles: GeneratedResourceFile[] = (
-          manifestRaw.resources ?? []
-        ).map((resourcePath) => {
-          const normalizedPath = normalizeManifestPath(resourcePath);
-          const resourceFile = path.join(resourceRoot, normalizedPath);
-          if (!existsSync(resourceFile)) {
-            panic(
-              `${kind}/${slug}: resource file not found: ${normalizedPath}`,
-            );
+        const importName = toImportName(kind, slug);
+
+        let skillPayload: GeneratedSkillPayload | null = null;
+        if (kind === "skill") {
+          const manifestRaw: {
+            source?: "in-tree" | "github";
+            entryPath?: string;
+            resources?: string[];
+          } = JSON.parse(readFileSync(manifest, "utf-8"));
+          // github-sourced skills keep their content upstream; no
+          // install payload is bundled for them.
+          if (manifestRaw.source !== "github") {
+            skillPayload = buildInTreeSkillPayload({
+              folder,
+              kind,
+              manifestRaw,
+              slug,
+            });
           }
-          const content = readFileSync(resourceFile, "utf-8");
-          return {
-            content,
-            path: normalizedPath,
-            sizeBytes: Buffer.byteLength(content, "utf-8"),
-          };
-        });
-        skillPayload = {
-          bodyLiteral: JSON.stringify(readFileSync(bodyFile, "utf-8")),
-          resourceFilesLiteral: JSON.stringify(resourceFiles),
-          slugLiteral: JSON.stringify(slug),
+        }
+
+        return {
+          importName,
+          manifestPath: toImportPath(manifest),
+          iconLiteral: iconLiteralFor(folder),
+          skillPayload,
         };
-      }
+      })
+      .filter((entry): entry is GeneratedEntry => entry !== null);
+  });
 
-      // Icons are inlined as inert image data URLs. SVGs are encoded
-      // rather than injected as markup so contributor-provided icons
-      // cannot execute active content in the app context.
-      const iconPng = path.join(folder, "icon.png");
-      const iconSvg = path.join(folder, "icon.svg");
-      let iconLiteral = "null";
-      if (existsSync(iconPng)) {
-        const base64 = readFileSync(iconPng).toString("base64");
-        iconLiteral = JSON.stringify(`data:image/png;base64,${base64}`);
-      } else if (existsSync(iconSvg)) {
-        const base64 = Buffer.from(
-          readFileSync(iconSvg, "utf-8"),
-          "utf-8",
-        ).toString("base64");
-        iconLiteral = JSON.stringify(`data:image/svg+xml;base64,${base64}`);
-      }
-
-      return {
-        importName,
-        manifestPath: toImportPath(manifest),
-        iconLiteral,
-        skillPayload,
-      };
-    })
-    .filter((entry): entry is GeneratedEntry => entry !== null);
-});
-
-const importLines = entries.map(
-  (entry) =>
-    `import ${entry.importName} from "${entry.manifestPath}" with { type: "json" };`,
-);
-
-const recommendedPath = toImportPath(
-  path.join(packageRoot, "entries", "recommended.json"),
-);
-importLines.push(
-  `import recommended from "${recommendedPath}" with { type: "json" };`,
-);
-
-const entryRows = entries.map(
-  (entry) => `  { manifest: ${entry.importName}, icon: ${entry.iconLiteral} }`,
-);
-
-const skillPayloadRows = entries
-  .map((entry) => entry.skillPayload)
-  .filter((payload): payload is GeneratedSkillPayload => payload !== null)
-  .map(
-    (payload) =>
-      `  { slug: ${payload.slugLiteral}, body: ${payload.bodyLiteral}, resourceFiles: ${payload.resourceFilesLiteral} }`,
+const importLines = (entries: readonly GeneratedEntry[]): string[] =>
+  entries.map(
+    (entry) =>
+      `import ${entry.importName} from "${entry.manifestPath}" with { type: "json" };`,
   );
 
-const output = `// Generated by packages/catalogue/scripts/generate-manifest.ts. Do not edit.
+type RenderedOutputs = {
+  catalogue: string;
+  installPayloads: string;
+};
 
-${importLines.join("\n")}
+const renderOutputs = (entries: readonly GeneratedEntry[]): RenderedOutputs => {
+  const lines = importLines(entries);
+  const recommendedPath = toImportPath(
+    path.join(packageRoot, "entries", "recommended.json"),
+  );
+  lines.push(
+    `import recommended from "${recommendedPath}" with { type: "json" };`,
+  );
+
+  const entryRows = entries.map(
+    (entry) =>
+      `  { manifest: ${entry.importName}, icon: ${entry.iconLiteral} }`,
+  );
+
+  const skillPayloadRows = entries
+    .map((entry) => entry.skillPayload)
+    .filter((payload): payload is GeneratedSkillPayload => payload !== null)
+    .map(
+      (payload) =>
+        `  { slug: ${payload.slugLiteral}, body: ${payload.bodyLiteral}, resourceFiles: ${payload.resourceFilesLiteral} }`,
+    );
+
+  const catalogue = `// Generated by packages/catalogue/scripts/generate-manifest.ts. Do not edit.
+
+${lines.join("\n")}
 
 export const GENERATED_ENTRIES = [
 ${formatRows(entryRows)}
@@ -160,25 +141,93 @@ ${formatRows(entryRows)}
 export const GENERATED_RECOMMENDED = recommended;
 `;
 
-const installPayloadsOutput = `// Generated by packages/catalogue/scripts/generate-manifest.ts. Do not edit.
+  const installPayloads = `// Generated by packages/catalogue/scripts/generate-manifest.ts. Do not edit.
 
 export const GENERATED_SKILL_INSTALL_PAYLOADS = [
 ${formatRows(skillPayloadRows)}
 ] as const;
 `;
 
-if (process.argv.includes("--check")) {
-  assertGeneratedFileCurrent({
-    content: output,
-    path: outputPath,
+  return { catalogue, installPayloads };
+};
+
+if (import.meta.main) {
+  const { catalogue, installPayloads } = renderOutputs(
+    collectEntries(defaultEntriesRoot),
+  );
+  if (process.argv.includes("--check")) {
+    assertGeneratedFileCurrent({ content: catalogue, path: outputPath });
+    assertGeneratedFileCurrent({
+      content: installPayloads,
+      path: installPayloadsOutputPath,
+    });
+  } else {
+    writeFileSync(outputPath, catalogue);
+    writeFileSync(installPayloadsOutputPath, installPayloads);
+  }
+}
+
+type BuildInTreeSkillPayloadArgs = {
+  folder: string;
+  kind: string;
+  manifestRaw: { entryPath?: string; resources?: string[] };
+  slug: string;
+};
+
+function buildInTreeSkillPayload({
+  folder,
+  kind,
+  manifestRaw,
+  slug,
+}: BuildInTreeSkillPayloadArgs): GeneratedSkillPayload {
+  const entryPath = normalizeManifestPath(manifestRaw.entryPath ?? "SKILL.md");
+  const entryDirectory = path.dirname(entryPath);
+  const resourceRoot =
+    entryDirectory === "." ? folder : path.join(folder, entryDirectory);
+  const bodyFile = path.join(folder, entryPath);
+  if (!existsSync(bodyFile)) {
+    panic(`${kind}/${slug}: entry file not found: ${entryPath}`);
+  }
+  const resourceFiles: GeneratedResourceFile[] = (
+    manifestRaw.resources ?? []
+  ).map((resourcePath) => {
+    const normalizedPath = normalizeManifestPath(resourcePath);
+    const resourceFile = path.join(resourceRoot, normalizedPath);
+    if (!existsSync(resourceFile)) {
+      panic(`${kind}/${slug}: resource file not found: ${normalizedPath}`);
+    }
+    const content = readFileSync(resourceFile, "utf-8");
+    return {
+      content,
+      path: normalizedPath,
+      sizeBytes: Buffer.byteLength(content, "utf-8"),
+    };
   });
-  assertGeneratedFileCurrent({
-    content: installPayloadsOutput,
-    path: installPayloadsOutputPath,
-  });
-} else {
-  writeFileSync(outputPath, output);
-  writeFileSync(installPayloadsOutputPath, installPayloadsOutput);
+  return {
+    bodyLiteral: JSON.stringify(readFileSync(bodyFile, "utf-8")),
+    resourceFilesLiteral: JSON.stringify(resourceFiles),
+    slugLiteral: JSON.stringify(slug),
+  };
+}
+
+// Icons are inlined as inert image data URLs. SVGs are encoded rather
+// than injected as markup so contributor-provided icons cannot execute
+// active content in the app context.
+function iconLiteralFor(folder: string): string {
+  const iconPng = path.join(folder, "icon.png");
+  const iconSvg = path.join(folder, "icon.svg");
+  if (existsSync(iconPng)) {
+    const base64 = readFileSync(iconPng).toString("base64");
+    return JSON.stringify(`data:image/png;base64,${base64}`);
+  }
+  if (existsSync(iconSvg)) {
+    const base64 = Buffer.from(
+      readFileSync(iconSvg, "utf-8"),
+      "utf-8",
+    ).toString("base64");
+    return JSON.stringify(`data:image/svg+xml;base64,${base64}`);
+  }
+  return "null";
 }
 
 function assertGeneratedFileCurrent({
