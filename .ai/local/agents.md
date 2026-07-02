@@ -34,3 +34,34 @@ The `stella-docs` MCP server provides on-demand access to library documentation 
 `WebSearch` directly.
 
 **Setup:** run `bun run setup:mcp` once after cloning.
+
+## Cursor Cloud specific instructions
+
+The base VM already has Bun (`~/.bun/bin`, on `PATH` via `~/.bashrc`) and Docker
+installed; the startup update script runs `bun install`. Standard commands live in
+`README.md`, `CONTRIBUTING.md`, and root `package.json` scripts; the notes below are
+only the non-obvious caveats for this environment.
+
+- **Start the Docker daemon first.** There is no systemd auto-start here, so `docker`
+  commands fail until the daemon runs. Start it once per session in the background
+  (e.g. `sudo dockerd` in a tmux session) and confirm with `docker ps`. The daemon is
+  configured with the `fuse-overlayfs` storage driver and iptables-legacy for
+  docker-in-docker.
+- **Run everything with `bun run dev --no-browser`.** The dev-runner
+  (`packages/scripts/src/dev-runner.ts`) brings up the Docker infra (Postgres 5432,
+  Valkey 6379, MinIO 9000/9001, Gotenberg 3003), copies `apps/{api,web}/.env` from
+  `.env.example`, applies DB migrations, and starts the API (3001) and web (3000). It
+  exits if any child dies, so a single background process covers the whole stack. Use
+  `bun run dev:api` or `bun run dev:web` for a focused loop.
+- **Auth is passwordless email OTP; no SMTP catcher runs.** `EMAIL_PROVIDER=smtp`
+  points at `localhost:1025`, which is not running, so verification emails are not
+  delivered. In dev the OTP is printed to the API log as
+  `[DEV] OTP for <email>: <code>` and is also fetchable via
+  `GET http://localhost:3001/dev-public/last-otp?email=<email>` (dev-only, 404 in
+  prod). Use the log line to complete sign-in/sign-up when testing.
+- **Mock AI is on by default** (`USE_MOCK_AI="true"` in `apps/api/.env.example`), so no
+  AI provider key is needed for local runs.
+- **`bun run verify` / `sync-ai:check` need the `.ai/shared` submodule.** It is not part
+  of the base checkout; run `git submodule update --init .ai/shared` first, otherwise
+  the "AI skill sync" step errors out.
+- Optional demo data: `bun --filter @stll/api db:seed-test-user` and `db:seed-dev`.
