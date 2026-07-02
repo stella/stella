@@ -237,6 +237,24 @@ const envApi = createEnv({
       ),
     ),
 
+    /**
+     * API token for Mexico's INEGI DENUE
+     * (https://www.inegi.org.mx/servicios/api_denue.html). Required
+     * whenever the DENUE business-data adapter is exposed; without it
+     * the runtime marks the adapter unavailable instead of surfacing a
+     * registry tool that will fail.
+     */
+    INEGI_DENUE_API_TOKEN: v.optional(
+      v.pipe(
+        v.string(),
+        v.trim(),
+        v.minLength(
+          1,
+          "INEGI_DENUE_API_TOKEN must be a non-empty token from https://www.inegi.org.mx/app/api/denue/v1/tokenVerify.aspx.",
+        ),
+      ),
+    ),
+
     /** Optional hosted usage integration settings. */
     HOSTED_USAGE_WEBHOOK_SECRET: v.optional(
       v.pipe(v.string(), v.minLength(16)),

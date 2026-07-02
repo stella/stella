@@ -44,6 +44,17 @@ import {
   searchByName as searchCompaniesHouseByName,
 } from "@stll/business-registries/companies-house";
 import {
+  DenueAPIError,
+  DenueAuthError,
+  type DenueEstablishment,
+  DenueRequestError,
+  type DenueSearchResult,
+  DenueValidationError,
+  lookupByEstablishmentId,
+  normalizeEstablishmentId,
+  searchByName as searchDenueByName,
+} from "@stll/business-registries/denue";
+import {
   EdgarAPIError,
   type EdgarCompany,
   EdgarRequestError,
@@ -137,6 +148,7 @@ export const BUSINESS_REGISTRY_SLUGS = [
   "ares",
   "brreg",
   "companies-house",
+  "denue",
   "edgar",
   "gcis",
   "krs",
@@ -185,6 +197,7 @@ export type BusinessRegistryHitDetails =
   | { registry: "ares"; company: AresCompany }
   | { registry: "brreg"; entity: BrregEntity }
   | { registry: "companies-house"; company: CompaniesHouseCompany }
+  | { registry: "denue"; establishment: DenueEstablishment }
   | { registry: "edgar"; company: EdgarCompany }
   | { registry: "gcis"; company: GcisCompany }
   | { registry: "krs"; entity: KrsEntity }
@@ -614,6 +627,129 @@ const COMPANIES_HOUSE_HANDLER: RegistryHandler = {
   },
   isDeployAvailable: isCompaniesHouseDeployAvailable,
   mapError: mapCompaniesHouseError,
+};
+
+// ---------------------------------------------------------------------------
+// INEGI DENUE (Mexico)
+// ---------------------------------------------------------------------------
+
+const denueEstablishmentToHit = (
+  establishment: DenueEstablishment,
+): BusinessRegistryHit => ({
+  registry: "denue",
+  id: establishment.id,
+  name: establishment.name,
+  // DENUE is an establishment / economic-unit directory. It exposes
+  // legal name and economic activity, but not a corporate legal-form
+  // classification, so keep the cross-registry field unambiguous.
+  legalForm: null,
+  address: establishment.address
+    ? {
+        line1: establishment.address.line1,
+        line2: establishment.address.line2,
+        postalCode: establishment.address.postalCode,
+        city:
+          establishment.address.municipality ?? establishment.address.locality,
+        region: establishment.address.state,
+        country: establishment.address.country,
+        textAddress: establishment.address.textAddress,
+      }
+    : null,
+  registryUrl: establishment.registryUrl,
+  // Carry legal name, activity class, employee stratum, coordinates,
+  // and contact fields for chat callers. The top-level shape remains
+  // intentionally limited to the cross-registry baseline.
+  details: { registry: "denue", establishment },
+});
+
+const denueSearchResultToHit = (
+  result: DenueSearchResult,
+): BusinessRegistryHit => ({
+  registry: "denue",
+  id: result.id,
+  name: result.name,
+  legalForm: null,
+  address: result.address
+    ? {
+        line1: null,
+        line2: null,
+        postalCode: null,
+        city: null,
+        region: null,
+        country: "MX",
+        textAddress: result.address,
+      }
+    : null,
+  registryUrl: result.registryUrl,
+});
+
+const mapDenueError = (error: unknown): HandlerError | null => {
+  if (error instanceof DenueValidationError) {
+    return new HandlerError({ status: 400, message: error.message });
+  }
+  if (error instanceof DenueAuthError) {
+    return new HandlerError({
+      status: 502,
+      message: `INEGI DENUE API token not configured or rejected: ${error.message}`,
+    });
+  }
+  if (error instanceof DenueAPIError) {
+    return new HandlerError({
+      status: 502,
+      message: `INEGI DENUE API error: ${error.message}`,
+    });
+  }
+  if (error instanceof DenueRequestError) {
+    return new HandlerError({
+      status: 502,
+      message: `INEGI DENUE request failed: ${error.message}`,
+    });
+  }
+  return null;
+};
+
+// The handler resolves the INEGI token at call time rather than at
+// module load so importing dispatch.ts remains side-effect free in
+// worker/test contexts that do not run full env validation.
+const INEGI_DENUE_API_TOKEN_ENV_VAR = "INEGI_DENUE_API_TOKEN";
+
+export const isDenueDeployAvailable = (): boolean =>
+  Boolean(process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim());
+
+const requireDenueApiToken = (): string => {
+  const token = process.env[INEGI_DENUE_API_TOKEN_ENV_VAR]?.trim();
+  if (!token) {
+    throw new DenueAuthError(
+      "INEGI_DENUE_API_TOKEN is not configured. Get a token at https://www.inegi.org.mx/app/api/denue/v1/tokenVerify.aspx and set the env var.",
+    );
+  }
+  return token;
+};
+
+const DENUE_HANDLER: RegistryHandler = {
+  slug: "denue",
+  country: "MX",
+  nativeToolSlug: "denue",
+  // Shape check only: DENUE establishment Ids are numeric. Full
+  // validation lives in lookupByEstablishmentId and surfaces as
+  // DenueValidationError -> HTTP 400.
+  isCanonicalId: (input) => /^\d{1,12}$/u.test(normalizeEstablishmentId(input)),
+  lookup: async (input) => {
+    const establishment = await lookupByEstablishmentId(input, {
+      token: requireDenueApiToken(),
+    });
+    return establishment ? denueEstablishmentToHit(establishment) : null;
+  },
+  search: async (input, options) => {
+    const results = await searchDenueByName(
+      input,
+      { token: requireDenueApiToken() },
+      options,
+    );
+    return results.map(denueSearchResultToHit);
+  },
+  isDeployAvailable: isDenueDeployAvailable,
+  mapError: mapDenueError,
 };
 
 // ---------------------------------------------------------------------------
@@ -1310,6 +1446,7 @@ export const BUSINESS_REGISTRY_DISPATCH: Record<
   ares: ARES_HANDLER,
   brreg: BRREG_HANDLER,
   "companies-house": COMPANIES_HOUSE_HANDLER,
+  denue: DENUE_HANDLER,
   edgar: EDGAR_HANDLER,
   gcis: GCIS_HANDLER,
   krs: KRS_HANDLER,

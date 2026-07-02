@@ -15,7 +15,8 @@ const TOOL_DESCRIPTION_BASE =
   "Look up companies in official national business registries. " +
   "Use jurisdiction for the country whose registry should be searched, " +
   "for example CZ for the Czech ARES register or NO for " +
-  "Brønnøysundregistrene in Norway. Pass EU to validate an EU VAT " +
+  "Brønnøysundregistrene in Norway, or MX for Mexico's INEGI " +
+  "DENUE establishment directory. Pass EU to validate an EU VAT " +
   "number against VIES (the VAT Information Exchange System); the " +
   "query must then be a fully-qualified VAT number including the " +
   "2-letter country prefix, e.g. DE143593636. Search by company " +
@@ -24,7 +25,8 @@ const TOOL_DESCRIPTION_BASE =
 
 const QUERY_DESCRIPTION_BASE =
   "Company registration number (e.g. Czech IČO, Norwegian orgnr, " +
-  "fully-qualified EU VAT such as DE143593636) or company name. " +
+  "Mexican DENUE establishment Id, fully-qualified EU VAT such as " +
+  "DE143593636) or company name. " +
   "Numeric inputs that match the registry's canonical ID format " +
   "route to a direct lookup; everything else is treated as a " +
   "name search where the selected registry supports name search.";
