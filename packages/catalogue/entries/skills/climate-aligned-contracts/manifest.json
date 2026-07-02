@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "skill",
+  "source": "github",
+  "slug": "climate-aligned-contracts",
+  "displayName": "Climate-Aligned Contracts",
+  "description": "Drafts, adapts, and reviews contract clauses that embed decarbonization objectives following The Chancery Lane Project's methodology: net-zero commitments, carbon accounting, supply-chain decarbonization, and sustainability-linked terms. Provides clause templates and house-style guidance for climate-conscious drafting.",
+  "author": "Felix Cohen",
+  "license": "MIT",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://github.com/lawve-ai/awesome-legal-skills/tree/main/skills/climate-aligned-contracts-tclp",
+  "tags": ["environmental", "commercial", "energy"],
+  "repo": "lawve-ai/awesome-legal-skills",
+  "rev": "7f58aaf1fbc7b12904b15b622edb1f8ac0742f5a",
+  "directory": "skills/climate-aligned-contracts-tclp"
+}
