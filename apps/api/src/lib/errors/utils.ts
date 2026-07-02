@@ -3,6 +3,7 @@ import { appendFile, mkdir, stat, truncate } from "node:fs/promises";
 import path from "node:path";
 
 import { envBase } from "@/api/env-base";
+import { pgErrorFields } from "@/api/lib/pg-error";
 
 /**
  * Extract a safe, structural error identifier for observability.
@@ -342,6 +343,11 @@ export const errorFingerprint = (error: unknown): ErrorFingerprint => {
       fingerprint["error.cause.frame"] = causeFrame;
     }
   }
+  // A Drizzle query failure wraps the driver's PostgresError as a cause; its
+  // SQLSTATE and schema identifiers are the actionable, non-PII detail. Without
+  // this the 5xx fingerprint carries only error types, and diagnosis needs the
+  // RDS server logs.
+  Object.assign(fingerprint, pgErrorFields(error));
   return fingerprint;
 };
 
