@@ -272,6 +272,19 @@ jobs:
           bun apps/api/scripts/exact-mirror-guard.ts --self-test
           bun apps/api/scripts/exact-mirror-guard.ts
 
+      - name: MCP coverage guard
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        # Every safe-handler config must declare an `mcp` disposition (a
+        # typecheck-enforced McpExposure). This guard imports every handler
+        # module, verifies each disposition is well-formed, that every
+        # tool/covered reference names a real static MCP tool, that no registry
+        # tool is orphaned, and that the `pending` baseline only ever shrinks
+        # (a new pending endpoint fails). The --self-test run first proves the
+        # ratchet detectors still fire, so a broken guard cannot pass silently.
+        run: |
+          bun apps/api/scripts/mcp-coverage-guard.ts --self-test
+          bun apps/api/scripts/mcp-coverage-guard.ts
+
       - name: Knip production dependency checks
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         # Static gate paired with the image compile/boot smokes

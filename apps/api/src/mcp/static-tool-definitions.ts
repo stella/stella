@@ -18,6 +18,19 @@ export const DEFAULT_MCP_TOOL_DEFINITIONS = [
 ] as const satisfies readonly McpToolDefinition[];
 
 /**
+ * The closed set of curated static MCP tool names, derived from the single
+ * default registry. Source of truth for the `McpToolName` type
+ * (`apps/api/src/lib/api-handlers.ts`, type-only import to avoid a runtime
+ * cycle) and for the runtime coverage guard
+ * (`apps/api/scripts/mcp-coverage-guard.ts`). Because the registry is
+ * declared `as const`, `.map` preserves the literal name union, so
+ * `(typeof MCP_STATIC_TOOL_NAMES)[number]` is the exact tool-name union.
+ */
+export const MCP_STATIC_TOOL_NAMES = DEFAULT_MCP_TOOL_DEFINITIONS.map(
+  (tool) => tool.name,
+);
+
+/**
  * Default -> anonymized scope remap. A tool available in anonymized mode keeps
  * its schema and (usually) description but is advertised under the paired
  * `stella:*_anonymized` scope so anonymized-mode tokens cannot reach the
