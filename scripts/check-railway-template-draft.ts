@@ -97,6 +97,28 @@ const readManifest = (): TemplateManifest => {
   return { services };
 };
 
+const readRailwayTokenFromConfig = (config: unknown) => {
+  if (!isRecord(config) || !isRecord(config["user"])) {
+    throw new RailwayTemplateDraftError(
+      "Railway CLI config does not include a user section",
+    );
+  }
+
+  const accessToken = config["user"]["accessToken"];
+  if (typeof accessToken === "string" && accessToken.trim()) {
+    return accessToken;
+  }
+
+  const token = config["user"]["token"];
+  if (typeof token === "string" && token.trim()) {
+    return token;
+  }
+
+  throw new RailwayTemplateDraftError(
+    "Railway CLI config does not include an access token",
+  );
+};
+
 const readRailwayToken = () => {
   const fromEnv = process.env["RAILWAY_API_TOKEN"]?.trim();
   if (fromEnv) {
@@ -111,17 +133,7 @@ const readRailwayToken = () => {
   }
 
   const config = readJson(configPath);
-  if (
-    !isRecord(config) ||
-    !isRecord(config["user"]) ||
-    typeof config["user"]["accessToken"] !== "string"
-  ) {
-    throw new RailwayTemplateDraftError(
-      "Railway CLI config does not include an access token",
-    );
-  }
-
-  return config["user"]["accessToken"];
+  return readRailwayTokenFromConfig(config);
 };
 
 const graphql = async (
