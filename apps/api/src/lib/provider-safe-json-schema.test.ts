@@ -94,6 +94,24 @@ describe("projectToProviderSafeJsonSchema", () => {
     });
   });
 
+  test("lowers a scalar null type to nullable: true", () => {
+    const { schema, droppedKeywords } = projectToProviderSafeJsonSchema({
+      type: "null",
+    });
+
+    expect(schema).toEqual({ nullable: true });
+    expect(droppedKeywords).toEqual([]);
+  });
+
+  test("lowers a multi-type union with null regardless of position", () => {
+    const { schema, droppedKeywords } = projectToProviderSafeJsonSchema({
+      type: ["null", "string", "number"],
+    });
+
+    expect(schema).toEqual({ type: "string", nullable: true });
+    expect(droppedKeywords).toEqual(["type[1]"]);
+  });
+
   test("keeps the first entry of a bare type union and records the rest", () => {
     const { schema, droppedKeywords } = projectToProviderSafeJsonSchema({
       type: ["string", "number"],
