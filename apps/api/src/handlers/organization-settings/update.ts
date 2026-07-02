@@ -13,6 +13,7 @@ const updateOrganizationSettingsBodySchema = t.Object({
   matterNumberPattern: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   matterNumberPadding: t.Optional(t.Integer({ minimum: 1, maximum: 6 })),
   promptCachingEnabled: t.Optional(t.Boolean()),
+  memoryExtractionEnabled: t.Optional(t.Boolean()),
 });
 
 const config = {
@@ -53,17 +54,25 @@ const updateOrganizationSettings = createSafeRootHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
-        // Only touch promptCachingEnabled when the body carries it;
-        // omitting it from the upsert set keeps a concurrent toggle
-        // request from being clobbered by a stale read.
+        // Only touch the AI toggles when the body carries them; omitting
+        // them from the upsert set keeps a concurrent toggle request from
+        // being clobbered by a stale read.
         const wantsPromptCachingUpdate =
           body.promptCachingEnabled !== undefined;
-        const existing = wantsPromptCachingUpdate
-          ? await tx.query.organizationSettings.findFirst({
-              where: { organizationId: { eq: session.activeOrganizationId } },
-              columns: { promptCachingEnabled: true },
-            })
-          : undefined;
+        const wantsMemoryExtractionUpdate =
+          body.memoryExtractionEnabled !== undefined;
+        const existing =
+          wantsPromptCachingUpdate || wantsMemoryExtractionUpdate
+            ? await tx.query.organizationSettings.findFirst({
+                where: {
+                  organizationId: { eq: session.activeOrganizationId },
+                },
+                columns: {
+                  promptCachingEnabled: true,
+                  memoryExtractionEnabled: true,
+                },
+              })
+            : undefined;
 
         // Insert path needs schema defaults for any required column
         // the body did not carry. Matter columns are NOT NULL with
@@ -82,6 +91,9 @@ const updateOrganizationSettings = createSafeRootHandler(
             ...(wantsPromptCachingUpdate
               ? { promptCachingEnabled: body.promptCachingEnabled }
               : {}),
+            ...(wantsMemoryExtractionUpdate
+              ? { memoryExtractionEnabled: body.memoryExtractionEnabled }
+              : {}),
           })
           .onConflictDoUpdate({
             target: organizationSettings.organizationId,
@@ -94,6 +106,9 @@ const updateOrganizationSettings = createSafeRootHandler(
                 : {}),
               ...(wantsPromptCachingUpdate
                 ? { promptCachingEnabled: body.promptCachingEnabled }
+                : {}),
+              ...(wantsMemoryExtractionUpdate
+                ? { memoryExtractionEnabled: body.memoryExtractionEnabled }
                 : {}),
               updatedAt: new Date(),
             },
@@ -126,6 +141,16 @@ const updateOrganizationSettings = createSafeRootHandler(
                   },
                 }
               : {}),
+            ...(wantsMemoryExtractionUpdate &&
+            body.memoryExtractionEnabled !==
+              (existing?.memoryExtractionEnabled ?? false)
+              ? {
+                  memoryExtractionEnabled: {
+                    old: existing?.memoryExtractionEnabled ?? false,
+                    new: body.memoryExtractionEnabled,
+                  },
+                }
+              : {}),
           },
         });
       }),
@@ -140,6 +165,9 @@ const updateOrganizationSettings = createSafeRootHandler(
         : {}),
       ...(body.promptCachingEnabled !== undefined
         ? { promptCachingEnabled: body.promptCachingEnabled }
+        : {}),
+      ...(body.memoryExtractionEnabled !== undefined
+        ? { memoryExtractionEnabled: body.memoryExtractionEnabled }
         : {}),
     });
   },

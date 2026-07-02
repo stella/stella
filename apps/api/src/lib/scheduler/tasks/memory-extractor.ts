@@ -1,6 +1,5 @@
-import { generateText, Output } from "ai";
 import { panic, Result } from "better-result";
-import { asc, eq, isNull } from "drizzle-orm";
+import { and, asc, eq, isNull } from "drizzle-orm";
 import * as v from "valibot";
 
 import { rootDb } from "@/api/db/root";
@@ -8,15 +7,22 @@ import {
   aiMemories,
   chatThreadCompactions,
   chatThreads,
+  organizationSettings,
 } from "@/api/db/schema";
-import { getModelForRole } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
+import { resolveCaching } from "@/api/lib/ai-config";
+import {
+  loadOrgAIConfig,
+  loadPromptCachingPreference,
+} from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
 import { errorTag } from "@/api/lib/errors/utils";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
+import { createRootSafeDb } from "@/api/lib/root-scoped-db";
+import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 export const MEMORY_EXTRACTOR_TASK = "memory.extractor" as const;
 
@@ -103,6 +109,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
       break;
     }
 
+    // eslint-disable-next-line no-await-in-loop -- sequential by design: one background model call at a time keeps provider load bounded and the abort check between calls meaningful
     const candidatesResult = await extractCandidates(compaction, signal);
 
     if (Result.isError(candidatesResult)) {
@@ -124,6 +131,7 @@ export const extractMemoriesFromCompactions: SchedulerTask = async ({
       break;
     }
 
+    // eslint-disable-next-line no-await-in-loop -- persistence is ordered after its own model call; the compaction must be stamped before the next one is mined
     suggested += await persistSuggestions({
       candidates: candidatesResult.value,
       compaction,
@@ -154,7 +162,20 @@ const loadUnminedCompactions = async (): Promise<CompactionRow[]> => {
     })
     .from(chatThreadCompactions)
     .innerJoin(chatThreads, eq(chatThreads.id, chatThreadCompactions.threadId))
-    .where(isNull(chatThreadCompactions.memoryExtractedAt))
+    // Background extraction is opt-in per organization. The inner join to
+    // organization_settings skips any org whose settings row is missing,
+    // and the flag filter skips orgs that left it off, so background AI
+    // spend on an org's own provider key stays explicit (cost attribution).
+    .innerJoin(
+      organizationSettings,
+      eq(organizationSettings.organizationId, chatThreads.organizationId),
+    )
+    .where(
+      and(
+        isNull(chatThreadCompactions.memoryExtractedAt),
+        eq(organizationSettings.memoryExtractionEnabled, true),
+      ),
+    )
     .orderBy(asc(chatThreadCompactions.createdAt))
     .limit(EXTRACTION_BATCH_SIZE);
 
@@ -163,7 +184,7 @@ const loadUnminedCompactions = async (): Promise<CompactionRow[]> => {
     summaryMarkdown: row.summaryMarkdown,
     // chatThreads.userId is a bare text FK to user.id (not branded in the
     // schema); brand it at this boundary so downstream inserts stay typed.
-    threadUserId: toSafeId<"user">(row.threadUserId),
+    threadUserId: brandPersistedUserId(row.threadUserId),
     threadWorkspaceId: row.threadWorkspaceId,
     threadOrganizationId: row.threadOrganizationId,
     threadDataWorkspaceIds: row.threadDataWorkspaceIds,
@@ -181,24 +202,53 @@ const extractCandidates = async (
 ): Promise<Result<ExtractedCandidate[], unknown>> => {
   const summary = compaction.summaryMarkdown.slice(0, SUMMARY_MAX_CHARS);
 
-  // v1: background extraction always uses the platform-default model
-  // (orgConfig=null). Threading per-org BYOK config through the scheduler
-  // needs a decryption path that does not exist for the root connection
-  // yet; see concerns.
+  // Background extraction spends on the originating org's own provider key,
+  // so it routes through that org's BYOK config and prompt-caching
+  // preference and meters the call as background usage for cost attribution.
+  const [orgAIConfig, promptCachingEnabled] = await Promise.all([
+    loadOrgAIConfig(compaction.threadOrganizationId),
+    loadPromptCachingPreference(compaction.threadOrganizationId),
+  ]);
+
+  const analytics = createTanStackAIAnalyticsCallbacks({
+    feature: "memory.extractor",
+    modelRole: "fast",
+    orgAIConfig,
+    traceId: Bun.randomUUIDv7(),
+    usageMetering: {
+      actionType: "background",
+      organizationId: compaction.threadOrganizationId,
+      // The scheduler runs on the root connection; scope a SafeDb to the
+      // originating tenant so the usage-event write lands under RLS.
+      safeDb: createRootSafeDb({
+        organizationId: compaction.threadOrganizationId,
+        userId: compaction.threadUserId,
+        workspaceIds: compaction.threadWorkspaceId
+          ? [compaction.threadWorkspaceId]
+          : [],
+      }),
+      serviceTier: "batch",
+      userId: compaction.threadUserId,
+      workspaceId: compaction.threadWorkspaceId,
+    },
+  });
+
   const result = await Result.tryPromise({
     try: async () =>
-      await generateText({
-        model: getModelForRole("fast", null, {
-          promptCachingEnabled: false,
-          scopeKey: null,
-          organizationId: compaction.threadOrganizationId,
-          serviceTier: "batch",
+      await generateTanStackObjectForRole({
+        role: "fast",
+        serviceTier: "batch",
+        organizationId: compaction.threadOrganizationId,
+        orgAIConfig,
+        analytics,
+        caching: resolveCaching({
+          promptCachingEnabled,
+          role: "fast",
+          scopeKey: compaction.compactionId,
         }),
         system: EXTRACTION_SYSTEM_PROMPT,
         prompt: summary,
-        output: Output.object({
-          schema: strictOutputSchema(extractionSchema),
-        }),
+        outputSchema: extractionSchema,
         maxOutputTokens: MEMORY_MAX_OUTPUT_TOKENS,
         // Combine the per-call timeout with the scheduler's shutdown signal
         // so a graceful stop cancels an in-flight model call immediately.
@@ -211,10 +261,11 @@ const extractCandidates = async (
   });
 
   if (Result.isError(result)) {
+    analytics.captureError(result.error);
     return Result.err(result.error);
   }
 
-  return Result.ok(normalizeCandidates(result.value.output.candidates));
+  return Result.ok(normalizeCandidates(result.value.candidates));
 };
 
 const normalizeCandidates = (
@@ -274,16 +325,23 @@ type BuildSuggestionRowOptions = {
   compaction: CompactionRow;
 };
 
+const resolveSourceDataWorkspaceIds = (
+  compaction: CompactionRow,
+): SafeId<"workspace">[] => {
+  if (compaction.threadDataWorkspaceIds.length > 0) {
+    return compaction.threadDataWorkspaceIds;
+  }
+  if (compaction.threadWorkspaceId) {
+    return [compaction.threadWorkspaceId];
+  }
+  return [];
+};
+
 const buildSuggestionRow = ({
   candidate,
   compaction,
 }: BuildSuggestionRowOptions): SuggestionInsert[] => {
-  const sourceDataWorkspaceIds =
-    compaction.threadDataWorkspaceIds.length > 0
-      ? compaction.threadDataWorkspaceIds
-      : compaction.threadWorkspaceId
-        ? [compaction.threadWorkspaceId]
-        : [];
+  const sourceDataWorkspaceIds = resolveSourceDataWorkspaceIds(compaction);
 
   // Scope is derived from the kind, never trusted from the model, so a
   // matter-specific kind can only ever land at scope='workspace' (matching

@@ -75,4 +75,8 @@ CREATE POLICY "ai_memory_update" ON "ai_memories" AS PERMISSIVE FOR UPDATE TO "s
 		OR source_data_workspace_ids <@ (SELECT current_setting('app.workspace_ids', true))::uuid[]
 	)
 );--> statement-breakpoint
-CREATE POLICY "ai_memory_no_delete" ON "ai_memories" AS RESTRICTIVE FOR DELETE TO "stella" USING (false);
+CREATE POLICY "ai_memory_no_delete" ON "ai_memories" AS RESTRICTIVE FOR DELETE TO "stella" USING (false);--> statement-breakpoint
+-- Background memory extraction is opt-in per organization; default off.
+-- Adding a boolean column with a constant default is a metadata-only
+-- change on modern Postgres, so no table rewrite and no lock wait.
+ALTER TABLE "organization_settings" ADD COLUMN "memory_extraction_enabled" boolean DEFAULT false NOT NULL;

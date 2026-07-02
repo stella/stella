@@ -2470,6 +2470,16 @@ export const organizationSettings = p.pgTable(
       .boolean("prompt_caching_enabled")
       .notNull()
       .default(true),
+    /**
+     * Whether stella may run background memory extraction over this
+     * organization's compacted chat threads. Off by default so the
+     * background AI spend on the organization's own provider key stays
+     * an explicit opt-in (cost attribution, not a paid feature).
+     */
+    memoryExtractionEnabled: p
+      .boolean("memory_extraction_enabled")
+      .notNull()
+      .default(false),
     updatedAt: p.timestamp("updated_at").notNull().defaultNow(),
   },
   () => [...orgPolicies()],
