@@ -14,14 +14,39 @@
     "stella-files": {}
   },
   "services": {
+    "Postgres": {
+      "variables": {
+        "DATABASE_PUBLIC_URL": "postgresql://${{PGUSER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}/${{PGDATABASE}}",
+        "DATABASE_URL": "postgresql://${{PGUSER}}:${{POSTGRES_PASSWORD}}@${{RAILWAY_PRIVATE_DOMAIN}}:5432/${{PGDATABASE}}",
+        "PGDATA": "/var/lib/postgresql/data/pgdata",
+        "PGDATABASE": "${{POSTGRES_DB}}",
+        "PGHOST": "${{RAILWAY_PRIVATE_DOMAIN}}",
+        "PGPASSWORD": "${{POSTGRES_PASSWORD}}",
+        "PGPORT": "5432",
+        "PGUSER": "${{POSTGRES_USER}}",
+        "POSTGRES_DB": "railway",
+        "POSTGRES_PASSWORD": "${{secret(32, \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\")}}",
+        "POSTGRES_USER": "postgres",
+        "RAILWAY_DEPLOYMENT_DRAINING_SECONDS": "60",
+        "SSL_CERT_DAYS": "820"
+      }
+    },
+    "Redis": {
+      "variables": {
+        "REDISHOST": "${{RAILWAY_PRIVATE_DOMAIN}}",
+        "REDISPASSWORD": "${{REDIS_PASSWORD}}",
+        "REDISPORT": "6379",
+        "REDISUSER": "default",
+        "REDIS_PASSWORD": "${{secret(32, \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\")}}",
+        "REDIS_PUBLIC_URL": "redis://default:${{REDIS_PASSWORD}}@${{RAILWAY_TCP_PROXY_DOMAIN}}:${{RAILWAY_TCP_PROXY_PORT}}",
+        "REDIS_URL": "redis://${{REDISUSER}}:${{REDIS_PASSWORD}}@${{REDISHOST}}:${{REDISPORT}}"
+      }
+    },
     "api": {
       "configFile": "/railway.json",
       "publicNetworking": true,
       "requiredUserInputs": {
-        "SMTP_HOST": "SMTP server host for sign-in and invitation emails.",
-        "SMTP_PASSWORD": "SMTP password or API key.",
-        "SMTP_PORT": "SMTP server port.",
-        "SMTP_USERNAME": "SMTP username.",
+        "SMTP_PASSWORD": "SMTP password or API key for sign-in and invitation emails.",
         "TRANSACTIONAL_EMAIL_FROM": "From address for transactional emails."
       },
       "variables": {
@@ -40,10 +65,10 @@
         "S3_ENDPOINT": "${{stella-files.ENDPOINT}}",
         "S3_REGION": "${{stella-files.REGION}}",
         "S3_SECRET_ACCESS_KEY": "${{stella-files.SECRET_ACCESS_KEY}}",
-        "SMTP_HOST": "smtp.example.invalid",
+        "SMTP_HOST": "smtp.resend.com",
         "SMTP_PASSWORD": "smtp-password",
         "SMTP_PORT": "587",
-        "SMTP_USERNAME": "smtp-user",
+        "SMTP_USERNAME": "resend",
         "TRANSACTIONAL_EMAIL_FROM": "noreply@example.invalid"
       }
     },
@@ -58,7 +83,7 @@
     "gotenberg": {
       "publicNetworking": false,
       "variables": {
-        "API_ENABLE_BASIC_AUTH": "${{secret(1, \"t\")}}${{secret(1, \"r\")}}${{secret(1, \"u\")}}${{secret(1, \"e\")}}",
+        "API_ENABLE_BASIC_AUTH": "true",
         "GOTENBERG_API_BASIC_AUTH_PASSWORD": "${{secret(64, \"abcdef0123456789\")}}",
         "GOTENBERG_API_BASIC_AUTH_USERNAME": "${{secret(32, \"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ\")}}"
       }

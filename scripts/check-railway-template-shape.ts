@@ -15,6 +15,8 @@ const WEB_VITE_CONFIG_PATH = "apps/web/vite.config.ts";
 const API_DOCKERFILE_PATH = "apps/api/Dockerfile";
 const WEB_DOCKERFILE_PATH = "apps/web/Dockerfile";
 const railwayTemplateReference = (value: string) => `\${{${value}}}`;
+const railwaySecretReference = (length: number, alphabet: string) =>
+  railwayTemplateReference(`secret(${String(length)}, "${alphabet}")`);
 const railwayPublicUrlReference = (serviceName: string) =>
   `https://${railwayTemplateReference(`${serviceName}.RAILWAY_PUBLIC_DOMAIN`)}`;
 
@@ -324,12 +326,19 @@ expect(
 const apiTemplate = getRecord(templateManifest, "api");
 const webTemplate = getRecord(templateManifest, "web");
 const gotenbergTemplate = getRecord(templateManifest, "gotenberg");
+const postgresTemplate = getRecord(templateManifest, "Postgres");
+const redisTemplate = getRecord(templateManifest, "Redis");
 const apiTemplateVariables = getStringRecord(apiTemplate, "variables");
 const webTemplateVariables = getStringRecord(webTemplate, "variables");
 const gotenbergTemplateVariables = getStringRecord(
   gotenbergTemplate,
   "variables",
 );
+const postgresTemplateVariables = getStringRecord(
+  postgresTemplate,
+  "variables",
+);
+const redisTemplateVariables = getStringRecord(redisTemplate, "variables");
 const apiRequiredUserInputs = getStringRecord(
   apiTemplate,
   "requiredUserInputs",
@@ -348,30 +357,24 @@ expect(
   "Gotenberg must stay private in the template",
 );
 
-const expectedUserInputs = [
-  "SMTP_HOST",
-  "SMTP_PASSWORD",
-  "SMTP_PORT",
-  "SMTP_USERNAME",
-  "TRANSACTIONAL_EMAIL_FROM",
-];
+const expectedUserInputs = ["SMTP_PASSWORD", "TRANSACTIONAL_EMAIL_FROM"];
 expect(
   JSON.stringify(Object.keys(apiRequiredUserInputs).sort()) ===
     JSON.stringify(expectedUserInputs),
-  "Railway template must only require SMTP_HOST, SMTP_PASSWORD, SMTP_PORT, SMTP_USERNAME, and TRANSACTIONAL_EMAIL_FROM",
+  "Railway template must only require SMTP_PASSWORD and TRANSACTIONAL_EMAIL_FROM",
 );
 
 const expectedPlaceholderApiVariables: Record<string, string> = {
-  SMTP_HOST: "smtp.example.invalid",
+  SMTP_HOST: "smtp.resend.com",
   SMTP_PASSWORD: "smtp-password",
   SMTP_PORT: "587",
-  SMTP_USERNAME: "smtp-user",
+  SMTP_USERNAME: "resend",
   TRANSACTIONAL_EMAIL_FROM: "noreply@example.invalid",
 };
 for (const [key, value] of Object.entries(expectedPlaceholderApiVariables)) {
   expect(
     apiTemplateVariables[key] === value,
-    `API template variable ${key} must use the inert placeholder ${value}`,
+    `API template variable ${key} must use the template default ${value}`,
   );
 }
 
@@ -393,6 +396,50 @@ for (const [key, value] of Object.entries(expectedApiReferenceVariables)) {
   );
 }
 
+const expectedPostgresVariables: Record<string, string> = {
+  DATABASE_PUBLIC_URL: `postgresql://${railwayTemplateReference("PGUSER")}:${railwayTemplateReference("POSTGRES_PASSWORD")}@${railwayTemplateReference("RAILWAY_TCP_PROXY_DOMAIN")}:${railwayTemplateReference("RAILWAY_TCP_PROXY_PORT")}/${railwayTemplateReference("PGDATABASE")}`,
+  DATABASE_URL: `postgresql://${railwayTemplateReference("PGUSER")}:${railwayTemplateReference("POSTGRES_PASSWORD")}@${railwayTemplateReference("RAILWAY_PRIVATE_DOMAIN")}:5432/${railwayTemplateReference("PGDATABASE")}`,
+  PGDATA: "/var/lib/postgresql/data/pgdata",
+  PGDATABASE: railwayTemplateReference("POSTGRES_DB"),
+  PGHOST: railwayTemplateReference("RAILWAY_PRIVATE_DOMAIN"),
+  PGPASSWORD: railwayTemplateReference("POSTGRES_PASSWORD"),
+  PGPORT: "5432",
+  PGUSER: railwayTemplateReference("POSTGRES_USER"),
+  POSTGRES_DB: "railway",
+  POSTGRES_PASSWORD: railwaySecretReference(
+    32,
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  ),
+  POSTGRES_USER: "postgres",
+  RAILWAY_DEPLOYMENT_DRAINING_SECONDS: "60",
+  SSL_CERT_DAYS: "820",
+};
+for (const [key, value] of Object.entries(expectedPostgresVariables)) {
+  expect(
+    postgresTemplateVariables[key] === value,
+    `Postgres template variable ${key} must be ${value}`,
+  );
+}
+
+const expectedRedisVariables: Record<string, string> = {
+  REDISHOST: railwayTemplateReference("RAILWAY_PRIVATE_DOMAIN"),
+  REDISPASSWORD: railwayTemplateReference("REDIS_PASSWORD"),
+  REDISPORT: "6379",
+  REDISUSER: "default",
+  REDIS_PASSWORD: railwaySecretReference(
+    32,
+    "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ",
+  ),
+  REDIS_PUBLIC_URL: `redis://default:${railwayTemplateReference("REDIS_PASSWORD")}@${railwayTemplateReference("RAILWAY_TCP_PROXY_DOMAIN")}:${railwayTemplateReference("RAILWAY_TCP_PROXY_PORT")}`,
+  REDIS_URL: `redis://${railwayTemplateReference("REDISUSER")}:${railwayTemplateReference("REDIS_PASSWORD")}@${railwayTemplateReference("REDISHOST")}:${railwayTemplateReference("REDISPORT")}`,
+};
+for (const [key, value] of Object.entries(expectedRedisVariables)) {
+  expect(
+    redisTemplateVariables[key] === value,
+    `Redis template variable ${key} must be ${value}`,
+  );
+}
+
 for (const key of ["BETTER_AUTH_SECRET", "CONTENT_ENCRYPTION_KEY"]) {
   expect(
     apiTemplateVariables[key]?.includes("${{secret(") ?? false,
@@ -411,10 +458,8 @@ for (const key of [
 }
 
 expect(
-  gotenbergTemplateVariables["API_ENABLE_BASIC_AUTH"]?.includes(
-    "${{secret(",
-  ) ?? false,
-  "Gotenberg basic auth toggle must be generated instead of prompting users",
+  gotenbergTemplateVariables["API_ENABLE_BASIC_AUTH"] === "true",
+  "Gotenberg basic auth toggle must be prefilled instead of prompting users",
 );
 expect(
   apiTemplateVariables["PUBLIC_URL"] === railwayPublicUrlReference("api"),
@@ -454,11 +499,14 @@ expect(
 
 const forbiddenTemplateVariablePattern =
   /^(?:VITE_)?FEATURE_|^VITE_SELFHOST$|^NODE_ENV$|^EMAIL_PROVIDER$|^S3_CREDENTIALS_PROVIDER$/u;
-for (const [serviceName, variables] of [
+const templateVariableSets: [string, Record<string, string>][] = [
   ["api", apiTemplateVariables],
   ["web", webTemplateVariables],
   ["gotenberg", gotenbergTemplateVariables],
-]) {
+  ["Postgres", postgresTemplateVariables],
+  ["Redis", redisTemplateVariables],
+];
+for (const [serviceName, variables] of templateVariableSets) {
   for (const key of Object.keys(variables)) {
     expect(
       !forbiddenTemplateVariablePattern.test(key),

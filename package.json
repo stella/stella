@@ -29,6 +29,7 @@
     "i18n:check": "turbo run i18n:check --",
     "i18n:sync": "turbo run i18n:sync --",
     "check:model-catalog": "bun packages/scripts/src/model-catalog-upstream.ts",
+    "check:railway-template-draft": "bun scripts/check-railway-template-draft.ts",
     "check:railway-template": "bun scripts/check-railway-template-shape.ts",
     "sync:railway-template-source": "bun scripts/sync-railway-template-source.ts",
     "test": "turbo run test",
