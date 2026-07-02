@@ -41,7 +41,12 @@ import {
   refreshS3,
 } from "@/api/lib/s3";
 
-import { createCaseLawSource, findCaseLawSource, ingestionDb } from "../db";
+import {
+  backfillDb,
+  createCaseLawSource,
+  findCaseLawSource,
+  ingestionDb,
+} from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
 
 const formatLogDetail = (detail: unknown): string => {
@@ -159,15 +164,21 @@ const WATCHDOG_MAX_STARVED_TICKS = 3;
 const CYCLE_HARD_DEADLINE_MS = 45 * 60 * 1000;
 
 // Hard wall-clock backstop for one backfill batch (the corpus-index and
-// search-index loops). Every external await inside a batch is already
-// individually bounded — corpus S3 reads via the corpus-storage ceiling, the
-// database via the ingestion handle, the corpus-index engine via its own HTTP
-// request timeout — so a healthy batch finishes well within this. It exists
-// only to catch a future unbounded await: if one wedges, the batch never
-// returns and the loop stops making progress silently while the event loop
-// stays responsive (so the lag watchdog cannot see it). Sized far above the
-// worst case of a fully-bounded batch so it never fires on a merely-slow one.
-const BACKFILL_HARD_DEADLINE_MS = 20 * 60 * 1000;
+// search-index loops). Every external await inside a batch is individually
+// bounded — corpus S3 reads via the corpus-storage ceiling, the database via
+// the dedicated backfill transaction handle in ../db (statement_timeout +
+// wall-clock grace), the corpus-index engine via its own HTTP request
+// timeout — so this is a pure backstop: it guards against any FUTURE
+// unbounded await slipping into a batch, where the batch would never return
+// and the loop would stop making progress silently while the event loop
+// stays responsive (invisible to the lag watchdog). Sizing basis: the
+// realistic worst case of a fully-bounded batch is batch size × per-item
+// bounded I/O over the drain concurrency (e.g. 20 items drained 4 at a
+// time, reads bounded at a minute each) plus a handful of bounded DB
+// transactions. 45 minutes — matching the adapter cycle's ceiling — sits far
+// above that with headroom, so it never fires on a merely-slow batch while a
+// genuine wedge still exits within a bounded window.
+const BACKFILL_HARD_DEADLINE_MS = 45 * 60 * 1000;
 
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -571,7 +582,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         cycle = await runWithHardDeadline(
           adapterKey,
           CYCLE_HARD_DEADLINE_MS,
-          () => runOneCycle(adapterKey, name),
+          async () => await runOneCycle(adapterKey, name),
         );
       } finally {
         cycleSemaphore.release();
@@ -778,7 +789,8 @@ export const runCaseLawIngest = async (
         const indexed = await runWithHardDeadline(
           "search-index",
           BACKFILL_HARD_DEADLINE_MS,
-          () => backfillSearchIndex(ingestionDb, SEARCH_INDEX_BATCH_SIZE),
+          async () =>
+            await backfillSearchIndex(backfillDb, SEARCH_INDEX_BATCH_SIZE),
         );
         if (indexed > 0) {
           logInfo(`[search-index] Indexed ${indexed} decisions (backfill)`);
@@ -838,9 +850,9 @@ export const runCaseLawIngest = async (
         const indexed = await runWithHardDeadline(
           "corpus-index",
           BACKFILL_HARD_DEADLINE_MS,
-          () =>
-            backfillCorpusIndex(
-              ingestionDb,
+          async () =>
+            await backfillCorpusIndex(
+              backfillDb,
               LIMITS.corpusIndexBatchSize,
               generation,
             ),
@@ -870,9 +882,9 @@ export const runCaseLawIngest = async (
         const indexed = await runWithHardDeadline(
           "legislation-search-index",
           BACKFILL_HARD_DEADLINE_MS,
-          () =>
-            backfillLegislationSearchIndex(
-              ingestionDb,
+          async () =>
+            await backfillLegislationSearchIndex(
+              backfillDb,
               SEARCH_INDEX_BATCH_SIZE,
             ),
         );
@@ -907,9 +919,9 @@ export const runCaseLawIngest = async (
         const indexed = await runWithHardDeadline(
           "legislation-corpus-index",
           BACKFILL_HARD_DEADLINE_MS,
-          () =>
-            backfillLegislationCorpusIndex(
-              ingestionDb,
+          async () =>
+            await backfillLegislationCorpusIndex(
+              backfillDb,
               LIMITS.corpusIndexBatchSize,
               generation,
             ),
