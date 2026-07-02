@@ -34,7 +34,11 @@ import {
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
-import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
+import type {
+  McpStructuredTextField,
+  McpToolDefinition,
+  McpToolHandler,
+} from "@/api/mcp/tool-types";
 import {
   enumProp,
   errorResult,
@@ -175,7 +179,14 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
         ),
       },
     },
-    anonymized: { exposure: "excluded", reason: "pending_projection" },
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [
+        "templates[].name",
+        "templates[].whenToUse",
+        "templates[].whenNotToUse",
+      ],
+    },
     name: "list_templates",
     scope: "stella:templates",
   },
@@ -197,7 +208,15 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       },
       required: ["template_id"],
     },
-    anonymized: { exposure: "excluded", reason: "pending_projection" },
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [
+        "name",
+        "fields[].label",
+        "fields[].hint",
+        "fields[].aiPrompt",
+      ],
+    },
     name: "describe_template",
     scope: "stella:templates",
   },
@@ -238,7 +257,7 @@ export const TEMPLATE_TOOL_DEFINITIONS = [
       type: "object",
       properties: {},
     },
-    anonymized: { exposure: "excluded", reason: "pending_projection" },
+    anonymized: { exposure: "passthrough" },
     name: "template_marker_reference",
     scope: "stella:templates",
   },
@@ -371,10 +390,66 @@ const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
     cursorForItem: (item) => encodePaginationCursor([item.id]),
   });
 
-  return textResult({
-    templates: page.items,
-    nextCursor: page.nextCursor,
-  });
+  const templateList = page.items;
+
+  // Templates are organization-scoped, so the org id is the anonymization
+  // scope. Only the org-authored free text (name, usage guidance) is redacted;
+  // ids, field counts, and tags pass through.
+  const workspaceId = context.organizationId;
+  const textFields: McpStructuredTextField[] = [];
+  for (const template of templateList) {
+    pushTemplateTextField({
+      apply: (value) => {
+        template.name = value;
+      },
+      fields: textFields,
+      value: template.name,
+      workspaceId,
+    });
+    pushTemplateTextField({
+      apply: (value) => {
+        template.whenToUse = value;
+      },
+      fields: textFields,
+      value: template.whenToUse,
+      workspaceId,
+    });
+    pushTemplateTextField({
+      apply: (value) => {
+        template.whenNotToUse = value;
+      },
+      fields: textFields,
+      value: template.whenNotToUse,
+      workspaceId,
+    });
+  }
+
+  return {
+    egress: "structured",
+    payload: { templates: templateList, nextCursor: page.nextCursor },
+    textFields,
+  };
+};
+
+/**
+ * Queue one anonymizable template text field, skipping null/empty values.
+ * Templates carry org-authored free text (name, usage guidance, field labels
+ * and prompts); everything else on the surface is structural.
+ */
+const pushTemplateTextField = ({
+  apply,
+  fields,
+  value,
+  workspaceId,
+}: {
+  apply: (value: string) => void;
+  fields: McpStructuredTextField[];
+  value: string | null | undefined;
+  workspaceId: string;
+}): void => {
+  if (typeof value === "string" && value.length > 0) {
+    fields.push({ apply, value, workspaceId });
+  }
 };
 
 const markerReferenceArgsSchema = v.strictObject({});
@@ -419,7 +494,47 @@ const handleDescribeTemplateTool: McpToolHandler = async ({
     return errorResult(result.error);
   }
 
-  return textResult(result);
+  // Redact the org-authored template name and each field's label/hint/aiPrompt;
+  // field paths, input types, options, and condition/formula expressions are
+  // structural and pass through. Template = org scope.
+  const workspaceId = context.organizationId;
+  const textFields: McpStructuredTextField[] = [];
+  pushTemplateTextField({
+    apply: (value) => {
+      result.name = value;
+    },
+    fields: textFields,
+    value: result.name,
+    workspaceId,
+  });
+  for (const field of result.fields) {
+    pushTemplateTextField({
+      apply: (value) => {
+        field.label = value;
+      },
+      fields: textFields,
+      value: field.label,
+      workspaceId,
+    });
+    pushTemplateTextField({
+      apply: (value) => {
+        field.hint = value;
+      },
+      fields: textFields,
+      value: field.hint,
+      workspaceId,
+    });
+    pushTemplateTextField({
+      apply: (value) => {
+        field.aiPrompt = value;
+      },
+      fields: textFields,
+      value: field.aiPrompt,
+      workspaceId,
+    });
+  }
+
+  return { egress: "structured", payload: result, textFields };
 };
 
 const fillTemplateArgsSchema = v.strictObject({

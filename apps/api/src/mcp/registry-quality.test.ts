@@ -26,18 +26,19 @@ const SURFACES = [
 
 type SurfaceMode = (typeof SURFACES)[number]["mode"];
 
-// Measured 2026-07-02: default 16 tools, anonymized 4 tools.
+// Measured 2026-07-02: default 16 tools, anonymized 12 tools (plan 046 Wave 0
+// projected the full read set onto the anonymized surface).
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
   default: 18,
-  anonymized: 6,
+  anonymized: 14,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
 // `toMcpTools`). Measured 2026-07-02: default 18_083 chars (~4.5k tokens),
-// anonymized 2_878 chars (~0.7k tokens).
+// anonymized 7_147 chars (~1.8k tokens).
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 20_500,
-  anonymized: 3300,
+  anonymized: 8200,
 };
 
 // Longest description measured 2026-07-02: create_template at 791 chars

@@ -5,6 +5,7 @@ import type {
 
 import type { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { TextWindowResult } from "@/api/mcp/tool-utils";
 
 export type JsonSchema = McpTool["inputSchema"];
 
@@ -18,12 +19,6 @@ export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
 export const MCP_ANONYMIZED_EXCLUSION_REASONS = [
   /** Mutating tool. The anonymized surface is egress-only, so writes never appear. */
   "write",
-  /**
-   * Read tool that surfaces tenant/personal text and is not yet wired into the
-   * central egress pipeline. Plan 046 grows the anonymized surface to the full
-   * read set; until a tool is projected it carries this reason.
-   */
-  "pending_projection",
   /**
    * User-managed skill or external MCP connector tool. These are resolved by the
    * dynamic gateway (default mode only) and are never part of the anonymized
@@ -82,11 +77,49 @@ export type McpCompatSearchResult = {
 };
 
 /**
+ * One anonymizable text field inside a generic `structured` egress payload.
+ * `workspaceId` is the anonymization scope: a real workspace id for
+ * matter/document payloads, or the organization id for org-scoped payloads
+ * (contacts, templates). Fields sharing a scope are batched into a single
+ * `anonymizeTextFields` call so placeholders stay consistent across them.
+ * `apply` writes the anonymized value back into the payload the plan carries
+ * (in default mode the field is left exactly as the handler produced it).
+ */
+export type McpStructuredTextField = {
+  apply: (value: string) => void;
+  value: string;
+  workspaceId: string;
+};
+
+/**
+ * Optional post-anonymization windowing of one text field on a `structured`
+ * plan. `read` returns the full text to window (already anonymized in
+ * anonymized mode, because the text field ran through `textFields` first);
+ * `apply` writes the windowed slice plus its cursor/charCount/truncated
+ * metadata back into the payload. Windowing runs after anonymization so an
+ * entity name can never be split across a window edge.
+ */
+export type McpStructuredWindow = {
+  apply: (window: TextWindowResult) => void;
+  cursor: string | undefined;
+  maxChars: number;
+  read: () => string;
+};
+
+/**
  * A handler either returns a finished `CallToolResult`, or an egress plan the
  * dispatch layer finalizes (anonymize declared text fields, then window, then
  * serialize). Egress plans keep the full, pre-window, un-anonymized payload so
  * the central pipeline can anonymize before it windows, without the handler
  * ever seeing the request mode.
+ *
+ * The `structured` variant is the generic shape: the handler builds the whole
+ * response object and declares which text fields to anonymize (with per-field
+ * workspace attribution, so multi-tenant payloads like search hits and matter
+ * lists group correctly) plus an optional field to window afterwards. The
+ * `compatSearch`/`compatFetch` variants predate it and stay as-is: they carry
+ * OpenAI-compatible-specific shaping (workspaceId stripping, anonymization
+ * metadata) that does not generalize.
  */
 export type McpEgressPlan =
   | {
@@ -103,6 +136,12 @@ export type McpEgressPlan =
       title: string;
       url: string;
       workspaceId: string;
+    }
+  | {
+      egress: "structured";
+      payload: unknown;
+      textFields: readonly McpStructuredTextField[];
+      window?: McpStructuredWindow;
     };
 
 export type McpToolResponse = CallToolResult | McpEgressPlan;

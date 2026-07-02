@@ -43,6 +43,7 @@ const ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE: Partial<Record<ToolScope, ToolScope>> =
   {
     "stella:search": "stella:search_anonymized",
     "stella:read": "stella:read_anonymized",
+    "stella:templates": "stella:templates_anonymized",
   };
 
 const toAnonymizedProjection = (

@@ -19,8 +19,12 @@ The server exposes two MCP resources:
 - `/mcp`: the default stella MCP. It includes first-party stella tools,
   OpenAI-compatible `search` / `fetch` tools, user-managed skills, and enabled
   external MCP connectors.
-- `/mcp-anonymized`: the anonymized MCP mode. It exposes anonymized search and
-  read tools for clients that should receive anonymized results.
+- `/mcp-anonymized`: the anonymized MCP mode. It exposes the full first-party
+  read/search surface (matters, matter overviews, cross-matter search and
+  content, contacts, templates, case law, plus the OpenAI-compatible
+  `search`/`fetch` tools) for clients that should receive anonymized results.
+  Tenant and personal text is redacted on egress; mutating tools and the dynamic
+  gateway are not exposed.
 
 OAuth protected-resource discovery is served from:
 
@@ -41,7 +45,7 @@ and `template-tools.ts`). Every `McpToolDefinition` carries a required
 - `{ exposure: "passthrough" }`: available as-is (the output carries no
   tenant/personal text, e.g. the shared case-law corpus).
 - `{ exposure: "excluded", reason }`: kept off the anonymized surface. `reason`
-  is a closed union (`write`, `pending_projection`, `dynamic_gateway`).
+  is a closed union (`write`, `dynamic_gateway`).
 
 The anonymized tool list and its `stella:*_anonymized` scopes are a pure
 projection of this registry (`ANONYMIZED_MCP_TOOL_DEFINITIONS`): excluded tools
@@ -61,6 +65,17 @@ across a window edge and keeps placeholders stable across windows of one
 document. With no mode in scope, per-mode divergence inside a handler is
 structurally impossible. Tools with compound windowing (e.g.
 `read_case_law_decision`) keep that logic tool-local and mode-agnostic.
+
+Most read tools use the generic `{ egress: "structured" }` plan: the handler
+builds the whole response object and declares its anonymizable text fields as
+`{ workspaceId, value, apply }` descriptors (plus an optional `window` for one
+field). Fields are grouped by `workspaceId` and batched into one
+`anonymizeTextFields` call per workspace, so placeholders stay consistent across
+a payload and multi-tenant payloads (search hits, matter lists) group correctly.
+Org-scoped payloads (contacts, templates) use the organization id as the scope.
+The OpenAI-compatible `search`/`fetch` tools keep their bespoke
+`compatSearch`/`compatFetch` plans (workspaceId stripping, anonymization
+metadata).
 
 ## Code map
 

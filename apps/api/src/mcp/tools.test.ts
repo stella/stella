@@ -564,12 +564,27 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(scopedDb).not.toHaveBeenCalled();
   });
 
-  test("lists shared case-law tools in anonymized mode", async () => {
+  test("lists the projected read surface in anonymized mode", async () => {
+    // The anonymized surface is the registry minus excluded (write / dynamic
+    // gateway) tools: every read/search/reference tool, in registry order.
     expect(
       (await listMcpTools(createContext(), "anonymized")).map(
         (tool) => tool.name,
       ),
-    ).toEqual(["search", "fetch", "search_case_law", "read_case_law_decision"]);
+    ).toEqual([
+      "search",
+      "fetch",
+      "list_matters",
+      "get_matter_overview",
+      "search_across_matters",
+      "search_case_law",
+      "read_content_across_matters",
+      "read_case_law_decision",
+      "read_contact",
+      "list_templates",
+      "describe_template",
+      "template_marker_reference",
+    ]);
   });
 
   test("remaps case-law tools to anonymized scopes", async () => {
