@@ -527,6 +527,67 @@ const stripRowMarkerParagraph = (
   }
 };
 
+/**
+ * Prune an `{{#if}}` block by block-level UNIT (paragraphs AND whole tables),
+ * keeping only the winning branch's content units. Applies only when the block's
+ * opener/closer (and the winning branch's delimiters) are block-level siblings
+ * of one parent — the common case for a body-level or loop-body `{{#if}}`. The
+ * unit walk removes every sibling in the opener…closer range that is not part of
+ * the winning branch, so a losing branch's `w:tbl` is removed with it (a
+ * paragraph-only removal would leave the table shell). Returns `false` without
+ * mutating when the placement is not a clean block-level sibling run, so the
+ * caller can fall back to paragraph-index removal.
+ */
+const pruneIfBlockUnits = (
+  paragraphs: readonly slimdom.Element[],
+  firstP: slimdom.Element,
+  lastP: slimdom.Element,
+  winningBranch: IfBranch | null,
+): boolean => {
+  const parent = firstP.parentNode;
+  if (!parent || !isElement(parent) || lastP.parentNode !== parent) {
+    return false;
+  }
+
+  const keep = new Set<slimdom.Node>();
+  if (winningBranch) {
+    // `contentStart` is the paragraph index just after the branch's opening
+    // directive, so `contentStart - 1` is that directive; `contentEnd` is the
+    // branch's closing directive (the next elseif/else/endif).
+    const branchOpenP = paragraphs[winningBranch.contentStart - 1];
+    const branchCloseP = paragraphs[winningBranch.contentEnd];
+    if (
+      !branchOpenP ||
+      !branchCloseP ||
+      branchOpenP.parentNode !== parent ||
+      branchCloseP.parentNode !== parent
+    ) {
+      return false;
+    }
+    for (
+      let n: slimdom.Node | null = branchOpenP.nextSibling;
+      n && n !== branchCloseP;
+      n = n.nextSibling
+    ) {
+      keep.add(n);
+    }
+  }
+
+  const toRemove: slimdom.Node[] = [];
+  for (let n: slimdom.Node | null = firstP; n; n = n.nextSibling) {
+    if (!keep.has(n)) {
+      toRemove.push(n);
+    }
+    if (n === lastP) {
+      break;
+    }
+  }
+  for (const n of toRemove) {
+    parent.removeChild(n);
+  }
+  return true;
+};
+
 // ── Main processor ───────────────────────────────────────
 
 type ProcessResult = {
@@ -650,6 +711,24 @@ export const processBlockDirectives = (
     const firstDirective = block.directiveParagraphs[0] ?? 0;
     // directiveParagraphs always has opening + closing entries
     const lastDirective = block.directiveParagraphs.at(-1) ?? 0;
+
+    // Preferred path: when the block's directive paragraphs are block-level
+    // siblings (share one parent), prune by block-level UNIT so a losing
+    // branch's whole tables (`w:tbl`) are removed too, not just its paragraphs.
+    // This mirrors the each-loop's block-unit treatment (see expandBlock);
+    // without it a two-table `{{#if}}/{{#else}}` variant would leave the losing
+    // branch's empty table shell behind. Falls through to the paragraph-index
+    // removal below for a degenerate placement where the directive paragraphs do
+    // not share a block-level parent (e.g. straddling a table boundary).
+    const firstP = paragraphs[firstDirective];
+    const lastP = paragraphs[lastDirective];
+    if (
+      firstP &&
+      lastP &&
+      pruneIfBlockUnits(paragraphs, firstP, lastP, winningBranch)
+    ) {
+      return;
+    }
 
     // We need to remove everything from firstDirective to
     // lastDirective, then insert the winning branch's content.

@@ -80,6 +80,10 @@ export type ReportRisk = {
   rationale: string;
   /** First quoted citation text from the ASK field's justification, else "". */
   citation: string;
+  /** True when {@link citation} is non-empty; gates the template's
+   *  "Citation: …" line so a risk without a quoted source renders no dangling
+   *  label. */
+  hasCitation: boolean;
 };
 
 export type ReportContract = {
@@ -87,8 +91,16 @@ export type ReportContract = {
   index: number;
   name: string;
   documentType: string;
+  /** True when this contract has a non-empty document type; gates the inline
+   *  "Document type: …" line so it never renders a dangling label. */
+  hasDocumentType: boolean;
   /** Worst severity among this contract's findings, or "ok" when none. */
   riskLevel: PositionSeverity | "ok";
+  /** Mirrors the top-level {@link ReportData.hasVerdicts}: a riskLevel is only
+   *  meaningful when the view carries playbook verdicts, so this gates the
+   *  "Risk level: …" line (a view without playbook has no verdicts and its
+   *  "ok" riskLevel is noise). */
+  hasRiskLevel: boolean;
   fields: ReportField[];
   risks: ReportRisk[];
   hasRisks: boolean;
@@ -135,6 +147,11 @@ export type ReportData = {
   stats: ReportStats;
   contracts: ReportContract[];
   grid: ReportGrid;
+  /** True when any visible column is a graded (playbook-verdict) position. Gates
+   *  the two variants of the per-contract field table (with vs. without the
+   *  Verdict column) and the executive-summary findings breakdown: a view with
+   *  no playbook renders the plain variants and no verdict/severity noise. */
+  hasVerdicts: boolean;
   /** Drives the built-in template's `{{#if aiNarrative}}` gates: when false the
    *  executive-summary and per-contract summary paragraphs are removed entirely
    *  and no AI generator runs, so the export is fast and deterministic. */
@@ -252,6 +269,20 @@ export const assembleReportData = ({
   const severities = severityByPropertyId(properties);
   const propertyColumns = columns.filter(isPropertyColumn);
 
+  // A view carries verdicts when at least one visible column is a graded
+  // position (ASK paired with a playbook-verdict property). Drives the template's
+  // Verdict-column and findings-breakdown gates.
+  const hasVerdicts = propertyColumns.some(
+    (column) => column.verdictPropertyId !== undefined,
+  );
+
+  // The Document Type classifier renders as the per-contract caption line, not
+  // as a field row (a field row would duplicate it and drag a dead verdict cell
+  // along). The annex summary re-adds it as a "Type: …" prefix instead.
+  const reportColumns = propertyColumns.filter(
+    (column) => column.propertyId !== docTypePropertyId,
+  );
+
   const bySeverity = { blocker: 0, high: 0, medium: 0, low: 0 };
 
   const contracts: ReportContract[] = entities.map((entity, entityIndex) => {
@@ -270,7 +301,7 @@ export const assembleReportData = ({
     const risks: ReportRisk[] = [];
     const contractSeverities: PositionSeverity[] = [];
 
-    for (const column of propertyColumns) {
+    for (const column of reportColumns) {
       const askField = fieldByPropertyId.get(column.propertyId);
       const value = formatFieldContent(askField?.content, REPORT_LOCALE);
 
@@ -292,6 +323,9 @@ export const assembleReportData = ({
       if (verdictField && RISK_VERDICT_TIERS.has(tier) && severity) {
         contractSeverities.push(severity);
         bySeverity[severity] += 1;
+        const citation = askField
+          ? citationFromJustification(justificationByFieldId.get(askField.id))
+          : "";
         risks.push({
           severity,
           issue: column.header,
@@ -299,9 +333,8 @@ export const assembleReportData = ({
           rationale: rationaleFromJustification(
             justificationByFieldId.get(verdictField.id),
           ),
-          citation: askField
-            ? citationFromJustification(justificationByFieldId.get(askField.id))
-            : "",
+          citation,
+          hasCitation: citation.length > 0,
         });
       }
     }
@@ -310,7 +343,11 @@ export const assembleReportData = ({
       index: entityIndex + 1,
       name: entity.name ?? "Untitled",
       documentType,
+      hasDocumentType: documentType.length > 0,
       riskLevel: worstSeverity(contractSeverities),
+      // A riskLevel is only meaningful when the view grades positions; without
+      // verdicts every contract is "ok", which is noise, so gate it on the view.
+      hasRiskLevel: hasVerdicts,
       fields,
       risks,
       hasRisks: risks.length > 0,
@@ -325,19 +362,24 @@ export const assembleReportData = ({
     generatedAt: formatGeneratedAt(now),
     stats: { total: contracts.length, redFlags, bySeverity },
     contracts,
-    grid: buildReviewGrid(propertyColumns, contracts),
+    grid: buildReviewGrid(reportColumns, contracts),
+    hasVerdicts,
     aiNarrative,
   };
 };
 
 /** Reshape the visible columns + assembled contracts into the annex matrix. The
  *  cells reuse each contract's already-computed fields (same order as the
- *  columns), so the annex and the per-contract tables can never disagree. */
+ *  columns), so the annex and the per-contract tables can never disagree. The
+ *  summary cell prepends a "Type: …" segment when the contract has a document
+ *  type: the classifier is excluded from the field columns (the per-contract
+ *  caption owns it), and the annex has no caption, so the prefix keeps the
+ *  information present there. */
 const buildReviewGrid = (
-  propertyColumns: ReportPropertyColumn[],
+  reportColumns: ReportPropertyColumn[],
   contracts: ReportContract[],
 ): ReportGrid => {
-  const columns: ReportGridColumn[] = propertyColumns.map((column) => ({
+  const columns: ReportGridColumn[] = reportColumns.map((column) => ({
     label: column.header,
   }));
   const rows: ReportGridRow[] = contracts.map((contract) => {
@@ -345,12 +387,14 @@ const buildReviewGrid = (
       label: field.label,
       value: field.verdict ? `${field.value} (${field.verdict})` : field.value,
     }));
+    const segments = cells.map((cell) => `${cell.label}: ${cell.value}`);
+    if (contract.hasDocumentType) {
+      segments.unshift(`Type: ${contract.documentType}`);
+    }
     return {
       name: contract.name,
       cells,
-      summary: cells
-        .map((cell) => `${cell.label}: ${cell.value}`)
-        .join(GRID_CELL_SEPARATOR),
+      summary: segments.join(GRID_CELL_SEPARATOR),
     };
   });
   return { columns, rows };

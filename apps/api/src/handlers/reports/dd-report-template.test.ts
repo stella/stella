@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent, PropertyTool } from "@/api/db/schema-validators";
 import { fillTemplate } from "@/api/handlers/docx/patch-template";
 import type { AiFieldGenerator } from "@/api/handlers/docx/resolve-ai-fields";
@@ -8,6 +9,8 @@ import { resolveAiFields } from "@/api/handlers/docx/resolve-ai-fields";
 import { isTemplateData } from "@/api/handlers/docx/types";
 import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { buildExportColumns } from "@/api/handlers/views/table-export";
+// eslint-disable-next-line no-restricted-imports -- test fixture: brand a field id for a JustificationContent literal
+import { toSafeId } from "@/api/lib/branded-types";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
 import { assembleReportData } from "./build-report-data";
@@ -137,17 +140,23 @@ describe("Due Diligence Report built-in template", () => {
   test("fills end-to-end with zero structure errors and no unmatched placeholders", async () => {
     const columns = buildExportColumns(layout, properties);
     const entities = [
-      makeEntity("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "NDA with Vendor", [
-        field("a-law", ASK_LAW, text("Czech law")),
-        field("v-law", VERDICT_LAW, select("deviation")),
-        field("a-term", ASK_TERM, text("2 years")),
-        field("v-term", VERDICT_TERM, select("compliant")),
-        field("a-cap", ASK_CAP, text("EUR 1,000,000")),
-      ]),
+      makeEntity(
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "Non-Disclosure Agreement — Vendor",
+        [
+          field("a-law", ASK_LAW, text("Czech law")),
+          field("v-law", VERDICT_LAW, select("deviation")),
+          field("a-term", ASK_TERM, text("2 years")),
+          field("v-term", VERDICT_TERM, select("compliant")),
+          field("a-cap", ASK_CAP, text("EUR 1,000,000")),
+        ],
+      ),
       makeEntity(
         "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
-        "Master Services Agreement",
+        "Master Services Agreement — Acme s.r.o.",
         [
+          // Two findings at different severities: law (missing/high) and
+          // term (deviation/blocker).
           field("b-law", ASK_LAW, text("New York law")),
           field("bv-law", VERDICT_LAW, select("missing")),
           field("b-term", ASK_TERM, text("5 years")),
@@ -155,13 +164,53 @@ describe("Due Diligence Report built-in template", () => {
           field("b-cap", ASK_CAP, text("Uncapped")),
         ],
       ),
+      makeEntity(
+        "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        "Software Licence Agreement — Globex Ltd",
+        [
+          // A clean contract: every verdict compliant, so no risks.
+          field("c-law", ASK_LAW, text("English law")),
+          field("cv-law", VERDICT_LAW, select("compliant")),
+          field("c-term", ASK_TERM, text("3 years")),
+          field("cv-term", VERDICT_TERM, select("compliant")),
+          field("c-cap", ASK_CAP, text("EUR 500,000")),
+        ],
+      ),
     ];
+
+    // Only the NDA's Governing-law risk carries a quoted citation; the MSA's
+    // two risks have none — proving the per-risk {{#if hasCitation}} gate.
+    const justifications = new Map<string, JustificationContent>([
+      [
+        "a-law",
+        {
+          version: 1,
+          blocks: [
+            {
+              kind: "docx-folio",
+              fileFieldId: toSafeId<"field">("fld"),
+              statements: [
+                {
+                  text: "stmt",
+                  citations: [
+                    {
+                      blockId: "b1",
+                      text: "Clause 12.1: governed by Czech law.",
+                    },
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      ],
+    ]);
 
     const data = assembleReportData({
       entities,
       columns,
       properties,
-      justificationByFieldId: new Map(),
+      justificationByFieldId: justifications,
       docTypePropertyId: null,
       workspaceName: "Project Atlas",
       now: new Date("2026-07-02T00:00:00.000Z"),
@@ -190,20 +239,34 @@ describe("Due Diligence Report built-in template", () => {
 
     const xml = await readDocumentXml(result.buffer);
     // Contract sections cloned per entity.
-    expect(xml).toContain("NDA with Vendor");
-    expect(xml).toContain("Master Services Agreement");
+    expect(xml).toContain("Non-Disclosure Agreement — Vendor");
+    expect(xml).toContain("Master Services Agreement — Acme s.r.o.");
+    expect(xml).toContain("Software Licence Agreement — Globex Ltd");
+    // Heading2 is numbered by the loop {{@index}}.
+    expect(xml).toContain("1.");
+    expect(xml).toContain("3.");
     // Field row-repeat rendered field labels/values.
     expect(xml).toContain("Governing law");
     expect(xml).toContain("Czech law");
     expect(xml).toContain("Liability cap");
+    // Verdict column present because the view carries verdicts.
+    expect(xml).toContain("Verdict");
     // Risk block rendered a deviation/missing finding.
     expect(xml).toContain("deviation");
-    expect(xml).toContain("Citation:");
+    // Per-risk citation gating: exactly ONE risk (NDA's Governing law) carries
+    // a citation, so "Citation:" renders exactly once — the MSA's two
+    // citation-less risks render no dangling label.
+    expect(xml.split("Citation:").length - 1).toBe(1);
+    expect(xml).toContain("Clause 12.1: governed by Czech law.");
     // AI-drafted narrative present.
     expect(xml).toContain("Executive summary drafted by the stub.");
-    expect(xml).toContain("Summary for contract 1 of 2.");
-    // Stats line rendered (the {{stats.total}} value lands in its own run).
-    expect(xml).toContain("Contracts reviewed: ");
+    expect(xml).toContain("Summary for contract 1 of 3.");
+    // One label/value stats table (no header band): the base row plus the
+    // verdict-gated breakdown rows.
+    expect(xml).toContain("Contracts reviewed");
+    expect(xml).toContain("Red flags");
+    expect(xml).toContain("Blocker");
+    expect(xml).not.toContain("Findings");
 
     // Annex — Review matrix: the row-repeat clones one row per contract and
     // renders each contract's consolidated "Label: value" summary cell.
@@ -215,13 +278,17 @@ describe("Due Diligence Report built-in template", () => {
   test("aiNarrative=false drops the AI sections with no model calls or leftover markers", async () => {
     const columns = buildExportColumns(layout, properties);
     const entities = [
-      makeEntity("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "NDA with Vendor", [
-        field("a-law", ASK_LAW, text("Czech law")),
-        field("v-law", VERDICT_LAW, select("deviation")),
-        field("a-term", ASK_TERM, text("2 years")),
-        field("v-term", VERDICT_TERM, select("compliant")),
-        field("a-cap", ASK_CAP, text("EUR 1,000,000")),
-      ]),
+      makeEntity(
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        "Non-Disclosure Agreement — Vendor",
+        [
+          field("a-law", ASK_LAW, text("Czech law")),
+          field("v-law", VERDICT_LAW, select("deviation")),
+          field("a-term", ASK_TERM, text("2 years")),
+          field("v-term", VERDICT_TERM, select("compliant")),
+          field("a-cap", ASK_CAP, text("EUR 1,000,000")),
+        ],
+      ),
     ];
 
     const data = assembleReportData({
@@ -269,8 +336,79 @@ describe("Due Diligence Report built-in template", () => {
     // Deterministic content still renders: the contract section, the field
     // table, and the stats line under the (non-empty) Executive Summary heading.
     expect(xml).toContain("Executive Summary");
-    expect(xml).toContain("Contracts reviewed: ");
-    expect(xml).toContain("NDA with Vendor");
+    expect(xml).toContain("Contracts reviewed");
+    expect(xml).toContain("Non-Disclosure Agreement — Vendor");
     expect(xml).toContain("Czech law");
+  });
+
+  test("plain view (no verdicts, no doc types) renders the no-Verdict table with no dangling labels", async () => {
+    // A view with only ASK columns and no playbook: hasVerdicts is false.
+    const bareProps = [
+      { id: ASK_LAW, name: "Governing law", tool: aiTool },
+      { id: ASK_TERM, name: "Term", tool: aiTool },
+      { id: ASK_CAP, name: "Liability cap", tool: aiTool },
+    ];
+    const bareLayout: Extract<ViewLayout, { type: "table" }> = {
+      type: "table",
+      version: 1,
+      filters: [],
+      sorts: [],
+      hiddenProperties: [],
+      columnOrder: [ASK_LAW, ASK_TERM, ASK_CAP],
+      columnPinning: [],
+    };
+    const columns = buildExportColumns(bareLayout, bareProps);
+    const entities = [
+      makeEntity(
+        "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+        "Consulting Agreement — Initech",
+        [
+          field("d-law", ASK_LAW, text("German law")),
+          field("d-term", ASK_TERM, text("12 months")),
+          field("d-cap", ASK_CAP, text("EUR 250,000")),
+        ],
+      ),
+    ];
+
+    const data = assembleReportData({
+      entities,
+      columns,
+      properties: bareProps,
+      justificationByFieldId: new Map(),
+      docTypePropertyId: null,
+      workspaceName: "Project Beacon",
+      now: new Date("2026-07-02T00:00:00.000Z"),
+      aiNarrative: false,
+    });
+    expect(data.hasVerdicts).toBe(false);
+
+    if (!isTemplateData(data)) {
+      throw new Error("assembled report data is not fillable template data");
+    }
+
+    const buffer = await getBuiltinReportTemplate("dd-report")?.loadBuffer();
+    if (!buffer) {
+      throw new Error("dd-report built-in template not found");
+    }
+
+    const result = await fillTemplate(buffer, data);
+
+    expect(result.structureErrors).toEqual([]);
+    expect(result.unmatchedPlaceholders).toEqual([]);
+
+    const xml = await readDocumentXml(result.buffer);
+    expect(xml).not.toContain("{{");
+    // The no-Verdict field table variant rendered: no "Verdict" header, no
+    // red-flag/severity stats rows (single-row stats variant), no citations,
+    // and no dangling "Document type:" / "Risk level:".
+    expect(xml).not.toContain("Verdict");
+    expect(xml).not.toContain("Red flags");
+    expect(xml).not.toContain("Citation");
+    expect(xml).not.toContain("Document type:");
+    expect(xml).not.toContain("Risk level:");
+    // Deterministic content still present.
+    expect(xml).toContain("Consulting Agreement — Initech");
+    expect(xml).toContain("German law");
+    expect(xml).toContain("Contracts reviewed");
   });
 });

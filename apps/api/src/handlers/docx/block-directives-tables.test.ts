@@ -225,6 +225,65 @@ describe("processBlockDirectives — table cloning in body loops", () => {
   });
 });
 
+// ── {{#if}} branch pruning removes whole tables ──────────
+
+describe("processBlockDirectives — if-branch table pruning", () => {
+  test("losing {{#if}} branch's table is removed, not left as a shell", () => {
+    const xml = WRAP(
+      P("{{#if hasVerdicts}}") +
+        TBL(TR(TC(P("Field")), TC(P("Value")), TC(P("Verdict")))) +
+        P("{{#else}}") +
+        TBL(TR(TC(P("Field")), TC(P("Value")))) +
+        P("{{/if}}"),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, { hasVerdicts: false });
+
+    expect(errors).toEqual([]);
+    // Only the else (2-column) table survives; no empty shell from the if branch.
+    expect(tableCount(body)).toBe(1);
+    const texts = bodyTexts(body);
+    expect(texts).not.toContain("Verdict");
+    expect(texts).toContain("Field");
+    expect(texts).toContain("Value");
+    // Directive markers are gone.
+    expect(texts).not.toContain("{{#if hasVerdicts}}");
+    expect(texts).not.toContain("{{/if}}");
+  });
+
+  test("winning {{#if}} branch's table is kept, else branch's table dropped", () => {
+    const xml = WRAP(
+      P("{{#if hasVerdicts}}") +
+        TBL(TR(TC(P("Field")), TC(P("Value")), TC(P("Verdict")))) +
+        P("{{#else}}") +
+        TBL(TR(TC(P("Field")), TC(P("Value")))) +
+        P("{{/if}}"),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, { hasVerdicts: true });
+
+    expect(errors).toEqual([]);
+    expect(tableCount(body)).toBe(1);
+    expect(bodyTexts(body)).toContain("Verdict");
+  });
+
+  test("if-false with a single table and no else removes the table entirely", () => {
+    const xml = WRAP(
+      P("Intro") +
+        P("{{#if hasVerdicts}}") +
+        TBL(TR(TC(P("Verdict table")))) +
+        P("{{/if}}") +
+        P("Outro"),
+    );
+    const body = parseBody(xml);
+    const { errors } = processBlockDirectives(body, { hasVerdicts: false });
+
+    expect(errors).toEqual([]);
+    expect(tableCount(body)).toBe(0);
+    expect(bodyTexts(body)).toEqual(["Intro", "Outro"]);
+  });
+});
+
 // ── Nested: contracts → fields (DD acceptance shape) ─────
 
 describe("processBlockDirectives — nested each (contracts → fields)", () => {

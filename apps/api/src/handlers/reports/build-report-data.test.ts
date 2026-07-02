@@ -176,13 +176,25 @@ describe("assembleReportData", () => {
 
     const contract = data.contracts[0];
     // Term before Governing law (columnOrder), Notes hidden, no verdict column.
-    // Document Type is a column too (not in columnOrder → appended).
+    // The Document Type classifier column is EXCLUDED from the field rows (the
+    // per-contract caption owns it; the annex summary re-adds a "Type:" prefix).
     expect(contract?.fields.map((f) => f.label)).toEqual([
       "Term",
       "Governing law",
-      "Document Type",
     ]);
     expect(contract?.documentType).toBe("NDA");
+    // The annex mirrors the field columns (no Document Type column) and keeps
+    // the type as the first joined summary segment.
+    expect(data.grid.columns.map((column) => column.label)).toEqual([
+      "Term",
+      "Governing law",
+    ]);
+    expect(data.grid.rows[0]?.summary.startsWith("Type: NDA · ")).toBe(true);
+    // The view grades positions, so it carries verdicts; the contract has a
+    // document type. Both gate template sections.
+    expect(data.hasVerdicts).toBe(true);
+    expect(contract?.hasDocumentType).toBe(true);
+    expect(contract?.hasRiskLevel).toBe(true);
     // Governing law rides its verdict tier + severity; Term is compliant.
     const lawField = contract?.fields.find((f) => f.label === "Governing law");
     expect(lawField?.value).toBe("Czech law");
@@ -253,7 +265,12 @@ describe("assembleReportData", () => {
       verdict: "deviation",
       rationale: "Non-standard forum.",
       citation: "Clause 12.1 quoted.",
+      hasCitation: true,
     });
+    // The Term risk has no justification → empty citation, gated off.
+    const termRisk = contract?.risks.find((r) => r.issue === "Term");
+    expect(termRisk?.citation).toBe("");
+    expect(termRisk?.hasCitation).toBe(false);
     // Worst severity among {high, blocker} is blocker.
     expect(contract?.riskLevel).toBe("blocker");
     // Stats roll up across contracts.
@@ -287,6 +304,11 @@ describe("assembleReportData", () => {
     expect(contract?.risks).toEqual([]);
     expect(contract?.hasRisks).toBe(false);
     expect(contract?.riskLevel).toBe("ok");
+    // No playbook column → no verdicts, so the riskLevel is noise and gated off;
+    // no document-type column was supplied either.
+    expect(data.hasVerdicts).toBe(false);
+    expect(contract?.hasRiskLevel).toBe(false);
+    expect(contract?.hasDocumentType).toBe(false);
     expect(contract?.fields[0]).toEqual({
       label: "Governing law",
       value: "Czech law",
@@ -327,11 +349,12 @@ describe("assembleReportData", () => {
 
     // The review-matrix annex is built from the same visible columns/rows and
     // must likewise carry no UUIDs (the serialized check above covers `grid`
-    // too). Columns mirror the property columns; rows mirror the contracts.
+    // too). Columns mirror the report columns (the Document Type classifier is
+    // excluded; the summary carries it as a "Type:" prefix when present); rows
+    // mirror the contracts.
     expect(data.grid.columns.map((column) => column.label)).toEqual([
       "Governing law",
       "Term",
-      "Document Type",
       "Notes",
     ]);
     expect(data.grid.rows.map((row) => row.name)).toEqual(["NDA", "MSA"]);
