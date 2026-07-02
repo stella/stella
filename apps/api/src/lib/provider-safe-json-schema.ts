@@ -49,8 +49,6 @@ export const PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS = [
   "example",
 ] as const;
 
-type ProviderSafeKeyword = (typeof PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS)[number];
-
 const ALLOWED_KEYWORDS = new Set<string>(PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS);
 
 type JsonObject = Record<string, unknown>;
@@ -191,5 +189,3 @@ export const projectToProviderSafeJsonSchema = (
   const safeSchema = isJsonObject(projected) ? projected : schema;
   return { schema: safeSchema, droppedKeywords: dropped };
 };
-
-export type { ProviderSafeKeyword };
