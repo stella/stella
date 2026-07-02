@@ -91,7 +91,8 @@ type AIModelTool = {
 type PlaybookVerdictTool = {
   version: 1;
   type: "playbook-verdict";
-  askPropertyId: string;
+  askPropertyId: PropertyId;
+  dependencies: PropertyDependency[];
 };
 
 export type WorkspaceProperty = {

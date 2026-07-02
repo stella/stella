@@ -1,4 +1,3 @@
-import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import * as v from "valibot";
 
@@ -12,14 +11,16 @@ import type {
   ResolvedStandard,
 } from "@/api/handlers/playbooks/positions";
 import type { VerdictTier } from "@/api/handlers/playbooks/verdict-tiers";
-import { getModelForRole } from "@/api/lib/ai-models";
-import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
-import type { AIUsageMetering } from "@/api/lib/analytics/ai";
+import { resolveCaching } from "@/api/lib/ai-config";
+import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
+import {
+  createTanStackAIAnalyticsCallbacks,
+  type AIUsageMetering,
+} from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type {
   AIJustification,
   AIResult,
@@ -225,7 +226,7 @@ export const gradePositionMatch = async ({
     });
   }
 
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "playbook.verdict",
     modelRole: "pdf",
     orgAIConfig: orgAIConfig ?? null,
@@ -242,44 +243,35 @@ export const gradePositionMatch = async ({
 
   return await Result.tryPromise({
     try: async (): Promise<PositionMatchVerdict> => {
-      const result = await generateText({
-        model: getModelForRole("pdf", orgAIConfig, {
+      const result = await generateTanStackObjectForRole({
+        role: "pdf",
+        orgAIConfig,
+        organizationId,
+        analytics: aiAnalytics,
+        caching: resolveCaching({
           promptCachingEnabled,
+          role: "pdf",
           scopeKey: entityVersionId,
-          organizationId,
-          serviceTier,
         }),
+        serviceTier,
         system: VERDICT_SYSTEM_PROMPT,
-        messages: [
-          {
-            role: "user",
-            content: [
-              {
-                type: "text",
-                text: buildVerdictUserMessage({
-                  preferred,
-                  fallbacks,
-                  askValue,
-                }),
-              },
-            ],
-          },
-        ],
-        output: Output.object({
-          schema: strictOutputSchema(positionMatchSchema),
+        prompt: buildVerdictUserMessage({
+          preferred,
+          fallbacks,
+          askValue,
         }),
         abortSignal,
-        ...aiAnalytics.stepCallbacks,
+        outputSchema: positionMatchSchema,
       });
 
-      const tier: VerdictTier = result.output.tier;
+      const tier: VerdictTier = result.tier;
       let matched: PositionMatchVerdict["matched"] = "none";
       if (tier === "compliant") {
         matched = "preferred";
       } else if (tier === "fallback") {
         matched = "fallback";
       }
-      return { tier, rationale: result.output.rationale, matched };
+      return { tier, rationale: result.rationale, matched };
     },
     catch: (error) => {
       aiAnalytics.captureError(error);

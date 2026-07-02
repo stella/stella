@@ -1,3 +1,4 @@
+import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspaceProperty } from "@/lib/types";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 
@@ -54,7 +55,7 @@ export const buildDocTypeGate = (
   classifierPropertyId: string,
   label: string,
 ): PropertyDependency => ({
-  dependsOnPropertyId: classifierPropertyId,
+  dependsOnPropertyId: toSafeId<"property">(classifierPropertyId),
   condition: {
     type: "compare",
     left: { type: "property", propertyId: classifierPropertyId },

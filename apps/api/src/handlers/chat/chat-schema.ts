@@ -25,6 +25,7 @@ import { CHAT_TOOL_SCOPE } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMention,
   ChatMessage,
+  ChatMessageMetadata,
   ChatPart,
   PersistableChatMessage,
 } from "@/api/handlers/chat/types";
@@ -41,6 +42,7 @@ const rawMessageSchema = t.Object(
       t.Literal("user"),
       t.Literal("assistant"),
     ]),
+    metadata: t.Optional(t.Any()),
     parts: t.Array(t.Any()),
   },
   { additionalProperties: true },
@@ -197,10 +199,18 @@ export const validateMessage = async ({
       return Result.err(partsResult.error);
     }
 
+    const metadataResult = validateIncomingChatMetadata(message.metadata);
+    if (Result.isError(metadataResult)) {
+      return Result.err(metadataResult.error);
+    }
+
     const validatedMessage: PersistableChatMessage = {
       id: message.id,
       role: message.role,
       parts: partsResult.value,
+      ...(metadataResult.value === undefined
+        ? {}
+        : { metadata: metadataResult.value }),
     };
     const toolValidationResult = validateToolCallParts({
       message: validatedMessage,
@@ -285,6 +295,220 @@ const validateIncomingChatParts = (
   }
   return Result.ok(validatedParts);
 };
+
+const validateIncomingChatMetadata = (
+  metadata: unknown,
+): Result<ChatMessageMetadata | undefined, HandlerError<400>> => {
+  if (metadata === undefined) {
+    return Result.ok(undefined);
+  }
+
+  if (!isJsonRecord(metadata)) {
+    return Result.err(invalidChatMetadataError());
+  }
+
+  const validated: ChatMessageMetadata = {};
+
+  const anonRestorations = metadata["anonRestorations"];
+  if (anonRestorations !== undefined) {
+    const parsed = parseAnonRestorationsMetadata(anonRestorations);
+    if (parsed === null) {
+      return Result.err(invalidChatMetadataError());
+    }
+    validated.anonRestorations = parsed;
+  }
+
+  const mentions = metadata["mentions"];
+  if (mentions !== undefined) {
+    const parsed = parseMentionsMetadata(mentions);
+    if (parsed === null) {
+      return Result.err(invalidChatMetadataError());
+    }
+    validated.mentions = parsed;
+  }
+
+  const sourceDocuments = metadata["sourceDocuments"];
+  if (sourceDocuments !== undefined) {
+    const parsed = parseSourceDocumentsMetadata(sourceDocuments);
+    if (parsed === null) {
+      return Result.err(invalidChatMetadataError());
+    }
+    validated.sourceDocuments = parsed;
+  }
+
+  const usage = metadata["usage"];
+  if (usage !== undefined) {
+    const parsed = parseUsageMetadata(usage);
+    if (parsed === null) {
+      return Result.err(invalidChatMetadataError());
+    }
+    validated.usage = parsed;
+  }
+
+  return Result.ok(
+    isChatMessageMetadataEmpty(validated) ? undefined : validated,
+  );
+};
+
+const invalidChatMetadataError = () =>
+  new HandlerError({
+    status: 400,
+    message: "Invalid chat message metadata",
+  });
+
+const isJsonRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const parseAnonRestorationsMetadata = (
+  value: unknown,
+): ChatMessageMetadata["anonRestorations"] | null => {
+  if (!isJsonRecord(value) || !Array.isArray(value["pairs"])) {
+    return null;
+  }
+
+  const pairs = [];
+  for (const pair of value["pairs"]) {
+    if (!isJsonRecord(pair)) {
+      return null;
+    }
+    const placeholder = pair["placeholder"];
+    const original = pair["original"];
+    if (typeof placeholder !== "string" || typeof original !== "string") {
+      return null;
+    }
+    pairs.push({ placeholder, original });
+  }
+
+  return { pairs };
+};
+
+const parseMentionsMetadata = (
+  value: unknown,
+): ChatMessageMetadata["mentions"] | null => {
+  if (!isJsonRecord(value) || !Array.isArray(value["mentions"])) {
+    return null;
+  }
+
+  const mentions: NonNullable<ChatMessageMetadata["mentions"]>["mentions"] = [];
+  for (const mention of value["mentions"]) {
+    if (!isJsonRecord(mention)) {
+      return null;
+    }
+    const category = mention["category"];
+    const id = mention["id"];
+    const label = mention["label"];
+    if (
+      typeof id !== "string" ||
+      typeof label !== "string" ||
+      (category !== "entity" && category !== "workspace")
+    ) {
+      return null;
+    }
+    if (category === "workspace") {
+      mentions.push({ category, id, label });
+      continue;
+    }
+    const workspaceId = mention["workspaceId"];
+    if (typeof workspaceId !== "string" && workspaceId !== null) {
+      return null;
+    }
+    mentions.push({ category, id, label, workspaceId });
+  }
+
+  return { mentions };
+};
+
+const parseSourceDocumentsMetadata = (
+  value: unknown,
+): ChatMessageMetadata["sourceDocuments"] | null => {
+  if (!Array.isArray(value)) {
+    return null;
+  }
+
+  const documents = [];
+  for (const document of value) {
+    if (!isJsonRecord(document)) {
+      return null;
+    }
+
+    const entityId = document["entityId"];
+    const kind = document["kind"];
+    const mimeType = document["mimeType"];
+    const title = document["title"];
+    const workspaceId = document["workspaceId"];
+    if (
+      typeof entityId !== "string" ||
+      typeof kind !== "string" ||
+      (typeof mimeType !== "string" && mimeType !== null) ||
+      typeof title !== "string" ||
+      (typeof workspaceId !== "string" && workspaceId !== null)
+    ) {
+      return null;
+    }
+
+    const parsed: NonNullable<ChatMessageMetadata["sourceDocuments"]>[number] =
+      { entityId, kind, mimeType, title, workspaceId };
+    for (const key of ["entityRef", "matterRef", "mention"] as const) {
+      const optionalValue = document[key];
+      if (optionalValue === undefined) {
+        continue;
+      }
+      if (typeof optionalValue !== "string") {
+        return null;
+      }
+      parsed[key] = optionalValue;
+    }
+    documents.push(parsed);
+  }
+
+  return documents;
+};
+
+const parseUsageMetadata = (
+  value: unknown,
+): ChatMessageMetadata["usage"] | null => {
+  if (!isJsonRecord(value)) {
+    return null;
+  }
+
+  const completionTokens = value["completionTokens"];
+  const promptTokens = value["promptTokens"];
+  const totalTokens = value["totalTokens"];
+  if (
+    typeof completionTokens !== "number" ||
+    typeof promptTokens !== "number" ||
+    typeof totalTokens !== "number"
+  ) {
+    return null;
+  }
+
+  const usage: NonNullable<ChatMessageMetadata["usage"]> = {
+    completionTokens,
+    promptTokens,
+    totalTokens,
+  };
+  const completionTokensDetails = value["completionTokensDetails"];
+  if (completionTokensDetails === undefined) {
+    return usage;
+  }
+  if (!isJsonRecord(completionTokensDetails)) {
+    return null;
+  }
+  const reasoningTokens = completionTokensDetails["reasoningTokens"];
+  if (reasoningTokens !== undefined) {
+    if (typeof reasoningTokens !== "number") {
+      return null;
+    }
+    usage.completionTokensDetails = { reasoningTokens };
+  }
+  return usage;
+};
+
+const isChatMessageMetadataEmpty = (metadata: ChatMessageMetadata): boolean =>
+  metadata.anonRestorations === undefined &&
+  metadata.mentions === undefined &&
+  metadata.sourceDocuments === undefined &&
+  metadata.usage === undefined;
 
 const validateToolCallParts = ({
   message,

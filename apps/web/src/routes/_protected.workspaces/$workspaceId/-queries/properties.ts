@@ -34,18 +34,34 @@ type RawWorkspaceProperty = Omit<
 > & {
   id: string;
   workspaceId: string;
-  tool:
-    | Extract<WorkspaceProperty["tool"], { type: "manual-input" }>
-    | (Omit<
-        Extract<WorkspaceProperty["tool"], { type: "ai-model" }>,
-        "dependencies"
-      > & {
-        dependencies: {
-          dependsOnPropertyId: string;
-          condition: PropertyDependency["condition"];
-        }[];
-      });
+  tool: RawWorkspacePropertyTool;
 };
+
+type RawPropertyDependency = {
+  dependsOnPropertyId: string;
+  condition: PropertyDependency["condition"];
+};
+
+type RawWorkspacePropertyTool =
+  | (Omit<
+      Extract<WorkspaceProperty["tool"], { type: "manual-input" }>,
+      "dependencies"
+    > & {
+      dependencies?: RawPropertyDependency[];
+    })
+  | (Omit<
+      Extract<WorkspaceProperty["tool"], { type: "ai-model" }>,
+      "dependencies"
+    > & {
+      dependencies: RawPropertyDependency[];
+    })
+  | (Omit<
+      Extract<WorkspaceProperty["tool"], { type: "playbook-verdict" }>,
+      "askPropertyId" | "dependencies"
+    > & {
+      askPropertyId: string;
+      dependencies: RawPropertyDependency[];
+    });
 
 const toWorkspaceProperty = (
   property: RawWorkspaceProperty,
@@ -55,19 +71,45 @@ const toWorkspaceProperty = (
     ...property,
     id,
     workspaceId: toSafeId<"workspace">(property.workspaceId),
-    tool:
-      property.tool.type === "manual-input"
-        ? property.tool
-        : {
-            ...property.tool,
-            dependencies: property.tool.dependencies.map((dependency) => ({
-              ...dependency,
-              dependsOnPropertyId: toSafeId<"property">(
-                dependency.dependsOnPropertyId,
-              ),
-            })),
-          },
+    tool: toWorkspacePropertyTool(property.tool),
   } satisfies WorkspaceProperty;
 
   return workspaceProperty;
 };
+
+const toWorkspacePropertyTool = (
+  tool: RawWorkspacePropertyTool,
+): WorkspaceProperty["tool"] => {
+  if (tool.type === "playbook-verdict") {
+    return {
+      ...tool,
+      askPropertyId: toSafeId<"property">(tool.askPropertyId),
+      dependencies: toPropertyDependencies(tool.dependencies),
+    };
+  }
+
+  if (tool.type === "ai-model") {
+    return {
+      ...tool,
+      dependencies: toPropertyDependencies(tool.dependencies),
+    };
+  }
+
+  const { dependencies, ...manualTool } = tool;
+  if (dependencies === undefined) {
+    return manualTool;
+  }
+
+  return {
+    ...manualTool,
+    dependencies: toPropertyDependencies(dependencies),
+  };
+};
+
+const toPropertyDependencies = (
+  dependencies: RawPropertyDependency[],
+): PropertyDependency[] =>
+  dependencies.map((dependency) => ({
+    ...dependency,
+    dependsOnPropertyId: toSafeId<"property">(dependency.dependsOnPropertyId),
+  }));

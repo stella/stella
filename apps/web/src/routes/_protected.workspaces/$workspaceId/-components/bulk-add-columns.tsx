@@ -25,6 +25,7 @@ import { Skeleton } from "@stll/ui/components/skeleton";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
+import { toSafeId } from "@/lib/safe-id";
 import type { PropertyDependency, WorkspacePropertyOption } from "@/lib/types";
 import {
   COMPOSER_CARD_CLASS,
@@ -341,7 +342,7 @@ const BulkBody = ({ workspaceId, onClose, dirtyRef }: BulkBodyProps) => {
           ...new Set([...d.fileIds, ...d.mentions]),
         ].filter((id) => scopeDocType === null || id !== classifier?.id);
         const dependencies: PropertyDependency[] = dependencyIds.map((id) => ({
-          dependsOnPropertyId: id,
+          dependsOnPropertyId: toSafeId<"property">(id),
           condition: null,
         }));
         if (classifier && scopeDocType !== null) {

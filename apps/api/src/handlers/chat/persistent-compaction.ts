@@ -7,6 +7,7 @@ import {
   chatThreadCompactions,
   chatThreads,
 } from "@/api/db/schema";
+import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_COMPACTION_PROMPT_VERSION,
   createCompactionSummaryMessage,
@@ -326,7 +327,10 @@ export const chatCompactionSnapshotMessagesEqual = (
     return (
       row.id === message.id &&
       row.role === message.role &&
-      jsonEqual(row.content.data, message.parts)
+      jsonEqual(
+        normalizePersistedChatMessageContent(row.content).parts,
+        message.parts,
+      )
     );
   });
 };

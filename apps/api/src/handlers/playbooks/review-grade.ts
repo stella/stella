@@ -11,8 +11,8 @@ import type {
   DocxFolioCitation,
 } from "@/api/handlers/playbooks/review-extract";
 import type { VerdictTier } from "@/api/handlers/playbooks/verdict-tiers";
-import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
-import type { AIUsageMetering } from "@/api/lib/analytics/ai";
+import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
+import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {

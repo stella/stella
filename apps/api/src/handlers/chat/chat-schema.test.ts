@@ -17,7 +17,7 @@ import {
   validateChatFileParts,
   validateStoredFileRefs,
 } from "./attachment-validation";
-import type { ChatMessage } from "./types";
+import type { ChatMessage, ChatMessageMetadata } from "./types";
 
 type ChatParts = ChatMessage["parts"];
 
@@ -169,6 +169,60 @@ describe("validateMessage", () => {
     expect(result.value.message.parts).toEqual([
       { type: "text", content: "Ahoj" },
     ]);
+  });
+
+  test("preserves incoming assistant metadata on continuations", async () => {
+    const metadata = {
+      anonRestorations: {
+        pairs: [{ placeholder: "[PERSON_1]", original: "Ada Lovelace" }],
+      },
+      mentions: {
+        mentions: [
+          {
+            category: "entity",
+            id: "entity_1",
+            label: "Source memo",
+            workspaceId: "workspace_1",
+          },
+        ],
+      },
+      sourceDocuments: [
+        {
+          entityId: "entity_1",
+          entityRef: "E-1",
+          kind: "document",
+          mimeType: "application/pdf",
+          title: "Source memo",
+          workspaceId: "workspace_1",
+        },
+      ],
+      usage: {
+        completionTokens: 3,
+        promptTokens: 2,
+        totalTokens: 5,
+        completionTokensDetails: { reasoningTokens: 1 },
+      },
+    } satisfies ChatMessageMetadata;
+
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_metadata_continuation"),
+        role: "assistant",
+        metadata,
+        parts: [{ type: "text", content: "Done" }],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_metadata_continuation"),
+      tools: noTools,
+      userId: userId("user_metadata_continuation"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      return;
+    }
+
+    expect(result.value.message.metadata).toEqual(metadata);
   });
 
   test("rejects old text parts at the live boundary", async () => {
