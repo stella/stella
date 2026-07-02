@@ -104,6 +104,15 @@ echo "Current tag $current_tag is on channel '$current_channel'" >&2
 #     stale and wrong; compatibility is the bridge handshake).
 #   - VERSION: every tag exists because VERSION bumped, so including
 #     it would make the diff never empty and defeat the skip entirely.
+#   - Root package.json / bun.lock: these change with nearly every
+#     release (repo-wide dependency maintenance), so including them
+#     would also defeat the skip. This is an accepted staleness
+#     window: a root catalog bump of a settings-webview JS dep does
+#     not rebuild the desktop until the next in-path change. The
+#     shipped native binary's dependencies are pinned in-tree
+#     (apps/desktop/src-tauri/Cargo.lock) and therefore ARE covered;
+#     when a root-level bump must ship immediately, a manual
+#     workflow_dispatch of release-desktop.yml forces a build.
 rebuild_paths=(
   "apps/desktop/"
   "packages/ui/"
