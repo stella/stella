@@ -9,7 +9,7 @@
  */
 
 import { Result } from "better-result";
-import { and, desc, eq, inArray, or } from "drizzle-orm";
+import { and, desc, eq, inArray, lt, or } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { aiMemories } from "@/api/db/schema";
@@ -20,8 +20,15 @@ import { stripPromptUnsafeChars } from "@/api/lib/prompt-safety";
 // context window or the prompt-cache budget on this one block.
 const MEMORY_ROW_LIMIT = 30;
 const MEMORY_BLOCK_MAX_CHARS = 2000;
+// Injection re-stamps `lastUsedAt` so the curator's stale/archive sweep
+// keeps in-use memories alive, but at most once per hour per row: chat
+// injects on every message, and stamping each one would rewrite up to
+// MEMORY_ROW_LIMIT rows per message for a signal the 30-day staleness
+// window cannot even see.
+const STAMP_MIN_INTERVAL_MS = 60 * 60 * 1000;
 
 type MemoryRow = {
+  id: SafeId<"aiMemory">;
   content: string;
   kind: typeof aiMemories.$inferSelect.kind;
   pinned: boolean;
@@ -59,6 +66,7 @@ export const buildMemoryPromptParts = async ({
       safeDb((tx) =>
         tx
           .select({
+            id: aiMemories.id,
             content: aiMemories.content,
             kind: aiMemories.kind,
             pinned: aiMemories.pinned,
@@ -89,6 +97,31 @@ export const buildMemoryPromptParts = async ({
           .limit(MEMORY_ROW_LIMIT),
       ),
     );
+
+    if (rows.length > 0) {
+      // Keep injected memories out of the curator's stale/archive sweep.
+      // The interval guard usually matches zero rows, so the write cost
+      // on the per-message chat path stays negligible.
+      const stampCutoff = new Date(Date.now() - STAMP_MIN_INTERVAL_MS);
+      yield* Result.await(
+        safeDb(async (tx) => {
+          // audit: skip — usage-recency bookkeeping (lastUsedAt); no
+          // content or governance change.
+          await tx
+            .update(aiMemories)
+            .set({ lastUsedAt: new Date() })
+            .where(
+              and(
+                inArray(
+                  aiMemories.id,
+                  rows.map((row) => row.id),
+                ),
+                lt(aiMemories.lastUsedAt, stampCutoff),
+              ),
+            );
+        }),
+      );
+    }
 
     const block = renderMemoryBlock({
       contextMatterIds,
