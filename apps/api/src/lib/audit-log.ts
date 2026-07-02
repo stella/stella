@@ -45,6 +45,7 @@ export const AUDIT_RESOURCE_TYPE = {
   PROMPT_SHORTCUT: "prompt_shortcut",
   PROPERTY: "property",
   RATE_ENTRY: "rate_entry",
+  REPORT_EXPORT: "report_export",
   RATE_TABLE: "rate_table",
   TEMPLATE: "template",
   TIME_ENTRY: "time_entry",
@@ -110,6 +111,38 @@ const baseRequestMetadata = (
   forwardedFor: nullableHeader(request.headers, "x-forwarded-for"),
   userAgent: nullableHeader(request.headers, "user-agent"),
 });
+
+/**
+ * Audit recorder for background jobs (BullMQ workers) that run without an HTTP
+ * request. Same insert shape as {@link createAuditRecorder}, but with no
+ * request-derived metadata (IP, UA, forwarded-for) since there is no request.
+ */
+export const createBackgroundAuditRecorder =
+  (bindings: {
+    organizationId: SafeId<"organization">;
+    workspaceId: SafeId<"workspace"> | null;
+    userId: SafeId<"user">;
+  }): AuditRecorder =>
+  async (tx, event) => {
+    const events = Array.isArray(event) ? event : [event];
+    if (events.length === 0) {
+      return;
+    }
+
+    await tx.insert(auditLogs).values(
+      events.map((e) => ({
+        organizationId: bindings.organizationId,
+        workspaceId:
+          e.workspaceId === undefined ? bindings.workspaceId : e.workspaceId,
+        userId: bindings.userId,
+        action: e.action,
+        resourceType: e.resourceType,
+        resourceId: e.resourceId,
+        metadata: e.metadata ?? null,
+        changes: e.changes ?? null,
+      })),
+    );
+  };
 
 export const createAuditRecorder = (
   bindings: AuditRecorderBindings,

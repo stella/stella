@@ -783,7 +783,7 @@ export const processBlockDirectives = (
     doc: slimdom.Document,
   ): void => {
     const tbl = row.parentNode;
-    if (!tbl) {
+    if (!tbl || !isElement(tbl)) {
       return;
     }
 
@@ -875,7 +875,7 @@ export const processBlockDirectives = (
     doc: slimdom.Document,
   ): void => {
     const parent = openerP.parentNode;
-    if (!parent) {
+    if (!parent || !isElement(parent)) {
       return;
     }
 

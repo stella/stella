@@ -66,6 +66,7 @@ export type SafeIdType =
   | "propertyDependency"
   | "rateEntry"
   | "rateTable"
+  | "reportExport"
   | "schedulerJobRun"
   | "taskAssignee"
   | "task"
