@@ -12,6 +12,7 @@ export const MCP_DEFAULT_RESOURCE_SCOPES = [
 export const MCP_ANONYMIZED_RESOURCE_SCOPES = [
   "stella:search_anonymized",
   "stella:read_anonymized",
+  "stella:templates_anonymized",
 ] as const;
 
 export const MCP_ALL_RESOURCE_SCOPES = [

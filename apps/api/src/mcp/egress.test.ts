@@ -218,4 +218,169 @@ describe("finalizeMcpEgress", () => {
     expect(anonPayload.results[0]?.title).toBe("[PERSON_1] SPA");
     expect(anonPayload.results[0]?.workspaceId).toBeUndefined();
   });
+
+  test("structured plan batches anonymization per workspace and applies it back", async () => {
+    // Two matters in two workspaces. Each workspace anonymizes in its own
+    // batch, so placeholders reset per tenant and cannot cross-reference.
+    const matters = [
+      { id: "ws_1", name: "John Smith Ltd" },
+      { id: "ws_2", name: "Jane Doe GmbH" },
+    ];
+    anonymizeTextFieldsMock
+      .mockResolvedValueOnce({ entityCount: 1, fields: ["[PERSON_1] Ltd"] })
+      .mockResolvedValueOnce({ entityCount: 1, fields: ["[PERSON_1] GmbH"] });
+
+    const payload = asTestRaw<{ matters: { id: string; name: string }[] }>(
+      parseText(
+        await finalizeMcpEgress({
+          context: createContext(),
+          mode: "anonymized",
+          response: {
+            egress: "structured",
+            payload: { matters },
+            textFields: matters.map((matter) => ({
+              apply: (value: string) => {
+                matter.name = value;
+              },
+              value: matter.name,
+              workspaceId: matter.id,
+            })),
+          },
+        }),
+      ),
+    );
+
+    expect(payload.matters[0]?.name).toBe("[PERSON_1] Ltd");
+    expect(payload.matters[1]?.name).toBe("[PERSON_1] GmbH");
+    expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(2);
+    expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0]).toMatchObject({
+      fields: ["John Smith Ltd"],
+      workspaceId: "ws_1",
+    });
+    expect(anonymizeTextFieldsMock.mock.calls.at(1)?.[0]).toMatchObject({
+      fields: ["Jane Doe GmbH"],
+      workspaceId: "ws_2",
+    });
+  });
+
+  test("structured plan anonymizes the whole field before windowing it", async () => {
+    // The window field is anonymized first, so the redacted placeholder is
+    // intact at the window edge and the raw name never appears in any slice.
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: ["[PERSON_1] doc", `[PERSON_1] signed here and there`],
+    });
+    const payload: {
+      name: string;
+      text: string;
+      charCount: number;
+      truncated: boolean;
+      nextCursor: string | null;
+    } = {
+      name: "John Smith doc",
+      text: "John Smith signed here and there",
+      charCount: 0,
+      truncated: false,
+      nextCursor: null,
+    };
+
+    const result = asTestRaw<typeof payload>(
+      parseText(
+        await finalizeMcpEgress({
+          context: createContext(),
+          mode: "anonymized",
+          response: {
+            egress: "structured",
+            payload,
+            textFields: [
+              {
+                apply: (value: string) => {
+                  payload.name = value;
+                },
+                value: payload.name,
+                workspaceId: "ws_1",
+              },
+              {
+                apply: (value: string) => {
+                  payload.text = value;
+                },
+                value: payload.text,
+                workspaceId: "ws_1",
+              },
+            ],
+            window: {
+              cursor: undefined,
+              maxChars: 10,
+              read: () => payload.text,
+              apply: (textWindow) => {
+                payload.text = textWindow.text;
+                payload.charCount = textWindow.charCount;
+                payload.truncated = textWindow.truncated;
+                payload.nextCursor = textWindow.nextCursor;
+              },
+            },
+          },
+        }),
+      ),
+    );
+
+    // First 10 chars of the ANONYMIZED text, not the raw text.
+    expect(result.text).toBe("[PERSON_1]");
+    expect(result.text).not.toContain("John Smith");
+    expect(result.charCount).toBe("[PERSON_1] signed here and there".length);
+    expect(result.truncated).toBe(true);
+    expect(result.nextCursor).not.toBeNull();
+    expect(result.name).toBe("[PERSON_1] doc");
+  });
+
+  test("structured plan windows raw text and skips anonymization in default mode", async () => {
+    const payload: {
+      text: string;
+      charCount: number;
+      truncated: boolean;
+      nextCursor: string | null;
+    } = {
+      text: "John Smith signed here",
+      charCount: 0,
+      truncated: false,
+      nextCursor: null,
+    };
+
+    const result = asTestRaw<typeof payload>(
+      parseText(
+        await finalizeMcpEgress({
+          context: createContext(),
+          mode: "default",
+          response: {
+            egress: "structured",
+            payload,
+            textFields: [
+              {
+                apply: (value: string) => {
+                  payload.text = value;
+                },
+                value: payload.text,
+                workspaceId: "ws_1",
+              },
+            ],
+            window: {
+              cursor: undefined,
+              maxChars: 10,
+              read: () => payload.text,
+              apply: (textWindow) => {
+                payload.text = textWindow.text;
+                payload.charCount = textWindow.charCount;
+                payload.truncated = textWindow.truncated;
+                payload.nextCursor = textWindow.nextCursor;
+              },
+            },
+          },
+        }),
+      ),
+    );
+
+    expect(result.text).toBe("John Smith");
+    expect(result.charCount).toBe("John Smith signed here".length);
+    expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
+  });
 });
