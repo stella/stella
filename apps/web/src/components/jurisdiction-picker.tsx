@@ -22,12 +22,14 @@ type JurisdictionPickerProps = {
   selected: readonly PracticeJurisdiction[];
   suggestedCountryCodes?: readonly CountryCode[];
   onChange: (jurisdictions: PracticeJurisdiction[]) => void;
+  autoFocus?: boolean;
 };
 
 export const JurisdictionPicker = ({
   selected,
   suggestedCountryCodes = NO_SUGGESTED_COUNTRY_CODES,
   onChange,
+  autoFocus = false,
 }: JurisdictionPickerProps) => {
   const t = useTranslations();
   const locale = useLocale();
@@ -106,6 +108,7 @@ export const JurisdictionPicker = ({
         </InputGroupAddon>
         <InputGroupInput
           aria-label={t("onboarding.jurisdictionSearchLabel")}
+          autoFocus={autoFocus}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("onboarding.jurisdictionSearchPlaceholder")}
           value={query}
