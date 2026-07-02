@@ -15,6 +15,29 @@ export const W_NS = OOXML_NS.w;
 export const isElement = (node: slimdom.Node): node is slimdom.Element =>
   node.nodeType === node.ELEMENT_NODE;
 
+/**
+ * Nearest ancestor (or self) that is a `w:<localName>` element, or `null`.
+ * Used by loop expansion to decide whether an `{{#each}}`/`{{/each}}` marker
+ * sits inside a table row (`w:tr`) or cell (`w:tc`).
+ */
+export const ancestorByLocalName = (
+  node: slimdom.Node,
+  localName: string,
+): slimdom.Element | null => {
+  let current: slimdom.Node | null = node;
+  while (current) {
+    if (
+      isElement(current) &&
+      current.localName === localName &&
+      current.namespaceURI === W_NS
+    ) {
+      return current;
+    }
+    current = current.parentNode;
+  }
+  return null;
+};
+
 // ── ID helpers ────────────────────────────────────────────
 
 /** Walk the DOM tree and collect all integer `w:id` attribute values. */
