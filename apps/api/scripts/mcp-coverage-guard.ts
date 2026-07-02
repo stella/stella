@@ -111,44 +111,39 @@ export const toEndpointIdentifier = (
     : absPath;
 };
 
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
+
 /** Narrow an unknown default export to an endpoint definition shape. */
 export const isEndpointModule = (
   value: unknown,
 ): value is { config: Record<string, unknown>; handler: unknown } => {
-  if (typeof value !== "object" || value === null) {
+  if (!isRecord(value)) {
     return false;
   }
-  if (!("config" in value) || !("handler" in value)) {
-    return false;
-  }
-  const { config, handler } = value as { config: unknown; handler: unknown };
-  return (
-    typeof handler === "function" &&
-    typeof config === "object" &&
-    config !== null
-  );
+  return typeof value["handler"] === "function" && isRecord(value["config"]);
 };
 
 /** Parse a config's `mcp` value into a discriminated result the guard checks. */
 export const parseExposure = (mcp: unknown): ParsedExposure => {
-  if (typeof mcp !== "object" || mcp === null || !("type" in mcp)) {
+  if (!isRecord(mcp)) {
     return { type: "invalid", raw: mcp };
   }
-  const type = (mcp as { type: unknown }).type;
+  const type = mcp["type"];
   if (type === "pending") {
     return { type: "pending" };
   }
-  if (type === "tool" && typeof (mcp as { name?: unknown }).name === "string") {
-    return { type: "tool", name: (mcp as { name: string }).name };
+  const name = mcp["name"];
+  if (type === "tool" && typeof name === "string") {
+    return { type: "tool", name };
   }
-  if (type === "covered" && typeof (mcp as { by?: unknown }).by === "string") {
-    return { type: "covered", by: (mcp as { by: string }).by };
+  const by = mcp["by"];
+  if (type === "covered" && typeof by === "string") {
+    return { type: "covered", by };
   }
-  if (
-    type === "internal" &&
-    typeof (mcp as { reason?: unknown }).reason === "string"
-  ) {
-    return { type: "internal", reason: (mcp as { reason: string }).reason };
+  const reason = mcp["reason"];
+  if (type === "internal" && typeof reason === "string") {
+    return { type: "internal", reason };
   }
   return { type: "invalid", raw: mcp };
 };
@@ -259,12 +254,21 @@ const readBaseline = async (): Promise<string[]> => {
     return [];
   }
   const parsed: unknown = await file.json();
-  if (!Array.isArray(parsed) || parsed.some((x) => typeof x !== "string")) {
+  if (!Array.isArray(parsed)) {
     return panic(
       `mcp-coverage-guard: ${BASELINE_PATH} must be a JSON array of strings.`,
     );
   }
-  return parsed as string[];
+  const entries: string[] = [];
+  for (const item of parsed) {
+    if (typeof item !== "string") {
+      return panic(
+        `mcp-coverage-guard: ${BASELINE_PATH} must be a JSON array of strings.`,
+      );
+    }
+    entries.push(item);
+  }
+  return entries;
 };
 
 const writeBaseline = async (pending: readonly string[]): Promise<void> => {
@@ -296,9 +300,9 @@ const discoverEndpoints = async (): Promise<Discovered> => {
       continue;
     }
     const id = toEndpointIdentifier(rel, REPO_ROOT);
-    let mod: Record<string, unknown>;
+    let mod: unknown;
     try {
-      mod = (await import(rel)) as Record<string, unknown>;
+      mod = await import(rel);
     } catch (error) {
       importErrors.push({
         id,
@@ -306,10 +310,13 @@ const discoverEndpoints = async (): Promise<Discovered> => {
       });
       continue;
     }
-    if (!isEndpointModule(mod.default)) {
+    if (!isRecord(mod) || !isEndpointModule(mod["default"])) {
       continue;
     }
-    endpoints.push({ id, exposure: parseExposure(mod.default.config.mcp) });
+    endpoints.push({
+      id,
+      exposure: parseExposure(mod["default"].config["mcp"]),
+    });
   }
 
   endpoints.sort((a, b) => a.id.localeCompare(b.id));
