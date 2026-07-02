@@ -26,6 +26,7 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/handlers/docx/ai-field-generator";
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
+import { convertToPdf } from "@/api/handlers/files/gotenberg";
 import { buildReportData } from "@/api/handlers/reports/build-report-data";
 import { getBuiltinReportTemplate } from "@/api/handlers/reports/builtin-templates";
 import {
@@ -44,6 +45,7 @@ import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { connectionErrorFields, errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { createBullMqConnection } from "@/api/lib/redis-client";
+import { recoverStuckReportExports } from "@/api/lib/report-export-recovery";
 import { createRootSafeDb, createRootScopedDb } from "@/api/lib/root-scoped-db";
 import { getS3 } from "@/api/lib/s3";
 import {
@@ -53,7 +55,7 @@ import {
 } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { parseViewLayout } from "@/api/lib/views-schema";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
 const QUEUE_NAME = "report-exports";
 const JOB_NAME = "export-report";
@@ -62,12 +64,20 @@ const WORKER_CONCURRENCY = 2;
 // document; a BullMQ retry would double both. Failures are persisted on the row.
 const JOB_ATTEMPTS = 1;
 const ERROR_MESSAGE_MAX_CHARS = 1000;
+const DOCX_TO_PDF_ERROR = "Failed to convert the report to PDF.";
+
+/** Delivery format chosen at export time. Carried on the job (not the export
+ *  row): the worker needs it to convert + name the artifact, and the status
+ *  endpoint derives the download filename from the stored key's extension, so
+ *  no schema column is required. */
+export type ReportExportFormat = "docx" | "pdf";
 
 type ReportExportJobData = {
   exportId: string;
   workspaceId: string;
   organizationId: string;
   userId: string;
+  format: ReportExportFormat;
 };
 
 export type EnqueueReportExportArgs = {
@@ -75,6 +85,7 @@ export type EnqueueReportExportArgs = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  format: ReportExportFormat;
 };
 
 let queue: Queue<ReportExportJobData> | null = null;
@@ -102,10 +113,11 @@ export const enqueueReportExport = async ({
   workspaceId,
   organizationId,
   userId,
+  format,
 }: EnqueueReportExportArgs): Promise<void> => {
   await getQueue().add(
     JOB_NAME,
-    { exportId, workspaceId, organizationId, userId },
+    { exportId, workspaceId, organizationId, userId, format },
     { jobId: createBullMqJobId(workspaceId, exportId) },
   );
 };
@@ -122,6 +134,20 @@ export const toExportErrorMessage = (cause: unknown): string => {
 };
 
 export const initReportExportWorker = () => {
+  // Heal exports stranded by a previous process's hard death before serving new
+  // ones. Fire-and-forget: a sweep failure must not block worker startup, and
+  // the next boot re-attempts it.
+  recoverStuckReportExports()
+    .then((count) => {
+      if (count > 0) {
+        logger.warn("report_export.recovered_stuck", { count: String(count) });
+      }
+      return count;
+    })
+    .catch((error: unknown) => {
+      captureError(error, { operation: "report_export.recover_stuck" });
+    });
+
   const workerConnection = createBullMqConnection();
 
   const worker = new Worker<ReportExportJobData>(
@@ -225,7 +251,7 @@ const processReportExportJob = async (
   await setExportStatus(actor, "running");
 
   const outcome = await Result.tryPromise({
-    try: async () => await runExport({ actor, row }),
+    try: async () => await runExport({ actor, row, format: data.format }),
     catch: (cause) => cause,
   });
 
@@ -240,12 +266,69 @@ type ExportRow = {
   layout: unknown;
 };
 
+/** Delivery artifact: the bytes to store plus the mime + extension that name
+ *  it. `pdf` runs the filled DOCX through Gotenberg; conversion failure is a
+ *  typed error string persisted on the row. */
+export type ReportDelivery =
+  | { buffer: Uint8Array; mimeType: string; ext: ReportExportFormat }
+  | { error: string };
+
+/** Injectable seam for the DOCX→PDF conversion so the format branching is
+ *  unit-testable without reaching Gotenberg. */
+type ConvertReportToPdf = (
+  docx: Buffer,
+) => Promise<Result<ArrayBuffer, unknown>>;
+
+const convertReportDocxToPdf: ConvertReportToPdf = async (docx) => {
+  const bytes = new Uint8Array(docx);
+  const result = await convertToPdf(
+    bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength),
+    "report.docx",
+    DOCX_MIME_TYPE,
+  );
+  if (Result.isError(result)) {
+    return result;
+  }
+  return Result.ok(result.value.buffer);
+};
+
+/** Resolve the delivery artifact for the chosen format. DOCX passes the filled
+ *  buffer through unchanged; PDF converts via `convertToPdfBuffer`. */
+export const buildReportDelivery = async ({
+  docxBuffer,
+  format,
+  convertToPdfBuffer = convertReportDocxToPdf,
+}: {
+  docxBuffer: Buffer;
+  format: ReportExportFormat;
+  convertToPdfBuffer?: ConvertReportToPdf;
+}): Promise<ReportDelivery> => {
+  if (format === "docx") {
+    return {
+      buffer: new Uint8Array(docxBuffer),
+      mimeType: DOCX_MIME_TYPE,
+      ext: "docx",
+    };
+  }
+  const pdf = await convertToPdfBuffer(docxBuffer);
+  if (Result.isError(pdf)) {
+    return { error: DOCX_TO_PDF_ERROR };
+  }
+  return {
+    buffer: new Uint8Array(pdf.value),
+    mimeType: PDF_MIME_TYPE,
+    ext: "pdf",
+  };
+};
+
 const runExport = async ({
   actor,
   row,
+  format,
 }: {
   actor: ExportActor;
   row: ExportRow;
+  format: ReportExportFormat;
 }): Promise<void> => {
   const layout = parseViewLayout(row.layout);
   if (layout.type !== "table") {
@@ -299,8 +382,17 @@ const runExport = async ({
     return;
   }
 
+  const delivery = await buildReportDelivery({
+    docxBuffer: filled.buffer,
+    format,
+  });
+  if ("error" in delivery) {
+    await markExportFailedRow(actor, delivery.error);
+    return;
+  }
+
   const fileName = sanitizeFilename(
-    `${workspaceName} - ${filled.templateName}.docx`,
+    `${workspaceName} - ${filled.templateName}.${delivery.ext}`,
   );
 
   if (row.mode === "workspace") {
@@ -314,9 +406,9 @@ const runExport = async ({
         workspaceId: actor.workspaceId,
         userId: actor.userId,
       }),
-      buffer: filled.buffer,
+      buffer: delivery.buffer,
       fileName,
-      mimeType: DOCX_MIME_TYPE,
+      mimeType: delivery.mimeType,
     });
     if (Result.isError(created)) {
       await markExportFailedRow(actor, created.error.message);
@@ -328,10 +420,13 @@ const runExport = async ({
     return;
   }
 
-  // Download mode: write under the org/workspace-scoped exports/ prefix (a
-  // bucket lifecycle rule expires this prefix); the status endpoint presigns it.
-  const key = `${actor.organizationId}/${actor.workspaceId}/exports/${actor.exportId}.docx`;
-  await getS3().write(key, new Uint8Array(filled.buffer));
+  // Download mode: write under the root exports/ prefix (S3 lifecycle prefix
+  // filters anchor at the key start, so the scratch prefix must lead the key;
+  // org/workspace segments keep the key tenant-scoped); the status endpoint
+  // presigns it. The stored key's extension is what the status endpoint uses
+  // to name the download, so no format column is needed on the export row.
+  const key = `exports/${actor.organizationId}/${actor.workspaceId}/${actor.exportId}.${delivery.ext}`;
+  await getS3().write(key, delivery.buffer);
   await completeExport(actor, { resultS3Key: key });
 };
 

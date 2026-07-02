@@ -35,15 +35,16 @@ const TC = (...paragraphs: string[]): string =>
 
 const TR = (...cells: string[]): string => `<w:tr>${cells.join("")}</w:tr>`;
 
-const TBL = (...rows: string[]): string =>
+const TBL = (columnCount: number, ...rows: string[]): string =>
   '<w:tbl><w:tblPr><w:tblStyle w:val="TableGrid"/>' +
   '<w:tblW w:w="0" w:type="auto"/></w:tblPr>' +
-  "<w:tblGrid><w:gridCol/><w:gridCol/><w:gridCol/></w:tblGrid>" +
+  `<w:tblGrid>${"<w:gridCol/>".repeat(columnCount)}</w:tblGrid>` +
   `${rows.join("")}</w:tbl>`;
 
 // ── Report body (matches build-report-data.ts ReportData shape) ──────────────
 
 const fieldsTable = TBL(
+  3,
   TR(TC(P("Field")), TC(P("Value")), TC(P("Verdict"))),
   TR(
     TC(P("{{#each contracts.fields}}"), P("{{contracts.fields.label}}")),
@@ -76,6 +77,29 @@ const contractSection =
   P("{{contracts.summary}}") +
   P("{{/each}}");
 
+// Annex: a consolidated docs × columns overview. The row-repeat clones one
+// `w:tr` per contract (`{{#each grid.rows}}`), but the grammar has no
+// cell-repeat, so a true dynamic-column matrix (one column per review column) is
+// not renderable from a static template. The annex therefore uses two fixed
+// columns — the contract name and a pre-joined "Label: value" summary cell
+// (`grid.rows.summary`). The data object still carries the faithful
+// `grid.columns`/`grid.rows.cells` matrix for callers that can consume it.
+const annexTable = TBL(
+  2,
+  TR(TC(P("Contract")), TC(P("Review summary"))),
+  TR(
+    TC(P("{{#each grid.rows}}"), P("{{grid.rows.name}}")),
+    TC(P("{{grid.rows.summary}}"), P("{{/each}}")),
+  ),
+);
+
+const annexSection =
+  styledP("Annex — Review matrix", "Heading1") +
+  P(
+    "A consolidated overview of every reviewed contract and its extracted columns.",
+  ) +
+  annexTable;
+
 const bodyXml =
   styledP("Executive Summary", "Heading1") +
   P("{{execSummary}}") +
@@ -84,7 +108,8 @@ const bodyXml =
   ) +
   P("Workspace: {{workspace.name}} — Generated: {{generatedAt}}") +
   styledP("Contract Review", "Heading1") +
-  contractSection;
+  contractSection +
+  annexSection;
 
 const TITLE = "Due Diligence Report";
 

@@ -45,6 +45,11 @@ const config = {
     templateRef: templateRefSchema,
     viewId: tSafeId("workspaceView"),
     mode: t.Union([t.Literal("workspace"), t.Literal("download")]),
+    // Output format. The fill pipeline always builds a DOCX; `pdf` converts it
+    // via Gotenberg before delivery. Optional for back-compat; absent defaults
+    // to docx (also matches Elysia's optional-UnionEnum coercion to the first
+    // literal). The frontend always sends it explicitly.
+    format: t.Optional(t.Union([t.Literal("docx"), t.Literal("pdf")])),
   }),
 } satisfies HandlerConfig;
 
@@ -193,6 +198,7 @@ const exportViewReport = createSafeHandler(
           workspaceId,
           organizationId,
           userId: user.id,
+          format: body.format ?? "docx",
         }),
       catch: (cause) => cause,
     });

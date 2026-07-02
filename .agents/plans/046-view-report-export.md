@@ -133,8 +133,17 @@ can adapt it to house style in Template Studio.
 
 **Out of scope (for now):**
 
-- Flat docs-x-columns grid annex (later template addition once row/table
-  repeat exists; likely just a second `{{#each}}` in the template).
+- Review-matrix annex — SHIPPED as a follow-up, but with a documented limit.
+  The report data now carries a faithful `grid: { columns, rows: [{ name,
+  cells, summary }] }` matrix, and the built-in template appends an
+  "Annex — Review matrix" section. Because the row-repeat engine clones a
+  `w:tr` per item but has **no cell-repeat** (`block-directives.ts`), a static
+  template cannot emit one dynamic column per review column. The v1 annex
+  therefore uses two fixed columns — the contract name and a pre-joined
+  "Label: value" summary cell (`grid.rows.summary`). A **true dynamic-column
+  matrix** (one `w:tc` per review column) remains deferred: it needs a
+  cell-repeat capability in the loop engine (clone `w:tc` within a `w:tr`),
+  which is a deliberate engine addition, not a template tweak.
 - Red-flag-only filtering, per-group export, custom report scoping beyond
   the view's own filters.
 - Localized default templates (default ships in en; the grammar and data

@@ -102,14 +102,45 @@ export type ReportStats = {
   bySeverity: { blocker: number; high: number; medium: number; low: number };
 };
 
+/** One column header of the review-matrix annex (one per visible property
+ *  column, ASK/verdict paired the same way the per-contract field table pairs
+ *  them). */
+export type ReportGridColumn = { label: string };
+
+/** One contract's value under a single review column. `value` folds the verdict
+ *  tier in as a suffix, mirroring how the per-contract field table surfaces it. */
+export type ReportGridCell = { label: string; value: string };
+
+export type ReportGridRow = {
+  name: string;
+  cells: ReportGridCell[];
+  /** Pre-joined "Label: value" text for the whole row. The DOCX row-repeat can
+   *  clone a `w:tr` per row but not a `w:tc` per column (no cell-repeat in the
+   *  grammar), so a true dynamic-column matrix is not renderable; the built-in
+   *  annex renders this consolidated summary cell instead. `columns`/`cells`
+   *  keep the faithful matrix data for callers that can consume it. */
+  summary: string;
+};
+
+/** Docs × columns review matrix: the same visible columns and rows the builder
+ *  already walks, reshaped as a grid for the annex. */
+export type ReportGrid = {
+  columns: ReportGridColumn[];
+  rows: ReportGridRow[];
+};
+
 export type ReportData = {
   workspace: { name: string };
   generatedAt: string;
   stats: ReportStats;
   contracts: ReportContract[];
+  grid: ReportGrid;
   // `execSummary` is deliberately absent — a top-level aiPrompt field drafts it
   // at fill time.
 };
+
+/** Join a row's cells into the annex summary cell text. */
+const GRID_CELL_SEPARATOR = " · ";
 
 /** Whether a row (contract) count exceeds the hard export cap. Exported as a
  *  pure predicate so both the enqueue count check and the build-time guard —
@@ -287,7 +318,34 @@ export const assembleReportData = ({
     generatedAt: formatGeneratedAt(now),
     stats: { total: contracts.length, redFlags, bySeverity },
     contracts,
+    grid: buildReviewGrid(propertyColumns, contracts),
   };
+};
+
+/** Reshape the visible columns + assembled contracts into the annex matrix. The
+ *  cells reuse each contract's already-computed fields (same order as the
+ *  columns), so the annex and the per-contract tables can never disagree. */
+const buildReviewGrid = (
+  propertyColumns: ReportPropertyColumn[],
+  contracts: ReportContract[],
+): ReportGrid => {
+  const columns: ReportGridColumn[] = propertyColumns.map((column) => ({
+    label: column.header,
+  }));
+  const rows: ReportGridRow[] = contracts.map((contract) => {
+    const cells: ReportGridCell[] = contract.fields.map((field) => ({
+      label: field.label,
+      value: field.verdict ? `${field.value} (${field.verdict})` : field.value,
+    }));
+    return {
+      name: contract.name,
+      cells,
+      summary: cells
+        .map((cell) => `${cell.label}: ${cell.value}`)
+        .join(GRID_CELL_SEPARATOR),
+    };
+  });
+  return { columns, rows };
 };
 
 const formatGeneratedAt = (now: Date): string =>

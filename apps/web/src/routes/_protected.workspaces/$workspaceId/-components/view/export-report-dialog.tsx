@@ -47,6 +47,7 @@ import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queri
  */
 
 type DeliveryMode = "workspace" | "download";
+type ReportFormat = "docx" | "pdf";
 
 /** The picker encodes each option as `<prefix><id>` so a single Select can mix
  * deployment built-ins with the org's stored report templates. */
@@ -251,6 +252,14 @@ const DELIVERY_MODES = [
   labelKey: TranslationKey;
 }[];
 
+const FORMATS = [
+  { format: "docx", labelKey: "workspaces.views.reportExport.formatDocx" },
+  { format: "pdf", labelKey: "workspaces.views.reportExport.formatPdf" },
+] as const satisfies readonly {
+  format: ReportFormat;
+  labelKey: TranslationKey;
+}[];
+
 type ExportReportDialogBodyProps = Omit<
   ExportReportDialogProps,
   "open" | "onOpenChange"
@@ -265,6 +274,7 @@ const ExportReportDialogBody = ({
   const analytics = useAnalytics();
   const [templateValue, setTemplateValue] = useState<string | null>(null);
   const [mode, setMode] = useState<DeliveryMode>("workspace");
+  const [format, setFormat] = useState<ReportFormat>("docx");
   const [submitting, setSubmitting] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
@@ -338,6 +348,7 @@ const ExportReportDialogBody = ({
             templateRef,
             viewId: toSafeId<"workspaceView">(view.id),
             mode,
+            format,
           }),
     );
     setSubmitting(false);
@@ -413,6 +424,32 @@ const ExportReportDialogBody = ({
                 tabIndex={mode === option.mode ? 0 : -1}
                 type="button"
                 variant={mode === option.mode ? "secondary" : "outline"}
+              >
+                {t(option.labelKey)}
+              </Button>
+            ))}
+          </div>
+        </fieldset>
+
+        <fieldset className="flex flex-col gap-1.5">
+          <legend className="text-sm font-medium">
+            {t("workspaces.views.reportExport.formatLabel")}
+          </legend>
+          <div
+            aria-label={t("workspaces.views.reportExport.formatLabel")}
+            className="flex gap-1"
+            role="radiogroup"
+          >
+            {FORMATS.map((option) => (
+              <Button
+                aria-checked={format === option.format}
+                key={option.format}
+                onClick={() => setFormat(option.format)}
+                role="radio"
+                size="sm"
+                tabIndex={format === option.format ? 0 : -1}
+                type="button"
+                variant={format === option.format ? "secondary" : "outline"}
               >
                 {t(option.labelKey)}
               </Button>

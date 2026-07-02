@@ -204,5 +204,11 @@ describe("Due Diligence Report built-in template", () => {
     expect(xml).toContain("Summary for contract 1 of 2.");
     // Stats line rendered (the {{stats.total}} value lands in its own run).
     expect(xml).toContain("Contracts reviewed: ");
+
+    // Annex — Review matrix: the row-repeat clones one row per contract and
+    // renders each contract's consolidated "Label: value" summary cell.
+    expect(xml).toContain("Annex — Review matrix");
+    expect(xml).toContain("Governing law: Czech law");
+    expect(xml).toContain("Liability cap: EUR 1,000,000");
   });
 });

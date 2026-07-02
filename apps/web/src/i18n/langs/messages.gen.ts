@@ -3033,6 +3033,9 @@ type Messages = {
         "deliveryLabel": "Delivery";
         "description": "Generate a report document from this view using a report template.";
         "failed": "Report export failed";
+        "formatDocx": "DOCX";
+        "formatLabel": "Format";
+        "formatPdf": "PDF";
         "loadTemplatesFailed": "Couldn’t load report templates.";
         "loadingTemplates": "Loading templates…";
         "noTemplates": "No report templates available.";

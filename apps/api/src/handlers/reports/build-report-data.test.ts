@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import type { JustificationContent } from "@/api/db/schema";
@@ -6,13 +7,17 @@ import type { QueryEntityResult } from "@/api/handlers/entities/query-entities";
 import { buildExportColumns } from "@/api/handlers/views/table-export";
 // eslint-disable-next-line no-restricted-imports -- test fixture: brand a field id for a JustificationContent literal
 import { toSafeId } from "@/api/lib/branded-types";
+import { isStuckReportExport } from "@/api/lib/report-export-recovery";
 import type { ViewLayout } from "@/api/lib/views-schema";
 
 import {
   assembleReportData,
   isReportRowCountOverCap,
 } from "./build-report-data";
-import { toExportErrorMessage } from "./report-export-queue";
+import {
+  buildReportDelivery,
+  toExportErrorMessage,
+} from "./report-export-queue";
 
 // ── Fixture ids (real UUID shape; the no-UUID test asserts none leak) ────────
 const ASK_LAW = "11111111-1111-4111-8111-111111111111";
@@ -319,6 +324,23 @@ describe("assembleReportData", () => {
     expect(serialized).not.toMatch(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}/iu);
     // Contracts are identified positionally.
     expect(data.contracts.map((c) => c.index)).toEqual([1, 2]);
+
+    // The review-matrix annex is built from the same visible columns/rows and
+    // must likewise carry no UUIDs (the serialized check above covers `grid`
+    // too). Columns mirror the property columns; rows mirror the contracts.
+    expect(data.grid.columns.map((column) => column.label)).toEqual([
+      "Governing law",
+      "Term",
+      "Document Type",
+      "Notes",
+    ]);
+    expect(data.grid.rows.map((row) => row.name)).toEqual(["NDA", "MSA"]);
+    // Verdict folds into the cell value as a suffix; the summary pre-joins them.
+    expect(data.grid.rows[0]?.cells[0]).toEqual({
+      label: "Governing law",
+      value: "Czech law (deviation)",
+    });
+    expect(data.grid.rows[0]?.summary).toContain("Governing law: Czech law");
   });
 });
 
@@ -326,6 +348,98 @@ describe("isReportRowCountOverCap", () => {
   test("cap boundary", () => {
     expect(isReportRowCountOverCap(500)).toBe(false);
     expect(isReportRowCountOverCap(501)).toBe(true);
+  });
+});
+
+describe("buildReportDelivery", () => {
+  const docx = Buffer.from("PK docx bytes");
+  const DOCX_MIME =
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
+
+  test("docx passes the filled buffer through unchanged", async () => {
+    let converted = false;
+    const delivery = await buildReportDelivery({
+      docxBuffer: docx,
+      format: "docx",
+      convertToPdfBuffer: async () => {
+        converted = true;
+        return Result.ok(new ArrayBuffer(0));
+      },
+    });
+    if ("error" in delivery) {
+      throw new Error("expected a docx delivery");
+    }
+    expect(delivery.ext).toBe("docx");
+    expect(delivery.mimeType).toBe(DOCX_MIME);
+    expect(Buffer.from(delivery.buffer).equals(docx)).toBe(true);
+    // No Gotenberg round-trip for the native format.
+    expect(converted).toBe(false);
+  });
+
+  test("pdf converts via the injected seam and names the artifact .pdf", async () => {
+    const pdfBytes = new TextEncoder().encode("%PDF-1.7 converted");
+    const delivery = await buildReportDelivery({
+      docxBuffer: docx,
+      format: "pdf",
+      convertToPdfBuffer: async (input) => {
+        // Receives the filled DOCX buffer.
+        expect(Buffer.from(input).equals(docx)).toBe(true);
+        return Result.ok(pdfBytes.buffer);
+      },
+    });
+    if ("error" in delivery) {
+      throw new Error("expected a pdf delivery");
+    }
+    expect(delivery.ext).toBe("pdf");
+    expect(delivery.mimeType).toBe("application/pdf");
+    expect(new TextDecoder().decode(delivery.buffer)).toBe(
+      "%PDF-1.7 converted",
+    );
+  });
+
+  test("pdf conversion failure yields a typed error string", async () => {
+    const delivery = await buildReportDelivery({
+      docxBuffer: docx,
+      format: "pdf",
+      convertToPdfBuffer: async () => Result.err(new Error("gotenberg down")),
+    });
+    expect("error" in delivery).toBe(true);
+  });
+});
+
+describe("isStuckReportExport", () => {
+  const now = new Date("2026-07-02T12:00:00.000Z");
+  const minutesAgo = (m: number) => new Date(now.getTime() - m * 60 * 1000);
+
+  test("sweeps an old running row, leaves fresh rows alone", () => {
+    // Old running row → orphaned by a dead worker; recover it.
+    expect(
+      isStuckReportExport(
+        { status: "running", updatedAt: minutesAgo(45) },
+        now,
+      ),
+    ).toBe(true);
+    // Old queued row → never picked up (enqueue died); recover it too.
+    expect(
+      isStuckReportExport({ status: "queued", updatedAt: minutesAgo(31) }, now),
+    ).toBe(true);
+    // Fresh running row → still in flight; leave it.
+    expect(
+      isStuckReportExport({ status: "running", updatedAt: minutesAgo(5) }, now),
+    ).toBe(false);
+    // Terminal rows are never touched, however old.
+    expect(
+      isStuckReportExport(
+        { status: "completed", updatedAt: minutesAgo(999) },
+        now,
+      ),
+    ).toBe(false);
+    expect(
+      isStuckReportExport(
+        { status: "failed", updatedAt: minutesAgo(999) },
+        now,
+      ),
+    ).toBe(false);
   });
 });
 

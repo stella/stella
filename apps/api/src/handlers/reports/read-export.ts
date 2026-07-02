@@ -18,7 +18,11 @@ import { presignDownloadUrl } from "@/api/lib/s3-presign";
 
 /** Presigned result URLs are short-lived; the client fetches immediately. */
 const DOWNLOAD_URL_EXPIRES_SECONDS = 5 * 60;
-const DOWNLOAD_FILE_NAME = "report.docx";
+
+/** Name the download after the stored key's extension (.docx or .pdf), so the
+ *  chosen output format travels via the S3 key with no extra column. */
+const downloadFileName = (resultS3Key: string): string =>
+  resultS3Key.endsWith(".pdf") ? "report.pdf" : "report.docx";
 
 const config = {
   permissions: { workspace: ["read"] },
@@ -63,7 +67,7 @@ const readReportExport = createSafeHandler(
           try: async () =>
             await presignDownloadUrl(row.resultS3Key ?? "", {
               expiresIn: DOWNLOAD_URL_EXPIRES_SECONDS,
-              fileName: DOWNLOAD_FILE_NAME,
+              fileName: downloadFileName(row.resultS3Key ?? ""),
               scope: {
                 organizationId: session.activeOrganizationId,
                 workspaceId,
