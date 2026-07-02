@@ -891,10 +891,10 @@
             "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#24"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#29"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -955,6 +955,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -2280,10 +2283,10 @@
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/stella-tools.ts#2"
+            "location": "apps/api/src/mcp/stella-tools.ts#3"
           },
           {
-            "location": "apps/api/src/mcp/template-tools.ts#2"
+            "location": "apps/api/src/mcp/template-tools.ts#3"
           },
           {
             "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"
@@ -2757,10 +2760,10 @@
             "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#24"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#29"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -2821,6 +2824,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -5552,10 +5558,10 @@
             "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#24"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#29"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -5616,6 +5622,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -8018,10 +8027,10 @@
             "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#24"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#29"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -8082,6 +8091,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -13252,10 +13264,10 @@
             "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#24"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#29"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -13316,6 +13328,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -14694,10 +14709,10 @@
             "location": "apps/api/src/handlers/chat/send-message.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#8"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#9"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#14"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#15"
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
@@ -15352,7 +15367,7 @@
             "location": "apps/api/src/handlers/chat/skills.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#15"
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#16"
           },
           {
             "location": "apps/api/src/handlers/chat/third-party-boundary.ts#3"
@@ -18778,6 +18793,12 @@
             "location": "apps/api/src/mcp/gateway/skills.ts#2"
           },
           {
+            "location": "apps/api/src/mcp/stella-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/mcp/template-tools.ts#2"
+          },
+          {
             "location": "apps/api/src/scripts/adapter-health.ts#17"
           },
           {
@@ -20688,7 +20709,7 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#29"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#36"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#41"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#18"
@@ -20704,6 +20725,9 @@
           },
           {
             "location": "apps/web/src/components/chat/ask-user-card.tsx#10"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#3"
           },
           {
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#1"
@@ -22963,7 +22987,7 @@
             "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#17"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#37"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#42"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#30"
@@ -23563,10 +23587,10 @@
             "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#17"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#24"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#22"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#29"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
@@ -23627,6 +23651,9 @@
           },
           {
             "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
           },
           {
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
@@ -25343,7 +25370,7 @@
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#30"
           },
           {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#38"
+            "location": "apps/web/src/components/ai-suggestions/host.tsx#43"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#19"
@@ -25386,6 +25413,9 @@
           },
           {
             "location": "apps/web/src/components/chat/ask-user-card.tsx#13"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#4"
           },
           {
             "location": "apps/web/src/components/chat/chat-draft-attachment-chips.tsx#2"
@@ -26528,10 +26558,10 @@
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/stella-tools.ts#2"
+            "location": "apps/api/src/mcp/stella-tools.ts#3"
           },
           {
-            "location": "apps/api/src/mcp/template-tools.ts#2"
+            "location": "apps/api/src/mcp/template-tools.ts#3"
           },
           {
             "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"

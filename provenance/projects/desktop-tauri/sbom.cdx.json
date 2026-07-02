@@ -32891,7 +32891,8 @@
         "pkg:cargo/tracing@0.1.44",
         "pkg:cargo/uuid@1.23.4",
         "pkg:cargo/windows-native-keyring-store@1.1.0",
-        "pkg:cargo/zbus-secret-service-keyring-store@1.0.0"
+        "pkg:cargo/zbus-secret-service-keyring-store@1.0.0",
+        "pkg:cargo/zip@4.6.1"
       ],
       "ref": "pkg:cargo/stella-desktop@0.0.1"
     },
