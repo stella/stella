@@ -828,6 +828,7 @@
     "pin": "Épingler",
     "playVideo": "Lire la vidéo",
     "playbooks": "Playbooks",
+    "preparing": "Préparation…",
     "preview": "Aperçu",
     "previous": "Précédent",
     "print": "Imprimer",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
         "action": "Exporter le rapport…",
+        "aiSummaries": "Inclure les résumés IA",
         "completed": "Rapport prêt",
+        "customize": "Personnaliser",
+        "customized": "Copié dans vos modèles",
         "deliveryLabel": "Livraison",
         "description": "Générez un document de rapport à partir de cette vue à l’aide d’un modèle de rapport.",
         "failed": "Échec de l’export du rapport",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "Chargement des modèles…",
         "noTemplates": "Aucun modèle de rapport disponible.",
         "openReport": "Ouvrir le rapport",
-        "started": "Préparation de votre rapport…",
         "submit": "Exporter le rapport",
         "templateLabel": "Modèle de rapport",
         "title": "Exporter le rapport"

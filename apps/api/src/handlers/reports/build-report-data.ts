@@ -135,6 +135,10 @@ export type ReportData = {
   stats: ReportStats;
   contracts: ReportContract[];
   grid: ReportGrid;
+  /** Drives the built-in template's `{{#if aiNarrative}}` gates: when false the
+   *  executive-summary and per-contract summary paragraphs are removed entirely
+   *  and no AI generator runs, so the export is fast and deterministic. */
+  aiNarrative: boolean;
   // `execSummary` is deliberately absent — a top-level aiPrompt field drafts it
   // at fill time.
 };
@@ -226,6 +230,8 @@ type AssembleReportDataArgs = {
   docTypePropertyId: string | null;
   workspaceName: string;
   now: Date;
+  /** Include AI-drafted narrative sections; defaults to on. */
+  aiNarrative?: boolean;
 };
 
 /**
@@ -241,6 +247,7 @@ export const assembleReportData = ({
   docTypePropertyId,
   workspaceName,
   now,
+  aiNarrative = true,
 }: AssembleReportDataArgs): ReportData => {
   const severities = severityByPropertyId(properties);
   const propertyColumns = columns.filter(isPropertyColumn);
@@ -319,6 +326,7 @@ export const assembleReportData = ({
     stats: { total: contracts.length, redFlags, bySeverity },
     contracts,
     grid: buildReviewGrid(propertyColumns, contracts),
+    aiNarrative,
   };
 };
 
@@ -376,6 +384,8 @@ type BuildReportDataArgs = {
   layout: TableLayout;
   workspaceName: string;
   now?: Date;
+  /** Include AI-drafted narrative sections; defaults to on. */
+  aiNarrative?: boolean;
 };
 
 /**
@@ -392,6 +402,7 @@ export const buildReportData = async ({
   layout,
   workspaceName,
   now = new Date(),
+  aiNarrative = true,
 }: BuildReportDataArgs) =>
   await Result.gen(async function* () {
     const properties = yield* Result.await(
@@ -513,6 +524,7 @@ export const buildReportData = async ({
         docTypePropertyId,
         workspaceName,
         now,
+        aiNarrative,
       }),
     );
   });

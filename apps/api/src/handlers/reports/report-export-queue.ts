@@ -78,6 +78,11 @@ type ReportExportJobData = {
   organizationId: string;
   userId: string;
   format: ReportExportFormat;
+  /** Include AI-drafted narrative sections. Carried on the job (not the export
+   *  row): the worker needs it to gate the AI generators + template sections.
+   *  Optional for back-compat with jobs enqueued before this field existed;
+   *  absent means "on". */
+  aiNarrative?: boolean;
 };
 
 export type EnqueueReportExportArgs = {
@@ -86,6 +91,7 @@ export type EnqueueReportExportArgs = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   format: ReportExportFormat;
+  aiNarrative: boolean;
 };
 
 let queue: Queue<ReportExportJobData> | null = null;
@@ -114,10 +120,11 @@ export const enqueueReportExport = async ({
   organizationId,
   userId,
   format,
+  aiNarrative,
 }: EnqueueReportExportArgs): Promise<void> => {
   await getQueue().add(
     JOB_NAME,
-    { exportId, workspaceId, organizationId, userId, format },
+    { exportId, workspaceId, organizationId, userId, format, aiNarrative },
     { jobId: createBullMqJobId(workspaceId, exportId) },
   );
 };
@@ -251,7 +258,13 @@ const processReportExportJob = async (
   await setExportStatus(actor, "running");
 
   const outcome = await Result.tryPromise({
-    try: async () => await runExport({ actor, row, format: data.format }),
+    try: async () =>
+      await runExport({
+        actor,
+        row,
+        format: data.format,
+        aiNarrative: data.aiNarrative ?? true,
+      }),
     catch: (cause) => cause,
   });
 
@@ -325,10 +338,12 @@ const runExport = async ({
   actor,
   row,
   format,
+  aiNarrative,
 }: {
   actor: ExportActor;
   row: ExportRow;
   format: ReportExportFormat;
+  aiNarrative: boolean;
 }): Promise<void> => {
   const layout = parseViewLayout(row.layout);
   if (layout.type !== "table") {
@@ -356,18 +371,24 @@ const runExport = async ({
     currentUserId: actor.userId,
     layout,
     workspaceName,
+    aiNarrative,
   });
   if (Result.isError(dataResult)) {
     await markExportFailedRow(actor, dataResult.error.message);
     return;
   }
 
-  const orgAIConfig = await loadOrgAIConfig(actor.organizationId);
+  // Deterministic export: skip loading the org AI config entirely; fillReport
+  // builds no generators and runs no usage preflight when aiNarrative is off.
+  const orgAIConfig = aiNarrative
+    ? await loadOrgAIConfig(actor.organizationId)
+    : null;
   const filled = await fillReport({
     actor,
     templateRef: row.templateRef,
     reportData: dataResult.value,
     orgAIConfig,
+    aiNarrative,
   });
 
   if ("usageRejection" in filled) {
@@ -440,12 +461,47 @@ const fillReport = async ({
   templateRef,
   reportData,
   orgAIConfig,
+  aiNarrative,
 }: {
   actor: ExportActor;
   templateRef: ReportTemplateRef;
   reportData: Record<string, unknown>;
   orgAIConfig: OrgAIConfig | null;
+  aiNarrative: boolean;
 }): Promise<FillReportResult> => {
+  // Deterministic export: no generators (resolveAiFields is a no-op without a
+  // generator) and no usage preflight. The template's {{#if aiNarrative}}
+  // sections are removed at fill time, so the unfilled AI-field placeholders
+  // never survive into the output.
+  const generators = aiNarrative
+    ? buildReportAiGenerators({ actor, orgAIConfig })
+    : {};
+
+  return await fillReportDocx({
+    actor,
+    templateRef,
+    values: reportData,
+    generators,
+  });
+};
+
+/** The AI generator bundle passed into the fill pipeline; every field is
+ *  optional so a deterministic export can pass `{}`. */
+type ReportAiGenerators = {
+  generateAiValue?: ReturnType<typeof buildAiFieldGenerator>;
+  decideAiCondition?: ReturnType<typeof buildAiConditionDecider>;
+  adaptAiValue?: ReturnType<typeof buildAiOccurrenceAdapter>;
+  assertUsageAvailable?: () => Promise<unknown>;
+};
+
+/** Build the metered AI generators + usage preflight for a narrative export. */
+const buildReportAiGenerators = ({
+  actor,
+  orgAIConfig,
+}: {
+  actor: ExportActor;
+  orgAIConfig: OrgAIConfig | null;
+}): ReportAiGenerators => {
   const aiAnalytics = createAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
@@ -480,7 +536,7 @@ const fillReport = async ({
     safeDb: actor.safeDb,
     userId: actor.userId,
   };
-  const generators = {
+  return {
     generateAiValue: buildAiFieldGenerator({
       orgAIConfig,
       organizationId: actor.organizationId,
@@ -501,11 +557,25 @@ const fillReport = async ({
     }),
     assertUsageAvailable,
   };
+};
 
+/** Dispatch the fill to a stored org template or a deployment built-in, with
+ *  whatever generators the caller supplied (none for a deterministic export). */
+const fillReportDocx = async ({
+  actor,
+  templateRef,
+  values,
+  generators,
+}: {
+  actor: ExportActor;
+  templateRef: ReportTemplateRef;
+  values: Record<string, unknown>;
+  generators: ReportAiGenerators;
+}): Promise<FillReportResult> => {
   if (templateRef.type === "stored") {
     return await fillStoredTemplateDocx({
       templateId: templateRef.templateId,
-      values: reportData,
+      values,
       scopedDb: actor.scopedDb,
       organizationId: actor.organizationId,
       ...generators,
@@ -519,7 +589,7 @@ const fillReport = async ({
   const buffer = await builtin.loadBuffer();
   return await fillTemplateDocx({
     source: { name: builtin.name, fileName: `${builtin.name}.docx`, buffer },
-    values: reportData,
+    values,
     scopedDb: actor.scopedDb,
     organizationId: actor.organizationId,
     ...generators,

@@ -50,6 +50,11 @@ const config = {
     // to docx (also matches Elysia's optional-UnionEnum coercion to the first
     // literal). The frontend always sends it explicitly.
     format: t.Optional(t.Union([t.Literal("docx"), t.Literal("pdf")])),
+    // Include the template's AI-drafted narrative (executive + per-contract
+    // summaries). Optional for back-compat; absent defaults to on. When false
+    // the worker skips every model call and the template's {{#if aiNarrative}}
+    // sections are removed, so the export is fast and deterministic.
+    aiNarrative: t.Optional(t.Boolean()),
   }),
 } satisfies HandlerConfig;
 
@@ -199,6 +204,7 @@ const exportViewReport = createSafeHandler(
           organizationId,
           userId: user.id,
           format: body.format ?? "docx",
+          aiNarrative: body.aiNarrative ?? true,
         }),
       catch: (cause) => cause,
     });

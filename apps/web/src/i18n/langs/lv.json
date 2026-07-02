@@ -828,6 +828,7 @@
     "pin": "Piespraust",
     "playVideo": "Atskaņot video",
     "playbooks": "Pārbaudes ceļveži",
+    "preparing": "Sagatavošana…",
     "preview": "Priekšskatījums",
     "previous": "Iepriekšējais",
     "print": "Drukāt",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
         "action": "Eksportēt pārskatu…",
+        "aiSummaries": "Iekļaut AI kopsavilkumus",
         "completed": "Pārskats ir gatavs",
+        "customize": "Pielāgot",
+        "customized": "Kopēts jūsu veidnēs",
         "deliveryLabel": "Piegāde",
         "description": "Izveidojiet pārskata dokumentu no šī skata, izmantojot pārskata veidni.",
         "failed": "Neizdevās eksportēt pārskatu",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "Notiek veidņu ielāde…",
         "noTemplates": "Nav pieejamu pārskatu veidņu.",
         "openReport": "Atvērt pārskatu",
-        "started": "Notiek jūsu pārskata sagatavošana…",
         "submit": "Eksportēt pārskatu",
         "templateLabel": "Pārskata veidne",
         "title": "Eksportēt pārskatu"

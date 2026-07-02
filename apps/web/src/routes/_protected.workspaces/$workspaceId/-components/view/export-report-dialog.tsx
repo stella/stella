@@ -7,6 +7,7 @@ import { FileOutputIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { Checkbox } from "@stll/ui/components/checkbox";
 import {
   Dialog,
   DialogClose,
@@ -185,9 +186,7 @@ export const ExportReportControl = ({
   }, [active, status, workspaceId, t, queryClient, navigate]);
 
   const handleStarted = (exportId: string, mode: DeliveryMode) => {
-    const toastId = stellaToast.loading(
-      t("workspaces.views.reportExport.started"),
-    );
+    const toastId = stellaToast.loading(t("common.preparing"));
     handledRef.current = null;
     setActive({ exportId, mode, toastId });
     setOpen(false);
@@ -205,6 +204,7 @@ export const ExportReportControl = ({
         <FileOutputIcon className="size-3.5" />
       </Button>
       <ExportReportDialog
+        onClose={() => setOpen(false)}
         onOpenChange={setOpen}
         onStarted={handleStarted}
         open={open}
@@ -218,6 +218,7 @@ export const ExportReportControl = ({
 type ExportReportDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  onClose: () => void;
   onStarted: (exportId: string, mode: DeliveryMode) => void;
   view: Pick<WorkspaceView, "id">;
   workspaceId: string;
@@ -226,6 +227,7 @@ type ExportReportDialogProps = {
 const ExportReportDialog = ({
   open,
   onOpenChange,
+  onClose,
   onStarted,
   view,
   workspaceId,
@@ -235,6 +237,7 @@ const ExportReportDialog = ({
         the picker to the preselected built-in. */}
     {open ? (
       <ExportReportDialogBody
+        onClose={onClose}
         onStarted={onStarted}
         view={view}
         workspaceId={workspaceId}
@@ -266,16 +269,22 @@ type ExportReportDialogBodyProps = Omit<
 >;
 
 const ExportReportDialogBody = ({
+  onClose,
   onStarted,
   view,
   workspaceId,
 }: ExportReportDialogBodyProps) => {
   const t = useTranslations();
   const analytics = useAnalytics();
+  const navigate = useNavigate();
   const [templateValue, setTemplateValue] = useState<string | null>(null);
   const [mode, setMode] = useState<DeliveryMode>("workspace");
   const [format, setFormat] = useState<ReportFormat>("docx");
+  // AI-drafted narrative (executive + per-contract summaries) is on by default;
+  // turning it off skips every model call for a fast, deterministic export.
+  const [aiNarrative, setAiNarrative] = useState(true);
   const [submitting, setSubmitting] = useState(false);
+  const [customizing, setCustomizing] = useState(false);
 
   const { data, isLoading, isError } = useQuery({
     queryKey: ["report-templates", workspaceId],
@@ -349,6 +358,7 @@ const ExportReportDialogBody = ({
             viewId: toSafeId<"workspaceView">(view.id),
             mode,
             format,
+            aiNarrative,
           }),
     );
     setSubmitting(false);
@@ -380,6 +390,54 @@ const ExportReportDialogBody = ({
     onStarted(response.data.exportId, mode);
   };
 
+  // "Customize" is offered only for a built-in: cloning it into the org's
+  // templates is the one way to see and edit the layout in Template Studio.
+  const selectedBuiltinKey =
+    resolvedValue && resolvedValue.startsWith(BUILTIN_PREFIX)
+      ? resolvedValue.slice(BUILTIN_PREFIX.length)
+      : null;
+
+  const handleCustomize = async () => {
+    if (selectedBuiltinKey === null) {
+      return;
+    }
+    setCustomizing(true);
+    const result = await Result.tryPromise(
+      async () =>
+        await api
+          .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+          .reports.templates["clone-builtin"].post({ key: selectedBuiltinKey }),
+    );
+    setCustomizing(false);
+
+    if (Result.isError(result)) {
+      analytics.captureError(result.error);
+      stellaToast.add({
+        type: "error",
+        title: t("common.unexpectedError"),
+      });
+      return;
+    }
+    const response = result.value;
+    if (response.error) {
+      analytics.captureError(toAPIError(response.error));
+      stellaToast.add({
+        type: "error",
+        title: userErrorMessage(response.error, t("common.unexpectedError")),
+      });
+      return;
+    }
+
+    stellaToast.add({
+      type: "success",
+      title: t("workspaces.views.reportExport.customized"),
+    });
+    onClose();
+    navigate({ to: "/knowledge/templates" }).catch(() => {
+      /* best-effort nav; the clone is already saved */
+    });
+  };
+
   return (
     <DialogPopup className="sm:max-w-md">
       <DialogHeader>
@@ -403,7 +461,26 @@ const ExportReportDialogBody = ({
             stored={stored}
             value={resolvedValue}
           />
+          {selectedBuiltinKey !== null && (
+            <Button
+              className="self-start"
+              disabled={customizing}
+              onClick={() => {
+                void handleCustomize();
+              }}
+              size="sm"
+              type="button"
+              variant="ghost"
+            >
+              {t("workspaces.views.reportExport.customize")}
+            </Button>
+          )}
         </div>
+
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <Checkbox checked={aiNarrative} onCheckedChange={setAiNarrative} />
+          {t("workspaces.views.reportExport.aiSummaries")}
+        </label>
 
         <fieldset className="flex flex-col gap-1.5">
           <legend className="text-sm font-medium">

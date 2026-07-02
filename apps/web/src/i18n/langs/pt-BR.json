@@ -828,6 +828,7 @@
     "pin": "Fixar",
     "playVideo": "Reproduzir vídeo",
     "playbooks": "Playbooks",
+    "preparing": "Preparando…",
     "preview": "Visualização",
     "previous": "Anterior",
     "print": "Imprimir",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
         "action": "Exportar relatório…",
+        "aiSummaries": "Incluir resumos de IA",
         "completed": "Relatório pronto",
+        "customize": "Personalizar",
+        "customized": "Copiado para seus modelos",
         "deliveryLabel": "Entrega",
         "description": "Gere um documento de relatório a partir desta visualização usando um modelo de relatório.",
         "failed": "Falha ao exportar o relatório",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "Carregando modelos…",
         "noTemplates": "Nenhum modelo de relatório disponível.",
         "openReport": "Abrir relatório",
-        "started": "Preparando seu relatório…",
         "submit": "Exportar relatório",
         "templateLabel": "Modelo de relatório",
         "title": "Exportar relatório"

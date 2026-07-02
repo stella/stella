@@ -65,6 +65,11 @@ const risksBlock =
   P("{{/each}}") +
   P("{{/if}}");
 
+// The per-contract summary is AI-drafted, so gate the heading AND the value on
+// {{#if aiNarrative}}: a deterministic export (aiNarrative=false) drops both, so
+// no empty "Summary" heading is left behind. The condition resolves the
+// top-level `aiNarrative` flag even inside the contracts loop (the loop body's
+// evaluation context inherits top-level data).
 const contractSection =
   P("{{#each contracts}}") +
   styledP("{{contracts.name}}", "Heading2") +
@@ -73,8 +78,10 @@ const contractSection =
   ) +
   fieldsTable +
   risksBlock +
+  P("{{#if aiNarrative}}") +
   styledP("Summary", "Heading3") +
   P("{{contracts.summary}}") +
+  P("{{/if}}") +
   P("{{/each}}");
 
 // Annex: a consolidated docs × columns overview. The row-repeat clones one
@@ -102,7 +109,13 @@ const annexSection =
 
 const bodyXml =
   styledP("Executive Summary", "Heading1") +
+  // The narrative paragraph is AI-drafted; gate only it on {{#if aiNarrative}}.
+  // The heading and the deterministic stats line below stay, so a fast export
+  // still has content under "Executive Summary" (the stats), never an empty
+  // heading or a literal {{execSummary}} marker.
+  P("{{#if aiNarrative}}") +
   P("{{execSummary}}") +
+  P("{{/if}}") +
   P(
     "Contracts reviewed: {{stats.total}} — Red flags: {{stats.redFlags}} (blocker {{stats.bySeverity.blocker}}, high {{stats.bySeverity.high}}, medium {{stats.bySeverity.medium}}, low {{stats.bySeverity.low}})",
   ) +

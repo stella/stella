@@ -828,6 +828,7 @@
     "pin": "Pripnúť",
     "playVideo": "Prehrať video",
     "playbooks": "Playbooky",
+    "preparing": "Pripravuje sa…",
     "preview": "Náhľad",
     "previous": "Predchádzajúci",
     "print": "Tlačiť",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
         "action": "Exportovať správu…",
+        "aiSummaries": "Zahrnúť zhrnutia od AI",
         "completed": "Správa je pripravená",
+        "customize": "Prispôsobiť",
+        "customized": "Skopírované do vašich vzorov",
         "deliveryLabel": "Doručenie",
         "description": "Vytvorte dokument so správou z tohto zobrazenia pomocou vzoru správy.",
         "failed": "Export správy zlyhal",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "Načítavajú sa vzory…",
         "noTemplates": "Nie sú k dispozícii žiadne vzory správ.",
         "openReport": "Otvoriť správu",
-        "started": "Pripravuje sa vaša správa…",
         "submit": "Exportovať správu",
         "templateLabel": "Vzor správy",
         "title": "Exportovať správu"

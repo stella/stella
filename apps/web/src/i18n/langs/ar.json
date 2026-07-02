@@ -828,6 +828,7 @@
     "pin": "تثبيت",
     "playVideo": "تشغيل الفيديو",
     "playbooks": "أدلّة المراجعة",
+    "preparing": "جارٍ التحضير…",
     "preview": "معاينة",
     "previous": "السابق",
     "print": "طباعة",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "إزالة عامل التصفية المتقدم",
       "reportExport": {
         "action": "تصدير التقرير…",
+        "aiSummaries": "تضمين ملخصات AI",
         "completed": "التقرير جاهز",
+        "customize": "تخصيص",
+        "customized": "تم النسخ إلى القوالب",
         "deliveryLabel": "التسليم",
         "description": "أنشئ مستند تقرير من هذا العرض باستخدام قالب تقرير.",
         "failed": "فشل تصدير التقرير",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "جارٍ تحميل القوالب…",
         "noTemplates": "لا توجد قوالب تقارير متاحة.",
         "openReport": "فتح التقرير",
-        "started": "جارٍ إعداد تقريرك…",
         "submit": "تصدير التقرير",
         "templateLabel": "قالب التقرير",
         "title": "تصدير التقرير"

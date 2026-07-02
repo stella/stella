@@ -828,6 +828,7 @@
     "pin": "Fijar",
     "playVideo": "Reproducir vídeo",
     "playbooks": "Playbooks",
+    "preparing": "Preparando…",
     "preview": "Vista previa",
     "previous": "Anterior",
     "print": "Imprimir",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
         "action": "Exportar informe…",
+        "aiSummaries": "Incluir resúmenes de IA",
         "completed": "Informe listo",
+        "customize": "Personalizar",
+        "customized": "Copiado en tus plantillas",
         "deliveryLabel": "Entrega",
         "description": "Genera un documento de informe a partir de esta vista usando una plantilla de informe.",
         "failed": "Error al exportar el informe",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "Cargando plantillas…",
         "noTemplates": "No hay plantillas de informe disponibles.",
         "openReport": "Abrir informe",
-        "started": "Preparando tu informe…",
         "submit": "Exportar informe",
         "templateLabel": "Plantilla de informe",
         "title": "Exportar informe"

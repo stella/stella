@@ -828,6 +828,7 @@
     "pin": "Przypnij",
     "playVideo": "Odtwórz wideo",
     "playbooks": "Playbooki",
+    "preparing": "Przygotowywanie…",
     "preview": "Podgląd",
     "previous": "Poprzedni",
     "print": "Drukuj",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
         "action": "Eksportuj raport…",
+        "aiSummaries": "Uwzględnij podsumowania AI",
         "completed": "Raport gotowy",
+        "customize": "Dostosuj",
+        "customized": "Skopiowano do Twoich szablonów",
         "deliveryLabel": "Dostarczenie",
         "description": "Wygeneruj dokument raportu z tego widoku przy użyciu szablonu raportu.",
         "failed": "Eksport raportu nie powiódł się",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "Ładowanie szablonów…",
         "noTemplates": "Brak dostępnych szablonów raportów.",
         "openReport": "Otwórz raport",
-        "started": "Przygotowywanie raportu…",
         "submit": "Eksportuj raport",
         "templateLabel": "Szablon raportu",
         "title": "Eksportuj raport"

@@ -828,6 +828,7 @@
     "pin": "Anheften",
     "playVideo": "Video abspielen",
     "playbooks": "Playbooks",
+    "preparing": "Wird vorbereitet…",
     "preview": "Vorschau",
     "previous": "Zurück",
     "print": "Drucken",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
         "action": "Bericht exportieren…",
+        "aiSummaries": "KI-Zusammenfassungen einschließen",
         "completed": "Bericht bereit",
+        "customize": "Anpassen",
+        "customized": "In Ihre Vorlagen kopiert",
         "deliveryLabel": "Zustellung",
         "description": "Erstellen Sie aus dieser Ansicht ein Berichtsdokument mithilfe einer Berichtsvorlage.",
         "failed": "Berichtsexport fehlgeschlagen",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "Vorlagen werden geladen…",
         "noTemplates": "Keine Berichtsvorlagen verfügbar.",
         "openReport": "Bericht öffnen",
-        "started": "Ihr Bericht wird vorbereitet…",
         "submit": "Bericht exportieren",
         "templateLabel": "Berichtsvorlage",
         "title": "Bericht exportieren"

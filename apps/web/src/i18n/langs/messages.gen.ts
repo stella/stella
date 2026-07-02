@@ -831,6 +831,7 @@ type Messages = {
     "pin": "Pin";
     "playVideo": "Play video";
     "playbooks": "Playbooks";
+    "preparing": "Preparing…";
     "preview": "Preview";
     "previous": "Previous";
     "print": "Print";
@@ -3029,7 +3030,10 @@ type Messages = {
       "removeAdvancedFilter": "Remove advanced filter";
       "reportExport": {
         "action": "Export report…";
+        "aiSummaries": "Include AI summaries";
         "completed": "Report ready";
+        "customize": "Customize";
+        "customized": "Copied to your templates";
         "deliveryLabel": "Delivery";
         "description": "Generate a report document from this view using a report template.";
         "failed": "Report export failed";
@@ -3040,7 +3044,6 @@ type Messages = {
         "loadingTemplates": "Loading templates…";
         "noTemplates": "No report templates available.";
         "openReport": "Open report";
-        "started": "Preparing your report…";
         "submit": "Export report";
         "templateLabel": "Report template";
         "title": "Export report";

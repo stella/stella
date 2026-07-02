@@ -211,4 +211,66 @@ describe("Due Diligence Report built-in template", () => {
     expect(xml).toContain("Governing law: Czech law");
     expect(xml).toContain("Liability cap: EUR 1,000,000");
   });
+
+  test("aiNarrative=false drops the AI sections with no model calls or leftover markers", async () => {
+    const columns = buildExportColumns(layout, properties);
+    const entities = [
+      makeEntity("aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "NDA with Vendor", [
+        field("a-law", ASK_LAW, text("Czech law")),
+        field("v-law", VERDICT_LAW, select("deviation")),
+        field("a-term", ASK_TERM, text("2 years")),
+        field("v-term", VERDICT_TERM, select("compliant")),
+        field("a-cap", ASK_CAP, text("EUR 1,000,000")),
+      ]),
+    ];
+
+    const data = assembleReportData({
+      entities,
+      columns,
+      properties,
+      justificationByFieldId: new Map(),
+      docTypePropertyId: null,
+      workspaceName: "Project Atlas",
+      now: new Date("2026-07-02T00:00:00.000Z"),
+      aiNarrative: false,
+    });
+
+    // Mirror the worker's deterministic branch: it gates the AI generator on
+    // `aiNarrative`, so with it off no generator is passed and resolveAiFields
+    // is a no-op (the spy must never run).
+    let aiCalls = 0;
+    const spy: AiFieldGenerator = async () => {
+      aiCalls += 1;
+      return "should not be called";
+    };
+    const record = await resolveAiFields({
+      values: data,
+      fields: DD_REPORT_MANIFEST.fields,
+      generate: data.aiNarrative ? spy : undefined,
+    });
+    if (!isTemplateData(record)) {
+      throw new Error("assembled report data is not fillable template data");
+    }
+
+    const buffer = await getBuiltinReportTemplate("dd-report")?.loadBuffer();
+    if (!buffer) {
+      throw new Error("dd-report built-in template not found");
+    }
+
+    const result = await fillTemplate(buffer, record);
+
+    expect(aiCalls).toBe(0);
+    expect(result.structureErrors).toEqual([]);
+    expect(result.unmatchedPlaceholders).toEqual([]);
+
+    const xml = await readDocumentXml(result.buffer);
+    // No literal directive/placeholder markers leaked into the output.
+    expect(xml).not.toContain("{{");
+    // Deterministic content still renders: the contract section, the field
+    // table, and the stats line under the (non-empty) Executive Summary heading.
+    expect(xml).toContain("Executive Summary");
+    expect(xml).toContain("Contracts reviewed: ");
+    expect(xml).toContain("NDA with Vendor");
+    expect(xml).toContain("Czech law");
+  });
 });

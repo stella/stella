@@ -1,5 +1,6 @@
 import Elysia from "elysia";
 
+import cloneBuiltinReportTemplate from "@/api/handlers/reports/clone-builtin";
 import exportViewReport from "@/api/handlers/reports/export-view";
 import listReportTemplates from "@/api/handlers/reports/list-templates";
 import readReportExport from "@/api/handlers/reports/read-export";
@@ -16,6 +17,11 @@ export const reportsRoute = new Elysia({
   .get("/templates", listReportTemplates.handler, {
     params: listReportTemplates.config.params,
     permissions: listReportTemplates.config.permissions,
+  })
+  .post("/templates/clone-builtin", cloneBuiltinReportTemplate.handler, {
+    body: cloneBuiltinReportTemplate.config.body,
+    params: cloneBuiltinReportTemplate.config.params,
+    permissions: cloneBuiltinReportTemplate.config.permissions,
   })
   .post("/export", exportViewReport.handler, {
     body: exportViewReport.config.body,

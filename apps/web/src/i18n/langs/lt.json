@@ -828,6 +828,7 @@
     "pin": "Prisegti",
     "playVideo": "Paleisti vaizdo įrašą",
     "playbooks": "Peržiūros vadovai",
+    "preparing": "Ruošiama…",
     "preview": "Peržiūra",
     "previous": "Ankstesnis",
     "print": "Spausdinti",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
         "action": "Eksportuoti ataskaitą…",
+        "aiSummaries": "Įtraukti AI santraukas",
         "completed": "Ataskaita paruošta",
+        "customize": "Tinkinti",
+        "customized": "Nukopijuota į jūsų šablonus",
         "deliveryLabel": "Pateikimas",
         "description": "Sukurkite ataskaitos dokumentą iš šio rodinio naudodami ataskaitos šabloną.",
         "failed": "Nepavyko eksportuoti ataskaitos",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "Įkeliami šablonai…",
         "noTemplates": "Nėra ataskaitų šablonų.",
         "openReport": "Atverti ataskaitą",
-        "started": "Ruošiama jūsų ataskaita…",
         "submit": "Eksportuoti ataskaitą",
         "templateLabel": "Ataskaitos šablonas",
         "title": "Eksportuoti ataskaitą"

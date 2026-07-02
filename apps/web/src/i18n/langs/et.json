@@ -828,6 +828,7 @@
     "pin": "Kinnita",
     "playVideo": "Esita video",
     "playbooks": "Playbookid",
+    "preparing": "Ettevalmistamine…",
     "preview": "Eelvaade",
     "previous": "Eelmine",
     "print": "Prindi",
@@ -3026,7 +3027,10 @@
       "removeAdvancedFilter": "Remove advanced filter",
       "reportExport": {
         "action": "Ekspordi aruanne…",
+        "aiSummaries": "Kaasa AI kokkuvõtted",
         "completed": "Aruanne on valmis",
+        "customize": "Kohanda",
+        "customized": "Kopeeritud teie mallidesse",
         "deliveryLabel": "Väljastus",
         "description": "Loo sellest vaatest aruandedokument aruandemalli abil.",
         "failed": "Aruande eksportimine ebaõnnestus",
@@ -3037,7 +3041,6 @@
         "loadingTemplates": "Mallide laadimine…",
         "noTemplates": "Aruandemalle pole saadaval.",
         "openReport": "Ava aruanne",
-        "started": "Aruande ettevalmistamine…",
         "submit": "Ekspordi aruanne",
         "templateLabel": "Aruandemall",
         "title": "Ekspordi aruanne"
