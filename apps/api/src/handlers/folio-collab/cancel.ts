@@ -21,6 +21,7 @@ import type { FolioCollabStoredSessionFile } from "@/api/lib/folio-collab-sessio
 import { broadcast } from "@/api/lib/sse";
 
 const config = {
+  mcp: { type: "internal", reason: "session_token_exchange" },
   params: t.Object({
     sessionId: tSafeId("folioCollabSession"),
   }),

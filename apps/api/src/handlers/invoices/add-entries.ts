@@ -95,6 +95,7 @@ const buildAttachEvents = (params: {
 const addEntries = createSafeHandler(
   {
     permissions: { invoice: ["update"] },
+    mcp: { type: "pending" },
     params: invoiceParamsSchema,
     body: addEntriesBodySchema,
   },

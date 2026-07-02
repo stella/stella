@@ -13,6 +13,7 @@ const listTemplateClausesParamsSchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: listTemplateClausesParamsSchema,
 } satisfies HandlerConfig;
 

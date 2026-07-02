@@ -112,6 +112,7 @@ const buildVoidEvents = (params: {
 const transitionInvoice = createSafeHandler(
   {
     permissions: { invoice: ["update"] },
+    mcp: { type: "pending" },
     params: invoiceParamsSchema,
     body: transitionInvoiceBodySchema,
   },

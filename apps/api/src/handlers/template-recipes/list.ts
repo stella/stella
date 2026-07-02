@@ -8,6 +8,7 @@ import { listTemplateRecipesHandler } from "./recipes";
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const listTemplateRecipes = createSafeRootHandler(

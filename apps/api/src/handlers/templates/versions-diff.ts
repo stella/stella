@@ -16,6 +16,7 @@ const templateVersionDiffParamsSchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: templateVersionDiffParamsSchema,
 } satisfies HandlerConfig;
 

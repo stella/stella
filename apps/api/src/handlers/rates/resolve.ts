@@ -21,6 +21,7 @@ const resolveRateQuerySchema = t.Object({
 const resolveRateHandler = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     query: resolveRateQuerySchema,
   },
   async function* ({ safeDb, workspaceId, session, query }) {

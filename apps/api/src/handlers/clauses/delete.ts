@@ -93,6 +93,7 @@ const deleteClauseHandler = async function* ({
 
 const config = {
   permissions: { clause: ["delete"] },
+  mcp: { type: "pending" },
   params: deleteClauseParamsSchema,
 } satisfies HandlerConfig;
 

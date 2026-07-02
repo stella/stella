@@ -147,6 +147,7 @@ const assertDevModelOverride = (
 
 const config = {
   permissions: { chat: ["create"] },
+  mcp: { type: "internal", reason: "realtime_stream" },
   body: sendMessageBodySchema,
   requiresUsage: { actionType: "chat" },
 } satisfies HandlerConfig;

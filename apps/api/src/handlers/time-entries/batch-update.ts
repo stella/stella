@@ -67,6 +67,7 @@ const batchChangesFor = (
 const batchUpdate = createSafeHandler(
   {
     permissions: { timeEntry: ["update"] },
+    mcp: { type: "pending" },
     body: batchUpdateBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {

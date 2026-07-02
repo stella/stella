@@ -347,6 +347,7 @@ const uploadEntityHandler = async function* ({
 
 const config = {
   permissions: { entity: ["create"] },
+  mcp: { type: "pending" },
   body: uploadEntityBodySchema,
 } satisfies HandlerConfig;
 

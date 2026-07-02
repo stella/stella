@@ -18,6 +18,7 @@ const querySchema = t.Object({
 const businessRegistriesLookup = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     query: querySchema,
   },
   async function* ({ query, safeDb, session }) {

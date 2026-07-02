@@ -20,6 +20,7 @@ const config = {
   // Anything that leaks bytes of a stored key (even masked) is gated
   // behind organizationSettings:update, mirroring read-deepl-config.
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const buildKeyState = async ({

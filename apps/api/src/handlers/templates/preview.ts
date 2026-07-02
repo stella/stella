@@ -83,6 +83,7 @@ const previewTemplateHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: previewTemplateParamsSchema,
 } satisfies HandlerConfig;
 

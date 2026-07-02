@@ -9,6 +9,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const listDocumentTypes = createSafeRootHandler(

@@ -6,6 +6,7 @@ import { playbookDefinitionParamsSchema } from "./schema";
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: playbookDefinitionParamsSchema,
 } satisfies HandlerConfig;
 

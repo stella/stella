@@ -45,6 +45,7 @@ const encodeCursor = (displayName: string, id: string): string =>
 const readContacts = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     query: readContactsQuerySchema,
   },
   async function* ({ safeDb, session, query }) {

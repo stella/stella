@@ -21,6 +21,7 @@ import { parseViewLayout, tUpdateViewBodySchema } from "@/api/lib/views-schema";
 
 const config = {
   permissions: { view: ["update"] },
+  mcp: { type: "pending" },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
   body: tUpdateViewBodySchema,
 } satisfies HandlerConfig;

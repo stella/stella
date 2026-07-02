@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/folio-collab-sessions";
 
 const config = {
+  mcp: { type: "internal", reason: "session_token_exchange" },
   body: t.Object({
     sessionId: tSafeId("folioCollabSession"),
     snapshotBase64: t.String({

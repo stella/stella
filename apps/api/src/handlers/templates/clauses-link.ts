@@ -16,6 +16,7 @@ const linkTemplateClauseParamsSchema = t.Object({
 
 const config = {
   permissions: { template: ["update"] },
+  mcp: { type: "pending" },
   params: linkTemplateClauseParamsSchema,
   body: linkClauseBodySchema,
 } satisfies HandlerConfig;

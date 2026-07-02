@@ -13,6 +13,7 @@ import { broadcast } from "@/api/lib/sse";
 
 const config = {
   permissions: { view: ["update"] },
+  mcp: { type: "pending" },
   body: t.Object({
     viewIds: t.Array(tSafeId("workspaceView"), { minItems: 1 }),
   }),

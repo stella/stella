@@ -11,6 +11,7 @@ const config = {
   // Any org member needs to know whether AI is usable; the answer
   // is just two booleans, so it does not require admin scope.
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const readAIAvailability = createSafeRootHandler(

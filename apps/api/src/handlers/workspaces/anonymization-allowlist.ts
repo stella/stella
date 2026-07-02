@@ -34,6 +34,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const readConfig = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   query: t.Object({
     entityId: t.Optional(tSafeId("entity")),
   }),
@@ -97,6 +98,7 @@ const SCOPE_VALUES = ["document", "workspace"] as const;
 
 const createConfig = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   body: t.Object({
     canonical: t.String({ minLength: 1, maxLength: 512 }),
     label: t.String({ minLength: 1, maxLength: 64 }),
@@ -211,6 +213,7 @@ export const createWorkspaceAnonymizationAllowlistEntry = createSafeHandler(
 
 const deleteConfig = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   params: t.Object({
     workspaceId: tSafeId("workspace"),
     entryId: tSafeId("anonymizationAllowlistEntry"),

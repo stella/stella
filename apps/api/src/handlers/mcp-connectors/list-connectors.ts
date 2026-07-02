@@ -16,6 +16,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "internal", reason: "mcp_transport" },
 } satisfies HandlerConfig;
 
 const listMcpConnectors = createSafeRootHandler(

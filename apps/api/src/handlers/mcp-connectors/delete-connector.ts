@@ -14,6 +14,7 @@ const routeParams = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "internal", reason: "mcp_transport" },
   params: routeParams,
 } satisfies HandlerConfig;
 

@@ -15,6 +15,7 @@ const readContactByIdParamsSchema = t.Object({
 const readContactById = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "tool", name: "read_contact" },
     params: readContactByIdParamsSchema,
   },
   async function* ({ safeDb, session, params }) {

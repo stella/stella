@@ -13,6 +13,7 @@ const paramsSchema = t.Object({
 const bormeSummary = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     params: paramsSchema,
   },
   async function* ({ params: { date } }) {

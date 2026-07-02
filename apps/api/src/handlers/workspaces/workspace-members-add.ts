@@ -17,6 +17,7 @@ const addWorkspaceMemberBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   body: addWorkspaceMemberBodySchema,
 } satisfies HandlerConfig;
 

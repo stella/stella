@@ -24,6 +24,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 
 const listDecisions = createSafePublicHandler(
   {
+    mcp: { type: "pending" },
     query: listDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -37,18 +38,22 @@ const listDecisions = createSafePublicHandler(
   },
 );
 
-const listDecisionFacets = createSafePublicHandler({}, async function* () {
-  const response = yield* Result.await(
-    Result.tryPromise(
-      async () => await listDecisionFacetsHandler(caseLawPublicReadDb),
-    ),
-  );
+const listDecisionFacets = createSafePublicHandler(
+  { mcp: { type: "pending" } },
+  async function* () {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await listDecisionFacetsHandler(caseLawPublicReadDb),
+      ),
+    );
 
-  return Result.ok(response);
-});
+    return Result.ok(response);
+  },
+);
 
 const readDecision = createSafePublicHandler(
   {
+    mcp: { type: "tool", name: "read_case_law_decision" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
   },
   async function* ({ params: { decisionId } }) {
@@ -64,6 +69,7 @@ const readDecision = createSafePublicHandler(
 
 const readDecisionBySlug = createSafePublicHandler(
   {
+    mcp: { type: "covered", by: "read_case_law_decision" },
     params: t.Object({ slug: t.String({ minLength: 1, maxLength: 256 }) }),
     query: t.Object({
       language: t.Optional(t.String({ minLength: 2, maxLength: 8 })),
@@ -83,6 +89,7 @@ const readDecisionBySlug = createSafePublicHandler(
 
 const searchDecisions = createSafePublicHandler(
   {
+    mcp: { type: "tool", name: "search_case_law" },
     body: searchDecisionsBodySchema,
   },
   async function* ({ body }) {
@@ -98,6 +105,7 @@ const searchDecisions = createSafePublicHandler(
 
 const listSitemapShardDecisions = createSafePublicHandler(
   {
+    mcp: { type: "pending" },
     query: sitemapShardDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -112,15 +120,18 @@ const listSitemapShardDecisions = createSafePublicHandler(
   },
 );
 
-const listSitemapShards = createSafePublicHandler({}, async function* () {
-  const response = yield* Result.await(
-    Result.tryPromise(
-      async () => await listSitemapShardsHandler(caseLawPublicReadDb),
-    ),
-  );
+const listSitemapShards = createSafePublicHandler(
+  { mcp: { type: "pending" } },
+  async function* () {
+    const response = yield* Result.await(
+      Result.tryPromise(
+        async () => await listSitemapShardsHandler(caseLawPublicReadDb),
+      ),
+    );
 
-  return Result.ok(response);
-});
+    return Result.ok(response);
+  },
+);
 
 /**
  * Public-read routes: no auth, no session, no organization context.

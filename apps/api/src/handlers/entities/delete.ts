@@ -169,6 +169,7 @@ const deleteEntitiesHandler = async function* ({
 
 const config = {
   permissions: { entity: ["delete"] },
+  mcp: { type: "pending" },
   body: deleteEntitiesBodySchema,
 } satisfies HandlerConfig;
 

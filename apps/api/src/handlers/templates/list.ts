@@ -85,6 +85,7 @@ const listTemplatesHandler = async function* ({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "tool", name: "list_templates" },
   query: listTemplatesQuerySchema,
 } satisfies HandlerConfig;
 

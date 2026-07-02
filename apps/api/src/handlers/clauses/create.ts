@@ -165,6 +165,7 @@ const createClauseHandler = async function* ({
 
 const config = {
   permissions: { clause: ["create"] },
+  mcp: { type: "pending" },
   body: createClauseBodySchema,
 } satisfies HandlerConfig;
 

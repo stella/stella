@@ -20,6 +20,7 @@ const THREAD_FILE_CLEANUP_BATCH_SIZE = 200;
 
 const config = {
   permissions: { chat: ["delete"] },
+  mcp: { type: "pending" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     workspaceId: t.Optional(tSafeId("workspace")),

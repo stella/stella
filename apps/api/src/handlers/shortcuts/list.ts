@@ -8,6 +8,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { promptShortcut: ["create"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const listShortcuts = createSafeRootHandler(

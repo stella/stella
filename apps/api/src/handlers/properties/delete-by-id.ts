@@ -11,6 +11,7 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 
 const config = {
   permissions: { property: ["delete"] },
+  mcp: { type: "pending" },
   params: workspaceParams({ propertyId: tSafeId("property") }),
 } satisfies HandlerConfig;
 

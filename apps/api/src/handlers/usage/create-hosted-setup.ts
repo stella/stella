@@ -20,6 +20,7 @@ const createHostedSetupBodySchema = t.Object({
 
 const config = {
   permissions: { organizationSettings: ["update"] },
+  mcp: { type: "internal", reason: "hosted_billing" },
   body: createHostedSetupBodySchema,
 } satisfies HandlerConfig;
 

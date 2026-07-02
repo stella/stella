@@ -27,6 +27,7 @@ const readBillingCodesQuerySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   query: readBillingCodesQuerySchema,
 } satisfies HandlerConfig;
 

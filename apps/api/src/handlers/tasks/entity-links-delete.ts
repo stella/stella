@@ -15,6 +15,7 @@ const deleteEntityLinkBodySchema = t.Object({
 const deleteEntityLink = createSafeHandler(
   {
     permissions: { entity: ["update"] },
+    mcp: { type: "pending" },
     body: deleteEntityLinkBodySchema,
   },
   async function* ({ workspaceId, body, safeDb, recordAuditEvent }) {

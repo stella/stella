@@ -11,6 +11,7 @@ import {
 
 const config = {
   permissions: { template: ["create"] },
+  mcp: { type: "pending" },
   body: createTemplateCategoryBodySchema,
 } satisfies HandlerConfig;
 

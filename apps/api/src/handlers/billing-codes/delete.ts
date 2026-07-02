@@ -15,6 +15,7 @@ const deleteBillingCodeBodySchema = t.Object({
 
 const config = {
   permissions: { billingCode: ["delete"] },
+  mcp: { type: "pending" },
   body: deleteBillingCodeBodySchema,
 } satisfies HandlerConfig;
 

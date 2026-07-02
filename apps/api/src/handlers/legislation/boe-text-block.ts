@@ -14,6 +14,7 @@ const paramsSchema = t.Object({
 const boeTextBlock = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
+    mcp: { type: "pending" },
     params: paramsSchema,
   },
   async function* ({ params: { lawId, blockId } }) {

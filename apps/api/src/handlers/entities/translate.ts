@@ -67,6 +67,7 @@ const translateBody = t.Object({
 
 const config = {
   permissions: { entity: ["create"] },
+  mcp: { type: "pending" },
   body: translateBody,
 } satisfies HandlerConfig;
 

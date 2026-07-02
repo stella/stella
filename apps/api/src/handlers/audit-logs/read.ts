@@ -111,6 +111,7 @@ const toAuditLogConditions = (query: ReadAuditLogsQuery): SQL[] => {
 
 const config = {
   permissions: { auditLog: ["read"] },
+  mcp: { type: "pending" },
   query: readAuditLogsQuerySchema,
 } satisfies HandlerConfig;
 

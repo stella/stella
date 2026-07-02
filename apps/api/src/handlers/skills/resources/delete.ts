@@ -21,6 +21,7 @@ const deleteSkillResourceBodySchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["update"] },
+  mcp: { type: "pending" },
   params: deleteSkillResourceParamsSchema,
   body: deleteSkillResourceBodySchema,
 } satisfies HandlerConfig;

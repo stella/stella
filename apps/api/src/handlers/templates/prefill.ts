@@ -155,6 +155,7 @@ const extractFieldValues = async ({
 
 const config = {
   permissions: { template: ["use"] },
+  mcp: { type: "pending" },
   params: prefillParamsSchema,
   body: prefillBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },

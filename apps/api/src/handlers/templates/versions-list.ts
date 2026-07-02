@@ -25,6 +25,7 @@ const listTemplateVersionsQuerySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: listTemplateVersionsParamsSchema,
   query: listTemplateVersionsQuerySchema,
 } satisfies HandlerConfig;

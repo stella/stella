@@ -82,6 +82,7 @@ const toDateOrNull = (value: string | null | undefined): Date | null =>
 const createTask = createSafeHandler(
   {
     permissions: { entity: ["create"] },
+    mcp: { type: "pending" },
     body: createTaskBodySchema,
   },
   async function* ({ workspaceId, user, body, safeDb, recordAuditEvent }) {

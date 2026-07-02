@@ -125,6 +125,7 @@ const toPurposeData = (purposeBody: PresignBody): PresignPurposeData => {
 
 const config = {
   permissions: uploadRoutePermission,
+  mcp: { type: "internal", reason: "upload_mechanics" },
   body: presignBodySchema,
 } satisfies HandlerConfig;
 

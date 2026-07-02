@@ -29,6 +29,7 @@ const templateSlotPreviewParamsSchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: templateSlotPreviewParamsSchema,
 } satisfies HandlerConfig;
 

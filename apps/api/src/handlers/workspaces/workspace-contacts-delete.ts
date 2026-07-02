@@ -12,6 +12,7 @@ import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
 const config = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   params: workspaceParams({ workspaceContactId: tSafeId("workspaceContact") }),
 } satisfies HandlerConfig;
 

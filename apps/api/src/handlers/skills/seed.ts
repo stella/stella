@@ -42,6 +42,7 @@ const DEFAULT_SKILLS = [
 
 const config = {
   permissions: { agentSkill: ["create"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const seedSkills = createSafeRootHandler(

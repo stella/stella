@@ -61,6 +61,7 @@ const resolveDocumentFileName = (
 
 const config = {
   permissions: { template: ["use"], entity: ["create"] },
+  mcp: { type: "covered", by: "fill_template" },
   params: fillToWorkspaceParamsSchema,
   body: fillToWorkspaceBodySchema,
 } satisfies HandlerConfig;

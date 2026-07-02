@@ -347,6 +347,7 @@ const updateClauseHandler = async function* ({
 
 const config = {
   permissions: { clause: ["update"] },
+  mcp: { type: "pending" },
   params: updateClauseParamsSchema,
   body: updateClauseBodySchema,
 } satisfies HandlerConfig;

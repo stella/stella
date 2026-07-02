@@ -34,6 +34,7 @@ const createWorkspaceContactBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   body: createWorkspaceContactBodySchema,
 } satisfies HandlerConfig;
 

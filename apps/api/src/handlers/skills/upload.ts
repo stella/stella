@@ -16,6 +16,7 @@ const uploadSkillBodySchema = t.Object({
 
 const config = {
   permissions: { agentSkill: ["create"] },
+  mcp: { type: "pending" },
   body: uploadSkillBodySchema,
 } satisfies HandlerConfig;
 

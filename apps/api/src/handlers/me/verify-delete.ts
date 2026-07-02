@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
+import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import {
   checkUserOrganizationOwnership,
@@ -23,8 +24,9 @@ export const deleteAccountVerifyBody = t.Object({
 });
 
 const config = {
+  mcp: { type: "internal", reason: "account_lifecycle" },
   body: deleteAccountVerifyBody,
-};
+} satisfies SessionHandlerConfig;
 
 const deleteAccountVerify = createSafeSessionHandler(
   config,

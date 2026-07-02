@@ -32,6 +32,7 @@ import { upsertWorkspaceSearchDocument } from "@/api/lib/search/index-global";
 
 const config = {
   permissions: { workspace: ["create"] },
+  mcp: { type: "pending" },
   // A request without `clientId` creates a personal matter (initially
   // visible only to the creator). With `clientId`, it's a normal
   // client matter and `memberUserIds` may add additional members.

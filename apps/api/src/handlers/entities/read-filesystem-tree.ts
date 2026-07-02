@@ -26,6 +26,7 @@ const readFilesystemTreeBodySchema = t.Object({
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   body: readFilesystemTreeBodySchema,
 } satisfies HandlerConfig;
 

@@ -18,6 +18,7 @@ const deleteContactParamsSchema = t.Object({
 const deleteContactById = createSafeRootHandler(
   {
     permissions: { contact: ["delete"] },
+    mcp: { type: "pending" },
     params: deleteContactParamsSchema,
   },
   async function* ({ safeDb, session, params, recordAuditEvent }) {

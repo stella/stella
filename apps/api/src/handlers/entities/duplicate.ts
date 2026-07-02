@@ -206,6 +206,7 @@ const duplicateEntityHandler = async function* ({
 
 const config = {
   permissions: { entity: ["create"] },
+  mcp: { type: "pending" },
   body: duplicateEntityBodySchema,
 } satisfies HandlerConfig;
 

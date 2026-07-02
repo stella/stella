@@ -17,6 +17,7 @@ import { LIMITS } from "@/api/lib/limits";
 
 const config = {
   permissions: { property: ["create"] },
+  mcp: { type: "pending" },
   body: t.Object({
     items: t.Array(createPropertyBodySchema, { minItems: 1, maxItems: 10 }),
   }),

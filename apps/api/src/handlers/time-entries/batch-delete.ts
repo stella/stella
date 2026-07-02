@@ -50,6 +50,7 @@ const buildBatchDeleteEvents = (params: {
 const batchDelete = createSafeHandler(
   {
     permissions: { timeEntry: ["delete"] },
+    mcp: { type: "pending" },
     body: batchDeleteBodySchema,
   },
   async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {

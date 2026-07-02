@@ -12,6 +12,7 @@ const createVariantParamsSchema = t.Object({
 
 const config = {
   permissions: { clause: ["create"] },
+  mcp: { type: "pending" },
   params: createVariantParamsSchema,
   body: createVariantBodySchema,
 } satisfies HandlerConfig;

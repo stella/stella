@@ -21,6 +21,7 @@ const restoreClauseVersionParamsSchema = t.Object({
 
 const config = {
   permissions: { clause: ["update"] },
+  mcp: { type: "pending" },
   params: restoreClauseVersionParamsSchema,
 } satisfies HandlerConfig;
 

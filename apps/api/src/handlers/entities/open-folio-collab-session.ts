@@ -346,6 +346,7 @@ const openFolioCollabSessionHandler = async function* ({
 const config = {
   body: openFolioCollabSessionBodySchema,
   permissions: { entity: ["update"] },
+  mcp: { type: "internal", reason: "session_token_exchange" },
 } satisfies HandlerConfig;
 
 const openFolioCollabSession = createSafeHandler(

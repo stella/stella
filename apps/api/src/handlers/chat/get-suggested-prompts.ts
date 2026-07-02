@@ -34,6 +34,7 @@ Write the suggestions in the same language as the conversation. Be specific to t
 
 const config = {
   permissions: { chat: ["create"] },
+  mcp: { type: "pending" },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
 } satisfies HandlerConfig;

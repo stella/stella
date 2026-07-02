@@ -21,6 +21,7 @@ import { startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
   permissions: { playbook: ["apply"] },
+  mcp: { type: "pending" },
   params: workspaceParams({}),
 } satisfies HandlerConfig;
 

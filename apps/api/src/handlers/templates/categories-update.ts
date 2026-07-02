@@ -17,6 +17,7 @@ const updateTemplateCategoryParamsSchema = t.Object({
 
 const config = {
   permissions: { template: ["update"] },
+  mcp: { type: "pending" },
   params: updateTemplateCategoryParamsSchema,
   body: updateTemplateCategoryBodySchema,
 } satisfies HandlerConfig;

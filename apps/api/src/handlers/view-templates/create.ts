@@ -27,6 +27,7 @@ const createViewTemplateBodySchema = t.Object(
 
 const config = {
   permissions: { view: ["create"] },
+  mcp: { type: "pending" },
   body: createViewTemplateBodySchema,
 } satisfies HandlerConfig;
 

@@ -103,6 +103,7 @@ const saveDocumentParamsSchema = t.Object({
 
 const config = {
   permissions: { template: ["update"] },
+  mcp: { type: "pending" },
   params: saveDocumentParamsSchema,
   body: saveDocumentBodySchema,
 } satisfies HandlerConfig;

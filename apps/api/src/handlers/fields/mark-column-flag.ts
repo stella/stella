@@ -47,6 +47,7 @@ const config = {
   permissions: {
     entity: ["update"],
   },
+  mcp: { type: "pending" },
   body: t.Object({
     propertyId: tSafeId("property"),
     flag: t.Literal(VERIFIED_COLUMN_FLAG),

@@ -87,6 +87,7 @@ ${numbered}`;
 
 const config = {
   permissions: { clause: ["update"] },
+  mcp: { type: "pending" },
   body: rewriteClauseBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies HandlerConfig;

@@ -12,6 +12,7 @@ const updateClauseCategoryParamsSchema = t.Object({
 
 const config = {
   permissions: { clause: ["update"] },
+  mcp: { type: "pending" },
   params: updateClauseCategoryParamsSchema,
   body: updateCategoryBodySchema,
 } satisfies HandlerConfig;

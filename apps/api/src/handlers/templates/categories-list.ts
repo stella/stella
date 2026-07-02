@@ -8,6 +8,7 @@ import { listTemplateCategoriesHandler } from "./categories";
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
 } satisfies HandlerConfig;
 
 const listTemplateCategories = createSafeRootHandler(

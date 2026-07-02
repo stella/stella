@@ -116,6 +116,7 @@ const createTemplateHandler = async function* ({
 
 const config = {
   permissions: { template: ["create"] },
+  mcp: { type: "tool", name: "create_template" },
   body: createTemplateBodySchema,
 } satisfies HandlerConfig;
 

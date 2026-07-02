@@ -16,6 +16,7 @@ import { broadcast } from "@/api/lib/sse";
 
 const config = {
   permissions: { entity: ["update"] },
+  mcp: { type: "pending" },
   body: t.Object({
     entityId: tSafeId("entity"),
     propertyId: tSafeId("property"),

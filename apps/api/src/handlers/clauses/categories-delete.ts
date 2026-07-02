@@ -12,6 +12,7 @@ const deleteClauseCategoryParamsSchema = t.Object({
 
 const config = {
   permissions: { clause: ["delete"] },
+  mcp: { type: "pending" },
   params: deleteClauseCategoryParamsSchema,
 } satisfies HandlerConfig;
 

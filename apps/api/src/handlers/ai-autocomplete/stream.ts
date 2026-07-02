@@ -21,6 +21,7 @@ const requestBody = t.Object({
 
 const config = {
   permissions: { chat: ["create"] },
+  mcp: { type: "internal", reason: "realtime_stream" },
   body: requestBody,
 } satisfies HandlerConfig;
 

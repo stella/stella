@@ -513,6 +513,7 @@ const createPendingRows = async ({
 
 const config = {
   permissions: uploadRoutePermission,
+  mcp: { type: "internal", reason: "upload_mechanics" },
   body: bodySchema,
 } satisfies HandlerConfig;
 

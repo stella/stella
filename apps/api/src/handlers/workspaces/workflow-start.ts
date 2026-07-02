@@ -10,6 +10,7 @@ import { startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {
   permissions: { workspace: ["update"] },
+  mcp: { type: "pending" },
   body: t.Object({
     entityIds: t.Optional(t.Array(tSafeId("entity"))),
     entityIdsOrder: t.Optional(t.Array(tSafeId("entity"))),

@@ -14,6 +14,7 @@ const unlinkTemplateClauseParamsSchema = t.Object({
 
 const config = {
   permissions: { template: ["update"] },
+  mcp: { type: "pending" },
   params: unlinkTemplateClauseParamsSchema,
 } satisfies HandlerConfig;
 
