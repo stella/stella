@@ -311,6 +311,13 @@ jobs:
       - name: Test release-channel script
         run: bash scripts/release-channel.test.sh
 
+      # Self-test the desktop-release skip decision. This script
+      # decides whether prod desktop users get an update at all; a
+      # regression either ships stale desktop builds or reintroduces
+      # pointless ~30 MB redownloads.
+      - name: Test detect-desktop-release-changes script
+        run: bash scripts/detect-desktop-release-changes.test.sh
+
       - name: Test bun ci retry script
         run: bash scripts/bun-ci-retry.test.sh
 

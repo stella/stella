@@ -3,9 +3,15 @@ name: Release Desktop App
 # Build, sign, and publish the Tauri desktop app for each release tag.
 # Runs after release.yml succeeds so the GitHub Release object already
 # exists; this workflow only adds desktop installers + the updater
-# manifest to it. Skipped automatically when nothing in apps/desktop
-# (or its bundled shared packages) changed since the previous tag, so
-# backend-only releases don't churn a 30 MB redownload.
+# manifest to it. Skipped automatically (for STABLE tags as well as
+# prereleases) when nothing the desktop actually ships changed since
+# the previous same-channel release, so backend-only releases don't
+# churn a ~30 MB redownload + restart. See
+# scripts/detect-desktop-release-changes.sh for the exact decision.
+# On a skipped STABLE release, the carry-forward job below copies the
+# previous stable's installers + latest.json onto the new release and
+# flips `--latest`, so the web app's /releases/latest/download deep
+# links never 404 and in-app updaters see no spurious update.
 #
 # Builds Windows + macOS in parallel. Windows uses Azure Trusted
 # Signing; macOS uses a Developer ID Application cert + App Store
@@ -55,6 +61,10 @@ jobs:
       release_sha: ${{ steps.ref.outputs.sha }}
       app_version: ${{ steps.ref.outputs.version }}
       should_build: ${{ steps.diff.outputs.should_build }}
+      # Previous same-channel release the skip decision compared
+      # against (empty when none). Consumed by carry-forward to copy
+      # that release's desktop assets onto a skipped stable release.
+      previous_tag: ${{ steps.diff.outputs.previous_tag }}
       # Channel directory name (`prod`, `rc`, `beta`, `alpha`)
       # derived from the tag suffix by scripts/release-channel.sh.
       # Used to route the updater manifest to a channel-specific
@@ -181,59 +191,26 @@ jobs:
         id: diff
         env:
           CURRENT_TAG: ${{ steps.ref.outputs.value }}
+          EVENT_NAME: ${{ github.event_name }}
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          # Stable releases are canonical: always build so latest.json
-          # is fresh and stable-channel users always get an upgrade
-          # path. The skip optimization only applies to prereleases,
-          # where rapid iteration on backend-only changes shouldn't
-          # churn desktop redownloads. This also avoids a subtle bug
-          # where the rc->stable promotion points the stable tag at
-          # the same commit as the rc and the diff comes up empty.
-          if [[ "$CURRENT_TAG" != *-* ]]; then
-            echo "Stable release ($CURRENT_TAG); always building desktop."
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
+          # Manual dispatch is the rebuild escape hatch (e.g. re-running
+          # a release whose signing job failed), so it never skips.
+          # Mirrors ci.yml's dispatch-forces-checks behaviour.
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]]; then
+            echo "Manual dispatch; forcing a desktop build."
+            {
+              echo "should_build=true"
+              echo "previous_tag="
+            } >> "$GITHUB_OUTPUT"
             exit 0
           fi
 
-          # For prereleases, find the most recent prerelease tag that
-          # actually shipped desktop artifacts (i.e. has latest.json on
-          # its GitHub Release). If none, build. This pins the diff
-          # window to the last release a desktop client would have
-          # received, instead of any tag that happens to exist.
-          previous=""
-          while IFS= read -r tag; do
-            [[ -z "$tag" || "$tag" == "$CURRENT_TAG" ]] && continue
-            [[ "$tag" != *-* ]] && continue
-            if gh release view "$tag" --json assets \
-                --jq '.assets[].name' 2>/dev/null \
-                | grep -qx 'latest.json'; then
-              previous="$tag"
-              break
-            fi
-          done < <(git tag --sort=-creatordate --list 'v*')
-          if [[ -z "$previous" ]]; then
-            echo "No previous prerelease with desktop artifacts; will build."
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
-          echo "Comparing $previous..$CURRENT_TAG for desktop-relevant changes"
-          # Paths that justify a desktop rebuild. apps/web is included
-          # because the Tauri build embeds the web bundle. VERSION is
-          # intentionally excluded — every tag exists because VERSION
-          # bumped, so including it would defeat the skip entirely.
-          changed=$(git diff --name-only "$previous" "$CURRENT_TAG" -- \
-            apps/desktop/ \
-            apps/web/ \
-            packages/folio/ \
-            packages/ui/ \
-            || true)
-          if [[ -n "$changed" ]]; then
-            echo "should_build=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "No desktop-relevant changes; skipping desktop build."
-            echo "should_build=false" >> "$GITHUB_OUTPUT"
-          fi
+          # All the skip logic (channel-exact comparison, manifest
+          # marker, rebuild-trigger paths, and why apps/web + VERSION
+          # are excluded) lives in the script so the workflow and its
+          # test share one implementation.
+          bash scripts/detect-desktop-release-changes.sh "$CURRENT_TAG" >> "$GITHUB_OUTPUT"
 
   build:
     needs: resolve
@@ -674,3 +651,58 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
         run: gh release edit "$RELEASE_REF" --latest
+
+  carry-forward:
+    # Runs ONLY when a STABLE (prod) release skipped the desktop build.
+    # A skipped release has no installers of its own, so:
+    #   - flipping it to `--latest` as-is would 404 the web app's
+    #     /releases/latest/download/Stella-* deep links, and
+    #   - NOT flipping it would strand /releases/latest on the old tag.
+    # So copy the previous stable release's desktop assets (installers
+    # + latest.json) onto this release, then flip `--latest`. The
+    # carried latest.json still advertises the previous desktop version
+    # and points at the previous release's download URLs, so in-app
+    # updaters see no update: that is exactly the point (no redownload
+    # churn). The S3 manifest mirror is intentionally left untouched
+    # for the same reason.
+    #
+    # Prereleases are deliberately excluded: they are never
+    # /releases/latest and their release objects aren't deep-linked, so
+    # a skipped prerelease needs no carry-forward (today's behaviour).
+    needs: resolve
+    if: ${{ needs.resolve.outputs.should_build == 'false' && needs.resolve.outputs.channel == 'prod' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: write   # download from / upload to / edit GitHub Releases
+    env:
+      # `gh` resolves the repo from GH_REPO, so no checkout is needed.
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GH_REPO: ${{ github.repository }}
+      RELEASE_REF: ${{ needs.resolve.outputs.release_ref }}
+      PREVIOUS_TAG: ${{ needs.resolve.outputs.previous_tag }}
+    steps:
+      - name: Copy previous stable desktop assets forward and promote
+        run: |
+          # A carry-forward with nothing to carry is a broken invariant:
+          # the skip decision only produces should_build=false when it
+          # found a previous same-channel release WITH a latest.json, so
+          # previous_tag must be non-empty here.
+          if [[ -z "$PREVIOUS_TAG" ]]; then
+            echo "::error::carry-forward reached with no previous_tag; refusing to promote an asset-less release"
+            exit 1
+          fi
+
+          # Fail loudly if the previous release has no matching assets:
+          # a stable release with no installers to carry means the
+          # invariant above is already violated upstream.
+          gh release download "$PREVIOUS_TAG" \
+            --pattern 'Stella-*' \
+            --pattern 'latest.json' \
+            --dir assets
+
+          # Attach first, THEN flip --latest (same ordering rationale as
+          # the manifest job's promote step): the deep links must
+          # resolve before /releases/latest points here.
+          gh release upload "$RELEASE_REF" assets/* --clobber
+          gh release edit "$RELEASE_REF" --latest
