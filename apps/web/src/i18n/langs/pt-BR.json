@@ -2089,6 +2089,12 @@
     "settings": "Configurações da organização",
     "settingsDescription": "Edite o nome e o slug da sua organização"
   },
+  "publicTools": {
+    "detailComingSoon": "Detalhes completos, visualização do conteúdo e download em breve.",
+    "metaDescription": "Explore o catálogo aberto de habilidades, integrações e ferramentas integradas para o trabalho jurídico.",
+    "practiceArea": "Área de atuação",
+    "recommendedIn": "Recomendado em {codes}"
+  },
   "search": {
     "aiRefine": "Melhore a consulta com IA",
     "continueInChat": "Continuar no bate-papo",

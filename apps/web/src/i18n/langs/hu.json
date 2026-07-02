@@ -2089,6 +2089,12 @@
     "settings": "Szervezet beállításai",
     "settingsDescription": "Szervezet nevének és slugjának szerkesztése"
   },
+  "publicTools": {
+    "detailComingSoon": "A teljes részletek, a tartalom előnézete és a letöltés hamarosan elérhető lesz.",
+    "metaDescription": "Böngéssze a jogi munkához készült képességek, integrációk és beépített eszközök nyílt katalógusát.",
+    "practiceArea": "Jogterület",
+    "recommendedIn": "Ajánlott itt: {codes}"
+  },
   "search": {
     "aiRefine": "Keresés javítása AI-val",
     "continueInChat": "Folytatás chatben",

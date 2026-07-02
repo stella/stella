@@ -2089,6 +2089,12 @@
     "settings": "إعدادات المؤسسة",
     "settingsDescription": "عدّل اسم مؤسستك والمعرّف"
   },
+  "publicTools": {
+    "detailComingSoon": "التفاصيل الكاملة ومعاينة المحتوى والتنزيل قريبًا.",
+    "metaDescription": "تصفح الكتالوج المفتوح للمهارات والتكاملات والأدوات المدمجة للعمل القانوني.",
+    "practiceArea": "مجال الممارسة",
+    "recommendedIn": "موصى به في {codes}"
+  },
   "search": {
     "aiRefine": "تحسين الاستعلام باستخدام AI",
     "continueInChat": "المتابعة في المحادثة",

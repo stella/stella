@@ -133,6 +133,9 @@ export function AppSidebar(props: AppSidebarProps) {
   const playbooksPreviewEnabled = usePlaybooksPreviewEnabled();
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includePublicLaw: publicLawPreviewEnabled,
+    // The public /tools catalogue stays out of the authenticated app
+    // nav; signed-in users manage tools via /knowledge/tools instead.
+    includePublicTools: false,
   });
   const user = routeApi.useRouteContext({
     select: (ctx) => ctx.user,

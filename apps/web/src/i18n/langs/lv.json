@@ -2089,6 +2089,12 @@
     "settings": "Organizācijas iestatījumi",
     "settingsDescription": "Rediģēt organizācijas nosaukumu un slug"
   },
+  "publicTools": {
+    "detailComingSoon": "Pilna informācija, satura priekšskatījums un lejupielāde būs pieejami drīzumā.",
+    "metaDescription": "Pārlūkojiet atvērto prasmju, integrāciju un iebūvēto rīku katalogu juridiskajam darbam.",
+    "practiceArea": "Prakses joma",
+    "recommendedIn": "Ieteicams {codes}"
+  },
   "search": {
     "aiRefine": "Uzlabot vaicājumu ar AI",
     "continueInChat": "Turpināt tērzēšanā",

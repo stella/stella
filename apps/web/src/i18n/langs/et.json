@@ -2089,6 +2089,12 @@
     "settings": "Organisatsiooni seaded",
     "settingsDescription": "Muutke oma organisatsiooni nime ja slugi"
   },
+  "publicTools": {
+    "detailComingSoon": "Täielikud üksikasjad, sisu eelvaade ja allalaadimine on peagi saadaval.",
+    "metaDescription": "Sirvige avatud oskuste, integratsioonide ja sisseehitatud tööriistade kataloogi õigustööks.",
+    "practiceArea": "Praktikavaldkond",
+    "recommendedIn": "Soovitatud {codes} jaoks"
+  },
   "search": {
     "aiRefine": "Täpsusta päringut AI-ga",
     "continueInChat": "Jätka vestluses",

@@ -1,26 +1,13 @@
-import { env } from "@/env";
 import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
+import {
+  createPublicCanonicalUrl,
+  createPublicHead,
+  type JsonLdObject,
+  type PublicHeadInput,
+} from "@/lib/public-seo";
 
-type JsonLdObject = Record<string, unknown>;
-
-type PublicLawHeadInput = {
-  alternateLinks?: readonly PublicLawAlternateLink[];
+type PublicLawHeadInput = Omit<PublicHeadInput, "crawlAllowed"> & {
   crawlAllowed?: boolean;
-  description?: string | null;
-  jsonLd?: JsonLdObject | null;
-  path: `/${string}`;
-  title: string;
-  type: "article" | "website";
-};
-
-type PublicLawMeta =
-  | { title: string }
-  | { name: string; content: string }
-  | { property: string; content: string };
-
-type PublicLawAlternateLink = {
-  href: string;
-  hreflang: string;
 };
 
 type CaseLawDecisionJsonLdInput = {
@@ -45,18 +32,6 @@ type CaseLawCollectionJsonLdInput = {
     url: string;
   }[];
   name: string;
-};
-
-const PUBLIC_ROBOTS =
-  "index,follow,max-snippet:-1,max-image-preview:large,max-video-preview:-1";
-const PRIVATE_ROBOTS = "noindex,nofollow";
-
-const trimTrailingSlash = (value: string): string => {
-  if (value.endsWith("/") && value.length > 1) {
-    return value.slice(0, -1);
-  }
-
-  return value;
 };
 
 const dateToIsoDate = (value: Date | string | null): string | null => {
@@ -87,64 +62,12 @@ const absoluteUrlOrNull = (value: string | null | undefined): string | null => {
   return URL.canParse(value) ? value : null;
 };
 
-const serializeJsonLd = (value: JsonLdObject): string =>
-  JSON.stringify(value).replace(/</gu, "\\u003c");
-
-export const createPublicLawCanonicalUrl = (path: `/${string}`): string =>
-  new URL(path, `${trimTrailingSlash(env.VITE_PUBLIC_APP_URL)}/`).toString();
+export const createPublicLawCanonicalUrl = createPublicCanonicalUrl;
 
 export const createPublicLawHead = ({
-  alternateLinks = [],
   crawlAllowed = isPublicLawCrawlAllowed(),
-  description,
-  jsonLd,
-  path,
-  title,
-  type,
-}: PublicLawHeadInput) => {
-  const canonicalUrl = createPublicLawCanonicalUrl(path);
-  const links = [
-    { rel: "canonical", href: canonicalUrl },
-    ...alternateLinks.map((link) => ({
-      rel: "alternate",
-      hreflang: link.hreflang,
-      href: link.href,
-    })),
-  ];
-  const meta: PublicLawMeta[] = [
-    { title },
-    {
-      name: "robots",
-      content: crawlAllowed ? PUBLIC_ROBOTS : PRIVATE_ROBOTS,
-    },
-    { property: "og:title", content: title },
-    { property: "og:type", content: type },
-    { property: "og:url", content: canonicalUrl },
-    { name: "twitter:card", content: "summary" },
-  ];
-
-  if (description?.trim()) {
-    meta.push(
-      { name: "description", content: description },
-      { property: "og:description", content: description },
-    );
-  }
-
-  return {
-    links,
-    meta,
-    ...(jsonLd
-      ? {
-          scripts: [
-            {
-              children: serializeJsonLd(jsonLd),
-              type: "application/ld+json",
-            },
-          ],
-        }
-      : {}),
-  };
-};
+  ...rest
+}: PublicLawHeadInput) => createPublicHead({ crawlAllowed, ...rest });
 
 export const createCaseLawDecisionJsonLd = ({
   canonicalUrl,

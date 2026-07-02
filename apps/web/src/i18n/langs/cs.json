@@ -2089,6 +2089,12 @@
     "settings": "Nastavení organizace",
     "settingsDescription": "Upravte název a slug organizace"
   },
+  "publicTools": {
+    "detailComingSoon": "Úplné podrobnosti, náhled obsahu a stažení budou brzy k dispozici.",
+    "metaDescription": "Procházejte otevřený katalog dovedností, integrací a vestavěných nástrojů pro právní práci.",
+    "practiceArea": "Oblast praxe",
+    "recommendedIn": "Doporučeno v {codes}"
+  },
   "search": {
     "aiRefine": "Vylepšit dotaz pomocí AI",
     "continueInChat": "Pokračovat v chatu",

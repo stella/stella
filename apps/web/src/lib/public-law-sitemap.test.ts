@@ -430,6 +430,7 @@ describe("public law sitemap", () => {
     });
 
     expect(robots).toContain("Disallow: /law/");
+    expect(robots).toContain("Disallow: /tools/");
     expect(robots).toContain("Disallow: /workspaces");
     expect(robots).toContain("Disallow: /knowledge");
     expect(robots).toContain("Disallow: /chat");
@@ -479,6 +480,13 @@ describe("public law sitemap", () => {
     expect(robots).toBe("User-agent: *\nDisallow: /\n");
   });
 
+  test("robots allows public tools only when indexing is explicitly enabled", () => {
+    const robots = createRobotsTxt({ publicToolsIndexingEnabled: true });
+
+    expect(robots).toContain("Allow: /tools/");
+    expect(robots).not.toContain("Disallow: /tools/");
+  });
+
   test("dark-launched law sitemaps do not publish law URLs", () => {
     const indexXml = createPublicLawSitemapIndexXml([
       {
@@ -509,6 +517,8 @@ describe("public law sitemap", () => {
     expect(isPublicSsrPath("/law")).toBe(true);
     expect(isPublicSsrPath("/law/cases")).toBe(true);
     expect(isPublicSsrPath("/law/cze/cases/court/2026-01-01/slug")).toBe(true);
+    expect(isPublicSsrPath("/tools")).toBe(true);
+    expect(isPublicSsrPath("/tools/some-skill")).toBe(true);
     expect(isPublicSsrPath("/auth")).toBe(false);
     expect(isPublicSsrPath("/workspaces/workspace-id")).toBe(false);
     expect(isPublicSsrPath("/")).toBe(false);
@@ -575,6 +585,7 @@ describe("public law sitemap", () => {
     const sources = await Promise.all([
       readSource("apps/web/src/routes/law/route.tsx"),
       readSource("apps/web/src/routes/law/-components/public-law-shell.tsx"),
+      readSource("apps/web/src/components/public-workspace-shell.tsx"),
       readSource(
         "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx",
       ),
@@ -591,7 +602,7 @@ describe("public law sitemap", () => {
   test("public and protected workspace sidebars share the same primary nav model", async () => {
     const sources = await Promise.all([
       readSource("apps/web/src/components/app-sidebar.tsx"),
-      readSource("apps/web/src/routes/law/-components/public-law-shell.tsx"),
+      readSource("apps/web/src/components/public-workspace-shell.tsx"),
     ]);
 
     expect(WORKSPACE_PRIMARY_NAV_ITEMS.map((item) => item.id)).toEqual([
@@ -599,6 +610,7 @@ describe("public law sitemap", () => {
       "chat",
       "matters",
       "caseLaw",
+      "tools",
       "knowledge",
       "contacts",
     ]);
@@ -612,11 +624,11 @@ describe("public law sitemap", () => {
     const [navSource, appSidebarSource, publicShellSource] = await Promise.all([
       readSource("apps/web/src/components/workspace-primary-nav.ts"),
       readSource("apps/web/src/components/app-sidebar.tsx"),
-      readSource("apps/web/src/routes/law/-components/public-law-shell.tsx"),
+      readSource("apps/web/src/components/public-workspace-shell.tsx"),
     ]);
 
     expect(navSource).toContain("getWorkspacePrimaryNavItems");
-    expect(navSource).toContain('item.id !== "caseLaw"');
+    expect(navSource).toContain('item.id === "caseLaw"');
     expect(appSidebarSource).toContain("usePublicLawPreviewEnabled");
     // The server-rendered shell must use the isomorphic host/env gate;
     // the browser-only preview hook would mismatch hydration there.

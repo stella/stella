@@ -2089,6 +2089,12 @@
     "settings": "Nastavenia organizácie",
     "settingsDescription": "Upravte názov a slug organizácie"
   },
+  "publicTools": {
+    "detailComingSoon": "Úplné podrobnosti, náhľad obsahu a stiahnutie budú čoskoro k dispozícii.",
+    "metaDescription": "Prehľadávajte otvorený katalóg zručností, integrácií a vstavaných nástrojov pre právnu prácu.",
+    "practiceArea": "Oblasť praxe",
+    "recommendedIn": "Odporúčané v {codes}"
+  },
   "search": {
     "aiRefine": "Vylepšiť dotaz pomocou AI",
     "continueInChat": "Pokračovať v chate",

@@ -16,6 +16,7 @@ import {
   isPublicLawSitemapEnabled,
 } from "@/lib/public-law-launch";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
+import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
@@ -343,11 +344,13 @@ ${serializedEntries}
 
 type RobotsTxtOptions = {
   publicLawCrawlAllowed?: boolean;
+  publicToolsCrawlAllowed?: boolean;
   seoIndexable?: boolean;
 };
 
 export const createRobotsTxt = ({
   publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
+  publicToolsCrawlAllowed = isPublicToolsCrawlAllowed(),
   seoIndexable = env.VITE_SEO_INDEXABLE,
 }: RobotsTxtOptions = {}): string => {
   // Non-indexable deployments serve a full crawl block: no path rules and no
@@ -364,9 +367,13 @@ Disallow: /
     env.VITE_PUBLIC_APP_URL,
   ).toString();
   const lawRule = publicLawCrawlAllowed ? "Allow: /law/" : "Disallow: /law/";
+  const toolsRule = publicToolsCrawlAllowed
+    ? "Allow: /tools/"
+    : "Disallow: /tools/";
 
   return `User-agent: *
 ${lawRule}
+${toolsRule}
 Disallow: /auth
 Disallow: /onboarding
 Disallow: /consent

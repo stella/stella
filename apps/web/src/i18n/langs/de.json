@@ -2089,6 +2089,12 @@
     "settings": "Organisationseinstellungen",
     "settingsDescription": "Name und Slug der Organisation bearbeiten"
   },
+  "publicTools": {
+    "detailComingSoon": "Vollständige Details, Inhaltsvorschau und Download folgen in Kürze.",
+    "metaDescription": "Durchsuchen Sie den offenen Katalog von Skills, Integrationen und integrierten Werkzeugen für die juristische Arbeit.",
+    "practiceArea": "Rechtsgebiet",
+    "recommendedIn": "Empfohlen in {codes}"
+  },
   "search": {
     "aiRefine": "Suchanfrage mit KI verbessern",
     "continueInChat": "Im Chat fortsetzen",

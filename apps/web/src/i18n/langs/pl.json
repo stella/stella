@@ -2089,6 +2089,12 @@
     "settings": "Ustawienia organizacji",
     "settingsDescription": "Edytuj nazwę i slug organizacji"
   },
+  "publicTools": {
+    "detailComingSoon": "Pełne szczegóły, podgląd treści i pobieranie będą dostępne wkrótce.",
+    "metaDescription": "Przeglądaj otwarty katalog umiejętności, integracji i wbudowanych narzędzi do pracy prawniczej.",
+    "practiceArea": "Dziedzina prawa",
+    "recommendedIn": "Zalecane w {codes}"
+  },
   "search": {
     "aiRefine": "Ulepsz zapytanie z AI",
     "continueInChat": "Kontynuuj na czacie",
