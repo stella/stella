@@ -13,8 +13,8 @@
 
 import type { Node as PMNode } from "prosemirror-model";
 
-import { buildPositionalText } from "@stll/folio";
-import type { AISuggestion } from "@stll/folio";
+import { buildPositionalText } from "@stll/folio-react";
+import type { AISuggestion } from "@stll/folio-react";
 import { isFieldPath } from "@stll/template-conditions";
 
 import type {

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
-import type { DocxCompatibility } from "@stll/folio";
+import type { DocxCompatibility } from "@stll/folio-react";
 import { stellaToast } from "@stll/ui/components/toast";
 
 import { useInspectorStore } from "@/components/inspector/inspector-store";

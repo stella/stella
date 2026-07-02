@@ -1,6 +1,6 @@
 import { t } from "elysia";
 
-import { createDocx, createEmptyDocument } from "@stll/folio/server";
+import { createDocx, createEmptyDocument } from "@stll/folio-core/server";
 
 import type { SafeDb } from "@/api/db";
 import {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { AISuggestion } from "@stll/folio";
+import type { AISuggestion } from "@stll/folio-react";
 
 import {
   anchorSuggestion,

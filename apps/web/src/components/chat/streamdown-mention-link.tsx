@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import { isFolioBlockId } from "@stll/folio";
+import { isFolioBlockId } from "@stll/folio-react";
 import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";

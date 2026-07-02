@@ -7,7 +7,7 @@ import { panic } from "better-result";
 import type * as YProseMirror from "y-prosemirror";
 import type * as Yjs from "yjs";
 
-import type { DocxEditorCollaboration } from "@stll/folio";
+import type { DocxEditorCollaboration } from "@stll/folio-react";
 
 import { env } from "@/env";
 import { useExternalSyncEffect } from "@/hooks/use-effect";

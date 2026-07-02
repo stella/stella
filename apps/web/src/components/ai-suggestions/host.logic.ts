@@ -16,7 +16,7 @@ import type {
   AIGenerateInput,
   AISuggestion,
   AISuggestionApplyMode,
-} from "@stll/folio";
+} from "@stll/folio-react";
 
 import type { FileAIChatStatus } from "./types";
 

@@ -20,7 +20,7 @@ import type { RefObject } from "react";
 
 import { create } from "zustand";
 
-import type { DocxEditorRef } from "@stll/folio";
+import type { DocxEditorRef } from "@stll/folio-react";
 
 // Registrations are keyed per (entity, file field): an entity can hold multiple
 // file fields, each a distinct document with its own live editor. Mirrors

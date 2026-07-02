@@ -1,7 +1,7 @@
 import { create } from "zustand";
 
 import type { TemplateRecipeDefinition } from "@stll/api/types";
-import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio";
+import type { DirectiveRange, TemplatePreviewValue } from "@stll/folio-react";
 
 import type { ReplacementSpec } from "@/routes/_protected.knowledge/-components/template-studio-suggestions";
 import type { EditableField } from "@/routes/_protected.knowledge/-components/template-wizard";

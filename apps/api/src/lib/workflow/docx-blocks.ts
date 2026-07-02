@@ -22,8 +22,8 @@
 import JSZip from "jszip";
 import * as slimdom from "slimdom";
 
-import { deriveBlockId } from "@stll/folio/server";
-import type { FolioAIBlock } from "@stll/folio/server";
+import { deriveBlockId } from "@stll/folio-core/server";
+import type { FolioAIBlock } from "@stll/folio-core/server";
 
 import {
   escapeDocxReviewText,

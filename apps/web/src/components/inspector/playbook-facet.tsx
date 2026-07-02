@@ -23,7 +23,7 @@ import { useFormatter, useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 import { useShallow } from "zustand/react/shallow";
 
-import type { FolioAIEditOperation } from "@stll/folio";
+import type { FolioAIEditOperation } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
 import {
   Select,

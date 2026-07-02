@@ -1,11 +1,18 @@
 import "./styles.css";
-import "../../../packages/folio/src/styles/editor.css";
+import "@stll/folio-react/editor.css";
 import { createRoot } from "react-dom/client";
 
 import { IntlProvider } from "use-intl";
 
-import messages from "../../web/src/i18n/langs/en.json";
+import { getFolioMessages } from "@stll/folio-react/messages";
+
+import appMessages from "../../web/src/i18n/langs/en.json";
 import { App } from "./App";
+
+// The playground only renders the folio editor, so the package's own
+// `folio.*` catalog (a superset of the app's) replaces the app namespace;
+// every other namespace comes from the app messages.
+const messages = { ...appMessages, ...getFolioMessages("en") };
 
 const container = document.querySelector("#app");
 if (container) {

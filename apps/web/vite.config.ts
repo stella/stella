@@ -258,10 +258,18 @@ export default defineConfig(({ mode }) => {
       //      statically reachable, so the cold crawl misses them until a
       //      protected route actually runs the auth client. Listing the
       //      entrypoints makes the optimizer bundle their full graph up front.
-      //   2. @stll/folio: the document route lazy-loads it via
-      //      `await import("@stll/folio")` ($viewId.document.tsx), dragging in
-      //      the prosemirror family + jszip + fast-xml-parser, none of which
-      //      apps/web imports statically anywhere else.
+      //   2. @stll/folio-react (which pulls @stll/folio-core, ~350 dist
+      //      modules): its root entry is statically reachable from shared
+      //      chunks (chat mention links, the AI-suggestion host) on every
+      //      page, so it must stay pre-bundled. Serving it unoptimized makes
+      //      every dev page load fetch hundreds of individual modules
+      //      (measured in the e2e route walk: ~90 folio requests pre-bundled
+      //      vs ~9,600 unoptimized, over a second of extra load per route).
+      //      Trade-off: the optimizer rewrites the layout engine's
+      //      `new Worker(new URL(..., import.meta.url))` to a .vite/deps path
+      //      that does not exist, so in dev the font-metrics worker fails to
+      //      spawn and folio silently falls back to main-thread measuring.
+      //      Dev-only: the production build bundles the worker correctly.
       //
       // When that discovery happens mid-session, Vite kicks off a second
       // optimize pass and forces a full-page reload ("optimized dependencies
@@ -293,6 +301,8 @@ export default defineConfig(({ mode }) => {
         "@better-fetch/fetch",
         "defu",
         "nanostores",
+        "@stll/folio-react",
+        "@stll/folio-react/messages",
         "prosemirror-commands",
         "prosemirror-dropcursor",
         "prosemirror-gapcursor",
