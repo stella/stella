@@ -147,6 +147,7 @@ run_step "Knip production deps" run_knip
 run_step "Test" run_test
 run_step "Bridge-version guard self-test" bash scripts/check-bridge-version.test.sh
 run_step "Release-channel self-test" bash scripts/release-channel.test.sh
+run_step "Desktop-release-changes self-test" bash scripts/detect-desktop-release-changes.test.sh
 run_step "Bridge-version guard" bash scripts/check-bridge-version.sh
 
 echo
