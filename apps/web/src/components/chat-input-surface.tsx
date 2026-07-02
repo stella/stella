@@ -1,7 +1,7 @@
 import "./chat-editor.css";
 import { useRef } from "react";
 
-import { ArrowUpIcon, PaperclipIcon, SquareIcon } from "lucide-react";
+import { PaperclipIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
@@ -12,6 +12,7 @@ import type {
   ChatEditorController,
   ChatInputDraft,
 } from "@/components/chat-editor-provider";
+import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -195,38 +196,28 @@ const ChatSubmitButton = ({
   onSend,
   onStop,
 }: ChatSubmitButtonProps) => {
-  const t = useTranslations();
   const isStop = isGenerating && onStop !== undefined;
 
+  if (isStop) {
+    return (
+      <ChatComposerActionButton
+        className="bg-foreground text-background hover:bg-foreground/90 shrink-0"
+        mode="stop"
+        onStop={onStop}
+        size="icon-sm"
+        variant="default"
+      />
+    );
+  }
+
   return (
-    <Button
-      aria-label={isStop ? t("chat.stopResponse") : t("chat.sendPrompt")}
-      className={cn(
-        "bg-foreground text-background hover:bg-foreground/90 shrink-0",
-        !isStop && !canSend && "opacity-50",
-      )}
-      disabled={!isStop && !canSend}
-      onClick={isStop ? onStop : onSend}
+    <ChatComposerActionButton
+      canSend={canSend}
+      className="bg-foreground text-background hover:bg-foreground/90 shrink-0"
+      mode="send"
+      onSend={onSend}
       size="icon-sm"
       variant="default"
-    >
-      <span
-        aria-hidden="true"
-        className="pointer-events-none relative size-3.5"
-      >
-        <SquareIcon
-          className={cn(
-            "absolute inset-0 mx-0! size-full transition-[opacity,transform] duration-150 ease-out",
-            isStop ? "scale-100 opacity-100" : "scale-75 opacity-0",
-          )}
-        />
-        <ArrowUpIcon
-          className={cn(
-            "absolute inset-0 mx-0! size-full transition-[opacity,transform] duration-150 ease-out",
-            isStop ? "scale-75 opacity-0" : "scale-100 opacity-100",
-          )}
-        />
-      </span>
-    </Button>
+    />
   );
 };

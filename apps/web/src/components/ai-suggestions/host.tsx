@@ -14,7 +14,14 @@
  */
 
 import "@/components/chat-editor.css";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  forwardRef,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import type {
   ComponentProps,
   KeyboardEvent as ReactKeyboardEvent,
@@ -22,13 +29,11 @@ import type {
 } from "react";
 
 import {
-  ArrowUpIcon,
   CheckIcon,
   ChevronDownIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
   LoaderCircleIcon,
-  RotateCcwIcon,
   SquareIcon,
   SquarePenIcon,
   UserIcon,
@@ -74,6 +79,7 @@ import {
 } from "@/components/ai-elements/message";
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
 import type { ChatEditorController } from "@/components/chat-editor-provider";
+import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
@@ -1318,9 +1324,9 @@ type PromptBarProps = {
   sendDisabledReason?: "editor-loading" | undefined;
   /**
    * When true the composer keeps accepting input while a response
-   * streams: a send is queued by `useChatSession` and dispatched
-   * once the turn finishes. A dedicated Stop button appears beside
-   * Send instead of the send button morphing into Stop.
+   * streams: pressing Enter queues a send via `useChatSession` and
+   * dispatches it once the turn finishes. The primary action stays
+   * Send; a separate Stop button is shown alongside it.
    */
   queueWhileGenerating?: boolean | undefined;
 };
@@ -1502,9 +1508,8 @@ export function PromptBar(props: PromptBarProps) {
   const inputDisabled = isSendBlocked;
   const submitDisabled = busy || isSendBlocked;
   // With queuing enabled the composer keeps accepting input while a
-  // response streams — `useChatSession` holds the send until the
-  // turn finishes. The send button stays a send button; a dedicated
-  // Stop button sits beside it instead of the send button morphing.
+  // response streams: `useChatSession` holds submitted drafts until the
+  // turn finishes. Keep Send as the primary action and show Stop beside it.
   const composerSubmitDisabled = queueWhileGenerating
     ? status === "applying" || isSendBlocked
     : submitDisabled;
@@ -1821,46 +1826,16 @@ export function PromptBar(props: PromptBarProps) {
       <Tooltip>
         <TooltipTrigger
           render={
-            <Button
-              aria-label={(() => {
-                if (morphSendToStop) {
-                  return t("chat.stopResponse");
-                }
-                if (morphSendToRetry) {
-                  return t("common.retry");
-                }
-                return t("chat.sendPrompt");
-              })()}
-              className="rounded-full"
-              disabled={
-                morphSendToStop || morphSendToRetry
-                  ? false
-                  : composerSubmitDisabled || !canSubmit
-              }
-              onClick={() => {
-                if (morphSendToStop) {
-                  onStop();
-                  return;
-                }
-                if (morphSendToRetry) {
-                  onRetry();
-                  return;
-                }
+            <PromptBarActionButton
+              canSend={!composerSubmitDisabled && canSubmit}
+              morphSendToRetry={morphSendToRetry}
+              morphSendToStop={morphSendToStop}
+              onRetry={onRetry}
+              onSend={() => {
                 void submitDraft();
               }}
-              size="icon"
-              type="button"
-            >
-              {(() => {
-                if (morphSendToStop) {
-                  return <SquareIcon aria-hidden="true" />;
-                }
-                if (morphSendToRetry) {
-                  return <RotateCcwIcon aria-hidden="true" />;
-                }
-                return <ArrowUpIcon aria-hidden="true" />;
-              })()}
-            </Button>
+              onStop={onStop}
+            />
           }
         />
         <TooltipPopup side="top">
@@ -1912,6 +1887,90 @@ export function PromptBar(props: PromptBarProps) {
     </PromptBarShell>
   );
 }
+
+type PromptBarActionButtonProps = {
+  canSend: boolean;
+  morphSendToRetry: boolean;
+  morphSendToStop: boolean;
+  onRetry?: (() => void) | undefined;
+  onSend: () => void;
+  onStop?: (() => void) | undefined;
+} & Omit<ComponentProps<"span">, "children">;
+
+const PromptBarActionButton = forwardRef<
+  HTMLSpanElement,
+  PromptBarActionButtonProps
+>(
+  (
+    {
+      canSend,
+      morphSendToRetry,
+      morphSendToStop,
+      onRetry,
+      onSend,
+      onStop,
+      ...triggerProps
+    },
+    ref,
+  ) => {
+    const triggerClassName = triggerProps.className;
+
+    if (morphSendToStop && onStop !== undefined) {
+      return (
+        <span
+          {...triggerProps}
+          className={cn("inline-flex", triggerClassName)}
+          ref={ref}
+        >
+          <ChatComposerActionButton
+            className="rounded-full"
+            iconClassName="size-4"
+            mode="stop"
+            onStop={onStop}
+            size="icon"
+          />
+        </span>
+      );
+    }
+
+    if (morphSendToRetry && onRetry !== undefined) {
+      return (
+        <span
+          {...triggerProps}
+          className={cn("inline-flex", triggerClassName)}
+          ref={ref}
+        >
+          <ChatComposerActionButton
+            className="rounded-full"
+            iconClassName="size-4"
+            mode="retry"
+            onRetry={onRetry}
+            size="icon"
+          />
+        </span>
+      );
+    }
+
+    return (
+      <span
+        {...triggerProps}
+        className={cn("inline-flex", triggerClassName)}
+        ref={ref}
+      >
+        <ChatComposerActionButton
+          canSend={canSend}
+          className="rounded-full"
+          iconClassName="size-4"
+          mode="send"
+          onSend={onSend}
+          size="icon"
+        />
+      </span>
+    );
+  },
+);
+
+PromptBarActionButton.displayName = "PromptBarActionButton";
 
 // ===========================================================================
 // Thread panel
