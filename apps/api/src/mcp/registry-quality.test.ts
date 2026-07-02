@@ -47,7 +47,7 @@ const TOOL_DESCRIPTION_CHAR_CEILING = 900;
 // verb_noun style: lowercase words joined by single underscores.
 const TOOL_NAME_PATTERN = /^[a-z]+(?:_[a-z]+)*$/u;
 
-describe.each(SURFACES)(
+describe.each([...SURFACES])(
   "MCP registry quality ($mode surface)",
   ({ mode, definitions }) => {
     test("tool surface snapshot (name, scope, description, annotations, inputSchema)", () => {
@@ -150,20 +150,20 @@ const collectUndescribedProperties = (
   if (!isRecord(schema)) {
     return;
   }
-  if (isRecord(schema.properties)) {
-    for (const [key, property] of Object.entries(schema.properties)) {
+  if (isRecord(schema["properties"])) {
+    for (const [key, property] of Object.entries(schema["properties"])) {
       const propertyPath = `${path}.${key}`;
       if (
         !isRecord(property) ||
-        typeof property.description !== "string" ||
-        property.description.trim() === ""
+        typeof property["description"] !== "string" ||
+        property["description"].trim() === ""
       ) {
         issues.push(propertyPath);
       }
       collectUndescribedProperties(property, propertyPath, issues);
     }
   }
-  collectUndescribedProperties(schema.items, `${path}[]`, issues);
+  collectUndescribedProperties(schema["items"], `${path}[]`, issues);
 };
 
 const getInputProperties = (tool: McpToolDefinition): Record<string, unknown> =>
