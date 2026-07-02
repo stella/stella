@@ -97,10 +97,12 @@ describe("active-docx-store instance-token guard", () => {
         ?.registration.editable,
     ).toBe(true);
 
-    // Replace with instance B.
-    useActiveDocxStore
-      .getState()
-      .registerEditor("ent_1", "fld_1", makeRegistration());
+    // Replace with instance B, whose editable state differs from A's stale
+    // write so an applied stale write is distinguishable from a no-op.
+    useActiveDocxStore.getState().registerEditor("ent_1", "fld_1", {
+      ...makeRegistration(),
+      editable: true,
+    });
     // Stale write from A — must be ignored.
     useActiveDocxStore
       .getState()
@@ -108,7 +110,7 @@ describe("active-docx-store instance-token guard", () => {
     expect(
       useActiveDocxStore.getState().byKey[activeDocxKey("ent_1", "fld_1")]
         ?.registration.editable,
-    ).toBe(false); // B's initial registration value, not A's stale write
+    ).toBe(true); // B's initial registration value, not A's stale write
   });
 
   test("two file fields of the same entity register independently", () => {
