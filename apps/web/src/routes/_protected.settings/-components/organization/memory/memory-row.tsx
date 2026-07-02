@@ -2,7 +2,7 @@ import { useState } from "react";
 
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { ArchiveIcon, PencilIcon, PinIcon } from "lucide-react";
-import { useTranslations } from "use-intl";
+import { useFormatter, useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
@@ -40,6 +40,7 @@ export const MemoryRow = ({ activeOrganizationId, memory }: MemoryRowProps) => {
   const t = useTranslations();
   const commonT = useTranslations("common");
   const tErrors = useTranslations("errors");
+  const format = useFormatter();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
@@ -70,8 +71,6 @@ export const MemoryRow = ({ activeOrganizationId, memory }: MemoryRowProps) => {
     },
   });
 
-  const kindKey: TranslationKey | undefined = MEMORY_KIND_KEYS[memory.kind];
-
   const saveEdit = () => {
     const trimmed = draft.trim();
     if (trimmed.length === 0) {
@@ -87,7 +86,7 @@ export const MemoryRow = ({ activeOrganizationId, memory }: MemoryRowProps) => {
     <div className="bg-card flex flex-col gap-2 rounded-lg border p-3">
       <div className="flex items-start justify-between gap-2">
         <span className="bg-muted text-muted-foreground rounded px-1.5 py-0.5 text-xs font-medium">
-          {kindKey ? t(kindKey) : memory.kind}
+          {t(MEMORY_KIND_KEYS[memory.kind])}
         </span>
         <div className="flex shrink-0 items-center gap-0.5">
           <Button
@@ -157,7 +156,9 @@ export const MemoryRow = ({ activeOrganizationId, memory }: MemoryRowProps) => {
       <p className="text-muted-foreground text-xs">
         {t("memory.provenance", {
           source: t(MEMORY_SOURCE_KEYS[memory.source]),
-          date: new Date(memory.createdAt).toLocaleDateString(),
+          date: format.dateTime(new Date(memory.createdAt), {
+            dateStyle: "medium",
+          }),
         })}
       </p>
     </div>
