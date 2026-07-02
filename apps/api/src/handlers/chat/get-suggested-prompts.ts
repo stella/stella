@@ -1,16 +1,16 @@
-import { generateText } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 
+import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import { buildRecapTranscript } from "@/api/handlers/chat/thread-recap-transcript";
 import {
   buildRecapMessageWindow,
   RECAP_RECENT_MESSAGE_LIMIT,
 } from "@/api/handlers/chat/thread-recap-window";
-import { requireAIAvailable, getModelForRole } from "@/api/lib/ai-models";
+import { resolveCaching } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   assertUsageAvailableForHandler,
   createSafeRootHandler,
@@ -18,6 +18,8 @@ import {
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 // How many follow-up suggestions to generate. The composer shows the
 // first and reveals the rest behind a toggle.
@@ -83,7 +85,14 @@ const getSuggestedPrompts = createSafeRootHandler(
     session,
     user,
   }) {
-    if (Result.isError(requireAIAvailable(orgAIConfig))) {
+    if (
+      Result.isError(
+        requireTanStackAIAvailableForRole({
+          orgConfig: orgAIConfig,
+          role: "fast",
+        }),
+      )
+    ) {
       return Result.ok<SuggestedPromptsResult>({ prompts: [] });
     }
 
@@ -179,7 +188,7 @@ const getSuggestedPrompts = createSafeRootHandler(
 
     const recapMessages = messageWindow.messages.map((row) => ({
       role: row.role,
-      parts: row.content.data,
+      parts: normalizePersistedChatMessageContent(row.content).parts,
     }));
 
     const transcript = buildRecapTranscript(recapMessages);
@@ -199,15 +208,7 @@ const getSuggestedPrompts = createSafeRootHandler(
       return Result.err(preflightError);
     }
 
-    const aiAnalytics = createAIAnalyticsCallbacks({
-      usageMetering: {
-        actionType: "chat",
-        organizationId: session.activeOrganizationId,
-        safeDb,
-        serviceTier: "standard",
-        userId: user.id,
-        workspaceId: persistedWorkspaceId,
-      },
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       feature: "chat.suggested_prompts",
       modelRole: "fast",
       orgAIConfig,
@@ -218,19 +219,22 @@ const getSuggestedPrompts = createSafeRootHandler(
     });
 
     try {
-      const { text } = await generateText({
-        abortSignal: AbortSignal.timeout(15_000),
-        maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
-        model: getModelForRole("fast", orgAIConfig, {
+      const text = await generateTanStackTextForRole({
+        role: "fast",
+        orgAIConfig,
+        organizationId: session.activeOrganizationId,
+        analytics: aiAnalytics,
+        caching: resolveCaching({
           promptCachingEnabled,
+          role: "fast",
           scopeKey: threadId,
-          organizationId: session.activeOrganizationId,
-          serviceTier: "standard",
         }),
-        prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
         system: SUGGESTIONS_SYSTEM_PROMPT,
+        prompt: `Conversation transcript:\n\n${transcript}\n\nSuggested follow-up prompts:`,
+        maxOutputTokens: SUGGESTIONS_MAX_OUTPUT_TOKENS,
         temperature: 0.3,
-        ...aiAnalytics.stepCallbacks,
+        serviceTier: "standard",
+        abortSignal: AbortSignal.timeout(15_000),
       });
 
       const prompts = cleanSuggestionsText(text);

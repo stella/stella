@@ -1251,7 +1251,7 @@ const SHARED_CHAT_RENDERER_MESSAGES = [
     parts: [
       {
         type: "text",
-        text: "Give me a quick first read on indemnity exposure.",
+        content: "Give me a quick first read on indemnity exposure.",
       },
     ],
     role: "user",
@@ -1261,7 +1261,8 @@ const SHARED_CHAT_RENDERER_MESSAGES = [
     parts: [
       {
         type: "text",
-        text: "The first read is medium exposure: broad carve-outs, a short survival period, and a relatively small escrow.",
+        content:
+          "The first read is medium exposure: broad carve-outs, a short survival period, and a relatively small escrow.",
       },
     ],
     role: "assistant",
@@ -1271,7 +1272,7 @@ const SHARED_CHAT_RENDERER_MESSAGES = [
     parts: [
       {
         type: "text",
-        text: "Now make that client-ready.",
+        content: "Now make that client-ready.",
       },
     ],
     role: "user",
@@ -1281,7 +1282,7 @@ const SHARED_CHAT_RENDERER_MESSAGES = [
     parts: [
       {
         type: "text",
-        text: [
+        content: [
           "**Indemnity position.** The draft creates a medium exposure profile.",
           "",
           "- Tax and environmental carve-outs sit outside the main cap.",
@@ -1339,7 +1340,6 @@ function SharedChatRendererSample() {
             onResend={() => {
               /* no-op in playground */
             }}
-            showToolCalls={false}
             streamdownComponents={{
               a: renderPlaygroundAnchor,
             }}

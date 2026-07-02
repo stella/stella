@@ -50,10 +50,7 @@ const fingerprintDraft = (draft: ProviderCredentialDraft): string | null => {
     return null;
   }
   const keyFingerprint = fingerprintKey(apiKey);
-  if (draft.provider !== "azure_foundry" && draft.provider !== "huggingface") {
-    return keyFingerprint;
-  }
-  return `${keyFingerprint}:${draft.endpoint.trim()}`;
+  return keyFingerprint;
 };
 
 type RowState = {
@@ -69,11 +66,10 @@ type RowStateMap = Record<ProviderValue, RowState>;
 const INITIAL_ROW_STATES: RowStateMap = {
   google: { status: "idle" },
   anthropic: { status: "idle" },
-  mistral: { status: "idle" },
   openai: { status: "idle" },
-  azure_foundry: { status: "idle" },
   openrouter: { status: "idle" },
-  huggingface: { status: "idle" },
+  mistral: { status: "idle" },
+  bedrock: { status: "idle" },
 };
 
 export const AIStep = ({
@@ -179,15 +175,6 @@ export const AIStep = ({
     const response = await api["ai-config"]["validate-provider"].post({
       provider: draft.provider,
       apiKey,
-      ...(draft.provider === "azure_foundry"
-        ? {
-            endpoint: draft.endpoint.trim(),
-            ...(draft.apiVersion ? { apiVersion: draft.apiVersion } : {}),
-          }
-        : {}),
-      ...(draft.provider === "huggingface"
-        ? { endpoint: draft.endpoint.trim() }
-        : {}),
       ...(draft.provider === "google" ? { region: draft.region } : {}),
     });
 
@@ -281,17 +268,12 @@ export const AIStep = ({
       anthropic: stillPresent.has("anthropic")
         ? prev.anthropic
         : { status: "idle" },
-      mistral: stillPresent.has("mistral") ? prev.mistral : { status: "idle" },
       openai: stillPresent.has("openai") ? prev.openai : { status: "idle" },
-      azure_foundry: stillPresent.has("azure_foundry")
-        ? prev.azure_foundry
-        : { status: "idle" },
       openrouter: stillPresent.has("openrouter")
         ? prev.openrouter
         : { status: "idle" },
-      huggingface: stillPresent.has("huggingface")
-        ? prev.huggingface
-        : { status: "idle" },
+      mistral: stillPresent.has("mistral") ? prev.mistral : { status: "idle" },
+      bedrock: stillPresent.has("bedrock") ? prev.bedrock : { status: "idle" },
     }));
   };
 

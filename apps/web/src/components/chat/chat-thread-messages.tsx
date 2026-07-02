@@ -1,9 +1,8 @@
 import { useLayoutEffect, useMemo, useRef } from "react";
 import type { ComponentProps, RefObject } from "react";
 
-import { isToolUIPart } from "ai";
-import type { FileUIPart } from "ai";
 import {
+  ChevronRightIcon,
   ClockIcon,
   CopyIcon,
   FileTextIcon,
@@ -31,6 +30,7 @@ import { useChatApproval } from "@/components/chat/chat-approval-context";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
+  ChatAttachmentPart,
   ChatPart,
   ChatUITools,
   PersistedChatMessage,
@@ -193,6 +193,7 @@ export const ChatThreadMessages = ({
               <>
                 <AssistantMessageParts
                   activeOrganizationId={activeOrganizationId}
+                  isGenerating={isGenerating}
                   isLatestAssistantMessage={
                     message.id === retryableAssistantMessageId
                   }
@@ -210,6 +211,7 @@ export const ChatThreadMessages = ({
                   activeOrganizationId={activeOrganizationId}
                   messageId={message.id}
                   parts={message.parts}
+                  sourceDocuments={message.metadata?.sourceDocuments}
                   workspaceId={workspaceId}
                 />
                 <AssistantMessageActions
@@ -224,9 +226,9 @@ export const ChatThreadMessages = ({
             ) : (
               <>
                 {(() => {
-                  const fileParts: FileUIPart[] = [];
+                  const fileParts: ChatAttachmentPart[] = [];
                   for (const part of message.parts) {
-                    if (part.type === "file") {
+                    if (isChatAttachmentPart(part)) {
                       fileParts.push(part);
                     }
                   }
@@ -241,7 +243,7 @@ export const ChatThreadMessages = ({
                         messages,
                         index,
                       )}
-                      text={normalizeUserMessageTextForDisplay(part.text)}
+                      text={normalizeUserMessageTextForDisplay(part.content)}
                     />
                   ) : null,
                 )}
@@ -319,20 +321,15 @@ const escapeRegExp = (value: string) =>
   value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 
 const collectAnonRestorations = (
-  parts: readonly ChatPart[],
+  message: PersistedChatMessage,
 ): readonly ChatAnonRestoration[] => {
   // De-dupe placeholder→original pairs across multiple parts in a
   // single assistant message so the rehype plugin builds one
   // pattern per stream.
   const seen = new Map<string, string>();
-  for (const part of parts) {
-    if (part.type !== "data-stella-anon-restorations") {
-      continue;
-    }
-    for (const pair of part.data.pairs) {
-      if (!seen.has(pair.placeholder)) {
-        seen.set(pair.placeholder, pair.original);
-      }
+  for (const pair of message.metadata?.anonRestorations?.pairs ?? []) {
+    if (!seen.has(pair.placeholder)) {
+      seen.set(pair.placeholder, pair.original);
     }
   }
   return [...seen.entries()].map(([placeholder, original]) => ({
@@ -348,9 +345,9 @@ const EMPTY_RESTORATION_PAIRS: readonly ChatAnonRestoration[] = Object.freeze(
 /**
  * Resolve the restoration pairs that match what *this user
  * message* actually sent. Walks forward to the next assistant
- * message (skipping any intervening user messages — the AI SDK
- * persists in chronological order) and uses its server-emitted
- * `data-stella-anon-restorations` pairs, which were produced by
+ * message (skipping any intervening user messages — TanStack
+ * messages persist in chronological order) and uses its
+ * server-emitted metadata pairs, which were produced by
  * the same `PipelineContext` the request body crossed. Returns an
  * empty array while the assistant is still streaming or if the
  * turn was sent raw — both cases render the user message without
@@ -364,7 +361,7 @@ const getFollowingAssistantRestorations = (
   for (let i = userMessageIndex + 1; i < messages.length; i += 1) {
     const candidate = messages[i];
     if (candidate?.role === "assistant") {
-      return collectAnonRestorations(candidate.parts);
+      return collectAnonRestorations(candidate);
     }
   }
   return EMPTY_RESTORATION_PAIRS;
@@ -435,7 +432,29 @@ const IMAGE_MEDIA_TYPES = new Set([
   "image/gif",
 ]);
 
-const UserAttachments = ({ parts }: { parts: readonly FileUIPart[] }) => {
+const isChatAttachmentPart = (part: ChatPart): part is ChatAttachmentPart =>
+  part.type === "image" || part.type === "document";
+
+const getAttachmentUrl = (part: ChatAttachmentPart): string =>
+  part.source.value;
+
+const getAttachmentMimeType = (part: ChatAttachmentPart): string =>
+  "mimeType" in part.source && typeof part.source.mimeType === "string"
+    ? part.source.mimeType
+    : "application/octet-stream";
+
+const getAttachmentFilename = (part: ChatAttachmentPart): string | undefined =>
+  part.metadata?.filename;
+
+const getAttachmentPlaceholder = (
+  part: ChatAttachmentPart,
+): string | undefined => part.metadata?.placeholder;
+
+const UserAttachments = ({
+  parts,
+}: {
+  parts: readonly ChatAttachmentPart[];
+}) => {
   const t = useTranslations();
 
   if (parts.length === 0) {
@@ -445,24 +464,24 @@ const UserAttachments = ({ parts }: { parts: readonly FileUIPart[] }) => {
   return (
     <div className="flex flex-wrap gap-1.5">
       {parts.map((part, index) => {
-        const key = `${part.filename ?? "attachment"}-${index}`;
-        const contentUrl = getUserFileContentUrl(part.url) ?? part.url;
+        const url = getAttachmentUrl(part);
+        const filename = getAttachmentFilename(part);
+        const mimeType = getAttachmentMimeType(part);
+        const key = `${filename ?? "attachment"}-${index}`;
+        const contentUrl = getUserFileContentUrl(url) ?? url;
         const fallbackLabel = t("chat.attachment");
-        if (IMAGE_MEDIA_TYPES.has(part.mediaType)) {
+        if (IMAGE_MEDIA_TYPES.has(mimeType)) {
           // The backend sets `placeholder` (a blur data URL) only when a
           // thumbnail was generated, so its presence doubles as "serve the
           // smaller thumbnail instead of the full original."
-          const placeholder =
-            "placeholder" in part && typeof part.placeholder === "string"
-              ? part.placeholder
-              : undefined;
+          const placeholder = getAttachmentPlaceholder(part);
           const imageSrc = placeholder
-            ? (getUserFileThumbnailUrl(part.url) ?? contentUrl)
+            ? (getUserFileThumbnailUrl(url) ?? contentUrl)
             : contentUrl;
           return (
             <a href={contentUrl} key={key} rel="noreferrer" target="_blank">
               <img
-                alt={part.filename ?? t("chat.attachedImage")}
+                alt={filename ?? t("chat.attachedImage")}
                 className="max-h-32 rounded-md object-cover"
                 height={128}
                 src={imageSrc}
@@ -494,7 +513,7 @@ const UserAttachments = ({ parts }: { parts: readonly FileUIPart[] }) => {
             target="_blank"
           >
             <FileTextIcon className="size-3" />
-            <span>{part.filename ?? fallbackLabel}</span>
+            <span>{filename ?? fallbackLabel}</span>
           </a>
         );
       })}
@@ -614,19 +633,15 @@ const hasVisibleContent = (
     }
 
     for (const part of message.parts) {
-      if (part.type === "text" && part.text.trim()) {
+      if (part.type === "text" && part.content.trim()) {
         return true;
       }
 
-      if (
-        isApprovalPart(part) ||
-        part.type === "tool-ask-user" ||
-        part.type === "tool-create-document"
-      ) {
+      if (part.type === "tool-call") {
         return true;
       }
 
-      if (isToolUIPart(part)) {
+      if (part.type === "thinking" && part.content.trim()) {
         return true;
       }
     }
@@ -638,8 +653,8 @@ const hasVisibleContent = (
 const getMessageText = (message: PersistedChatMessage) => {
   const textParts: string[] = [];
   for (const part of message.parts) {
-    if (part.type === "text" && part.text.trim()) {
-      textParts.push(part.text);
+    if (part.type === "text" && part.content.trim()) {
+      textParts.push(part.content);
     }
   }
 
@@ -869,6 +884,7 @@ type AssistantMessagePartsProps = Pick<
   | "workspaceId"
 > & {
   activeOrganizationId: string;
+  isGenerating: boolean;
   isLatestAssistantMessage: boolean;
   message: PersistedChatMessage;
   shouldShowToolCalls: boolean;
@@ -884,6 +900,7 @@ type AssistantMessagePartsProps = Pick<
  */
 const AssistantMessageParts = ({
   activeOrganizationId,
+  isGenerating,
   isLatestAssistantMessage,
   message,
   onAskUserEditAndRerun,
@@ -895,26 +912,54 @@ const AssistantMessageParts = ({
   streamdownComponents,
   workspaceId,
 }: AssistantMessagePartsProps) => {
-  const restorationPairs = collectAnonRestorations(message.parts);
+  const restorationPairs = collectAnonRestorations(message);
+  const firstThinkingPartIndex = getFirstThinkingPartIndex(message.parts);
+  const reasoningTokenCount = getReasoningTokenCount(message);
+  const hasAnswerText = hasAssistantAnswerText(message.parts);
   return (
     <>
+      {firstThinkingPartIndex === -1 && reasoningTokenCount !== null && (
+        <AssistantReasoningTokenSummary count={reasoningTokenCount} />
+      )}
       {message.parts.map((part, index) => {
+        if (part.type === "thinking") {
+          return (
+            <AssistantThinkingPart
+              components={streamdownComponents}
+              displayState={
+                hasAnswerText
+                  ? { status: "folded" }
+                  : {
+                      isStreaming: isGenerating && isLatestAssistantMessage,
+                      status: "expanded",
+                    }
+              }
+              key={`${message.id}-thinking-${index}`}
+              reasoningTokenCount={
+                index === firstThinkingPartIndex ? reasoningTokenCount : null
+              }
+              restorationPairs={restorationPairs}
+              text={part.content}
+            />
+          );
+        }
+
         if (part.type === "text") {
           return (
             <AssistantTextPart
               components={streamdownComponents}
               key={`${message.id}-text-${index}`}
               restorationPairs={restorationPairs}
-              text={part.text}
+              text={part.content}
             />
           );
         }
 
-        if (part.type === "tool-ask-user") {
+        if (part.type === "tool-call" && part.name === "ask-user") {
           return (
             <AskUserCard
               discardsDownstream={!isLatestAssistantMessage}
-              key={part.toolCallId}
+              key={part.id}
               {...(onAskUserEditAndRerun && {
                 onEditAndRerun: (toolCallId, output) => {
                   void onAskUserEditAndRerun(toolCallId, output);
@@ -931,10 +976,10 @@ const AssistantMessageParts = ({
           );
         }
 
-        if (part.type === "tool-create-document") {
+        if (part.type === "tool-call" && part.name === "create-document") {
           return (
             <NeedsMatterCard
-              key={part.toolCallId}
+              key={part.id}
               onOpenCreated={onOpenCreatedDocument}
               onResolve={onCreateDocumentResolve}
               part={part}
@@ -943,9 +988,9 @@ const AssistantMessageParts = ({
         }
 
         if (
-          (part.type === "tool-web_search" || part.type === "tool-fetch_url") &&
-          "state" in part &&
-          part.state === "output-available"
+          part.type === "tool-call" &&
+          (part.name === "web_search" || part.name === "fetch_url") &&
+          part.state === "complete"
         ) {
           // Completed searches are rendered as a single dedup'd row by
           // <WebSearchSources> below; skipping here avoids the duplicate.
@@ -954,21 +999,21 @@ const AssistantMessageParts = ({
           return null;
         }
 
-        if (isApprovalPart(part)) {
-          return (
-            <ToolApprovalCard
-              key={part.toolCallId}
-              part={part}
-              workspaceId={workspaceId}
-            />
-          );
-        }
+        if (part.type === "tool-call") {
+          if (isApprovalPart(part)) {
+            return (
+              <ToolApprovalCard
+                key={part.id}
+                part={part}
+                workspaceId={workspaceId}
+              />
+            );
+          }
 
-        if (isToolUIPart(part)) {
           return (
             <ToolCallCard
               activeOrganizationId={activeOrganizationId}
-              key={part.toolCallId}
+              key={part.id}
               part={part}
               showDetails={shouldShowToolCalls}
             />
@@ -982,11 +1027,178 @@ const AssistantMessageParts = ({
   );
 };
 
-const AssistantTextPart = ({
+const getFirstThinkingPartIndex = (parts: readonly ChatPart[]): number =>
+  parts.findIndex(
+    (part) => part.type === "thinking" && part.content.trim().length > 0,
+  );
+
+const getReasoningTokenCount = (
+  message: PersistedChatMessage,
+): number | null => {
+  const count =
+    message.metadata?.usage?.completionTokensDetails?.reasoningTokens;
+  return count !== undefined && count > 0 ? count : null;
+};
+
+const hasAssistantAnswerText = (parts: readonly ChatPart[]): boolean => {
+  for (const part of parts) {
+    if (part.type === "text" && part.content.trim()) {
+      return true;
+    }
+  }
+  return false;
+};
+
+const AssistantReasoningTokenSummary = ({ count }: { count: number }) => {
+  const t = useTranslations();
+  return (
+    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
+      <span>{t("chat.reasoning")}</span>
+      <span aria-hidden="true" className="text-foreground-placeholder">
+        ·
+      </span>
+      <ReasoningTokenCount count={count} />
+    </div>
+  );
+};
+
+const ReasoningTokenCount = ({ count }: { count: number }) => {
+  const t = useTranslations();
+  return (
+    <span className="text-muted-foreground text-[11px] leading-none tabular-nums">
+      {t("chat.reasoningTokens", { count })}
+    </span>
+  );
+};
+
+type AssistantThinkingDisplayState =
+  | { status: "expanded"; isStreaming: boolean }
+  | { status: "folded" };
+
+const AssistantThinkingPart = ({
+  components,
+  displayState,
+  reasoningTokenCount,
+  restorationPairs,
+  text,
+}: {
+  components: ChatThreadMessagesProps["streamdownComponents"];
+  displayState: AssistantThinkingDisplayState;
+  reasoningTokenCount: number | null;
+  restorationPairs: readonly ChatAnonRestoration[];
+  text: string;
+}) => {
+  if (!text.trim()) {
+    return null;
+  }
+
+  if (displayState.status === "expanded") {
+    return (
+      <div className="border-border/70 bg-muted/20 max-w-[min(44rem,100%)] rounded-md border">
+        <div className="flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs">
+          <AssistantThinkingHeader
+            isExpanded
+            isStreaming={displayState.isStreaming}
+            reasoningTokenCount={reasoningTokenCount}
+          />
+        </div>
+        <AssistantThinkingBody
+          components={components}
+          restorationPairs={restorationPairs}
+          text={text}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <details className="group/reasoning w-fit max-w-full rounded-md">
+      <summary
+        className={cn(
+          "inline-flex min-h-8 cursor-pointer list-none items-center gap-1.5",
+          "border-border/70 bg-background/70 rounded-md border px-2.5 py-1.5 text-xs shadow-sm",
+          "text-muted-foreground",
+          "hover:bg-muted/40 transition-colors",
+          "[&::-webkit-details-marker]:hidden",
+        )}
+      >
+        <AssistantThinkingHeader
+          isExpanded={false}
+          isStreaming={false}
+          reasoningTokenCount={reasoningTokenCount}
+        />
+      </summary>
+      <AssistantThinkingBody
+        components={components}
+        restorationPairs={restorationPairs}
+        text={text}
+      />
+    </details>
+  );
+};
+
+const AssistantThinkingHeader = ({
+  isExpanded,
+  isStreaming,
+  reasoningTokenCount,
+}: {
+  isExpanded: boolean;
+  isStreaming: boolean;
+  reasoningTokenCount: number | null;
+}) => {
+  const t = useTranslations();
+  return (
+    <>
+      <ChevronRightIcon
+        className={cn(
+          "size-3.5 shrink-0 transition-transform",
+          isExpanded ? "rotate-90" : "group-open/reasoning:rotate-90",
+        )}
+      />
+      <span className="text-xs font-medium">{t("chat.reasoning")}</span>
+      {reasoningTokenCount !== null && (
+        <>
+          <span aria-hidden="true" className="text-foreground-placeholder">
+            ·
+          </span>
+          <ReasoningTokenCount count={reasoningTokenCount} />
+        </>
+      )}
+      {isStreaming && (
+        <span className="bg-foreground-placeholder size-1.5 animate-pulse rounded-full" />
+      )}
+    </>
+  );
+};
+
+const AssistantThinkingBody = ({
   components,
   restorationPairs,
   text,
 }: {
+  components: ChatThreadMessagesProps["streamdownComponents"];
+  restorationPairs: readonly ChatAnonRestoration[];
+  text: string;
+}) => (
+  <div className="px-2.5 pb-2.5">
+    <div className="border-s ps-2.5">
+      <AssistantTextPart
+        className="text-muted-foreground text-xs leading-relaxed"
+        components={components}
+        restorationPairs={restorationPairs}
+        text={text}
+      />
+    </div>
+  </div>
+);
+
+const AssistantTextPart = ({
+  className,
+  components,
+  restorationPairs,
+  text,
+}: {
+  className?: string | undefined;
   components: ChatThreadMessagesProps["streamdownComponents"];
   restorationPairs: readonly ChatAnonRestoration[];
   text: string;
@@ -1001,11 +1213,20 @@ const AssistantTextPart = ({
         : undefined,
     [restorationPairs],
   );
+  const classNamePatch = className === undefined ? {} : { className };
   if (rehypePlugins === undefined) {
-    return <MessageResponse components={components}>{text}</MessageResponse>;
+    return (
+      <MessageResponse components={components} {...classNamePatch}>
+        {text}
+      </MessageResponse>
+    );
   }
   return (
-    <MessageResponse components={components} rehypePlugins={rehypePlugins}>
+    <MessageResponse
+      components={components}
+      rehypePlugins={rehypePlugins}
+      {...classNamePatch}
+    >
       {text}
     </MessageResponse>
   );
@@ -1025,7 +1246,7 @@ const UserMessageText = ({
   text: string;
   /**
    * Server-side placeholder → original pairs from the *following*
-   * assistant message's `data-stella-anon-restorations` part.
+   * assistant message's metadata sidecar.
    * Using those guarantees the pill rendering matches what
    * actually crossed the boundary on this turn: any pair listed
    * here was minted by the server's shared `PipelineContext`, so

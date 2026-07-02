@@ -1,8 +1,8 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
 import type { ScopedDb } from "@/api/db";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 // -----------------------------------------------------------------
@@ -16,7 +16,8 @@ type OrgToolsContext = {
 };
 
 export const createOrgTools = (_context: OrgToolsContext) => ({
-  "ask-user": tool({
+  "ask-user": toolDefinition({
+    name: "ask-user",
     description:
       "Ask the user clarifying questions before executing " +
       "a complex task. Use this when the request is " +
@@ -36,7 +37,7 @@ export const createOrgTools = (_context: OrgToolsContext) => ({
       "(no `options`) for genuinely open-ended answers like " +
       "names, dates, free text. Once the user answers, " +
       "synthesize their input into a plan and execute it.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         analysis: v.pipe(
           v.string(),
@@ -77,7 +78,7 @@ export const createOrgTools = (_context: OrgToolsContext) => ({
         ),
       }),
     ),
-    outputSchema: valibotSchema(
+    outputSchema: toTanStackToolSchema(
       v.strictObject({
         answers: v.array(
           v.strictObject({

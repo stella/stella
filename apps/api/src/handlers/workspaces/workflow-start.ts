@@ -1,11 +1,11 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { isDeferredServiceTierAvailableForRole } from "@/api/lib/ai-models";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { isDeferredServiceTierAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 
 const config = {

@@ -1,4 +1,4 @@
-import type { ModelMessage } from "ai";
+import type { ModelMessage } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -11,19 +11,24 @@ import {
 } from "./loop-detector";
 
 const toolCallMessage = ({
+  argumentsText,
   input,
   toolName = "searchMatter",
 }: {
+  argumentsText?: string | undefined;
   input: unknown;
   toolName?: string | undefined;
 }): ModelMessage => ({
   role: "assistant",
-  content: [
+  content: null,
+  toolCalls: [
     {
-      type: "tool-call",
-      toolCallId: Bun.randomUUIDv7(),
-      toolName,
-      input,
+      id: Bun.randomUUIDv7(),
+      type: "function",
+      function: {
+        name: toolName,
+        arguments: argumentsText ?? JSON.stringify(input),
+      },
     },
   ],
 });
@@ -67,9 +72,9 @@ describe("model loop detection", () => {
     expect(detectModelLoop(messages).type).toBe("tool-call-loop");
   });
 
-  test("handles structured values that JSON.stringify cannot serialize", () => {
+  test("handles non-json tool arguments without throwing", () => {
     const messages = Array.from({ length: 5 }, () =>
-      toolCallMessage({ input: { amount: 10n } }),
+      toolCallMessage({ input: {}, argumentsText: "{not-json" }),
     );
 
     const detection = detectModelLoop(messages);
@@ -180,6 +185,18 @@ describe("model loop detection", () => {
       expect(detection.repetitionCount).toBeGreaterThanOrEqual(10);
       expect(detection.signature).toHaveLength(64);
     }
+  });
+
+  test("detects repeated TanStack text content parts", () => {
+    const repeated = "No progress was made on this exact same line. ";
+    const detection = detectModelLoop([
+      {
+        role: "assistant",
+        content: [{ type: "text", content: repeated.repeat(14) }],
+      },
+    ]);
+
+    expect(detection.type).toBe("content-loop");
   });
 
   test("hard-stops content loops that keep repeating past recovery", () => {

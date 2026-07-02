@@ -6,6 +6,7 @@ import type {
   ApprovalToolName,
   ToolApprovalGrant,
 } from "@/components/chat/chat-ui-tools";
+import type { ChatSendMessageOptions } from "@/routes/_protected.chat/-queries";
 
 /**
  * Tool-approval handlers and grant sets shared by every leaf that
@@ -32,6 +33,7 @@ type ChatApprovalContextValue = {
   handleApprove: (
     id: string,
     toolName: ApprovalToolName,
+    options?: ChatSendMessageOptions,
   ) => void | PromiseLike<void>;
   handleDeny: (id: string) => void | PromiseLike<void>;
   alwaysApprovedTools: ReadonlySet<ToolApprovalGrant>;

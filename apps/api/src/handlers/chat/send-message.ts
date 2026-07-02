@@ -1,4 +1,3 @@
-import type { LanguageModel } from "ai";
 import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Static } from "elysia";
@@ -11,6 +10,7 @@ import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
+import { chatMessageContentFromMessage } from "@/api/handlers/chat/chat-message-parts";
 import {
   appendAnonymizedModeHintToChatSafePrompt,
   buildChatPromptCacheKey,
@@ -88,7 +88,8 @@ import {
 import { restrictChatToolsToScope } from "@/api/handlers/chat/tools/tool-scope";
 import type {
   ChatMessage,
-  ChatMessageContent,
+  PersistableChatMessage,
+  PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import {
   createRawChatFilePart,
@@ -98,15 +99,9 @@ import {
 import type { UploadedChatFile } from "@/api/handlers/chat/upload-files";
 import { createFileKey } from "@/api/handlers/files/utils";
 import { getDisabledNativeToolSlugs } from "@/api/handlers/mcp-connectors/catalog-metadata";
-import {
-  getModelById,
-  getModelForRole,
-  requireAIAvailable,
-  validateDevModelOverride,
-} from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -118,6 +113,10 @@ import { PG_ERROR } from "@/api/lib/pg-error";
 import { getS3 } from "@/api/lib/s3";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
+import {
+  requireTanStackAIAvailableForRole,
+  validateTanStackDevModelOverride,
+} from "@/api/lib/tanstack-ai-models";
 import { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -143,7 +142,7 @@ const assertDevModelOverride = (
       }),
     );
   }
-  return validateDevModelOverride(devModelId, orgAIConfig);
+  return validateTanStackDevModelOverride(devModelId, orgAIConfig);
 };
 
 const config = {
@@ -167,7 +166,10 @@ const sendMessage = createSafeRootHandler(
     session,
     user,
   }) {
-    yield* requireAIAvailable(orgAIConfig);
+    yield* requireTanStackAIAvailableForRole({
+      orgConfig: orgAIConfig,
+      role: "chat",
+    });
 
     yield* assertDevModelOverride(body.devModelId, orgAIConfig);
 
@@ -622,7 +624,8 @@ const sendMessage = createSafeRootHandler(
     // Streaming tools mirror the surface the user is on: only the
     // DOCX file-overlay client knows how to satisfy
     // apply-active-docx-edits (it queues into the review store and
-    // sends the output back via addToolOutput). PDF/file overlays
+    // sends the output back via TanStack ChatClient.addToolResult).
+    // PDF/file overlays
     // still send active-file context, but they must not expose the
     // DOCX edit tool or the model can chase an impossible path.
     const chatTools = getChatTools({
@@ -676,15 +679,6 @@ const sendMessage = createSafeRootHandler(
       chatContext.systemUntrusted,
       [externalMcpSystemHint],
     );
-    let externalMcpToolsClosed = false;
-    const closeExternalMcpTools = async () => {
-      if (externalMcpToolsClosed) {
-        return;
-      }
-
-      externalMcpToolsClosed = true;
-      await externalMcpTools.close();
-    };
 
     const response = yield* Result.await(
       Result.tryPromise({
@@ -702,130 +696,126 @@ const sendMessage = createSafeRootHandler(
               messages: chatContext.hydratedMessages,
               latestMessageId: parsedMessage.message.id,
               onFinish: async ({ isAborted, responseMessage }) => {
-                try {
-                  const resolvedMessages = resolveAssistantMessageRefs({
-                    messages: [responseMessage],
-                    refRegistry,
-                  });
-                  const resolvedResponseMessage = resolvedMessages.at(0);
-                  if (!resolvedResponseMessage) {
-                    panic("Missing chat response message");
-                  }
+                const resolvedMessages = resolveAssistantMessageRefs({
+                  messages: [responseMessage],
+                  refRegistry,
+                });
+                const resolvedResponseMessage = resolvedMessages.at(0);
+                if (!resolvedResponseMessage) {
+                  panic("Missing chat response message");
+                }
 
-                  const persistencePlan = planAssistantFinishPersistence({
-                    existingIds: latestMessagePlan.existingIds,
-                    isAborted: isAborted || isClientConnectionAborted(),
-                    message: resolvedResponseMessage,
-                  });
+                const persistencePlan = planAssistantFinishPersistence({
+                  existingIds: latestMessagePlan.existingIds,
+                  isAborted: isAborted || isClientConnectionAborted(),
+                  message: resolvedResponseMessage,
+                });
 
-                  // Skip scope expansion when the assistant message
-                  // will not be persisted (aborted stream, planner
-                  // returned `none`). Widening `data_workspace_ids`
-                  // for transient parts that never land in
-                  // `chat_messages` could make the thread unreadable
-                  // after future access changes even though no
-                  // corresponding content was saved.
-                  if (persistencePlan.type === "none") {
-                    return;
-                  }
+                // Skip scope expansion when the assistant message
+                // will not be persisted (aborted stream, planner
+                // returned `none`). Widening `data_workspace_ids`
+                // for transient parts that never land in
+                // `chat_messages` could make the thread unreadable
+                // after future access changes even though no
+                // corresponding content was saved.
+                if (persistencePlan.type === "none") {
+                  return;
+                }
 
-                  // Widen the thread's data scope to cover any
-                  // workspace-scoped content the assistant just
-                  // emitted (source-document parts from search and
-                  // workspace tools). Run before persistMessage so
-                  // the recorded scope already includes the
-                  // workspaces when the message lands in
-                  // `chat_messages`.
-                  //
-                  // If expansion fails (transient DB error, etc.),
-                  // SKIP the message persist. Storing workspace-
-                  // scoped content in `chat_messages` while the
-                  // owning thread's `data_workspace_ids` stays stale
-                  // would leave the new content readable after the
-                  // user loses access to those workspaces — the same
-                  // class of leak this whole change exists to close.
-                  //
-                  // Intersect with `accessibleWorkspaceIds` so a
-                  // hallucinated or stale UUID from the model never
-                  // lands in `data_workspace_ids`. An out-of-set ID
-                  // would fail the RLS subset check on every later
-                  // persist, silently breaking the thread.
-                  const assistantWorkspaceIds = extractAssistantWorkspaceIds(
-                    resolvedResponseMessage.parts,
-                  ).filter((id) => accessibleSet.has(id));
-                  const expandResult = await expandThreadDataScope({
-                    currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
-                    newWorkspaceIds: assistantWorkspaceIds,
-                    recordAuditEvent,
-                    safeDb,
+                // Widen the thread's data scope to cover any
+                // workspace-scoped content the assistant just
+                // emitted (source-document parts from search and
+                // workspace tools). Run before persistMessage so
+                // the recorded scope already includes the
+                // workspaces when the message lands in
+                // `chat_messages`.
+                //
+                // If expansion fails (transient DB error, etc.),
+                // SKIP the message persist. Storing workspace-
+                // scoped content in `chat_messages` while the
+                // owning thread's `data_workspace_ids` stays stale
+                // would leave the new content readable after the
+                // user loses access to those workspaces — the same
+                // class of leak this whole change exists to close.
+                //
+                // Intersect with `accessibleWorkspaceIds` so a
+                // hallucinated or stale UUID from the model never
+                // lands in `data_workspace_ids`. An out-of-set ID
+                // would fail the RLS subset check on every later
+                // persist, silently breaking the thread.
+                const assistantWorkspaceIds = extractAssistantWorkspaceIds(
+                  resolvedResponseMessage.parts,
+                ).filter((id) => accessibleSet.has(id));
+                const expandResult = await expandThreadDataScope({
+                  currentDataWorkspaceIds: dataScopeAfterIncomingMessage,
+                  newWorkspaceIds: assistantWorkspaceIds,
+                  recordAuditEvent,
+                  safeDb,
+                  threadId: body.threadId,
+                  threadWorkspaceId: workspaceId,
+                });
+                if (Result.isError(expandResult)) {
+                  captureError(expandResult.error, {
                     threadId: body.threadId,
-                    threadWorkspaceId: workspaceId,
                   });
-                  if (Result.isError(expandResult)) {
-                    captureError(expandResult.error, {
+                  return;
+                }
+                const persistResult = await persistMessage({
+                  persistencePlan,
+                  recordAuditEvent,
+                  safeDb,
+                  threadId: body.threadId,
+                  userId: user.id,
+                  workspaceId,
+                });
+
+                if (Result.isError(persistResult)) {
+                  captureError(persistResult.error, {
+                    threadId: body.threadId,
+                  });
+                } else {
+                  const messagesAfterAssistantPersist =
+                    applyAssistantPersistencePlan({
+                      messages: latestMessagePlan.messages,
+                      persistencePlan,
+                    });
+                  if (
+                    messagesAfterAssistantPersist !== null &&
+                    body.sendMode !== CHAT_SEND_MODE.anonymized
+                  ) {
+                    scheduleChatCompactionCheckpoint({
+                      abortSignal: AbortSignal.timeout(
+                        CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS,
+                      ),
+                      boundary: thirdPartyBoundary,
+                      devModelId: body.devModelId,
+                      messages: messagesAfterAssistantPersist,
+                      organizationId: session.activeOrganizationId,
+                      orgAIConfig,
+                      safeDb,
                       threadId: body.threadId,
                     });
-                    return;
                   }
-                  const persistResult = await persistMessage({
-                    persistencePlan,
-                    recordAuditEvent,
-                    safeDb,
-                    threadId: body.threadId,
-                    userId: user.id,
-                    workspaceId,
-                  });
 
-                  if (Result.isError(persistResult)) {
-                    captureError(persistResult.error, {
+                  if (
+                    thread.type === "created" &&
+                    body.sendMode !== CHAT_SEND_MODE.anonymized
+                  ) {
+                    void generateThreadTitle({
+                      messages: [
+                        parsedMessage.message,
+                        resolvedResponseMessage,
+                      ],
+                      organizationId: session.activeOrganizationId,
+                      orgAIConfig,
+                      promptCachingEnabled,
+                      recordAuditEvent,
+                      safeDb,
                       threadId: body.threadId,
+                      threadWorkspaceId: workspaceId,
+                      userId: user.id,
                     });
-                  } else {
-                    const messagesAfterAssistantPersist =
-                      applyAssistantPersistencePlan({
-                        messages: latestMessagePlan.messages,
-                        persistencePlan,
-                      });
-                    if (
-                      messagesAfterAssistantPersist !== null &&
-                      body.sendMode !== CHAT_SEND_MODE.anonymized
-                    ) {
-                      scheduleChatCompactionCheckpoint({
-                        abortSignal: AbortSignal.timeout(
-                          CHAT_COMPACTION_CHECKPOINT_TIMEOUT_MS,
-                        ),
-                        boundary: thirdPartyBoundary,
-                        devModelId: body.devModelId,
-                        messages: messagesAfterAssistantPersist,
-                        organizationId: session.activeOrganizationId,
-                        orgAIConfig,
-                        safeDb,
-                        threadId: body.threadId,
-                      });
-                    }
-
-                    if (
-                      thread.type === "created" &&
-                      body.sendMode !== CHAT_SEND_MODE.anonymized
-                    ) {
-                      void generateThreadTitle({
-                        messages: [
-                          parsedMessage.message,
-                          resolvedResponseMessage,
-                        ],
-                        organizationId: session.activeOrganizationId,
-                        orgAIConfig,
-                        promptCachingEnabled,
-                        recordAuditEvent,
-                        safeDb,
-                        threadId: body.threadId,
-                        threadWorkspaceId: workspaceId,
-                        userId: user.id,
-                      });
-                    }
                   }
-                } finally {
-                  await closeExternalMcpTools();
                 }
               },
               orgAIConfig,
@@ -839,6 +829,7 @@ const sendMessage = createSafeRootHandler(
               thirdPartyBoundary,
               threadId: body.threadId,
               tools: streamingTools,
+              externalMcpToolSource: externalMcpTools.source,
               systemSafe,
               systemUntrusted,
               userId: user.id,
@@ -846,12 +837,12 @@ const sendMessage = createSafeRootHandler(
             });
 
             if (!isChatStreamResponse(chatResponse)) {
-              await closeExternalMcpTools();
+              await externalMcpTools.close();
             }
 
             return chatResponse;
           } catch (error) {
-            await closeExternalMcpTools();
+            await externalMcpTools.close();
             throw error;
           }
         },
@@ -872,13 +863,13 @@ const sendMessage = createSafeRootHandler(
 
 export default sendMessage;
 
-type ResolveChatCompactionModelProps = {
+type ChatCompactionModelProps = {
   devModelId: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
 };
 
-type CompactMessagesForContextProps = ResolveChatCompactionModelProps & {
+type CompactMessagesForContextProps = ChatCompactionModelProps & {
   abortSignal: AbortSignal;
   boundary: ReturnType<typeof createChatThirdPartyBoundary>;
   messages: ChatMessage[];
@@ -943,16 +934,7 @@ const compactMessagesForContext = async ({
 }: CompactMessagesForContextProps): Promise<
   Result<ChatMessage[], HandlerError>
 > => {
-  const modelResult = resolveChatCompactionModel({
-    devModelId,
-    organizationId,
-    orgAIConfig,
-  });
-  if (Result.isError(modelResult)) {
-    return Result.err(modelResult.error);
-  }
-
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -977,56 +959,27 @@ const compactMessagesForContext = async ({
     aiAnalytics,
     boundary,
     messages,
-    model: modelResult.value,
+    modelId: devModelId,
     onSummaryError: (error) => {
       captureError(error, {
         threadId,
         feature: "chat.compaction",
       });
     },
+    organizationId,
+    orgAIConfig,
   });
 };
 
-const resolveChatCompactionModel = ({
-  devModelId,
-  organizationId,
-  orgAIConfig,
-}: ResolveChatCompactionModelProps) =>
-  Result.try({
-    try: () =>
-      devModelId
-        ? getModelById(devModelId, orgAIConfig, {
-            organizationId,
-            promptCachingEnabled: false,
-            role: "chat",
-            scopeKey: null,
-            serviceTier: "standard",
-          })
-        : getModelForRole("chat", orgAIConfig, {
-            organizationId,
-            promptCachingEnabled: false,
-            scopeKey: null,
-            serviceTier: "standard",
-          }),
-    catch: (cause) =>
-      HandlerError.is(cause)
-        ? cause
-        : new HandlerError({
-            status: 500,
-            message: "Failed to initialize chat compaction model",
-            cause,
-          }),
-  });
-
 type ApplyAssistantPersistencePlanProps = {
-  messages: ChatMessage[];
+  messages: PersistableChatMessage[];
   persistencePlan: MessagePersistencePlan;
 };
 
 const applyAssistantPersistencePlan = ({
   messages,
   persistencePlan,
-}: ApplyAssistantPersistencePlanProps): ChatMessage[] | null => {
+}: ApplyAssistantPersistencePlanProps): PersistableChatMessage[] | null => {
   switch (persistencePlan.type) {
     case "none":
       return null;
@@ -1052,7 +1005,7 @@ const applyAssistantPersistencePlan = ({
   }
 };
 
-type ScheduleChatCompactionCheckpointProps = ResolveChatCompactionModelProps & {
+type ScheduleChatCompactionCheckpointProps = ChatCompactionModelProps & {
   abortSignal: AbortSignal;
   boundary: ReturnType<typeof createChatThirdPartyBoundary>;
   messages: ChatMessage[];
@@ -1078,23 +1031,12 @@ const scheduleChatCompactionCheckpoint = ({
     return;
   }
 
-  const modelResult = resolveChatCompactionModel({
-    devModelId,
-    organizationId,
-    orgAIConfig,
-  });
-  if (Result.isError(modelResult)) {
-    captureError(modelResult.error, {
-      threadId,
-      feature: "chat.compaction_checkpoint_model",
-    });
-    return;
-  }
-
   void runChatCompactionCheckpoint({
     abortSignal,
     boundary,
-    model: modelResult.value,
+    devModelId,
+    organizationId,
+    orgAIConfig,
     safeDb,
     threadId,
   }).catch((error: unknown) => {
@@ -1105,10 +1047,9 @@ const scheduleChatCompactionCheckpoint = ({
   });
 };
 
-type RunChatCompactionCheckpointProps = {
+type RunChatCompactionCheckpointProps = ChatCompactionModelProps & {
   abortSignal: AbortSignal;
   boundary: ReturnType<typeof createChatThirdPartyBoundary>;
-  model: LanguageModel;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
 };
@@ -1116,7 +1057,9 @@ type RunChatCompactionCheckpointProps = {
 const runChatCompactionCheckpoint = async ({
   abortSignal,
   boundary,
-  model,
+  devModelId,
+  organizationId,
+  orgAIConfig,
   safeDb,
   threadId,
 }: RunChatCompactionCheckpointProps): Promise<void> => {
@@ -1158,13 +1101,15 @@ const runChatCompactionCheckpoint = async ({
     boundary,
     dataWorkspaceIds: dataScopeResult.value.dataWorkspaceIds,
     messages: historyResult.value,
-    model,
+    modelId: devModelId,
     onSummaryError: (error) => {
       captureError(error, {
         threadId,
         feature: "chat.compaction_checkpoint_summary",
       });
     },
+    organizationId,
+    orgAIConfig,
     safeDb,
     threadId,
   });
@@ -1253,7 +1198,7 @@ type ThreadRecord = {
   messages: {
     id: SafeId<"chatMessage">;
     role: ChatMessage["role"];
-    content: ChatMessageContent;
+    content: PersistedChatMessageContent;
   }[];
 };
 
@@ -1480,7 +1425,7 @@ const loadThread = async ({
   });
 
 type UploadMessageFilesWithRollbackProps = {
-  message: ChatMessage;
+  message: PersistableChatMessage;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -1490,7 +1435,7 @@ type UploadMessageFilesWithRollbackProps = {
 
 type UploadMessageFilesWithRollbackResult = Result<
   {
-    message: ChatMessage;
+    message: PersistableChatMessage;
     uploadedFiles: UploadedChatFile[];
   },
   HandlerError<400 | 422 | 500> | SafeDbError
@@ -1791,7 +1736,7 @@ const attachActivePdfWhenExtractionIsEmpty = async ({
         ...latestUserMessage.parts,
         {
           type: "text",
-          text: `The active file "${activePdf.fileName}" is attached directly as a PDF because stella has no extracted text for it. Use the attached PDF itself for this question.`,
+          content: `The active file "${activePdf.fileName}" is attached directly as a PDF because stella has no extracted text for it. Use the attached PDF itself for this question.`,
         },
         createRawChatFilePart({
           bytes: activePdf.bytes,
@@ -1919,7 +1864,7 @@ const getPdfFileRefForModel = (
 
 type InsertMessagesProps = {
   acceptedSendMode: ChatSendMode | null;
-  messages: ChatMessage[];
+  messages: PersistableChatMessage[];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
@@ -1928,14 +1873,14 @@ type InsertMessagesProps = {
 };
 
 type ResolveAssistantMessageRefsProps = {
-  messages: ChatMessage[];
+  messages: PersistableChatMessage[];
   refRegistry: ReturnType<typeof createChatRefRegistry>;
 };
 
 const resolveAssistantMessageRefs = ({
   messages,
   refRegistry,
-}: ResolveAssistantMessageRefsProps): ChatMessage[] => {
+}: ResolveAssistantMessageRefsProps): PersistableChatMessage[] => {
   const resolvePart = (
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] => {
@@ -1957,10 +1902,15 @@ const resolveAssistantMessageRefs = ({
   );
 };
 
+type HydrateAssistantMessageRefsProps = {
+  messages: ChatMessage[];
+  refRegistry: ReturnType<typeof createChatRefRegistry>;
+};
+
 const hydrateAssistantMessageRefs = ({
   messages,
   refRegistry,
-}: ResolveAssistantMessageRefsProps): ChatMessage[] => {
+}: HydrateAssistantMessageRefsProps): ChatMessage[] => {
   const hydratePart = (
     part: ChatMessage["parts"][number],
   ): ChatMessage["parts"][number] => {
@@ -1999,15 +1949,12 @@ const insertMessages = async ({
   const insertResult = await safeDb(async (tx) => {
     await tx.insert(chatMessages).values(
       messages.map((persistedMessage) => ({
-        id: brandPersistedChatMessageId(persistedMessage.id),
+        id: persistedMessage.id,
         threadId,
         workspaceId,
         userId,
         role: persistedMessage.role,
-        content: {
-          version: 1 as const,
-          data: persistedMessage.parts,
-        },
+        content: chatMessageContentFromMessage(persistedMessage),
       })),
     );
     await tx
@@ -2028,7 +1975,7 @@ const insertMessages = async ({
       messages.map((persistedMessage) => ({
         action: AUDIT_ACTION.CREATE,
         resourceType: AUDIT_RESOURCE_TYPE.CHAT_MESSAGE,
-        resourceId: brandPersistedChatMessageId(persistedMessage.id),
+        resourceId: persistedMessage.id,
         workspaceId,
         metadata: { threadId, role: persistedMessage.role },
       })),
@@ -2122,17 +2069,12 @@ const runPersistMessage = async ({
         await markActiveChatCompactionCheckpointStale({ threadId, tx });
       }
 
-      const updatedMessageId = brandPersistedChatMessageId(
-        persistencePlan.messageId,
-      );
+      const updatedMessageId = persistencePlan.messageId;
       await tx
         .update(chatMessages)
         .set({
           role: persistencePlan.message.role,
-          content: {
-            version: 1 as const,
-            data: persistencePlan.message.parts,
-          },
+          content: chatMessageContentFromMessage(persistencePlan.message),
         })
         .where(eq(chatMessages.id, updatedMessageId));
       await tx
@@ -2189,9 +2131,7 @@ const runPersistMessage = async ({
   }
 
   return await Result.gen(async function* () {
-    const deletedMessageId = brandPersistedChatMessageId(
-      persistencePlan.deleteMessageId,
-    );
+    const deletedMessageId = persistencePlan.deleteMessageId;
     yield* Result.await(
       safeDb(async (tx) => {
         await tx

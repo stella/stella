@@ -9,7 +9,7 @@ import type {
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import { createFileKey } from "@/api/handlers/files/utils";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { getS3 } from "@/api/lib/s3";

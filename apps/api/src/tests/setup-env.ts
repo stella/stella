@@ -11,7 +11,6 @@ process.env["S3_REGION"] ??= "us-east-1";
 // real resolver path.
 process.env["S3_ACCESS_KEY_ID"] ??= "minioadmin";
 process.env["S3_SECRET_ACCESS_KEY"] ??= "minioadmin";
-process.env["AI_DEVTOOLS_ENABLED"] = "false";
 
 process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["BETTER_AUTH_SECRET"] ??= "x".repeat(32);

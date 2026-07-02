@@ -3,6 +3,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { t } from "elysia";
 
 import { chatThreads } from "@/api/db/schema";
+import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
   generateThreadRecapText,
@@ -14,12 +15,12 @@ import {
   buildRecapMessageWindow,
   RECAP_RECENT_MESSAGE_LIMIT,
 } from "@/api/handlers/chat/thread-recap-window";
-import { requireAIAvailable } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const config = {
   permissions: { chat: ["create"] },
@@ -43,7 +44,14 @@ const getThreadRecap = createSafeRootHandler(
   }) {
     // The recap is a non-critical nicety: when AI is unavailable we
     // return no recap rather than blocking the thread view.
-    if (Result.isError(requireAIAvailable(orgAIConfig))) {
+    if (
+      Result.isError(
+        requireTanStackAIAvailableForRole({
+          orgConfig: orgAIConfig,
+          role: "fast",
+        }),
+      )
+    ) {
       return Result.ok<ThreadRecapResult>({ recap: null });
     }
 
@@ -153,10 +161,13 @@ const getThreadRecap = createSafeRootHandler(
       return Result.ok<ThreadRecapResult>({ recap: null });
     }
 
-    const recapMessages = messageWindow.messages.map((row) => ({
-      role: row.role,
-      parts: row.content.data,
-    }));
+    const recapMessages = messageWindow.messages.map((row) => {
+      const message = chatMessageFromPersisted(row);
+      return {
+        role: message.role,
+        parts: message.parts,
+      };
+    });
 
     // Cache hit: the stored recap already covers this exact message
     // tail and prompt version, so no model call is needed.

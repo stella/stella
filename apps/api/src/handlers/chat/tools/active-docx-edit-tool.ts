@@ -1,6 +1,8 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
+
+import { normalizeActiveDocxEditToolInput } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 
 export const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
 
@@ -247,8 +249,52 @@ const outputSchema = v.strictObject({
   ),
 });
 
+const inputSchema = v.strictObject({
+  operations: v.pipe(
+    v.array(operationSchema),
+    v.minLength(1),
+    // Long contracts routinely produce 50+ legitimate ops in
+    // one redline pass (verified in trace: a 40-op
+    // cross-reference cleanup hit the old 20 cap and the
+    // tool returned error-text — the model then claimed "40
+    // ready" because it didn't read the validation failure).
+    // The review panel sorts/groups large batches fine; the
+    // ceiling here is just a sanity guard, not a UX limit.
+    v.maxLength(200),
+    v.description("Operations to apply to the active DOCX."),
+  ),
+});
+
+const inputToolSchema = toTanStackToolSchema(inputSchema);
+
+const repairingInputToolSchema = {
+  ...inputToolSchema,
+  "~standard": {
+    ...inputToolSchema["~standard"],
+    validate: async (input: unknown) => {
+      const initial = await inputToolSchema["~standard"].validate(input);
+      if (initial.issues === undefined) {
+        return initial;
+      }
+
+      const serialized = JSON.stringify(input);
+      if (typeof serialized !== "string") {
+        return initial;
+      }
+
+      const repaired = normalizeActiveDocxEditToolInput(serialized);
+      if (repaired === null) {
+        return initial;
+      }
+
+      return await inputToolSchema["~standard"].validate(JSON.parse(repaired));
+    },
+  },
+} satisfies typeof inputToolSchema;
+
 export const createActiveDocxEditTool = () =>
-  tool({
+  toolDefinition({
+    name: APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME,
     description:
       "Propose edits for the DOCX currently open in the document " +
       "editor. Use this whenever the user asks to change, edit, " +
@@ -262,22 +308,6 @@ export const createActiveDocxEditTool = () =>
       "replacements are not re-formatted. See each schema field for its " +
       "semantics.",
     needsApproval: true,
-    inputSchema: valibotSchema(
-      v.strictObject({
-        operations: v.pipe(
-          v.array(operationSchema),
-          v.minLength(1),
-          // Long contracts routinely produce 50+ legitimate ops in
-          // one redline pass (verified in trace: a 40-op
-          // cross-reference cleanup hit the old 20 cap and the
-          // tool returned error-text — the model then claimed "40
-          // ready" because it didn't read the validation failure).
-          // The review panel sorts/groups large batches fine; the
-          // ceiling here is just a sanity guard, not a UX limit.
-          v.maxLength(200),
-          v.description("Operations to apply to the active DOCX."),
-        ),
-      }),
-    ),
-    outputSchema: valibotSchema(outputSchema),
+    inputSchema: repairingInputToolSchema,
+    outputSchema: toTanStackToolSchema(outputSchema),
   });

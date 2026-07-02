@@ -28,10 +28,9 @@ const context = {
 
 // --------------- Schema ---------------
 
-// Element schema for `Output.array`: the SDK wraps the elements in an
-// object root, which OpenAI's strict response format requires (a
-// top-level array schema is rejected). Emptiness is checked by the
-// caller; `Output.array` carries no array-level constraints.
+// Element schema for the top-level `boxes` array. The object root
+// keeps provider strict-response modes away from top-level array
+// schemas. Emptiness is checked at the array schema/caller boundary.
 //
 // A length-4 array, not `v.tuple`: tuples convert to the array form
 // of `items`, which OpenAI strict mode rejects; `v.length(4)`

@@ -1,6 +1,5 @@
-import type { ToolSet } from "ai";
-
 import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
+import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import { SUGGEST_TEMPLATE_FIELDS_TOOL_NAME } from "@/api/handlers/chat/tools/template-tools";
 
 /**
@@ -31,9 +30,9 @@ const CHAT_TOOL_SCOPE_ALLOWLISTS = {
  * set so previously persisted tool parts still pass schema checks.
  */
 export const restrictChatToolsToScope = (
-  tools: ToolSet,
+  tools: ChatToolMap,
   scope: ChatToolScope,
-): ToolSet => {
+): ChatToolMap => {
   const allowed = CHAT_TOOL_SCOPE_ALLOWLISTS[scope];
   return Object.fromEntries(
     Object.entries(tools).filter(([name]) => allowed.has(name)),

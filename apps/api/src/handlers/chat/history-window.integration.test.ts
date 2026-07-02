@@ -165,7 +165,7 @@ const longText = (token: string): string => `${token} `.repeat(80_000);
 const windowTexts = (window: WindowedThreadMessage[]): (string | null)[] =>
   window.map((message) => {
     const part = message.content.data.at(0);
-    return part?.type === "text" ? part.text : null;
+    return part?.type === "text" ? part.content : null;
   });
 
 // Postgres uuid order equals lexicographic order of the canonical string, so
@@ -529,7 +529,7 @@ describe("shouldCompactChatMessages", () => {
       {
         id: "a",
         role: "user" as const,
-        parts: [{ type: "text" as const, text: "hi" }],
+        parts: [{ type: "text" as const, content: "hi" }],
       },
     ];
     expect(shouldCompactChatMessages(small)).toBe(false);
@@ -538,7 +538,7 @@ describe("shouldCompactChatMessages", () => {
       {
         id: "b",
         role: "user" as const,
-        parts: [{ type: "text" as const, text: longText("fact") }],
+        parts: [{ type: "text" as const, content: longText("fact") }],
       },
     ];
     expect(shouldCompactChatMessages(large)).toBe(true);

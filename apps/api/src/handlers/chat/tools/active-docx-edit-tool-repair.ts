@@ -1,6 +1,5 @@
-import { APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME } from "@/api/handlers/chat/tools/active-docx-edit-tool";
-
 type JsonObject = Record<string, unknown>;
+const APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME = "apply-active-docx-edits";
 
 const isJsonObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);

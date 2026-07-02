@@ -3,9 +3,16 @@ import { and, desc, eq, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages } from "@/api/db/schema";
-import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import {
+  chatMessageFromPersisted,
+  getChatAttachmentUrl,
+  isChatAttachmentPart,
+  normalizePersistedChatMessageContent,
+} from "@/api/handlers/chat/chat-message-parts";
 import type {
+  ChatMessageMetadata,
   ChatMessageRole,
+  ChatPart,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import { parseUserFileId } from "@/api/handlers/user-files/types";
@@ -18,10 +25,9 @@ import {
 } from "@/api/lib/pagination";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 
-type ChatPart = ReturnType<typeof normalizeLegacyToolInputs>[number];
-
 export type ClientMessage = {
   id: SafeId<"chatMessage">;
+  metadata?: ChatMessageMetadata | undefined;
   role: ChatMessageRole;
   parts: ChatPart[];
 };
@@ -37,12 +43,14 @@ export const attachPlaceholders = (
   placeholderById: Map<string, string>,
 ): ChatPart[] =>
   parts.map((part) => {
-    if (part.type !== "file") {
+    if (!isChatAttachmentPart(part)) {
       return part;
     }
-    const fileId = parseUserFileId(part.url);
+    const fileId = parseUserFileId(getChatAttachmentUrl(part));
     const placeholder = fileId ? placeholderById.get(fileId) : undefined;
-    return placeholder ? { ...part, placeholder } : part;
+    return placeholder
+      ? { ...part, metadata: { ...part.metadata, placeholder } }
+      : part;
   });
 
 // The cursor is the boundary message id alone. loadChatMessagePage resolves
@@ -143,18 +151,32 @@ export const loadChatMessagePage = async ({
       pageAscending.at(-1)?.createdAt.toISOString() ?? null;
 
     return Result.ok({
-      messages: pageAscending.map((row) => ({
-        id: row.id,
-        role: row.role,
-        parts: attachPlaceholders(
-          normalizeLegacyToolInputs(row.content.data),
-          placeholderById,
-        ),
-      })),
+      messages: pageAscending.map((row) =>
+        clientMessageFromPageRow(row, placeholderById),
+      ),
       olderCursor,
       lastActivityAt,
     });
   });
+
+type ChatMessagePageRow = {
+  content: PersistedChatMessageContent;
+  id: SafeId<"chatMessage">;
+  role: ChatMessageRole;
+};
+
+export const clientMessageFromPageRow = (
+  row: ChatMessagePageRow,
+  placeholderById: Map<string, string>,
+): ClientMessage => {
+  const message = chatMessageFromPersisted(row);
+  return {
+    id: message.id,
+    ...(message.metadata === undefined ? {} : { metadata: message.metadata }),
+    role: message.role,
+    parts: attachPlaceholders(message.parts, placeholderById),
+  };
+};
 
 type LoadPlaceholdersArgs = {
   safeDb: SafeDb;
@@ -170,11 +192,12 @@ const loadPlaceholders = async ({
   await Result.gen(async function* () {
     const referencedFileIds = new Set<SafeId<"userFile">>();
     for (const row of rows) {
-      for (const part of row.content.data) {
-        if (part.type !== "file") {
+      for (const part of normalizePersistedChatMessageContent(row.content)
+        .parts) {
+        if (!isChatAttachmentPart(part)) {
           continue;
         }
-        const fileId = parseUserFileId(part.url);
+        const fileId = parseUserFileId(getChatAttachmentUrl(part));
         if (fileId) {
           referencedFileIds.add(fileId);
         }

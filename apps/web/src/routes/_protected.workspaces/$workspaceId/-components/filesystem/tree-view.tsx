@@ -54,6 +54,7 @@ import type { DragPreviewData } from "@/components/drag-preview";
 import { FileTreeNameCell } from "@/components/file-tree/file-tree";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { HOTKEYS } from "@/lib/hotkeys";
+import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
   ViewLayout,
@@ -491,7 +492,7 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
     }
     const trail: { id: string; name: string }[] = [];
     const nodeMap = new Map(data.map((e) => [e.entityId, e]));
-    let current = nodeMap.get(currentFolderId);
+    let current = nodeMap.get(toSafeId<"entity">(currentFolderId));
     while (current) {
       trail.unshift({
         id: current.entityId,
@@ -640,31 +641,34 @@ export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   // from the anchor to the clicked row, inclusive, over the visible order.
   const handleSelect = useCallback(
     (entityId: string, mods: { meta: boolean; shift: boolean }) => {
+      const selectedEntityId = toSafeId<"entity">(entityId);
       setSelectedIds((prev) => {
         if (mods.shift && anchorIdRef.current !== null) {
-          const from = orderedEntityIds.indexOf(anchorIdRef.current);
-          const to = orderedEntityIds.indexOf(entityId);
+          const from = orderedEntityIds.indexOf(
+            toSafeId<"entity">(anchorIdRef.current),
+          );
+          const to = orderedEntityIds.indexOf(selectedEntityId);
           if (from !== -1 && to !== -1) {
             const [lo, hi] = from <= to ? [from, to] : [to, from];
             return new Set(orderedEntityIds.slice(lo, hi + 1));
           }
         }
         // A plain or cmd/ctrl click makes this row the new range anchor.
-        anchorIdRef.current = entityId;
+        anchorIdRef.current = selectedEntityId;
         if (mods.meta) {
           const next = new Set(prev);
-          if (next.has(entityId)) {
-            next.delete(entityId);
+          if (next.has(selectedEntityId)) {
+            next.delete(selectedEntityId);
           } else {
-            next.add(entityId);
+            next.add(selectedEntityId);
           }
           return next;
         }
         // Plain click: sole selection (clicking the only selected row clears it).
-        if (prev.size === 1 && prev.has(entityId)) {
+        if (prev.size === 1 && prev.has(selectedEntityId)) {
           return new Set();
         }
-        return new Set([entityId]);
+        return new Set([selectedEntityId]);
       });
     },
     [orderedEntityIds],
@@ -1720,7 +1724,7 @@ const ExtraColumnCell = ({ column, entity }: ExtraColumnCellProps) => {
   }
 
   // Regular property
-  const field = entity.fields[column.id];
+  const field = entity.fields[toSafeId<"property">(column.id)];
 
   // Date fields need explicit formatting; raw Date objects
   // crash React ("Objects are not valid as a React child").

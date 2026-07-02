@@ -1,3 +1,4 @@
+import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -6,11 +7,9 @@ import {
 } from "./business-registry-tools.js";
 
 type ToolInputJsonSchema = {
-  jsonSchema: {
-    properties?: {
-      query?: {
-        description?: string;
-      };
+  properties?: {
+    query?: {
+      description?: string;
     };
   };
 };
@@ -18,7 +17,7 @@ type ToolInputJsonSchema = {
 const hasToolInputJsonSchema = (
   schema: unknown,
 ): schema is ToolInputJsonSchema =>
-  typeof schema === "object" && schema !== null && "jsonSchema" in schema;
+  typeof schema === "object" && schema !== null && "properties" in schema;
 
 describe("createBusinessRegistryTools", () => {
   test("does not register the tool when no jurisdictions are enabled", () => {
@@ -58,11 +57,14 @@ describe("createBusinessRegistryTools", () => {
       "EU/VIES requires a fully-qualified VAT number",
     );
     expect(lookupTool?.description).not.toContain("CZ/ARES");
-    if (!lookupTool || !hasToolInputJsonSchema(lookupTool.inputSchema)) {
+    const inputJsonSchema = lookupTool
+      ? convertSchemaToJsonSchema(lookupTool.inputSchema)
+      : undefined;
+    if (!hasToolInputJsonSchema(inputJsonSchema)) {
       throw new Error("Expected lookup tool JSON schema");
     }
-    expect(
-      lookupTool.inputSchema.jsonSchema.properties?.query?.description,
-    ).toContain("Ask the user for the canonical identifier");
+    expect(inputJsonSchema.properties?.query?.description).toContain(
+      "Ask the user for the canonical identifier",
+    );
   });
 });

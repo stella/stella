@@ -1,4 +1,4 @@
-import type { ModelMessage } from "ai";
+import type { ModelMessage } from "@tanstack/ai";
 
 const codePointOf = (value: string): number => {
   const code = value.codePointAt(0);
@@ -18,13 +18,6 @@ const BOX_DRAWING_START_CODE_POINT = codePointOf("\u2500");
 const BOX_DRAWING_END_CODE_POINT = codePointOf("\u257f");
 const DIGIT_ZERO_CODE_POINT = 48;
 const DIGIT_NINE_CODE_POINT = 57;
-
-type AssistantMessage = Extract<ModelMessage, { role: "assistant" }>;
-type AssistantContentPart = Exclude<
-  AssistantMessage["content"],
-  string
->[number];
-type ToolCallPart = Extract<AssistantContentPart, { type: "tool-call" }>;
 
 type ToolCallLoopDetection = {
   repetitionCount: number;
@@ -160,19 +153,17 @@ const collectToolCallSignatures = (
   const signatures: { key: string; toolName: string }[] = [];
 
   for (const message of messages) {
-    if (message.role !== "assistant" || typeof message.content === "string") {
+    if (message.role !== "assistant") {
       continue;
     }
 
-    for (const part of message.content) {
-      if (!isToolCallPart(part)) {
-        continue;
-      }
-
-      const serializedInput = stableStringify(part.input);
+    for (const toolCall of message.toolCalls ?? []) {
+      const serializedInput = stableStringify(
+        parseToolArguments(toolCall.function.arguments),
+      );
       signatures.push({
-        key: hashString(`${part.toolName}:${serializedInput}`),
-        toolName: part.toolName,
+        key: hashString(`${toolCall.function.name}:${serializedInput}`),
+        toolName: toolCall.function.name,
       });
     }
   }
@@ -265,10 +256,13 @@ const collectAssistantText = (
       texts.push(message.content);
       continue;
     }
+    if (!Array.isArray(message.content)) {
+      continue;
+    }
 
     for (const part of message.content) {
       if (part.type === "text") {
-        texts.push(part.text);
+        texts.push(part.content);
       }
     }
   }
@@ -392,8 +386,13 @@ const isMarkdownHeadingLine = (value: string): boolean => {
   );
 };
 
-const isToolCallPart = (part: AssistantContentPart): part is ToolCallPart =>
-  part.type === "tool-call";
+const parseToolArguments = (value: string): unknown => {
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
+};
 
 const describeLoopDetection = (
   detection: Exclude<ModelLoopDetection, { type: "none" }>,

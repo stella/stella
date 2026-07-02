@@ -13,12 +13,12 @@ import { eq, sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
 import { organizationSettings } from "@/api/db/schema";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { decryptAIConfig } from "@/api/lib/ai-config-crypto";
 import {
   decryptOrgAIConfigRow,
   resolvePromptCachingPreference,
 } from "@/api/lib/ai-config-loader-core";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
 import type { SafeId } from "@/api/lib/branded-types";
 
 export const loadOrgAIConfig = async (

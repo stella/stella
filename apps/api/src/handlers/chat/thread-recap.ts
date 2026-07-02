@@ -1,14 +1,12 @@
-import { generateText } from "ai";
-
 import {
   buildRecapTranscript,
   type RecapMessage,
 } from "@/api/handlers/chat/thread-recap-transcript";
-import { getModelForRole } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 /**
  * Bump when the recap prompt or output shape changes so cached
@@ -102,7 +100,7 @@ export const generateThreadRecapText = async ({
     return null;
   }
 
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     feature: "chat.thread_recap",
     modelRole: "fast",
     orgAIConfig,
@@ -111,19 +109,21 @@ export const generateThreadRecapText = async ({
   });
 
   try {
-    const { text } = await generateText({
+    const text = await generateTanStackTextForRole({
       abortSignal: AbortSignal.timeout(RECAP_GENERATION_TIMEOUT_MS),
       maxOutputTokens: RECAP_MAX_OUTPUT_TOKENS,
-      model: getModelForRole("fast", orgAIConfig, {
+      role: "fast",
+      serviceTier: "standard",
+      orgAIConfig,
+      organizationId,
+      analytics: aiAnalytics,
+      caching: resolveCaching({
         promptCachingEnabled,
+        role: "fast",
         scopeKey: threadId,
-        organizationId,
-        serviceTier: "standard",
       }),
       prompt: `Conversation transcript:\n\n${transcript}\n\nRecap:`,
       system: RECAP_SYSTEM_PROMPT,
-      temperature: 0,
-      ...aiAnalytics.stepCallbacks,
     });
 
     return cleanRecapText(text);

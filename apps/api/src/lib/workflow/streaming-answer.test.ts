@@ -1,9 +1,17 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   consumePartialAnswers,
+  consumeTanStackPartialAnswer,
   formatPartialAnswer,
 } from "@/api/lib/workflow/streaming-answer";
+
+const propertyId = (value: string) => toSafeId<"property">(value);
+type PartialAnswerUpdateFixture = {
+  propertyId: ReturnType<typeof propertyId>;
+  answer: string;
+};
 
 describe("formatPartialAnswer", () => {
   test("formats plain text answers", () => {
@@ -41,12 +49,30 @@ describe("formatPartialAnswer", () => {
   });
 });
 
+describe("consumeTanStackPartialAnswer", () => {
+  test("uses TanStack partial JSON parsing for streamed structured output", async () => {
+    const updates: PartialAnswerUpdateFixture[] = [];
+
+    await consumeTanStackPartialAnswer({
+      propertyIds: [propertyId("p1")],
+      rawJson: '{"p1":{"answer":"Alpha"',
+      onPartialAnswer: (update) => {
+        updates.push(update);
+      },
+    });
+
+    expect(updates).toEqual([
+      { propertyId: propertyId("p1"), answer: "Alpha" },
+    ]);
+  });
+});
+
 describe("consumePartialAnswers", () => {
   test("emits only answer text for known properties", async () => {
-    const updates: { propertyId: string; answer: string }[] = [];
+    const updates: PartialAnswerUpdateFixture[] = [];
 
     await consumePartialAnswers({
-      propertyIds: ["p1", "p2"],
+      propertyIds: [propertyId("p1"), propertyId("p2")],
       partialOutputs: [
         { p1: { answer: "Alpha", justification: "ignored" } },
         { p2: { answer: ["Beta", "Gamma"] }, p3: { answer: "ignored" } },
@@ -57,8 +83,8 @@ describe("consumePartialAnswers", () => {
     });
 
     expect(updates).toEqual([
-      { propertyId: "p1", answer: "Alpha" },
-      { propertyId: "p2", answer: "Beta, Gamma" },
+      { propertyId: propertyId("p1"), answer: "Alpha" },
+      { propertyId: propertyId("p2"), answer: "Beta, Gamma" },
     ]);
   });
 });

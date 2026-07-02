@@ -9,21 +9,20 @@
  * The model never emits structure: it returns revised text per editable
  * (non-directive) paragraph keyed by index, and we swap only that text. Lists,
  * headings, paragraph order, and every `{{ }}` directive stay exactly as
- * authored. Reuses the `streamText` + `Output.object` structured-output pattern
- * (see suggest-template-fields).
+ * authored. Reuses the `generateTanStackObjectForRole` structured-output
+ * pattern (see suggest-template-fields).
  */
 
-import { Output, streamText } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 import * as v from "valibot";
 
-import { getModelForRole } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
 import { clauseBodySchema } from "./shared-schemas";
 import type { ClauseBody } from "./types";
@@ -111,7 +110,7 @@ const rewriteClause = createSafeRootHandler(
 
     const numbered = editable.map((p) => `[${p.index}] ${p.text}`).join("\n");
 
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -129,34 +128,28 @@ const rewriteClause = createSafeRootHandler(
 
     const output = yield* Result.await(
       Result.tryPromise({
-        try: async () => {
-          const result = streamText({
-            abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
-            messages: [
-              {
-                role: "user",
-                content: buildPrompt({
-                  numbered,
-                  instruction: body.instruction,
-                  usageNotes: body.usageNotes,
-                  title: body.title,
-                }),
-              },
-            ],
-            model: getModelForRole("fast", orgAIConfig, {
+        try: async () =>
+          await generateTanStackObjectForRole({
+            role: "fast",
+            orgAIConfig,
+            organizationId,
+            analytics: aiAnalytics,
+            caching: resolveCaching({
               promptCachingEnabled: false,
+              role: "fast",
               scopeKey: organizationId,
-              organizationId,
-              serviceTier: "standard",
-            }),
-            output: Output.object({
-              schema: strictOutputSchema(rewriteOutputSchema),
             }),
             system: SYSTEM_PROMPT,
-            ...aiAnalytics.stepCallbacks,
-          });
-          return await result.output;
-        },
+            prompt: buildPrompt({
+              numbered,
+              instruction: body.instruction,
+              usageNotes: body.usageNotes,
+              title: body.title,
+            }),
+            outputSchema: rewriteOutputSchema,
+            serviceTier: "standard",
+            abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
+          }),
         catch: (cause) => {
           aiAnalytics.captureError(cause);
           return new HandlerError({

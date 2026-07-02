@@ -10,7 +10,6 @@ import {
 import { deleteMatterLinkHandler } from "@/api/handlers/case-law/matter-links/delete";
 import { listMatterLinksHandler } from "@/api/handlers/case-law/matter-links/list";
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
-import { requireAIAvailable } from "@/api/lib/ai-models";
 import {
   createSafeHandler,
   createSafeRootHandler,
@@ -23,6 +22,7 @@ import {
   workspaceAccessMacro,
 } from "@/api/lib/auth";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const generateDecisionAnalysis = createSafeRootHandler(
   {
@@ -36,7 +36,10 @@ const generateDecisionAnalysis = createSafeRootHandler(
     orgAIConfig,
     promptCachingEnabled,
   }) {
-    yield* requireAIAvailable(orgAIConfig);
+    yield* requireTanStackAIAvailableForRole({
+      orgConfig: orgAIConfig,
+      role: "fast",
+    });
 
     const response = yield* Result.await(
       Result.tryPromise(

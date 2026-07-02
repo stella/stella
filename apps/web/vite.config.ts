@@ -7,7 +7,7 @@ import { execFileSync } from "node:child_process";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { visualizer } from "rollup-plugin-visualizer";
-import { defineConfig, type Plugin } from "vite";
+import { defineConfig, type Plugin, type PluginOption } from "vite";
 
 const APP_ROOT = import.meta.dirname;
 const ANALYZE_MODE = "analyze";
@@ -82,8 +82,112 @@ const logCapPlugin = (): Plugin => ({
   },
 });
 
+const ensurePluginOption = (option: unknown, label: string): PluginOption => {
+  if (isPluginOption(option)) {
+    return option;
+  }
+
+  throw new TypeError(`Invalid Vite plugin option from ${label}`);
+};
+
+const isPluginOption = (value: unknown): value is PluginOption => {
+  if (value === false || value === null || value === undefined) {
+    return true;
+  }
+
+  if (isPlugin(value)) {
+    return true;
+  }
+
+  if (isUnknownArray(value)) {
+    return value.every(isPluginOption);
+  }
+
+  if (isPromiseLikePluginOption(value)) {
+    return true;
+  }
+
+  return false;
+};
+
+const isPlugin = (value: unknown): value is Plugin => {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+
+  if (!("name" in value)) {
+    return false;
+  }
+
+  return typeof value.name === "string";
+};
+
+const isUnknownArray = (value: unknown): value is readonly unknown[] =>
+  Array.isArray(value);
+
+const isPromiseLikePluginOption = (
+  value: unknown,
+): value is PromiseLike<PluginOption> => {
+  if (
+    (typeof value !== "object" && typeof value !== "function") ||
+    value === null
+  ) {
+    return false;
+  }
+
+  if (!("then" in value)) {
+    return false;
+  }
+
+  return typeof value.then === "function";
+};
+
 export default defineConfig(({ mode }) => {
   const shouldAnalyze = mode === ANALYZE_MODE || process.env["ANALYZE"] === "1";
+  const plugins: PluginOption[] = [
+    logCapPlugin(),
+    ensurePluginOption(
+      devtools({ consolePiping: { enabled: false } }),
+      "@tanstack/devtools-vite",
+    ),
+    versionManifestPlugin(),
+    ensurePluginOption(tailwindcss(), "@tailwindcss/vite"),
+    ensurePluginOption(
+      tanstackStart({
+        router: {
+          codeSplittingOptions: {
+            defaultBehavior: [
+              ["component"],
+              ["errorComponent"],
+              ["notFoundComponent"],
+              ["pendingComponent"],
+            ],
+          },
+        },
+      }),
+      "@tanstack/react-start",
+    ),
+    ensurePluginOption(react(), "@vitejs/plugin-react"),
+    ensurePluginOption(
+      babel({
+        // `apps/web` imports TSX from workspace packages such as `@stll/ui`.
+        // Be explicit so Babel parses TS/JSX outside the app CWD before the
+        // React Compiler preset runs.
+        parserOpts: { plugins: ["typescript", "jsx"] },
+        presets: [reactCompilerPreset()],
+      }),
+      "@rolldown/plugin-babel",
+    ),
+    shouldAnalyze &&
+      ensurePluginOption(
+        visualizer({
+          filename: "stats.html",
+          gzipSize: true,
+          brotliSize: true,
+        }),
+        "rollup-plugin-visualizer",
+      ),
+  ];
 
   return {
     root: APP_ROOT,
@@ -222,42 +326,12 @@ export default defineConfig(({ mode }) => {
       dedupe: [
         "react",
         "react-dom",
+        "solid-js",
         "lucide-react",
         "zustand",
         "@tanstack/react-query",
       ],
     },
-    plugins: [
-      logCapPlugin(),
-      versionManifestPlugin(),
-      devtools({ consolePiping: { enabled: false } }),
-      tailwindcss(),
-      tanstackStart({
-        router: {
-          codeSplittingOptions: {
-            defaultBehavior: [
-              ["component"],
-              ["errorComponent"],
-              ["notFoundComponent"],
-              ["pendingComponent"],
-            ],
-          },
-        },
-      }),
-      react(),
-      babel({
-        // `apps/web` imports TSX from workspace packages such as `@stll/ui`.
-        // Be explicit so Babel parses TS/JSX outside the app CWD before the
-        // React Compiler preset runs.
-        parserOpts: { plugins: ["typescript", "jsx"] },
-        presets: [reactCompilerPreset()],
-      }),
-      shouldAnalyze &&
-        visualizer({
-          filename: "stats.html",
-          gzipSize: true,
-          brotliSize: true,
-        }),
-    ],
+    plugins,
   };
 });

@@ -22,7 +22,13 @@ import { MetadataPanelSkeleton } from "@/components/inspector/file-facets";
 import { QuerySuspenseBoundary } from "@/components/query-suspense-boundary";
 import { TOOLBAR_ROW_HEIGHT } from "@/lib/consts";
 import { formatFullTimestamp, formatRelativeTime } from "@/lib/relative-time";
-import type { EntityField, EntityKind, WorkspaceProperty } from "@/lib/types";
+import type {
+  EntityField,
+  EntityId,
+  EntityKind,
+  PropertyId,
+  WorkspaceProperty,
+} from "@/lib/types";
 import { CreateProperty } from "@/routes/_protected.workspaces/$workspaceId/-components/create-property";
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { Justification } from "@/routes/_protected.workspaces/$workspaceId/-components/justification";
@@ -67,14 +73,14 @@ type EntityMetadataContentProps = {
   onAiFieldClick: ((args: AiFieldClickArgs) => void) | undefined;
   entity: {
     kind: EntityKind;
-    entityId: string;
+    entityId: EntityId;
     fields: EntityField[];
   };
 };
 
 type FieldInfoRow = {
   id: string;
-  propertyId: string;
+  propertyId: PropertyId;
   content: EntityField["content"] | undefined;
 };
 
@@ -178,7 +184,7 @@ const EntityMetadataContent = ({
   // optimistic-only set empties. The placeholder must persist until
   // `entity.fields` actually contains the property id.
   const [pendingPlaceholderIds, setPendingPlaceholderIds] = useState<
-    readonly string[]
+    readonly PropertyId[]
   >([]);
   const activeJustification = useWorkspaceStore(
     (s) =>

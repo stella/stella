@@ -1,12 +1,13 @@
-import type { FileUIPart } from "ai";
-import { isFileUIPart } from "ai";
 import { Result } from "better-result";
 
-import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
 import {
-  isUserFileUrl,
-  parseUserFileId,
-} from "@/api/handlers/user-files/types";
+  getChatAttachmentMimeType,
+  getChatAttachmentUrl,
+  getUserFileIdFromAttachmentPart,
+  isChatAttachmentPart,
+} from "@/api/handlers/chat/chat-message-parts";
+import type { ChatMessage, ChatPart } from "@/api/handlers/chat/types";
+import { isUserFileUrl } from "@/api/handlers/user-files/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -54,11 +55,13 @@ export const validateChatFileParts = ({
   let filePartCount = 0;
 
   for (const part of parts) {
-    if (!isFileUIPart(part)) {
+    if (!isChatAttachmentPart(part)) {
       continue;
     }
 
     filePartCount += 1;
+    const mimeType = getChatAttachmentMimeType(part);
+    const url = getChatAttachmentUrl(part);
 
     if (filePartCount > LIMITS.chatContextFilesPerMessage) {
       return Result.err(
@@ -69,11 +72,11 @@ export const validateChatFileParts = ({
       );
     }
 
-    if (part.url.startsWith("data:")) {
+    if (url.startsWith("data:")) {
       const dataUrlResult = validateDataUrl({
-        expectedMimeType: part.mediaType,
+        expectedMimeType: mimeType,
         maxBytes: CHAT_MAX_FILE_BYTES,
-        url: part.url,
+        url,
       });
 
       if (Result.isError(dataUrlResult)) {
@@ -86,7 +89,7 @@ export const validateChatFileParts = ({
         );
       }
 
-      if (!USER_FILE_ALLOWED_MIME_TYPES.has(part.mediaType)) {
+      if (!USER_FILE_ALLOWED_MIME_TYPES.has(mimeType)) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -105,7 +108,7 @@ export const validateChatFileParts = ({
         return Result.err(fileIdResult.error);
       }
 
-      if (!USER_FILE_ALLOWED_MIME_TYPES.has(part.mediaType)) {
+      if (!USER_FILE_ALLOWED_MIME_TYPES.has(mimeType)) {
         return Result.err(
           new HandlerError({
             status: 400,
@@ -116,7 +119,7 @@ export const validateChatFileParts = ({
 
       storedFileRefs.push({
         id: fileIdResult.value,
-        mediaType: part.mediaType,
+        mediaType: mimeType,
       });
       continue;
     }
@@ -179,9 +182,9 @@ export const validateStoredFileRefs = ({
 };
 
 export const getUserFileIdFromPart = (
-  part: FileUIPart,
+  part: ChatPart,
 ): Result<SafeId<"userFile">, HandlerError<400>> => {
-  if (!isUserFileUrl(part.url)) {
+  if (!isChatAttachmentPart(part)) {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -190,8 +193,7 @@ export const getUserFileIdFromPart = (
     );
   }
 
-  const id = parseUserFileId(part.url);
-
+  const id = getUserFileIdFromAttachmentPart(part);
   if (id === null) {
     return Result.err(
       new HandlerError({
@@ -204,5 +206,5 @@ export const getUserFileIdFromPart = (
   return Result.ok(id);
 };
 
-const isChatFilePart = (part: ChatPart): part is FileUIPart =>
-  isFileUIPart(part) && isUserFileUrl(part.url);
+const isChatFilePart = (part: ChatPart): boolean =>
+  isChatAttachmentPart(part) && isUserFileUrl(getChatAttachmentUrl(part));

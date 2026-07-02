@@ -1,8 +1,15 @@
-import type { InferUITools, UIMessage } from "ai";
+import type { TokenUsage } from "@tanstack/ai";
+import type { MessagePart, UIMessage } from "@tanstack/ai-client";
+import type { DocumentPart, ImagePart } from "@tanstack/ai/client";
 
 import type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
+import type {
+  ChatClientToolsFor,
+  ChatUIToolsFor,
+} from "@/api/handlers/chat/tools/chat-tool-types";
 import type { ChatTools } from "@/api/handlers/chat/tools/chat-tools";
 import type { UserFileUrl } from "@/api/handlers/user-files/types";
+import type { SafeId } from "@/api/lib/branded-types";
 
 export const CHAT_MENTION_CATEGORIES = ["entity", "workspace"] as const;
 
@@ -58,15 +65,47 @@ export type ChatAnonRestorationsData = {
   pairs: ChatAnonRestoration[];
 };
 
-export type ChatUITools = InferUITools<ChatTools>;
-export type ChatUIDataTypes = {
-  "stella-anon-restorations": ChatAnonRestorationsData;
-  "stella-mentions": ChatMentionsData;
-  "stella-source-document": ChatSourceDocument;
+export type ChatUITools = ChatUIToolsFor<ChatTools>;
+export type ChatClientTools = ChatClientToolsFor<ChatTools>;
+
+export type ChatAttachmentMetadata = {
+  filename?: string | undefined;
+  placeholder?: string | undefined;
 };
 
-export type ChatMessage = UIMessage<never, ChatUIDataTypes, ChatUITools>;
-export type ChatPart = ChatMessage["parts"][number];
+export type ChatAttachmentPart =
+  | ImagePart<ChatAttachmentMetadata>
+  | DocumentPart<ChatAttachmentMetadata>;
+
+export type ChatTanStackPart = MessagePart<ChatClientTools>;
+export type ChatPart = ChatTanStackPart;
+
+export type ChatMessageUsage = Pick<
+  TokenUsage,
+  "completionTokens" | "promptTokens" | "totalTokens"
+> & {
+  completionTokensDetails?:
+    | Pick<
+        NonNullable<TokenUsage["completionTokensDetails"]>,
+        "reasoningTokens"
+      >
+    | undefined;
+};
+
+export type ChatMessageMetadata = {
+  anonRestorations?: ChatAnonRestorationsData | undefined;
+  mentions?: ChatMentionsData | undefined;
+  sourceDocuments?: ChatSourceDocument[] | undefined;
+  usage?: ChatMessageUsage | undefined;
+};
+
+export type ChatMessage = UIMessage<ChatClientTools> & {
+  metadata?: ChatMessageMetadata | undefined;
+};
+
+export type PersistableChatMessage = ChatMessage & {
+  id: SafeId<"chatMessage">;
+};
 
 export type ChatMessageRole = UIMessage["role"];
 
@@ -91,8 +130,17 @@ export type ChatCompactionSummary = {
  *  Bump the version and add a new variant when the parts
  *  shape changes; migrate in-place by reading the version
  *  and transforming old shapes on read. */
-export type ChatMessageContent = {
+export type LegacyChatMessageContent = {
   version: 1;
-  data: ChatMessage["parts"];
+  data: unknown[];
 };
-export type PersistedChatMessageContent = ChatMessageContent;
+
+export type ChatMessageContent = {
+  data: ChatMessage["parts"];
+  metadata?: ChatMessageMetadata | undefined;
+  version: 2;
+};
+
+export type PersistedChatMessageContent =
+  | LegacyChatMessageContent
+  | ChatMessageContent;

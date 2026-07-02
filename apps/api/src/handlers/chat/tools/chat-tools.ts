@@ -1,5 +1,3 @@
-import type { ToolSet } from "ai";
-
 import { roles } from "@stll/permissions";
 import type { SkillMetadata } from "@stll/skills";
 
@@ -21,6 +19,7 @@ import {
   createChatHistoryTools,
   SEARCH_CHAT_HISTORY_TOOL_NAME,
 } from "@/api/handlers/chat/tools/chat-history-tools";
+import type { ChatToolMap } from "@/api/handlers/chat/tools/chat-tool-types";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -44,7 +43,7 @@ import {
   WEB_SEARCH_TOOL_NAME,
 } from "@/api/handlers/chat/tools/web-search-tools";
 import { createWorkspaceTools } from "@/api/handlers/chat/tools/workspace-tools";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getDeployAvailableRegistryHandlers } from "@/api/lib/business-registries/dispatch";
@@ -86,7 +85,7 @@ type CurrentSkillEditToolName =
   | "update-current-skill-body"
   | "update-current-skill-resource";
 type CurrentSkillEditTools = Partial<
-  Record<CurrentSkillEditToolName, NonNullable<ToolSet[string]>>
+  Record<CurrentSkillEditToolName, NonNullable<ChatToolMap[string]>>
 >;
 type TemplateTools = ReturnType<typeof createTemplateTools>;
 type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
@@ -142,8 +141,8 @@ type GetChatToolsProps = {
    * apply-active-docx-edits client executor mounted (the file
    * overlay or the Template Studio). Other surfaces (standalone
    * chat, global chat) MUST NOT see this tool: the server has no
-   * `execute` for it, the client never calls `addToolOutput`, and
-   * the call would hang.
+   * `execute` for it, the client never calls TanStack
+   * ChatClient.addToolResult, and the call would hang.
    */
   hasActiveDocxEditClient: boolean;
   /**
@@ -161,7 +160,7 @@ type GetChatToolsProps = {
    * the feature is unavailable for the org and the tools are skipped.
    */
   webSearchProviders: ResolvedWebSearchProviders;
-  externalTools?: ToolSet | undefined;
+  externalTools?: ChatToolMap | undefined;
   /**
    * Native tool slugs (e.g. "ares") the org has disabled in chat.
    * Validation tool sets ignore this — past tool messages must still
@@ -239,7 +238,7 @@ export const getChatTools = ({
   skillMetadata,
   activeSkillContext,
   recordAuditEvent,
-}: GetChatToolsProps): ToolSet => {
+}: GetChatToolsProps): ChatToolMap => {
   const orgTools = createOrgTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
@@ -349,7 +348,7 @@ export const getChatTools = ({
 
   // create-document is client-executed (no server `execute`) — the
   // chat client picks the destination matter and posts the result
-  // via the AI SDK's addToolOutput. It is always registered so the
+  // via TanStack ChatClient.addToolResult. It is always registered so the
   // model can see and call it from any chat surface.
   const createDocumentTools = createCreateDocumentTools();
 

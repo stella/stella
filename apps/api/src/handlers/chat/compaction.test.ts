@@ -1,14 +1,10 @@
-import type { ModelMessage } from "ai";
-import { MockLanguageModelV3 } from "ai/test";
+import type { ModelMessage } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
-import type { Analytics } from "@/api/lib/analytics/types";
 import { toSafeId } from "@/api/lib/branded-types";
-import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   compactChatMessages,
@@ -22,7 +18,6 @@ import {
   shouldCompactChatMessages,
   summarizeChatCompaction,
 } from "./compaction";
-import { ANON_RESTORATIONS_DATA_PART_TYPE } from "./third-party-boundary";
 
 const textMessage = ({
   id,
@@ -35,14 +30,8 @@ const textMessage = ({
 }): ChatMessage => ({
   id,
   role,
-  parts: [{ type: "text", text }],
+  parts: [{ type: "text", content: text }],
 });
-
-const waitForAsyncSideEffects = async () => {
-  await new Promise<void>((resolve) => {
-    setTimeout(resolve, 0);
-  });
-};
 
 describe("chat history compaction", () => {
   test("keeps full history below the token trigger", () => {
@@ -91,7 +80,8 @@ describe("chat history compaction", () => {
     expect(compacted.value.at(0)?.role).toBe("user");
     expect(compacted.value.at(0)?.parts.at(0)).toEqual({
       type: "text",
-      text: "Earlier conversation compacted from 2 message(s).\n\nold work summary",
+      content:
+        "Earlier conversation compacted from 2 message(s).\n\nold work summary",
     });
     expect(compacted.value.at(1)?.id).toBe("msg_3");
   });
@@ -171,18 +161,19 @@ describe("chat history compaction", () => {
         id: "msg_1",
         role: "user",
         parts: [
-          {
-            type: "file",
+          createChatAttachmentPart({
             filename: "contract.pdf",
-            mediaType: "application/pdf",
+            mimeType: "application/pdf",
             url: "stella-user-file://file_1",
-          },
+          }),
         ],
       },
     ]);
 
     expect(transcript).toContain("contract.pdf");
-    expect(transcript).toContain("old file attachments are not rehydrated");
+    expect(transcript).toContain(
+      "content: omitted; attachments are not inlined during compaction",
+    );
     expect(transcript).not.toContain("stella-user-file://file_1");
   });
 
@@ -191,28 +182,26 @@ describe("chat history compaction", () => {
       {
         id: "msg_1",
         role: "assistant",
+        metadata: {
+          anonRestorations: {
+            pairs: [
+              {
+                placeholder: "[ORG_1]",
+                original: "Confidential Client LLC",
+              },
+            ],
+          },
+        },
         parts: [
           {
             type: "text",
-            text: "The answer references [ORG_1].",
-          },
-          {
-            type: ANON_RESTORATIONS_DATA_PART_TYPE,
-            data: {
-              pairs: [
-                {
-                  placeholder: "[ORG_1]",
-                  original: "Confidential Client LLC",
-                },
-              ],
-            },
+            content: "The answer references [ORG_1].",
           },
         ],
       },
     ]);
 
     expect(transcript).toContain("The answer references [ORG_1].");
-    expect(transcript).not.toContain(ANON_RESTORATIONS_DATA_PART_TYPE);
     expect(transcript).not.toContain("Confidential Client LLC");
   });
 
@@ -221,21 +210,20 @@ describe("chat history compaction", () => {
       {
         id: "msg_1",
         role: "assistant",
+        metadata: {
+          anonRestorations: {
+            pairs: [
+              {
+                placeholder: "[ORG_1]",
+                original: "Confidential Client LLC ".repeat(1000),
+              },
+            ],
+          },
+        },
         parts: [
           {
             type: "text",
-            text: "The answer references [ORG_1].",
-          },
-          {
-            type: ANON_RESTORATIONS_DATA_PART_TYPE,
-            data: {
-              pairs: [
-                {
-                  placeholder: "[ORG_1]",
-                  original: "Confidential Client LLC ".repeat(1000),
-                },
-              ],
-            },
+            content: "The answer references [ORG_1].",
           },
         ],
       },
@@ -252,19 +240,17 @@ describe("chat history compaction", () => {
       {
         id: "msg_1",
         role: "assistant",
-        parts: [
-          {
-            type: ANON_RESTORATIONS_DATA_PART_TYPE,
-            data: {
-              pairs: [
-                {
-                  placeholder: "[ORG_1]",
-                  original: "Confidential Client LLC ".repeat(1000),
-                },
-              ],
-            },
+        metadata: {
+          anonRestorations: {
+            pairs: [
+              {
+                placeholder: "[ORG_1]",
+                original: "Confidential Client LLC ".repeat(1000),
+              },
+            ],
           },
-        ],
+        },
+        parts: [],
       },
     ];
 
@@ -286,19 +272,17 @@ describe("chat history compaction", () => {
       {
         id: "msg_3",
         role: "assistant",
-        parts: [
-          {
-            type: ANON_RESTORATIONS_DATA_PART_TYPE,
-            data: {
-              pairs: [
-                {
-                  placeholder: "[ORG_1]",
-                  original: "Confidential Client LLC",
-                },
-              ],
-            },
+        metadata: {
+          anonRestorations: {
+            pairs: [
+              {
+                placeholder: "[ORG_1]",
+                original: "Confidential Client LLC",
+              },
+            ],
           },
-        ],
+        },
+        parts: [],
       },
       textMessage({ id: "msg_4", role: "user", text: "latest question" }),
     ];
@@ -466,7 +450,7 @@ Answer the latest question.
       { role: "user", content: "old request ".repeat(80) },
       {
         role: "assistant",
-        content: [{ type: "text", text: "old tool finding ".repeat(80) }],
+        content: [{ type: "text", content: "old tool finding ".repeat(80) }],
       },
       { role: "user", content: "latest request" },
     ];
@@ -494,108 +478,36 @@ Answer the latest question.
     ]);
   });
 
-  test("records usage for model compaction summaries", async () => {
-    const periodStart = new Date("2026-06-01T00:00:00.000Z");
-    const periodEnd = new Date("2026-07-01T00:00:00.000Z");
-    const insertedRows: unknown[] = [];
-    const tx = {
-      select: () => ({
-        from: () => ({
-          where: () => ({
-            limit: async () => [
-              {
-                currentPeriodEnd: periodEnd,
-                currentPeriodStart: periodStart,
-                status: "active",
-              },
-            ],
-          }),
-        }),
-      }),
-      insert: () => ({
-        values: async (values: unknown) => {
-          insertedRows.push(values);
-        },
-      }),
-    };
-    const { safeDb } = createScopedDbMock(tx);
-    const analytics: Analytics = {
-      capture: () => undefined,
-      flush: async () => undefined,
-    };
-    const aiAnalytics = createAIAnalyticsCallbacks({
-      analytics,
-      usageMetering: {
-        actionType: "chat",
-        organizationId: toSafeId<"organization">("org_compaction"),
-        safeDb,
-        serviceTier: "standard",
-        userId: toSafeId<"user">("user_compaction"),
-        workspaceId: toSafeId<"workspace">("workspace_compaction"),
-      },
-      feature: "chat.step_compaction",
-      modelRole: "chat",
-      traceId: "trace_compaction",
-    });
-    const model = new MockLanguageModelV3({
-      modelId: "gpt-4o-mini",
-      provider: "openai",
-      doGenerate: {
-        content: [{ type: "text", text: "metered summary" }],
-        finishReason: { raw: "stop", unified: "stop" },
-        usage: {
-          inputTokens: {
-            cacheRead: 0,
-            cacheWrite: 0,
-            noCache: 1_000_000,
-            total: 1_000_000,
-          },
-          outputTokens: {
-            reasoning: 0,
-            text: 0,
-            total: 0,
-          },
-        },
-        warnings: [],
-      },
-    });
+  test("uses the TanStack model wrapper for model compaction summaries", async () => {
+    let transcriptSeenBySummarizer = "";
 
     const compacted = await compactModelMessagesForModel({
       abortSignal: AbortSignal.timeout(1000),
-      aiAnalytics,
       messages: [
         { role: "user", content: "old request ".repeat(80) },
         { role: "assistant", content: "old response ".repeat(80) },
         { role: "user", content: "latest request" },
       ],
-      model,
+      organizationId: toSafeId<"organization">("org_compaction"),
+      orgAIConfig: null,
       preserveTokens: 20,
+      role: "chat",
+      summarizeWithModel: async (transcript) => {
+        transcriptSeenBySummarizer = transcript;
+        return "tanstack summary";
+      },
       triggerTokens: 50,
     });
 
-    await waitForAsyncSideEffects();
-
     expect(Result.isOk(compacted)).toBe(true);
-    expect(insertedRows).toHaveLength(1);
-    const row = asTestRaw<{
-      actionType: string;
-      unitsConsumed: number;
-      modelRole: string;
-      organizationId: string;
-      rawUsageMicroUnits: number;
-      serviceTier: string;
-      traceId: string;
-      workspaceId: string;
-    }>(insertedRows.at(0));
-    expect(row).toMatchObject({
-      actionType: "chat",
-      unitsConsumed: 225,
-      modelRole: "chat",
-      organizationId: "org_compaction",
-      rawUsageMicroUnits: 15_000,
-      serviceTier: "standard",
-      traceId: "trace_compaction",
-      workspaceId: "workspace_compaction",
+    if (Result.isError(compacted)) {
+      return;
+    }
+    expect(transcriptSeenBySummarizer).toContain("old request");
+    expect(compacted.value.at(0)).toEqual({
+      role: "user",
+      content:
+        "Earlier model-step history compacted from 2 message(s).\n\ntanstack summary",
     });
   });
 
@@ -606,25 +518,22 @@ Answer the latest question.
       { role: "user", content: "latest request ".repeat(20) },
       {
         role: "assistant",
-        content: [
+        content: null,
+        toolCalls: [
           {
-            type: "tool-call",
-            toolCallId: "call_1",
-            toolName: "searchMatter",
-            input: { query: "termination" },
+            id: "call_1",
+            type: "function",
+            function: {
+              name: "searchMatter",
+              arguments: JSON.stringify({ query: "termination" }),
+            },
           },
         ],
       },
       {
         role: "tool",
-        content: [
-          {
-            type: "tool-result",
-            toolCallId: "call_1",
-            toolName: "searchMatter",
-            output: { type: "json", value: { finding: "survives" } },
-          },
-        ],
+        content: "searchMatter result: survives",
+        toolCallId: "call_1",
       },
     ];
 
@@ -665,10 +574,9 @@ Answer the latest question.
         role: "assistant",
         content: [
           {
-            type: "tool-call",
-            toolCallId: "call_1",
-            toolName: "searchMatter",
-            input: { value: 1n },
+            type: "text",
+            content: "search",
+            metadata: { value: 1n },
           },
         ],
       },

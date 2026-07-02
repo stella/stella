@@ -6,33 +6,32 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
-import { toSafeId } from "@/lib/safe-id";
+import type { EntityId, PropertyId, WorkspaceId } from "@/lib/types";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { workspaceKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/workspace";
+
+type RetryCellArgs = {
+  entityId: EntityId;
+  propertyId: PropertyId;
+};
 
 /**
  * Re-runs AI extraction for one cell (one entity × one property).
  * Enqueues a workflow restricted to the target property only; the
  * worker itself moves the cell into `pending` and writes the result.
  */
-export const useRetryCell = (workspaceId: string) => {
+export const useRetryCell = (workspaceId: WorkspaceId) => {
   const queryClient = useQueryClient();
   const analytics = useAnalytics();
   const t = useTranslations();
 
-  return async ({
-    entityId,
-    propertyId,
-  }: {
-    entityId: string;
-    propertyId: string;
-  }) => {
+  return async ({ entityId, propertyId }: RetryCellArgs) => {
     try {
       const response = await api
-        .workspaces({ workspaceId: toSafeId<"workspace">(workspaceId) })
+        .workspaces({ workspaceId })
         ["cell-retry"].post({
-          entityId: toSafeId<"entity">(entityId),
-          propertyId: toSafeId<"property">(propertyId),
+          entityId,
+          propertyId,
         });
 
       if (response.error) {

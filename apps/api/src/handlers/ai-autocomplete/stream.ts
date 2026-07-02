@@ -1,11 +1,11 @@
-import { streamText } from "ai";
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { getModelForRole } from "@/api/lib/ai-models";
+import { resolveCaching } from "@/api/lib/ai-config";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { streamTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const MAX_PREFIX_CHARS = 8000;
 const MAX_SUFFIX_CHARS = 4000;
@@ -67,46 +67,42 @@ const autocompleteStream = createSafeRootHandler(
     session,
     request,
   }) {
-    const modelResult = (() => {
-      try {
-        return Result.ok(
-          getModelForRole("fast", orgAIConfig, {
+    const stream = yield* Result.try({
+      try: () =>
+        streamTanStackTextForRole({
+          role: "fast",
+          serviceTier: "standard",
+          orgAIConfig,
+          organizationId: session.activeOrganizationId,
+          caching: resolveCaching({
             promptCachingEnabled,
+            role: "fast",
             scopeKey: null,
-            organizationId: session.activeOrganizationId,
-            serviceTier: "standard",
           }),
-        );
-      } catch (error) {
-        if (error instanceof HandlerError) {
-          return Result.err(error);
+          abortSignal: AbortSignal.any([
+            request.signal,
+            AbortSignal.timeout(AUTOCOMPLETE_TIMEOUT_MS),
+          ]),
+          system: SYSTEM_PROMPT,
+          prompt: buildUserPrompt({
+            prefix: body.prefix,
+            suffix: body.suffix,
+            headings: body.headings,
+            language: body.language,
+          }),
+          maxOutputTokens: MAX_OUTPUT_TOKENS,
+          temperature: 0.2,
+        }),
+      catch: (cause) => {
+        if (cause instanceof HandlerError) {
+          return cause;
         }
-        return Result.err(
-          new HandlerError({
-            status: 500,
-            message: "Autocomplete is not available on this deployment.",
-            cause: error,
-          }),
-        );
-      }
-    })();
-    const model = yield* modelResult;
-
-    const stream = streamText({
-      model,
-      maxOutputTokens: MAX_OUTPUT_TOKENS,
-      temperature: 0.2,
-      abortSignal: AbortSignal.any([
-        request.signal,
-        AbortSignal.timeout(AUTOCOMPLETE_TIMEOUT_MS),
-      ]),
-      system: SYSTEM_PROMPT,
-      prompt: buildUserPrompt({
-        prefix: body.prefix,
-        suffix: body.suffix,
-        headings: body.headings,
-        language: body.language,
-      }),
+        return new HandlerError({
+          status: 500,
+          message: "Autocomplete is not available on this deployment.",
+          cause,
+        });
+      },
     });
 
     const sse = new ReadableStream<Uint8Array>({
@@ -123,7 +119,7 @@ const autocompleteStream = createSafeRootHandler(
           );
         };
         try {
-          for await (const delta of stream.textStream) {
+          for await (const delta of stream) {
             if (delta.length > 0) {
               writeEvent("token", { text: delta });
             }

@@ -1,16 +1,17 @@
-import { generateText } from "ai";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
-import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { resolveCaching } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const REWRITE_PROMPT_MAX_CHARS = 2000;
 const REWRITE_TIMEOUT_MS = 60_000;
@@ -38,13 +39,16 @@ const rewriteSkillResource = createSafeRootHandler(
     body,
     memberRole,
     orgAIConfig,
-    promptCachingEnabled,
     params,
+    promptCachingEnabled,
     safeDb,
     session,
     user,
   }) {
-    yield* requireAIAvailable(orgAIConfig);
+    yield* requireTanStackAIAvailableForRole({
+      orgConfig: orgAIConfig,
+      role: "fast",
+    });
 
     const skillRows = yield* Result.await(
       safeDb((tx) =>
@@ -113,7 +117,7 @@ const rewriteSkillResource = createSafeRootHandler(
       );
     }
 
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -137,17 +141,20 @@ const rewriteSkillResource = createSafeRootHandler(
 
     const generation = await Result.tryPromise({
       try: async () =>
-        await generateText({
+        await generateTanStackTextForRole({
           abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
           maxOutputTokens: REWRITE_MAX_OUTPUT_TOKENS,
-          model: getModelForRole("fast", orgAIConfig, {
+          role: "fast",
+          serviceTier: "standard",
+          orgAIConfig,
+          organizationId: session.activeOrganizationId,
+          analytics: aiAnalytics,
+          caching: resolveCaching({
             promptCachingEnabled,
-            scopeKey: null,
-            organizationId: session.activeOrganizationId,
-            serviceTier: "standard",
+            role: "fast",
+            scopeKey: `${session.activeOrganizationId}:skills:${params.skillId}:${resource.path}`,
           }),
           prompt,
-          ...aiAnalytics.stepCallbacks,
         }),
       catch: (cause) => {
         aiAnalytics.captureError(cause);
@@ -162,7 +169,7 @@ const rewriteSkillResource = createSafeRootHandler(
       return Result.err(generation.error);
     }
 
-    const rewritten = stripFences(generation.value.text).trim();
+    const rewritten = stripFences(generation.value).trim();
     if (!rewritten) {
       return Result.err(
         new HandlerError({

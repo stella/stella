@@ -1,7 +1,15 @@
 import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+
 import { organizationSettings } from "@/api/db/schema";
+import {
+  normalizeProviderRegion,
+  type OrgAIConfig,
+  type OrgAIModelSelection,
+  type OrgAIProviderConfig,
+} from "@/api/lib/ai-config";
 import {
   decryptAIConfig,
   encryptAIConfig,
@@ -11,49 +19,23 @@ import {
   providerResponseExtras,
   providerResponseRegion,
 } from "@/api/lib/ai-config-response";
-import {
-  isAllowedBYOKModel,
-  MODEL_ROLES,
-  supportsRegion,
-} from "@/api/lib/ai-models";
-import type {
-  AIProvider,
-  DataRegion,
-  ModelRole,
-  OrgAIConfig,
-  OrgAIModelSelection,
-  OrgAIProviderConfig,
-} from "@/api/lib/ai-models";
 import { probeProvider } from "@/api/lib/ai-provider-probe";
 import type { ProviderProbeResult } from "@/api/lib/ai-provider-probe";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
-import { normalizeAzureFoundryBaseURL } from "@/api/lib/azure-foundry";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { normalizeHuggingFaceBaseURL } from "@/api/lib/huggingface";
+import { isAllowedBYOKModelForRole } from "@/api/lib/tanstack-ai-models";
+import type { BYOKProvider, ModelRole } from "@/api/lib/tanstack-ai-models";
 
-const BYOK_PROVIDER_VALUES = [
-  "google",
-  "openrouter",
-  "openai",
-  "azure_foundry",
-  "anthropic",
-  "mistral",
-  "huggingface",
-] as const satisfies readonly AIProvider[];
-type BYOKProvider = (typeof BYOK_PROVIDER_VALUES)[number];
+const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 
 const providerBody = t.Object({
   provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
   apiKey: t.Optional(t.String({ minLength: 1 })),
-  endpoint: t.Optional(t.String({ minLength: 1, maxLength: 2048 })),
-  apiVersion: t.Optional(t.String({ minLength: 1, maxLength: 64 })),
-  region: t.Optional(
-    t.Union([t.Literal("eu"), t.Literal("global"), t.Literal("ch")]),
-  ),
+  region: t.Optional(t.Literal("global")),
 });
 
 const modelSelectionBody = t.Object({
@@ -139,7 +121,7 @@ const updateAIConfig = createSafeRootHandler(
       );
     }
 
-    const newKeyProviders = new Set(
+    const newKeyProviders = new Set<BYOKProvider>(
       body.providers
         .filter((provider) => provider.apiKey)
         .map((provider) => provider.provider),
@@ -148,17 +130,14 @@ const updateAIConfig = createSafeRootHandler(
     const providersToValidate = providerResult.providers.filter(
       (providerConfig) =>
         shouldValidateProviderConfig({
-          existingConfig,
           newKeyProviders,
-          overrideModels: modelResult.overrideModels,
           providerConfig,
         }),
     );
 
     const validationResults = await Promise.all(
       providersToValidate.map(
-        async (providerConfig) =>
-          await validateProviderKey(providerConfig, modelResult.overrideModels),
+        async (providerConfig) => await validateProviderKey(providerConfig),
       ),
     );
 
@@ -241,104 +220,26 @@ type ValidationResult = ProviderProbeResult;
 type ProviderConfigInput = {
   provider: BYOKProvider;
   apiKey?: string | undefined;
-  endpoint?: string | undefined;
-  apiVersion?: string | undefined;
-  region?: DataRegion | undefined;
+  region?: "global" | undefined;
+};
+
+type TanStackBYOKProviderConfig = OrgAIProviderConfig & {
+  provider: BYOKProvider;
 };
 
 type ProviderConfigResult =
   | {
       valid: true;
-      providers: (OrgAIProviderConfig & { provider: BYOKProvider })[];
+      providers: TanStackBYOKProviderConfig[];
     }
   | { valid: false; error: string };
-
-type ResolveExternalProviderArgs = {
-  apiKey: string;
-  providerInput: ProviderConfigInput;
-  existingProvider: OrgAIProviderConfig | undefined;
-};
-
-type ResolveExternalProviderResult<TConfig extends OrgAIProviderConfig> =
-  | { valid: true; config: TConfig }
-  | { valid: false; error: string };
-
-const resolveAzureProviderConfig = ({
-  apiKey,
-  providerInput,
-  existingProvider,
-}: ResolveExternalProviderArgs): ResolveExternalProviderResult<
-  OrgAIProviderConfig & { provider: "azure_foundry" }
-> => {
-  const existingEndpoint =
-    existingProvider?.provider === "azure_foundry"
-      ? existingProvider.baseURL
-      : undefined;
-  const endpoint = providerInput.endpoint?.trim() || existingEndpoint;
-  if (!endpoint) {
-    return { valid: false, error: "Endpoint is required for azure_foundry" };
-  }
-
-  const normalized = normalizeAzureFoundryBaseURL(endpoint);
-  if (!normalized.ok) {
-    return { valid: false, error: normalized.error };
-  }
-
-  const existingApiVersion =
-    existingProvider?.provider === "azure_foundry"
-      ? existingProvider.apiVersion
-      : undefined;
-  const apiVersion = providerInput.apiVersion?.trim() || existingApiVersion;
-
-  return {
-    valid: true,
-    config: {
-      provider: "azure_foundry",
-      apiKey,
-      baseURL: normalized.baseURL,
-      ...(apiVersion ? { apiVersion } : {}),
-    },
-  };
-};
-
-const resolveHuggingFaceProviderConfig = ({
-  apiKey,
-  providerInput,
-  existingProvider,
-}: ResolveExternalProviderArgs): ResolveExternalProviderResult<
-  OrgAIProviderConfig & { provider: "huggingface" }
-> => {
-  const existingEndpoint =
-    existingProvider?.provider === "huggingface"
-      ? existingProvider.baseURL
-      : undefined;
-  const endpoint = providerInput.endpoint?.trim() || existingEndpoint;
-  if (!endpoint) {
-    return { valid: false, error: "Endpoint is required for huggingface" };
-  }
-  const normalized = normalizeHuggingFaceBaseURL(endpoint);
-  if (!normalized.ok) {
-    return { valid: false, error: normalized.error };
-  }
-
-  return {
-    valid: true,
-    config: {
-      provider: "huggingface",
-      apiKey,
-      baseURL: normalized.baseURL,
-    },
-  };
-};
 
 const resolveProviderConfigs = (
   providers: readonly ProviderConfigInput[],
   existingConfig: OrgAIConfig | undefined,
 ): ProviderConfigResult => {
-  const resolvedProviders: (OrgAIProviderConfig & {
-    provider: BYOKProvider;
-  })[] = [];
-  const seenProviders = new Set<AIProvider>();
+  const resolvedProviders: TanStackBYOKProviderConfig[] = [];
+  const seenProviders = new Set<BYOKProvider>();
 
   for (const providerInput of providers) {
     if (seenProviders.has(providerInput.provider)) {
@@ -361,65 +262,30 @@ const resolveProviderConfigs = (
       };
     }
 
-    if (providerInput.provider === "azure_foundry") {
-      const resolved = resolveAzureProviderConfig({
-        apiKey,
-        providerInput,
-        existingProvider,
-      });
-      if (!resolved.valid) {
-        return resolved;
-      }
-      resolvedProviders.push(resolved.config);
-      continue;
-    }
-
-    if (providerInput.provider === "huggingface") {
-      const resolved = resolveHuggingFaceProviderConfig({
-        apiKey,
-        providerInput,
-        existingProvider,
-      });
-      if (!resolved.valid) {
-        return resolved;
-      }
-      resolvedProviders.push(resolved.config);
-      continue;
-    }
-
-    if (
-      providerInput.region &&
-      providerInput.region !== "global" &&
-      !supportsRegion(providerInput.provider)
-    ) {
-      return {
-        valid: false,
-        error:
-          `Regional routing is not supported for ${providerInput.provider}. ` +
-          "Only Google AI supports EU/CH regional endpoints via Vertex AI.",
-      };
-    }
-
     const existingRegion =
-      existingProvider &&
-      existingProvider.provider !== "azure_foundry" &&
-      existingProvider.provider !== "huggingface"
+      existingProvider?.provider === providerInput.provider
         ? existingProvider.region
         : undefined;
 
     resolvedProviders.push({
       provider: providerInput.provider,
       apiKey,
-      region: supportsRegion(providerInput.provider)
-        ? (providerInput.region ?? existingRegion ?? "global")
-        : "global",
+      region: normalizeProviderRegion(
+        providerInput.provider,
+        providerInput.region ?? existingRegion,
+      ),
     });
   }
 
   return { valid: true, providers: resolvedProviders };
 };
 
-type OverrideModelsInput = Record<ModelRole, OrgAIModelSelection>;
+type OverrideModelSelectionInput = {
+  provider: BYOKProvider;
+  modelId: string;
+};
+
+type OverrideModelsInput = Record<ModelRole, OverrideModelSelectionInput>;
 
 type OverrideModelsResult =
   | { valid: true; overrideModels: Record<ModelRole, OrgAIModelSelection> }
@@ -428,7 +294,7 @@ type OverrideModelsResult =
 const normalizeRoleSelection = (
   role: ModelRole,
   overrideModels: OverrideModelsInput,
-  configuredProviders: ReadonlySet<AIProvider>,
+  configuredProviders: ReadonlySet<BYOKProvider>,
 ):
   | { valid: true; selection: OrgAIModelSelection }
   | { valid: false; error: string } => {
@@ -446,10 +312,18 @@ const normalizeRoleSelection = (
     };
   }
 
-  if (!isAllowedBYOKModel(selection.provider, modelId)) {
+  if (
+    !isAllowedBYOKModelForRole({
+      provider: selection.provider,
+      modelId,
+      role,
+    })
+  ) {
     return {
       valid: false,
-      error: `Model "${modelId}" is not offered for ${selection.provider}`,
+      error:
+        `Model "${modelId}" is not offered for ` +
+        `${selection.provider} on the ${role} role`,
     };
   }
 
@@ -461,7 +335,7 @@ const normalizeRoleSelection = (
 
 const normalizeOverrideModels = (
   overrideModels: OverrideModelsInput,
-  providers: readonly OrgAIProviderConfig[],
+  providers: readonly TanStackBYOKProviderConfig[],
 ): OverrideModelsResult => {
   const configuredProviders = new Set(
     providers.map((providerConfig) => providerConfig.provider),
@@ -512,55 +386,17 @@ const normalizeOverrideModels = (
 };
 
 type ShouldValidateProviderConfigOptions = {
-  existingConfig: OrgAIConfig | undefined;
-  newKeyProviders: ReadonlySet<AIProvider>;
-  overrideModels: Record<ModelRole, OrgAIModelSelection>;
-  providerConfig: OrgAIProviderConfig;
+  newKeyProviders: ReadonlySet<BYOKProvider>;
+  providerConfig: TanStackBYOKProviderConfig;
 };
 
 const shouldValidateProviderConfig = ({
-  existingConfig,
   newKeyProviders,
-  overrideModels,
   providerConfig,
 }: ShouldValidateProviderConfigOptions): boolean => {
   if (newKeyProviders.has(providerConfig.provider)) {
     return true;
   }
-
-  if (providerConfig.provider === "azure_foundry") {
-    const existingProvider = existingConfig?.providers.find(
-      (candidate) => candidate.provider === providerConfig.provider,
-    );
-    if (existingProvider?.provider !== "azure_foundry") {
-      return true;
-    }
-
-    if (
-      providerConfig.baseURL !== existingProvider.baseURL ||
-      providerConfig.apiVersion !== existingProvider.apiVersion
-    ) {
-      return true;
-    }
-
-    return MODEL_ROLES.some(
-      (role) =>
-        overrideModels[role].provider === "azure_foundry" &&
-        existingConfig?.overrideModels[role]?.modelId !==
-          overrideModels[role].modelId,
-    );
-  }
-
-  if (providerConfig.provider === "huggingface") {
-    const existingProvider = existingConfig?.providers.find(
-      (candidate) => candidate.provider === providerConfig.provider,
-    );
-    if (existingProvider?.provider !== "huggingface") {
-      return true;
-    }
-    return providerConfig.baseURL !== existingProvider.baseURL;
-  }
-
   return false;
 };
 
@@ -574,35 +410,18 @@ const SETTINGS_PROBE_TIMEOUT_MS = 20_000;
  * Validate a provider API key via the shared lightweight probe
  * (provider's own auth/list-models endpoint). No token cost and
  * avoids per-model quirks like reasoning-model token minimums.
- * For Azure Foundry, also verifies each role's deployment name
- * exists, since those are free-text values typed by the user.
  */
 const validateProviderKey = async (
-  providerConfig: OrgAIProviderConfig & { provider: BYOKProvider },
-  overrideModels: Record<ModelRole, OrgAIModelSelection>,
+  providerConfig: TanStackBYOKProviderConfig,
 ): Promise<ValidationResult> => {
-  const probeEndpoint =
-    providerConfig.provider === "azure_foundry" ||
-    providerConfig.provider === "huggingface"
-      ? providerConfig.baseURL
-      : undefined;
-  const probeApiVersion =
-    providerConfig.provider === "azure_foundry"
-      ? providerConfig.apiVersion
-      : undefined;
-  const probeAzureDeployments =
-    providerConfig.provider === "azure_foundry"
-      ? collectAzureDeployments(overrideModels)
-      : undefined;
-
   const result = await Result.tryPromise({
     try: async () =>
       await probeProvider(
         providerConfig.provider,
         providerConfig.apiKey,
-        probeEndpoint,
-        probeApiVersion,
-        probeAzureDeployments,
+        undefined,
+        undefined,
+        undefined,
         SETTINGS_PROBE_TIMEOUT_MS,
       ),
     catch: (error: unknown) =>
@@ -614,18 +433,5 @@ const validateProviderKey = async (
   }
   return result.value;
 };
-
-const collectAzureDeployments = (
-  overrideModels: Record<ModelRole, OrgAIModelSelection>,
-): readonly string[] =>
-  Array.from(
-    new Set(
-      MODEL_ROLES.flatMap((role) =>
-        overrideModels[role].provider === "azure_foundry"
-          ? [overrideModels[role].modelId]
-          : [],
-      ),
-    ),
-  );
 
 export default updateAIConfig;

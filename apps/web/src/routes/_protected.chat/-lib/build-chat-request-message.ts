@@ -1,11 +1,21 @@
-import type { FileUIPart } from "ai";
+import type { MultimodalContent } from "@tanstack/ai-client";
 
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
+import type {
+  ChatAttachmentPart,
+  ChatPart,
+} from "@/components/chat/chat-ui-tools";
+import { toSafeId } from "@/lib/safe-id";
+import type { SafeId } from "@/lib/safe-id";
 
-type ChatRequestMessage =
-  | { text: string }
-  | { files: FileUIPart[] }
-  | { text: string; files: FileUIPart[] };
+type ChatRequestMessage = MultimodalContent & {
+  id: SafeId<"chatMessage">;
+};
+
+const IMAGE_MIME_PREFIX = "image/";
+
+const createChatMessageId = (): SafeId<"chatMessage"> =>
+  toSafeId<"chatMessage">(crypto.randomUUID());
 
 const toDataUrl = async (file: File) =>
   await new Promise<string>((resolve, reject) => {
@@ -28,25 +38,35 @@ export const buildChatRequestMessage = async ({
   files,
   html,
 }: ChatInputDraft): Promise<ChatRequestMessage> => {
+  const id = createChatMessageId();
+
   if (files.length === 0) {
-    return { text: html };
+    return { id, content: html };
   }
 
-  const fileParts: FileUIPart[] = await Promise.all(
-    files.map(async (file) => ({
-      type: "file",
-      filename: file.filename,
-      mediaType: file.mimeType,
-      url: await toDataUrl(file.file),
-    })),
+  const fileParts: ChatAttachmentPart[] = await Promise.all(
+    files.map(async (file): Promise<ChatAttachmentPart> => {
+      const source = {
+        type: "url" as const,
+        value: await toDataUrl(file.file),
+        mimeType: file.mimeType,
+      };
+      const metadata = { filename: file.filename };
+
+      if (file.mimeType.startsWith(IMAGE_MIME_PREFIX)) {
+        return { type: "image", source, metadata };
+      }
+
+      return { type: "document", source, metadata };
+    }),
   );
 
   if (!html) {
-    return { files: fileParts };
+    return { id, content: fileParts };
   }
 
   return {
-    files: fileParts,
-    text: html,
+    id,
+    content: [{ type: "text", content: html } satisfies ChatPart, ...fileParts],
   };
 };

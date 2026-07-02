@@ -68,9 +68,18 @@ const MODELS_DEV_PROVIDER: Record<string, string> = {
 };
 const FIRST_PARTY_KEYS = new Set(Object.values(MODELS_DEV_PROVIDER));
 
-/** IDs are customer deployment names; */
-/** not checkable against a public model list. */
-const CUSTOM_ID_PROVIDERS = new Set(["azure_foundry", "huggingface"]);
+/**
+ * Providers whose offered IDs are not checkable against the public
+ * OpenRouter/models.dev lists used by this script. Azure/Hugging Face
+ * IDs are customer deployment names; Bedrock IDs are AWS Bedrock model
+ * IDs, but the existing keyless upstream check has no Bedrock catalog
+ * source.
+ */
+const CUSTOM_ID_PROVIDERS = new Set([
+  "azure_foundry",
+  "bedrock",
+  "huggingface",
+]);
 
 /** Punctuation/case-insensitive form so `claude-opus-4-8`, */
 /** `claude-opus-4.8`, and `anthropic/claude-opus-4.8` all match. */

@@ -1,5 +1,3 @@
-import type { ListToolsResult } from "@ai-sdk/mcp";
-
 import type { CachedMcpToolDefinition } from "@/api/db/schema";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -26,11 +24,21 @@ const readOnlyHint = (annotations: unknown): boolean | undefined => {
     : undefined;
 };
 
-type DiscoveredMcpTool = ListToolsResult["tools"][number];
+type DiscoveredMcpTool = {
+  annotations?: unknown;
+  description?: string | undefined;
+  inputSchema?: unknown;
+  name: string;
+  title?: unknown;
+};
+
+type CacheableDiscoveredMcpTool = DiscoveredMcpTool & {
+  inputSchema: { type: "object"; [key: string]: unknown };
+};
 
 type CachedToolCandidate = {
   baseName: string;
-  tool: DiscoveredMcpTool;
+  tool: CacheableDiscoveredMcpTool;
 };
 
 const isValidInputSchema = (
@@ -52,7 +60,7 @@ export const normalizeDiscoveredMcpTools = ({
   tools,
 }: {
   connectorSlug: string;
-  tools: ListToolsResult["tools"];
+  tools: readonly DiscoveredMcpTool[];
 }): CachedMcpToolDefinition[] => {
   const candidates: CachedToolCandidate[] = [];
   const baseNameCounts = new Map<string, number>();
@@ -106,7 +114,9 @@ export const normalizeDiscoveredMcpTools = ({
   return cachedTools;
 };
 
-const isCacheableTool = (tool: DiscoveredMcpTool): boolean =>
+const isCacheableTool = (
+  tool: DiscoveredMcpTool,
+): tool is CacheableDiscoveredMcpTool =>
   tool.name.length > 0 &&
   tool.name.length <= LIMITS.mcpGatewayToolNameMaxChars &&
   isValidInputSchema(tool.inputSchema);

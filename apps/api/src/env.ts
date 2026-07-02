@@ -24,6 +24,7 @@ const envApi = createEnv({
         "openai",
         "azure_foundry",
         "anthropic",
+        "bedrock",
         "mistral",
         "openai_compatible",
         "huggingface",
@@ -36,17 +37,6 @@ const envApi = createEnv({
     AI_MODEL_CHAT: v.optional(v.string()),
     AI_MODEL_REASONING: v.optional(v.string()),
     AI_MODEL_PDF: v.optional(v.string()),
-    AI_DEVTOOLS_ENABLED: v.optional(
-      v.pipe(
-        v.string(),
-        v.parseBoolean(),
-        v.check(
-          (enabled) => !enabled || process.env.NODE_ENV === "development",
-          "AI_DEVTOOLS_ENABLED is local-only and requires NODE_ENV=development.",
-        ),
-      ),
-      "false",
-    ),
     GOOGLE_GENERATIVE_AI_API_KEY: v.optional(v.string()),
     OPENROUTER_API_KEY: v.optional(v.string()),
     OPENAI_API_KEY: v.optional(v.string()),
@@ -55,6 +45,7 @@ const envApi = createEnv({
     AZURE_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
     AZURE_API_VERSION: v.optional(v.string()),
     ANTHROPIC_API_KEY: v.optional(v.string()),
+    BEDROCK_API_KEY: v.optional(v.string()),
     MISTRAL_API_KEY: v.optional(v.string()),
     GOOGLE_AI_API_KEY_EU: v.optional(v.string()),
     GOOGLE_AI_API_KEY_CH: v.optional(v.string()),

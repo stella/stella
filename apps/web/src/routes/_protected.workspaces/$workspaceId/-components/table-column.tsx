@@ -31,6 +31,12 @@ import { CellResult } from "@/routes/_protected.workspaces/$workspaceId/-compone
 import { EditableField } from "@/routes/_protected.workspaces/$workspaceId/-components/editable-field";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 import { PropertyPopover } from "@/routes/_protected.workspaces/$workspaceId/-components/property-popover";
+import {
+  isAIExtractionProperty,
+  resolveAiCellTargets,
+  type AIExtractionTarget,
+  type SourceFileTarget,
+} from "@/routes/_protected.workspaces/$workspaceId/-components/table-column.logic";
 import type { TableColumnDef } from "@/routes/_protected.workspaces/$workspaceId/-components/table/types";
 import {
   type ColorVariants,
@@ -42,7 +48,6 @@ import {
   selectJustificationByFieldId,
   useWorkspaceStore,
 } from "@/routes/_protected.workspaces/$workspaceId/-store";
-import { getFirstFile } from "@/routes/_protected.workspaces/$workspaceId/-utils";
 
 type PropertyColumnOptions = {
   filters: ConditionNode[];
@@ -204,65 +209,20 @@ const PropertyCell = ({
   }
 
   // AI-model property: click opens peek PDF with justification
-  if (field !== undefined) {
-    const firstFile = getFirstFile(entity);
-    const justFieldId = justification?.fileFieldIds.at(0);
-    const fileFieldId = justFieldId ?? firstFile?.fieldId;
+  if (isAIExtractionProperty(property) && field !== undefined) {
+    const targets = resolveAiCellTargets({
+      entity,
+      extractionField: field,
+      extractionProperty: property,
+      justificationFileFieldId: justification?.fileFieldIds.at(0),
+    });
 
-    // When the justification references a specific file, look it up
-    // so label, mimeType, and the owning propertyId all match the
-    // file the AI cited. Entries (not values) because the Record key
-    // is the propertyId — that's the identifier downstream consumers
-    // (edit-session, desktop-open) want on the inspector tab.
-    const referencedFileEntry =
-      justFieldId !== undefined
-        ? Object.entries(entity.fields).find(
-            ([, f]) => f.id === justFieldId && f.content.type === "file",
-          )
-        : undefined;
-    const referencedFile = referencedFileEntry?.[1];
-    const referencedFilePropertyId = referencedFileEntry?.[0];
-
-    const fileName =
-      (referencedFile?.content.type === "file"
-        ? referencedFile.content.fileName
-        : undefined) ??
-      firstFile?.fileName ??
-      entity.name ??
-      "";
-
-    const mimeType =
-      referencedFile?.content.type === "file"
-        ? referencedFile.content.mimeType
-        : firstFile?.mimeType;
-    const pdfFileId =
-      referencedFile?.content.type === "file"
-        ? referencedFile.content.pdfFileId
-        : firstFile?.pdfFileId;
-    // The inspector tab's propertyId must point at the FILE property
-    // (the one whose content is the DOCX/PDF), not the AI-extraction
-    // property whose cell triggered the open. Downstream consumers —
-    // DocxBrowserEditor's edit-session, the desktop-open button, and
-    // inspector-panel's latestFileFieldForProperty lookup — all index
-    // by the file's propertyId. Using the AI property here makes the
-    // backend reject the open with "Target property is not an
-    // editable DOCX field". The AI cell's identity travels via
-    // justificationFieldId, which is what the source bar reads.
-    const filePropertyId = referencedFilePropertyId ?? firstFile?.propertyId;
-
-    if (fileFieldId && filePropertyId) {
+    if (targets) {
       const cell = (
         <WithOpenEntityButton
-          entityId={entity.entityId}
-          fieldId={fileFieldId}
-          fileName={fileName}
-          justificationFieldId={field.id}
-          label={fileName}
-          mimeType={mimeType}
-          pdfFileId={pdfFileId}
-          propertyId={filePropertyId}
+          extraction={targets.extraction}
           retryDisabled={cellMetadata?.locked === true || entity.readOnly}
-          workspaceId={property.workspaceId}
+          sourceFile={targets.sourceFile}
         >
           <CellMetadataFlags
             entityId={entity.entityId}
@@ -293,14 +253,14 @@ const PropertyCell = ({
           justification={justification}
           onOpen={() =>
             useInspectorStore.getState().openFile({
-              id: fileFieldId,
+              id: targets.sourceFile.fieldId,
               entityId: entity.entityId,
-              label: fileName,
-              fileName,
-              mimeType,
-              pdfFileId: pdfFileId ?? null,
+              label: targets.sourceFile.label,
+              fileName: targets.sourceFile.fileName,
+              mimeType: targets.sourceFile.mimeType,
+              pdfFileId: targets.sourceFile.pdfFileId,
               justificationFieldId: field.id,
-              propertyId: filePropertyId,
+              propertyId: targets.sourceFile.propertyId,
               workspaceId: property.workspaceId,
             })
           }
@@ -493,50 +453,37 @@ const resolveVerdictColor = (
 };
 
 type WithOpenEntityButtonProps = {
-  fieldId: string;
-  entityId: string;
-  justificationFieldId: string;
-  label: string;
-  fileName: string;
-  mimeType?: string | undefined;
-  pdfFileId?: string | null | undefined;
-  propertyId: string;
+  extraction: AIExtractionTarget;
   retryDisabled: boolean;
-  workspaceId: string;
+  sourceFile: SourceFileTarget;
 };
 
 /** Shows a peek PDF preview in the inspector with the AI justification visible. */
 const WithOpenEntityButton = ({
-  fieldId,
-  entityId,
-  justificationFieldId,
-  label,
-  fileName,
-  mimeType,
-  pdfFileId,
-  propertyId,
+  extraction,
   retryDisabled,
-  workspaceId,
+  sourceFile,
   children,
 }: PropsWithChildren<WithOpenEntityButtonProps>) => {
   const t = useTranslations();
+  const workspaceId = extraction.property.workspaceId;
   const openFile = useInspectorStore((s) => s.openFile);
   const isFileAlreadyOpen = useInspectorStore((s) =>
-    s.tabs.some((tab) => tab.type === "pdf" && tab.id === fieldId),
+    s.tabs.some((tab) => tab.type === "pdf" && tab.id === sourceFile.fieldId),
   );
   const retryCell = useRetryCell(workspaceId);
   const [isRetrying, setIsRetrying] = useState(false);
 
   const handleOpenPreview = () => {
     openFile({
-      id: fieldId,
-      entityId,
-      label,
-      fileName,
-      mimeType,
-      pdfFileId: pdfFileId ?? null,
-      justificationFieldId,
-      propertyId,
+      id: sourceFile.fieldId,
+      entityId: extraction.entityId,
+      label: sourceFile.label,
+      fileName: sourceFile.fileName,
+      mimeType: sourceFile.mimeType,
+      pdfFileId: sourceFile.pdfFileId,
+      justificationFieldId: extraction.fieldId,
+      propertyId: sourceFile.propertyId,
       workspaceId,
     });
   };
@@ -573,7 +520,10 @@ const WithOpenEntityButton = ({
     }
     setIsRetrying(true);
     try {
-      await retryCell({ entityId, propertyId });
+      await retryCell({
+        entityId: extraction.entityId,
+        propertyId: extraction.property.id,
+      });
     } finally {
       setIsRetrying(false);
     }

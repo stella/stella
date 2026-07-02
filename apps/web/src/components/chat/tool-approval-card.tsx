@@ -41,296 +41,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
 import { propertiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/properties";
 
-export const ToolApprovalCard = ({
-  part,
-  workspaceId,
-}: ToolApprovalCardProps) => {
-  const {
-    activeOrganizationId,
-    alwaysApprovedTools,
-    conversationApprovedTools,
-    blockedApprovalTools,
-    handleAllowInConversation: onAllowInConversation,
-    handleAlwaysAllow: onAlwaysAllow,
-    handleApprove: onApprove,
-    handleDeny: onDeny,
-  } = useChatApproval();
-  const t = useTranslations();
-  const name = getApprovalToolName(part);
-  const autoApproveRef = useRef(false);
-  const autoDenyRef = useRef(false);
-  const submittedApprovalIdRef = useRef<string | null>(null);
-  const [responded, setResponded] = useState(false);
-
-  const isApprovalRequested = part.state === "approval-requested";
-  const isApprovalResponded = part.state === "approval-responded";
-  const isApproved = part.state === "output-available";
-  const isDenied = part.state === "output-denied";
-  const isProcessing =
-    isApprovalResponded || (responded && isApprovalRequested);
-  const isBlocked = blockedApprovalTools?.has(name) ?? false;
-  const isExternalMcpApproval = isExternalMcpToolName(name);
-  const canAllowInConversation = name !== "apply-active-docx-edits";
-  const canAlwaysAllow = canAllowInConversation;
-  const isPublicOfficialApproval = isPublicOfficialChatToolName(name);
-  /**
-   * DOCX edit batches always go to the side review panel — never
-   * gated by a chat-level Allow/Deny. The card collapses to a
-   * compact status and auto-approves once so the queueing
-   * handler can register the suggestions.
-   */
-  const isDocxEditBatch = name === "apply-active-docx-edits";
-  const externalMcpProviderName = getExternalMcpProviderName(name);
-  const label = externalMcpProviderName ?? t(getChatToolTitleKey(name));
-  const externalMcpConnectorSlug = getExternalMcpConnectorSlug(name);
-  const externalMcpInput =
-    isExternalMcpApproval && part.state !== "input-streaming"
-      ? getApprovalPartInput(part)
-      : undefined;
-  const { data: mcpConnectorsData } = useQuery({
-    ...mcpConnectorsOptions(activeOrganizationId),
-    enabled: externalMcpConnectorSlug !== null,
-  });
-  const mcpIconHref =
-    externalMcpConnectorSlug === null
-      ? undefined
-      : findMcpConnectorIconHref({
-          connectorSlug: externalMcpConnectorSlug,
-          connectors: mcpConnectorsData?.connectors ?? [],
-        });
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-deny once a blocked tool's approval request arrives. The trigger is the incoming `part` prop transitioning to approval-requested (plus the blocked set from context), not a local setter, so there is no call site to fold this into. Keep.
-  useEffect(() => {
-    if (!isApprovalRequested || !isBlocked || autoDenyRef.current) {
-      return;
-    }
-    const id = getApprovalId(part);
-    if (!id) {
-      return;
-    }
-    autoDenyRef.current = true;
-    setResponded(true);
-    onDeny(id);
-  }, [isApprovalRequested, isBlocked, part, onDeny]);
-
-  // Auto-approve if the tool was allowed for this conversation,
-  // always allowed, OR if this is a DOCX edit batch (review happens
-  // per item in the side panel; the chat-level gate would just be
-  // friction).
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-approve once the incoming `part` prop reaches approval-requested and a prior grant/allow (from context) covers it. The trigger is an external prop/context transition, not a local setter, so there is no call site to fold this into. Keep.
-  useEffect(() => {
-    if (
-      !isApprovalRequested ||
-      isBlocked ||
-      autoApproveRef.current ||
-      (!isDocxEditBatch &&
-        !isPublicOfficialApproval &&
-        !isToolApprovedByGrant(conversationApprovedTools, name) &&
-        (!canAlwaysAllow || !isToolApprovedByGrant(alwaysApprovedTools, name)))
-    ) {
-      return;
-    }
-    const id = getApprovalId(part);
-    if (!id) {
-      return;
-    }
-    autoApproveRef.current = true;
-    setResponded(true);
-    onApprove(id, name);
-  }, [
-    isApprovalRequested,
-    isBlocked,
-    alwaysApprovedTools,
-    conversationApprovedTools,
-    canAlwaysAllow,
-    isDocxEditBatch,
-    isPublicOfficialApproval,
-    name,
-    part,
-    onApprove,
-  ]);
-
-  const approvalId = isApprovalRequested ? getApprovalId(part) : null;
-  const beginManualResponse = (id: string): boolean => {
-    if (submittedApprovalIdRef.current === id) {
-      return false;
-    }
-
-    submittedApprovalIdRef.current = id;
-    setResponded(true);
-    return true;
-  };
-
-  // Clicking a DOCX-edit-batch card jumps the user to the review
-  // facet for the entity those edits target. The output's `queued`
-  // ids are the same client-side suggestion ids the review store
-  // keys its session entries by, so we look up the entity by
-  // matching any of them.
-  const queuedIds: string[] | null =
-    isDocxEditBatch &&
-    part.type === "tool-apply-active-docx-edits" &&
-    part.state === "output-available" &&
-    part.output.queued !== undefined
-      ? part.output.queued.map((q) => q.id)
-      : null;
-  const handleOpenReviewPanel =
-    queuedIds !== null && queuedIds.length > 0
-      ? () => {
-          const opIds = new Set(queuedIds);
-          const sessions = useReviewStore.getState().sessions;
-          const entityIdMatch = Object.entries(sessions).find(([, items]) =>
-            items.some((item) => opIds.has(item.id)),
-          )?.[0];
-          if (!entityIdMatch) {
-            return;
-          }
-          const inspector = useInspectorStore.getState();
-          const tab = inspector.tabs.find(
-            (candidate) =>
-              candidate.type === "pdf" && candidate.entityId === entityIdMatch,
-          );
-          if (!tab) {
-            return;
-          }
-          inspector.setActive(tab.id);
-          inspector.setFileFacet(tab.id, "suggestions", { pulse: true });
-        }
-      : null;
-
-  return (
-    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- conditional role/handlers are paired below; the linter can't see they're always set together
-    <div
-      className={cn(
-        "my-1 rounded-lg border text-sm",
-        isApprovalRequested && !isProcessing
-          ? "border-border bg-muted/30"
-          : "bg-muted/40 border-transparent",
-        handleOpenReviewPanel &&
-          "hover:bg-muted/50 cursor-pointer transition-colors",
-      )}
-      onClick={handleOpenReviewPanel ?? undefined}
-      onKeyDown={
-        handleOpenReviewPanel
-          ? (event) => {
-              if (event.key === "Enter" || event.key === " ") {
-                event.preventDefault();
-                handleOpenReviewPanel();
-              }
-            }
-          : undefined
-      }
-      role={handleOpenReviewPanel ? "button" : undefined}
-      tabIndex={handleOpenReviewPanel ? 0 : undefined}
-    >
-      {/* Header: icon + label + status */}
-      <div className="flex items-center gap-2 px-3 py-2">
-        <ToolApprovalLeadingIcon iconHref={mcpIconHref} toolName={name} />
-        <span className="font-medium">{label}</span>
-        {isProcessing && (
-          <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
-        )}
-        {isApproved && (
-          <CheckIcon className="text-success ms-auto size-3.5 shrink-0" />
-        )}
-        {isDenied && (
-          <XIcon className="text-destructive ms-auto size-3.5 shrink-0" />
-        )}
-      </div>
-
-      {/* Rich summary */}
-      {part.type === "tool-update-entity-fields" &&
-        part.state !== "input-streaming" &&
-        part.input !== undefined && (
-          <UpdateSummary input={part.input} workspaceId={workspaceId} />
-        )}
-      {part.type === "tool-apply-active-docx-edits" &&
-        part.state !== "input-streaming" &&
-        part.input !== undefined && (
-          <ActiveDocxEditSummary input={part.input} />
-        )}
-      {isExternalMcpApproval &&
-        part.state !== "input-streaming" &&
-        externalMcpInput !== undefined && (
-          <ExternalMcpInputSummary
-            input={externalMcpInput}
-            isAwaitingDecision={
-              isApprovalRequested &&
-              !isProcessing &&
-              !isBlocked &&
-              !isPublicOfficialApproval
-            }
-            providerName={
-              externalMcpProviderName ?? t("knowledge.sections.mcp.title")
-            }
-          />
-        )}
-
-      {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
-      {approvalId &&
-        !isProcessing &&
-        !isBlocked &&
-        !isDocxEditBatch &&
-        !isPublicOfficialApproval && (
-          <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
-            <Button
-              autoFocus
-              onClick={() => {
-                if (!beginManualResponse(approvalId)) {
-                  return;
-                }
-                onApprove(approvalId, name);
-              }}
-              size="xs"
-            >
-              {t("chat.approval.allowOnce")}
-            </Button>
-            {canAllowInConversation && (
-              <Button
-                onClick={() => {
-                  if (!beginManualResponse(approvalId)) {
-                    return;
-                  }
-                  onAllowInConversation(approvalId, name);
-                }}
-                size="xs"
-                variant="outline"
-              >
-                {t("chat.approval.allowInConversation")}
-              </Button>
-            )}
-            {canAlwaysAllow && (
-              <Button
-                onClick={() => {
-                  if (!beginManualResponse(approvalId)) {
-                    return;
-                  }
-                  onAlwaysAllow(approvalId, name);
-                }}
-                size="xs"
-                variant="outline"
-              >
-                {t("chat.approval.alwaysAllow")}
-              </Button>
-            )}
-            <Button
-              className="ms-auto"
-              onClick={() => {
-                if (!beginManualResponse(approvalId)) {
-                  return;
-                }
-                onDeny(approvalId);
-              }}
-              size="xs"
-              variant="ghost"
-            >
-              {t("chat.approval.deny")}
-            </Button>
-          </div>
-        )}
-    </div>
-  );
-};
-
 const DOCX_MIME =
   "application/vnd.openxmlformats-officedocument" +
   ".wordprocessingml.document";
@@ -373,30 +83,21 @@ const mimeFromName = (name: string): string => {
 
 const getApprovalId = (part: ApprovalToolPart): string | null => {
   switch (part.state) {
-    case "input-available":
+    case "awaiting-input":
+    case "input-complete":
     case "input-streaming":
       return null;
     case "approval-requested":
     case "approval-responded":
-    case "output-denied":
       return part.approval.id;
-    case "output-available":
-    case "output-error":
-      return part.approval?.id ?? null;
+    case "complete":
+      return part.approval.id;
     default:
       return null;
   }
 };
 
-const getApprovalPartInput = (part: ApprovalToolPart): unknown => {
-  if (!("input" in part)) {
-    return undefined;
-  }
-
-  // SAFETY: external MCP tool inputs are intentionally schema-less on the
-  // frontend. Treat the payload as unknown before rendering a read-only summary.
-  return (part as { input?: unknown }).input;
-};
+const getApprovalPartInput = (part: ApprovalToolPart): unknown => part.input;
 
 // -- Select badge (colored chip matching table UX) --
 
@@ -594,6 +295,300 @@ const ActiveDocxEditSummary = ({ input }: ActiveDocxEditSummaryProps) => {
 type ToolApprovalCardProps = {
   part: ApprovalToolPart;
   workspaceId?: string | undefined;
+};
+
+export const ToolApprovalCard = ({
+  part,
+  workspaceId,
+}: ToolApprovalCardProps) => {
+  const {
+    activeOrganizationId,
+    alwaysApprovedTools,
+    conversationApprovedTools,
+    blockedApprovalTools,
+    handleAllowInConversation: onAllowInConversation,
+    handleAlwaysAllow: onAlwaysAllow,
+    handleApprove: onApprove,
+    handleDeny: onDeny,
+  } = useChatApproval();
+  const t = useTranslations();
+  const name = getApprovalToolName(part);
+  const autoApproveRef = useRef(false);
+  const autoDenyRef = useRef(false);
+  const submittedApprovalIdRef = useRef<string | null>(null);
+  const [responded, setResponded] = useState(false);
+
+  const isApprovalRequested = part.state === "approval-requested";
+  const isApprovalResponded = part.state === "approval-responded";
+  const isApproved = part.state === "complete" && part.output !== undefined;
+  const isDenied =
+    part.state === "approval-responded" && part.approval.approved === false;
+  const isProcessing =
+    isApprovalResponded || (responded && isApprovalRequested);
+  const isBlocked = blockedApprovalTools?.has(name) ?? false;
+  const isExternalMcpApproval = isExternalMcpToolName(name);
+  const canAllowInConversation = name !== "apply-active-docx-edits";
+  const canAlwaysAllow = canAllowInConversation;
+  const isPublicOfficialApproval = isPublicOfficialChatToolName(name);
+  /**
+   * DOCX edit batches always go to the side review panel — never
+   * gated by a chat-level Allow/Deny. The card collapses to a
+   * compact status and auto-approves once so the queueing
+   * handler can register the suggestions.
+   */
+  const isDocxEditBatch = name === "apply-active-docx-edits";
+  const externalMcpProviderName = getExternalMcpProviderName(name);
+  const label = externalMcpProviderName ?? t(getChatToolTitleKey(name));
+  const externalMcpConnectorSlug = getExternalMcpConnectorSlug(name);
+  const externalMcpInput =
+    isExternalMcpApproval && part.state !== "input-streaming"
+      ? getApprovalPartInput(part)
+      : undefined;
+  const { data: mcpConnectorsData } = useQuery({
+    ...mcpConnectorsOptions(activeOrganizationId),
+    enabled: externalMcpConnectorSlug !== null,
+  });
+  const mcpIconHref =
+    externalMcpConnectorSlug === null
+      ? undefined
+      : findMcpConnectorIconHref({
+          connectorSlug: externalMcpConnectorSlug,
+          connectors: mcpConnectorsData?.connectors ?? [],
+        });
+
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-deny once a blocked tool's approval request arrives. The trigger is the incoming `part` prop transitioning to approval-requested (plus the blocked set from context), not a local setter, so there is no call site to fold this into. Keep.
+  useEffect(() => {
+    if (!isApprovalRequested || !isBlocked || autoDenyRef.current) {
+      return;
+    }
+    const id = getApprovalId(part);
+    if (!id) {
+      return;
+    }
+    autoDenyRef.current = true;
+    setResponded(true);
+    onDeny(id);
+  }, [isApprovalRequested, isBlocked, part, onDeny]);
+
+  // Auto-approve if the tool was allowed for this conversation,
+  // always allowed, OR if this is a DOCX edit batch (review happens
+  // per item in the side panel; the chat-level gate would just be
+  // friction).
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- auto-approve once the incoming `part` prop reaches approval-requested and a prior grant/allow (from context) covers it. The trigger is an external prop/context transition, not a local setter, so there is no call site to fold this into. Keep.
+  useEffect(() => {
+    if (
+      !isApprovalRequested ||
+      isBlocked ||
+      autoApproveRef.current ||
+      (!isDocxEditBatch &&
+        !isPublicOfficialApproval &&
+        !isToolApprovedByGrant(conversationApprovedTools, name) &&
+        (!canAlwaysAllow || !isToolApprovedByGrant(alwaysApprovedTools, name)))
+    ) {
+      return;
+    }
+    const id = getApprovalId(part);
+    if (!id) {
+      return;
+    }
+    autoApproveRef.current = true;
+    setResponded(true);
+    onApprove(id, name);
+  }, [
+    isApprovalRequested,
+    isBlocked,
+    alwaysApprovedTools,
+    conversationApprovedTools,
+    canAlwaysAllow,
+    isDocxEditBatch,
+    isPublicOfficialApproval,
+    name,
+    part,
+    onApprove,
+  ]);
+
+  const approvalId = isApprovalRequested ? getApprovalId(part) : null;
+  const beginManualResponse = (id: string): boolean => {
+    if (submittedApprovalIdRef.current === id) {
+      return false;
+    }
+
+    submittedApprovalIdRef.current = id;
+    setResponded(true);
+    return true;
+  };
+
+  // Clicking a DOCX-edit-batch card jumps the user to the review
+  // facet for the entity those edits target. The output's `queued`
+  // ids are the same client-side suggestion ids the review store
+  // keys its session entries by, so we look up the entity by
+  // matching any of them.
+  const docxEditBatchOutput =
+    isDocxEditBatch &&
+    part.name === "apply-active-docx-edits" &&
+    part.state === "complete"
+      ? part.output
+      : undefined;
+  const queuedIds =
+    docxEditBatchOutput?.queued !== undefined
+      ? docxEditBatchOutput.queued.map((q) => q.id)
+      : null;
+  const handleOpenReviewPanel =
+    queuedIds !== null && queuedIds.length > 0
+      ? () => {
+          const opIds = new Set(queuedIds);
+          const sessions = useReviewStore.getState().sessions;
+          const entityIdMatch = Object.entries(sessions).find(([, items]) =>
+            items.some((item) => opIds.has(item.id)),
+          )?.[0];
+          if (!entityIdMatch) {
+            return;
+          }
+          const inspector = useInspectorStore.getState();
+          const tab = inspector.tabs.find(
+            (candidate) =>
+              candidate.type === "pdf" && candidate.entityId === entityIdMatch,
+          );
+          if (!tab) {
+            return;
+          }
+          inspector.setActive(tab.id);
+          inspector.setFileFacet(tab.id, "suggestions", { pulse: true });
+        }
+      : null;
+
+  return (
+    // oxlint-disable-next-line jsx-a11y/no-static-element-interactions -- conditional role/handlers are paired below; the linter can't see they're always set together
+    <div
+      className={cn(
+        "my-1 rounded-lg border text-sm",
+        isApprovalRequested && !isProcessing
+          ? "border-border bg-muted/30"
+          : "bg-muted/40 border-transparent",
+        handleOpenReviewPanel &&
+          "hover:bg-muted/50 cursor-pointer transition-colors",
+      )}
+      onClick={handleOpenReviewPanel ?? undefined}
+      onKeyDown={
+        handleOpenReviewPanel
+          ? (event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                handleOpenReviewPanel();
+              }
+            }
+          : undefined
+      }
+      role={handleOpenReviewPanel ? "button" : undefined}
+      tabIndex={handleOpenReviewPanel ? 0 : undefined}
+    >
+      {/* Header: icon + label + status */}
+      <div className="flex items-center gap-2 px-3 py-2">
+        <ToolApprovalLeadingIcon iconHref={mcpIconHref} toolName={name} />
+        <span className="font-medium">{label}</span>
+        {isProcessing && (
+          <LoaderIcon className="text-muted-foreground ms-auto size-3.5 shrink-0 animate-spin" />
+        )}
+        {isApproved && (
+          <CheckIcon className="text-success ms-auto size-3.5 shrink-0" />
+        )}
+        {isDenied && (
+          <XIcon className="text-destructive ms-auto size-3.5 shrink-0" />
+        )}
+      </div>
+
+      {/* Rich summary */}
+      {part.name === "update-entity-fields" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <UpdateSummary input={part.input} workspaceId={workspaceId} />
+        )}
+      {part.name === "apply-active-docx-edits" &&
+        part.state !== "input-streaming" &&
+        part.input !== undefined && (
+          <ActiveDocxEditSummary input={part.input} />
+        )}
+      {isExternalMcpApproval &&
+        part.state !== "input-streaming" &&
+        externalMcpInput !== undefined && (
+          <ExternalMcpInputSummary
+            input={externalMcpInput}
+            isAwaitingDecision={
+              isApprovalRequested &&
+              !isProcessing &&
+              !isBlocked &&
+              !isPublicOfficialApproval
+            }
+            providerName={
+              externalMcpProviderName ?? t("knowledge.sections.mcp.title")
+            }
+          />
+        )}
+
+      {/* Actions — hidden for DOCX edit batches (reviewed in the side panel). */}
+      {approvalId &&
+        !isProcessing &&
+        !isBlocked &&
+        !isDocxEditBatch &&
+        !isPublicOfficialApproval && (
+          <div className="border-border/50 flex flex-wrap items-center gap-2 border-t px-3 py-2">
+            <Button
+              autoFocus
+              onClick={() => {
+                if (!beginManualResponse(approvalId)) {
+                  return;
+                }
+                onApprove(approvalId, name);
+              }}
+              size="xs"
+            >
+              {t("chat.approval.allowOnce")}
+            </Button>
+            {canAllowInConversation && (
+              <Button
+                onClick={() => {
+                  if (!beginManualResponse(approvalId)) {
+                    return;
+                  }
+                  onAllowInConversation(approvalId, name);
+                }}
+                size="xs"
+                variant="outline"
+              >
+                {t("chat.approval.allowInConversation")}
+              </Button>
+            )}
+            {canAlwaysAllow && (
+              <Button
+                onClick={() => {
+                  if (!beginManualResponse(approvalId)) {
+                    return;
+                  }
+                  onAlwaysAllow(approvalId, name);
+                }}
+                size="xs"
+                variant="outline"
+              >
+                {t("chat.approval.alwaysAllow")}
+              </Button>
+            )}
+            <Button
+              className="ms-auto"
+              onClick={() => {
+                if (!beginManualResponse(approvalId)) {
+                  return;
+                }
+                onDeny(approvalId);
+              }}
+              size="xs"
+              variant="ghost"
+            >
+              {t("chat.approval.deny")}
+            </Button>
+          </div>
+        )}
+    </div>
+  );
 };
 
 const ExternalMcpInputSummary = ({

@@ -2,18 +2,13 @@ import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
 import { useNavigate, useRouterState } from "@tanstack/react-router";
-import { getToolName, isDataUIPart, isToolUIPart } from "ai";
-import type { UIDataTypes } from "ai";
 import { ExternalLinkIcon, FileTextIcon, FolderIcon } from "lucide-react";
 
-import type {
-  ChatMessage,
-  ChatPart,
-  ChatSourceDocument,
-} from "@stll/api/types";
+import type { ChatMessage, ChatSourceDocument } from "@stll/api/types";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { cn } from "@stll/ui/lib/utils";
 
+import type { ChatToolCallPart } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
@@ -31,42 +26,29 @@ import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
-type SourceDocumentPart = {
-  type: "data-stella-source-document";
-  data: ChatSourceDocument;
-  id?: string;
-  transient?: boolean;
-};
-
 type SourceChipsProps = {
   activeOrganizationId: string;
   messageId: string;
+  sourceDocuments?: readonly ChatSourceDocument[] | undefined;
   parts: ChatMessage["parts"];
   workspaceId?: string | undefined;
 };
-
-type ToolPart = Parameters<typeof getToolName>[0];
 
 type McpToolInfo = {
   connectorSlug: string;
   sourceToolName: string;
 };
 
-const isSourceDocumentPart = (part: ChatPart): part is SourceDocumentPart =>
-  isDataUIPart<UIDataTypes & { "stella-source-document": ChatSourceDocument }>(
-    part,
-  ) && part.type === "data-stella-source-document";
-
-const getToolOutput = (part: ChatPart): unknown => {
-  if (!isToolUIPart(part) || !("output" in part)) {
+const getToolOutput = (part: ChatMessage["parts"][number]): unknown => {
+  if (part.type !== "tool-call" || !("output" in part)) {
     return undefined;
   }
 
   return part.output;
 };
 
-const getMcpToolInfo = (part: ToolPart): McpToolInfo | null => {
-  const sourceToolName = getToolName(part);
+const getMcpToolInfo = (part: ChatToolCallPart): McpToolInfo | null => {
+  const sourceToolName = part.name;
   if (!sourceToolName.startsWith("mcp__")) {
     return null;
   }
@@ -83,10 +65,13 @@ export const SourceChips = ({
   activeOrganizationId,
   messageId,
   parts,
+  sourceDocuments,
   workspaceId,
 }: SourceChipsProps) => {
-  const { uniqueExternalSources, uniqueSources } =
-    collectSourceChipEntries(parts);
+  const { uniqueExternalSources, uniqueSources } = collectSourceChipEntries({
+    parts,
+    sourceDocuments,
+  });
   const hasMcpExternalSources = uniqueExternalSources.some(
     (source) => source.connectorSlug !== undefined,
   );
@@ -139,21 +124,24 @@ export const SourceChips = ({
   );
 };
 
-const collectSourceChipEntries = (
-  parts: ChatMessage["parts"],
-): {
+const collectSourceChipEntries = ({
+  parts,
+  sourceDocuments,
+}: {
+  parts: ChatMessage["parts"];
+  sourceDocuments?: readonly ChatSourceDocument[] | undefined;
+}): {
   uniqueExternalSources: ExternalSourceEntry[];
   uniqueSources: SourceDocumentEntry[];
 } => {
   const sources: SourceDocumentEntry[] = [];
   const externalSources: ExternalSourceEntry[] = [];
-  for (const part of parts) {
-    if (isSourceDocumentPart(part)) {
-      sources.push({ data: part.data, id: part.id });
-      continue;
-    }
+  for (const sourceDocument of sourceDocuments ?? []) {
+    sources.push({ data: sourceDocument });
+  }
 
-    if (!isToolUIPart(part)) {
+  for (const part of parts) {
+    if (part.type !== "tool-call") {
       continue;
     }
 

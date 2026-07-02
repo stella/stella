@@ -1,9 +1,8 @@
-import type { LanguageModelV3Usage } from "@ai-sdk/provider";
-import { simulateReadableStream } from "ai";
-import { MockLanguageModelV3 } from "ai/test";
+import { EventType } from "@tanstack/ai";
+import type { AnyTextAdapter, StreamChunk, TokenUsage } from "@tanstack/ai";
 
 import { isMockAI } from "@/api/consts";
-import { registerMockModelFactory } from "@/api/lib/ai-models";
+import { registerTanStackMockTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { generateBatchMock } from "@/api/lib/workflow/generate-batch-mock";
 import { registerBatchGenerator } from "@/api/lib/workflow/generate-batch-provider";
 
@@ -16,38 +15,78 @@ import { registerBatchGenerator } from "@/api/lib/workflow/generate-batch-provid
 const MOCK_REPLY =
   "Mock assistant reply: streaming is stubbed because USE_MOCK_AI is set.";
 
-const mockUsage: LanguageModelV3Usage = {
-  inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
-  outputTokens: { total: 1, text: 1, reasoning: 0 },
+const mockUsage: TokenUsage = {
+  promptTokens: 1,
+  completionTokens: 1,
+  totalTokens: 2,
 };
+
+const createMockTextAdapter = (modelId: string): AnyTextAdapter => ({
+  kind: "text",
+  name: "mock",
+  model: modelId,
+  "~types": {
+    providerOptions: {},
+    inputModalities: ["text"],
+    messageMetadataByModality: {},
+    toolCapabilities: [],
+    toolCallMetadata: {},
+    systemPromptMetadata: undefined,
+  },
+  async *chatStream({ model, runId, threadId }) {
+    const resolvedRunId = runId ?? "mock-run";
+    const resolvedThreadId = threadId ?? "mock-thread";
+    const messageId = "mock-message";
+    const timestamp = Date.now();
+
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: resolvedRunId,
+      threadId: resolvedThreadId,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_START,
+      messageId,
+      role: "assistant",
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_CONTENT,
+      messageId,
+      delta: MOCK_REPLY,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.TEXT_MESSAGE_END,
+      messageId,
+      model,
+      timestamp,
+    } satisfies StreamChunk;
+    yield {
+      type: EventType.RUN_FINISHED,
+      runId: resolvedRunId,
+      threadId: resolvedThreadId,
+      model,
+      timestamp,
+      finishReason: "stop",
+      usage: mockUsage,
+    } satisfies StreamChunk;
+  },
+  structuredOutput: async () => {
+    await Promise.resolve();
+    return {
+      data: {},
+      rawText: "{}",
+      usage: mockUsage,
+    };
+  },
+});
 
 if (isMockAI()) {
   registerBatchGenerator(generateBatchMock);
-  registerMockModelFactory(
-    (modelId) =>
-      new MockLanguageModelV3({
-        modelId,
-        doGenerate: {
-          content: [{ type: "text", text: MOCK_REPLY }],
-          finishReason: { unified: "stop" as const, raw: "stop" },
-          usage: mockUsage,
-          warnings: [],
-        },
-        doStream: {
-          stream: simulateReadableStream({
-            chunks: [
-              { type: "stream-start", warnings: [] },
-              { type: "text-start", id: "mock-text" },
-              { type: "text-delta", id: "mock-text", delta: MOCK_REPLY },
-              { type: "text-end", id: "mock-text" },
-              {
-                type: "finish" as const,
-                finishReason: { unified: "stop" as const, raw: "stop" },
-                usage: mockUsage,
-              },
-            ],
-          }),
-        },
-      }),
-  );
+  registerTanStackMockTextAdapterFactory(createMockTextAdapter);
 }

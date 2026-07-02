@@ -6,7 +6,7 @@ import {
   planAssistantFinishPersistence,
   planMessagePersistence,
 } from "./persist-message";
-import type { ChatMessage, ChatMessageContent } from "./types";
+import type { ChatMessageContent, PersistableChatMessage } from "./types";
 
 const workspaceId = toSafeId<"workspace">(
   "0dc54d0c-10d7-501d-897e-e801dbd0998c",
@@ -14,47 +14,48 @@ const workspaceId = toSafeId<"workspace">(
 const entityId = toSafeId<"entity">("c09ec856-d945-5ecc-82e3-bb5382165f34");
 const fieldId = toSafeId<"field">("12549e0d-f3dd-589a-8012-d4f27b8cd641");
 const propertyId = toSafeId<"property">("750890f7-42ce-59ab-9627-9171e5dc6346");
+const chatMessageId = (id: string) => toSafeId<"chatMessage">(id);
 
-const stored = (message: ChatMessage) => ({
+const stored = (message: PersistableChatMessage) => ({
   id: message.id,
   role: message.role,
   content: {
-    version: 1,
+    version: 2,
     data: message.parts,
+    metadata: message.metadata,
   } satisfies ChatMessageContent,
 });
 
+const createDocumentInput = {
+  name: "Draft agreement",
+  source: "@title Draft agreement",
+};
+
 const createDocumentApprovalRespondedMessage = {
-  id: "019aef0c-4df0-7d25-b5ad-cfa5a548fb2b",
+  id: chatMessageId("019aef0c-4df0-7d25-b5ad-cfa5a548fb2b"),
   role: "assistant",
   parts: [
     {
-      type: "tool-create-document",
-      toolCallId: "tool-create-document-1",
-      state: "approval-responded",
-      input: {
-        name: "Draft agreement",
-        source: "@title Draft agreement",
-      },
-      approval: {
-        id: "approval-1",
-        approved: true,
-      },
+      type: "tool-call",
+      id: "tool-create-document-1",
+      name: "create-document",
+      arguments: JSON.stringify(createDocumentInput),
+      state: "input-complete",
+      input: createDocumentInput,
     },
   ],
-} satisfies ChatMessage;
+} satisfies PersistableChatMessage;
 
 const createDocumentFinishedMessage = {
   ...createDocumentApprovalRespondedMessage,
   parts: [
     {
-      type: "tool-create-document",
-      toolCallId: "tool-create-document-1",
-      state: "output-available",
-      input: {
-        name: "Draft agreement",
-        source: "@title Draft agreement",
-      },
+      type: "tool-call",
+      id: "tool-create-document-1",
+      name: "create-document",
+      arguments: JSON.stringify(createDocumentInput),
+      state: "complete",
+      input: createDocumentInput,
       output: {
         success: true,
         fileName: "Draft agreement.docx",
@@ -66,27 +67,33 @@ const createDocumentFinishedMessage = {
         href: `#stella-entity=${workspaceId}:${entityId}`,
         mention: `[Draft agreement.docx](#stella-entity=${workspaceId}:${entityId})`,
       },
-      approval: {
-        id: "approval-1",
-        approved: true,
-      },
     },
     {
       type: "text",
-      text:
+      content:
         "Created [Draft agreement.docx](#stella-entity=" +
         `${workspaceId}:${entityId}).`,
     },
   ],
-} satisfies ChatMessage;
+} satisfies PersistableChatMessage;
 
 const updateFieldsApprovalRespondedMessage = {
-  id: "019aef0c-4df0-7d25-b5ad-cfa5a548fb2c",
+  id: chatMessageId("019aef0c-4df0-7d25-b5ad-cfa5a548fb2c"),
   role: "assistant",
   parts: [
     {
-      type: "tool-update-entity-fields",
-      toolCallId: "tool-update-entity-fields-1",
+      type: "tool-call",
+      id: "tool-update-entity-fields-1",
+      name: "update-entity-fields",
+      arguments: JSON.stringify({
+        workspaceId,
+        entityId,
+        propertyId,
+        propertyName: "Status",
+        entityName: "Draft agreement.docx",
+        oldValue: "Open",
+        value: "Reviewed",
+      }),
       state: "approval-responded",
       input: {
         workspaceId,
@@ -100,18 +107,29 @@ const updateFieldsApprovalRespondedMessage = {
       approval: {
         id: "approval-2",
         approved: true,
+        needsApproval: true,
       },
     },
   ],
-} satisfies ChatMessage;
+} satisfies PersistableChatMessage;
 
 const updateFieldsFinishedMessage = {
   ...updateFieldsApprovalRespondedMessage,
   parts: [
     {
-      type: "tool-update-entity-fields",
-      toolCallId: "tool-update-entity-fields-1",
-      state: "output-available",
+      type: "tool-call",
+      id: "tool-update-entity-fields-1",
+      name: "update-entity-fields",
+      arguments: JSON.stringify({
+        workspaceId,
+        entityId,
+        propertyId,
+        propertyName: "Status",
+        entityName: "Draft agreement.docx",
+        oldValue: "Open",
+        value: "Reviewed",
+      }),
+      state: "complete",
       input: {
         workspaceId,
         entityId,
@@ -130,14 +148,15 @@ const updateFieldsFinishedMessage = {
       approval: {
         id: "approval-2",
         approved: true,
+        needsApproval: true,
       },
     },
     {
       type: "text",
-      text: "Updated Status to Reviewed.",
+      content: "Updated Status to Reviewed.",
     },
   ],
-} satisfies ChatMessage;
+} satisfies PersistableChatMessage;
 
 describe("chat approval persistence", () => {
   test("updates an approved create-document assistant message with the final output and text", () => {
@@ -180,10 +199,10 @@ describe("chat approval persistence", () => {
 
   test("inserts a new final assistant message after an ordinary user turn", () => {
     const userMessage = {
-      id: "019aef0c-4df0-7d25-b5ad-cfa5a548fb2d",
+      id: chatMessageId("019aef0c-4df0-7d25-b5ad-cfa5a548fb2d"),
       role: "user",
-      parts: [{ type: "text", text: "Create a document" }],
-    } satisfies ChatMessage;
+      parts: [{ type: "text", content: "Create a document" }],
+    } satisfies PersistableChatMessage;
 
     const incomingPlan = planMessagePersistence({
       message: userMessage,
@@ -204,10 +223,10 @@ describe("chat approval persistence", () => {
 
   test("does not overwrite user messages from the finish callback", () => {
     const userMessage = {
-      id: "019aef0c-4df0-7d25-b5ad-cfa5a548fb2e",
+      id: chatMessageId("019aef0c-4df0-7d25-b5ad-cfa5a548fb2e"),
       role: "user",
-      parts: [{ type: "text", text: "Approved" }],
-    } satisfies ChatMessage;
+      parts: [{ type: "text", content: "Approved" }],
+    } satisfies PersistableChatMessage;
 
     const finishPlan = planAssistantFinishPersistence({
       existingIds: new Set([userMessage.id]),

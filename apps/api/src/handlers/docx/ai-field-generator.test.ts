@@ -1,46 +1,67 @@
-import type { ToolSet } from "ai";
-import { describe, expect, mock, test } from "bun:test";
+import * as realTanStackAI from "@tanstack/ai";
+import { afterAll, describe, expect, mock, test } from "bun:test";
 
 import type { SafeDb } from "@/api/db";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { toSafeId } from "@/api/lib/branded-types";
+import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";
 
-// Capture the args each generate/stream call receives so we can assert whether
-// the skill tools were wired. The model itself is irrelevant here (mocked).
-const generateTextMock = mock(
-  async (args: { tools?: ToolSet; prompt?: string }) => {
-    generateTextArgs.push(args);
-    return { text: "drafted value" };
-  },
-);
+// Capture the args each chat() call receives so we can assert whether the skill
+// tools were wired and how the prompt was assembled. The model itself is
+// irrelevant here (chat is mocked). Skill refs run the agentic tool loop, so the
+// field generators call chat() directly; `tools` arrives as a ChatTool[] array.
+type CapturedChat = {
+  tools: { name: string }[] | undefined;
+  prompt: string | undefined;
+};
 
-const streamTextMock = mock((args: { tools?: ToolSet; prompt?: string }) => {
-  streamTextArgs.push(args);
-  return { output: Promise.resolve({ renderings: ["adapted"] }) };
+const chatArgs: CapturedChat[] = [];
+
+const captureChat = (options: {
+  tools?: { name: string }[];
+  messages?: { content?: string }[];
+  outputSchema?: unknown;
+}): CapturedChat => ({
+  tools: options.tools,
+  prompt: options.messages?.at(0)?.content,
 });
 
-const generateTextArgs: { tools?: ToolSet; prompt?: string }[] = [];
-const streamTextArgs: { tools?: ToolSet; prompt?: string }[] = [];
+const chat = (options: {
+  tools?: { name: string }[];
+  messages?: { content?: string }[];
+  outputSchema?: unknown;
+}): unknown => {
+  chatArgs.push(captureChat(options));
+  if (options.outputSchema) {
+    return Promise.resolve({ renderings: ["adapted"] });
+  }
+  return Promise.resolve("drafted value");
+};
 
-void mock.module("ai", () => ({
-  generateText: generateTextMock,
-  streamText: streamTextMock,
-  Output: { object: () => ({}) },
-  stepCountIs: (n: number) => n,
-  tool: (config: unknown) => config,
+const testModel = {
+  adapter: {},
+  keySource: "instance",
+  modelId: "test-model",
+  modelOptions: {},
+  provider: "openai",
+};
+
+void mock.module("@tanstack/ai", () => ({
+  ...realTanStackAI,
+  chat,
 }));
 
-void mock.module("@/api/lib/ai-models", () => ({
-  getModelForRole: () => ({ modelId: "test-model" }),
-  hasInstanceProvider: () => false,
-}));
-
-void mock.module("@/api/lib/ai-output-schema", () => ({
-  strictOutputSchema: (schema: unknown) => schema,
+void mock.module("@/api/lib/tanstack-ai-models", () => ({
+  ...realTanStackAIModels,
+  getTanStackTextModelForRole: () => testModel,
 }));
 
 const { buildAiFieldGenerator, buildAiOccurrenceAdapter } =
   await import("@/api/handlers/docx/ai-field-generator");
+
+afterAll(() => {
+  mock.restore();
+});
 
 // SAFETY: only used as a non-null truthiness gate in the builders; the model
 // is mocked, so the config's contents are never read.
@@ -57,8 +78,8 @@ const SKILL_REF_PROMPT =
   "Draft this clause [POA scope](#stella-skill-ref=poa-drafting).";
 const PLAIN_PROMPT = "Draft the scope of this power of attorney.";
 
-const lastGenerate = () => generateTextArgs.at(-1);
-const lastStream = () => streamTextArgs.at(-1);
+const lastChat = () => chatArgs.at(-1);
+const lastToolNames = () => (lastChat()?.tools ?? []).map((tool) => tool.name);
 
 describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("wires load-skill tools when the prompt references a skill", async () => {
@@ -74,12 +95,8 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
       values: {},
     });
 
-    const args = lastGenerate();
-    expect(args?.tools).toBeDefined();
-    expect(Object.keys(args?.tools ?? {})).toEqual([
-      "load-skill",
-      "read-skill-resource",
-    ]);
+    expect(lastChat()?.tools).toBeDefined();
+    expect(lastToolNames()).toEqual(["load-skill", "read-skill-resource"]);
   });
 
   test("passes no tools when the prompt has no skill reference", async () => {
@@ -90,7 +107,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
     });
     await generate?.({ prompt: PLAIN_PROMPT, fieldPath: "scope", values: {} });
 
-    expect(lastGenerate()?.tools).toBeUndefined();
+    expect(lastChat()?.tools).toBeUndefined();
   });
 
   test("passes no tools without a skill context, even with a ref", async () => {
@@ -101,7 +118,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
       values: {},
     });
 
-    expect(lastGenerate()?.tools).toBeUndefined();
+    expect(lastChat()?.tools).toBeUndefined();
   });
 });
 
@@ -115,7 +132,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
       documentText: "THE FULL CONTRACT BODY",
     });
 
-    const prompt = lastGenerate()?.prompt ?? "";
+    const prompt = lastChat()?.prompt ?? "";
     expect(prompt).toContain("Document:\nTHE FULL CONTRACT BODY");
   });
 
@@ -123,7 +140,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
     const generate = buildAiFieldGenerator({ orgAIConfig, organizationId });
     await generate?.({ prompt: PLAIN_PROMPT, fieldPath: "scope", values: {} });
 
-    expect(lastGenerate()?.prompt ?? "").not.toContain("Document:");
+    expect(lastChat()?.prompt ?? "").not.toContain("Document:");
   });
 
   test("omits the Document section for blank documentText", async () => {
@@ -135,7 +152,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
       documentText: "   ",
     });
 
-    expect(lastGenerate()?.prompt ?? "").not.toContain("Document:");
+    expect(lastChat()?.prompt ?? "").not.toContain("Document:");
   });
 });
 
@@ -157,12 +174,8 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
       occurrences,
     });
 
-    const args = lastStream();
-    expect(args?.tools).toBeDefined();
-    expect(Object.keys(args?.tools ?? {})).toEqual([
-      "load-skill",
-      "read-skill-resource",
-    ]);
+    expect(lastChat()?.tools).toBeDefined();
+    expect(lastToolNames()).toEqual(["load-skill", "read-skill-resource"]);
   });
 
   test("passes no tools when the instruction has no skill reference", async () => {
@@ -179,6 +192,6 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
       occurrences,
     });
 
-    expect(lastStream()?.tools).toBeUndefined();
+    expect(lastChat()?.tools).toBeUndefined();
   });
 });

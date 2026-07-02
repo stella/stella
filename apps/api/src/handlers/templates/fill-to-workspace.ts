@@ -12,9 +12,8 @@ import {
 import { createEntityFromBuffer } from "@/api/handlers/entities/create-from-buffer";
 import { containsNull } from "@/api/handlers/templates/fill";
 import { fillStoredTemplateDocx } from "@/api/handlers/templates/template-fill-service";
-import { hasInstanceProvider } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
   assertUsageAvailableForHandler,
   createSafeHandler,
@@ -24,6 +23,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { DOCX_EXT_RE, sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
@@ -141,7 +141,7 @@ const fillTemplateToWorkspace = createSafeHandler(
       }
     }
 
-    const aiAnalytics = createAIAnalyticsCallbacks({
+    const aiAnalytics = createTanStackAIAnalyticsCallbacks({
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -164,7 +164,7 @@ const fillTemplateToWorkspace = createSafeHandler(
     // case, so an instance-provider fill must still be quota-checked. A null
     // org config flows through to the metering layer (instance-provider rate).
     const assertUsageAvailable =
-      orgAIConfig || hasInstanceProvider()
+      orgAIConfig || hasTanStackInstanceProvider()
         ? async () =>
             await assertUsageAvailableForHandler({
               metering: { actionType: "chat", modelRole: "fast" },

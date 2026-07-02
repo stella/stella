@@ -1,15 +1,15 @@
 import { Result } from "better-result";
 
+import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-config";
 import { decryptAIConfig, maskApiKey } from "@/api/lib/ai-config-crypto";
 import {
   providerResponseExtras,
   providerResponseRegion,
 } from "@/api/lib/ai-config-response";
-import { hasInstanceProvider } from "@/api/lib/ai-models";
-import type { DataRegion, OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 
 type AIConfigResult = {
   /**
@@ -64,7 +64,7 @@ const readAIConfig = createSafeRootHandler(
 
     const ciphertext = row?.aiConfigEncrypted;
     const iv = row?.aiConfigIv;
-    const instanceProvisioned = hasInstanceProvider();
+    const instanceProvisioned = hasTanStackInstanceProvider();
 
     let result: AIConfigResult = {
       configured: false,

@@ -3,12 +3,17 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
 import { chatMessages } from "@/api/db/schema";
-import { normalizeLegacyToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import {
+  chatMessageContentFromMessage,
+  chatMessageFromPersisted,
+  normalizePersistedChatMessageContent,
+} from "@/api/handlers/chat/chat-message-parts";
 import { readLatestChatCompaction } from "@/api/handlers/chat/persistent-compaction";
 import type {
   ChatMessage,
   ChatMessageContent,
   ChatMessageRole,
+  PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -18,6 +23,20 @@ export type WindowedThreadMessage = {
   role: ChatMessageRole;
   content: ChatMessageContent;
 };
+
+/**
+ * Normalize a stored row's content (which may be a legacy v1 payload) into the
+ * canonical version-2 `ChatMessageContent` the rest of the chat pipeline reads.
+ */
+const toWindowedMessage = (row: {
+  id: SafeId<"chatMessage">;
+  role: ChatMessageRole;
+  content: PersistedChatMessageContent;
+}): WindowedThreadMessage => ({
+  id: row.id,
+  role: row.role,
+  content: chatMessageContentFromMessage(chatMessageFromPersisted(row)),
+});
 
 type LoadWindowedThreadMessagesArgs = {
   safeDb: SafeDb;
@@ -96,7 +115,7 @@ export const loadWindowedThreadMessages = async ({
             .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
         ),
       );
-      return Result.ok(rows);
+      return Result.ok(rows.map(toWindowedMessage));
     }
 
     if (!isAnonymized) {
@@ -124,7 +143,7 @@ export const loadWindowedThreadMessages = async ({
             .orderBy(asc(chatMessages.createdAt), asc(chatMessages.id)),
         ),
       );
-      return Result.ok(fullRows);
+      return Result.ok(fullRows.map(toWindowedMessage));
     }
 
     // Anonymized thread: it never forms a checkpoint, so hard-cap the read at
@@ -144,7 +163,7 @@ export const loadWindowedThreadMessages = async ({
       ),
     );
 
-    return Result.ok(rows.toReversed());
+    return Result.ok(rows.toReversed().map(toWindowedMessage));
   });
 
 type LoadFullThreadHistoryArgs = {
@@ -188,7 +207,7 @@ export const loadFullThreadHistory = async ({
       rows.map((row) => ({
         id: row.id,
         role: row.role,
-        parts: normalizeLegacyToolInputs(row.content.data),
+        parts: normalizePersistedChatMessageContent(row.content).parts,
       })),
     );
   });
@@ -288,7 +307,7 @@ export const resolveTruncationTarget = async ({
     );
 
     return Result.ok({
-      messagesForPersistence: retainedPrefix,
+      messagesForPersistence: retainedPrefix.map(toWindowedMessage),
       deleteMessageIdsBeforeLatest: idsAfterTarget.map((row) => row.id),
     });
   });

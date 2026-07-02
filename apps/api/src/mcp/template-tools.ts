@@ -21,9 +21,8 @@ import {
   fillStoredTemplateWithText,
 } from "@/api/handlers/templates/template-fill-service";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
-import { hasInstanceProvider } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
 import {
@@ -33,6 +32,7 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
+import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { buildMarkerReference } from "@/api/mcp/template-marker-reference";
 import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
 import {
@@ -440,7 +440,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   // they do in the chat tools and web fill routes; a missing config simply
   // leaves those fields unfilled rather than erroring.
   const orgAIConfig = await loadOrgAIConfig(context.organizationId);
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
       organizationId: context.organizationId,
@@ -478,7 +478,7 @@ const handleFillTemplateTool: McpToolHandler = async ({ args, context }) => {
   // fast model in either case; a null org config flows through to the metering
   // layer (instance-provider rate).
   const assertUsageAvailable =
-    orgAIConfig || hasInstanceProvider()
+    orgAIConfig || hasTanStackInstanceProvider()
       ? async () =>
           await assertUsageAvailableForHandler({
             metering: { actionType: "chat", modelRole: "fast" },

@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceJustification } from "@/lib/types";
 import { selectJustificationByFieldId } from "@/routes/_protected.workspaces/$workspaceId/-store";
 
@@ -7,8 +8,8 @@ const justification = (
   id: string,
   fieldId: string,
 ): WorkspaceJustification => ({
-  id,
-  fieldId,
+  id: toSafeId<"justification">(id),
+  fieldId: toSafeId<"field">(fieldId),
   content: { version: 1, blocks: [] },
   boundingBoxes: null,
   fileFieldIds: [],

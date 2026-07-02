@@ -9,7 +9,6 @@ import {
   ComboboxPopup,
 } from "@stll/ui/components/combobox";
 import { Field, FieldDescription, FieldLabel } from "@stll/ui/components/field";
-import { Input } from "@stll/ui/components/input";
 import {
   Select,
   SelectItem,
@@ -20,11 +19,11 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import {
-  CUSTOM_MODEL_ID_PROVIDERS,
   getDefaultModelSelection,
+  getModelOptionsForRole,
   getRolePickerRows,
+  isProviderRoleSupported,
   isProviderValue,
-  MODEL_OPTIONS_BY_PROVIDER,
   PROVIDER_LABELS,
 } from "@/components/ai-config-role-models.logic";
 import type {
@@ -53,7 +52,6 @@ export const AIConfigRoleModelPicker = ({
 }: AIConfigRoleModelPickerProps) => {
   const t = useTranslations("organization");
   const rows = getRolePickerRows({ providers, roleModels });
-  const hasProviders = providers.length > 0;
 
   return (
     <Field className={className}>
@@ -67,22 +65,27 @@ export const AIConfigRoleModelPicker = ({
       <div className="w-full overflow-hidden rounded-md border">
         {rows.map((row) => {
           const roleLabel = t(`aiConfig.roles.${row.role}`);
-          const selectedProvider = row.selection?.provider ?? providers.at(0);
-          const usesCustomModelId =
-            selectedProvider !== undefined &&
-            CUSTOM_MODEL_ID_PROVIDERS.has(selectedProvider);
+          const selection = row.selection;
+          const providerOptions = providers.filter((provider) =>
+            isProviderRoleSupported(provider, row.role),
+          );
+          const selectedProvider = selection?.provider ?? providerOptions.at(0);
           const modelOptions = selectedProvider
-            ? MODEL_OPTIONS_BY_PROVIDER[selectedProvider].map((modelId) => ({
+            ? getModelOptionsForRole({
+                provider: selectedProvider,
+                role: row.role,
+              }).map((modelId) => ({
                 modelId,
                 provider: selectedProvider,
               }))
             : [];
-          const selectedModelOption =
-            modelOptions.find(
-              (option) =>
-                option.provider === row.selection?.provider &&
-                option.modelId === row.selection.modelId,
-            ) ?? null;
+          const selectedModelOption = selection
+            ? (modelOptions.find(
+                (option) =>
+                  option.provider === selection.provider &&
+                  option.modelId === selection.modelId,
+              ) ?? null)
+            : null;
 
           return (
             <div
@@ -99,16 +102,14 @@ export const AIConfigRoleModelPicker = ({
               </span>
 
               <Select
-                disabled={disabled || !hasProviders}
+                disabled={disabled || providerOptions.length === 0}
                 onValueChange={(value) => {
-                  if (!isProvider(value, providers)) {
+                  if (!isProvider(value, providerOptions)) {
                     return;
                   }
                   onModelChange(
                     row.role,
-                    CUSTOM_MODEL_ID_PROVIDERS.has(value)
-                      ? { provider: value, modelId: "" }
-                      : getDefaultModelSelection(value, row.role),
+                    getDefaultModelSelection(value, row.role),
                   );
                 }}
                 value={selectedProvider}
@@ -122,7 +123,7 @@ export const AIConfigRoleModelPicker = ({
                   <SelectValue placeholder={t("aiConfig.addProviderFirst")} />
                 </SelectTrigger>
                 <SelectPopup alignItemWithTrigger={false}>
-                  {providers.map((provider) => (
+                  {providerOptions.map((provider) => (
                     <SelectItem key={provider} value={provider}>
                       {PROVIDER_LABELS[provider]}
                     </SelectItem>
@@ -130,74 +131,50 @@ export const AIConfigRoleModelPicker = ({
                 </SelectPopup>
               </Select>
 
-              {usesCustomModelId ? (
-                <Input
-                  aria-invalid={!row.selection?.modelId.trim()}
+              <Combobox<ModelSelection>
+                autoHighlight
+                disabled={disabled || !selectedProvider}
+                items={modelOptions}
+                itemToStringLabel={(option) => option.modelId}
+                onInputValueChange={(value) => {
+                  if (!value.trim()) {
+                    onModelChange(row.role, null);
+                  }
+                }}
+                onValueChange={(option) => {
+                  if (!option) {
+                    return;
+                  }
+
+                  onModelChange(row.role, option);
+                }}
+                value={selectedModelOption}
+              >
+                <ComboboxInput
+                  aria-invalid={!row.selection}
                   aria-label={t("aiConfig.modelForRole", {
                     role: roleLabel,
                   })}
                   className="min-w-0"
-                  disabled={disabled || !selectedProvider}
-                  onChange={(event) => {
-                    const modelId = event.target.value;
-                    onModelChange(
-                      row.role,
-                      modelId.trim()
-                        ? { provider: selectedProvider, modelId }
-                        : { provider: selectedProvider, modelId: "" },
-                    );
-                  }}
-                  placeholder={t("aiConfig.deploymentNamePlaceholder")}
-                  value={row.selection?.modelId ?? ""}
+                  placeholder={t("aiConfig.modelIdPlaceholder")}
+                  showClear={Boolean(row.selection)}
                 />
-              ) : (
-                <Combobox<ModelSelection>
-                  autoHighlight
-                  disabled={disabled || !selectedProvider}
-                  items={modelOptions}
-                  itemToStringLabel={(option) => option.modelId}
-                  onInputValueChange={(value) => {
-                    if (!value.trim()) {
-                      onModelChange(row.role, null);
-                    }
-                  }}
-                  onValueChange={(option) => {
-                    if (!option) {
-                      return;
-                    }
-
-                    onModelChange(row.role, option);
-                  }}
-                  value={selectedModelOption}
-                >
-                  <ComboboxInput
-                    aria-invalid={!row.selection}
-                    aria-label={t("aiConfig.modelForRole", {
-                      role: roleLabel,
-                    })}
-                    className="min-w-0"
-                    placeholder={t("aiConfig.modelIdPlaceholder")}
-                    showClear={Boolean(row.selection)}
-                  />
-                  <ComboboxPopup>
-                    <ComboboxList>
-                      {(option: ModelSelection) => (
-                        <ComboboxItem
-                          key={`${option.provider}:${option.modelId}`}
-                          value={option}
-                        >
-                          <span className="block min-w-0 truncate">
-                            {option.modelId}
-                          </span>
-                        </ComboboxItem>
-                      )}
-                    </ComboboxList>
-                    <ComboboxEmpty>
-                      {t("aiConfig.noModelResults")}
-                    </ComboboxEmpty>
-                  </ComboboxPopup>
-                </Combobox>
-              )}
+                <ComboboxPopup>
+                  <ComboboxList>
+                    {(option: ModelSelection) => (
+                      <ComboboxItem
+                        key={`${option.provider}:${option.modelId}`}
+                        value={option}
+                      >
+                        <span className="block min-w-0 truncate">
+                          {option.modelId}
+                        </span>
+                      </ComboboxItem>
+                    )}
+                  </ComboboxList>
+                  <ComboboxEmpty>{t("aiConfig.noModelResults")}</ComboboxEmpty>
+                </ComboboxPopup>
+              </Combobox>
             </div>
           );
         })}

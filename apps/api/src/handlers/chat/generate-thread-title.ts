@@ -1,18 +1,17 @@
-import { generateText } from "ai";
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
 import { chatThreads } from "@/api/db/schema";
 import type { ChatMessage } from "@/api/handlers/chat/types";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { getModelForRole } from "@/api/lib/ai-models";
+import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
+import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_MAX_LENGTH = 60;
 const TITLE_CONTEXT_MAX_LENGTH = 500;
@@ -42,7 +41,7 @@ export const generateThreadTitle = async ({
   threadWorkspaceId,
   userId,
 }: GenerateThreadTitleProps): Promise<void> => {
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "background",
       organizationId,
@@ -63,20 +62,23 @@ export const generateThreadTitle = async ({
     const userText = extractTitleContext(userMessage);
     const assistantText = extractTitleContext(assistantMessage);
 
-    const { text } = await generateText({
+    const text = await generateTanStackTextForRole({
       abortSignal: AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS),
       maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
-      model: getModelForRole("fast", orgAIConfig, {
+      role: "fast",
+      serviceTier: "batch",
+      orgAIConfig,
+      organizationId,
+      analytics: aiAnalytics,
+      caching: resolveCaching({
         promptCachingEnabled,
+        role: "fast",
         scopeKey: threadId,
-        organizationId,
-        serviceTier: "batch",
       }),
       prompt: `Given this conversation, reply with a short thread title (max 6 words). Reply with the title only, nothing else.
 
 User: ${userText}
 Assistant: ${assistantText}`,
-      ...aiAnalytics.stepCallbacks,
     });
 
     const title = cleanGeneratedTitle(text);
@@ -146,7 +148,7 @@ Assistant: ${assistantText}`,
 
 const extractTitleContext = (message: ChatMessage): string =>
   message.parts
-    .map((part) => (part.type === "text" ? part.text : ""))
+    .map((part) => (part.type === "text" ? part.content : ""))
     .join(" ")
     .replaceAll(/\s+/gu, " ")
     .trim()

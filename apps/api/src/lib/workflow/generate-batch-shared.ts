@@ -5,8 +5,8 @@ import type { ScopedDb } from "@/api/db";
 import { fields } from "@/api/db/schema";
 import type { JustificationContent } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
-import type { AIUsageMetering } from "@/api/lib/analytics/ai";
+import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
+import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   Unreachable,

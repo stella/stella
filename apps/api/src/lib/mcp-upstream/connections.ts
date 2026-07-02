@@ -1,10 +1,10 @@
-import { createMCPClient } from "@ai-sdk/mcp";
-import type { ListToolsResult, MCPClient } from "@ai-sdk/mcp";
-import type { FetchFunction } from "@ai-sdk/provider-utils";
 import {
   CallToolResultSchema,
   type CallToolResult,
 } from "@modelcontextprotocol/sdk/types.js";
+import { toolDefinition } from "@tanstack/ai";
+import { createMCPClient } from "@tanstack/ai-mcp";
+import type { MCPClient } from "@tanstack/ai-mcp";
 import { Result } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
@@ -31,11 +31,7 @@ import {
   validateOutboundFetchTarget,
 } from "@/api/lib/safe-outbound-fetch";
 import type { SafeOutboundFetchBody } from "@/api/lib/safe-outbound-fetch";
-import {
-  MCP_TOOL_EXECUTION_OPTIONS,
-  errorResult,
-  textResult,
-} from "@/api/mcp/tool-utils";
+import { errorResult, textResult } from "@/api/mcp/tool-utils";
 
 import { normalizeDiscoveredMcpTools } from "./cached-tools";
 
@@ -277,24 +273,12 @@ export const createMcpClientForConnection = async ({
     transport: {
       type: "http",
       url: target.value.url.toString(),
-      redirect: "error",
       fetch: createSafeMcpFetch(MCP_HTTP_REQUEST_TIMEOUT_MS),
       ...(token.value === null
         ? {}
         : { headers: { Authorization: `Bearer ${token.value}` } }),
     },
   });
-};
-
-const MAX_SERVER_VERSION_LEN = 64;
-const MAX_INSTRUCTIONS_LEN = 4000;
-
-const capServerText = (
-  value: string | undefined,
-  maxLen: number,
-): string | null => {
-  const trimmed = value?.trim();
-  return trimmed ? trimmed.slice(0, maxLen) : null;
 };
 
 /** Metadata the upstream server reports during the MCP `initialize`
@@ -331,20 +315,17 @@ export const discoverCachedMcpTools = async ({
   }
 
   try {
-    const tools = await client.listTools();
+    const tools = await client.tools();
     return {
       tools: normalizeDiscoveredMcpTools({
         connectorSlug: row.slug,
-        tools: tools.tools,
+        tools,
       }),
       // Bound what an upstream server can persist on our connector row and
       // ship in the catalogue payload; the values are server-controlled.
       server: {
-        version: capServerText(
-          client.serverInfo.version,
-          MAX_SERVER_VERSION_LEN,
-        ),
-        instructions: capServerText(client.instructions, MAX_INSTRUCTIONS_LEN),
+        version: null,
+        instructions: null,
       },
     };
   } finally {
@@ -405,10 +386,7 @@ export const refreshCachedMcpToolsForConnection = async ({
 };
 
 type ExecutableMcpTool = {
-  execute: (
-    args: Record<string, unknown>,
-    options: typeof MCP_TOOL_EXECUTION_OPTIONS,
-  ) => unknown;
+  execute: (args: Record<string, unknown>) => unknown;
 };
 
 const isExecutableMcpTool = (value: unknown): value is ExecutableMcpTool =>
@@ -452,40 +430,31 @@ export const proxyMcpToolCall = async ({
   }
 
   try {
-    const definitions: ListToolsResult = {
-      tools: [
-        {
-          name: cachedTool.rawName,
-          inputSchema: cachedTool.inputSchema,
-          ...(cachedTool.description === undefined
-            ? {}
-            : { description: cachedTool.description }),
-          ...(cachedTool.title === undefined
-            ? {}
-            : { title: cachedTool.title }),
-          ...(cachedTool.readOnlyHint === undefined
-            ? {}
-            : { annotations: { readOnlyHint: cachedTool.readOnlyHint } }),
-        },
-      ],
-    };
-    const tool = client.toolsFromDefinitions(definitions)[cachedTool.rawName];
+    const tools = await client.tools([
+      toolDefinition({
+        name: cachedTool.rawName,
+        description:
+          cachedTool.description ?? cachedTool.title ?? cachedTool.rawName,
+        inputSchema: cachedTool.inputSchema,
+      }),
+    ]);
+    const tool: unknown = tools.at(0);
     if (!isExecutableMcpTool(tool)) {
       return errorResult("External MCP tool is unavailable");
     }
 
-    const result = await tool.execute(args, MCP_TOOL_EXECUTION_OPTIONS);
+    const result = await tool.execute(args);
     return asCallToolResult(result);
   } finally {
     await client.close();
   }
 };
 
-const createSafeMcpFetch = (timeoutMs: number): FetchFunction => {
-  const safeFetch: FetchFunction = Object.assign(
+const createSafeMcpFetch = (timeoutMs: number): typeof fetch => {
+  const safeFetch: typeof fetch = Object.assign(
     async (
-      input: Parameters<FetchFunction>[0],
-      init: Parameters<FetchFunction>[1],
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
     ) => {
       if (init?.signal?.aborted) {
         throw init.signal.reason;
@@ -518,7 +487,7 @@ const createSafeMcpFetch = (timeoutMs: number): FetchFunction => {
   return safeFetch;
 };
 
-const mcpFetchUrl = (input: Parameters<FetchFunction>[0]): URL => {
+const mcpFetchUrl = (input: Parameters<typeof fetch>[0]): URL => {
   if (input instanceof Request) {
     return new URL(input.url);
   }
@@ -527,8 +496,8 @@ const mcpFetchUrl = (input: Parameters<FetchFunction>[0]): URL => {
 };
 
 const mcpFetchHeaders = (
-  input: Parameters<FetchFunction>[0],
-  init: Parameters<FetchFunction>[1],
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1] | undefined,
 ): Headers => {
   const headers = new Headers(input instanceof Request ? input.headers : {});
   const initHeaders = new Headers(init?.headers);
@@ -539,8 +508,8 @@ const mcpFetchHeaders = (
 };
 
 const mcpFetchBody = async (
-  input: Parameters<FetchFunction>[0],
-  init: Parameters<FetchFunction>[1],
+  input: Parameters<typeof fetch>[0],
+  init: Parameters<typeof fetch>[1] | undefined,
 ): Promise<SafeOutboundFetchBody | undefined> => {
   if (init?.body !== undefined && init.body !== null) {
     return normalizeMcpFetchBody(init.body);

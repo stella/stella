@@ -1,4 +1,4 @@
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 

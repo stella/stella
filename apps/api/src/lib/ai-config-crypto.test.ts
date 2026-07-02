@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+
 process.env["EMAIL_PROVIDER"] ??= "smtp";
 process.env["GOTENBERG_PASSWORD"] ??= "gotenberg";
 process.env["GOTENBERG_URL"] ??= "http://localhost:3003";
@@ -10,6 +12,7 @@ process.env["SMTP_PORT"] ??= "1025";
 
 const { isOrgAIConfig, maskApiKey } =
   await import("@/api/lib/ai-config-crypto");
+const { normalizeOrgAIConfig } = await import("@/api/lib/ai-config");
 
 describe("maskApiKey", () => {
   test("shows first 8 chars for keys longer than 16 chars", () => {
@@ -47,7 +50,7 @@ describe("isOrgAIConfig", () => {
     fast: { provider: "openai", modelId: "gpt-5.4-nano" },
     reasoning: { provider: "openai", modelId: "gpt-5.4" },
     pdf: { provider: "openai", modelId: "gpt-5.4" },
-  };
+  } satisfies OrgAIConfig["overrideModels"];
 
   test("accepts a valid org AI config", () => {
     expect(
@@ -56,6 +59,18 @@ describe("isOrgAIConfig", () => {
         overrideModels: fullOverrideModels,
       }),
     ).toBe(true);
+  });
+
+  test("normalizes legacy Google regional configs to global", () => {
+    expect(
+      normalizeOrgAIConfig({
+        providers: [{ provider: "google", apiKey: "sk-test", region: "eu" }],
+        overrideModels: fullOverrideModels,
+      }),
+    ).toEqual({
+      providers: [{ provider: "google", apiKey: "sk-test", region: "global" }],
+      overrideModels: fullOverrideModels,
+    });
   });
 
   test("accepts Azure Foundry org AI config with endpoint metadata", () => {
@@ -94,6 +109,23 @@ describe("isOrgAIConfig", () => {
             modelId: "magistral-medium-latest",
           },
           pdf: { provider: "mistral", modelId: "mistral-large-latest" },
+        },
+      }),
+    ).toBe(true);
+  });
+
+  test("accepts Bedrock org AI config", () => {
+    expect(
+      isOrgAIConfig({
+        providers: [{ provider: "bedrock", apiKey: "sk-test" }],
+        overrideModels: {
+          chat: { provider: "bedrock", modelId: "anthropic.claude-4-8-sonnet" },
+          fast: { provider: "bedrock", modelId: "anthropic.claude-4-8-sonnet" },
+          reasoning: {
+            provider: "bedrock",
+            modelId: "anthropic.claude-4-8-sonnet",
+          },
+          pdf: { provider: "bedrock", modelId: "anthropic.claude-4-8-sonnet" },
         },
       }),
     ).toBe(true);

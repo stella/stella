@@ -400,11 +400,12 @@ function ChatIndex() {
                   ),
                 ]);
 
-                // Fire-and-forget: don't block navigation on the
-                // streaming response. The thread page picks up the
-                // same Chat instance from cache and renders the
-                // user message + streaming reply as it arrives.
-                void chat.sendMessage(message);
+                // Start the stream before navigation and require
+                // the user message to be locally visible. If the
+                // TanStack boundary fails before appending, this
+                // throws here so the composer restores the draft
+                // instead of navigating to an empty thread.
+                chat.startRouteHandoffMessage(message);
 
                 await navigate({
                   to: "/chat/$threadId",

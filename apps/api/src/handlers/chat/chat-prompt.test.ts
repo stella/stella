@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { createChatAttachmentPart } from "@/api/handlers/chat/chat-message-parts";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DOCX_REVIEW_MARKUP_EXAMPLES } from "@/api/lib/docx-review-markup";
@@ -406,12 +407,12 @@ describe("chat prompt builders", () => {
 describe("extractTitle", () => {
   test("falls back for empty titles and truncates long text", () => {
     const emptyParts = [
-      { text: "   ", type: "text" },
+      { type: "text", content: "   " },
     ] satisfies ChatMessage["parts"];
     const longParts = [
       {
-        text: "A".repeat(81),
         type: "text",
+        content: "A".repeat(81),
       },
     ] satisfies ChatMessage["parts"];
 
@@ -421,15 +422,14 @@ describe("extractTitle", () => {
 
   test("ignores non-text parts when building the title", () => {
     const parts = [
-      {
+      createChatAttachmentPart({
         filename: "attachment.pdf",
-        mediaType: "application/pdf",
-        type: "file",
+        mimeType: "application/pdf",
         url: "https://example.com/attachment.pdf",
-      },
+      }),
       {
-        text: "Useful title",
         type: "text",
+        content: "Useful title",
       },
     ] satisfies ChatMessage["parts"];
 
@@ -439,8 +439,8 @@ describe("extractTitle", () => {
   test("strips html markup before returning the title", () => {
     const parts = [
       {
-        text: "<p>hello <strong>world</strong></p>",
         type: "text",
+        content: "<p>hello <strong>world</strong></p>",
       },
     ] satisfies ChatMessage["parts"];
 

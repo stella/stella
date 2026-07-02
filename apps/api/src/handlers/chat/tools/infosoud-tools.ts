@@ -1,15 +1,16 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { createInfoSoudClient } from "@/api/handlers/workspaces/infosoud-common";
 import { mapInfoSoudResult } from "@/api/handlers/workspaces/infosoud-result";
 
 export const createInfosoudTools = () => ({
-  infosoud_lookup_case: tool({
+  infosoud_lookup_case: toolDefinition({
+    name: "infosoud_lookup_case",
     description:
       "Look up a Czech court case in InfoSoud by court code and spisová značka. Returns the case identifier, current status, parties (if disclosed), recorded case events, and upcoming hearings.",
-    inputSchema: valibotSchema(
+    inputSchema: toTanStackToolSchema(
       v.strictObject({
         courtCode: v.pipe(
           v.string(),
@@ -25,19 +26,18 @@ export const createInfosoudTools = () => ({
         ),
       }),
     ),
-    execute: async ({ courtCode, spisZn }) => {
-      const client = createInfoSoudClient();
-      const lookupResult = await client.searchCaseWithHearings({
-        courtCode,
-        spisZn,
-      });
-      // Reuse the bounded mapper from the REST handler so chat output
-      // respects the same event/hearing/related-case caps and never
-      // blows up the model context on long-running cases.
-      return mapInfoSoudResult({
-        lookupResult,
-        selectedCourtCode: courtCode,
-      });
-    },
+  }).server(async ({ courtCode, spisZn }) => {
+    const client = createInfoSoudClient();
+    const lookupResult = await client.searchCaseWithHearings({
+      courtCode,
+      spisZn,
+    });
+    // Reuse the bounded mapper from the REST handler so chat output
+    // respects the same event/hearing/related-case caps and never
+    // blows up the model context on long-running cases.
+    return mapInfoSoudResult({
+      lookupResult,
+      selectedCourtCode: courtCode,
+    });
   }),
 });

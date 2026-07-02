@@ -57,15 +57,16 @@ import { getActiveDocxEditApprovalPart } from "@/components/chat/chat-ui-tools";
 import type { ApprovalToolName } from "@/components/chat/chat-ui-tools";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
-import { useDevStore } from "@/lib/dev-store";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
+import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
 import type {
   ApplyActiveDocxEditsInput,
   ApplyActiveDocxEditsOutput,
@@ -98,6 +99,10 @@ type ActiveExternal = {
   text?: string | undefined;
   title: string;
   url: string;
+};
+
+const capturePromptSubmitError = (error: unknown): void => {
+  getAnalytics().captureError(error);
 };
 
 type ToolInputOperation = ApplyActiveDocxEditsInput["operations"][number];
@@ -924,7 +929,6 @@ const FileChatOverlayInner = ({
       };
     },
   );
-  const showToolCallDetails = useDevStore((s) => s.showToolCallDetails);
   const blockedApprovalTools = activeFile
     ? ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS
     : undefined;
@@ -992,7 +996,7 @@ const FileChatOverlayInner = ({
     handleOpenCreatedDocument,
     createDocumentMatters,
     isLoadingCreateDocumentMatters,
-    addToolOutput,
+    addToolResult,
     streamdownComponents,
     approvalPendingMessageId,
   } = useChatSession({
@@ -1003,6 +1007,23 @@ const FileChatOverlayInner = ({
     workspaceId,
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
+  const handlePromptSubmit = useEffectEvent(async (prompt: string) => {
+    try {
+      if (!(await ensureAIAvailable())) {
+        return;
+      }
+
+      // Always pop the thread open on send, even if the user
+      // minimised it earlier — they're sending a new prompt
+      // and want to see the response stream in.
+      setPanelOpen(true);
+      await sendMessage(
+        await buildChatRequestMessage({ files: [], html: prompt }),
+      );
+    } catch (submitError) {
+      capturePromptSubmitError(submitError);
+    }
+  });
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (open AI-key gate on mount/dep change), move into handler
   useEffect(() => {
@@ -1121,7 +1142,7 @@ const FileChatOverlayInner = ({
     if (toolName === "apply-active-docx-edits") {
       const part = getActiveDocxEditApprovalPart(messages, approvalId);
       if (!part) {
-        handleApprove(approvalId, toolName);
+        await handleApprove(approvalId, toolName);
         return;
       }
 
@@ -1131,17 +1152,17 @@ const FileChatOverlayInner = ({
       // surface the queued ids back to the LLM. The actual apply
       // (including the unlock prompt) happens when the user clicks
       // Accept on a suggestion in the panel.
-      handleApprove(approvalId, toolName);
+      await handleApprove(approvalId, toolName);
       const output = handleActiveDocxEditToolCall(part.input);
-      await addToolOutput({
+      await addToolResult({
         output,
         tool: "apply-active-docx-edits",
-        toolCallId: part.toolCallId,
+        toolCallId: part.id,
       });
       return;
     }
 
-    handleApprove(approvalId, toolName);
+    await handleApprove(approvalId, toolName);
   };
 
   const [panelOpen, setPanelOpen] = useState(false);
@@ -1234,7 +1255,6 @@ const FileChatOverlayInner = ({
                 queuedMessages={queuedMessages}
                 scrollContainerRef={threadScrollRef}
                 showThinkingIndicator
-                showToolCallDetails={showToolCallDetails}
                 streamdownComponents={streamdownComponents}
                 workspaceId={workspaceId}
               />
@@ -1277,7 +1297,7 @@ const FileChatOverlayInner = ({
                 // path) so a chip sent while the thread is collapsed still
                 // streams the reply into view.
                 setPanelOpen(true);
-                await sendMessage({ text: draft.html });
+                await sendMessage(await buildChatRequestMessage(draft));
               });
             }}
           />
@@ -1305,20 +1325,20 @@ const FileChatOverlayInner = ({
             // Abort any live stream first: the rotation remount only
             // swaps the surface, while the old Chat instance would
             // keep streaming inside the query cache.
-            void stop();
+            stop();
             shouldFocusComposerAfterNewThreadRef.current = true;
             setPanelOpen(false);
             onNewThread();
           }}
           onStop={() => {
-            void stop();
+            stop();
           }}
           onSubmit={({ prompt }) => {
             const reservedCommand = matchReservedChatCommand(prompt);
             if (reservedCommand?.id === "new") {
               // Mirror the New Chat button: abort any live stream before
               // rotating, or the old Chat keeps streaming in the query cache.
-              void stop();
+              stop();
               shouldFocusComposerAfterNewThreadRef.current = true;
               setPanelOpen(false);
               onNewThread();
@@ -1331,17 +1351,7 @@ const FileChatOverlayInner = ({
               return;
             }
 
-            void ensureAIAvailable().then((available) => {
-              if (!available) {
-                return;
-              }
-              // Always pop the thread open on send, even if the user
-              // minimised it earlier — they're sending a new prompt
-              // and want to see the response stream in.
-              setPanelOpen(true);
-              void sendMessage({ text: prompt });
-              return;
-            });
+            void handlePromptSubmit(prompt);
           }}
           onTogglePanel={() => setPanelOpen((v) => !v)}
           panelOpen={panelOpen}

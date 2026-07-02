@@ -17,7 +17,6 @@ process.env["REDIS_URL"] ??= "redis://localhost:6379";
 process.env["SMTP_HOST"] ??= "localhost";
 process.env["SMTP_PORT"] ??= "1025";
 process.env["AZURE_API_VERSION"] = "";
-process.env["AI_DEVTOOLS_ENABLED"] = "";
 
 class MockSafeOutboundFetchError extends TaggedError("SafeOutboundFetchError")<{
   cause?: unknown;

@@ -3,9 +3,9 @@
  *
  * This module converts actual provider usage (input / output /
  * cached tokens) into the ledger's normalized integer units. The
- * analytics callback in `lib/analytics/ai.ts` is the natural
- * caller because it receives `usage` from the AI SDK on every
- * `onStepFinish`.
+ * analytics callback in `lib/analytics/tanstack-ai.ts` is the
+ * natural caller because it receives provider usage from TanStack
+ * chat middleware.
  */
 
 import { panic } from "better-result";
@@ -54,7 +54,8 @@ type UsageInput = {
 /**
  * Convert token usage into normalized micro-units using the
  * model's public rate table. Caller is responsible for passing
- * non-negative integers; we trust the AI SDK's `usage` shape.
+ * non-negative integers; provider adapters are responsible for
+ * normalizing their token usage before calling this helper.
  */
 export const computeRawUsageMicroUnits = ({
   modelId,
@@ -97,7 +98,7 @@ type UsageUnitsFromTokensResult = {
 };
 
 /**
- * The post-flight metering path: turn AI SDK usage into the two
+ * The post-flight metering path: turn provider token usage into the two
  * fields the ledger needs (`raw_usage_micro_units`,
  * `units_consumed`). Use this from the analytics callback when the
  * actual token counts are known.

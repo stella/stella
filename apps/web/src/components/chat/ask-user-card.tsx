@@ -1,7 +1,6 @@
 import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 
-import type { ToolUIPart } from "ai";
 import {
   CheckIcon,
   HelpCircleIcon,
@@ -20,13 +19,13 @@ import type {
   AskUserInput,
   AskUserOutput,
   ChatAnonRestoration,
-  ChatUITools,
+  ChatToolCallPart,
 } from "@/components/chat/chat-ui-tools";
 import { EntityLink } from "@/components/chat/entity-link";
 import { rehypeAnonSpans } from "@/components/chat/rehype-anon-spans";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 
-type AskUserPart = ToolUIPart<Pick<ChatUITools, "ask-user">>;
+type AskUserPart = Extract<ChatToolCallPart, { name: "ask-user" }>;
 
 type AskUserCardProps = {
   part: AskUserPart;
@@ -55,7 +54,7 @@ type AskUserCardProps = {
   workspaceId?: string | undefined;
   /**
    * Placeholder → original pairs from the assistant message's
-   * `data-stella-anon-restorations` parts. Used to paint green
+   * metadata sidecar. Used to paint green
    * pills around restored names inside the question text and
    * option labels — same audit cue the markdown text body shows.
    */
@@ -160,8 +159,9 @@ export const AskUserCard = ({
     () => (pairs.length > 0 ? [[rehypeAnonSpans, pairs]] : undefined),
     [pairs],
   );
-  const answeredOutput = part.state === "output-available" ? part.output : null;
-  const isLoading = part.state === "input-streaming";
+  const answeredOutput = part.state === "complete" ? part.output : null;
+  const isLoading =
+    part.state === "awaiting-input" || part.state === "input-streaming";
 
   // Input is only fully available after input-streaming.
   // During streaming it's a DeepPartial; treat as null.
@@ -220,9 +220,9 @@ export const AskUserCard = ({
   // Mirror local edit-mode to the parent: a reopened answered card is a live
   // clarification again, so the parent can suppress competing affordances.
   useExternalSyncEffect(() => {
-    onEditingChange?.(part.toolCallId, isEditing);
-    return () => onEditingChange?.(part.toolCallId, false);
-  }, [isEditing, onEditingChange, part.toolCallId]);
+    onEditingChange?.(part.id, isEditing);
+    return () => onEditingChange?.(part.id, false);
+  }, [isEditing, onEditingChange, part.id]);
 
   const setAnswer = useCallback(
     (idx: number, value: string) =>
@@ -260,8 +260,8 @@ export const AskUserCard = ({
       return;
     }
     setSubmitted(true);
-    onSubmit(part.toolCallId, output);
-  }, [input, submitted, buildOutput, onSubmit, part.toolCallId]);
+    onSubmit(part.id, output);
+  }, [input, submitted, buildOutput, onSubmit, part.id]);
 
   const handleStartEdit = useCallback(() => {
     if (!input || !answeredOutput || !canRerun) {
@@ -314,8 +314,23 @@ export const AskUserCard = ({
       return;
     }
     setIsEditing(false);
-    void onEditAndRerun(part.toolCallId, output);
-  }, [input, onEditAndRerun, buildOutput, part.toolCallId]);
+    void onEditAndRerun(part.id, output);
+  }, [input, onEditAndRerun, buildOutput, part.id]);
+
+  const handleFormSubmit = useCallback<
+    NonNullable<ComponentProps<"form">["onSubmit"]>
+  >(
+    (event) => {
+      event.preventDefault();
+      if (isEditing) {
+        handleRerun();
+        return;
+      }
+
+      handleSubmit();
+    },
+    [handleRerun, handleSubmit, isEditing],
+  );
 
   if (!input) {
     return (
@@ -380,110 +395,111 @@ export const AskUserCard = ({
         </div>
       )}
 
-      {/* Questions */}
-      <div className="border-border/50 space-y-3 border-t px-3 py-3">
-        {input.questions.map((q, i) => {
-          const hasOptions = q.options !== undefined && q.options.length > 0;
-          return (
-            <div className="space-y-1.5" key={q.question}>
-              <p className="text-xs font-medium">
-                {i + 1}. {renderAnonPills(q.question, pairs)}
-              </p>
+      <form onSubmit={handleFormSubmit}>
+        {/* Questions */}
+        <div className="border-border/50 space-y-3 border-t px-3 py-3">
+          {input.questions.map((q, i) => {
+            const hasOptions = q.options !== undefined && q.options.length > 0;
+            return (
+              <div className="space-y-1.5" key={q.question}>
+                <p className="text-xs font-medium">
+                  {i + 1}. {renderAnonPills(q.question, pairs)}
+                </p>
 
-              {!isDone && hasOptions && !customMode[i] && (
-                <div className="flex flex-wrap gap-1.5">
-                  {q.options?.map((opt) => (
+                {!isDone && hasOptions && !customMode[i] && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {q.options?.map((opt) => (
+                      <button
+                        className={cn(
+                          "rounded-md border px-2 py-1 text-xs",
+                          "transition-colors",
+                          answers[i] === opt
+                            ? "border-foreground bg-foreground text-background"
+                            : "hover:bg-muted",
+                        )}
+                        key={opt}
+                        onClick={() => setAnswer(i, opt)}
+                        type="button"
+                      >
+                        {renderAnonPills(opt, pairs, { interactive: false })}
+                      </button>
+                    ))}
                     <button
-                      className={cn(
-                        "rounded-md border px-2 py-1 text-xs",
-                        "transition-colors",
-                        answers[i] === opt
-                          ? "border-foreground bg-foreground text-background"
-                          : "hover:bg-muted",
-                      )}
-                      key={opt}
-                      onClick={() => setAnswer(i, opt)}
-                      type="button"
-                    >
-                      {renderAnonPills(opt, pairs, { interactive: false })}
-                    </button>
-                  ))}
-                  <button
-                    className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
-                    onClick={() => toggleCustom(i)}
-                    type="button"
-                  >
-                    <PencilIcon className="size-2.5" />
-                    {t("chat.askUser.custom")}
-                  </button>
-                </div>
-              )}
-
-              {!isDone && (!hasOptions || customMode[i]) && (
-                <div className="flex gap-1.5">
-                  <input
-                    className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
-                    dir={contentDir(answers[i] ?? "")}
-                    onChange={(e) => setAnswer(i, e.target.value)}
-                    placeholder={q.default ?? t("chat.askUser.placeholder")}
-                    type="text"
-                    value={answers[i] ?? ""}
-                  />
-                  {hasOptions && customMode[i] && (
-                    <button
-                      className="text-muted-foreground hover:text-foreground text-xs"
+                      className="text-muted-foreground hover:text-foreground flex items-center gap-1 rounded-md border px-2 py-1 text-xs transition-colors"
                       onClick={() => toggleCustom(i)}
                       type="button"
                     >
-                      A/B/C
+                      <PencilIcon className="size-2.5" />
+                      {t("chat.askUser.custom")}
                     </button>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
 
-              {isDone && (
-                <p className="text-muted-foreground text-xs">
-                  {renderAnonPills(
-                    answeredOutput?.answers[i]?.answer ||
-                      answers[i] ||
-                      t("chat.askUser.noAnswer"),
-                    pairs,
-                  )}
-                </p>
+                {!isDone && (!hasOptions || customMode[i]) && (
+                  <div className="flex gap-1.5">
+                    <input
+                      className="bg-background focus-visible:ring-ring flex-1 rounded-md border px-2 py-1 text-xs focus-visible:ring-1 focus-visible:outline-none"
+                      dir={contentDir(answers[i] ?? "")}
+                      onChange={(e) => setAnswer(i, e.target.value)}
+                      placeholder={q.default ?? t("chat.askUser.placeholder")}
+                      type="text"
+                      value={answers[i] ?? ""}
+                    />
+                    {hasOptions && customMode[i] && (
+                      <button
+                        className="text-muted-foreground hover:text-foreground text-xs"
+                        onClick={() => toggleCustom(i)}
+                        type="button"
+                      >
+                        A/B/C
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {isDone && (
+                  <p className="text-muted-foreground text-xs">
+                    {renderAnonPills(
+                      answeredOutput?.answers[i]?.answer ||
+                        answers[i] ||
+                        t("chat.askUser.noAnswer"),
+                      pairs,
+                    )}
+                  </p>
+                )}
+              </div>
+            );
+          })}
+        </div>
+
+        {/* Submit */}
+        {!isDone && !isLoading && (
+          <div className="border-border/50 border-t px-3 py-2">
+            {isEditing && discardsDownstream && (
+              <p className="text-muted-foreground mb-2 text-xs">
+                {t("chat.askUser.editWarning")}
+              </p>
+            )}
+            <div className="flex items-center gap-2">
+              <button
+                className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
+                type="submit"
+              >
+                {isEditing ? t("chat.askUser.rerun") : t("chat.askUser.submit")}
+              </button>
+              {isEditing && (
+                <button
+                  className="text-muted-foreground hover:text-foreground text-xs"
+                  onClick={handleCancelEdit}
+                  type="button"
+                >
+                  {t("common.cancel")}
+                </button>
               )}
             </div>
-          );
-        })}
-      </div>
-
-      {/* Submit */}
-      {!isDone && !isLoading && (
-        <div className="border-border/50 border-t px-3 py-2">
-          {isEditing && discardsDownstream && (
-            <p className="text-muted-foreground mb-2 text-xs">
-              {t("chat.askUser.editWarning")}
-            </p>
-          )}
-          <div className="flex items-center gap-2">
-            <button
-              className="bg-foreground text-background focus-visible:ring-ring rounded-md px-3 py-1 text-xs font-medium transition-opacity hover:opacity-80 focus-visible:ring-2 focus-visible:ring-offset-1"
-              onClick={isEditing ? handleRerun : handleSubmit}
-              type="button"
-            >
-              {isEditing ? t("chat.askUser.rerun") : t("chat.askUser.submit")}
-            </button>
-            {isEditing && (
-              <button
-                className="text-muted-foreground hover:text-foreground text-xs"
-                onClick={handleCancelEdit}
-                type="button"
-              >
-                {t("common.cancel")}
-              </button>
-            )}
           </div>
-        </div>
-      )}
+        )}
+      </form>
     </div>
   );
 };

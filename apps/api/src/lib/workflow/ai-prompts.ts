@@ -123,8 +123,8 @@ const createJustificationSchema = (filenames: JustificationFilenames) => {
       ? "seq-0010"
       : `${exampleFile?.simplified ?? "F0"}-0002`;
 
-  // Schema is converted to JSON Schema by the Vercel AI SDK
-  // (`valibotSchema(...)` → `@valibot/to-json-schema`). That
+  // Schema is converted to JSON Schema for TanStack tools with
+  // `@valibot/to-json-schema`. That
   // converter rejects transformation actions like `v.trim()` —
   // they have no JSON Schema equivalent — so we keep validation
   // here strictly to constraints (`v.minLength`, `v.nonEmpty`).

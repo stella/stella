@@ -84,112 +84,6 @@ const getTextField = (
   return undefined;
 };
 
-const buildAresCompanyText = (
-  value: Record<string, unknown>,
-): string | undefined => {
-  const ico = getStringField(value, ["ico"]);
-  const name = getStringField(value, ["name", "obchodniJmeno"]);
-  const registryUrl = getStringField(value, ["registryUrl"]);
-  if (!ico || !name || !registryUrl) {
-    return undefined;
-  }
-
-  const lines = [name, `IČO: ${ico}`];
-  pushLabelledAresField(lines, "Právní forma", value, [
-    "legalForm",
-    "pravniForma",
-  ]);
-  appendAresAddress(lines, value["address"]);
-  pushLabelledAresField(lines, "Datum vzniku", value, ["dateEstablished"]);
-  appendAresCourtFile(lines, value["courtFile"]);
-  pushLabelledAresField(lines, "Základní kapitál", value, ["shareCapital"]);
-  pushLabelledAresField(lines, "Jednání", value, ["actingClause"]);
-  appendAresStatutoryBodies(lines, value["statutoryBodies"]);
-
-  return lines.join("\n");
-};
-
-const pushLabelledAresField = (
-  lines: string[],
-  label: string,
-  value: Record<string, unknown>,
-  fields: readonly string[],
-) => {
-  const fieldValue = getStringField(value, fields);
-  if (fieldValue) {
-    lines.push(`${label}: ${fieldValue}`);
-  }
-};
-
-const appendAresAddress = (lines: string[], address: unknown) => {
-  if (!isRecord(address)) {
-    return;
-  }
-
-  const textAddress = getStringField(address, ["textAddress", "textovaAdresa"]);
-  if (textAddress) {
-    lines.push(`Sídlo: ${textAddress}`);
-  }
-};
-
-const appendAresCourtFile = (lines: string[], courtFile: unknown) => {
-  if (!isRecord(courtFile)) {
-    return;
-  }
-
-  const court = getStringField(courtFile, ["court"]);
-  const section = getStringField(courtFile, ["section"]);
-  const insert = getStringField(courtFile, ["insert"]);
-  if (court && section && insert) {
-    lines.push(`Spisová značka: ${section} ${insert}, ${court}`);
-  }
-};
-
-const appendAresStatutoryBodies = (lines: string[], bodies: unknown) => {
-  if (!Array.isArray(bodies) || bodies.length === 0) {
-    return;
-  }
-
-  lines.push("Statutární orgány:");
-  for (const body of bodies) {
-    appendAresStatutoryBody(lines, body);
-  }
-};
-
-const appendAresStatutoryBody = (lines: string[], body: unknown) => {
-  if (!isRecord(body)) {
-    return;
-  }
-
-  const organName = getStringField(body, ["organName"]);
-  if (organName) {
-    lines.push(`- ${organName}`);
-  }
-
-  const members = body["members"];
-  if (!Array.isArray(members)) {
-    return;
-  }
-
-  for (const member of members) {
-    appendAresBodyMember(lines, member);
-  }
-};
-
-const appendAresBodyMember = (lines: string[], member: unknown) => {
-  if (!isRecord(member)) {
-    return;
-  }
-
-  const memberName = getStringField(member, ["name"]);
-  if (!memberName) {
-    return;
-  }
-
-  const role = getStringField(member, ["role"]);
-  lines.push(`  - ${memberName}${role ? ` (${role})` : ""}`);
-};
-
 const collectTextValue = (value: unknown, depth = 0): string | undefined => {
   if (depth > 4) {
     return undefined;
@@ -345,11 +239,10 @@ export const collectExternalSources = (
           "authority",
           "courtCode",
           "idx",
+          "registry",
         ]),
         snippet: getStringField(value, ["snippet", "summary", "description"]),
-        text:
-          getTextField(value, ["text", "content", "body", "texts"]) ??
-          buildAresCompanyText(value),
+        text: getTextField(value, ["text", "content", "body", "texts"]),
       });
     }
   }

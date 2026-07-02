@@ -1,5 +1,4 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
@@ -9,6 +8,7 @@ import { entities, fields } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { CHAT_ENTITY_REF_PREFIX } from "@/api/handlers/chat/tools/execute/ref-registry";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
@@ -119,6 +119,13 @@ const workspaceIdSchema = (allowedIds: readonly SafeId<"workspace">[]) =>
     ),
   );
 
+const updateEntityFieldsOutputSchema = v.strictObject({
+  success: v.literal(true),
+  entityId: v.string(),
+  propertyId: v.string(),
+  newValue: v.string(),
+});
+
 // This is a brand-minting validator: workspaceId is an untrusted
 // string from chat-tool input (LLM-generated), looked up in the
 // allowed-set Map and returned as SafeId<"workspace"> on success.
@@ -154,7 +161,8 @@ export const createWorkspaceTools = ({
   const wsSchema = workspaceIdSchema(allowedWorkspaceIds);
 
   return {
-    "update-entity-fields": tool({
+    "update-entity-fields": toolDefinition({
+      name: "update-entity-fields",
       description:
         "Update a metadata field on an entity (document, " +
         "task, file). The property type is looked up " +
@@ -165,7 +173,7 @@ export const createWorkspaceTools = ({
         "number. For multi-select: pass an array of " +
         "strings.",
       needsApproval: true,
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           workspaceId: wsSchema,
           entityId: idSchema("The entity ID to update"),
@@ -194,191 +202,190 @@ export const createWorkspaceTools = ({
           ),
         }),
       ),
-      execute: async (input) => {
-        const allowedWorkspaceId = requireAllowedWorkspaceId({
-          allowedIdsByValue: allowedWorkspaceIdsByValue,
-          workspaceId: input.workspaceId,
+      outputSchema: toTanStackToolSchema(updateEntityFieldsOutputSchema),
+    }).server(async (input) => {
+      const allowedWorkspaceId = requireAllowedWorkspaceId({
+        allowedIdsByValue: allowedWorkspaceIdsByValue,
+        workspaceId: input.workspaceId,
+      });
+      const entityId = brandPersistedEntityId(input.entityId);
+      const propertyId = brandPersistedPropertyId(input.propertyId);
+      const { value } = input;
+      const property = await scopedDb((tx) =>
+        tx.query.properties.findFirst({
+          columns: { id: true, content: true },
+          where: {
+            id: { eq: propertyId },
+            workspaceId: { eq: allowedWorkspaceId },
+          },
+        }),
+      );
+
+      if (!property) {
+        throw new ChatToolError({
+          message: `Property "${propertyId}" not found. Check the system prompt for available property IDs.`,
         });
-        const entityId = brandPersistedEntityId(input.entityId);
-        const propertyId = brandPersistedPropertyId(input.propertyId);
-        const { value } = input;
-        const property = await scopedDb((tx) =>
-          tx.query.properties.findFirst({
-            columns: { id: true, content: true },
-            where: {
-              id: { eq: propertyId },
-              workspaceId: { eq: allowedWorkspaceId },
-            },
-          }),
-        );
+      }
 
-        if (!property) {
+      const propType = property.content.type;
+
+      let content!: FieldContent;
+      switch (propType) {
+        case "file":
           throw new ChatToolError({
-            message: `Property "${propertyId}" not found. Check the system prompt for available property IDs.`,
+            message:
+              'Property is "file"; use the document creation or upload tools instead.',
           });
+        case "text": {
+          if (typeof value !== "string") {
+            throw new ChatToolError({
+              message: `Property is "text"; pass a string value, not ${typeof value}.`,
+            });
+          }
+          content = { version: 1, type: "text", value };
+          break;
         }
-
-        const propType = property.content.type;
-
-        let content!: FieldContent;
-        switch (propType) {
-          case "file":
+        case "single-select": {
+          if (value !== null && typeof value !== "string") {
+            throw new ChatToolError({
+              message: `Property is "single-select"; pass a string or null, not ${typeof value}.`,
+            });
+          }
+          if (
+            value !== null &&
+            "options" in property.content &&
+            Array.isArray(property.content.options)
+          ) {
+            const valid = new Set(
+              (
+                property.content.options as {
+                  value: string;
+                }[]
+              ).map((option) => option.value),
+            );
+            if (!valid.has(value)) {
+              throw new ChatToolError({
+                message: `Invalid option "${value}". Valid: ${[...valid].join(", ")}`,
+              });
+            }
+          }
+          content = {
+            version: 1,
+            type: "single-select",
+            value,
+          };
+          break;
+        }
+        case "multi-select": {
+          if (!Array.isArray(value)) {
+            throw new ChatToolError({
+              message: 'Property is "multi-select"; pass an array of strings.',
+            });
+          }
+          content = {
+            version: 1,
+            type: "multi-select",
+            value,
+          };
+          break;
+        }
+        case "date": {
+          if (value !== null && typeof value !== "string") {
             throw new ChatToolError({
               message:
-                'Property is "file"; use the document creation or upload tools instead.',
-            });
-          case "text": {
-            if (typeof value !== "string") {
-              throw new ChatToolError({
-                message: `Property is "text"; pass a string value, not ${typeof value}.`,
-              });
-            }
-            content = { version: 1, type: "text", value };
-            break;
-          }
-          case "single-select": {
-            if (value !== null && typeof value !== "string") {
-              throw new ChatToolError({
-                message: `Property is "single-select"; pass a string or null, not ${typeof value}.`,
-              });
-            }
-            if (
-              value !== null &&
-              "options" in property.content &&
-              Array.isArray(property.content.options)
-            ) {
-              const valid = new Set(
-                (
-                  property.content.options as {
-                    value: string;
-                  }[]
-                ).map((option) => option.value),
-              );
-              if (!valid.has(value)) {
-                throw new ChatToolError({
-                  message: `Invalid option "${value}". Valid: ${[...valid].join(", ")}`,
-                });
-              }
-            }
-            content = {
-              version: 1,
-              type: "single-select",
-              value,
-            };
-            break;
-          }
-          case "multi-select": {
-            if (!Array.isArray(value)) {
-              throw new ChatToolError({
-                message:
-                  'Property is "multi-select"; pass an array of strings.',
-              });
-            }
-            content = {
-              version: 1,
-              type: "multi-select",
-              value,
-            };
-            break;
-          }
-          case "date": {
-            if (value !== null && typeof value !== "string") {
-              throw new ChatToolError({
-                message:
-                  'Property is "date"; pass an ISO date string (YYYY-MM-DD) or null.',
-              });
-            }
-            content = { version: 1, type: "date", value };
-            break;
-          }
-          case "int": {
-            if (value !== null && typeof value !== "number") {
-              throw new ChatToolError({
-                message: `Property is "int"; pass a number or null, not ${typeof value}.`,
-              });
-            }
-            if (value !== null) {
-              content = {
-                version: 1,
-                type: "int",
-                value,
-                currency: null,
-              };
-            }
-            break;
-          }
-          default:
-            panic("Unhandled property type in update-entity-fields tool");
-        }
-
-        const entity = await scopedDb((tx) =>
-          tx.query.entities.findFirst({
-            columns: { id: true, currentVersionId: true, readOnly: true },
-            where: {
-              id: { eq: entityId },
-              workspaceId: { eq: allowedWorkspaceId },
-            },
-          }),
-        );
-
-        if (!entity) {
-          throw new ChatToolError({
-            message: `Entity "${entityId}" not found.`,
-          });
-        }
-        if (entity.readOnly) {
-          throw new ChatToolError({
-            message: `Entity "${entityId}" is read-only.`,
-          });
-        }
-
-        if (!entity.currentVersionId) {
-          throw new ChatToolError({
-            message: `Entity "${entityId}" has no current version and cannot be updated.`,
-          });
-        }
-
-        const versionId = entity.currentVersionId;
-        const isEmpty =
-          value === null ||
-          value === "" ||
-          (Array.isArray(value) && value.length === 0);
-
-        await scopedDb(async (tx) => {
-          // audit: skip — MCP tool execution metadata; audit happens at the parent user action
-          await tx
-            .delete(fields)
-            .where(
-              and(
-                eq(fields.propertyId, propertyId),
-                eq(fields.entityVersionId, versionId),
-              ),
-            );
-
-          if (!isEmpty) {
-            await tx.insert(fields).values({
-              workspaceId: allowedWorkspaceId,
-              propertyId,
-              entityVersionId: versionId,
-              content,
+                'Property is "date"; pass an ISO date string (YYYY-MM-DD) or null.',
             });
           }
+          content = { version: 1, type: "date", value };
+          break;
+        }
+        case "int": {
+          if (value !== null && typeof value !== "number") {
+            throw new ChatToolError({
+              message: `Property is "int"; pass a number or null, not ${typeof value}.`,
+            });
+          }
+          if (value !== null) {
+            content = {
+              version: 1,
+              type: "int",
+              value,
+              currency: null,
+            };
+          }
+          break;
+        }
+        default:
+          panic("Unhandled property type in update-entity-fields tool");
+      }
 
-          await tx
-            .update(entities)
-            .set({ updatedAt: new Date() })
-            .where(eq(entities.id, entityId));
+      const entity = await scopedDb((tx) =>
+        tx.query.entities.findFirst({
+          columns: { id: true, currentVersionId: true, readOnly: true },
+          where: {
+            id: { eq: entityId },
+            workspaceId: { eq: allowedWorkspaceId },
+          },
+        }),
+      );
+
+      if (!entity) {
+        throw new ChatToolError({
+          message: `Entity "${entityId}" not found.`,
         });
+      }
+      if (entity.readOnly) {
+        throw new ChatToolError({
+          message: `Entity "${entityId}" is read-only.`,
+        });
+      }
 
-        getSearchProvider().indexEntity(entityId).catch(captureError);
+      if (!entity.currentVersionId) {
+        throw new ChatToolError({
+          message: `Entity "${entityId}" has no current version and cannot be updated.`,
+        });
+      }
 
-        return {
-          success: true,
-          entityId,
-          propertyId,
-          newValue: isEmpty ? "" : formatFieldValue(content),
-        };
-      },
+      const versionId = entity.currentVersionId;
+      const isEmpty =
+        value === null ||
+        value === "" ||
+        (Array.isArray(value) && value.length === 0);
+
+      await scopedDb(async (tx) => {
+        // audit: skip — MCP tool execution metadata; audit happens at the parent user action
+        await tx
+          .delete(fields)
+          .where(
+            and(
+              eq(fields.propertyId, propertyId),
+              eq(fields.entityVersionId, versionId),
+            ),
+          );
+
+        if (!isEmpty) {
+          await tx.insert(fields).values({
+            workspaceId: allowedWorkspaceId,
+            propertyId,
+            entityVersionId: versionId,
+            content,
+          });
+        }
+
+        await tx
+          .update(entities)
+          .set({ updatedAt: new Date() })
+          .where(eq(entities.id, entityId));
+      });
+
+      getSearchProvider().indexEntity(entityId).catch(captureError);
+
+      return {
+        success: true,
+        entityId,
+        propertyId,
+        newValue: isEmpty ? "" : formatFieldValue(content),
+      };
     }),
   };
 };

@@ -1,5 +1,4 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { sql } from "drizzle-orm";
@@ -7,6 +6,7 @@ import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db";
 import { renderChatMessagesForCompaction } from "@/api/handlers/chat/compaction";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type {
   ChatMessage,
   ChatMessageContent,
@@ -131,139 +131,139 @@ export const createChatHistoryTools = ({
         )})`;
 
   return {
-    [SEARCH_CHAT_HISTORY_TOOL_NAME]: tool({
+    [SEARCH_CHAT_HISTORY_TOOL_NAME]: toolDefinition({
+      name: SEARCH_CHAT_HISTORY_TOOL_NAME,
       description:
         "Search earlier persisted messages in this same chat thread. Use this when compacted context may omit a detail, prior instruction, cited source, or unresolved task. Follow up with expand-chat-history when exact surrounding context matters.",
-      inputSchema: valibotSchema(searchChatHistoryInputSchema),
-      outputSchema: valibotSchema(searchChatHistoryOutputSchema),
-      execute: async ({ query, limit }) => {
-        const normalizedQuery = query.trim();
-        if (!normalizedQuery) {
-          throw new ChatToolError({
-            message: "Chat history search query must not be empty.",
-          });
-        }
+      inputSchema: toTanStackToolSchema(searchChatHistoryInputSchema),
+      outputSchema: toTanStackToolSchema(searchChatHistoryOutputSchema),
+    }).server(async ({ query, limit }) => {
+      const normalizedQuery = query.trim();
+      if (!normalizedQuery) {
+        throw new ChatToolError({
+          message: "Chat history search query must not be empty.",
+        });
+      }
 
-        const tsQuery = buildSearchTsQuery(normalizedQuery);
-        const result = await safeDb((tx) =>
-          tx.execute<ChatHistorySearchRow>(sql`
-          SELECT
-            message_id AS "messageId",
-            role,
-            ts_headline(
-              'simple',
-              left(searchable_text, 2000),
-              ${tsQuery},
-              ${CHAT_HISTORY_HEADLINE_CONFIG}
-            ) AS excerpt,
-            created_at AS "createdAt"
-          FROM chat_message_search_documents
-          WHERE thread_id = ${threadId}
-            AND tsv @@ ${tsQuery}
-            ${excludeMessageSql(sql`message_id`)}
-          ORDER BY ts_rank(tsv, ${tsQuery}) DESC, created_at DESC, message_id DESC
-          LIMIT ${limit}
-        `),
-        );
+      const tsQuery = buildSearchTsQuery(normalizedQuery);
+      const result = await safeDb((tx) =>
+        tx.execute<ChatHistorySearchRow>(sql`
+        SELECT
+          message_id AS "messageId",
+          role,
+          ts_headline(
+            'simple',
+            left(searchable_text, 2000),
+            ${tsQuery},
+            ${CHAT_HISTORY_HEADLINE_CONFIG}
+          ) AS excerpt,
+          created_at AS "createdAt"
+        FROM chat_message_search_documents
+        WHERE thread_id = ${threadId}
+          AND tsv @@ ${tsQuery}
+          ${excludeMessageSql(sql`message_id`)}
+        ORDER BY ts_rank(tsv, ${tsQuery}) DESC, created_at DESC, message_id DESC
+        LIMIT ${limit}
+      `),
+      );
 
-        if (Result.isError(result)) {
-          throw new ChatToolError({
-            message: "Failed to search chat history.",
-            cause: result.error,
-          });
-        }
+      if (Result.isError(result)) {
+        throw new ChatToolError({
+          message: "Failed to search chat history.",
+          cause: result.error,
+        });
+      }
 
-        return {
-          query: normalizedQuery,
-          results: result.value.map((row) => ({
-            messageId: row.messageId,
-            role: row.role,
-            excerpt: row.excerpt,
-            createdAt: row.createdAt.toISOString(),
-          })),
-        };
-      },
+      return {
+        query: normalizedQuery,
+        results: result.value.map((row) => ({
+          messageId: row.messageId,
+          role: row.role,
+          excerpt: row.excerpt,
+          createdAt: row.createdAt.toISOString(),
+        })),
+      };
     }),
-    [EXPAND_CHAT_HISTORY_TOOL_NAME]: tool({
+    [EXPAND_CHAT_HISTORY_TOOL_NAME]: toolDefinition({
+      name: EXPAND_CHAT_HISTORY_TOOL_NAME,
       description:
         "Expand one persisted chat-history search result into a small transcript window from this same thread. Use only with a messageId returned by search-chat-history.",
-      inputSchema: valibotSchema(expandChatHistoryInputSchema),
-      outputSchema: valibotSchema(expandChatHistoryOutputSchema),
-      execute: async ({ messageId, before, after }) => {
-        if (excludedMessageIdSet.has(messageId)) {
-          return {
-            targetMessageId: messageId,
-            messages: [],
-          };
-        }
-
-        const persistedMessageId = brandPersistedChatMessageId(messageId);
-        const result = await safeDb((tx) =>
-          tx.execute<ChatHistoryExpansionRow>(sql`
-          WITH target AS (
-            SELECT id, created_at
-            FROM chat_messages
-            WHERE thread_id = ${threadId}
-              AND id = ${persistedMessageId}
-            LIMIT 1
-          ),
-          before_rows AS (
-            SELECT m.id, m.role, m.content, m.created_at
-            FROM chat_messages m, target t
-            WHERE m.thread_id = ${threadId}
-              ${excludeMessageSql(sql`m.id`)}
-              AND (m.created_at, m.id) < (t.created_at, t.id)
-            ORDER BY m.created_at DESC, m.id DESC
-            LIMIT ${before}
-          ),
-          target_row AS (
-            SELECT m.id, m.role, m.content, m.created_at
-            FROM chat_messages m
-            WHERE m.thread_id = ${threadId}
-              AND m.id = ${persistedMessageId}
-              ${excludeMessageSql(sql`m.id`)}
-          ),
-          after_rows AS (
-            SELECT m.id, m.role, m.content, m.created_at
-            FROM chat_messages m, target t
-            WHERE m.thread_id = ${threadId}
-              ${excludeMessageSql(sql`m.id`)}
-              AND (m.created_at, m.id) > (t.created_at, t.id)
-            ORDER BY m.created_at ASC, m.id ASC
-            LIMIT ${after}
-          )
-          SELECT id, role, content, created_at AS "createdAt"
-          FROM (
-            SELECT * FROM before_rows
-            UNION ALL
-            SELECT * FROM target_row
-            UNION ALL
-            SELECT * FROM after_rows
-          ) history_rows
-          ORDER BY created_at ASC, id ASC
-        `),
-        );
-
-        if (Result.isError(result)) {
-          throw new ChatToolError({
-            message: "Failed to expand chat history.",
-            cause: result.error,
-          });
-        }
-
+      inputSchema: toTanStackToolSchema(expandChatHistoryInputSchema),
+      outputSchema: toTanStackToolSchema(expandChatHistoryOutputSchema),
+    }).server(async ({ messageId, before, after }) => {
+      if (excludedMessageIdSet.has(messageId)) {
         return {
           targetMessageId: messageId,
-          messages: result.value.map((row) => {
-            const message = persistedRowToChatMessage(row);
-            return {
-              messageId: row.id,
-              role: row.role,
-              createdAt: row.createdAt.toISOString(),
-              content: renderChatMessagesForCompaction([message]),
-            };
-          }),
+          messages: [],
         };
-      },
+      }
+
+      const persistedMessageId = brandPersistedChatMessageId(messageId);
+      const result = await safeDb((tx) =>
+        tx.execute<ChatHistoryExpansionRow>(sql`
+        WITH target AS (
+          SELECT id, created_at
+          FROM chat_messages
+          WHERE thread_id = ${threadId}
+            AND id = ${persistedMessageId}
+          LIMIT 1
+        ),
+        before_rows AS (
+          SELECT m.id, m.role, m.content, m.created_at
+          FROM chat_messages m, target t
+          WHERE m.thread_id = ${threadId}
+            ${excludeMessageSql(sql`m.id`)}
+            AND (m.created_at, m.id) < (t.created_at, t.id)
+          ORDER BY m.created_at DESC, m.id DESC
+          LIMIT ${before}
+        ),
+        target_row AS (
+          SELECT m.id, m.role, m.content, m.created_at
+          FROM chat_messages m
+          WHERE m.thread_id = ${threadId}
+            AND m.id = ${persistedMessageId}
+            ${excludeMessageSql(sql`m.id`)}
+        ),
+        after_rows AS (
+          SELECT m.id, m.role, m.content, m.created_at
+          FROM chat_messages m, target t
+          WHERE m.thread_id = ${threadId}
+            ${excludeMessageSql(sql`m.id`)}
+            AND (m.created_at, m.id) > (t.created_at, t.id)
+          ORDER BY m.created_at ASC, m.id ASC
+          LIMIT ${after}
+        )
+        SELECT id, role, content, created_at AS "createdAt"
+        FROM (
+          SELECT * FROM before_rows
+          UNION ALL
+          SELECT * FROM target_row
+          UNION ALL
+          SELECT * FROM after_rows
+        ) history_rows
+        ORDER BY created_at ASC, id ASC
+      `),
+      );
+
+      if (Result.isError(result)) {
+        throw new ChatToolError({
+          message: "Failed to expand chat history.",
+          cause: result.error,
+        });
+      }
+
+      return {
+        targetMessageId: messageId,
+        messages: result.value.map((row) => {
+          const message = persistedRowToChatMessage(row);
+          return {
+            messageId: row.id,
+            role: row.role,
+            createdAt: row.createdAt.toISOString(),
+            content: renderChatMessagesForCompaction([message]),
+          };
+        }),
+      };
     }),
   };
 };

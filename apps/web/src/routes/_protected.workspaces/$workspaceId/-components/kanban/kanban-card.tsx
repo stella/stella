@@ -16,6 +16,7 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
 import type {
   WorkspaceEntity,
@@ -224,8 +225,9 @@ export const KanbanCard = ({
       {properties && valueFields.length > 0 && (
         <div className="flex min-w-0 flex-wrap items-center gap-1.5">
           {valueFields.map((fieldId) => {
-            const field = entity.fields[fieldId];
-            const property = properties.find((p) => p.id === fieldId);
+            const propertyId = toSafeId<"property">(fieldId);
+            const field = entity.fields[propertyId];
+            const property = properties.find((p) => p.id === propertyId);
             if (!property || !field || field.content.type === "file") {
               return null;
             }

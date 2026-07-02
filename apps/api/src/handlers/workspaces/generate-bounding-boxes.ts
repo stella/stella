@@ -80,8 +80,8 @@ const generateBoundingBoxes = createSafeHandler(
           workspaceId,
           organizationId,
         });
-        // `WorkflowIntegrationError.cause` carries the underlying AI
-        // provider failure (APICallError / RetryError) — classify
+        // `WorkflowIntegrationError.cause` carries the underlying
+        // provider failure — classify
         // against that so quota/usage-limit errors map to 429/402 instead of
         // bubbling up as an uncaught Panic and returning 500.
         return Result.err(

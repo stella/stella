@@ -1,4 +1,3 @@
-import { generateText, Output } from "ai";
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 import { status, t } from "elysia";
@@ -16,12 +15,14 @@ import {
   workspaceSearchDocuments,
 } from "@/api/db/schema";
 import { resolveSelectedWorkspaceIds } from "@/api/handlers/search/search";
+import { resolveCaching } from "@/api/lib/ai-config";
+import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
 import { aiErrorStatusBody } from "@/api/lib/ai-error";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
-import { getModelForRole, requireAIAvailable } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import {
+  createTanStackAIAnalyticsCallbacks,
+  type TanStackAIAnalyticsCallbacks,
+} from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -45,6 +46,8 @@ import {
   type GlobalSearchHit,
   type GlobalSearchResultType,
 } from "@/api/lib/search/types";
+import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
+import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 
 const SEARCH_SUMMARY_RESULT_LIMIT = 5;
 const SEARCH_CONTEXT_CHARS_PER_RESULT = 3000;
@@ -243,13 +246,13 @@ const truncate = (text: string, maxLength: number): string =>
   text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
 
 type GenerateRefinedSearchQueryOptions = {
+  analytics: TanStackAIAnalyticsCallbacks;
   attempt: number;
   body: RefineSearchBody;
+  caching: CachingDecision;
   lastValidationError: string | null;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
-  promptCachingEnabled: boolean;
-  stepCallbacks: ReturnType<typeof createAIAnalyticsCallbacks>["stepCallbacks"];
 };
 
 const validateSearchQueryWithPostgres = async ({
@@ -269,23 +272,23 @@ const validateSearchQueryWithPostgres = async ({
   });
 
 const generateRefinedSearchQuery = async ({
+  analytics,
   attempt,
   body,
+  caching,
   lastValidationError,
   organizationId,
   orgAIConfig,
-  promptCachingEnabled,
-  stepCallbacks,
 }: GenerateRefinedSearchQueryOptions) =>
   await Result.tryPromise({
     try: async () =>
-      await generateText({
-        model: getModelForRole("fast", orgAIConfig, {
-          promptCachingEnabled,
-          scopeKey: null,
-          organizationId,
-          serviceTier: "standard",
-        }),
+      await generateTanStackObjectForRole({
+        role: "fast",
+        serviceTier: "standard",
+        orgAIConfig,
+        organizationId,
+        analytics,
+        caching,
         system: SEARCH_REFINE_SYSTEM,
         prompt: JSON.stringify({
           attempt,
@@ -293,12 +296,9 @@ const generateRefinedSearchQuery = async ({
           query: body.query,
           previousValidationError: lastValidationError,
         }),
-        output: Output.object({
-          schema: strictOutputSchema(refineSearchOutputSchema),
-        }),
+        outputSchema: refineSearchOutputSchema,
         maxOutputTokens: 180,
         abortSignal: AbortSignal.timeout(20_000),
-        ...stepCallbacks,
       }),
     catch: (error: unknown) => error,
   });
@@ -314,12 +314,15 @@ export const refineSearchQuery = async ({
 }: SearchAIContext & {
   body: RefineSearchBody;
 }) => {
-  const gate = requireAIAvailable(orgAIConfig);
+  const gate = requireTanStackAIAvailableForRole({
+    orgConfig: orgAIConfig,
+    role: "fast",
+  });
   if (gate.isErr()) {
-    return status(403, { message: gate.error.message });
+    return status(gate.error.status, { message: gate.error.message });
   }
 
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -345,8 +348,12 @@ export const refineSearchQuery = async ({
       lastValidationError,
       organizationId,
       orgAIConfig,
-      promptCachingEnabled,
-      stepCallbacks: aiAnalytics.stepCallbacks,
+      analytics: aiAnalytics,
+      caching: resolveCaching({
+        promptCachingEnabled,
+        role: "fast",
+        scopeKey: null,
+      }),
     });
 
     if (result.isErr()) {
@@ -358,16 +365,7 @@ export const refineSearchQuery = async ({
       return status(mapped.status, mapped.body);
     }
 
-    const parsedOutput = v.safeParse(
-      refineSearchOutputSchema,
-      result.value.output,
-    );
-    if (!parsedOutput.success) {
-      lastValidationError = "AI output did not match the expected schema.";
-      continue;
-    }
-
-    const refinedQuery = parsedOutput.output.query.trim();
+    const refinedQuery = result.value.query.trim();
     if (!refinedQuery) {
       lastValidationError = "AI returned an empty query.";
       continue;
@@ -408,9 +406,12 @@ export const summarizeSearchResults = async ({
 }: SearchSummaryContext & {
   body: SummarizeSearchBody;
 }) => {
-  const gate = requireAIAvailable(orgAIConfig);
+  const gate = requireTanStackAIAvailableForRole({
+    orgConfig: orgAIConfig,
+    role: "fast",
+  });
   if (gate.isErr()) {
-    return status(403, { message: gate.error.message });
+    return status(gate.error.status, { message: gate.error.message });
   }
 
   const resolved = await resolveSelectedWorkspaceIds({
@@ -440,7 +441,7 @@ export const summarizeSearchResults = async ({
     return status(404, { message: "No results to summarize" });
   }
 
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -461,12 +462,16 @@ export const summarizeSearchResults = async ({
 
   const result = await Result.tryPromise({
     try: async () =>
-      await generateText({
-        model: getModelForRole("fast", orgAIConfig, {
+      await generateTanStackObjectForRole({
+        role: "fast",
+        serviceTier: "standard",
+        orgAIConfig,
+        organizationId,
+        analytics: aiAnalytics,
+        caching: resolveCaching({
           promptCachingEnabled,
+          role: "fast",
           scopeKey: null,
-          organizationId,
-          serviceTier: "standard",
         }),
         system: SEARCH_SUMMARY_SYSTEM,
         prompt: JSON.stringify({
@@ -475,12 +480,9 @@ export const summarizeSearchResults = async ({
           searchQuery: body.query,
           results: contextsResult.map(toModelSearchResultContext),
         }),
-        output: Output.object({
-          schema: strictOutputSchema(searchSummaryOutputSchema),
-        }),
+        outputSchema: searchSummaryOutputSchema,
         maxOutputTokens: 700,
         abortSignal: AbortSignal.timeout(30_000),
-        ...aiAnalytics.stepCallbacks,
       }),
     catch: (error: unknown) => error,
   });
@@ -498,16 +500,8 @@ export const summarizeSearchResults = async ({
     return status(mapped.status, mapped.body);
   }
 
-  const parsedOutput = v.safeParse(
-    searchSummaryOutputSchema,
-    result.value.output,
-  );
-  if (!parsedOutput.success) {
-    return status(502, { message: "Failed to summarize search results" });
-  }
-
-  const title = parsedOutput.output.title.trim();
-  const summary = parsedOutput.output.summary.trim();
+  const title = result.value.title.trim();
+  const summary = result.value.summary.trim();
   if (!title || !summary) {
     return status(502, { message: "Failed to summarize search results" });
   }
@@ -517,7 +511,7 @@ export const summarizeSearchResults = async ({
     summary,
     citations: resolveSummaryCitations({
       contexts: contextsResult,
-      citations: parsedOutput.output.citations,
+      citations: result.value.citations,
     }),
   };
 };

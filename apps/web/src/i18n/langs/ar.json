@@ -449,6 +449,8 @@
     },
     "queuedAttachmentCount": "{count, plural, zero {# مرفق} one {# مرفق} two {# مرفقان} few {# مرفقات} many {# مرفقاً} other {# مرفق}}",
     "queuedNotice": "في قائمة الانتظار — يُرسَل عند انتهاء الردّ الحالي",
+    "reasoning": "استدلال",
+    "reasoningTokens": "{count, plural, zero {# رمز استدلال} one {# رمز استدلال} two {# رمزا استدلال} few {# رموز استدلال} many {# رمز استدلال} other {# رمز استدلال}}",
     "recapLoading": "جارٍ تلخيص المحادثة…",
     "removeSuggestion": "(إزالة)",
     "resend": "إعادة الإرسال",

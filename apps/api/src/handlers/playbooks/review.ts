@@ -11,7 +11,6 @@ import { extractAskContents } from "@/api/handlers/playbooks/review-extract";
 import type { ReviewAsk } from "@/api/handlers/playbooks/review-extract";
 import { buildFindings } from "@/api/handlers/playbooks/review-grade";
 import type { ReviewFinding } from "@/api/handlers/playbooks/review-grade";
-import { requireAIAvailable } from "@/api/lib/ai-models";
 import {
   assertUsageAvailableForHandler,
   createSafeHandler,
@@ -20,6 +19,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
 import { isAISupportedFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 
@@ -59,7 +59,10 @@ const reviewPlaybook = createSafeHandler(
   }) {
     const organizationId = session.activeOrganizationId;
 
-    yield* requireAIAvailable(orgAIConfig);
+    yield* requireTanStackAIAvailableForRole({
+      orgConfig: orgAIConfig,
+      role: "pdf",
+    });
 
     const loaded = yield* Result.await(
       safeDb(async (tx) => {

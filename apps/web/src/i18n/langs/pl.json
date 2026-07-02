@@ -449,6 +449,8 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# załącznik} few {# załączniki} many {# załączników} other {# załącznika}}",
     "queuedNotice": "W kolejce — zostanie wysłana po zakończeniu bieżącej odpowiedzi",
+    "reasoning": "Rozumowanie",
+    "reasoningTokens": "{count, plural, one {# token rozumowania} few {# tokeny rozumowania} many {# tokenów rozumowania} other {# tokenu rozumowania}}",
     "recapLoading": "Podsumowywanie rozmowy…",
     "removeSuggestion": "(usuń)",
     "resend": "Wyślij ponownie",

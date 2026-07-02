@@ -7,6 +7,7 @@ import type {
   OptionColor,
   ViewLayout,
   ViewLayoutType,
+  SafeId,
 } from "@stll/api/types";
 
 import { PDF_MIME_TYPE } from "@/consts";
@@ -25,6 +26,12 @@ export type {
 
 export type RouterToPath = FileRouteTypes["to"];
 export type RouterFullPath = FileRouteTypes["fullPaths"];
+
+export type WorkspaceId = SafeId<"workspace">;
+export type EntityId = SafeId<"entity">;
+export type FieldId = SafeId<"field">;
+export type JustificationId = SafeId<"justification">;
+export type PropertyId = SafeId<"property">;
 
 export const isFileDisplayable = (file: {
   mimeType: string;
@@ -57,7 +64,7 @@ export const isFileDisplayable = (file: {
 };
 
 export type PropertyDependency = {
-  dependsOnPropertyId: string;
+  dependsOnPropertyId: PropertyId;
   condition: ConditionNode | null;
 };
 
@@ -84,14 +91,15 @@ type AIModelTool = {
 type PlaybookVerdictTool = {
   version: 1;
   type: "playbook-verdict";
-  askPropertyId: string;
+  askPropertyId: PropertyId;
+  dependencies: PropertyDependency[];
 };
 
 export type WorkspaceProperty = {
-  id: string;
+  id: PropertyId;
   name: string;
   createdAt: Date;
-  workspaceId: string;
+  workspaceId: WorkspaceId;
   status: "stale" | "fresh";
   content:
     | {
@@ -191,8 +199,9 @@ export type WorkspaceFieldContent =
     };
 
 export type WorkspaceField = {
-  entityId: string;
-  id: string;
+  entityId: EntityId;
+  id: FieldId;
+  propertyId: PropertyId;
   content: WorkspaceFieldContent;
 };
 
@@ -219,16 +228,16 @@ export type WorkspaceCellMetadata = {
 };
 
 export type EntityField = {
-  id: string;
-  propertyId: string;
+  id: FieldId;
+  propertyId: PropertyId;
   content: WorkspaceFieldContent;
 };
 
 export type WorkspaceEntity = {
-  entityId: string;
+  entityId: EntityId;
   kind: EntityKind;
   name: string | null;
-  parentId: string | null;
+  parentId: EntityId | null;
   createdAt: string;
   createdBy: string | null;
   createdByImage: string | null;
@@ -260,8 +269,8 @@ export type WorkspaceEntity = {
   readOnly: boolean;
   sortOrder: string | null;
   activeEditBy: { name: string; image: string | null; isMe: boolean } | null;
-  fields: Record<string, WorkspaceField>;
-  cellMetadata: Record<string, WorkspaceCellMetadata>;
+  fields: Partial<Record<PropertyId, WorkspaceField>>;
+  cellMetadata: Partial<Record<PropertyId, WorkspaceCellMetadata>>;
 };
 
 export type WorkspaceView<T extends ViewLayoutType = ViewLayoutType> = {
@@ -341,9 +350,9 @@ export type JustificationContent = {
 };
 
 export type WorkspaceJustification = {
-  id: string;
-  fieldId: string;
+  id: JustificationId;
+  fieldId: FieldId;
   content: JustificationContent;
   boundingBoxes: { version: number; boxes: BoundingBox[] } | null;
-  fileFieldIds: string[];
+  fileFieldIds: FieldId[];
 };

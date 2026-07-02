@@ -6,7 +6,7 @@ import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
 
 /**
  * Read-only matter list shared by every leaf that resolves a
- * `tool-create-document` part (currently `NeedsMatterCard`).
+ * `create-document` tool call (currently `NeedsMatterCard`).
  *
  * The list is workspace-scoped and lives on whichever component
  * owns the chat surface — `ChatThreadPage`, `ChatTabPanel`,

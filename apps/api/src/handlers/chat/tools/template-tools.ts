@@ -1,8 +1,8 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import * as v from "valibot";
 
 import type { SafeDb, ScopedDb } from "@/api/db";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -14,9 +14,9 @@ import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/handlers/templates/template-fill-service";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -63,7 +63,7 @@ const buildTemplateAiAnalytics = ({
   orgAIConfig,
   feature,
 }: TemplateAiAnalyticsArgs) =>
-  createAIAnalyticsCallbacks({
+  createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -126,7 +126,8 @@ export const createTemplateTools = ({
   });
 
   return {
-    [LIST_TEMPLATES_TOOL_NAME]: tool({
+    [LIST_TEMPLATES_TOOL_NAME]: toolDefinition({
+      name: LIST_TEMPLATES_TOOL_NAME,
       description:
         "List the document templates in this workspace (NDAs, powers of " +
         "attorney, leases, and so on). Returns each template's id, name, " +
@@ -135,32 +136,32 @@ export const createTemplateTools = ({
         "and their ids before describing or filling one. When picking a " +
         "template, prefer one whose whenToUse matches the request and skip " +
         "any whose whenNotToUse applies.",
-      inputSchema: valibotSchema(v.strictObject({})),
-      execute: async () => {
-        const rows = await scopedDb((tx) =>
-          tx.query.templates.findMany({
-            columns: {
-              id: true,
-              name: true,
-              fieldCount: true,
-              tags: true,
-              whenToUse: true,
-              whenNotToUse: true,
-            },
-            orderBy: { createdAt: "desc" },
-            limit: LIMITS.templatesCount,
-          }),
-        );
-        return { templates: rows };
-      },
+      inputSchema: toTanStackToolSchema(v.strictObject({})),
+    }).server(async () => {
+      const rows = await scopedDb((tx) =>
+        tx.query.templates.findMany({
+          columns: {
+            id: true,
+            name: true,
+            fieldCount: true,
+            tags: true,
+            whenToUse: true,
+            whenNotToUse: true,
+          },
+          orderBy: { createdAt: "desc" },
+          limit: LIMITS.templatesCount,
+        }),
+      );
+      return { templates: rows };
     }),
 
-    [DESCRIBE_TEMPLATE_TOOL_NAME]: tool({
+    [DESCRIBE_TEMPLATE_TOOL_NAME]: toolDefinition({
+      name: DESCRIBE_TEMPLATE_TOOL_NAME,
       description:
         "Describe a template's fillable fields (with any named conditions and " +
         "computed fields) so you know what values to provide before filling " +
         "it. Pass the template id from list_templates.",
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           templateId: v.pipe(
             v.string(),
@@ -168,14 +169,16 @@ export const createTemplateTools = ({
           ),
         }),
       ),
-      execute: async ({ templateId }) =>
+    }).server(
+      async ({ templateId }) =>
         await describeStoredTemplate({
           templateId: brandPersistedTemplateId(templateId),
           scopedDb,
         }),
-    }),
+    ),
 
-    [FILL_TEMPLATE_TOOL_NAME]: tool({
+    [FILL_TEMPLATE_TOOL_NAME]: toolDefinition({
+      name: FILL_TEMPLATE_TOOL_NAME,
       description:
         "Fill a template with values and return the assembled document text. " +
         "Call describe_template first to learn the field paths. 'values' maps " +
@@ -183,7 +186,7 @@ export const createTemplateTools = ({
         '"signing_date": "2026-06-08"}. Fields configured as AI-fillable are ' +
         "drafted automatically when you omit them. Returns the rendered text " +
         "plus any placeholders left unfilled.",
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           templateId: v.pipe(
             v.string(),
@@ -195,38 +198,37 @@ export const createTemplateTools = ({
           ),
         }),
       ),
-      execute: async ({ templateId, values }) => {
-        const branded = brandPersistedTemplateId(templateId);
-        const result = await fillStoredTemplate({
-          templateId: branded,
-          values,
-          scopedDb,
-          organizationId,
-          generateAiValue,
-          decideAiCondition,
-          adaptAiValue,
-        });
-        if (!("error" in result)) {
-          // Record the execution (fill row + EXECUTE audit) like the REST fill
-          // routes, so agent-driven fills appear in the audit trail.
-          // Best-effort: a successful render is not discarded if the
-          // bookkeeping write fails (it is captured).
-          await scopedDb(
-            async (tx) =>
-              await recordTemplateFill({
-                tx,
-                templateId: branded,
-                organizationId,
-                userId,
-                format: "text",
-                unmatchedCount: result.unmatchedPlaceholders.length,
-                unusedCount: result.unusedValues.length,
-                recordAuditEvent,
-              }),
-          ).catch(captureError);
-        }
-        return result;
-      },
+    }).server(async ({ templateId, values }) => {
+      const branded = brandPersistedTemplateId(templateId);
+      const result = await fillStoredTemplate({
+        templateId: branded,
+        values,
+        scopedDb,
+        organizationId,
+        generateAiValue,
+        decideAiCondition,
+        adaptAiValue,
+      });
+      if (!("error" in result)) {
+        // Record the execution (fill row + EXECUTE audit) like the REST fill
+        // routes, so agent-driven fills appear in the audit trail.
+        // Best-effort: a successful render is not discarded if the
+        // bookkeeping write fails (it is captured).
+        await scopedDb(
+          async (tx) =>
+            await recordTemplateFill({
+              tx,
+              templateId: branded,
+              organizationId,
+              userId,
+              format: "text",
+              unmatchedCount: result.unmatchedPlaceholders.length,
+              unusedCount: result.unusedValues.length,
+              recordAuditEvent,
+            }),
+        ).catch(captureError);
+      }
+      return result;
     }),
   };
 };
@@ -263,7 +265,8 @@ export const createTemplateAuthoringTools = ({
   });
 
   return {
-    [SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]: tool({
+    [SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]: toolDefinition({
+      name: SUGGEST_TEMPLATE_FIELDS_TOOL_NAME,
       description:
         "Suggest which literal values in a template document being authored " +
         "should become {{field}} placeholders (party names, addresses, " +
@@ -276,7 +279,7 @@ export const createTemplateAuthoringTools = ({
         "In bilingual or multi-column documents apply the marker in EVERY " +
         "language column (one edit per parallel occurrence), so the same " +
         "value is never a field in one language and hardcoded in the other.",
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           text: v.pipe(
             v.string(),
@@ -293,16 +296,15 @@ export const createTemplateAuthoringTools = ({
           ),
         }),
       ),
-      execute: async ({ text, instructions }) => {
-        const suggestions = await suggestTemplateFields({
-          documentText: text,
-          instructions: instructions ?? undefined,
-          orgAIConfig: orgAIConfig ?? null,
-          organizationId,
-          aiAnalytics,
-        });
-        return { suggestions };
-      },
+    }).server(async ({ text, instructions }) => {
+      const suggestions = await suggestTemplateFields({
+        documentText: text,
+        instructions: instructions ?? undefined,
+        orgAIConfig: orgAIConfig ?? null,
+        organizationId,
+        aiAnalytics,
+      });
+      return { suggestions };
     }),
   };
 };

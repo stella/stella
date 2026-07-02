@@ -1,6 +1,3 @@
-import type { ChatMessage } from "@/api/handlers/chat/types";
-
-type ChatPart = ChatMessage["parts"][number];
 type CreateDocumentInput = {
   name: string;
   source: string;
@@ -30,37 +27,6 @@ const LEGACY_MISSING_ROUTE_ID = "";
 export const normalizeLegacyRawToolInputs = (
   parts: readonly unknown[],
 ): unknown[] => parts.map((part) => normalizeLegacyRawCreateDocumentPart(part));
-
-export const normalizeLegacyToolInputs = (
-  parts: ChatMessage["parts"],
-): ChatMessage["parts"] =>
-  parts.map((part) => normalizeLegacyCreateDocumentPart(part));
-
-const normalizeLegacyCreateDocumentPart = (part: ChatPart): ChatPart => {
-  if (
-    part.type !== CREATE_DOCUMENT_TOOL_PART_TYPE ||
-    !("input" in part) ||
-    part.input === undefined
-  ) {
-    return part;
-  }
-
-  const input = normalizeCreateDocumentInput(part.input);
-  if (part.state !== "output-available") {
-    return input ? { ...part, input } : part;
-  }
-
-  const output = normalizeCreateDocumentOutput(part.output);
-  if (!input && !output) {
-    return part;
-  }
-
-  return {
-    ...part,
-    ...(input && { input }),
-    output: output ?? part.output,
-  };
-};
 
 const normalizeCreateDocumentInput = (
   input: unknown,

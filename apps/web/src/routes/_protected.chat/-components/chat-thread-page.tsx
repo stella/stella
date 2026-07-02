@@ -36,6 +36,7 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
 import { UsageLimitModal } from "@/components/usage/usage-limit-modal";
 import { useUsageLimit } from "@/components/usage/use-usage-limit";
+import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
 import { api } from "@/lib/api";
@@ -47,7 +48,6 @@ import {
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
-import { useDevStore } from "@/lib/dev-store";
 import { toAPIError } from "@/lib/errors";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -87,7 +87,6 @@ export const ChatThreadPage = ({
   const { ensureAIAvailable } = useAIKeyGate();
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
-  const showToolCallDetails = useDevStore((state) => state.showToolCallDetails);
   const prompts = useSavedPrompts();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -139,10 +138,13 @@ export const ChatThreadPage = ({
     }),
   );
   const { chat } = data;
-  if (seededForThreadId !== threadRef.threadId) {
+  useExternalSyncEffect(() => {
+    if (seededForThreadId === threadRef.threadId) {
+      return;
+    }
     setSeededForThreadId(threadRef.threadId);
     setContextMatterIds(data.contextMatterIds);
-  }
+  }, [data.contextMatterIds, seededForThreadId, threadRef.threadId]);
 
   const {
     error,
@@ -254,7 +256,9 @@ export const ChatThreadPage = ({
     lastMessage.role === "assistant" &&
     lastMessage.parts.some(
       (part) =>
-        part.type === "tool-ask-user" && part.state !== "output-available",
+        part.type === "tool-call" &&
+        part.name === "ask-user" &&
+        part.state !== "complete",
     );
   const askUserOwnsTurn =
     lastMessageHasPendingAskUser || editingAskUserToolCallIds.size > 0;
@@ -462,7 +466,6 @@ export const ChatThreadPage = ({
                     onSendWithoutAnonymization={sendWithoutAnonymization}
                     queuedMessages={queuedMessages}
                     showThinkingIndicator
-                    showToolCallDetails={showToolCallDetails}
                     streamdownComponents={streamdownComponents}
                     workspaceId={workspaceId}
                   />
@@ -529,7 +532,7 @@ export const ChatThreadPage = ({
               controller={controller}
               isGenerating={isGenerating}
               onStop={() => {
-                void stop();
+                stop();
               }}
               onSubmit={async (draft) => {
                 const reservedCommand = matchReservedChatCommand(draft.html);
@@ -537,7 +540,7 @@ export const ChatThreadPage = ({
                   // Abort any live stream first: `chatThreadOptions` keeps the
                   // in-flight Chat alive in the query cache, so navigating away
                   // would leave it streaming against the abandoned thread.
-                  void stop();
+                  stop();
                   controller.setContent("");
                   if (threadRef.scope === "workspace") {
                     void navigate({

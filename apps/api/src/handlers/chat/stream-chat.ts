@@ -1,20 +1,21 @@
 import {
-  convertToModelMessages,
-  createUIMessageStream,
-  createUIMessageStreamResponse,
-  consumeStream,
-  hasToolCall,
-  stepCountIs,
-  streamText,
-} from "ai";
+  chat,
+  EventType,
+  maxIterations,
+  StreamProcessor,
+  toServerSentEventsResponse,
+} from "@tanstack/ai";
 import type {
-  InferUIMessageChunk,
-  LanguageModel,
-  ToolSet,
-  UIMessageStreamOnFinishCallback,
-} from "ai";
+  ChatMiddleware,
+  ChatMiddlewareConfig,
+  ModelMessage,
+  StreamChunk,
+  TokenUsage,
+  UIMessage,
+} from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
+import type { ModelRole } from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
   CHAT_TRANSPORT_ERROR_CODE,
@@ -23,7 +24,11 @@ import {
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { SafeDb, SafeDbError } from "@/api/db";
-import { getUserFileIdFromPart } from "@/api/handlers/chat/attachment-validation";
+import {
+  getUserFileIdFromAttachmentPart,
+  isChatPart,
+  isChatAttachmentPart,
+} from "@/api/handlers/chat/chat-message-parts";
 import type {
   ChatSafePrompt,
   ChatUntrustedPromptSuffix,
@@ -42,74 +47,93 @@ import {
   deanonymizeFromBoundary,
   deanonymizeUnknownStringsFromBoundary,
   prepareMessagesForThirdParty,
+  prepareMcpToolSourceForThirdParty,
   prepareTextForThirdParty,
   prepareToolsForThirdParty,
 } from "@/api/handlers/chat/third-party-boundary";
-import { repairActiveDocxEditToolCall } from "@/api/handlers/chat/tools/active-docx-edit-tool-repair";
-import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
-import type { ChatMessage } from "@/api/handlers/chat/types";
-import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
-import { composeSystemWithCacheBoundary } from "@/api/lib/ai-caching";
-import { classifyAIError } from "@/api/lib/ai-error";
-import type { OrgAIConfig, ResolvedModelInfo } from "@/api/lib/ai-models";
 import {
-  getModelById,
-  getModelInfoById,
-  getModelForRole,
-  getModelInfoForRole,
-} from "@/api/lib/ai-models";
+  chatToolMapToArray,
+  type ChatToolMap,
+} from "@/api/handlers/chat/tools/chat-tool-types";
+import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
+import type { StellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
+import type {
+  ChatAnonRestoration,
+  ChatMessage,
+  ChatMessageUsage,
+  ChatPart,
+  PersistableChatMessage,
+} from "@/api/handlers/chat/types";
+import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
+import { classifyAIError } from "@/api/lib/ai-error";
+import type { AIErrorKind } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
-  ChatToolError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import {
+  abortControllerFromSignal,
+  mergeGenerationOptions,
+  resolveTanStackTextModel,
+  systemPromptsPatch,
+} from "@/api/lib/tanstack-ai-generate";
+import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 
 const MAX_TOOL_STEPS = 100;
-const CHAT_TOOL_ERROR_UNWRAP_DEPTH = 8;
-
-const unwrapChatToolError = (error: unknown): ChatToolError | null => {
-  let current: unknown = error;
-  for (let depth = 0; depth < CHAT_TOOL_ERROR_UNWRAP_DEPTH; depth += 1) {
-    if (current instanceof ChatToolError) {
-      return current;
-    }
-    if (
-      current === null ||
-      typeof current !== "object" ||
-      !("cause" in current)
-    ) {
-      return null;
-    }
-    const cause: unknown = Reflect.get(current, "cause");
-    if (cause === undefined) {
-      return null;
-    }
-    current = cause;
-  }
-  return null;
-};
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
   "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.";
+const STELLA_ANON_RESTORATIONS_EVENT = "stella.anon-restorations";
+const ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL = "stella-assistant-response";
+const CHAT_LOOP_DETECTED_MESSAGE =
+  "The AI model repeated the same work and could not recover. Please try again with a narrower request.";
+const CHAT_EMPTY_COMPLETION_MESSAGE =
+  "Model returned finish_reason=stop with zero output";
 
-const ORPHAN_TOOL_STATES = new Set<string>([
-  "input-streaming",
-  "input-available",
-]);
+type StoredUserFile = {
+  fileName: string;
+  id: SafeId<"userFile">;
+  mimeType: string;
+  s3Key: string;
+  threadId: SafeId<"chatThread">;
+  userId: string;
+};
 
-const isOrphanToolPart = (part: ChatMessage["parts"][number]): boolean => {
-  const isToolPart =
-    part.type === "dynamic-tool" || part.type.startsWith("tool-");
-  if (!isToolPart) {
-    return false;
-  }
-  if (!("state" in part) || typeof part.state !== "string") {
-    return false;
-  }
-  return ORPHAN_TOOL_STATES.has(part.state);
+type AssistantValueRefResolver = ChatRefRegistry["resolveAssistantValueRefs"];
+
+type StreamChatFinishEvent = {
+  isAborted: boolean;
+  responseMessage: PersistableChatMessage;
+};
+
+type StreamChatProps = {
+  abortSignal: AbortSignal;
+  devModelId?: string | undefined;
+  latestMessageId: string;
+  messages: ChatMessage[];
+  onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  promptCacheKey: string;
+  promptCachingEnabled: boolean;
+  resolveAssistantTextRefs?: ((text: string) => string) | undefined;
+  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  safeDb: SafeDb;
+  systemSafe: ChatSafePrompt;
+  systemUntrusted: ChatUntrustedPromptSuffix;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  threadId: SafeId<"chatThread">;
+  tools: ChatToolMap;
+  externalMcpToolSource?: StellaMcpToolSource | undefined;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
 };
 
 export const pruneOrphanedToolParts = (
@@ -119,264 +143,24 @@ export const pruneOrphanedToolParts = (
     if (message.role !== "assistant") {
       return message;
     }
-    const kept = message.parts.filter((part) => !isOrphanToolPart(part));
-    if (kept.length === message.parts.length) {
-      return message;
-    }
-    return { ...message, parts: kept };
+
+    const parts = message.parts.filter(
+      (part) =>
+        part.type !== "tool-call" ||
+        part.state === "complete" ||
+        part.state === "input-complete" ||
+        part.state === "approval-responded" ||
+        part.output !== undefined,
+    );
+    return parts.length === message.parts.length
+      ? message
+      : { ...message, parts };
   });
-
-type AssistantValueRefResolver = ChatRefRegistry["resolveAssistantValueRefs"];
-
-type RunChatStreamArgs = {
-  writer: Parameters<
-    NonNullable<
-      Parameters<typeof createUIMessageStream<ChatMessage>>[0]["execute"]
-    >
-  >[0]["writer"];
-  aiAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
-  compactionAIAnalytics: ReturnType<typeof createAIAnalyticsCallbacks>;
-  model: LanguageModel;
-  modelInfo: ResolvedModelInfo;
-  /**
-   * When true, an empty completion appends an `{type: "error"}`
-   * chunk to the tail of the stream — `Chat.onFinish` then reports
-   * `isError: true` and the frontend renders the recoverable error
-   * bubble. When false, the empty case finishes silently so a
-   * caller (the fallback path) can continue with a different
-   * model on the same writer.
-   */
-  emitErrorOnEmpty: boolean;
-  abortSignal: AbortSignal;
-  system: string;
-  tools: ToolSet;
-  modelMessages: Awaited<ReturnType<typeof convertToModelMessages>>;
-  threadId: SafeId<"chatThread">;
-  thirdPartyBoundary: ChatThirdPartyBoundary;
-  resolveAssistantTextRefs: ((text: string) => string) | undefined;
-  resolveAssistantValueRefs: AssistantValueRefResolver | undefined;
-  initialRestorationPlaceholders: ReadonlySet<string>;
-  onAiError: (error: unknown) => string;
-};
-
-/**
- * One streamText invocation, threaded through the deanonymization
- * + ref-resolution pipeline and merged onto the shared writer.
- * Returns `true` if the model produced zero output tokens — the
- * caller decides whether to retry on a fallback model or surface
- * the error.
- */
-const runChatStream = async ({
-  writer,
-  aiAnalytics,
-  compactionAIAnalytics,
-  model,
-  modelInfo,
-  emitErrorOnEmpty,
-  abortSignal,
-  system,
-  tools,
-  modelMessages,
-  threadId,
-  thirdPartyBoundary,
-  resolveAssistantTextRefs,
-  resolveAssistantValueRefs,
-  initialRestorationPlaceholders,
-  onAiError,
-}: RunChatStreamArgs): Promise<boolean> => {
-  let emptyCompletion: ChatEmptyCompletionError | null = null;
-  let finalLoopDetection: ChatLoopDetectedError | null = null;
-  let lastLoopRecoveryKey: string | null = null;
-  let flushResolve: (() => void) | null = null;
-  const flushed = new Promise<void>((resolve) => {
-    flushResolve = resolve;
-  });
-  const result = streamText({
-    abortSignal,
-    model,
-    system,
-    tools,
-    experimental_repairToolCall: async ({ toolCall }) =>
-      await Promise.resolve(repairActiveDocxEditToolCall(toolCall)),
-    prepareStep: async ({ messages }) => {
-      const loopDetection = detectModelLoop(messages);
-      if (shouldStopLoopRecovery(loopDetection)) {
-        throw new ChatLoopDetectedError({
-          message:
-            "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
-        });
-      }
-
-      let nextSystem = system;
-      if (shouldInjectLoopRecovery(loopDetection)) {
-        const recoveryKey = getLoopRecoveryKey(loopDetection);
-        if (recoveryKey !== lastLoopRecoveryKey) {
-          lastLoopRecoveryKey = recoveryKey;
-          nextSystem = createLoopRecoverySystemPrompt({
-            baseSystem: system,
-            detection: loopDetection,
-          });
-        }
-      }
-
-      const compactedMessages = await compactModelMessagesForModel({
-        abortSignal,
-        aiAnalytics: compactionAIAnalytics,
-        messages,
-        model,
-        onSummaryError: (error) => {
-          captureError(error, {
-            threadId,
-            provider: modelInfo.provider,
-            modelId: modelInfo.modelId,
-            feature: "chat.step-compaction",
-          });
-        },
-      });
-      if (Result.isError(compactedMessages)) {
-        throw compactedMessages.error;
-      }
-      if (compactedMessages.value === messages && nextSystem === system) {
-        return undefined;
-      }
-
-      return {
-        messages: compactedMessages.value,
-        system: nextSystem,
-      };
-    },
-    stopWhen: [stepCountIs(MAX_TOOL_STEPS), hasToolCall("ask-user")],
-    messages: modelMessages,
-    ...aiAnalytics.stepCallbacks,
-    onStepFinish: (event) => {
-      aiAnalytics.stepCallbacks.onStepFinish?.(event);
-      const { response, toolCalls } = event;
-      if (toolCalls.length > 0) {
-        return;
-      }
-
-      const loopDetection = detectModelLoop(response.messages);
-      if (!shouldSurfaceFinalContentLoop(loopDetection)) {
-        return;
-      }
-
-      finalLoopDetection = new ChatLoopDetectedError({
-        message:
-          "The AI model repeated the same work and could not recover. Please try again with a narrower request.",
-      });
-    },
-    onFinish: ({ finishReason, totalUsage }) => {
-      // `outputTokens` is `number | undefined` — only fire when
-      // explicitly zero, otherwise providers that omit usage
-      // metadata would all be misclassified as empty.
-      if (finishReason === "stop" && totalUsage.outputTokens === 0) {
-        emptyCompletion = new ChatEmptyCompletionError({
-          message: "Model returned finish_reason=stop with zero output",
-        });
-        captureError(emptyCompletion, {
-          threadId,
-          provider: modelInfo.provider,
-          modelId: modelInfo.modelId,
-        });
-      }
-    },
-  });
-
-  const uiStream = result.toUIMessageStream<ChatMessage>({
-    onError: onAiError,
-  });
-  const refResolved = resolveAssistantTextRefs
-    ? resolveRefsInTextStream(
-        uiStream,
-        resolveAssistantTextRefs,
-        resolveAssistantValueRefs,
-      )
-    : uiStream;
-  const piped =
-    thirdPartyBoundary.type === "anonymized"
-      ? deanonymizeOutgoingStream(refResolved, thirdPartyBoundary, {
-          initialRestorationPlaceholders,
-        })
-      : refResolved;
-  // Terminal-flush transform: when `emitErrorOnEmpty` and the
-  // model returned empty, append the error chunk so the client
-  // sees a clear failure. The flush also resolves `flushed`, which
-  // we await below to know when the pipeline has fully drained.
-  const finalised = piped.pipeThrough(
-    new TransformStream<
-      InferUIMessageChunk<ChatMessage>,
-      InferUIMessageChunk<ChatMessage>
-    >({
-      transform(chunk, controller) {
-        controller.enqueue(chunk);
-      },
-      flush(controller) {
-        if (finalLoopDetection) {
-          controller.enqueue({
-            type: "error",
-            errorText: onAiError(finalLoopDetection),
-          });
-        }
-        if (emptyCompletion && emitErrorOnEmpty) {
-          controller.enqueue({
-            type: "error",
-            errorText: onAiError(emptyCompletion),
-          });
-        }
-        flushResolve?.();
-      },
-    }),
-  );
-  writer.merge(finalised);
-  await flushed;
-  // eslint-disable-next-line typescript/no-unnecessary-condition -- onFinish can set this while the provider stream drains.
-  return emptyCompletion !== null;
-};
-
-type StoredUserFile = {
-  id: SafeId<"userFile">;
-  userId: string;
-  threadId: SafeId<"chatThread">;
-  fileName: string;
-  mimeType: string;
-  s3Key: string;
-};
-
-type StreamChatProps = {
-  abortSignal: AbortSignal;
-  devModelId?: string | undefined;
-  messages: ChatMessage[];
-  onFinish: UIMessageStreamOnFinishCallback<ChatMessage>;
-  organizationId: SafeId<"organization">;
-  orgAIConfig: OrgAIConfig | null;
-  promptCacheKey: string;
-  promptCachingEnabled: boolean;
-  resolveAssistantTextRefs?: ((text: string) => string) | undefined;
-  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
-  /**
-   * Server-built scaffold half of the system prompt. Sent to the
-   * model verbatim.
-   */
-  systemSafe: ChatSafePrompt;
-  /**
-   * Dynamic, user-supplied half of the system prompt (active file
-   * body, decision text, external source content, matter labels).
-   * In anonymized mode this passes through the boundary first;
-   * otherwise it concatenates straight onto `systemSafe`.
-   */
-  systemUntrusted: ChatUntrustedPromptSuffix;
-  thirdPartyBoundary: ChatThirdPartyBoundary;
-  latestMessageId: string;
-  safeDb: SafeDb;
-  threadId: SafeId<"chatThread">;
-  tools: ToolSet;
-  userId: SafeId<"user">;
-  workspaceId: SafeId<"workspace"> | null;
-};
 
 export const streamChat = async ({
   abortSignal,
   devModelId,
+  latestMessageId,
   messages: rawMessages,
   onFinish,
   organizationId,
@@ -389,282 +173,1237 @@ export const streamChat = async ({
   systemSafe,
   systemUntrusted,
   thirdPartyBoundary,
-  latestMessageId,
   threadId,
   tools,
+  externalMcpToolSource,
   userId,
   workspaceId,
-}: StreamChatProps) => {
-  // Strip persisted tool-call parts that never received a result
-  // (process killed mid-stream, provider threw before the result was
-  // written, etc.) — otherwise the AI SDK throws
-  // `AI_MissingToolResultsError` at prompt assembly and the whole
-  // thread becomes unsendable.
+}: StreamChatProps): Promise<Response> => {
   const messages = pruneOrphanedToolParts(rawMessages);
-  // The prompt builder already split the system prompt into a safe
-  // scaffold half (brand voice, skill catalog, jurisdictions) and
-  // a dynamic-context half (active file body, decision text,
-  // external source, matter labels). Only the dynamic half can
-  // carry third-party PII, so it's the only piece that crosses the
-  // boundary; the scaffold concatenates onto the front unchanged.
   const preparedUntrusted = await prepareTextForThirdParty({
     boundary: thirdPartyBoundary,
     text: systemUntrusted,
   });
   if (Result.isError(preparedUntrusted)) {
-    return new Response(
-      JSON.stringify(
-        createThirdPartyBoundaryRefusalPayload(preparedUntrusted.error.message),
-      ),
-      {
-        headers: { "Content-Type": "application/json" },
-        status: preparedUntrusted.error.status,
-      },
-    );
+    return thirdPartyBoundaryRefusalResponse(preparedUntrusted.error);
   }
-  // Keep the stable scaffold and the dynamic tail separable for the
-  // caching layer: the marker lets the middleware place the Anthropic
-  // cache breakpoint at the prefix boundary (so the volatile tail —
-  // user name, current date, matter / active-file context — does not
-  // invalidate the cached scaffold). Stripped to a plain concatenation
-  // for every other provider and when caching is off.
-  const system = composeSystemWithCacheBoundary({
-    cacheablePrefix: systemSafe,
-    dynamicTail: preparedUntrusted.value,
-  });
+  const system =
+    preparedUntrusted.value.length > 0
+      ? `${systemSafe}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
+      : systemSafe;
 
   const preparedMessages = await prepareMessagesForThirdParty({
     boundary: thirdPartyBoundary,
     messages,
   });
-
   if (Result.isError(preparedMessages)) {
-    return new Response(
-      JSON.stringify(
-        createThirdPartyBoundaryRefusalPayload(preparedMessages.error.message),
-      ),
-      {
-        headers: { "Content-Type": "application/json" },
-        status: preparedMessages.error.status,
-      },
-    );
+    return thirdPartyBoundaryRefusalResponse(preparedMessages.error);
   }
 
-  const modelMessages = await convertToModelMessages(preparedMessages.value);
-  const initialRestorationPlaceholders =
-    thirdPartyBoundary.type === "anonymized"
-      ? collectInitialRestorationPlaceholders({
-          latestMessageId,
-          messages: preparedMessages.value,
-          redactionMap: thirdPartyBoundary.redactionMap,
-        })
-      : new Set<string>();
-  const modelTools = prepareToolsForThirdParty({
-    boundary: thirdPartyBoundary,
-    tools,
+  const primaryModel = resolveTanStackTextModel({
+    modelId: devModelId,
+    organizationId,
+    orgAIConfig,
+    role: "chat",
   });
-  // The AI SDK runs error formatting in two places: the outer
-  // `createUIMessageStream({ onError })` for errors thrown inside
-  // `execute`, and the inner `result.toUIMessageStream({ onError })`
-  // for errors emitted by the model stream itself. The inner one
-  // defaults to `() => "An error occurred."` and *that* is the path a
-  // Gemini-quota / provider-quota failure actually takes — without
-  // wiring the same classifier on both, the chat client sees the
-  // generic string and our frontend kind-mapping never fires.
-  const onAiError = (error: unknown): string => {
-    const kind = classifyAIError(error);
-    captureError(error, { threadId, kind });
-    const toolError = unwrapChatToolError(error);
-    if (toolError) {
-      return toolError.message;
-    }
-    return kind;
-  };
-
-  const stream = createUIMessageStream<ChatMessage>({
-    generateId: () => Bun.randomUUIDv7(),
-    originalMessages: preparedMessages.value,
-    onFinish,
-    onError: onAiError,
-    execute: async ({ writer }) => {
-      const primaryInfo = devModelId
-        ? getModelInfoById(devModelId, orgAIConfig)
-        : getModelInfoForRole("chat", orgAIConfig);
-      const primaryModel = devModelId
-        ? getModelById(devModelId, orgAIConfig, {
-            promptCachingEnabled,
-            scopeKey: promptCacheKey,
-            role: "chat",
-            organizationId,
-            serviceTier: "standard",
-          })
-        : getModelForRole("chat", orgAIConfig, {
-            promptCachingEnabled,
-            scopeKey: promptCacheKey,
-            organizationId,
-            serviceTier: "standard",
-          });
-      // Eligible fallback: a *different* model on the same orgAI
-      // config. Skip when the user has pinned a specific dev
-      // override (their choice is authoritative) and when the
-      // reasoning role resolves to the same id as chat (e.g.
-      // anthropic — claude-sonnet-4-6 for both; same on
-      // openai_compatible's "default").
-      const fallbackInfo: ResolvedModelInfo | null =
-        devModelId === undefined
-          ? getModelInfoForRole("reasoning", orgAIConfig)
-          : null;
-      const fallbackEligible =
-        fallbackInfo !== null && fallbackInfo.modelId !== primaryInfo.modelId;
-      const primaryAnalytics = createAIAnalyticsCallbacks({
-        usageMetering: {
-          actionType: "chat",
+  const fallbackModel =
+    devModelId === undefined
+      ? resolveFallbackTextModel({
           organizationId,
-          safeDb,
-          serviceTier: "standard",
-          userId,
-          workspaceId,
-        },
-        feature: "chat.stream",
-        modelRole: "chat",
-        orgAIConfig,
-        properties: {
-          organization_id: organizationId,
-          ...(workspaceId ? { workspace_id: workspaceId } : {}),
-        },
-        sessionId: threadId,
-        traceId: Bun.randomUUIDv7(),
-      });
-      const primaryCompactionAnalytics = createAIAnalyticsCallbacks({
-        usageMetering: {
-          actionType: "chat",
-          organizationId,
-          safeDb,
-          serviceTier: "standard",
-          userId,
-          workspaceId,
-        },
-        feature: "chat.step_compaction",
-        modelRole: "chat",
-        orgAIConfig,
-        properties: {
-          organization_id: organizationId,
-          ...(workspaceId ? { workspace_id: workspaceId } : {}),
-        },
-        sessionId: threadId,
-        traceId: Bun.randomUUIDv7(),
-      });
-
-      const primaryEmpty = await runChatStream({
-        writer,
-        aiAnalytics: primaryAnalytics,
-        compactionAIAnalytics: primaryCompactionAnalytics,
-        model: primaryModel,
-        modelInfo: primaryInfo,
-        // Primary finalises on empty only when there's no fallback
-        // — otherwise the fallback path emits the terminal error.
-        emitErrorOnEmpty: !fallbackEligible,
-        abortSignal,
-        system,
-        tools: modelTools,
-        modelMessages,
-        threadId,
-        thirdPartyBoundary,
-        resolveAssistantTextRefs,
-        resolveAssistantValueRefs,
-        initialRestorationPlaceholders,
-        onAiError,
-      });
-
-      if (primaryEmpty && fallbackEligible) {
-        // Same conversation, different model. If the fallback also
-        // returns empty we surface the error chunk; one automatic
-        // retry on a different model is bounded and recoverable,
-        // unlike the model-keeps-failing-on-cached-prefix case.
-        const fallbackModel = getModelForRole("reasoning", orgAIConfig, {
-          promptCachingEnabled,
-          scopeKey: promptCacheKey,
-          organizationId,
-          serviceTier: "standard",
-        });
-        const fallbackAnalytics = createAIAnalyticsCallbacks({
-          usageMetering: {
-            actionType: "chat",
-            organizationId,
-            safeDb,
-            serviceTier: "standard",
-            userId,
-            workspaceId,
-          },
-          feature: "chat.stream_fallback",
-          modelRole: "reasoning",
           orgAIConfig,
-          properties: {
-            organization_id: organizationId,
-            ...(workspaceId ? { workspace_id: workspaceId } : {}),
-          },
-          sessionId: threadId,
-          traceId: Bun.randomUUIDv7(),
-        });
-        const fallbackCompactionAnalytics = createAIAnalyticsCallbacks({
-          usageMetering: {
-            actionType: "chat",
-            organizationId,
-            safeDb,
-            serviceTier: "standard",
-            userId,
-            workspaceId,
-          },
-          feature: "chat.step_compaction_fallback",
-          modelRole: "reasoning",
-          orgAIConfig,
-          properties: {
-            organization_id: organizationId,
-            ...(workspaceId ? { workspace_id: workspaceId } : {}),
-          },
-          sessionId: threadId,
-          traceId: Bun.randomUUIDv7(),
-        });
-        await runChatStream({
-          writer,
-          aiAnalytics: fallbackAnalytics,
-          compactionAIAnalytics: fallbackCompactionAnalytics,
-          model: fallbackModel,
-          modelInfo: fallbackInfo,
-          emitErrorOnEmpty: true,
-          abortSignal,
-          system,
-          tools: modelTools,
-          modelMessages,
+          primaryModel,
           threadId,
-          thirdPartyBoundary,
-          resolveAssistantTextRefs,
-          resolveAssistantValueRefs,
-          initialRestorationPlaceholders,
-          onAiError,
+        })
+      : null;
+  const abortController = abortControllerFromSignal(abortSignal);
+  const modelTools = chatToolMapToArray(
+    prepareToolsForThirdParty({ boundary: thirdPartyBoundary, tools }),
+  );
+  const restorationPairs: ChatAnonRestoration[] = [];
+  const mapAssistantMessageId = createChatMessageIdMapper();
+  let responseMessage: ChatMessage | null = null;
+  const processor = new StreamProcessor({
+    initialMessages: preparedMessages.value,
+    events: {
+      onStreamEnd: (message) => {
+        responseMessage = attachRestorationMetadata({
+          message: toChatMessage(message),
+          restorationPairs,
         });
-      }
+      },
     },
   });
 
-  return createUIMessageStreamResponse({
-    consumeSseStream: async ({ stream: sseStream }) =>
-      await consumeStream({
-        stream: sseStream,
-        onError: (error) => {
+  const stream = runChatAttempts({
+    abortController,
+    abortSignal,
+    baseSystem: system,
+    devModelId,
+    externalMcpToolSource,
+    fallbackModel,
+    modelTools,
+    organizationId,
+    orgAIConfig,
+    preparedMessages: preparedMessages.value,
+    primaryModel,
+    promptCacheKey,
+    promptCachingEnabled,
+    safeDb,
+    thirdPartyBoundary,
+    threadId,
+    userId,
+    workspaceId,
+  });
+
+  const output = processServerChatStream({
+    abortSignal,
+    onFinish,
+    processor,
+    source: transformOutgoingStream({
+      boundary: thirdPartyBoundary,
+      initialRestorationPlaceholders:
+        thirdPartyBoundary.type === "anonymized"
+          ? collectInitialRestorationPlaceholders({
+              latestMessageId,
+              messages: preparedMessages.value,
+              redactionMap: thirdPartyBoundary.redactionMap,
+            })
+          : new Set<string>(),
+      resolveAssistantTextRefs,
+      resolveAssistantValueRefs,
+      restorationPairs,
+      source: stream,
+    }),
+    mapMessageId: mapAssistantMessageId,
+    getResponseMessage: () => responseMessage,
+  });
+
+  return toServerSentEventsResponse(output, { abortController });
+};
+
+const thirdPartyBoundaryRefusalResponse = (
+  error: HandlerError<422 | 500>,
+): Response =>
+  new Response(
+    JSON.stringify(createThirdPartyBoundaryRefusalPayload(error.message)),
+    {
+      headers: { "Content-Type": "application/json" },
+      status: error.status,
+    },
+  );
+
+type ChatAttemptState = {
+  emptyCompletion: ChatEmptyCompletionError | null;
+  finalLoopDetection: ChatLoopDetectedError | null;
+};
+
+export const createChatAttemptState = (): ChatAttemptState => ({
+  emptyCompletion: null,
+  finalLoopDetection: null,
+});
+
+type ChatAttemptModelInfo = Pick<
+  ResolvedTanStackTextModel,
+  "modelId" | "provider"
+>;
+
+type RecordChatAttemptFinishProps = {
+  captureError?: typeof captureError | undefined;
+  finishReason: string | null;
+  messages: readonly ModelMessage[];
+  modelInfo: ChatAttemptModelInfo;
+  state: ChatAttemptState;
+  threadId: SafeId<"chatThread">;
+  usage: TokenUsage | undefined;
+};
+
+export const recordChatAttemptFinish = ({
+  captureError: captureAttemptError = captureError,
+  finishReason,
+  messages,
+  modelInfo,
+  state,
+  threadId,
+  usage,
+}: RecordChatAttemptFinishProps): void => {
+  const loopDetection = detectModelLoop(messages);
+  if (shouldSurfaceFinalContentLoop(loopDetection)) {
+    state.finalLoopDetection = new ChatLoopDetectedError({
+      message: CHAT_LOOP_DETECTED_MESSAGE,
+    });
+  }
+
+  if (finishReason !== "stop" || usage?.completionTokens !== 0) {
+    return;
+  }
+
+  state.emptyCompletion = new ChatEmptyCompletionError({
+    message: CHAT_EMPTY_COMPLETION_MESSAGE,
+  });
+  captureAttemptError(state.emptyCompletion, {
+    modelId: modelInfo.modelId,
+    provider: modelInfo.provider,
+    threadId,
+  });
+};
+
+const chatAttemptTerminalError = (
+  state: ChatAttemptState,
+): ChatLoopDetectedError | ChatEmptyCompletionError | null =>
+  state.finalLoopDetection ?? state.emptyCompletion;
+
+type ResolveFallbackTextModelProps = {
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  primaryModel: ResolvedTanStackTextModel;
+  threadId: SafeId<"chatThread">;
+};
+
+const resolveFallbackTextModel = ({
+  organizationId,
+  orgAIConfig,
+  primaryModel,
+  threadId,
+}: ResolveFallbackTextModelProps): ResolvedTanStackTextModel | null => {
+  try {
+    const fallbackModel = resolveTanStackTextModel({
+      organizationId,
+      orgAIConfig,
+      role: "reasoning",
+    });
+    if (
+      fallbackModel.provider === primaryModel.provider &&
+      fallbackModel.modelId === primaryModel.modelId
+    ) {
+      return null;
+    }
+    return fallbackModel;
+  } catch (error) {
+    captureError(error, {
+      feature: "chat.stream_fallback_resolution",
+      threadId,
+    });
+    return null;
+  }
+};
+
+type CreateChatAttemptAnalyticsProps = {
+  feature: string;
+  modelRole: ModelRole;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  safeDb: SafeDb;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const createChatAttemptAnalytics = ({
+  feature,
+  modelRole,
+  organizationId,
+  orgAIConfig,
+  safeDb,
+  threadId,
+  userId,
+  workspaceId,
+}: CreateChatAttemptAnalyticsProps): TanStackAIAnalyticsCallbacks =>
+  createTanStackAIAnalyticsCallbacks({
+    usageMetering: {
+      actionType: "chat",
+      organizationId,
+      safeDb,
+      serviceTier: "standard",
+      userId,
+      workspaceId,
+    },
+    feature,
+    modelRole,
+    orgAIConfig,
+    properties: {
+      organization_id: organizationId,
+      ...(workspaceId ? { workspace_id: workspaceId } : {}),
+    },
+    sessionId: threadId,
+    traceId: Bun.randomUUIDv7(),
+  });
+
+type ChatAttemptRole = Extract<ModelRole, "chat" | "reasoning">;
+
+type RunChatAttemptsProps = {
+  abortController: AbortController;
+  abortSignal: AbortSignal;
+  baseSystem: string;
+  devModelId: string | undefined;
+  externalMcpToolSource: StellaMcpToolSource | undefined;
+  fallbackModel: ResolvedTanStackTextModel | null;
+  modelTools: ReturnType<typeof chatToolMapToArray>;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  preparedMessages: ChatMessage[];
+  primaryModel: ResolvedTanStackTextModel;
+  promptCacheKey: string;
+  promptCachingEnabled: boolean;
+  safeDb: SafeDb;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const runChatAttempts = async function* ({
+  abortController,
+  abortSignal,
+  baseSystem,
+  devModelId,
+  externalMcpToolSource,
+  fallbackModel,
+  modelTools,
+  organizationId,
+  orgAIConfig,
+  preparedMessages,
+  primaryModel,
+  promptCacheKey,
+  promptCachingEnabled,
+  safeDb,
+  thirdPartyBoundary,
+  threadId,
+  userId,
+  workspaceId,
+}: RunChatAttemptsProps): AsyncIterable<StreamChunk> {
+  const primaryState = createChatAttemptState();
+  yield* runChatAttempt({
+    abortController,
+    abortSignal,
+    baseSystem,
+    compactionFeature: "chat.step_compaction",
+    externalMcpToolSource,
+    feature: "chat.stream",
+    model: primaryModel,
+    modelId: devModelId,
+    modelTools,
+    organizationId,
+    orgAIConfig,
+    preparedMessages,
+    promptCacheKey,
+    promptCachingEnabled,
+    role: "chat",
+    safeDb,
+    state: primaryState,
+    thirdPartyBoundary,
+    threadId,
+    userId,
+    workspaceId,
+  });
+
+  const primaryError = chatAttemptTerminalError(primaryState);
+  if (primaryError === null) {
+    return;
+  }
+
+  if (
+    !(primaryError instanceof ChatEmptyCompletionError) ||
+    fallbackModel === null
+  ) {
+    throw primaryError;
+  }
+
+  const fallbackState = createChatAttemptState();
+  yield* runChatAttempt({
+    abortController,
+    abortSignal,
+    baseSystem,
+    compactionFeature: "chat.step_compaction_fallback",
+    externalMcpToolSource,
+    feature: "chat.stream_fallback",
+    model: fallbackModel,
+    modelId: undefined,
+    modelTools,
+    organizationId,
+    orgAIConfig,
+    preparedMessages,
+    promptCacheKey,
+    promptCachingEnabled,
+    role: "reasoning",
+    safeDb,
+    state: fallbackState,
+    thirdPartyBoundary,
+    threadId,
+    userId,
+    workspaceId,
+  });
+
+  const fallbackError = chatAttemptTerminalError(fallbackState);
+  if (fallbackError !== null) {
+    throw fallbackError;
+  }
+};
+
+type RunChatAttemptProps = {
+  abortController: AbortController;
+  abortSignal: AbortSignal;
+  baseSystem: string;
+  compactionFeature: string;
+  externalMcpToolSource: StellaMcpToolSource | undefined;
+  feature: string;
+  model: ResolvedTanStackTextModel;
+  modelId: string | undefined;
+  modelTools: ReturnType<typeof chatToolMapToArray>;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  preparedMessages: ChatMessage[];
+  promptCacheKey: string;
+  promptCachingEnabled: boolean;
+  role: ChatAttemptRole;
+  safeDb: SafeDb;
+  state: ChatAttemptState;
+  thirdPartyBoundary: ChatThirdPartyBoundary;
+  threadId: SafeId<"chatThread">;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const runChatAttempt = async function* ({
+  abortController,
+  abortSignal,
+  baseSystem,
+  compactionFeature,
+  externalMcpToolSource,
+  feature,
+  model,
+  modelId,
+  modelTools,
+  organizationId,
+  orgAIConfig,
+  preparedMessages,
+  promptCacheKey,
+  promptCachingEnabled,
+  role,
+  safeDb,
+  state,
+  thirdPartyBoundary,
+  threadId,
+  userId,
+  workspaceId,
+}: RunChatAttemptProps): AsyncIterable<StreamChunk> {
+  const caching = resolveCaching({
+    promptCachingEnabled,
+    role,
+    scopeKey: promptCacheKey,
+  });
+  const analytics = createChatAttemptAnalytics({
+    feature,
+    modelRole: role,
+    organizationId,
+    orgAIConfig,
+    safeDb,
+    threadId,
+    userId,
+    workspaceId,
+  });
+  const compactionAnalytics = createChatAttemptAnalytics({
+    feature: compactionFeature,
+    modelRole: role,
+    organizationId,
+    orgAIConfig,
+    safeDb,
+    threadId,
+    userId,
+    workspaceId,
+  });
+
+  const stream = chat({
+    adapter: model.adapter,
+    messages: preparedMessages,
+    tools: modelTools,
+    ...(externalMcpToolSource
+      ? {
+          mcp: {
+            clients: [
+              prepareMcpToolSourceForThirdParty({
+                boundary: thirdPartyBoundary,
+                source: externalMcpToolSource,
+              }),
+            ],
+            connection: "close",
+            lazyTools: true,
+          },
+        }
+      : {}),
+    agentLoopStrategy: maxIterations(MAX_TOOL_STEPS),
+    abortController,
+    threadId,
+    ...systemPromptsPatch({ caching, model, system: baseSystem }),
+    modelOptions: mergeGenerationOptions({
+      caching,
+      model,
+      maxOutputTokens: undefined,
+      serviceTier: "standard",
+      temperature: getTemperatureForRole(role),
+    }),
+    middleware: [
+      analytics.middleware,
+      createChatRuntimeMiddleware({
+        abortSignal,
+        baseSystem,
+        compactionAnalytics,
+        compactionFeature,
+        model,
+        modelId,
+        organizationId,
+        orgAIConfig,
+        role,
+        state,
+        threadId,
+      }),
+    ],
+  });
+
+  yield* stream;
+};
+
+type ChatRuntimeMiddlewareProps = {
+  abortSignal: AbortSignal;
+  baseSystem: string;
+  compactionAnalytics: TanStackAIAnalyticsCallbacks;
+  compactionFeature: string;
+  model: ResolvedTanStackTextModel;
+  modelId: string | undefined;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
+  role: ChatAttemptRole;
+  state: ChatAttemptState;
+  threadId: SafeId<"chatThread">;
+};
+
+const createChatRuntimeMiddleware = ({
+  abortSignal,
+  baseSystem,
+  compactionAnalytics,
+  compactionFeature,
+  model,
+  modelId,
+  organizationId,
+  orgAIConfig,
+  role,
+  state,
+  threadId,
+}: ChatRuntimeMiddlewareProps): ChatMiddleware => {
+  let lastLoopRecoveryKey: string | null = null;
+  return {
+    name: "stella-chat-runtime",
+    onConfig: async (ctx, config) => {
+      if (ctx.phase !== "beforeModel") {
+        return undefined;
+      }
+
+      const patch: Partial<ChatMiddlewareConfig> = {};
+      const loopDetection = detectModelLoop(config.messages);
+      if (shouldStopLoopRecovery(loopDetection)) {
+        throw new ChatLoopDetectedError({
+          message: CHAT_LOOP_DETECTED_MESSAGE,
+        });
+      }
+
+      if (shouldInjectLoopRecovery(loopDetection)) {
+        const recoveryKey = getLoopRecoveryKey(loopDetection);
+        if (recoveryKey !== lastLoopRecoveryKey) {
+          lastLoopRecoveryKey = recoveryKey;
+          patch.systemPrompts = [
+            createLoopRecoverySystemPrompt({
+              baseSystem,
+              detection: loopDetection,
+            }),
+          ];
+        }
+      }
+
+      const compactedMessages = await compactModelMessagesForModel({
+        abortSignal,
+        aiAnalytics: compactionAnalytics,
+        messages: config.messages,
+        modelId,
+        organizationId,
+        orgAIConfig,
+        role,
+        onSummaryError: (error) => {
           captureError(error, {
+            feature: compactionFeature,
+            modelId: model.modelId,
+            provider: model.provider,
             threadId,
-            feature: "chat.stream_drain",
           });
         },
+      });
+      if (Result.isError(compactedMessages)) {
+        throw compactedMessages.error;
+      }
+
+      if (compactedMessages.value !== config.messages) {
+        patch.messages = compactedMessages.value;
+      }
+
+      return Object.keys(patch).length === 0 ? undefined : patch;
+    },
+    onFinish: (ctx, info) => {
+      recordChatAttemptFinish({
+        finishReason: info.finishReason,
+        messages: ctx.messages,
+        modelInfo: model,
+        state,
+        threadId,
+        usage: info.usage,
+      });
+    },
+  };
+};
+
+type ProcessServerChatStreamProps = {
+  abortSignal: AbortSignal;
+  getResponseMessage: () => ChatMessage | null;
+  mapMessageId: MessageIdMapper;
+  onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  processor: StreamProcessor;
+  source: AsyncIterable<StreamChunk>;
+};
+
+type RunErrorChunk = Extract<StreamChunk, { type: EventType.RUN_ERROR }>;
+
+const runErrorMessage = (chunk: RunErrorChunk): string =>
+  chunk.message || "AI stream error";
+
+const errorFromRunErrorChunk = (chunk: RunErrorChunk): Error => {
+  const error = new Error(runErrorMessage(chunk));
+  const code = chunk.code;
+  if (code !== undefined) {
+    Object.assign(error, { code });
+  }
+  return error;
+};
+
+const classifyRunErrorChunk = (chunk: RunErrorChunk): AIErrorKind =>
+  classifyAIError(chunk.rawEvent ?? errorFromRunErrorChunk(chunk));
+
+const normalizeRunErrorChunk = (chunk: RunErrorChunk): RunErrorChunk => {
+  const kind = classifyRunErrorChunk(chunk);
+  captureError(errorFromRunErrorChunk(chunk), { kind });
+  return {
+    ...chunk,
+    message: kind,
+    code: kind,
+  };
+};
+
+export const processServerChatStream = async function* ({
+  abortSignal,
+  getResponseMessage,
+  mapMessageId,
+  onFinish,
+  processor,
+  source,
+}: ProcessServerChatStreamProps): AsyncIterable<StreamChunk> {
+  const deferredRunFinishedChunks: StreamChunk[] = [];
+  let usage: TokenUsage | undefined;
+  try {
+    const normalizedSource = ensureAssistantMessageStart({
+      getOrCreateMessageId: () =>
+        mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+      source: remapOutgoingMessageIds({
+        mapMessageId,
+        source,
       }),
-    stream,
+    });
+
+    for await (const sourceChunk of normalizedSource) {
+      const chunk =
+        sourceChunk.type === EventType.RUN_ERROR
+          ? normalizeRunErrorChunk(sourceChunk)
+          : sourceChunk;
+      if (chunk.type === EventType.RUN_FINISHED && chunk.usage) {
+        usage = chunk.usage;
+      }
+      processor.processChunk(chunk);
+      if (chunk.type === EventType.RUN_FINISHED) {
+        deferredRunFinishedChunks.push(chunk);
+        continue;
+      }
+      yield chunk;
+      if (chunk.type === EventType.RUN_ERROR) {
+        return;
+      }
+    }
+
+    await finishResponseMessage({
+      abortSignal,
+      getResponseMessage,
+      mapMessageId,
+      onFinish,
+      usage,
+    });
+    for (const chunk of deferredRunFinishedChunks) {
+      yield chunk;
+    }
+  } catch (error) {
+    const kind = classifyAIError(error);
+    captureError(error, { kind });
+    if (abortSignal.aborted) {
+      await finishAbortedResponseMessage({
+        abortSignal,
+        getResponseMessage,
+        mapMessageId,
+        onFinish,
+        processor,
+        usage,
+      });
+    }
+    yield {
+      type: EventType.RUN_ERROR,
+      message: kind,
+      code: kind,
+      timestamp: Date.now(),
+    };
+  }
+};
+
+type FinishResponseMessageProps = {
+  abortSignal: AbortSignal;
+  getResponseMessage: () => ChatMessage | null;
+  mapMessageId: MessageIdMapper;
+  onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  usage: TokenUsage | undefined;
+};
+
+const finishResponseMessage = async ({
+  abortSignal,
+  getResponseMessage,
+  mapMessageId,
+  onFinish,
+  usage,
+}: FinishResponseMessageProps): Promise<void> => {
+  const responseMessage = getResponseMessage();
+  if (!responseMessage) {
+    return;
+  }
+
+  await onFinish({
+    isAborted: abortSignal.aborted,
+    responseMessage: attachUsageMetadata({
+      message: normalizeFinalAssistantMessageId({
+        mapMessageId,
+        message: responseMessage,
+      }),
+      usage,
+    }),
   });
+};
+
+type FinishAbortedResponseMessageProps = FinishResponseMessageProps & {
+  processor: StreamProcessor;
+};
+
+const finishAbortedResponseMessage = async ({
+  processor,
+  ...props
+}: FinishAbortedResponseMessageProps): Promise<void> => {
+  try {
+    processor.finalizeStream();
+    await finishResponseMessage(props);
+  } catch (error) {
+    captureError(error, { kind: "aborted_stream_finish_failed" });
+  }
+};
+
+type MessageIdMapper = (messageId: string) => SafeId<"chatMessage">;
+
+export const createChatMessageIdMapper = (
+  createId: () => SafeId<"chatMessage"> = () => createSafeId<"chatMessage">(),
+): MessageIdMapper => {
+  let responseId: SafeId<"chatMessage"> | null = null;
+  return (messageId) => {
+    void messageId;
+    if (!responseId) {
+      responseId = createId();
+    }
+    return responseId;
+  };
+};
+
+export const normalizeFinalAssistantMessageId = ({
+  mapMessageId,
+  message,
+}: {
+  mapMessageId: MessageIdMapper;
+  message: ChatMessage;
+}): PersistableChatMessage => {
+  const id = mapMessageId(message.id);
+  return { ...message, id };
+};
+
+type RemapOutgoingMessageIdsProps = {
+  mapMessageId: MessageIdMapper;
+  source: AsyncIterable<StreamChunk>;
+};
+
+export const remapOutgoingMessageIds = async function* ({
+  mapMessageId,
+  source,
+}: RemapOutgoingMessageIdsProps): AsyncIterable<StreamChunk> {
+  for await (const chunk of source) {
+    yield remapChunkMessageId({ chunk, mapMessageId });
+  }
+};
+
+type EnsureAssistantMessageStartProps = {
+  getOrCreateMessageId: () => SafeId<"chatMessage">;
+  source: AsyncIterable<StreamChunk>;
+};
+
+export const ensureAssistantMessageStart = async function* ({
+  getOrCreateMessageId,
+  source,
+}: EnsureAssistantMessageStartProps): AsyncIterable<StreamChunk> {
+  let hasAssistantMessageStart = false;
+
+  for await (const chunk of source) {
+    if (chunk.type === EventType.TEXT_MESSAGE_START) {
+      hasAssistantMessageStart = true;
+      yield chunk;
+      continue;
+    }
+
+    if (!hasAssistantMessageStart) {
+      const messageId = getAssistantStartMessageId({
+        chunk,
+        getOrCreateMessageId,
+      });
+      if (messageId !== null) {
+        hasAssistantMessageStart = true;
+        yield {
+          type: EventType.TEXT_MESSAGE_START,
+          messageId,
+          role: "assistant",
+          timestamp: Date.now(),
+        };
+      }
+    }
+
+    yield chunk;
+  }
+};
+
+const getAssistantStartMessageId = ({
+  chunk,
+  getOrCreateMessageId,
+}: {
+  chunk: StreamChunk;
+  getOrCreateMessageId: () => SafeId<"chatMessage">;
+}): string | null => {
+  if (hasMessageId(chunk)) {
+    return chunk.messageId;
+  }
+
+  if (chunk.type === EventType.TOOL_CALL_START) {
+    return typeof chunk.parentMessageId === "string"
+      ? chunk.parentMessageId
+      : getOrCreateMessageId();
+  }
+
+  if (chunk.type === EventType.STEP_FINISHED) {
+    return getOrCreateMessageId();
+  }
+
+  return null;
+};
+
+type StreamChunkWithMessageId = StreamChunk & { messageId: string };
+
+const hasMessageId = (chunk: StreamChunk): chunk is StreamChunkWithMessageId =>
+  "messageId" in chunk && typeof chunk.messageId === "string";
+
+const remapChunkMessageId = ({
+  chunk,
+  mapMessageId,
+}: {
+  chunk: StreamChunk;
+  mapMessageId: MessageIdMapper;
+}): StreamChunk => {
+  const remappedChunk = hasMessageId(chunk)
+    ? { ...chunk, messageId: mapMessageId(chunk.messageId) }
+    : chunk;
+
+  const remappedParentChunk =
+    "parentMessageId" in remappedChunk &&
+    typeof remappedChunk.parentMessageId === "string"
+      ? {
+          ...remappedChunk,
+          parentMessageId: mapMessageId(remappedChunk.parentMessageId),
+        }
+      : remappedChunk;
+
+  if (
+    remappedParentChunk.type !== EventType.CUSTOM ||
+    !isRecord(remappedParentChunk.value)
+  ) {
+    return remappedParentChunk;
+  }
+
+  const messageId = remappedParentChunk.value["messageId"];
+  if (typeof messageId !== "string") {
+    return remappedParentChunk;
+  }
+
+  return {
+    ...remappedParentChunk,
+    value: {
+      ...remappedParentChunk.value,
+      messageId: mapMessageId(messageId),
+    },
+  };
+};
+
+type TransformOutgoingStreamProps = {
+  boundary: ChatThirdPartyBoundary;
+  initialRestorationPlaceholders: ReadonlySet<string>;
+  resolveAssistantTextRefs?: ((text: string) => string) | undefined;
+  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  restorationPairs: ChatAnonRestoration[];
+  source: AsyncIterable<StreamChunk>;
+};
+
+export const transformOutgoingStream = async function* ({
+  boundary,
+  initialRestorationPlaceholders,
+  resolveAssistantTextRefs,
+  resolveAssistantValueRefs,
+  restorationPairs,
+  source,
+}: TransformOutgoingStreamProps): AsyncIterable<StreamChunk> {
+  const transform = createOutgoingChunkTransformer({
+    boundary,
+    initialRestorationPlaceholders,
+    resolveAssistantTextRefs,
+    resolveAssistantValueRefs,
+    restorationPairs,
+  });
+
+  for await (const chunk of source) {
+    for (const transformed of transform(chunk)) {
+      yield transformed;
+    }
+  }
+
+  for (const flushed of transform.flush()) {
+    yield flushed;
+  }
+};
+
+type OutgoingChunkTransformerOptions = {
+  boundary: ChatThirdPartyBoundary;
+  initialRestorationPlaceholders: ReadonlySet<string>;
+  resolveAssistantTextRefs?: ((text: string) => string) | undefined;
+  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+  restorationPairs: ChatAnonRestoration[];
+};
+
+const createOutgoingChunkTransformer = ({
+  boundary,
+  initialRestorationPlaceholders,
+  resolveAssistantTextRefs,
+  resolveAssistantValueRefs,
+  restorationPairs,
+}: OutgoingChunkTransformerOptions) => {
+  const buffers = new Map<string, string>();
+  const emittedPlaceholders = new Set(initialRestorationPlaceholders);
+  const lenientCollector =
+    boundary.type === "anonymized"
+      ? buildLenientPlaceholderCollector(boundary)
+      : null;
+
+  if (boundary.type === "anonymized") {
+    for (const placeholder of initialRestorationPlaceholders) {
+      const original = boundary.redactionMap.get(placeholder);
+      if (original !== undefined) {
+        restorationPairs.push({ placeholder, original });
+      }
+    }
+  }
+
+  const emitRestorationDelta = (
+    placeholders: ReadonlySet<string>,
+  ): StreamChunk[] => {
+    if (boundary.type !== "anonymized" || placeholders.size === 0) {
+      return [];
+    }
+
+    const newPairs: ChatAnonRestoration[] = [];
+    for (const placeholder of placeholders) {
+      if (emittedPlaceholders.has(placeholder)) {
+        continue;
+      }
+      const original = boundary.redactionMap.get(placeholder);
+      if (original === undefined) {
+        continue;
+      }
+      emittedPlaceholders.add(placeholder);
+      const pair = { placeholder, original };
+      restorationPairs.push(pair);
+      newPairs.push(pair);
+    }
+
+    if (newPairs.length === 0) {
+      return [];
+    }
+
+    return [
+      {
+        type: EventType.CUSTOM,
+        name: STELLA_ANON_RESTORATIONS_EVENT,
+        value: { pairs: newPairs },
+        timestamp: Date.now(),
+      },
+    ];
+  };
+
+  const transformText = (text: string): string => {
+    const resolved = resolveAssistantTextRefs
+      ? resolveAssistantTextRefs(text)
+      : text;
+    if (boundary.type !== "anonymized") {
+      return resolved;
+    }
+    return deanonymizeFromBoundary({ boundary, text: resolved });
+  };
+
+  const flushText = ({
+    messageId,
+    text,
+  }: {
+    messageId: string;
+    text: string;
+  }): StreamChunk[] => {
+    if (text.length === 0) {
+      return [];
+    }
+
+    return [
+      ...emitRestorationDelta(collectTextPlaceholders(text)),
+      {
+        type: EventType.TEXT_MESSAGE_CONTENT,
+        messageId,
+        delta: transformText(text),
+        timestamp: Date.now(),
+      },
+    ];
+  };
+
+  const flushReasoning = ({
+    messageId,
+    text,
+  }: {
+    messageId: string;
+    text: string;
+  }): StreamChunk[] => {
+    if (text.length === 0) {
+      return [];
+    }
+
+    return [
+      ...emitRestorationDelta(collectTextPlaceholders(text)),
+      {
+        type: EventType.REASONING_MESSAGE_CONTENT,
+        messageId,
+        delta: transformText(text),
+        timestamp: Date.now(),
+      },
+    ];
+  };
+
+  const flushToolArguments = ({
+    text,
+    toolCallId,
+  }: {
+    text: string;
+    toolCallId: string;
+  }): StreamChunk[] => {
+    if (text.length === 0) {
+      return [];
+    }
+
+    return [
+      ...emitRestorationDelta(
+        collectPlaceholdersFromText(text, lenientCollector),
+      ),
+      {
+        type: EventType.TOOL_CALL_ARGS,
+        toolCallId,
+        delta:
+          boundary.type === "anonymized"
+            ? deanonymizeToolInputText(boundary, text)
+            : text,
+        timestamp: Date.now(),
+      },
+    ];
+  };
+
+  const transform = (chunk: StreamChunk): StreamChunk[] => {
+    if (chunk.type === EventType.TEXT_MESSAGE_CONTENT) {
+      const key = `text:${chunk.messageId}`;
+      const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
+      const prefixLength =
+        boundary.type === "anonymized"
+          ? getDeanonymisablePrefixLength(buffer)
+          : getResolvedTextPrefixLength(buffer);
+      buffers.set(key, buffer.slice(prefixLength));
+      return flushText({
+        messageId: chunk.messageId,
+        text: buffer.slice(0, prefixLength),
+      });
+    }
+
+    if (chunk.type === EventType.TEXT_MESSAGE_END) {
+      const key = `text:${chunk.messageId}`;
+      const pending = buffers.get(key) ?? "";
+      buffers.delete(key);
+      return [
+        ...flushText({ messageId: chunk.messageId, text: pending }),
+        chunk,
+      ];
+    }
+
+    if (chunk.type === EventType.REASONING_MESSAGE_CONTENT) {
+      const key = `reasoning:${chunk.messageId}`;
+      const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
+      const prefixLength =
+        boundary.type === "anonymized"
+          ? getDeanonymisablePrefixLength(buffer)
+          : getResolvedTextPrefixLength(buffer);
+      buffers.set(key, buffer.slice(prefixLength));
+      return flushReasoning({
+        messageId: chunk.messageId,
+        text: buffer.slice(0, prefixLength),
+      });
+    }
+
+    if (chunk.type === EventType.REASONING_MESSAGE_END) {
+      const key = `reasoning:${chunk.messageId}`;
+      const pending = buffers.get(key) ?? "";
+      buffers.delete(key);
+      return [
+        ...flushReasoning({ messageId: chunk.messageId, text: pending }),
+        chunk,
+      ];
+    }
+
+    if (chunk.type === EventType.TOOL_CALL_ARGS) {
+      const key = `tool:${chunk.toolCallId}`;
+      const buffer = `${buffers.get(key) ?? ""}${chunk.delta}`;
+      const prefixLength =
+        boundary.type === "anonymized"
+          ? getDeanonymisablePrefixLength(buffer)
+          : buffer.length;
+      buffers.set(key, buffer.slice(prefixLength));
+      return flushToolArguments({
+        text: buffer.slice(0, prefixLength),
+        toolCallId: chunk.toolCallId,
+      });
+    }
+
+    if (chunk.type === EventType.TOOL_CALL_END) {
+      const key = `tool:${chunk.toolCallId}`;
+      const pending = buffers.get(key) ?? "";
+      buffers.delete(key);
+      let input: unknown;
+      if ("input" in chunk) {
+        input =
+          boundary.type === "anonymized"
+            ? deanonymizeUnknownStringsFromBoundary(
+                boundary,
+                chunk.input,
+                "lenient",
+              )
+            : chunk.input;
+      }
+      return [
+        ...flushToolArguments({
+          text: pending,
+          toolCallId: chunk.toolCallId,
+        }),
+        input === undefined ? chunk : { ...chunk, input },
+      ];
+    }
+
+    if (chunk.type === EventType.TOOL_CALL_RESULT) {
+      const result = transformToolResultContent({
+        boundary,
+        content: chunk.content,
+        lenientCollector,
+        resolveAssistantValueRefs,
+      });
+      return [
+        ...emitRestorationDelta(result.placeholders),
+        { ...chunk, content: result.content },
+      ];
+    }
+
+    if (
+      chunk.type === EventType.CUSTOM &&
+      chunk.name === "tool-input-available"
+    ) {
+      const value = isRecord(chunk.value) ? chunk.value : {};
+      const rawInput = value["input"];
+      const input =
+        boundary.type === "anonymized"
+          ? deanonymizeUnknownStringsFromBoundary(boundary, rawInput, "lenient")
+          : rawInput;
+      return [
+        ...emitRestorationDelta(
+          collectUnknownStringPlaceholders(rawInput, lenientCollector),
+        ),
+        { ...chunk, value: { ...value, input } },
+      ];
+    }
+
+    return [chunk];
+  };
+
+  transform.flush = (): StreamChunk[] => {
+    const chunks: StreamChunk[] = [];
+    for (const [key, value] of buffers) {
+      if (key.startsWith("text:")) {
+        chunks.push(
+          ...flushText({
+            messageId: key.slice("text:".length),
+            text: value,
+          }),
+        );
+      }
+      if (key.startsWith("reasoning:")) {
+        chunks.push(
+          ...flushReasoning({
+            messageId: key.slice("reasoning:".length),
+            text: value,
+          }),
+        );
+      }
+      if (key.startsWith("tool:")) {
+        chunks.push(
+          ...flushToolArguments({
+            toolCallId: key.slice("tool:".length),
+            text: value,
+          }),
+        );
+      }
+    }
+    buffers.clear();
+    return chunks;
+  };
+
+  return transform;
 };
 
 const STELLA_REF_MARKER = "#stella-";
 
-const getResolvedTextPrefixLength = (text: string) => {
+const getResolvedTextPrefixLength = (text: string): number => {
   const markerIndex = text.lastIndexOf(STELLA_REF_MARKER);
   if (markerIndex === -1) {
     return text.length;
@@ -674,20 +1413,6 @@ const getResolvedTextPrefixLength = (text: string) => {
   return /[\s)]/u.test(markerSuffix) ? text.length : markerIndex;
 };
 
-// A token like `[PERSON_1]` may straddle two text deltas. Hold back
-// any tail that *could* be the opening of a placeholder until the
-// closing `]` arrives or the stream completes — otherwise the user
-// briefly sees `[PERSON_1]` before it snaps to the real name.
-//
-// `[A-Z][A-Z0-9_]*` is the smallest superset of the wasm pipeline's
-// "replace" operator output (`[PERSON_1]`, `[ORG_3]`, `[CUSTOM_2]`,
-// …). The `\[$` alternative also buffers a *lone* trailing `[`,
-// because the first char after the bracket can land in the next
-// delta — without it, `"foo ["` flushes immediately and the next
-// `"PERSON_1] bar"` chunk never sees `[PERSON_1]` to deanonymize.
-// The one-delta latency penalty for markdown `[link text](url)`
-// is acceptable; once the next char arrives it's lowercase, the
-// regex stops matching, and the buffered `[` flushes.
 const PARTIAL_PLACEHOLDER_TAIL = /\[[A-Z][A-Z0-9_]*$|\[$/u;
 const PLACEHOLDER_TOKEN = /\[[A-Z][A-Z0-9_]*\]/gu;
 const PLACEHOLDER_INNER_TOKEN = /^[A-Z][A-Z0-9_]*$/u;
@@ -842,6 +1567,97 @@ const collectUnknownStringPlaceholders = (
   return placeholders;
 };
 
+type ParsedToolResultContent =
+  | { type: "json"; value: unknown }
+  | { type: "text"; value: string };
+
+type TransformToolResultContentOptions = {
+  boundary: ChatThirdPartyBoundary;
+  content: string;
+  lenientCollector: LenientPlaceholderCollector | null;
+  resolveAssistantValueRefs?: AssistantValueRefResolver | undefined;
+};
+
+type TransformToolResultContentResult = {
+  content: string;
+  placeholders: ReadonlySet<string>;
+};
+
+const transformToolResultContent = ({
+  boundary,
+  content,
+  lenientCollector,
+  resolveAssistantValueRefs,
+}: TransformToolResultContentOptions): TransformToolResultContentResult => {
+  const parsed = parseToolResultContent(content);
+  const placeholders =
+    boundary.type === "anonymized"
+      ? collectToolResultPlaceholders({ lenientCollector, parsed })
+      : new Set<string>();
+  const visibleValue =
+    boundary.type === "anonymized"
+      ? deanonymizeUnknownStringsFromBoundary(boundary, parsed.value)
+      : parsed.value;
+  const resolvedValue = resolveAssistantValueRefs
+    ? resolveAssistantValueRefs(visibleValue)
+    : visibleValue;
+
+  if (parsed.type === "json") {
+    return {
+      content: safeStringifyToolResultContent({
+        fallback: content,
+        value: resolvedValue,
+      }),
+      placeholders,
+    };
+  }
+
+  return {
+    content:
+      typeof resolvedValue === "string"
+        ? resolvedValue
+        : safeStringifyToolResultContent({
+            fallback: content,
+            value: resolvedValue,
+          }),
+    placeholders,
+  };
+};
+
+const parseToolResultContent = (content: string): ParsedToolResultContent => {
+  try {
+    return { type: "json", value: JSON.parse(content) as unknown };
+  } catch {
+    return { type: "text", value: content };
+  }
+};
+
+const collectToolResultPlaceholders = ({
+  lenientCollector,
+  parsed,
+}: {
+  lenientCollector: LenientPlaceholderCollector | null;
+  parsed: ParsedToolResultContent;
+}): Set<string> =>
+  parsed.type === "json"
+    ? collectUnknownStringPlaceholders(parsed.value, lenientCollector)
+    : collectPlaceholdersFromText(parsed.value, lenientCollector);
+
+const safeStringifyToolResultContent = ({
+  fallback,
+  value,
+}: {
+  fallback: string;
+  value: unknown;
+}): string => {
+  try {
+    const serialized: unknown = JSON.stringify(value);
+    return typeof serialized === "string" ? serialized : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
 const deanonymizeToolInputText = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
   text: string,
@@ -855,259 +1671,76 @@ const deanonymizeToolInputText = (
   return typeof deanonymized === "string" ? deanonymized : text;
 };
 
-export const deanonymizeOutgoingStream = (
-  stream: ReadableStream<InferUIMessageChunk<ChatMessage>>,
-  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
-  {
-    initialRestorationPlaceholders = new Set<string>(),
-  }: {
-    initialRestorationPlaceholders?: ReadonlySet<string> | undefined;
-  } = {},
-) => {
-  const buffers = new Map<string, string>();
-
-  // Tracks which placeholders we've already pushed to the client
-  // so subsequent emissions only carry the *new* pairs. Initial
-  // placeholders come from provider-visible chat messages; later
-  // placeholders are emitted only when they appear in user-visible
-  // assistant/tool chunks. System-context-only placeholders stay on
-  // the server map for deanonymization but are not persisted into
-  // chat history.
-  const emittedPlaceholders = new Set<string>();
-
-  const emitRestorationDelta = (
-    controller: TransformStreamDefaultController<
-      InferUIMessageChunk<ChatMessage>
-    >,
-    placeholders: ReadonlySet<string>,
-  ) => {
-    if (placeholders.size === 0) {
-      return;
-    }
-    const newPairs: { placeholder: string; original: string }[] = [];
-    for (const placeholder of placeholders) {
-      if (emittedPlaceholders.has(placeholder)) {
-        continue;
-      }
-      const original = boundary.redactionMap.get(placeholder);
-      if (original !== undefined) {
-        emittedPlaceholders.add(placeholder);
-        newPairs.push({ placeholder, original });
-      }
-    }
-    if (newPairs.length === 0) {
-      return;
-    }
-    controller.enqueue({
-      type: "data-stella-anon-restorations" as const,
-      data: { pairs: newPairs },
-    } satisfies InferUIMessageChunk<ChatMessage>);
+const attachRestorationMetadata = ({
+  message,
+  restorationPairs,
+}: {
+  message: ChatMessage;
+  restorationPairs: readonly ChatAnonRestoration[];
+}): ChatMessage => {
+  if (restorationPairs.length === 0) {
+    return message;
+  }
+  return {
+    ...message,
+    metadata: {
+      ...message.metadata,
+      anonRestorations: { pairs: [...restorationPairs] },
+    },
   };
-
-  const flushText = ({
-    controller,
-    id,
-    text,
-  }: {
-    controller: TransformStreamDefaultController<
-      InferUIMessageChunk<ChatMessage>
-    >;
-    id: string;
-    text: string;
-  }) => {
-    if (text.length === 0) {
-      return;
-    }
-    emitRestorationDelta(controller, collectTextPlaceholders(text));
-    controller.enqueue({
-      type: "text-delta",
-      id,
-      delta: deanonymizeFromBoundary({ boundary, text }),
-    });
-  };
-
-  return stream.pipeThrough(
-    new TransformStream<
-      InferUIMessageChunk<ChatMessage>,
-      InferUIMessageChunk<ChatMessage>
-    >({
-      transform(chunk, controller) {
-        emitRestorationDelta(controller, initialRestorationPlaceholders);
-        if (chunk.type === "text-delta") {
-          const buffer = `${buffers.get(chunk.id) ?? ""}${chunk.delta}`;
-          const prefixLength = getDeanonymisablePrefixLength(buffer);
-          flushText({
-            controller,
-            id: chunk.id,
-            text: buffer.slice(0, prefixLength),
-          });
-          buffers.set(chunk.id, buffer.slice(prefixLength));
-          return;
-        }
-
-        if (chunk.type === "text-end") {
-          flushText({
-            controller,
-            id: chunk.id,
-            text: buffers.get(chunk.id) ?? "",
-          });
-          buffers.delete(chunk.id);
-          controller.enqueue(chunk);
-          return;
-        }
-
-        if (chunk.type === "tool-output-available") {
-          emitRestorationDelta(
-            controller,
-            collectUnknownStringPlaceholders(chunk.output),
-          );
-          controller.enqueue({
-            ...chunk,
-            output: deanonymizeUnknownStringsFromBoundary(
-              boundary,
-              chunk.output,
-            ),
-          });
-          return;
-        }
-
-        // Tool *input* chunks carry text the LLM writes into its
-        // tool arguments — for `ask-user` that's the question and
-        // option labels rendered to the user. Without rehydration
-        // here, the card shows raw `[PERSON_N]` instead of the
-        // original name. Same partial-placeholder buffering as
-        // text-delta so a placeholder split across deltas isn't
-        // emitted half-formed.
-        if (chunk.type === "tool-input-delta") {
-          const key = `tool-input:${chunk.toolCallId}`;
-          const buffer = `${buffers.get(key) ?? ""}${chunk.inputTextDelta}`;
-          const prefixLength = getDeanonymisablePrefixLength(buffer);
-          const flushable = buffer.slice(0, prefixLength);
-          buffers.set(key, buffer.slice(prefixLength));
-          if (flushable.length > 0) {
-            emitRestorationDelta(
-              controller,
-              collectTextPlaceholders(flushable),
-            );
-            controller.enqueue({
-              ...chunk,
-              inputTextDelta: deanonymizeFromBoundary({
-                boundary,
-                text: flushable,
-              }),
-            });
-          }
-          return;
-        }
-
-        if (chunk.type === "tool-input-available") {
-          const key = `tool-input:${chunk.toolCallId}`;
-          const pending = buffers.get(key);
-          const lenientCollector = buildLenientPlaceholderCollector(boundary);
-          if (pending !== undefined && pending.length > 0) {
-            emitRestorationDelta(
-              controller,
-              collectPlaceholdersFromText(pending, lenientCollector),
-            );
-            controller.enqueue({
-              type: "tool-input-delta",
-              toolCallId: chunk.toolCallId,
-              inputTextDelta: deanonymizeToolInputText(boundary, pending),
-            });
-            buffers.delete(key);
-          }
-          emitRestorationDelta(
-            controller,
-            collectUnknownStringPlaceholders(chunk.input, lenientCollector),
-          );
-          controller.enqueue({
-            ...chunk,
-            input: deanonymizeUnknownStringsFromBoundary(
-              boundary,
-              chunk.input,
-              "lenient",
-            ),
-          });
-          return;
-        }
-
-        controller.enqueue(chunk);
-      },
-    }),
-  );
 };
 
-export const resolveRefsInTextStream = (
-  stream: ReadableStream<InferUIMessageChunk<ChatMessage>>,
-  resolveAssistantTextRefs: (text: string) => string,
-  resolveAssistantValueRefs?: AssistantValueRefResolver,
-) => {
-  const buffers = new Map<string, string>();
+const attachUsageMetadata = ({
+  message,
+  usage,
+}: {
+  message: PersistableChatMessage;
+  usage: TokenUsage | undefined;
+}): PersistableChatMessage => {
+  if (usage === undefined) {
+    return message;
+  }
 
-  const flushText = ({
-    controller,
-    id,
-    text,
-  }: {
-    controller: TransformStreamDefaultController<
-      InferUIMessageChunk<ChatMessage>
-    >;
-    id: string;
-    text: string;
-  }) => {
-    if (text.length === 0) {
-      return;
-    }
-
-    controller.enqueue({
-      type: "text-delta",
-      id,
-      delta: resolveAssistantTextRefs(text),
-    });
+  return {
+    ...message,
+    metadata: {
+      ...message.metadata,
+      usage: chatMessageUsageFromTokenUsage(usage),
+    },
   };
+};
 
-  return stream.pipeThrough(
-    new TransformStream<
-      InferUIMessageChunk<ChatMessage>,
-      InferUIMessageChunk<ChatMessage>
-    >({
-      transform(chunk, controller) {
-        if (chunk.type === "text-delta") {
-          const buffer = `${buffers.get(chunk.id) ?? ""}${chunk.delta}`;
-          const prefixLength = getResolvedTextPrefixLength(buffer);
-          flushText({
-            controller,
-            id: chunk.id,
-            text: buffer.slice(0, prefixLength),
-          });
-          buffers.set(chunk.id, buffer.slice(prefixLength));
-          return;
-        }
+export const chatMessageUsageFromTokenUsage = (
+  usage: TokenUsage,
+): ChatMessageUsage => {
+  const reasoningTokens = usage.completionTokensDetails?.reasoningTokens;
+  return {
+    completionTokens: usage.completionTokens,
+    promptTokens: usage.promptTokens,
+    totalTokens: usage.totalTokens,
+    ...(reasoningTokens === undefined
+      ? {}
+      : { completionTokensDetails: { reasoningTokens } }),
+  };
+};
 
-        if (chunk.type === "text-end") {
-          flushText({
-            controller,
-            id: chunk.id,
-            text: buffers.get(chunk.id) ?? "",
-          });
-          buffers.delete(chunk.id);
-        }
+const toChatMessage = (message: UIMessage): ChatMessage => ({
+  id: message.id,
+  role: message.role,
+  parts: toChatParts(message.parts),
+});
 
-        if (
-          chunk.type === "tool-output-available" &&
-          resolveAssistantValueRefs
-        ) {
-          controller.enqueue({
-            ...chunk,
-            output: resolveAssistantValueRefs(chunk.output),
-          });
-          return;
-        }
-
-        controller.enqueue(chunk);
-      },
-    }),
-  );
+const toChatParts = (
+  parts: readonly UIMessage["parts"][number][],
+): ChatPart[] => {
+  const chatParts: ChatPart[] = [];
+  for (const part of parts) {
+    if (!isChatPart(part)) {
+      panic("TanStack stream emitted an unsupported chat part");
+    }
+    chatParts.push(part);
+  }
+  return chatParts;
 };
 
 type HydrateMessagesProps = {
@@ -1137,17 +1770,18 @@ export const hydrateMessages = async ({
       const parts: ChatMessage["parts"] = [];
 
       for (const part of message.parts) {
-        if (part.type !== "file") {
+        if (!isChatAttachmentPart(part)) {
           parts.push(part);
           continue;
         }
 
-        const fileIdResult = getUserFileIdFromPart(part);
-        if (Result.isError(fileIdResult)) {
-          panic("Persisted chat file part did not use a valid user-file URL");
+        const fileId = getUserFileIdFromAttachmentPart(part);
+        if (fileId === null) {
+          parts.push(part);
+          continue;
         }
 
-        const file = userFilesById.get(fileIdResult.value);
+        const file = userFilesById.get(fileId);
         if (!file) {
           panic("Persisted chat file reference missing user_files row");
         }
@@ -1239,18 +1873,19 @@ const collectMessageUserFileIds = (
 
   for (const message of messages) {
     for (const part of message.parts) {
-      if (part.type !== "file") {
+      if (!isChatAttachmentPart(part)) {
         continue;
       }
 
-      const fileIdResult = getUserFileIdFromPart(part);
-      if (Result.isError(fileIdResult)) {
-        panic("Persisted chat file part did not use a valid user-file URL");
+      const fileId = getUserFileIdFromAttachmentPart(part);
+      if (fileId !== null) {
+        ids.add(fileId);
       }
-
-      ids.add(fileIdResult.value);
     }
   }
 
   return [...ids];
 };
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;

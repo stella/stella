@@ -8,10 +8,13 @@ import {
   ensureRoleModelsForProviders,
   getAvailableModelOptions,
   getNextAvailableProvider,
+  getModelOptionsForRole,
   getProviderValues,
   getRolePickerRows,
   hasUsableProviderDrafts,
   isKnownModelSelection,
+  isKnownModelSelectionForRole,
+  isProviderRoleSupported,
   providerDraftsFromStoredProviders,
   roleModelsFromOverrideModels,
   serializeOverrideModels,
@@ -30,6 +33,20 @@ describe("BYOK provider and model configuration", () => {
       reasoning: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
       pdf: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
     });
+  });
+
+  test("does not default PDF flows to Mistral", () => {
+    expect(createDefaultRoleModels(["mistral", "openai"])).toEqual({
+      chat: { provider: "mistral", modelId: "mistral-large-latest" },
+      fast: { provider: "mistral", modelId: "mistral-small-latest" },
+      reasoning: {
+        provider: "mistral",
+        modelId: "magistral-medium-latest",
+      },
+      pdf: { provider: "openai", modelId: "gpt-5.4" },
+    });
+
+    expect(createDefaultRoleModels(["mistral"]).pdf).toBeNull();
   });
 
   test("normalizes stored providers for editing without exposing keys", () => {
@@ -52,7 +69,7 @@ describe("BYOK provider and model configuration", () => {
         apiKey: "",
         apiKeyMasked: "AIza****",
         endpoint: "",
-        region: "eu",
+        region: "global",
         replacingKey: false,
       },
       {
@@ -66,7 +83,7 @@ describe("BYOK provider and model configuration", () => {
     ]);
   });
 
-  test("normalizes stored Azure Foundry provider endpoint metadata", () => {
+  test("ignores stored providers that are not supported by TanStack AI", () => {
     expect(
       providerDraftsFromStoredProviders([
         {
@@ -76,63 +93,26 @@ describe("BYOK provider and model configuration", () => {
           apiVersion: "2024-06-01",
         },
       ]),
-    ).toEqual([
-      {
-        provider: "azure_foundry",
-        apiKey: "",
-        apiKeyMasked: "abcd****",
-        endpoint: "https://example.openai.azure.com/openai",
-        apiVersion: "2024-06-01",
-        region: "global",
-        replacingKey: false,
-      },
-    ]);
+    ).toEqual([createProviderCredentialDraft()]);
   });
 
   test("builds model options from the union of configured providers", () => {
     expect(
-      getAvailableModelOptions([
-        "anthropic",
-        "mistral",
-        "openai",
-        "openrouter",
-      ]),
+      getAvailableModelOptions(["anthropic", "openai", "openrouter"]),
     ).toContainEqual({
       provider: "anthropic",
       modelId: "claude-opus-4-7",
       value: "anthropic::claude-opus-4-7",
     });
     expect(
-      getAvailableModelOptions([
-        "anthropic",
-        "mistral",
-        "openai",
-        "openrouter",
-      ]),
-    ).toContainEqual({
-      provider: "mistral",
-      modelId: "mistral-large-latest",
-      value: "mistral::mistral-large-latest",
-    });
-    expect(
-      getAvailableModelOptions([
-        "anthropic",
-        "mistral",
-        "openai",
-        "openrouter",
-      ]),
+      getAvailableModelOptions(["anthropic", "openai", "openrouter"]),
     ).toContainEqual({
       provider: "openai",
       modelId: "gpt-5.4",
       value: "openai::gpt-5.4",
     });
     expect(
-      getAvailableModelOptions([
-        "anthropic",
-        "mistral",
-        "openai",
-        "openrouter",
-      ]),
+      getAvailableModelOptions(["anthropic", "openai", "openrouter"]),
     ).toContainEqual({
       provider: "openrouter",
       modelId: "google/gemini-3.5-flash",
@@ -144,7 +124,6 @@ describe("BYOK provider and model configuration", () => {
     const modelOptions = getAvailableModelOptions([
       "anthropic",
       "google",
-      "mistral",
       "openai",
     ]);
 
@@ -157,16 +136,6 @@ describe("BYOK provider and model configuration", () => {
       provider: "google",
       modelId: "gemini-3.5-flash",
       value: "google::gemini-3.5-flash",
-    });
-    expect(modelOptions).toContainEqual({
-      provider: "mistral",
-      modelId: "magistral-medium-latest",
-      value: "mistral::magistral-medium-latest",
-    });
-    expect(modelOptions).toContainEqual({
-      provider: "mistral",
-      modelId: "mistral-medium-3-5",
-      value: "mistral::mistral-medium-3-5",
     });
     expect(modelOptions).toContainEqual({
       provider: "openai",
@@ -182,16 +151,6 @@ describe("BYOK provider and model configuration", () => {
       provider: "google",
       modelId: "gemini-2.5-pro",
       value: "google::gemini-2.5-pro",
-    });
-    expect(modelOptions).not.toContainEqual({
-      provider: "mistral",
-      modelId: "mistral-tiny",
-      value: "mistral::mistral-tiny",
-    });
-    expect(modelOptions).not.toContainEqual({
-      provider: "mistral",
-      modelId: "pixtral-large-latest",
-      value: "mistral::pixtral-large-latest",
     });
     expect(modelOptions).not.toContainEqual({
       provider: "openai",
@@ -217,6 +176,31 @@ describe("BYOK provider and model configuration", () => {
       reasoning: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
       pdf: { provider: "anthropic", modelId: "claude-sonnet-4-6" },
     });
+  });
+
+  test("blocks Mistral PDF selections", () => {
+    const roleModels: RoleModelSelections = {
+      ...createDefaultRoleModels(["mistral"]),
+      pdf: { provider: "mistral", modelId: "mistral-large-latest" },
+    };
+
+    expect(isProviderRoleSupported("mistral", "chat")).toBe(true);
+    expect(isProviderRoleSupported("mistral", "pdf")).toBe(false);
+    expect(
+      getModelOptionsForRole({ provider: "mistral", role: "pdf" }),
+    ).toEqual([]);
+    expect(
+      isKnownModelSelectionForRole({
+        role: "pdf",
+        selection: { provider: "mistral", modelId: "mistral-large-latest" },
+      }),
+    ).toBe(false);
+    expect(
+      serializeOverrideModels({
+        providers: ["mistral"],
+        roleModels,
+      }),
+    ).toBeNull();
   });
 
   test("blocks serialization when a role is missing a model", () => {
@@ -302,67 +286,15 @@ describe("BYOK provider and model configuration", () => {
       hasUsableProviderDrafts([
         {
           ...createProviderCredentialDraft("openrouter"),
-          apiKey: "sk-or-v1-test",
+          apiKey: "test-openrouter-provider-key",
         },
       ]),
     ).toBe(true);
   });
 
-  test("requires an endpoint for Azure Foundry drafts", () => {
-    expect(
-      hasUsableProviderDrafts([
-        {
-          ...createProviderCredentialDraft("azure_foundry"),
-          apiKey: "azure-test",
-        },
-      ]),
-    ).toBe(false);
-    expect(
-      hasUsableProviderDrafts([
-        {
-          ...createProviderCredentialDraft("azure_foundry"),
-          apiKey: "azure-test",
-          endpoint: "https://example.openai.azure.com/openai/v1",
-        },
-      ]),
-    ).toBe(true);
-  });
-
-  test("requires an endpoint for Hugging Face drafts", () => {
-    expect(
-      hasUsableProviderDrafts([
-        {
-          ...createProviderCredentialDraft("huggingface"),
-          apiKey: "hf-test",
-        },
-      ]),
-    ).toBe(false);
-    expect(
-      hasUsableProviderDrafts([
-        {
-          ...createProviderCredentialDraft("huggingface"),
-          apiKey: "hf-test",
-          endpoint: "https://router.huggingface.co/v1",
-        },
-      ]),
-    ).toBe(true);
-  });
-
-  test("serializes endpoint-backed provider drafts for save payloads", () => {
+  test("serializes TanStack provider drafts for save payloads", () => {
     expect(
       serializeProviderDrafts([
-        {
-          ...createProviderCredentialDraft("azure_foundry"),
-          apiKey: " azure-test ",
-          endpoint: " https://example.openai.azure.com/openai/v1 ",
-          apiVersion: "2024-06-01",
-        },
-        {
-          ...createProviderCredentialDraft("huggingface"),
-          apiKey: " hf-test ",
-          endpoint: " https://router.huggingface.co/v1 ",
-          apiVersion: "ignored-for-huggingface",
-        },
         {
           ...createProviderCredentialDraft("openai"),
           apiKeyMasked: "sk-proj****",
@@ -371,32 +303,10 @@ describe("BYOK provider and model configuration", () => {
       ]),
     ).toEqual([
       {
-        provider: "azure_foundry",
-        apiKey: "azure-test",
-        endpoint: "https://example.openai.azure.com/openai/v1",
-        apiVersion: "2024-06-01",
-        region: "global",
-      },
-      {
-        provider: "huggingface",
-        apiKey: "hf-test",
-        endpoint: "https://router.huggingface.co/v1",
-        region: "global",
-      },
-      {
         provider: "openai",
         region: "global",
       },
     ]);
-  });
-
-  test("creates Mistral role defaults", () => {
-    expect(createDefaultRoleModels(["mistral"])).toEqual({
-      chat: { provider: "mistral", modelId: "mistral-large-latest" },
-      fast: { provider: "mistral", modelId: "mistral-small-latest" },
-      reasoning: { provider: "mistral", modelId: "magistral-medium-latest" },
-      pdf: { provider: "mistral", modelId: "mistral-large-latest" },
-    });
   });
 
   test("accepts saved provider drafts without requiring key replacement", () => {
@@ -444,37 +354,6 @@ describe("BYOK provider and model configuration", () => {
     ).toBeNull();
   });
 
-  test("allows custom Azure Foundry deployment names", () => {
-    expect(
-      isKnownModelSelection({
-        provider: "azure_foundry",
-        modelId: "customer-deployment",
-      }),
-    ).toBe(true);
-    expect(
-      serializeOverrideModels({
-        providers: ["azure_foundry"],
-        roleModels: {
-          chat: { provider: "azure_foundry", modelId: " customer-chat " },
-          fast: { provider: "azure_foundry", modelId: "customer-fast" },
-          reasoning: {
-            provider: "azure_foundry",
-            modelId: "customer-reasoning",
-          },
-          pdf: { provider: "azure_foundry", modelId: "customer-pdf" },
-        },
-      }),
-    ).toEqual({
-      chat: { provider: "azure_foundry", modelId: "customer-chat" },
-      fast: { provider: "azure_foundry", modelId: "customer-fast" },
-      reasoning: {
-        provider: "azure_foundry",
-        modelId: "customer-reasoning",
-      },
-      pdf: { provider: "azure_foundry", modelId: "customer-pdf" },
-    });
-  });
-
   test("finds provider values and the next addable provider", () => {
     const providers = [createProviderCredentialDraft("google")];
 
@@ -511,6 +390,31 @@ describe("BYOK provider and model configuration", () => {
       provider: "anthropic",
       modelId: "claude-opus-4-6",
       value: "anthropic::claude-opus-4-6",
+    });
+  });
+
+  test("builds role-specific picker rows", () => {
+    const rows = getRolePickerRows({
+      providers: ["mistral", "openai"],
+      roleModels: createDefaultRoleModels(["mistral", "openai"]),
+    });
+
+    const chatRow = rows.find((row) => row.role === "chat");
+    const pdfRow = rows.find((row) => row.role === "pdf");
+
+    expect(chatRow?.modelOptions).toContainEqual({
+      provider: "mistral",
+      modelId: "mistral-large-latest",
+      value: "mistral::mistral-large-latest",
+    });
+    expect(pdfRow?.selection).toEqual({
+      provider: "openai",
+      modelId: "gpt-5.4",
+    });
+    expect(pdfRow?.modelOptions).not.toContainEqual({
+      provider: "mistral",
+      modelId: "mistral-large-latest",
+      value: "mistral::mistral-large-latest",
     });
   });
 });

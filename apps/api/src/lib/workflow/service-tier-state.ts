@@ -1,4 +1,4 @@
-import type { AIRequestServiceTier } from "@/api/lib/ai-models";
+import type { AIRequestServiceTier } from "@/api/lib/ai-config";
 
 export const parseStoredWorkflowServiceTier = (
   value: string | null,

@@ -449,6 +449,8 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# anexo} many {# anexos} other {# anexos}}",
     "queuedNotice": "Na fila: será enviada quando a resposta atual terminar",
+    "reasoning": "Raciocínio",
+    "reasoningTokens": "{count, plural, one {# token de raciocínio} other {# tokens de raciocínio}}",
     "recapLoading": "Resumindo a conversa…",
     "removeSuggestion": "(remover)",
     "resend": "Reenviar",

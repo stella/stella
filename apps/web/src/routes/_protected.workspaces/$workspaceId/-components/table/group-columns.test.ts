@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/lib/safe-id";
 import type { WorkspaceProperty } from "@/lib/types";
 import {
   buildDocTypeGateLabels,
@@ -12,7 +13,7 @@ const property = ({
   tool,
 }: Pick<WorkspaceProperty, "id" | "tool">): WorkspaceProperty => ({
   id,
-  workspaceId: "workspace-1",
+  workspaceId: toSafeId<"workspace">("workspace-1"),
   name: id,
   status: "fresh",
   createdAt: new Date("2026-01-01T00:00:00.000Z"),
@@ -27,9 +28,9 @@ const column = (id: string): TableColumnDef => ({
 
 describe("document-type grouped columns", () => {
   test("uses manual-input dependency gates when selecting group columns", () => {
-    const classifierPropertyId = "property-document-type";
+    const classifierPropertyId = toSafeId<"property">("property-document-type");
     const manualScoped = property({
-      id: "property-playbook-manual",
+      id: toSafeId<"property">("property-playbook-manual"),
       tool: {
         version: 1,
         type: "manual-input",
@@ -47,7 +48,7 @@ describe("document-type grouped columns", () => {
       },
     });
     const ungated = property({
-      id: "property-title",
+      id: toSafeId<"property">("property-title"),
       tool: { version: 1, type: "manual-input" },
     });
 

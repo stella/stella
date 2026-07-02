@@ -1,4 +1,3 @@
-import type { LanguageModel } from "ai";
 import { Result } from "better-result";
 import { and, asc, eq, sql } from "drizzle-orm";
 
@@ -8,6 +7,7 @@ import {
   chatThreadCompactions,
   chatThreads,
 } from "@/api/db/schema";
+import { normalizePersistedChatMessageContent } from "@/api/handlers/chat/chat-message-parts";
 import {
   CHAT_COMPACTION_PROMPT_VERSION,
   createCompactionSummaryMessage,
@@ -20,6 +20,7 @@ import type {
   ChatMessage,
   PersistedChatMessageContent,
 } from "@/api/handlers/chat/types";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -145,8 +146,10 @@ type PersistChatCompactionCheckpointProps = {
   boundary: ChatThirdPartyBoundary;
   dataWorkspaceIds: readonly SafeId<"workspace">[];
   messages: ChatMessage[];
-  model: LanguageModel;
+  modelId?: string | undefined;
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
+  organizationId: SafeId<"organization">;
+  orgAIConfig: OrgAIConfig | null;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
 };
@@ -156,8 +159,10 @@ export const persistChatCompactionCheckpoint = async ({
   boundary,
   dataWorkspaceIds,
   messages,
-  model,
+  modelId,
   onSummaryError,
+  organizationId,
+  orgAIConfig,
   safeDb,
   threadId,
 }: PersistChatCompactionCheckpointProps): Promise<
@@ -167,8 +172,10 @@ export const persistChatCompactionCheckpoint = async ({
     abortSignal,
     boundary,
     messages,
-    model,
+    modelId,
     onSummaryError,
+    organizationId,
+    orgAIConfig,
   });
   if (Result.isError(checkpointResult)) {
     return Result.err(checkpointResult.error);
@@ -320,7 +327,10 @@ export const chatCompactionSnapshotMessagesEqual = (
     return (
       row.id === message.id &&
       row.role === message.role &&
-      jsonEqual(row.content.data, message.parts)
+      jsonEqual(
+        normalizePersistedChatMessageContent(row.content).parts,
+        message.parts,
+      )
     );
   });
 };

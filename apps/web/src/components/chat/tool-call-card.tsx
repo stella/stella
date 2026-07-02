@@ -1,7 +1,6 @@
 import { useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
-import { getToolName } from "ai";
 import {
   ChevronDownIcon,
   CodeIcon,
@@ -21,6 +20,7 @@ import {
 import { cn } from "@stll/ui/lib/utils";
 
 import {
+  type ChatToolCallPart,
   getChatToolTitleKey,
   isRunningToolPart,
 } from "@/components/chat/chat-ui-tools";
@@ -28,7 +28,7 @@ import { sanitizeHref } from "@/lib/sanitize-href";
 import { mcpConnectorsOptions } from "@/routes/_protected.knowledge/-queries";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
-type ToolPart = Parameters<typeof getToolName>[0];
+type ToolPart = ChatToolCallPart;
 
 const getToolInput = (part: ToolPart): unknown => {
   if (!("input" in part)) {
@@ -339,7 +339,7 @@ export const ToolCallCard = ({
   showDetails?: boolean;
 }) => {
   const t = useTranslations();
-  const name = getToolName(part);
+  const name = part.name;
   const mcpToolInfo = getMcpToolInfo(name);
   const hasCatalogEntry =
     mcpToolInfo !== null || NATIVE_TOOL_BRANDS[name] !== undefined;
@@ -371,12 +371,9 @@ export const ToolCallCard = ({
   });
 
   const isLoading = isRunningToolPart(part);
-  const hasOutput = part.state === "output-available";
-  const hasError = part.state === "output-error";
-  const errorMessage =
-    hasError && "errorText" in part && typeof part.errorText === "string"
-      ? part.errorText
-      : undefined;
+  const hasOutput = part.output !== undefined;
+  const errorMessage = getToolOutputError(part.output);
+  const hasError = errorMessage !== undefined;
   const toolInput = getToolInput(part);
   const codeToolSource = getCodeToolSource(part, name);
   const showCodeToolOutput = CODE_TOOL_NAMES.has(name) && hasOutput;
@@ -539,6 +536,17 @@ export const ToolCallCard = ({
       )}
     </div>
   );
+};
+
+const getToolOutputError = (output: unknown): string | undefined => {
+  if (typeof output === "string") {
+    return undefined;
+  }
+  if (typeof output !== "object" || output === null || !("error" in output)) {
+    return undefined;
+  }
+  const error = output.error;
+  return typeof error === "string" ? error : undefined;
 };
 
 function ToolCallLeadingIcon({

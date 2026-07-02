@@ -1,15 +1,18 @@
-import { Output, streamText } from "ai";
-import type { FilePart, TextPart } from "ai";
+import type { DocumentPart, TextPart } from "@tanstack/ai";
+import type {
+  AnthropicDocumentMetadata,
+  AnthropicTextMetadata,
+} from "@tanstack/ai-anthropic";
 import { Result } from "better-result";
 
-import { markCacheBreakpoint } from "@/api/lib/ai-caching";
-import { getModelForRole, resolveCaching } from "@/api/lib/ai-models";
-import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-models";
-import { strictOutputSchema } from "@/api/lib/ai-output-schema";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
-import type { AIUsageMetering } from "@/api/lib/analytics/ai";
+import { resolveCaching } from "@/api/lib/ai-config";
+import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
+import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
+import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
+import { streamTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import {
   buildBatchSchema,
   buildDocxBlocksMessage,
@@ -25,7 +28,10 @@ import type {
   AIJustificationOutput,
   JustificationFilenames,
 } from "@/api/lib/workflow/parse-justifications";
-import { consumePartialAnswers } from "@/api/lib/workflow/streaming-answer";
+import {
+  consumePartialAnswers,
+  consumeTanStackPartialAnswer,
+} from "@/api/lib/workflow/streaming-answer";
 import type { PartialAnswerUpdate } from "@/api/lib/workflow/streaming-answer";
 
 type GenerateWorkflowDataProps = {
@@ -52,7 +58,7 @@ type WorkflowDataOutput = Record<
 >;
 
 type WorkflowAIAnalyticsProps = Parameters<
-  typeof createAIAnalyticsCallbacks
+  typeof createTanStackAIAnalyticsCallbacks
 >[0];
 
 type BuildWorkflowAIAnalyticsPropsInput = {
@@ -110,14 +116,22 @@ export const generateWorkflowData = async ({
     scopeKey: entityVersionId,
   });
 
-  const messageContent: (FilePart | TextPart)[] = [];
+  type WorkflowMessagePart =
+    | DocumentPart<AnthropicDocumentMetadata>
+    | TextPart<AnthropicTextMetadata>;
+
+  const messageContent: WorkflowMessagePart[] = [];
 
   for (const file of files) {
     if (file.kind === "pdf") {
       messageContent.push({
-        type: "file",
-        data: file.content,
-        mediaType: file.mimeType,
+        type: "document",
+        source: {
+          type: "data",
+          value: Buffer.from(file.content).toString("base64"),
+          mimeType: file.mimeType,
+        },
+        metadata: { mediaType: file.mimeType },
       });
       continue;
     }
@@ -125,7 +139,7 @@ export const generateWorkflowData = async ({
     // ids back in `justification.citations` instead of bates stamps.
     messageContent.push({
       type: "text",
-      text: buildDocxBlocksMessage({
+      content: buildDocxBlocksMessage({
         simplifiedName: file.simplifiedName,
         blocks: file.blocks,
       }),
@@ -135,7 +149,7 @@ export const generateWorkflowData = async ({
   if (textInputs.length > 0) {
     messageContent.push({
       type: "text",
-      text: buildTextInputsMessage(textInputs),
+      content: buildTextInputsMessage(textInputs),
     });
   }
 
@@ -143,7 +157,7 @@ export const generateWorkflowData = async ({
   if (lastStaticIdx >= 0) {
     const lastStatic = messageContent[lastStaticIdx];
     if (lastStatic) {
-      messageContent[lastStaticIdx] = markCacheBreakpoint(lastStatic, {
+      messageContent[lastStaticIdx] = markTanStackCacheBreakpoint(lastStatic, {
         decision: cachingDecision,
       });
     }
@@ -151,10 +165,10 @@ export const generateWorkflowData = async ({
 
   messageContent.push({
     type: "text",
-    text: buildPromptsMessage(properties),
+    content: buildPromptsMessage(properties),
   });
 
-  const aiAnalytics = createAIAnalyticsCallbacks(
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks(
     buildWorkflowAIAnalyticsProps({
       entityVersionId,
       organizationId,
@@ -167,36 +181,57 @@ export const generateWorkflowData = async ({
 
   return await Result.tryPromise({
     try: async () => {
-      const result = streamText({
-        model: getModelForRole("pdf", orgAIConfig, {
-          promptCachingEnabled,
-          scopeKey: entityVersionId,
-          organizationId,
-          serviceTier,
-          allowServiceTierFallback: false,
-        }),
+      const stream = streamTanStackObjectForRole({
+        role: "pdf",
+        orgAIConfig,
+        organizationId,
+        analytics: aiAnalytics,
+        caching: cachingDecision,
+        serviceTier,
         messages: [{ role: "user", content: messageContent }],
-        output: Output.object({ schema: strictOutputSchema(schema) }),
         system: WORKFLOW_SYSTEM_PROMPT,
         abortSignal,
-        ...aiAnalytics.stepCallbacks,
+        outputSchema: schema,
       });
 
-      const partialAnswerTask = onPartialAnswer
-        ? consumePartialAnswers({
-            partialOutputs: result.partialOutputStream,
-            propertyIds: properties.map((property) => property.id),
-            onPartialAnswer,
-          }).catch((error: unknown) => {
-            aiAnalytics.captureError(error);
-          })
-        : Promise.resolve();
+      let rawJson = "";
+      let output: WorkflowDataOutput | undefined;
+      const propertyIds = properties.map((property) => property.id);
 
-      try {
-        return await result.output;
-      } finally {
-        await partialAnswerTask;
+      for await (const event of stream) {
+        if (event.type === "complete") {
+          output = event.object;
+          continue;
+        }
+
+        if (!onPartialAnswer) {
+          continue;
+        }
+
+        if (event.type === "partial") {
+          await consumePartialAnswers({
+            partialOutputs: [event.partial],
+            propertyIds,
+            onPartialAnswer,
+          });
+          continue;
+        }
+
+        rawJson += event.delta;
+        await consumeTanStackPartialAnswer({
+          rawJson,
+          propertyIds,
+          onPartialAnswer,
+        });
       }
+
+      if (output === undefined) {
+        throw new WorkflowIntegrationError({
+          message: "Workflow AI generation did not return structured output",
+        });
+      }
+
+      return output;
     },
     catch: (error) => {
       aiAnalytics.captureError(error);

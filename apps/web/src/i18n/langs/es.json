@@ -449,6 +449,8 @@
     },
     "queuedAttachmentCount": "{count, plural, one {# adjunto} many {# adjuntos} other {# adjuntos}}",
     "queuedNotice": "En cola: se enviará cuando termine la respuesta actual",
+    "reasoning": "Razonamiento",
+    "reasoningTokens": "{count, plural, one {# token de razonamiento} other {# tokens de razonamiento}}",
     "recapLoading": "Resumiendo la conversación…",
     "removeSuggestion": "(eliminar)",
     "resend": "Reenviar",

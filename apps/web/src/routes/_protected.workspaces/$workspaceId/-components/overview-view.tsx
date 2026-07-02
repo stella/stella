@@ -1085,9 +1085,13 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
     const propertyKey = entity.propertyId ?? entity.fieldId;
     const fieldKey = entity.fieldId ?? propertyKey;
     if (propertyKey && fieldKey && entity.mimeType) {
-      fields[propertyKey] = {
-        id: fieldKey,
-        entityId: entity.entityId,
+      const entityId = toSafeId<"entity">(entity.entityId);
+      const fieldId = toSafeId<"field">(fieldKey);
+      const propertyId = toSafeId<"property">(propertyKey);
+      fields[propertyId] = {
+        id: fieldId,
+        entityId,
+        propertyId,
         content: {
           type: "file",
           version: 1,
@@ -1102,7 +1106,7 @@ const OverviewRow = ({ entity, workspaceId }: OverviewRowProps) => {
       };
     }
     return {
-      entityId: entity.entityId,
+      entityId: toSafeId<"entity">(entity.entityId),
       kind: entity.kind,
       name: entity.name,
       parentId: null,

@@ -16,6 +16,7 @@ import { ChatComposerActionButton } from "@/components/chat/chat-composer-action
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
+import { getAnalytics } from "@/lib/analytics/provider";
 
 type ChatInputSurfaceProps = {
   autoFocus?: boolean;
@@ -41,6 +42,10 @@ type ChatInputSurfaceProps = {
    * shield on raw requests or hide it on protected ones.
    */
   anonymized?: boolean;
+};
+
+const captureChatSubmitError = (error: unknown): void => {
+  getAnalytics().captureError(error);
 };
 
 export const ChatInputSurface = ({
@@ -83,6 +88,7 @@ export const ChatInputSurface = ({
     controller,
     inputDisabled,
     onSubmit,
+    onSubmitError: captureChatSubmitError,
     submitDisabled,
   });
 

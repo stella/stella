@@ -62,49 +62,52 @@ describe("isApprovalPart", () => {
 
   test("treats active DOCX edit tools as approval parts", () => {
     const part = {
-      approval: { id: "approval-1" },
+      approval: { id: "approval-1", needsApproval: true },
+      arguments: JSON.stringify({ operations: [] }),
+      id: "tool-call-1",
       input: { operations: [] },
-      providerExecuted: false,
       state: "approval-requested",
-      toolCallId: "tool-call-1",
-      type: "tool-apply-active-docx-edits",
-    } as ChatPart;
+      name: "apply-active-docx-edits",
+      type: "tool-call",
+    } satisfies ChatPart;
 
     expect(isApprovalPart(part)).toBe(true);
   });
 
   test("treats external MCP tools as approval parts", () => {
     const part = {
-      approval: { id: "approval-1" },
+      approval: { id: "approval-1", needsApproval: true },
+      arguments: JSON.stringify({ query: "civil code" }),
+      id: "tool-call-1",
       input: { query: "civil code" },
-      providerExecuted: false,
       state: "approval-requested",
-      toolCallId: "tool-call-1",
-      type: "tool-mcp__salvia__search_decisions",
-    };
+      name: "mcp__salvia__search_decisions",
+      type: "tool-call",
+    } satisfies ChatPart;
 
     expect(isApprovalPart(part)).toBe(true);
   });
 
-  test("treats dynamic external MCP approval requests as approval parts", () => {
+  test("extracts approval tool names from external MCP approval requests", () => {
     const part = {
-      approval: { id: "approval-1" },
+      approval: { id: "approval-1", needsApproval: true },
+      arguments: JSON.stringify({ query: "protección de datos" }),
+      id: "tool-call-1",
       input: { query: "protección de datos" },
       state: "approval-requested",
-      toolCallId: "tool-call-1",
-      toolName: "mcp__legal-data-hunter__search",
-      type: "dynamic-tool",
-    };
+      name: "mcp__legal-data-hunter__search",
+      type: "tool-call",
+    } satisfies ChatPart;
 
     expect(isApprovalPart(part)).toBe(true);
     if (!isApprovalPart(part)) {
-      throw new Error("Expected dynamic MCP approval part");
+      throw new Error("Expected MCP approval part");
     }
 
     expect(getApprovalToolName(part)).toBe("mcp__legal-data-hunter__search");
   });
 
-  test("treats legacy external native API approval requests as approval parts", () => {
+  test("does not treat legacy dynamic tool parts as approval parts", () => {
     const part = {
       approval: { id: "approval-1" },
       input: { ico: "27082440" },
@@ -114,10 +117,10 @@ describe("isApprovalPart", () => {
       type: "tool-ares_lookup_company",
     };
 
-    expect(isApprovalPart(part)).toBe(true);
+    expect(isApprovalPart(part)).toBe(false);
   });
 
-  test("does not treat public ARES output as an approval part", () => {
+  test("does not treat legacy public ARES output as an approval part", () => {
     const part = {
       input: { ico: "27082440" },
       output: { ico: "27082440", name: "Alza.cz a.s." },
@@ -131,12 +134,16 @@ describe("isApprovalPart", () => {
 
   test("does not treat ask-user as an approval part", () => {
     const part = {
-      input: { questions: [] },
-      output: undefined,
-      state: "input-available",
-      toolCallId: "tool-call-1",
-      type: "tool-ask-user",
-    };
+      arguments: JSON.stringify({
+        analysis: "Need the user's answer.",
+        questions: [],
+      }),
+      id: "tool-call-1",
+      input: { analysis: "Need the user's answer.", questions: [] },
+      state: "input-complete",
+      name: "ask-user",
+      type: "tool-call",
+    } satisfies ChatPart;
 
     expect(isApprovalPart(part)).toBe(false);
   });
@@ -166,13 +173,18 @@ describe("hasApprovedActiveDocxEditAwaitingClientOutput", () => {
             id: "message-1",
             parts: [
               {
-                approval: { approved: true, id: "approval-1" },
+                approval: {
+                  approved: true,
+                  id: "approval-1",
+                  needsApproval: true,
+                },
+                arguments: JSON.stringify({ operations: [] }),
+                id: "tool-call-1",
                 input: { operations: [] },
-                providerExecuted: false,
                 state: "approval-responded",
-                toolCallId: "tool-call-1",
-                type: "tool-apply-active-docx-edits",
-              } as ChatPart,
+                name: "apply-active-docx-edits",
+                type: "tool-call",
+              } satisfies ChatPart,
             ],
             role: "assistant",
           },
@@ -189,13 +201,18 @@ describe("hasApprovedActiveDocxEditAwaitingClientOutput", () => {
             id: "message-1",
             parts: [
               {
-                approval: { approved: false, id: "approval-1" },
+                approval: {
+                  approved: false,
+                  id: "approval-1",
+                  needsApproval: true,
+                },
+                arguments: JSON.stringify({ operations: [] }),
+                id: "tool-call-1",
                 input: { operations: [] },
-                providerExecuted: false,
                 state: "approval-responded",
-                toolCallId: "tool-call-1",
-                type: "tool-apply-active-docx-edits",
-              } as ChatPart,
+                name: "apply-active-docx-edits",
+                type: "tool-call",
+              } satisfies ChatPart,
             ],
             role: "assistant",
           },
@@ -214,13 +231,18 @@ describe("hasApprovalResponseAwaitingModelStep", () => {
             id: "message-1",
             parts: [
               {
-                approval: { approved: true, id: "approval-1" },
+                approval: {
+                  approved: true,
+                  id: "approval-1",
+                  needsApproval: true,
+                },
+                arguments: JSON.stringify({ query: "protección de datos" }),
+                id: "tool-call-1",
                 input: { query: "protección de datos" },
                 state: "approval-responded",
-                toolCallId: "tool-call-1",
-                toolName: "mcp__legal-data-hunter__search",
-                type: "dynamic-tool",
-              } as ChatPart,
+                name: "mcp__legal-data-hunter__search",
+                type: "tool-call",
+              } satisfies ChatPart,
             ],
             role: "assistant",
           },
@@ -237,11 +259,12 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
         id: "message-1",
         parts: [
           {
+            arguments: JSON.stringify({ query: "consumer credit" }),
+            id: "tool-call-1",
             input: { query: "consumer credit" },
-            state: "input-available",
-            toolCallId: "tool-call-1",
-            toolName: "mcp__salvia__search_decisions",
-            type: "dynamic-tool",
+            state: "input-complete",
+            name: "mcp__salvia__search_decisions",
+            type: "tool-call",
           },
         ],
         role: "assistant",
@@ -259,12 +282,13 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
         id: "message-1",
         parts: [
           {
+            arguments: JSON.stringify({ query: "consumer credit" }),
+            id: "tool-call-1",
             input: { query: "consumer credit" },
             output: { content: [] },
-            state: "output-available",
-            toolCallId: "tool-call-1",
-            toolName: "mcp__salvia__search_decisions",
-            type: "dynamic-tool",
+            state: "complete",
+            name: "mcp__salvia__search_decisions",
+            type: "tool-call",
           },
         ],
         role: "assistant",
@@ -284,10 +308,15 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
         id: "message-1",
         parts: [
           {
+            arguments: JSON.stringify({
+              analysis: "Need the user's answer.",
+              questions: [],
+            }),
+            id: "tool-call-1",
             input: { analysis: "Need the user's answer.", questions: [] },
-            state: "input-available",
-            toolCallId: "tool-call-1",
-            type: "tool-ask-user",
+            state: "input-complete",
+            name: "ask-user",
+            type: "tool-call",
           },
         ],
         role: "assistant",
@@ -307,13 +336,18 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
         id: "message-1",
         parts: [
           {
+            arguments: JSON.stringify({
+              name: "Engagement letter",
+              source: "@title Engagement letter",
+            }),
+            id: "tool-call-1",
             input: {
               name: "Engagement letter",
               source: "@title Engagement letter",
             },
-            state: "input-available",
-            toolCallId: "tool-call-1",
-            type: "tool-create-document",
+            state: "input-complete",
+            name: "create-document",
+            type: "tool-call",
           },
         ],
         role: "assistant",
@@ -333,18 +367,19 @@ describe("hasRunningToolCallInLatestAssistantMessage", () => {
         id: "message-1",
         parts: [
           {
+            arguments: JSON.stringify({ query: "consumer credit" }),
+            id: "tool-call-1",
             input: { query: "consumer credit" },
-            state: "input-available",
-            toolCallId: "tool-call-1",
-            toolName: "mcp__salvia__search_decisions",
-            type: "dynamic-tool",
+            state: "input-complete",
+            name: "mcp__salvia__search_decisions",
+            type: "tool-call",
           },
         ],
         role: "assistant",
       },
       {
         id: "message-2",
-        parts: [{ text: "new prompt", type: "text" }],
+        parts: [{ content: "new prompt", type: "text" }],
         role: "user",
       },
     ] satisfies Parameters<
@@ -363,11 +398,12 @@ describe("isChatTurnInFlight", () => {
       id: "message-1",
       parts: [
         {
+          arguments: JSON.stringify({ query: "consumer credit" }),
+          id: "tool-call-1",
           input: { query: "consumer credit" },
+          name: "mcp__salvia__search_decisions",
           state: "input-streaming",
-          toolCallId: "tool-call-1",
-          toolName: "mcp__salvia__search_decisions",
-          type: "dynamic-tool",
+          type: "tool-call",
         },
       ],
       role: "assistant",
@@ -425,17 +461,17 @@ describe("getUserMessageHtmlHistory", () => {
       getUserMessageHtmlHistory([
         {
           id: "message-1",
-          parts: [{ text: "Older prompt", type: "text" }],
+          parts: [{ content: "Older prompt", type: "text" }],
           role: "user",
         },
         {
           id: "message-2",
-          parts: [{ text: "Assistant response", type: "text" }],
+          parts: [{ content: "Assistant response", type: "text" }],
           role: "assistant",
         },
         {
           id: "message-3",
-          parts: [{ text: "Latest prompt", type: "text" }],
+          parts: [{ content: "Latest prompt", type: "text" }],
           role: "user",
         },
       ]),
@@ -447,17 +483,20 @@ describe("getUserMessageHtmlHistory", () => {
       getUserMessageHtmlHistory([
         {
           id: "message-1",
-          parts: [{ text: "Reusable prompt", type: "text" }],
+          parts: [{ content: "Reusable prompt", type: "text" }],
           role: "user",
         },
         {
           id: "message-2",
           parts: [
             {
-              filename: "contract.pdf",
-              mediaType: "application/pdf",
-              type: "file",
-              url: "https://example.com/contract.pdf",
+              metadata: { filename: "contract.pdf" },
+              source: {
+                mimeType: "application/pdf",
+                type: "url",
+                value: "https://example.com/contract.pdf",
+              },
+              type: "document",
             },
           ],
           role: "user",
@@ -471,12 +510,12 @@ describe("getUserMessageHtmlHistory", () => {
       getUserMessageHtmlHistory([
         {
           id: "message-1",
-          parts: [{ text: "   ", type: "text" }],
+          parts: [{ content: "   ", type: "text" }],
           role: "user",
         },
         {
           id: "message-2",
-          parts: [{ text: "\n<p>Clean prompt</p>\n", type: "text" }],
+          parts: [{ content: "\n<p>Clean prompt</p>\n", type: "text" }],
           role: "user",
         },
       ]),

@@ -1,16 +1,19 @@
-import { APICallError } from "ai";
 import { describe, expect, test } from "bun:test";
 
 import { classifyAIError } from "@/api/lib/ai-error";
 import { ChatLoopDetectedError } from "@/api/lib/errors/tagged-errors";
 
-const apiCallError = (statusCode: number): APICallError =>
-  new APICallError({
-    message: `provider responded ${statusCode}`,
-    url: "https://provider.example/v1/messages",
-    requestBodyValues: {},
+const apiCallError = (statusCode: number) =>
+  ({
     statusCode,
-  });
+    message: `provider responded ${statusCode}`,
+  }) satisfies Record<string, unknown>;
+
+const tanStackProviderError = (status: number) =>
+  ({
+    status,
+    message: `provider responded ${status}`,
+  }) satisfies Record<string, unknown>;
 
 describe("classifyAIError", () => {
   test("maps chat loop stops to a stable stream error kind", () => {
@@ -45,16 +48,22 @@ describe("classifyAIError", () => {
     expect(classifyAIError(error)).toBe("model_unavailable");
   });
 
-  test("maps the AI SDK NoSuchModelError to model_unavailable", () => {
-    const error = new Error("no such model: gpt-retired");
-    error.name = "AI_NoSuchModelError";
-
-    expect(classifyAIError(error)).toBe("model_unavailable");
-  });
-
   test("still maps other status codes to their existing kinds", () => {
     expect(classifyAIError(apiCallError(429))).toBe("quota_exhausted");
     expect(classifyAIError(apiCallError(402))).toBe("provider_billing");
     expect(classifyAIError(apiCallError(503))).toBe("provider_unavailable");
+  });
+
+  test("maps provider status fields without provider-specific error classes", () => {
+    expect(classifyAIError(tanStackProviderError(429))).toBe("quota_exhausted");
+    expect(classifyAIError(tanStackProviderError(402))).toBe(
+      "provider_billing",
+    );
+    expect(classifyAIError(tanStackProviderError(404))).toBe(
+      "model_unavailable",
+    );
+    expect(classifyAIError(tanStackProviderError(503))).toBe(
+      "provider_unavailable",
+    );
   });
 });

@@ -1,5 +1,4 @@
-import { valibotSchema } from "@ai-sdk/valibot";
-import { tool } from "ai";
+import { toolDefinition } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -20,6 +19,7 @@ import type { SandboxFunctionRegistry } from "@/api/handlers/chat/tools/execute/
 import { runSandbox } from "@/api/handlers/chat/tools/execute/sandbox/run-sandbox";
 import { createReadonlyWorkspaceFunctionRegistry } from "@/api/handlers/chat/tools/execute/workspace-function-registry";
 import { readonlyWorkspaceFunctionContracts } from "@/api/handlers/chat/tools/execute/workspace-manifest";
+import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -107,9 +107,10 @@ export const createChatExecutionTools = ({
   });
 
   return {
-    "describe-stella-api": tool({
+    "describe-stella-api": toolDefinition({
+      name: "describe-stella-api",
       description: DESCRIBE_STELLA_API_TOOL_DESCRIPTION,
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           name: v.optional(
             v.pipe(
@@ -122,40 +123,40 @@ export const createChatExecutionTools = ({
           ),
         }),
       ),
-      execute: async ({ name }) => {
-        if (name === undefined) {
-          const manifest = buildReadonlyFunctionManifest(
-            readonlyFunctionContracts,
-          ).unwrap();
-          return await Promise.resolve({
-            functions: manifest.map((entry) => ({
-              name: entry.name,
-              summary: entry.summary,
-              outputShape: entry.outputShape,
-            })),
-          });
-        }
+    }).server(({ name }) => {
+      if (name === undefined) {
+        const manifest = buildReadonlyFunctionManifest(
+          readonlyFunctionContracts,
+        ).unwrap();
+        return {
+          functions: manifest.map((entry) => ({
+            name: entry.name,
+            summary: entry.summary,
+            outputShape: entry.outputShape,
+          })),
+        };
+      }
 
-        const manifestEntry = findReadonlyFunctionManifestEntry({
-          contracts: readonlyFunctionContracts,
-          name,
-        }).unwrap();
+      const manifestEntry = findReadonlyFunctionManifestEntry({
+        contracts: readonlyFunctionContracts,
+        name,
+      }).unwrap();
 
-        if (!manifestEntry) {
-          throw new ChatToolError({
-            message: `Unknown readonly read function: ${name}`,
-          });
-        }
-
-        return await Promise.resolve({
-          function: manifestEntry,
+      if (!manifestEntry) {
+        throw new ChatToolError({
+          message: `Unknown readonly read function: ${name}`,
         });
-      },
+      }
+
+      return {
+        function: manifestEntry,
+      };
     }),
 
-    "run-stella-query": tool({
+    "run-stella-query": toolDefinition({
+      name: "run-stella-query",
       description: RUN_STELLA_QUERY_TOOL_DESCRIPTION,
-      inputSchema: valibotSchema(
+      inputSchema: toTanStackToolSchema(
         v.strictObject({
           code: v.pipe(
             v.string(),
@@ -164,21 +165,20 @@ export const createChatExecutionTools = ({
           ),
         }),
       ),
-      execute: async ({ code }) => {
-        const result = await runSandbox({
-          concurrencyKey: userId,
-          source: code,
-          registry: readonlySandboxRegistry,
-        });
+    }).server(async ({ code }) => {
+      const result = await runSandbox({
+        concurrencyKey: userId,
+        source: code,
+        registry: readonlySandboxRegistry,
+      });
 
-        if (Result.isOk(result)) {
-          return { value: result.value.value };
-        }
+      if (Result.isOk(result)) {
+        return { value: result.value.value };
+      }
 
-        throw new ChatToolError({
-          message: `Sandbox execution failed (${result.error.reason}): ${result.error.message}`,
-        });
-      },
+      throw new ChatToolError({
+        message: `Sandbox execution failed (${result.error.reason}): ${result.error.message}`,
+      });
     }),
   };
 };

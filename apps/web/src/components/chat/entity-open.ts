@@ -7,12 +7,18 @@ import { api } from "@/lib/api";
 import { toAPIError } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
 import { isFileDisplayable } from "@/lib/types";
-import type { WorkspaceEntity, WorkspaceFieldContent } from "@/lib/types";
+import type {
+  FieldId,
+  PropertyId,
+  WorkspaceEntity,
+  WorkspaceField,
+  WorkspaceFieldContent,
+} from "@/lib/types";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
 
 type EntityFileField = {
-  id: string;
-  propertyId?: string | undefined;
+  id: FieldId;
+  propertyId?: PropertyId | undefined;
   content: WorkspaceFieldContent;
 };
 
@@ -56,11 +62,13 @@ const openDisplayableFile = ({
 };
 
 const toEntityFileFields = (entity: WorkspaceEntity): EntityFileField[] =>
-  Object.entries(entity.fields).map(([propertyId, field]) => ({
-    id: field.id,
-    propertyId,
-    content: field.content,
-  }));
+  Object.values(entity.fields)
+    .filter((field): field is WorkspaceField => field !== undefined)
+    .map((field) => ({
+      id: field.id,
+      propertyId: field.propertyId,
+      content: field.content,
+    }));
 
 type OpenEntityResult =
   | { type: "opened" }

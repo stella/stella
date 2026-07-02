@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { normalizeLegacyRawToolInputs } from "@/api/handlers/chat/legacy-tool-compat";
+import { createActiveDocxEditTool } from "@/api/handlers/chat/tools/active-docx-edit-tool";
 
 describe("legacy chat tool input compatibility", () => {
   test("maps legacy create-document markdown input to source", () => {
@@ -100,5 +101,38 @@ describe("legacy chat tool input compatibility", () => {
         type: "tool-create-document",
       },
     ]);
+  });
+
+  test("repairs active DOCX edit aliases through the tool schema", async () => {
+    const tool = createActiveDocxEditTool();
+    if (tool.inputSchema === undefined) {
+      throw new TypeError("Expected active DOCX edit input schema");
+    }
+    const result = await tool.inputSchema["~standard"].validate({
+      operations: [
+        JSON.stringify({
+          id: "block-1",
+          kind: "replaceInBlock",
+          find: "old",
+          replace: "new",
+          area: "Names",
+          severity: "medium",
+        }),
+      ],
+    });
+
+    expect(result.issues).toBeUndefined();
+    if (result.issues === undefined) {
+      expect(result.value.operations).toEqual([
+        {
+          blockId: "block-1",
+          type: "replaceInBlock",
+          find: "old",
+          replace: "new",
+          area: "Names",
+          severity: "medium",
+        },
+      ]);
+    }
   });
 });

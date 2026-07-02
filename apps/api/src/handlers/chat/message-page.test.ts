@@ -1,9 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  clientMessageFromPageRow,
   decodeMessagePageCursor,
   encodeMessagePageCursor,
 } from "@/api/handlers/chat/message-page";
+import type { ChatMessageContent } from "@/api/handlers/chat/types";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 
 const MESSAGE_ID = brandPersistedChatMessageId(
@@ -39,5 +41,60 @@ describe("chat message page cursor", () => {
 
   test("rejects a non-string id", () => {
     expect(decodeMessagePageCursor(encodeParts([42]))).toBeNull();
+  });
+});
+
+describe("clientMessageFromPageRow", () => {
+  test("preserves persisted message metadata", () => {
+    const message = clientMessageFromPageRow(
+      {
+        id: MESSAGE_ID,
+        role: "assistant",
+        content: {
+          version: 2,
+          data: [{ type: "text", content: "Done" }],
+          metadata: {
+            anonRestorations: {
+              pairs: [{ placeholder: "[PERSON_1]", original: "Ada Lovelace" }],
+            },
+            sourceDocuments: [
+              {
+                entityId: "doc_1",
+                kind: "document",
+                mimeType: "application/pdf",
+                title: "Source memo",
+                workspaceId: "workspace_1",
+              },
+            ],
+            usage: {
+              completionTokens: 3,
+              promptTokens: 2,
+              totalTokens: 5,
+            },
+          },
+        } satisfies ChatMessageContent,
+      },
+      new Map(),
+    );
+
+    expect(message.metadata).toEqual({
+      anonRestorations: {
+        pairs: [{ placeholder: "[PERSON_1]", original: "Ada Lovelace" }],
+      },
+      sourceDocuments: [
+        {
+          entityId: "doc_1",
+          kind: "document",
+          mimeType: "application/pdf",
+          title: "Source memo",
+          workspaceId: "workspace_1",
+        },
+      ],
+      usage: {
+        completionTokens: 3,
+        promptTokens: 2,
+        totalTokens: 5,
+      },
+    });
   });
 });

@@ -1,4 +1,7 @@
-import type { ToolSet } from "ai";
+import type {
+  ChatTool,
+  ChatToolMap,
+} from "@/api/handlers/chat/tools/chat-tool-types";
 
 export const CHAT_TOOL_POLICY_KIND = {
   external: "external",
@@ -57,46 +60,39 @@ const CHAT_TOOL_POLICIES = {
   },
 } as const satisfies Record<ChatToolPolicyKind, ChatToolPolicy>;
 
-const CHAT_TOOL_POLICY_SYMBOL = Symbol.for("stella.chat.toolPolicy");
+const chatToolPolicies = new WeakMap<ChatTool, ChatToolPolicy>();
 
-type ToolDefinition = NonNullable<ToolSet[string]>;
-type ToolDefinitionWithPolicy = ToolDefinition & {
-  [CHAT_TOOL_POLICY_SYMBOL]?: ChatToolPolicy | undefined;
-};
+export const getChatToolPolicy = (toolDefinition: ChatTool): ChatToolPolicy =>
+  chatToolPolicies.get(toolDefinition) ?? CHAT_TOOL_POLICIES.internal;
 
-export const getChatToolPolicy = (
-  toolDefinition: ToolDefinition,
-): ChatToolPolicy =>
-  // SAFETY: widening to read the optional Stella-private policy symbol that
-  // applyChatToolPolicy attaches via Object.assign. The symbol property is
-  // typed optional and the ?? fallback covers tools that were never tagged.
-  (toolDefinition as ToolDefinitionWithPolicy)[CHAT_TOOL_POLICY_SYMBOL] ??
-  CHAT_TOOL_POLICIES.internal;
-
-export const applyChatToolPolicy = <TTool extends ToolDefinition>(
+export const applyChatToolPolicy = <TTool extends ChatTool>(
   toolDefinition: TTool,
   policyKind: ChatToolPolicyKind,
 ): TTool => {
   const policy = CHAT_TOOL_POLICIES[policyKind];
+  chatToolPolicies.set(toolDefinition, policy);
 
   return Object.assign(toolDefinition, {
-    [CHAT_TOOL_POLICY_SYMBOL]: policy,
     ...(policy.needsApproval ? { needsApproval: true } : {}),
   });
 };
 
-type ApplyChatToolPoliciesOptions<TTools extends ToolSet> = {
+type ApplyChatToolPoliciesOptions<TTools extends ChatToolMap> = {
   defaultPolicyKind?: ChatToolPolicyKind | undefined;
   policyKinds?: Partial<Record<keyof TTools & string, ChatToolPolicyKind>>;
   tools: TTools;
 };
 
-export const applyChatToolPolicies = <TTools extends ToolSet>({
+export const applyChatToolPolicies = <TTools extends ChatToolMap>({
   defaultPolicyKind,
   policyKinds = {},
   tools,
 }: ApplyChatToolPoliciesOptions<TTools>): TTools => {
   for (const [name, toolDefinition] of Object.entries(tools)) {
+    if (!toolDefinition) {
+      continue;
+    }
+
     const policyKind = policyKinds[name] ?? defaultPolicyKind;
     if (!policyKind) {
       continue;

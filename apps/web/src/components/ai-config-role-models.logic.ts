@@ -1,26 +1,29 @@
-import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
+import {
+  BYOK_DEFAULT_MODELS,
+  BYOK_MODEL_OPTIONS,
+  isBYOKModelRoleSupported,
+  isBYOKProviderRoleSupported,
+} from "@stll/ai-catalog";
 
 export const PROVIDER_KEYS = [
   "google",
   "anthropic",
-  "mistral",
   "openai",
-  "azure_foundry",
   "openrouter",
-  "huggingface",
+  "mistral",
+  "bedrock",
 ] as const;
 
 export const PROVIDER_LABELS = {
   google: "Google",
   anthropic: "Anthropic",
-  mistral: "Mistral",
   openai: "OpenAI",
-  azure_foundry: "Azure Foundry",
   openrouter: "OpenRouter",
-  huggingface: "Hugging Face",
+  mistral: "Mistral",
+  bedrock: "Bedrock",
 } as const satisfies Record<(typeof PROVIDER_KEYS)[number], string>;
 
-export const REGION_KEYS = ["global", "eu", "ch"] as const;
+export const REGION_KEYS = ["global"] as const;
 
 export const ROLE_KEYS = ["chat", "fast", "reasoning", "pdf"] as const;
 
@@ -84,25 +87,15 @@ export type SerializedProviderConfig = {
 };
 
 const PROVIDER_VALUES = new Set<string>(PROVIDER_KEYS);
-const REGION_VALUES = new Set<string>(REGION_KEYS);
 const ROLE_VALUES = new Set<string>(ROLE_KEYS);
-
-export const REGIONAL_PROVIDERS = new Set<ProviderValue>(["google"]);
-export const CUSTOM_MODEL_ID_PROVIDERS = new Set<ProviderValue>([
-  "azure_foundry",
-  "huggingface",
-]);
-export const ENDPOINT_REQUIRED_PROVIDERS = new Set<ProviderValue>([
-  "azure_foundry",
-  "huggingface",
-]);
 
 // Catalog data is the single source of truth in @stll/ai-catalog,
 // shared with the API runtime. The `satisfies` guards also cross-check
 // that the package's provider/role sets still match the UI's
 // ProviderValue/RoleValue — a divergence fails typecheck here.
-export const DEFAULT_MODELS_BY_PROVIDER = BYOK_DEFAULT_MODELS satisfies Partial<
-  Record<ProviderValue, Record<RoleValue, string>>
+export const DEFAULT_MODELS_BY_PROVIDER = BYOK_DEFAULT_MODELS satisfies Record<
+  ProviderValue,
+  Record<RoleValue, string>
 >;
 
 export const MODEL_OPTIONS_BY_PROVIDER = BYOK_MODEL_OPTIONS satisfies Record<
@@ -110,11 +103,28 @@ export const MODEL_OPTIONS_BY_PROVIDER = BYOK_MODEL_OPTIONS satisfies Record<
   readonly string[]
 >;
 
+export const isProviderRoleSupported = (
+  provider: ProviderValue,
+  role: RoleValue,
+): boolean => isBYOKProviderRoleSupported({ provider, role });
+
+export const getModelOptionsForRole = ({
+  provider,
+  role,
+}: {
+  provider: ProviderValue;
+  role: RoleValue;
+}): readonly string[] => {
+  if (!isProviderRoleSupported(provider, role)) {
+    return [];
+  }
+  return MODEL_OPTIONS_BY_PROVIDER[provider].filter((modelId) =>
+    isBYOKModelRoleSupported({ provider, modelId, role }),
+  );
+};
+
 export const isProviderValue = (value: string | null): value is ProviderValue =>
   value !== null && PROVIDER_VALUES.has(value);
-
-export const isRegionValue = (value: string | null): value is RegionValue =>
-  value !== null && REGION_VALUES.has(value);
 
 export const isRoleValue = (value: string): value is RoleValue =>
   ROLE_VALUES.has(value);
@@ -144,15 +154,6 @@ export const providerDraftsFromStoredProviders = (
     }
 
     const provider = providerConfig.provider;
-    const storedRegion = providerConfig.region;
-    let region: RegionValue = "global";
-    if (
-      storedRegion &&
-      isRegionValue(storedRegion) &&
-      REGIONAL_PROVIDERS.has(provider)
-    ) {
-      region = storedRegion;
-    }
 
     drafts.push({
       provider,
@@ -160,7 +161,7 @@ export const providerDraftsFromStoredProviders = (
       apiKeyMasked: providerConfig.apiKeyMasked,
       endpoint: providerConfig.endpoint ?? "",
       apiVersion: providerConfig.apiVersion,
-      region,
+      region: "global",
       replacingKey: false,
     });
   }
@@ -170,15 +171,24 @@ export const providerDraftsFromStoredProviders = (
 
 export const createDefaultRoleModels = (
   providers: readonly ProviderValue[] = ["google"],
-): RoleModelSelections => {
-  const provider = providers.at(0);
-  return {
-    chat: getDefaultModelSelection(provider, "chat"),
-    fast: getDefaultModelSelection(provider, "fast"),
-    reasoning: getDefaultModelSelection(provider, "reasoning"),
-    pdf: getDefaultModelSelection(provider, "pdf"),
-  };
-};
+): RoleModelSelections => ({
+  chat: getDefaultModelSelection(
+    getDefaultProviderForRole(providers, "chat"),
+    "chat",
+  ),
+  fast: getDefaultModelSelection(
+    getDefaultProviderForRole(providers, "fast"),
+    "fast",
+  ),
+  reasoning: getDefaultModelSelection(
+    getDefaultProviderForRole(providers, "reasoning"),
+    "reasoning",
+  ),
+  pdf: getDefaultModelSelection(
+    getDefaultProviderForRole(providers, "pdf"),
+    "pdf",
+  ),
+});
 
 export const roleModelsFromOverrideModels = ({
   overrideModels,
@@ -201,7 +211,8 @@ export const roleModelsFromOverrideModels = ({
       selection?.provider &&
       selection.modelId &&
       isProviderValue(selection.provider) &&
-      providerSet.has(selection.provider)
+      providerSet.has(selection.provider) &&
+      isProviderRoleSupported(selection.provider, role)
     ) {
       models[role] = {
         provider: selection.provider,
@@ -225,7 +236,11 @@ export const ensureRoleModelsForProviders = ({
 
   for (const role of ROLE_KEYS) {
     const selection = roleModels[role];
-    if (selection && configuredProviders.has(selection.provider)) {
+    if (
+      selection &&
+      configuredProviders.has(selection.provider) &&
+      isProviderRoleSupported(selection.provider, role)
+    ) {
       nextModels[role] = selection;
     }
   }
@@ -251,12 +266,16 @@ export const decodeModelSelection = (value: string): ModelSelection | null => {
 
 export const getAvailableModelOptions = (
   providers: readonly ProviderValue[],
+  role?: RoleValue,
 ): ModelOption[] => {
   const options: ModelOption[] = [];
   const seen = new Set<string>();
 
   for (const provider of providers) {
-    for (const modelId of MODEL_OPTIONS_BY_PROVIDER[provider]) {
+    const modelOptions = role
+      ? getModelOptionsForRole({ provider, role })
+      : MODEL_OPTIONS_BY_PROVIDER[provider];
+    for (const modelId of modelOptions) {
       const option = {
         provider,
         modelId,
@@ -279,16 +298,13 @@ export const getRolePickerRows = ({
 }: {
   providers: readonly ProviderValue[];
   roleModels: RoleModelSelections;
-}) => {
-  const options = getAvailableModelOptions(providers);
-
-  return ROLE_KEYS.map((role) => ({
-    modelOptions: options,
+}) =>
+  ROLE_KEYS.map((role) => ({
+    modelOptions: getAvailableModelOptions(providers, role),
     role,
     selection: roleModels[role],
     value: roleModels[role] ? encodeModelSelection(roleModels[role]) : "",
   }));
-};
 
 export const isKnownModelSelection = (
   selection: ModelSelection | null,
@@ -298,9 +314,23 @@ export const isKnownModelSelection = (
   }
   const knownModels: readonly string[] =
     MODEL_OPTIONS_BY_PROVIDER[selection.provider];
-  if (CUSTOM_MODEL_ID_PROVIDERS.has(selection.provider)) {
-    return selection.modelId.trim().length > 0;
+  return knownModels.includes(selection.modelId);
+};
+
+export const isKnownModelSelectionForRole = ({
+  selection,
+  role,
+}: {
+  selection: ModelSelection | null;
+  role: RoleValue;
+}): boolean => {
+  if (!selection) {
+    return false;
   }
+  const knownModels = getModelOptionsForRole({
+    provider: selection.provider,
+    role,
+  });
   return knownModels.includes(selection.modelId);
 };
 
@@ -324,15 +354,18 @@ export const serializeOverrideModels = ({
     return null;
   }
 
-  const selections = [chat, fast, reasoning, pdf];
-  if (
-    selections.some(
-      (selection) =>
-        !providers.includes(selection.provider) ||
-        !isKnownModelSelection(selection),
-    )
-  ) {
-    return null;
+  const selections = { chat, fast, reasoning, pdf } satisfies Record<
+    RoleValue,
+    ModelSelection
+  >;
+  for (const role of ROLE_KEYS) {
+    const selection = selections[role];
+    if (
+      !providers.includes(selection.provider) ||
+      !isKnownModelSelectionForRole({ selection, role })
+    ) {
+      return null;
+    }
   }
 
   return {
@@ -374,12 +407,6 @@ export const serializeProviderDrafts = (
     serializedProviders.push({
       provider: providerDraft.provider,
       ...(apiKey ? { apiKey } : {}),
-      ...(ENDPOINT_REQUIRED_PROVIDERS.has(providerDraft.provider)
-        ? { endpoint: providerDraft.endpoint.trim() }
-        : {}),
-      ...(providerDraft.provider === "azure_foundry" && providerDraft.apiVersion
-        ? { apiVersion: providerDraft.apiVersion }
-        : {}),
       region: providerDraft.region,
     });
   }
@@ -416,12 +443,6 @@ export const hasUsableProviderDrafts = (
     ) {
       return false;
     }
-    if (
-      ENDPOINT_REQUIRED_PROVIDERS.has(providerDraft.provider) &&
-      !providerDraft.endpoint.trim()
-    ) {
-      return false;
-    }
   }
 
   return true;
@@ -431,10 +452,7 @@ export const getDefaultModelSelection = (
   provider: ProviderValue | undefined,
   role: RoleValue,
 ): ModelSelection | null => {
-  if (!provider) {
-    return null;
-  }
-  if (provider === "azure_foundry" || provider === "huggingface") {
+  if (!provider || !isProviderRoleSupported(provider, role)) {
     return null;
   }
   const defaults = DEFAULT_MODELS_BY_PROVIDER[provider];
@@ -444,10 +462,16 @@ export const getDefaultModelSelection = (
   };
 };
 
+const getDefaultProviderForRole = (
+  providers: readonly ProviderValue[],
+  role: RoleValue,
+): ProviderValue | undefined =>
+  providers.find((provider) => isProviderRoleSupported(provider, role));
+
 const normalizeModelSelection = ({
   provider,
   modelId,
 }: ModelSelection): ModelSelection => ({
   provider,
-  modelId: CUSTOM_MODEL_ID_PROVIDERS.has(provider) ? modelId.trim() : modelId,
+  modelId,
 });

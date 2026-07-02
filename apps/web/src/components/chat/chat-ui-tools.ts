@@ -3,7 +3,7 @@
  * source of truth) and provides frontend-only helpers.
  */
 
-import type { ChatStatus } from "ai";
+import type { ChatClientState, UIMessage } from "@tanstack/ai-client";
 import { panic } from "better-result";
 
 import type { ChatMessage, ChatPart, ChatUITools } from "@stll/api/types";
@@ -17,6 +17,18 @@ export type {
   ChatUITools,
 } from "@stll/api/types";
 export type PersistedChatMessage = ChatMessage;
+export type ChatAttachmentPart = Extract<
+  ChatPart,
+  { type: "document" | "image" }
+> & {
+  metadata?: {
+    filename?: string | undefined;
+    placeholder?: string | undefined;
+  };
+};
+export type ChatClientTools =
+  ChatMessage extends UIMessage<infer TTools> ? TTools : never;
+export type ChatMessageMetadata = NonNullable<ChatMessage["metadata"]>;
 export type SharedChatUITools = Pick<ChatUITools, "ask-user">;
 export type AskUserOutput = SharedChatUITools["ask-user"]["output"];
 // `create-document` is client-executed and uses the matter-pick UI as
@@ -31,18 +43,18 @@ const MCP_CONNECTOR_APPROVAL_GRANT_PREFIX = "mcp-connector:";
 export type ToolApprovalGrant =
   | ApprovalToolName
   | `${typeof MCP_CONNECTOR_APPROVAL_GRANT_PREFIX}${string}`;
-type DynamicApprovalToolPart = ChatPart & {
-  type: "dynamic-tool";
-  toolName: ApprovalToolName;
+export type ChatToolCallPart = Extract<ChatPart, { type: "tool-call" }>;
+export type ApprovalToolPart = ChatToolCallPart & {
+  name: ApprovalToolName;
+  approval: {
+    approved?: boolean | undefined;
+    id: string;
+    needsApproval: boolean;
+  };
 };
-export type ApprovalToolPart =
-  | Extract<ChatPart, { type: `tool-${ApprovalToolName}` }>
-  | (ChatPart & { type: `tool-mcp__${string}` })
-  | DynamicApprovalToolPart;
-export type ActiveDocxEditApprovalPart = Extract<
-  ChatPart,
-  { type: "tool-apply-active-docx-edits" }
->;
+export type ActiveDocxEditApprovalPart = ApprovalToolPart & {
+  name: "apply-active-docx-edits";
+};
 export type AskUserInput = SharedChatUITools["ask-user"]["input"];
 type PublicOfficialToolName = Extract<
   BuiltInApprovalToolName,
@@ -56,12 +68,13 @@ type PublicOfficialToolName = Extract<
   | "infosoud_lookup_case"
 >;
 const RUNNING_TOOL_STATES = {
-  "input-available": true,
+  "awaiting-input": true,
+  "input-complete": true,
   "input-streaming": true,
 } as const satisfies Record<string, true>;
-const USER_INPUT_TOOL_TYPES = {
-  "tool-ask-user": true,
-  "tool-create-document": true,
+const USER_INPUT_TOOL_NAMES = {
+  "ask-user": true,
+  "create-document": true,
 } as const satisfies Record<string, true>;
 
 const CHAT_TOOL_TITLE_KEYS = {
@@ -215,19 +228,15 @@ const getToolNameFromPart = (part: unknown): string | null => {
     return null;
   }
 
-  if (part.type === "dynamic-tool") {
-    if (!("toolName" in part) || typeof part.toolName !== "string") {
-      return null;
-    }
-
-    return part.toolName;
-  }
-
-  if (!part.type.startsWith("tool-")) {
+  if (part.type !== "tool-call") {
     return null;
   }
 
-  return part.type.slice("tool-".length);
+  if (!("name" in part) || typeof part.name !== "string") {
+    return null;
+  }
+
+  return part.name;
 };
 
 export const getApprovalToolName = (
@@ -252,14 +261,15 @@ export const isApprovalPart = (part: unknown): part is ApprovalToolPart => {
     return false;
   }
 
-  if (
-    toolName === "apply-active-docx-edits" ||
-    isExternalMcpToolName(toolName)
-  ) {
-    return true;
-  }
-
-  return "approval" in part;
+  return (
+    "approval" in part &&
+    typeof part.approval === "object" &&
+    part.approval !== null &&
+    "id" in part.approval &&
+    typeof part.approval.id === "string" &&
+    "needsApproval" in part.approval &&
+    typeof part.approval.needsApproval === "boolean"
+  );
 };
 
 type ApplyActiveDocxEditsToolInput =
@@ -296,18 +306,18 @@ export const getActiveDocxEditApprovalPart = (
     }
 
     for (const part of message.parts) {
-      if (part.type !== "tool-apply-active-docx-edits") {
+      if (!isApprovalPart(part) || part.name !== "apply-active-docx-edits") {
         continue;
       }
 
+      const input = part.input;
       if (
         (part.state === "approval-requested" ||
-          part.state === "approval-responded" ||
-          part.state === "output-denied") &&
+          part.state === "approval-responded") &&
         part.approval.id === approvalId &&
-        isApplyActiveDocxEditsInput(part.input)
+        isApplyActiveDocxEditsInput(input)
       ) {
-        return part;
+        return { ...part, input };
       }
     }
   }
@@ -318,17 +328,18 @@ export const getActiveDocxEditApprovalPart = (
 export const isApprovedActiveDocxEditPart = (
   part: ChatPart,
 ): part is ActiveDocxEditApprovalPart & {
-  approval: { approved: true; id: string };
+  approval: { approved: true; id: string; needsApproval: boolean };
   state: "approval-responded";
 } =>
-  part.type === "tool-apply-active-docx-edits" &&
+  part.type === "tool-call" &&
+  part.name === "apply-active-docx-edits" &&
   part.state === "approval-responded" &&
-  part.approval.approved;
+  part.approval?.approved === true;
 
 export const isApprovalRespondedPart = (
   part: ChatPart,
 ): part is ApprovalToolPart & {
-  approval: { approved: boolean; id: string };
+  approval: { approved: boolean; id: string; needsApproval: boolean };
   state: "approval-responded";
 } =>
   isApprovalPart(part) &&
@@ -378,15 +389,19 @@ export const isRunningToolPart = (part: unknown): boolean => {
     return false;
   }
 
+  if (part.type !== "tool-call" || !("name" in part)) {
+    return false;
+  }
+
   if (!(part.state in RUNNING_TOOL_STATES)) {
     return false;
   }
 
-  if (part.type in USER_INPUT_TOOL_TYPES) {
+  if (typeof part.name !== "string" || part.name in USER_INPUT_TOOL_NAMES) {
     return false;
   }
 
-  return part.type === "dynamic-tool" || part.type.startsWith("tool-");
+  return true;
 };
 
 export const hasRunningToolCallInLatestAssistantMessage = ({
@@ -403,7 +418,7 @@ export const hasRunningToolCallInLatestAssistantMessage = ({
 };
 
 type ChatTurnInFlightOptions = {
-  status: ChatStatus;
+  status: ChatClientState;
   messages: PersistedChatMessage[];
   /**
    * Set when the user explicitly stopped the turn. The AI SDK's
@@ -453,8 +468,8 @@ export const getUserMessageHtmlHistory = (
 
     const textParts: string[] = [];
     for (const part of message.parts) {
-      if (part.type === "text" && part.text.trim()) {
-        textParts.push(part.text);
+      if (part.type === "text" && part.content.trim()) {
+        textParts.push(part.content);
       }
     }
 

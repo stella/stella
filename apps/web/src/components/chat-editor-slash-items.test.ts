@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
-import { buildChatSlashItems } from "@/components/chat-editor-slash-items";
+import {
+  buildChatSlashItems,
+  commandShortcutRowsFromSkillPages,
+} from "@/components/chat-editor-slash-items";
 
 describe("buildChatSlashItems", () => {
   test("includes built-in skills when no installed skill shadows them", () => {
@@ -254,6 +257,47 @@ describe("buildChatSlashItems", () => {
     ]);
   });
 
+  test("derives prompt rows from command-bearing skill pages", () => {
+    const rows = commandShortcutRowsFromSkillPages([
+      {
+        builtIn: [],
+        installed: [
+          skillRow({
+            body: "Summarise this document.",
+            command: "summarize",
+            id: "summarize-default",
+            name: "Summarise",
+            scope: "private",
+            slug: "summarize-default",
+          }),
+          skillRow({
+            body: "Disabled body.",
+            command: "disabled",
+            enabled: false,
+            id: "disabled-command",
+            slug: "disabled-command",
+          }),
+          skillRow({
+            body: null,
+            command: "missing-body",
+            id: "missing-body",
+            slug: "missing-body",
+          }),
+        ],
+      },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        id: "summarize-default",
+        scope: "private",
+        name: "Summarise",
+        command: "summarize",
+        prompt: "Summarise this document.",
+      },
+    ]);
+  });
+
   test("hides installed skills that carry a slash command (covered by prompt feed)", () => {
     const items = buildChatSlashItems({
       shortcuts: [
@@ -342,6 +386,8 @@ describe("buildChatSlashItems", () => {
 });
 
 type SkillRowInput = {
+  body?: string | null;
+  command?: string | null;
   description?: string;
   enabled?: boolean;
   id: string;
@@ -351,6 +397,8 @@ type SkillRowInput = {
 };
 
 const skillRow = ({
+  body,
+  command,
   description = "Skill description.",
   enabled = true,
   id,
@@ -358,6 +406,8 @@ const skillRow = ({
   scope = "private",
   slug,
 }: SkillRowInput) => ({
+  ...(body === undefined ? {} : { body }),
+  ...(command === undefined ? {} : { command }),
   description,
   enabled,
   id,

@@ -11,7 +11,11 @@ import { toAPIError } from "@/lib/errors";
 import { ROUTE_QUERY_STALE_TIME_MS } from "@/lib/react-query";
 import type { QueryOptionsInput } from "@/lib/react-query";
 import { toSafeId } from "@/lib/safe-id";
-import type { WorkspaceEntity, WorkspaceField } from "@/lib/types";
+import type {
+  WorkspaceCellMetadata,
+  WorkspaceEntity,
+  WorkspaceField,
+} from "@/lib/types";
 import {
   DEFAULT_ENTITY_VIEW_PAGE_SIZE,
   DEFAULT_ENTITY_WINDOW_SIZE,
@@ -49,23 +53,25 @@ type RawWorkspaceEntity = Omit<
   }[];
   cellMetadata: {
     propertyId: string;
-    metadata: WorkspaceEntity["cellMetadata"][string];
+    metadata: WorkspaceCellMetadata;
   }[];
 };
 
 const toWorkspaceEntity = (entity: RawWorkspaceEntity): WorkspaceEntity => {
   const { fields: rawFields } = entity;
-  const fields: Record<string, WorkspaceField> = {};
+  const fields: WorkspaceEntity["fields"] = {};
   for (const field of rawFields) {
-    fields[field.propertyId] = {
+    const propertyId = toSafeId<"property">(field.propertyId);
+    fields[propertyId] = {
       id: toSafeId<"field">(field.id),
       entityId: toSafeId<"entity">(field.entityId),
+      propertyId,
       content: field.content,
     };
   }
   const cellMetadata: WorkspaceEntity["cellMetadata"] = {};
   for (const entry of entity.cellMetadata) {
-    cellMetadata[entry.propertyId] = entry.metadata;
+    cellMetadata[toSafeId<"property">(entry.propertyId)] = entry.metadata;
   }
   return {
     entityId: toSafeId<"entity">(entity.entityId),
