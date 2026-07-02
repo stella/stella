@@ -54,6 +54,12 @@ not just a UX nicety.
   the AI infers becomes a `status: "suggested"` memory the lawyer accepts
   (→ `active`) or dismisses (→ `archived`). Nothing is written silently — data
   minimization and auditability over convenience.
+- **Background extraction is org opt-in, default off.** The extractor spends on
+  the organization's own AI provider key with no user in the loop, so
+  `organization_settings.memory_extraction_enabled` (admin toggle in AI
+  settings) must be switched on before any org's compactions are mined. The
+  extractor filters orgs in the compaction query itself. Cost attribution
+  stays explicit; the `remember` tool and manual creation work regardless.
 - **Own Postgres/Drizzle, not Anthropic Memory Stores.** No lock-in;
   self-hosting stays first-class; data residency stays ours.
 - **No embeddings in v1.** Deterministic scoped fetch (active + pinned + recent,
