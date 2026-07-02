@@ -35,7 +35,7 @@ function AuditLogsPage() {
     queryParams.cursor = cursor;
   }
 
-  const { data, isLoading } = useQuery(
+  const { data, isLoading, isError } = useQuery(
     auditLogOptions(queryParams),
   );
 
@@ -82,6 +82,12 @@ function AuditLogsPage() {
                     <TableRow>
                       <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
                         Loading logs...
+                      </TableCell>
+                    </TableRow>
+                  ) : isError ? (
+                    <TableRow>
+                      <TableCell className="text-destructive h-24 text-center font-medium" colSpan={6}>
+                        Failed to load activity logs.
                       </TableCell>
                     </TableRow>
                   ) : !data || data.items.length === 0 ? (

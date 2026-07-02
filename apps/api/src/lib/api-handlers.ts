@@ -11,14 +11,19 @@ import { status } from "elysia";
 import type { ModelRole } from "@stll/ai-catalog";
 import type { PermissionInput, roles } from "@stll/permissions";
 
+import type { Transaction } from "@/api/db/root";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureRequestError } from "@/api/lib/analytics/capture";
-import type { AuditRecorder } from "@/api/lib/audit-log";
-import { captureRequestError } from "@/api/lib/analytics";
-import type { AuditRecorder, AuditAction, AuditResourceType, FieldDiffs, AuditEvent } from "@/api/lib/audit-log";
+import type {
+  AuditRecorder,
+  AuditAction,
+  AuditResourceType,
+  FieldDiffs,
+  AuditEvent,
+} from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -201,12 +206,26 @@ export type McpExposure =
   | { type: "capability"; reason: McpCapabilityReason }
   | { type: "internal"; reason: McpInternalReason };
 
-export type AuditConfig<TBody = any, TParams = any, TQuery = any, TResult = any> = {
+export type AuditConfig<
+  TBody = any,
+  TParams = any,
+  TQuery = any,
+  TResult = any,
+> = {
   action: AuditAction;
   resourceType: AuditResourceType;
-  getResourceId: (ctx: { body: TBody; params: TParams; query: TQuery }, result: TResult) => string;
-  getChanges?: (ctx: { body: TBody; params: TParams; query: TQuery }, result: TResult) => FieldDiffs | null;
-  getMetadata?: (ctx: { body: TBody; params: TParams; query: TQuery }, result: TResult) => Record<string, unknown> | null;
+  getResourceId: (
+    ctx: { body: TBody; params: TParams; query: TQuery },
+    result: TResult,
+  ) => string;
+  getChanges?: (
+    ctx: { body: TBody; params: TParams; query: TQuery },
+    result: TResult,
+  ) => FieldDiffs | null;
+  getMetadata?: (
+    ctx: { body: TBody; params: TParams; query: TQuery },
+    result: TResult,
+  ) => Record<string, unknown> | null;
 };
 
 /**
@@ -550,33 +569,43 @@ const createSafeScopedHandler = <
     let hasLogged = false;
 
     if (config.audit) {
+      const recordAudit = async (tx: Transaction, result: any) => {
+        if (hasLogged || !config.audit) {
+          return;
+        }
+        const reqCtx = {
+          body: ctx.body,
+          params: ctx.params,
+          query: ctx.query,
+        };
+        const changes = config.audit.getChanges
+          ? config.audit.getChanges(reqCtx, result)
+          : null;
+        if (config.audit.getChanges && changes === null) {
+          return;
+        }
+        const resourceId = config.audit.getResourceId(reqCtx, result);
+        const metadata = config.audit.getMetadata?.(reqCtx, result);
+
+        const auditEvent: AuditEvent = {
+          action: config.audit.action,
+          resourceType: config.audit.resourceType,
+          resourceId,
+          changes,
+        };
+        if (metadata) {
+          auditEvent.metadata = metadata;
+        }
+
+        await ctx.recordAuditEvent(tx, auditEvent);
+        hasLogged = true;
+      };
+
       const originalSafeDb = ctx.safeDb;
       ctx.safeDb = async (fn, retry) => {
         return await originalSafeDb(async (tx) => {
           const result = await fn(tx);
-          if (!hasLogged && config.audit) {
-            const reqCtx = {
-              body: ctx.body,
-              params: ctx.params,
-              query: ctx.query,
-            };
-            const resourceId = config.audit.getResourceId(reqCtx, result);
-            const changes = config.audit.getChanges?.(reqCtx, result) ?? null;
-            const metadata = config.audit.getMetadata?.(reqCtx, result);
-
-            const auditEvent: AuditEvent = {
-              action: config.audit.action,
-              resourceType: config.audit.resourceType,
-              resourceId,
-              changes,
-            };
-            if (metadata) {
-              auditEvent.metadata = metadata;
-            }
-
-            await ctx.recordAuditEvent(tx, auditEvent);
-            hasLogged = true;
-          }
+          await recordAudit(tx, result);
           return result;
         }, retry);
       };
@@ -585,29 +614,7 @@ const createSafeScopedHandler = <
       ctx.scopedDb = async (fn) => {
         return await originalScopedDb(async (tx) => {
           const result = await fn(tx);
-          if (!hasLogged && config.audit) {
-            const reqCtx = {
-              body: ctx.body,
-              params: ctx.params,
-              query: ctx.query,
-            };
-            const resourceId = config.audit.getResourceId(reqCtx, result);
-            const changes = config.audit.getChanges?.(reqCtx, result) ?? null;
-            const metadata = config.audit.getMetadata?.(reqCtx, result);
-
-            const auditEvent: AuditEvent = {
-              action: config.audit.action,
-              resourceType: config.audit.resourceType,
-              resourceId,
-              changes,
-            };
-            if (metadata) {
-              auditEvent.metadata = metadata;
-            }
-
-            await ctx.recordAuditEvent(tx, auditEvent);
-            hasLogged = true;
-          }
+          await recordAudit(tx, result);
           return result;
         });
       };
