@@ -70,6 +70,10 @@ export const env = createEnv({
     VITE_FEATURE_CASE_LAW: featureFlagSchema,
     VITE_PUBLIC_LAW_ENABLED: featureFlagSchema,
     VITE_PUBLIC_LAW_INDEXING_ENABLED: featureFlagSchema,
+    // Whether search engines are allowed to index this deployment.
+    // Off by default so deployments that should not be crawled can still
+    // serve sitemaps for verification while staying non-indexable.
+    VITE_SEO_INDEXABLE: featureFlagSchema,
     VITE_PLAYBOOKS_ENABLED: featureFlagSchema,
     VITE_FEATURE_CONTACTS: featureFlagSchema,
     VITE_FEATURE_CALENDAR: featureFlagSchema,
