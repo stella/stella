@@ -3,16 +3,51 @@ language: "en-GB"
 reviews:
   profile: "chill"
   high_level_summary: true
+  review_details: true
+  in_progress_fortune: false
+  poem: false
+  path_filters:
+    - "!**/*.gen.ts"
+    - "!**/*.generated.ts"
+    - "!apps/web/src/routeTree.gen.ts"
+    - "!**/drizzle/**/snapshot.json"
+    # sync-ai: injected path filters
   auto_review:
     enabled: true
     drafts: false
+    auto_incremental_review: true
+    auto_pause_after_reviewed_commits: 2
     ignore_title_keywords:
       - "wip"
       - "draft"
+    ignore_usernames:
+      - "dependabot[bot]"
+      - "github-actions[bot]"
   tools:
+    actionlint:
+      enabled: true
     biome:
       enabled: false
+    eslint:
+      enabled: false
+    github-checks:
+      enabled: true
+      timeout_ms: 900000
+    gitleaks:
+      enabled: true
     hadolint:
+      enabled: true
+    reactDoctor:
+      enabled: true
+    shellcheck:
+      enabled: true
+    sqlfluff:
+      enabled: false
+    trivy:
+      enabled: true
+    trufflehog:
+      enabled: true
+    zizmor:
       enabled: true
 chat:
   auto_reply: true
@@ -20,4 +55,10 @@ knowledge_base:
   code_guidelines:
     enabled: true
     filePatterns:
+      - "AGENTS.md"
+      - "CLAUDE.md"
+      - "GEMINI.md"
+      - "CONTRIBUTING.md"
+      - "SECURITY.md"
       - "**/.cursorrules"
+      # sync-ai: injected code guideline file patterns

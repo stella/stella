@@ -16,5 +16,14 @@
       "linting"
     ],
     "local": ".ai/local/agents.md"
+  },
+  "coderabbit": {
+    "pathFilters": [
+      "!apps/web/src/routeTree.gen.ts",
+      "!**/drizzle/**/snapshot.json"
+    ],
+    "codeGuidelineFilePatterns": [
+      "**/.cursorrules"
+    ]
   }
 }
