@@ -333,7 +333,7 @@ export type ComputeVerdictBatchArgs = {
 // per-entity fan-out here: a large playbook (many positions per document) must
 // not burst an unbounded number of external calls at once and trip provider
 // rate limits or timeouts.
-const POSITION_MATCH_CONCURRENCY = 4;
+export const POSITION_MATCH_CONCURRENCY = 4;
 
 /**
  * Grade a batch of verdict properties for one entity version. Deterministic

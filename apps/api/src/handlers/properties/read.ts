@@ -57,17 +57,25 @@ const readProperties = createSafeHandler(
             createdAt: property.createdAt,
           };
         }
-        // The only remaining tool type is the backend-only playbook verdict;
-        // expose it as a plain manual-input column so consumers only ever see
-        // the ai-model | manual-input contract (mirrors view-templates and
-        // update-by-id masking).
+        // The only remaining tool type is the playbook verdict. The web
+        // client has first-class read-only support for it, pairing each
+        // verdict onto its ASK column via `tool.askPropertyId`; masking it as
+        // manual-input would render verdicts as editable single-select
+        // columns. The grading inputs (rule/severity/standard) stay
+        // server-side. The view-templates and update-by-id masking are
+        // separate contracts.
         return {
           id: property.id,
           workspaceId,
           name: property.name,
           status: property.status,
           content: property.content,
-          tool: { version: 1, type: "manual-input", dependencies } as const,
+          tool: {
+            version: property.tool.version,
+            type: property.tool.type,
+            askPropertyId: property.tool.askPropertyId,
+            dependencies,
+          },
           createdAt: property.createdAt,
         };
       }),

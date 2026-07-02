@@ -12,10 +12,12 @@ const createContext = ({
   body,
   safeDb,
   scopedDb,
+  recordAuditEvent = async () => {},
 }: {
   body: UpdatePropertyCtx["body"];
   safeDb: UpdatePropertyCtx["safeDb"];
   scopedDb: UpdatePropertyCtx["scopedDb"];
+  recordAuditEvent?: UpdatePropertyCtx["recordAuditEvent"];
 }): UpdatePropertyCtx =>
   asTestRaw<UpdatePropertyCtx>({
     body,
@@ -28,7 +30,7 @@ const createContext = ({
       activeOrganizationId: toSafeId<"organization">("org_test"),
     },
     user: { id: toSafeId<"user">("user_test") },
-    recordAuditEvent: async () => {},
+    recordAuditEvent,
   });
 
 describe("updateProperty", () => {
@@ -60,5 +62,73 @@ describe("updateProperty", () => {
       response: { message: "Fallback must match one of the supplied options" },
     });
     expect(getCallCount()).toBe(0);
+  });
+
+  test("preserves dependency gates when renaming a playbook-materialized manual column", async () => {
+    const gateRow = {
+      dependsOnPropertyId: toSafeId<"property">("classifier_prop"),
+      condition: {
+        type: "compare",
+        left: { type: "property", propertyId: toSafeId("classifier_prop") },
+        op: "eq",
+        right: { type: "literal", value: "NDA" },
+      },
+    };
+    const oldDependencies = [gateRow];
+
+    let deleteCalled = false;
+    let auditedDependencies: unknown;
+
+    const { safeDb, scopedDb } = createScopedDbMock({
+      select: () => ({
+        from: () => ({
+          where: () => ({
+            for: async () => [
+              {
+                id: toSafeId<"property">("property_test"),
+                name: "Old name",
+                content: { version: 1, type: "text" },
+                tool: { version: 1, type: "manual-input" },
+                status: "fresh",
+                playbookDefinitionId:
+                  toSafeId<"playbookDefinition">("pb_def_test"),
+              },
+            ],
+          }),
+        }),
+      }),
+      query: {
+        propertyDependencies: { findMany: async () => oldDependencies },
+      },
+      update: () => ({
+        set: () => ({ where: async () => undefined }),
+      }),
+      delete: () => {
+        deleteCalled = true;
+        return { where: async () => undefined };
+      },
+    });
+
+    const result = await updateProperty.handler(
+      createContext({
+        safeDb,
+        scopedDb,
+        recordAuditEvent: async (_tx, event) => {
+          auditedDependencies = event.changes?.dependencies;
+        },
+        body: {
+          name: "New name",
+          content: { version: 1, type: "text" },
+          tool: { version: 1, type: "manual-input" },
+        },
+      }),
+    );
+
+    expect(result).toEqual({});
+    expect(deleteCalled).toBe(false);
+    expect(auditedDependencies).toEqual({
+      old: oldDependencies,
+      new: oldDependencies,
+    });
   });
 });

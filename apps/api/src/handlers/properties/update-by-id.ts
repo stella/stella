@@ -209,6 +209,7 @@ const updateProperty = createSafeHandler(
             content: properties.content,
             tool: properties.tool,
             status: properties.status,
+            playbookDefinitionId: properties.playbookDefinitionId,
           })
           .from(properties)
           .where(
@@ -299,11 +300,24 @@ const updateProperty = createSafeHandler(
           })
           .where(eq(properties.id, propertyId));
 
-        const deleteDeps = tx
-          .delete(propertyDependencies)
-          .where(eq(propertyDependencies.propertyId, propertyId));
+        // Playbook-materialized manual ASK columns carry classifier gate rows
+        // that the composer's update body cannot round-trip; deleting and
+        // reinserting from an empty `dependencies` here would wipe the gate and
+        // leak the column into every document-type group. Preserve the existing
+        // rows on a manual save of a playbook-owned property.
+        const preserveDependencies =
+          oldProperty.playbookDefinitionId !== null &&
+          body.tool.type === "manual-input";
 
-        const promises: Promise<unknown>[] = [updatePropertyQuery, deleteDeps];
+        const promises: Promise<unknown>[] = [updatePropertyQuery];
+
+        if (!preserveDependencies) {
+          promises.push(
+            tx
+              .delete(propertyDependencies)
+              .where(eq(propertyDependencies.propertyId, propertyId)),
+          );
+        }
 
         if (isStale) {
           const staleIds = getTransitiveDependents(propertyId, allProperties);
@@ -339,7 +353,10 @@ const updateProperty = createSafeHandler(
             name: { old: oldProperty.name, new: name },
             content: { old: oldProperty.content, new: content },
             tool: { old: oldProperty.tool, new: dbTool },
-            dependencies: { old: oldDependencies, new: dependencies },
+            dependencies: {
+              old: oldDependencies,
+              new: preserveDependencies ? oldDependencies : dependencies,
+            },
             status: {
               old: oldProperty.status,
               new: isStale ? "stale" : "fresh",

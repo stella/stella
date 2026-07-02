@@ -21,6 +21,7 @@ import {
   gradePositionMatch,
   gradePresence,
   gradePropertyConstraint,
+  POSITION_MATCH_CONCURRENCY,
 } from "@/api/lib/workflow/verdict-engine";
 
 // Ephemeral grading for the single-doc review: grade each position from the
@@ -232,39 +233,74 @@ export const buildFindings = async ({
     fieldContentBySourceId.set(sourceId, extraction.content);
   }
 
-  // Grade in parallel: deterministic rules resolve immediately; positionMatch
-  // rules each issue one targeted LLM compare, matching the batch engine's
-  // parallel positionMatch fan-out.
-  return await Promise.all(
-    positions.map(async (position): Promise<ReviewFinding> => {
-      const extraction = contentBySourceId.get(position.sourceId);
-      const askContent = extraction?.content;
-      const standard = standardBySourceId.get(position.sourceId) ?? {};
-      const citations = extraction?.citations ?? [];
+  const buildFinding = async (position: Position): Promise<ReviewFinding> => {
+    const extraction = contentBySourceId.get(position.sourceId);
+    const askContent = extraction?.content;
+    const standard = standardBySourceId.get(position.sourceId) ?? {};
+    const citations = extraction?.citations ?? [];
 
-      const { verdict, rationale } = await gradePosition({
-        position,
-        askContent,
-        fieldContentBySourceId,
-        standard,
-        deps,
-      });
+    const { verdict, rationale } = await gradePosition({
+      position,
+      askContent,
+      fieldContentBySourceId,
+      standard,
+      deps,
+    });
 
-      return {
-        positionId: position.sourceId,
-        issue: position.issue,
-        severity: position.severity,
+    return {
+      positionId: position.sourceId,
+      issue: position.issue,
+      severity: position.severity,
+      verdict,
+      extracted: extractedFromContent(askContent),
+      rationale,
+      citations,
+      fix: buildFix({
         verdict,
-        extracted: extractedFromContent(askContent),
-        rationale,
         citations,
-        fix: buildFix({
-          verdict,
-          citations,
-          preferred: standard.preferred,
-          lastBlockId,
-        }),
-      };
+        preferred: standard.preferred,
+        lastBlockId,
+      }),
+    };
+  };
+
+  // Deterministic rules resolve without an LLM call, so grade them all in
+  // parallel. positionMatch rules each issue one targeted LLM compare; drain
+  // them in bounded chunks so this single-doc review's fan-out stays capped the
+  // same way `computeVerdictBatch` bounds its per-entity fan-out (see
+  // POSITION_MATCH_CONCURRENCY). Findings are re-sorted by original index to
+  // preserve the input `positions` order.
+  const indexedFindings: { index: number; finding: ReviewFinding }[] = [];
+  const positionMatchTasks: { index: number; position: Position }[] = [];
+
+  await Promise.all(
+    positions.map(async (position, index) => {
+      if (position.rule.kind === "positionMatch") {
+        positionMatchTasks.push({ index, position });
+        return;
+      }
+      indexedFindings.push({ index, finding: await buildFinding(position) });
     }),
   );
+
+  for (
+    let cursor = 0;
+    cursor < positionMatchTasks.length;
+    cursor += POSITION_MATCH_CONCURRENCY
+  ) {
+    const chunk = positionMatchTasks.slice(
+      cursor,
+      cursor + POSITION_MATCH_CONCURRENCY,
+    );
+    // oxlint-disable-next-line no-await-in-loop -- sequential chunk drain bounds the single-doc review's Promise.all fan-out of LLM compares
+    await Promise.all(
+      chunk.map(async ({ index, position }) => {
+        indexedFindings.push({ index, finding: await buildFinding(position) });
+      }),
+    );
+  }
+
+  return indexedFindings
+    .sort((a, b) => a.index - b.index)
+    .map(({ finding }) => finding);
 };
