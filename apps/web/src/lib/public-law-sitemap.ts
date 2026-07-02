@@ -16,7 +16,10 @@ import {
   isPublicLawSitemapEnabled,
 } from "@/lib/public-law-launch";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
-import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
+import {
+  isPublicToolsCrawlAllowed,
+  isPublicToolsSitemapEnabled,
+} from "@/lib/public-tools-launch";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
@@ -90,7 +93,12 @@ type FetchSitemapShardsOptions = {
 type PublicLawSitemapIndexOptions = {
   maxBytes?: number;
   publicLawIndexingEnabled?: boolean;
+  publicToolsIndexingEnabled?: boolean;
 };
+
+// Kept as a literal (not imported from public-tools-sitemap) to avoid an
+// import cycle: the tools sitemap module reuses this module's helpers.
+const TOOLS_SITEMAP_PATH = "/sitemaps/tools.xml";
 
 type PublicLawIndexingOptions = {
   publicLawIndexingEnabled?: boolean;
@@ -236,19 +244,23 @@ export const createPublicLawSitemapIndexXml = (
   shards: readonly SitemapShard[],
   options: number | PublicLawSitemapIndexOptions = {},
 ): string => {
-  const { maxBytes, publicLawIndexingEnabled } =
+  const { maxBytes, publicLawIndexingEnabled, publicToolsIndexingEnabled } =
     typeof options === "number"
       ? {
           maxBytes: options,
           publicLawIndexingEnabled: isPublicLawSitemapEnabled(),
+          publicToolsIndexingEnabled: isPublicToolsSitemapEnabled(),
         }
       : {
           maxBytes: options.maxBytes ?? SITEMAP_XML_MAX_BYTES,
           publicLawIndexingEnabled:
             options.publicLawIndexingEnabled ?? isPublicLawSitemapEnabled(),
+          publicToolsIndexingEnabled:
+            options.publicToolsIndexingEnabled ??
+            isPublicToolsSitemapEnabled(),
         };
 
-  const sitemapEntries = publicLawIndexingEnabled
+  const lawEntries = publicLawIndexingEnabled
     ? [
         {
           loc: createPublicLawCanonicalUrl(LAW_SITEMAP_PATH),
@@ -261,7 +273,16 @@ export const createPublicLawSitemapIndexXml = (
       ]
     : [];
 
-  const entries = sitemapEntries
+  const toolsEntries = publicToolsIndexingEnabled
+    ? [
+        {
+          loc: createPublicLawCanonicalUrl(TOOLS_SITEMAP_PATH),
+          lastmod: null,
+        },
+      ]
+    : [];
+
+  const entries = [...lawEntries, ...toolsEntries]
     .map(
       ({ lastmod, loc }) => `  <sitemap>
     <loc>${xmlEscape(loc)}</loc>${

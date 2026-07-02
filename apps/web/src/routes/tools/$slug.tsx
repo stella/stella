@@ -1,11 +1,25 @@
+import { lazy, Suspense } from "react";
+
 import { createFileRoute, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
+import * as v from "valibot";
 
-import { loadCatalogue } from "@stll/catalogue";
+import {
+  githubArchiveUrl,
+  loadCatalogue,
+  type LoadedCatalogueEntry,
+  type LoadedEntryByKind,
+} from "@stll/catalogue";
+import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
+import { Button } from "@stll/ui/components/button";
 
 import { nativeToolLabelKey } from "@/components/catalogue/native-tool-label";
 import { pageTitleLiteral } from "@/lib/page-title";
-import { createPublicToolsHead } from "@/lib/public-tools-seo";
+import {
+  createPublicToolsCanonicalUrl,
+  createPublicToolsHead,
+  createToolEntryJsonLd,
+} from "@/lib/public-tools-seo";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   CostBadge,
@@ -14,28 +28,85 @@ import {
   SetupBadge,
 } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-badges";
 import { CatalogueEntryIcon } from "@/routes/_protected.knowledge/-components/catalogue/catalogue-entry-icon";
+import { fetchGithubSkillContent } from "@/routes/tools/-components/github-skill-content";
+import {
+  buildMcpConfigSnippet,
+  githubSkillTreeUrl,
+  toolDownloadPath,
+} from "@/routes/tools/-components/tool-detail.logic";
 import { prettifyPracticeArea } from "@/routes/tools/-components/tools-catalogue.logic";
 
+const ToolMarkdown = lazy(async () => ({
+  default: (await import("@/routes/tools/-components/tool-markdown"))
+    .ToolMarkdown,
+}));
+
+const CopyButton = lazy(async () => ({
+  default: (await import("@/routes/tools/-components/copy-button")).CopyButton,
+}));
+
+const AddToStella = lazy(async () => ({
+  default: (await import("@/routes/tools/-components/add-to-stella"))
+    .AddToStella,
+}));
+
 // Slugs are unique across kinds, so a flat lookup is unambiguous.
-const findEntryBySlug = (slug: string) =>
+const findEntryBySlug = (slug: string): LoadedCatalogueEntry | undefined =>
   loadCatalogue().find((entry) => entry.slug === slug);
 
+// SKILL.md for the detail page: in-tree bodies ship in the static
+// install-payload bundle; github bodies are fetched server-side at the
+// pinned SHA. `null` means "not a skill" or "content unavailable"; the
+// page degrades to metadata + an external link rather than crashing.
+const loadSkillMarkdown = async (
+  entry: LoadedCatalogueEntry,
+): Promise<string | null> => {
+  if (entry.kind !== "skill") {
+    return null;
+  }
+  if (entry.source === "in-tree") {
+    return findCatalogueSkillInstallPayload(entry.slug)?.body ?? null;
+  }
+  const result = await fetchGithubSkillContent({
+    data: { slug: entry.slug },
+  });
+  return result.status === "ok" ? result.markdown : null;
+};
+
+const searchSchema = v.object({
+  install: v.optional(v.literal("1")),
+});
+
 export const Route = createFileRoute("/tools/$slug")({
-  loader: ({ params }) => {
+  validateSearch: searchSchema,
+  loader: async ({ params }) => {
     const entry = findEntryBySlug(params.slug);
     if (!entry) {
       throw redirect({ to: "/tools", replace: true });
     }
-    return entry;
+    return { entry, markdown: await loadSkillMarkdown(entry) };
   },
   head: ({ loaderData }) => {
     if (!loaderData) {
       return {};
     }
+    const { entry } = loaderData;
+    const path = `/tools/${entry.slug}` as const;
     return createPublicToolsHead({
-      description: loaderData.description,
-      path: `/tools/${loaderData.slug}`,
-      title: pageTitleLiteral(loaderData.displayName),
+      description: entry.description,
+      jsonLd: createToolEntryJsonLd({
+        author: entry.author,
+        authorUrl: entry.authorUrl,
+        canonicalUrl: createPublicToolsCanonicalUrl(path),
+        cost: entry.cost,
+        description: entry.description,
+        homepage: entry.homepage,
+        kind: entry.kind,
+        license: entry.license,
+        name: entry.displayName,
+      }),
+      path,
+      title: pageTitleLiteral(entry.displayName),
       type: "article",
     });
   },
@@ -44,7 +115,9 @@ export const Route = createFileRoute("/tools/$slug")({
 
 function PublicToolDetail() {
   const t = useTranslations();
-  const entry = Route.useLoaderData();
+  const { entry, markdown } = Route.useLoaderData();
+  const installIntent = Route.useSearch({ select: (s) => s.install === "1" });
+  const navigate = Route.useNavigate();
   const labelKey = nativeToolLabelKey({ slug: entry.slug, kind: entry.kind });
   const displayName = labelKey ? t(labelKey) : entry.displayName;
   const homepage = entry.homepage ? sanitizeHref(entry.homepage) : undefined;
@@ -104,21 +177,173 @@ function PublicToolDetail() {
           </div>
         )}
 
-        {homepage && (
+        <div className="flex flex-wrap items-center gap-2">
+          <Suspense fallback={<InstallButtonPlaceholder />}>
+            <AddToStella
+              displayName={displayName}
+              entry={entry}
+              installIntent={installIntent}
+              onClearInstallIntent={() =>
+                void navigate({ replace: true, search: {} })
+              }
+            />
+          </Suspense>
+          <DownloadAffordance entry={entry} />
+          {homepage && (
+            <a
+              className="text-primary text-sm hover:underline"
+              href={homepage}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {t("catalogue.openHomepage")}
+            </a>
+          )}
+        </div>
+
+        <div className="border-border mt-2 border-t pt-4">
+          <ToolContent entry={entry} markdown={markdown} />
+        </div>
+      </div>
+    </main>
+  );
+}
+
+function InstallButtonPlaceholder() {
+  const t = useTranslations();
+  return (
+    <Button disabled type="button">
+      {t("publicTools.addToStella")}
+    </Button>
+  );
+}
+
+function DownloadAffordance({ entry }: { entry: LoadedCatalogueEntry }) {
+  const t = useTranslations();
+  if (entry.kind !== "skill") {
+    return null;
+  }
+  if (entry.source === "in-tree") {
+    return (
+      <Button asChild variant="outline">
+        <a href={toolDownloadPath(entry.slug)}>{t("common.download")}</a>
+      </Button>
+    );
+  }
+  return (
+    <Button asChild variant="outline">
+      <a href={githubArchiveUrl(entry)} rel="noreferrer" target="_blank">
+        {t("publicTools.downloadUpstream")}
+      </a>
+    </Button>
+  );
+}
+
+function ToolContent({
+  entry,
+  markdown,
+}: {
+  entry: LoadedCatalogueEntry;
+  markdown: string | null;
+}) {
+  const t = useTranslations();
+
+  if (entry.kind === "mcp") {
+    return <McpConfig entry={entry} />;
+  }
+
+  if (entry.kind === "native-tool") {
+    return (
+      <p className="text-muted-foreground text-sm">
+        {t("publicTools.nativeToolInfo")}
+      </p>
+    );
+  }
+
+  if (markdown !== null) {
+    return (
+      <Suspense fallback={<ContentLoading />}>
+        <ToolMarkdown markdown={markdown} />
+      </Suspense>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-muted-foreground text-sm">
+        {t("publicTools.contentUnavailable")}
+      </p>
+      {entry.source === "github" && (
+        <a
+          className="text-primary text-sm hover:underline"
+          href={githubSkillTreeUrl(entry)}
+          rel="noreferrer"
+          target="_blank"
+        >
+          {t("publicTools.viewOnGithub")}
+        </a>
+      )}
+    </div>
+  );
+}
+
+function McpConfig({ entry }: { entry: LoadedEntryByKind<"mcp"> }) {
+  const t = useTranslations();
+  const snippet = buildMcpConfigSnippet({
+    slug: entry.slug,
+    url: entry.url,
+    authType: entry.authType,
+    oauthRequestedScopes: entry.oauthRequestedScopes,
+  });
+
+  return (
+    <section
+      aria-label={t("catalogue.configuration")}
+      className="flex flex-col gap-2"
+    >
+      <div className="flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold">
+          {t("catalogue.configuration")}
+        </h2>
+        <Suspense fallback={null}>
+          <CopyButton text={snippet} />
+        </Suspense>
+      </div>
+      <p className="text-muted-foreground text-xs">
+        {t("publicTools.mcpConfigHint")}
+      </p>
+      <pre className="bg-muted/40 border-border overflow-x-auto rounded-md border p-3 font-mono text-xs">
+        {snippet}
+      </pre>
+      <div className="flex flex-wrap gap-3">
+        {entry.documentationUrl && (
           <a
             className="text-primary text-sm hover:underline"
-            href={homepage}
+            href={sanitizeHref(entry.documentationUrl)}
             rel="noreferrer"
             target="_blank"
           >
-            {t("catalogue.openHomepage")}
+            {t("publicTools.documentation")}
           </a>
         )}
-
-        <p className="text-muted-foreground border-border mt-2 border-t pt-4 text-xs">
-          {t("publicTools.detailComingSoon")}
-        </p>
+        {entry.tokenHelpUrl && (
+          <a
+            className="text-primary text-sm hover:underline"
+            href={sanitizeHref(entry.tokenHelpUrl)}
+            rel="noreferrer"
+            target="_blank"
+          >
+            {t("publicTools.tokenHelp")}
+          </a>
+        )}
       </div>
-    </main>
+    </section>
+  );
+}
+
+function ContentLoading() {
+  const t = useTranslations();
+  return (
+    <p className="text-muted-foreground text-sm">{t("publicTools.content")}</p>
   );
 }
