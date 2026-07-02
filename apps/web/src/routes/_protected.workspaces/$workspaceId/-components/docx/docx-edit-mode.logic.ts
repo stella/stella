@@ -1,4 +1,4 @@
-import type { AnonymizationTerm } from "@stll/folio";
+import type { AnonymizationTerm } from "@stll/folio-react";
 
 export type AutosaveStatus = "synced" | "pending" | "syncing";
 

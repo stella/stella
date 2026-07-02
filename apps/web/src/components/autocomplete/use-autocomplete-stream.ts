@@ -11,7 +11,7 @@ import {
   getAutocompleteSuggestion,
   shouldTriggerAutocomplete,
   startAutocompleteSuggestion,
-} from "@stll/folio";
+} from "@stll/folio-react";
 
 import { apiUrl } from "@/lib/api-url";
 

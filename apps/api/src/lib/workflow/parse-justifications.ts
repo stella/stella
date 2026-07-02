@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 
-import { isFolioBlockId } from "@stll/folio/server";
+import { isFolioBlockId } from "@stll/folio-core/server";
 
 import type {
   DocxFolioJustificationBlock,

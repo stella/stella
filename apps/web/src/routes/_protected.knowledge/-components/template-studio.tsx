@@ -69,7 +69,7 @@ import {
   getTemplateSlashMenu,
   resetTemplateSlashQuery,
   setTemplatePreviewValues,
-} from "@stll/folio";
+} from "@stll/folio-react";
 import type {
   DirectiveKind,
   DirectiveRange,
@@ -78,7 +78,7 @@ import type {
   TemplatePreviewValue,
   TemplateSlashMenuKeyAction,
   TemplateSlashMenuState,
-} from "@stll/folio";
+} from "@stll/folio-react";
 import { displayLanguageName } from "@stll/locales";
 import {
   isFieldPath,
@@ -126,7 +126,7 @@ import { Textarea } from "@stll/ui/components/textarea";
 import { stellaToast } from "@stll/ui/components/toast";
 import { containedHandler } from "@stll/ui/hooks/use-contained-handler";
 import { cn } from "@stll/ui/lib/utils";
-import "@stll/folio/editor.css";
+import "@stll/folio-react/editor.css";
 
 import { AIPromptInput } from "@/components/ai-prompt-input/ai-prompt-input";
 import { FormulaEditor } from "@/components/conditions/formula-editor";

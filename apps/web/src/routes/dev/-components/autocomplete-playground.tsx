@@ -20,7 +20,7 @@ import {
   shouldTriggerAutocomplete,
   startAutocompleteSuggestion,
   type AutocompleteTriggerSkipReason,
-} from "@stll/folio";
+} from "@stll/folio-react";
 
 import { useMountEffect } from "@/hooks/use-effect";
 import { apiUrl } from "@/lib/api-url";

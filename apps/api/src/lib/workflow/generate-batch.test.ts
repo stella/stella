@@ -1,7 +1,7 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
-import { deriveBlockId } from "@stll/folio/server";
+import { deriveBlockId } from "@stll/folio-core/server";
 
 import type { JustificationContent } from "@/api/db/schema";
 import { extractJustificationContent } from "@/api/lib/bbox/generate-b-boxes-shared";

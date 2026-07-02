@@ -20,9 +20,9 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { DocxEditorRef } from "@stll/folio";
+import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
-import "@stll/folio/editor.css";
+import "@stll/folio-react/editor.css";
 
 import "./peek-docx.css";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";

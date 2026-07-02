@@ -1,6 +1,6 @@
 import type { RefObject } from "react";
 
-import type { DocxEditorRef } from "@stll/folio";
+import type { DocxEditorRef } from "@stll/folio-react";
 
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";

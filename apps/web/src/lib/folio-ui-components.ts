@@ -1,4 +1,4 @@
-import type { FolioUIComponents } from "@stll/folio";
+import type { FolioUIComponents } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";
 import { ColorPicker } from "@stll/ui/components/color-picker";
