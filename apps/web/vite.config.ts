@@ -258,13 +258,18 @@ export default defineConfig(({ mode }) => {
       //      statically reachable, so the cold crawl misses them until a
       //      protected route actually runs the auth client. Listing the
       //      entrypoints makes the optimizer bundle their full graph up front.
-      //   2. @stll/folio-react / @stll/folio-core: the document route reaches
-      //      them only through lazy route chunks (docx-browser-editor.tsx and
-      //      friends), dragging in the prosemirror family + jszip +
-      //      fast-xml-parser, none of which apps/web imports statically
-      //      anywhere else. The folio packages themselves are excluded below
-      //      (worker via `import.meta.url`), so their dependencies are listed
-      //      here individually.
+      //   2. @stll/folio-react (which pulls @stll/folio-core, ~350 dist
+      //      modules): its root entry is statically reachable from shared
+      //      chunks (chat mention links, the AI-suggestion host) on every
+      //      page, so it must stay pre-bundled. Serving it unoptimized makes
+      //      every dev page load fetch hundreds of individual modules
+      //      (measured in the e2e route walk: ~90 folio requests pre-bundled
+      //      vs ~9,600 unoptimized, over a second of extra load per route).
+      //      Trade-off: the optimizer rewrites the layout engine's
+      //      `new Worker(new URL(..., import.meta.url))` to a .vite/deps path
+      //      that does not exist, so in dev the font-metrics worker fails to
+      //      spawn and folio silently falls back to main-thread measuring.
+      //      Dev-only: the production build bundles the worker correctly.
       //
       // When that discovery happens mid-session, Vite kicks off a second
       // optimize pass and forces a full-page reload ("optimized dependencies
@@ -296,6 +301,8 @@ export default defineConfig(({ mode }) => {
         "@better-fetch/fetch",
         "defu",
         "nanostores",
+        "@stll/folio-react",
+        "@stll/folio-react/messages",
         "prosemirror-commands",
         "prosemirror-dropcursor",
         "prosemirror-gapcursor",
@@ -315,14 +322,8 @@ export default defineConfig(({ mode }) => {
       // optimizer would rewrite that URL into .vite/deps/, where the .wasm
       // binary doesn't exist and the dev server falls back to index.html —
       // producing a WASM CompileError. Excluding them keeps the original
-      // module paths intact so the relative URL resolves. The folio packages
-      // spawn their font-metrics measurement worker the same way
-      // (`new Worker(new URL(..., import.meta.url))`), so they get the same
-      // treatment; their heavy dependencies are pre-bundled via the include
-      // list above.
+      // module paths intact so the relative URL resolves.
       exclude: [
-        "@stll/folio-core",
-        "@stll/folio-react",
         "@stll/text-search-wasm",
         "@stll/anonymize-wasm",
         "@stll/aho-corasick-wasm",
