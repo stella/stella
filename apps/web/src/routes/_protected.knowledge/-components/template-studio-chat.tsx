@@ -36,13 +36,13 @@ import {
   resolveSuggestionAnchor,
   setAISuggestionsMeta,
   setFocusedSuggestionMeta,
-} from "@stll/folio";
+} from "@stll/folio-react";
 import type {
   AISuggestion,
   AISuggestionPreset,
   DocxEditorRef,
   FolioAIEditSnapshot,
-} from "@stll/folio";
+} from "@stll/folio-react";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";

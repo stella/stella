@@ -4,9 +4,9 @@ import { CodeIcon, PenLineIcon } from "lucide-react";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 
-import "@stll/folio/editor.css";
-import { fromMarkdown, toMarkdown } from "@stll/folio";
-import type { Document, MarkdownOptions } from "@stll/folio";
+import "@stll/folio-react/editor.css";
+import { fromMarkdown, toMarkdown } from "@stll/folio-react";
+import type { Document, MarkdownOptions } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
 import { Textarea } from "@stll/ui/components/textarea";
 import { cn } from "@stll/ui/lib/utils";

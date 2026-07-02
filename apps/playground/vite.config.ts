@@ -20,10 +20,6 @@ export default defineConfig({
         replacement: path.join(monorepoRoot, "packages/ui/src/index.ts"),
       },
       {
-        find: "@stll/folio",
-        replacement: path.join(monorepoRoot, "packages/folio/src/index.ts"),
-      },
-      {
         find: /^@stll\/docx-utils(?<rest>.*)/u,
         replacement: path.join(monorepoRoot, "packages/docx-utils/src$<rest>"),
       },

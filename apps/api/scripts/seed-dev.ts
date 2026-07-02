@@ -24,7 +24,7 @@
 import { panic } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { deriveBlockId } from "@stll/folio/server";
+import { deriveBlockId } from "@stll/folio-core/server";
 
 import { rootDb } from "@/api/db/root";
 import {

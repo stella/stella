@@ -13,7 +13,7 @@
     "format": "oxfmt ."
   },
   "dependencies": {
-    "@stll/folio": "workspace:*",
+    "@stll/folio-react": "^0.1.1",
     "@stll/ui": "workspace:*",
     "lucide-react": "catalog:",
     "react": "catalog:react19",

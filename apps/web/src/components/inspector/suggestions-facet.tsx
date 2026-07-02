@@ -24,7 +24,7 @@ import { useEffect, useEffectEvent, useRef } from "react";
 
 import { useShallow } from "zustand/react/shallow";
 
-import type { DocxEditorRef } from "@stll/folio";
+import type { DocxEditorRef } from "@stll/folio-react";
 
 import {
   activeDocxKey,

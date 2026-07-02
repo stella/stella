@@ -258,10 +258,10 @@ export default defineConfig(({ mode }) => {
       //      statically reachable, so the cold crawl misses them until a
       //      protected route actually runs the auth client. Listing the
       //      entrypoints makes the optimizer bundle their full graph up front.
-      //   2. @stll/folio: the document route lazy-loads it via
-      //      `await import("@stll/folio")` ($viewId.document.tsx), dragging in
-      //      the prosemirror family + jszip + fast-xml-parser, none of which
-      //      apps/web imports statically anywhere else.
+      //   2. @stll/folio-react: the document route reaches it only through
+      //      lazy route chunks (docx-browser-editor.tsx and friends), dragging
+      //      in the prosemirror family + jszip + fast-xml-parser, none of
+      //      which apps/web imports statically anywhere else.
       //
       // When that discovery happens mid-session, Vite kicks off a second
       // optimize pass and forces a full-page reload ("optimized dependencies
@@ -293,6 +293,7 @@ export default defineConfig(({ mode }) => {
         "@better-fetch/fetch",
         "defu",
         "nanostores",
+        "@stll/folio-react",
         "prosemirror-commands",
         "prosemirror-dropcursor",
         "prosemirror-gapcursor",

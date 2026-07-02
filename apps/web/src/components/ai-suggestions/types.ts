@@ -19,7 +19,7 @@ import type {
   AISuggestion,
   AISuggestionApplyMode,
   AISuggestionPreset,
-} from "@stll/folio";
+} from "@stll/folio-react";
 
 /**
  * A user-attached file added to the bar's prompt context. Phase 1

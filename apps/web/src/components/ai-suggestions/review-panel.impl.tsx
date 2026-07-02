@@ -18,8 +18,8 @@ import {
 } from "lucide-react";
 import { useFormatter, useTranslations } from "use-intl";
 
-import { diffWordSegments } from "@stll/folio";
-import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio";
+import { diffWordSegments } from "@stll/folio-react";
+import type { DocxEditorRef, FolioAIBlockPreviewRun } from "@stll/folio-react";
 import { Avatar, AvatarFallback } from "@stll/ui/components/avatar";
 import { Button } from "@stll/ui/components/button";
 import { Checkbox } from "@stll/ui/components/checkbox";

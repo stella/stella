@@ -1,4 +1,4 @@
-import type { FolioAIBlock, FolioAIEditOperation } from "@stll/folio";
+import type { FolioAIBlock, FolioAIEditOperation } from "@stll/folio-react";
 
 export type ReviewOperationSnapshotBlock = Pick<
   FolioAIBlock,
