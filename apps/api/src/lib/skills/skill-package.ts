@@ -221,6 +221,27 @@ export const fetchSkillPackageFromUrl = async (
     catch: toHandlerError,
   });
 
+/** Fetch and parse a catalogue skill from an immutable raw-content base URL. */
+export const fetchGithubCatalogueSkillPackage = async (
+  rawContentBaseUrl: string,
+  fetchBytes: (
+    url: URL,
+    maxBytes: number,
+  ) => Promise<{ body: ArrayBuffer }> = fetchSafeBytes,
+): Promise<Result<ParsedSkillPackage, HandlerError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const url = new URL(`${rawContentBaseUrl}${SKILL_FILE_NAME}`);
+      const response = await fetchBytes(url, GITHUB_SKILL_FILE_MAX_BYTES);
+      const parsed = parseMarkdownSkillPackage(decodeUtf8(response.body));
+      return {
+        ...parsed,
+        sourceUrl: redactSkillSourceUrlForStorage(url.toString()),
+      };
+    },
+    catch: toHandlerError,
+  });
+
 export const discoverSkillPackagesFromUrl = async (
   rawUrl: string,
 ): Promise<Result<SkillPackageDiscovery, HandlerError>> =>

@@ -1,0 +1,108 @@
+name: Catalogue Upstream Check
+
+# github-sourced catalogue skills pin an immutable upstream commit SHA
+# (`rev`). This weekly job checks whether each pinned repo/directory has
+# advanced on its default branch and, when it has, bumps the revs,
+# regenerates the catalogue bundle, and opens a single consolidated PR.
+# The pinned SHA is what "recommended" endorses, so a maintainer must
+# review each upstream diff before merging; this job never auto-merges.
+
+on:
+  schedule:
+    # 05:23 UTC every Monday (off-minute to avoid the :00 stampede)
+    - cron: "23 5 * * 1"
+  workflow_dispatch:
+
+permissions: {}
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: true
+
+jobs:
+  catalogue-upstream:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          # Credentials are kept so the job can push the bump branch.
+          persist-credentials: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Check upstream revisions
+        id: check
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          bun packages/catalogue/scripts/check-upstream.ts --json > upstream.json
+          {
+            echo "update_count=$(jq '.updates | length' upstream.json)"
+            echo "failure_count=$(jq '.failures | length' upstream.json)"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Apply revision bumps
+        if: steps.check.outputs.update_count != '0'
+        run: |
+          jq -c '.updates[]' upstream.json | while read -r update; do
+            path=$(echo "$update" | jq -r '.manifestPath')
+            current=$(echo "$update" | jq -r '.currentRev')
+            latest=$(echo "$update" | jq -r '.latestRev')
+            # The 40-hex SHA is unique in the manifest, so a targeted
+            # replace keeps the diff to just the rev line.
+            sed -i "s/${current}/${latest}/" "$path"
+          done
+          bun run --filter @stll/catalogue generate
+          bun run --filter @stll/catalogue validate
+
+      - name: Open or update pull request
+        if: steps.check.outputs.update_count != '0'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: |
+          {
+            echo "Automated bump of \`rev\` for github-sourced catalogue skills whose pinned upstream advanced on its default branch."
+            echo
+            echo "A maintainer must review each upstream diff before merging. The pinned commit SHA is what a \"recommended\" badge endorses, so open the linked compare view and confirm there are no unexpected or unsafe changes before accepting this PR."
+            echo
+            echo "| Skill | Repo | Change |"
+            echo "| --- | --- | --- |"
+            jq -r '.updates[] | "| \(.slug) | \(.repo) | [\(.currentRev[0:7])...\(.latestRev[0:7])](\(.compareUrl)) |"' upstream.json
+          } > pr-body.md
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -C catalogue/upstream-revs
+          git add packages/catalogue
+          git commit -m "chore: bump github-sourced catalogue skill revisions"
+          git push --force origin catalogue/upstream-revs
+
+          title="chore: bump github-sourced catalogue skill revisions"
+          number=$(gh pr list --head catalogue/upstream-revs --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --title "$title" --body-file pr-body.md
+          else
+            gh pr create --title "$title" --body-file pr-body.md --head catalogue/upstream-revs --base main
+          fi
+
+      - name: Surface upstream check failures
+        if: steps.check.outputs.failure_count != '0'
+        run: |
+          jq -r '.failures[] | "::warning::catalogue upstream check failed for \(.slug) (\(.repo)): \(.message)"' upstream.json
+          # Fail the run after any PR is opened so a persistent upstream
+          # error is visible without blocking the available bumps.
+          exit 1
