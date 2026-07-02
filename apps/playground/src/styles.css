@@ -1,7 +1,8 @@
 @import "tailwindcss";
 
-/* Scan folio + ui sources for Tailwind utility classes */
-@source "../../../packages/folio/src";
+/* Scan ui sources for Tailwind utility classes; the folio-react package is
+ * scanned by the imported globals.css (its @source paths resolve relative to
+ * that file). */
 @source "../../../packages/ui/src";
 
 /* Import Stella's actual globals — provides all semantic tokens.
