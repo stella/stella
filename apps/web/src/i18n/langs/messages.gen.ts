@@ -2234,6 +2234,8 @@ type Messages = {
         "reorder": "Reorder document type";
         "title": "Document types";
       };
+      "auditLogs": "Activity logs";
+      "auditLogsDescription": "View compliance and action logs for this organization";
       "matterNumbering": "Matter numbering";
       "matterNumberingDescription": "Configure how new matter reference numbers are generated";
       "membersDescription": "Manage who has access to this organization and any pending invitations";

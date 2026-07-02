@@ -2231,6 +2231,8 @@
         "reorder": "Reorder document type",
         "title": "Document types"
       },
+      "auditLogs": "Activity logs",
+      "auditLogsDescription": "View compliance and action logs for this organization",
       "matterNumbering": "Aktennummerierung",
       "matterNumberingDescription": "Konfigurieren Sie, wie neue Aktenzeichen erzeugt werden",
       "membersDescription": "Manage who has access to this organization",

@@ -17,6 +17,8 @@ import { env } from "@/api/env";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureRequestError } from "@/api/lib/analytics/capture";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { captureRequestError } from "@/api/lib/analytics";
+import type { AuditRecorder, AuditAction, AuditResourceType, FieldDiffs, AuditEvent } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -199,6 +201,14 @@ export type McpExposure =
   | { type: "capability"; reason: McpCapabilityReason }
   | { type: "internal"; reason: McpInternalReason };
 
+export type AuditConfig<TBody = any, TParams = any, TQuery = any, TResult = any> = {
+  action: AuditAction;
+  resourceType: AuditResourceType;
+  getResourceId: (ctx: { body: TBody; params: TParams; query: TQuery }, result: TResult) => string;
+  getChanges?: (ctx: { body: TBody; params: TParams; query: TQuery }, result: TResult) => FieldDiffs | null;
+  getMetadata?: (ctx: { body: TBody; params: TParams; query: TQuery }, result: TResult) => Record<string, unknown> | null;
+};
+
 /**
  * Per-handler usage metering opt-in. When set, the framework:
  *  - runs `assertUsageAvailable` pre-flight with a fixed
@@ -231,6 +241,7 @@ export type HandlerConfig = InputSchema & {
   permissions: PermissionInput;
   requiresUsage?: UsageMeteringConfig;
   mcp: McpExposure;
+  audit?: AuditConfig | false;
 };
 
 export type SessionHandlerConfig = InputSchema & {
@@ -534,6 +545,72 @@ const createSafeScopedHandler = <
         code: API_ERROR_CODE.forbidden,
         message: "Forbidden",
       });
+    }
+
+    let hasLogged = false;
+
+    if (config.audit) {
+      const originalSafeDb = ctx.safeDb;
+      ctx.safeDb = async (fn, retry) => {
+        return await originalSafeDb(async (tx) => {
+          const result = await fn(tx);
+          if (!hasLogged && config.audit) {
+            const reqCtx = {
+              body: ctx.body,
+              params: ctx.params,
+              query: ctx.query,
+            };
+            const resourceId = config.audit.getResourceId(reqCtx, result);
+            const changes = config.audit.getChanges?.(reqCtx, result) ?? null;
+            const metadata = config.audit.getMetadata?.(reqCtx, result);
+
+            const auditEvent: AuditEvent = {
+              action: config.audit.action,
+              resourceType: config.audit.resourceType,
+              resourceId,
+              changes,
+            };
+            if (metadata) {
+              auditEvent.metadata = metadata;
+            }
+
+            await ctx.recordAuditEvent(tx, auditEvent);
+            hasLogged = true;
+          }
+          return result;
+        }, retry);
+      };
+
+      const originalScopedDb = ctx.scopedDb;
+      ctx.scopedDb = async (fn) => {
+        return await originalScopedDb(async (tx) => {
+          const result = await fn(tx);
+          if (!hasLogged && config.audit) {
+            const reqCtx = {
+              body: ctx.body,
+              params: ctx.params,
+              query: ctx.query,
+            };
+            const resourceId = config.audit.getResourceId(reqCtx, result);
+            const changes = config.audit.getChanges?.(reqCtx, result) ?? null;
+            const metadata = config.audit.getMetadata?.(reqCtx, result);
+
+            const auditEvent: AuditEvent = {
+              action: config.audit.action,
+              resourceType: config.audit.resourceType,
+              resourceId,
+              changes,
+            };
+            if (metadata) {
+              auditEvent.metadata = metadata;
+            }
+
+            await ctx.recordAuditEvent(tx, auditEvent);
+            hasLogged = true;
+          }
+          return result;
+        });
+      };
     }
 
     // Resolve the metering context only when enforcement is on. It reads

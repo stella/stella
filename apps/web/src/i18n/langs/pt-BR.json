@@ -2231,6 +2231,8 @@
         "reorder": "Reorder document type",
         "title": "Document types"
       },
+      "auditLogs": "Activity logs",
+      "auditLogsDescription": "View compliance and action logs for this organization",
       "matterNumbering": "Numeração de casos",
       "matterNumberingDescription": "Configure como os novos números de referência de casos são gerados",
       "membersDescription": "Gerenciar quem tem acesso a esta organização e quaisquer convites pendentes",

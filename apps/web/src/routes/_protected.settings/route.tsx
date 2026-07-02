@@ -6,6 +6,7 @@ import {
   HashIcon,
   MonitorIcon,
   PlugIcon,
+  ScrollTextIcon,
   ShieldIcon,
   SparklesIcon,
   TagsIcon,
@@ -40,7 +41,8 @@ type NavTo =
   | "/settings/organization/document-types"
   | "/settings/organization/ai"
   | "/settings/organization/anonymization"
-  | "/settings/organization/usage";
+  | "/settings/organization/usage"
+  | "/settings/organization/audit-logs";
 
 type NavItem = {
   readonly to: NavTo;
@@ -117,6 +119,11 @@ const ORGANIZATION_SECTION = {
       to: "/settings/organization/usage",
       labelKey: "settings.organization.usage",
       icon: GaugeIcon,
+    },
+    {
+      to: "/settings/organization/audit-logs",
+      labelKey: "settings.organization.auditLogs",
+      icon: ScrollTextIcon,
     },
   ],
 } as const satisfies Section;
