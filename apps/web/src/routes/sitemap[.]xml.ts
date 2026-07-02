@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { isPublicLawIndexingEnabled } from "@/lib/public-law-launch";
+import { isPublicLawSitemapEnabled } from "@/lib/public-law-launch";
 import {
   createPublicLawSitemapIndexXml,
   fetchPublicSitemapShards,
@@ -11,7 +11,7 @@ export const Route = createFileRoute("/sitemap.xml")({
   server: {
     handlers: {
       GET: async () => {
-        if (!isPublicLawIndexingEnabled()) {
+        if (!isPublicLawSitemapEnabled()) {
           return new Response(createPublicLawSitemapIndexXml([]), {
             headers: SITEMAP_XML_RESPONSE_HEADERS,
           });

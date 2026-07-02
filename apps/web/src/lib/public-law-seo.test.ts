@@ -22,7 +22,7 @@ describe("public law SEO", () => {
   test("creates indexable canonical Open Graph metadata", () => {
     expect(
       createPublicLawHead({
-        indexingEnabled: true,
+        crawlAllowed: true,
         path: "/law/cases",
         title: "Case law | stella",
         type: "website",
@@ -54,6 +54,19 @@ describe("public law SEO", () => {
     ).toContainEqual({ name: "robots", content: "noindex,nofollow" });
   });
 
+  test("keeps meta robots noindex when crawling is not permitted", () => {
+    // Mirrors a non-indexable deployment: sitemaps may still be served, but
+    // every law page must stay noindex,nofollow.
+    expect(
+      createPublicLawHead({
+        crawlAllowed: false,
+        path: "/law/cases",
+        title: "Case law | stella",
+        type: "website",
+      }).meta,
+    ).toContainEqual({ name: "robots", content: "noindex,nofollow" });
+  });
+
   test("adds hreflang alternates when public routes provide them", () => {
     expect(
       createPublicLawHead({
@@ -68,7 +81,7 @@ describe("public law SEO", () => {
           },
         ],
         path: "/law/guidelines/wp29/dpia/v/wp-248-rev-01/lang/en",
-        indexingEnabled: true,
+        crawlAllowed: true,
         title: "WP29 DPIA guidelines | stella",
         type: "article",
       }).links,
@@ -93,7 +106,7 @@ describe("public law SEO", () => {
   test("serializes JSON-LD through a safe head script", () => {
     expect(
       createPublicLawHead({
-        indexingEnabled: true,
+        crawlAllowed: true,
         jsonLd: { "@context": "https://schema.org", name: "</script>" },
         path: "/law/cases",
         title: "Case law | stella",

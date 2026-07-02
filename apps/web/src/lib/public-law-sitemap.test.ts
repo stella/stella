@@ -406,21 +406,77 @@ describe("public law sitemap", () => {
     expect(xml).not.toContain("matter");
   });
 
-  test("robots disallows public law by default and private workspace routes always", () => {
-    const robots = createRobotsTxt();
+  test("robots fully blocks crawlers on non-indexable deployments", () => {
+    const robots = createRobotsTxt({
+      publicLawCrawlAllowed: false,
+      seoIndexable: false,
+    });
+
+    expect(robots).toBe("User-agent: *\nDisallow: /\n");
+    expect(robots).not.toContain("Disallow: /law/");
+    expect(robots).not.toContain("Disallow: /workspaces");
+    expect(robots).not.toContain("Sitemap:");
+  });
+
+  test("robots defaults to a full crawl block until the deployment is indexable", () => {
+    // The env default leaves VITE_SEO_INDEXABLE off.
+    expect(createRobotsTxt()).toBe("User-agent: *\nDisallow: /\n");
+  });
+
+  test("robots disallows public law but keeps path rules when indexable without crawl permission", () => {
+    const robots = createRobotsTxt({
+      publicLawCrawlAllowed: false,
+      seoIndexable: true,
+    });
 
     expect(robots).toContain("Disallow: /law/");
     expect(robots).toContain("Disallow: /workspaces");
     expect(robots).toContain("Disallow: /knowledge");
     expect(robots).toContain("Disallow: /chat");
     expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
+    expect(robots).not.toContain("Allow: /law/");
   });
 
-  test("robots allows public law only when indexing is explicitly enabled", () => {
-    const robots = createRobotsTxt({ publicLawIndexingEnabled: true });
+  test("robots allows public law only when indexable and crawling is permitted", () => {
+    const robots = createRobotsTxt({
+      publicLawCrawlAllowed: true,
+      seoIndexable: true,
+    });
 
     expect(robots).toContain("Allow: /law/");
     expect(robots).not.toContain("Disallow: /law/");
+    expect(robots).toContain("Sitemap: http://localhost:3000/sitemap.xml");
+  });
+
+  test("sitemaps are still served while a non-indexable deployment blocks crawlers", () => {
+    // Sitemap serving keeps today's semantics (law && indexing) and is
+    // independent of crawl permission, so verification tooling can fetch
+    // sitemaps even while robots.txt blocks all crawlers.
+    const indexXml = createPublicLawSitemapIndexXml(
+      [
+        {
+          bucket: "all",
+          country: "cze",
+          lastmod: "2026-01-01",
+          month: "05",
+          year: "2026",
+        },
+      ],
+      { publicLawIndexingEnabled: true },
+    );
+    const staticXml = createPublicLawStaticSitemapXml({
+      publicLawIndexingEnabled: true,
+    });
+    const robots = createRobotsTxt({
+      publicLawCrawlAllowed: false,
+      seoIndexable: false,
+    });
+
+    expect(indexXml).toContain(
+      "<loc>http://localhost:3000/sitemaps/law.xml</loc>",
+    );
+    expect(staticXml).toContain("http://localhost:3000/law/cases");
+    expect(robots).toBe("User-agent: *\nDisallow: /\n");
   });
 
   test("dark-launched law sitemaps do not publish law URLs", () => {

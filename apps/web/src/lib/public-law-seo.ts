@@ -1,12 +1,12 @@
 import { env } from "@/env";
-import { isPublicLawIndexingEnabled } from "@/lib/public-law-launch";
+import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 
 type JsonLdObject = Record<string, unknown>;
 
 type PublicLawHeadInput = {
   alternateLinks?: readonly PublicLawAlternateLink[];
+  crawlAllowed?: boolean;
   description?: string | null;
-  indexingEnabled?: boolean;
   jsonLd?: JsonLdObject | null;
   path: `/${string}`;
   title: string;
@@ -95,8 +95,8 @@ export const createPublicLawCanonicalUrl = (path: `/${string}`): string =>
 
 export const createPublicLawHead = ({
   alternateLinks = [],
+  crawlAllowed = isPublicLawCrawlAllowed(),
   description,
-  indexingEnabled = isPublicLawIndexingEnabled(),
   jsonLd,
   path,
   title,
@@ -115,7 +115,7 @@ export const createPublicLawHead = ({
     { title },
     {
       name: "robots",
-      content: indexingEnabled ? PUBLIC_ROBOTS : PRIVATE_ROBOTS,
+      content: crawlAllowed ? PUBLIC_ROBOTS : PRIVATE_ROBOTS,
     },
     { property: "og:title", content: title },
     { property: "og:type", content: type },

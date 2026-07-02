@@ -1,6 +1,6 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { isPublicLawIndexingEnabled } from "@/lib/public-law-launch";
+import { isPublicLawSitemapEnabled } from "@/lib/public-law-launch";
 import {
   createPublicCaseLawSitemapXml,
   fetchPublicSitemapDecisions,
@@ -13,7 +13,7 @@ export const Route = createFileRoute(
   server: {
     handlers: {
       GET: async ({ params }) => {
-        if (!isPublicLawIndexingEnabled()) {
+        if (!isPublicLawSitemapEnabled()) {
           return new Response("Not Found", { status: 404 });
         }
 

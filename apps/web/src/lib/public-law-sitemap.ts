@@ -11,7 +11,10 @@ import {
   createCaseLawDecisionRouteParams,
 } from "@/lib/case-law-route";
 import { ClientOperationError } from "@/lib/errors";
-import { isPublicLawIndexingEnabled } from "@/lib/public-law-launch";
+import {
+  isPublicLawCrawlAllowed,
+  isPublicLawSitemapEnabled,
+} from "@/lib/public-law-launch";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
@@ -236,12 +239,12 @@ export const createPublicLawSitemapIndexXml = (
     typeof options === "number"
       ? {
           maxBytes: options,
-          publicLawIndexingEnabled: isPublicLawIndexingEnabled(),
+          publicLawIndexingEnabled: isPublicLawSitemapEnabled(),
         }
       : {
           maxBytes: options.maxBytes ?? SITEMAP_XML_MAX_BYTES,
           publicLawIndexingEnabled:
-            options.publicLawIndexingEnabled ?? isPublicLawIndexingEnabled(),
+            options.publicLawIndexingEnabled ?? isPublicLawSitemapEnabled(),
         };
 
   const sitemapEntries = publicLawIndexingEnabled
@@ -279,7 +282,7 @@ ${entries}
 };
 
 export const createPublicLawStaticSitemapXml = ({
-  publicLawIndexingEnabled = isPublicLawIndexingEnabled(),
+  publicLawIndexingEnabled = isPublicLawSitemapEnabled(),
 }: PublicLawIndexingOptions = {}): string => {
   if (!publicLawIndexingEnabled) {
     return `<?xml version="1.0" encoding="UTF-8"?>
@@ -338,14 +341,29 @@ ${serializedEntries}
   return xml;
 };
 
+type RobotsTxtOptions = {
+  publicLawCrawlAllowed?: boolean;
+  seoIndexable?: boolean;
+};
+
 export const createRobotsTxt = ({
-  publicLawIndexingEnabled = isPublicLawIndexingEnabled(),
-}: PublicLawIndexingOptions = {}): string => {
+  publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
+  seoIndexable = env.VITE_SEO_INDEXABLE,
+}: RobotsTxtOptions = {}): string => {
+  // Non-indexable deployments serve a full crawl block: no path rules and no
+  // Sitemap line, so crawlers stay out even when sitemaps are served for
+  // verification.
+  if (!seoIndexable) {
+    return `User-agent: *
+Disallow: /
+`;
+  }
+
   const sitemapUrl = new URL(
     "/sitemap.xml",
     env.VITE_PUBLIC_APP_URL,
   ).toString();
-  const lawRule = publicLawIndexingEnabled ? "Allow: /law/" : "Disallow: /law/";
+  const lawRule = publicLawCrawlAllowed ? "Allow: /law/" : "Disallow: /law/";
 
   return `User-agent: *
 ${lawRule}
