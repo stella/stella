@@ -109,3 +109,168 @@ describe("resolveAiFields", () => {
     expect(seen).toBeUndefined();
   });
 });
+
+const arrayFields: FieldMeta[] = [
+  { path: "contracts.summary", aiPrompt: "Summarize this contract" },
+];
+
+describe("resolveAiFields — array-scoped (per-item) fields", () => {
+  test("drafts once per row and injects at the remainder path on each row", async () => {
+    const seenNames: unknown[] = [];
+    const result = await resolveAiFields({
+      values: {
+        contracts: [{ name: "Alpha" }, { name: "Beta" }],
+      },
+      fields: arrayFields,
+      generate: async ({ values }) => {
+        seenNames.push(values["name"]);
+        return `SUMMARY[${String(values["name"])}]`;
+      },
+    });
+    // One draft per row, grounded in the row object (not the whole data object).
+    expect(seenNames).toHaveLength(2);
+    expect([...seenNames].sort()).toEqual(["Alpha", "Beta"]);
+    // Value written onto the row object at the remainder path; no flat key.
+    expect(result).toEqual({
+      contracts: [
+        { name: "Alpha", summary: "SUMMARY[Alpha]" },
+        { name: "Beta", summary: "SUMMARY[Beta]" },
+      ],
+    });
+    expect("contracts.summary" in result).toBe(false);
+  });
+
+  test("passes 1-based item index and total count per row", async () => {
+    const seen: { index: number; count: number }[] = [];
+    await resolveAiFields({
+      values: { contracts: [{ name: "A" }, { name: "B" }, { name: "C" }] },
+      fields: arrayFields,
+      generate: async ({ item }) => {
+        if (item !== undefined) {
+          seen.push(item);
+        }
+        return "S";
+      },
+    });
+    expect(seen.map((i) => i.count)).toEqual([3, 3, 3]);
+    expect(seen.map((i) => i.index).sort()).toEqual([1, 2, 3]);
+  });
+
+  test("skips rows that already carry a non-empty value", async () => {
+    let calls = 0;
+    const result = await resolveAiFields({
+      values: {
+        contracts: [
+          { name: "Alpha", summary: "hand written" },
+          { name: "Beta" },
+          { name: "Gamma", summary: "" }, // empty -> still drafted
+        ],
+      },
+      fields: arrayFields,
+      generate: async ({ values }) => {
+        calls += 1;
+        return `SUMMARY[${String(values["name"])}]`;
+      },
+    });
+    expect(calls).toBe(2); // Beta + Gamma, not Alpha
+    expect(result).toEqual({
+      contracts: [
+        { name: "Alpha", summary: "hand written" },
+        { name: "Beta", summary: "SUMMARY[Beta]" },
+        { name: "Gamma", summary: "SUMMARY[Gamma]" },
+      ],
+    });
+  });
+
+  test("top-level and array-scoped fields resolve together", async () => {
+    const result = await resolveAiFields({
+      values: { contracts: [{ name: "Alpha" }] },
+      fields: [
+        { path: "execSummary", aiPrompt: "Draft the executive summary" },
+        { path: "contracts.summary", aiPrompt: "Summarize" },
+      ],
+      generate: async ({ fieldPath, item }) =>
+        item === undefined ? `TOP[${fieldPath}]` : `ITEM[${fieldPath}]`,
+    });
+    expect(result["execSummary"]).toBe("TOP[execSummary]");
+    expect(result["contracts"]).toEqual([
+      { name: "Alpha", summary: "ITEM[contracts.summary]" },
+    ]);
+  });
+
+  test("a nested remainder writes a nested record on the row", async () => {
+    const result = await resolveAiFields({
+      values: { contracts: [{ name: "Alpha" }] },
+      fields: [{ path: "contracts.review.note", aiPrompt: "Draft a note" }],
+      generate: async () => "NOTE",
+    });
+    expect(result["contracts"]).toEqual([
+      { name: "Alpha", review: { note: "NOTE" } },
+    ]);
+  });
+
+  test("a double-array path is skipped (one array level in v1)", async () => {
+    let calls = 0;
+    const result = await resolveAiFields({
+      values: {
+        groups: [{ items: [{ name: "A" }, { name: "B" }] }],
+      },
+      // groups[].items[].summary crosses two arrays.
+      fields: [{ path: "groups.items.summary", aiPrompt: "Summarize" }],
+      generate: async () => {
+        calls += 1;
+        return "S";
+      },
+    });
+    expect(calls).toBe(0);
+    expect(result).toEqual({
+      groups: [{ items: [{ name: "A" }, { name: "B" }] }],
+    });
+  });
+
+  test("one row's failure does not lose the other rows' drafts", async () => {
+    const result = await resolveAiFields({
+      values: {
+        contracts: [{ name: "Alpha" }, { name: "Boom" }, { name: "Gamma" }],
+      },
+      fields: arrayFields,
+      generate: async ({ values }) => {
+        const name = String(values["name"]);
+        if (name === "Boom") {
+          throw new Error("model exploded");
+        }
+        return `SUMMARY[${name}]`;
+      },
+    });
+    expect(result).toEqual({
+      contracts: [
+        { name: "Alpha", summary: "SUMMARY[Alpha]" },
+        { name: "Boom" }, // failed row left unfilled
+        { name: "Gamma", summary: "SUMMARY[Gamma]" },
+      ],
+    });
+  });
+
+  test("runs rows with bounded concurrency", async () => {
+    let inFlight = 0;
+    let peak = 0;
+    const rows = Array.from({ length: 10 }, (_unused, i) => ({
+      name: `c${String(i)}`,
+    }));
+    await resolveAiFields({
+      values: { contracts: rows },
+      fields: arrayFields,
+      generate: async () => {
+        inFlight += 1;
+        peak = Math.max(peak, inFlight);
+        await Promise.resolve();
+        await Promise.resolve();
+        inFlight -= 1;
+        return "S";
+      },
+    });
+    // The named pool cap is 4; concurrency must never exceed it.
+    expect(peak).toBeLessThanOrEqual(4);
+    expect(peak).toBeGreaterThan(1); // and it does run in parallel
+  });
+});
