@@ -39,14 +39,17 @@ because it is an internal document conversion dependency.
 
 ### Deployment Dependencies
 
-- SMTP relay credentials are required before the first production login. stella
-  uses email OTPs for sign-in, invitations, and account security emails.
+- An SMTP password/API key and verified sender address are required before the
+  first production login. The template defaults to Resend-compatible SMTP
+  settings (`smtp.resend.com`, port `587`, username `resend`). stella uses
+  email OTPs for sign-in, invitations, and account security emails.
 - The Railway storage bucket is provisioned by the template and wired to the
   API with reference variables.
 - Generated application secrets stay in Railway variables and should not be
   copied into source control.
 
-Use a production SMTP provider rather than a personal mailbox SMTP account.
+Use a production transactional email provider rather than a personal mailbox
+SMTP account.
 
 ### Implementation Details
 

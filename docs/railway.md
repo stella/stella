@@ -47,10 +47,10 @@ S3_REGION=${{stella-files.REGION}}
 S3_ACCESS_KEY_ID=${{stella-files.ACCESS_KEY_ID}}
 S3_SECRET_ACCESS_KEY=${{stella-files.SECRET_ACCESS_KEY}}
 
-SMTP_HOST=<smtp host>
+SMTP_HOST=smtp.resend.com
 SMTP_PASSWORD=<smtp password or API key>
-SMTP_PORT=<smtp port>
-SMTP_USERNAME=<smtp username>
+SMTP_PORT=587
+SMTP_USERNAME=resend
 TRANSACTIONAL_EMAIL_FROM=noreply@example.com
 
 GOTENBERG_URL=http://${{gotenberg.RAILWAY_PRIVATE_DOMAIN}}:3000
@@ -61,7 +61,7 @@ GOTENBERG_PASSWORD=${{gotenberg.GOTENBERG_API_BASIC_AUTH_PASSWORD}}
 Do not expose Gotenberg publicly. Configure the `gotenberg` service with:
 
 ```bash
-API_ENABLE_BASIC_AUTH=${{secret(1, "t")}}${{secret(1, "r")}}${{secret(1, "u")}}${{secret(1, "e")}}
+API_ENABLE_BASIC_AUTH=true
 GOTENBERG_API_BASIC_AUTH_USERNAME=${{secret(32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")}}
 GOTENBERG_API_BASIC_AUTH_PASSWORD=${{secret(64, "abcdef0123456789")}}
 ```
@@ -69,11 +69,11 @@ GOTENBERG_API_BASIC_AUTH_PASSWORD=${{secret(64, "abcdef0123456789")}}
 The API Docker image now honors Railway's injected `PORT` variable, with
 `STELLA_API_PORT` still available as an explicit override.
 
-For the public template, only SMTP host, port, username, password, and the
-transactional sender address should be required user inputs. Use Railway
-template variable functions for generated secrets and Railway reference
-variables for same-project services. The repository source of truth for this
-shape is `railway/template-manifest.json`.
+For the public template, default the SMTP connection to Resend-compatible SMTP
+settings. Only the SMTP password/API key and transactional sender address should
+be required user inputs. Use Railway template variable functions for generated
+secrets and Railway reference variables for same-project services. The
+repository source of truth for this shape is `railway/template-manifest.json`.
 
 Template editor checklist for `api` variables:
 
@@ -86,10 +86,10 @@ Template editor checklist for `api` variables:
 | `PUBLIC_URL`               | `https://${{api.RAILWAY_PUBLIC_DOMAIN}}`            | No           |
 | `BETTER_AUTH_SECRET`       | `${{secret(64, "abcdef0123456789")}}`               | No           |
 | `CONTENT_ENCRYPTION_KEY`   | `${{secret(64, "abcdef0123456789")}}`               | No           |
-| `SMTP_HOST`                | SMTP relay hostname                                 | Yes          |
+| `SMTP_HOST`                | `smtp.resend.com`                                   | No           |
 | `SMTP_PASSWORD`            | SMTP password or API key                            | Yes          |
-| `SMTP_PORT`                | SMTP relay port                                     | Yes          |
-| `SMTP_USERNAME`            | SMTP username                                       | Yes          |
+| `SMTP_PORT`                | `587`                                               | No           |
+| `SMTP_USERNAME`            | `resend`                                            | No           |
 | `TRANSACTIONAL_EMAIL_FROM` | Verified sender address                             | Yes          |
 | `S3_ENDPOINT`              | `${{stella-files.ENDPOINT}}`                        | No           |
 | `S3_BUCKET`                | `${{stella-files.BUCKET}}`                          | No           |
@@ -99,6 +99,22 @@ Template editor checklist for `api` variables:
 | `GOTENBERG_URL`            | `http://${{gotenberg.RAILWAY_PRIVATE_DOMAIN}}:3000` | No           |
 | `GOTENBERG_USERNAME`       | `${{gotenberg.GOTENBERG_API_BASIC_AUTH_USERNAME}}`  | No           |
 | `GOTENBERG_PASSWORD`       | `${{gotenberg.GOTENBERG_API_BASIC_AUTH_PASSWORD}}`  | No           |
+
+Template editor checklist for managed service variables:
+
+| Service     | Variable                              | Source                                                                   | Prompt user? |
+| ----------- | ------------------------------------- | ------------------------------------------------------------------------ | ------------ |
+| `Postgres`  | `PGDATA`                              | `/var/lib/postgresql/data/pgdata`                                        | No           |
+| `Postgres`  | `PGPORT`                              | `5432`                                                                   | No           |
+| `Postgres`  | `POSTGRES_DB`                         | `railway`                                                                | No           |
+| `Postgres`  | `POSTGRES_USER`                       | `postgres`                                                               | No           |
+| `Postgres`  | `SSL_CERT_DAYS`                       | `820`                                                                    | No           |
+| `Postgres`  | `RAILWAY_DEPLOYMENT_DRAINING_SECONDS` | `60`                                                                     | No           |
+| `Redis`     | `REDISPORT`                           | `6379`                                                                   | No           |
+| `Redis`     | `REDISUSER`                           | `default`                                                                | No           |
+| `gotenberg` | `API_ENABLE_BASIC_AUTH`               | `true`                                                                   | No           |
+| `gotenberg` | `GOTENBERG_API_BASIC_AUTH_USERNAME`   | `${{secret(32, "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")}}` | No           |
+| `gotenberg` | `GOTENBERG_API_BASIC_AUTH_PASSWORD`   | `${{secret(64, "abcdef0123456789")}}`                                    | No           |
 
 ## Web Variables
 
@@ -165,11 +181,18 @@ publishing. Check these items before the first publish:
   from the template into a fresh project.
 - Generated values use `secret(...)`; user-supplied credentials are prompted,
   not committed.
-- Only SMTP connection details and `TRANSACTIONAL_EMAIL_FROM` are required user
-  inputs.
+- Only `SMTP_PASSWORD` and `TRANSACTIONAL_EMAIL_FROM` are required user inputs.
+  SMTP host, port, and username should use the template defaults.
 - Gotenberg has no public domain.
 - Both public domains pass `/health`.
 - The marketplace overview uses `railway/template-readme.md`.
+
+After editing the draft variables, validate that only the intended user prompts
+remain:
+
+```bash
+bun run check:railway-template-draft -- --template <template-id>
+```
 
 ## Source-Backed Smoke Verification
 
