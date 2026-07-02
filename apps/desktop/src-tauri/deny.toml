@@ -24,6 +24,12 @@ ignore = [
   # Pulled through the same GTK3 macro stack; no safe upgrade is available in
   # the current Tauri graph.
   "RUSTSEC-2024-0370",
+  # Tauri and notify-rust currently pull quick-xml through plist,
+  # wayland-scanner, and tauri-winrt-notification. The affected owners are
+  # already at their latest published compatible versions in this graph, so
+  # Cargo cannot select the remediated quick-xml 0.41 line yet.
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
 ]
 
 [licenses]
