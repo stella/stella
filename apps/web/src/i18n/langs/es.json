@@ -2543,6 +2543,12 @@
     "settingsDescription": "Edite el nombre y el slug de su organización",
     "switchOrganization": "Cambiar de organización"
   },
+  "publicTools": {
+    "detailComingSoon": "Full details, content preview, and download are coming soon.",
+    "metaDescription": "Browse the open catalogue of skills, integrations, and built-in tools for legal work.",
+    "practiceArea": "Practice area",
+    "recommendedIn": "Recommended in {codes}"
+  },
   "routeError": {
     "backToMatters": "Volver a los asuntos",
     "copyReference": "Copiar referencia del error",

@@ -2543,6 +2543,12 @@
     "settingsDescription": "Rediģēt organizācijas nosaukumu un slug",
     "switchOrganization": "Mainīt organizāciju"
   },
+  "publicTools": {
+    "detailComingSoon": "Full details, content preview, and download are coming soon.",
+    "metaDescription": "Browse the open catalogue of skills, integrations, and built-in tools for legal work.",
+    "practiceArea": "Practice area",
+    "recommendedIn": "Recommended in {codes}"
+  },
   "routeError": {
     "backToMatters": "Atgriezties pie lietām",
     "copyReference": "Kopēt kļūdas atsauci",

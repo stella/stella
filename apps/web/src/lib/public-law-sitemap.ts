@@ -16,6 +16,7 @@ import {
   isPublicLawSitemapEnabled,
 } from "@/lib/public-law-launch";
 import { createPublicLawCanonicalUrl } from "@/lib/public-law-seo";
+import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
@@ -343,6 +344,7 @@ ${serializedEntries}
 
 type RobotsTxtOptions = {
   publicLawCrawlAllowed?: boolean;
+  publicToolsCrawlAllowed?: boolean;
   seoIndexable?: boolean;
 };
 
@@ -361,6 +363,7 @@ export const PUBLIC_CRAWL_PATH_PREFIXES = [
 
 export const createRobotsTxt = ({
   publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
+  publicToolsCrawlAllowed = isPublicToolsCrawlAllowed(),
   seoIndexable = env.VITE_SEO_INDEXABLE,
 }: RobotsTxtOptions = {}): string => {
   // Non-indexable deployments serve a full crawl block: no path rules and no
@@ -390,13 +393,17 @@ Disallow: /
   // supported by Googlebot and Bing; crawlers that don't support `$` treat it
   // literally and simply fail to match, erring toward not crawling — the
   // failure direction we want.
-  const allowLines = publicLawCrawlAllowed
-    ? PUBLIC_CRAWL_PATH_PREFIXES.flatMap((prefix) =>
-        prefix.includes(".")
-          ? [`Allow: ${prefix}$`]
-          : [`Allow: ${prefix}/`, `Allow: ${prefix}$`],
-      )
+  const crawlPrefixes = publicLawCrawlAllowed
+    ? [...PUBLIC_CRAWL_PATH_PREFIXES]
     : [];
+  if (publicToolsCrawlAllowed) {
+    crawlPrefixes.push("/tools");
+  }
+  const allowLines = crawlPrefixes.flatMap((prefix) =>
+    prefix.includes(".")
+      ? [`Allow: ${prefix}$`]
+      : [`Allow: ${prefix}/`, `Allow: ${prefix}$`],
+  );
 
   return `${["User-agent: *", ...allowLines, "Disallow: /", `Sitemap: ${sitemapUrl}`].join("\n")}
 `;

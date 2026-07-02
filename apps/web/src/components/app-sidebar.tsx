@@ -158,6 +158,9 @@ export function AppSidebar(props: AppSidebarProps) {
   const guidesPreviewEnabled = useGuidesPreviewEnabled();
   const primaryNavItems = getWorkspacePrimaryNavItems({
     includePublicLaw: publicLawPreviewEnabled,
+    // The public /tools catalogue stays out of the authenticated app
+    // nav; signed-in users manage tools via /knowledge/tools instead.
+    includePublicTools: false,
   });
   const user = useAuthenticatedUser();
 

@@ -426,6 +426,7 @@ describe("public law sitemap", () => {
   test("robots default-denies the whole host when indexable without crawl permission", () => {
     const robots = createRobotsTxt({
       publicLawCrawlAllowed: false,
+      publicToolsCrawlAllowed: false,
       seoIndexable: true,
     });
     const lines = robots.split("\n");
@@ -466,11 +467,31 @@ describe("public law sitemap", () => {
     expect(lines).toContain("Sitemap: http://localhost:3000/sitemap.xml");
   });
 
+  test("robots allow-lists public tools independently of public law", () => {
+    const robots = createRobotsTxt({
+      publicLawCrawlAllowed: false,
+      publicToolsCrawlAllowed: true,
+      seoIndexable: true,
+    });
+    const allowLines = robots
+      .split("\n")
+      .filter((line) => line.startsWith("Allow:"));
+
+    expect(allowLines).toEqual(["Allow: /tools/", "Allow: /tools$"]);
+    expect(robots).toContain("Disallow: /");
+  });
+
   test("robots always default-denies for every flag combination", () => {
     for (const publicLawCrawlAllowed of [false, true]) {
-      for (const seoIndexable of [false, true]) {
-        const robots = createRobotsTxt({ publicLawCrawlAllowed, seoIndexable });
-        expect(robots.split("\n")).toContain("Disallow: /");
+      for (const publicToolsCrawlAllowed of [false, true]) {
+        for (const seoIndexable of [false, true]) {
+          const robots = createRobotsTxt({
+            publicLawCrawlAllowed,
+            publicToolsCrawlAllowed,
+            seoIndexable,
+          });
+          expect(robots.split("\n")).toContain("Disallow: /");
+        }
       }
     }
   });

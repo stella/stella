@@ -1,6 +1,7 @@
 import type { ComponentType } from "react";
 
 import {
+  BlocksIcon,
   BookOpenIcon,
   MessageSquareIcon,
   ScaleIcon,
@@ -16,6 +17,7 @@ type WorkspacePrimaryRoute =
   | "/contacts"
   | "/knowledge"
   | "/law/cases"
+  | "/tools"
   | "/workspaces";
 
 type WorkspacePrimaryNavItem = {
@@ -26,7 +28,8 @@ type WorkspacePrimaryNavItem = {
     | "contacts"
     | "knowledge"
     | "matters"
-    | "search";
+    | "search"
+    | "tools";
   readonly labelKey: TranslationKey;
 } & (
   | {
@@ -67,6 +70,14 @@ export const WORKSPACE_PRIMARY_NAV_ITEMS = [
     to: "/law/cases",
   },
   {
+    icon: BlocksIcon,
+    id: "tools",
+    kind: "route",
+    // Reuse the canonical "Tools" label; no per-surface variant.
+    labelKey: "knowledge.sections.tools.title",
+    to: "/tools",
+  },
+  {
     icon: BookOpenIcon,
     id: "knowledge",
     kind: "route",
@@ -87,9 +98,17 @@ export type WorkspacePrimaryNavId =
 
 export const getWorkspacePrimaryNavItems = ({
   includePublicLaw,
+  includePublicTools,
 }: {
   includePublicLaw: boolean;
+  includePublicTools: boolean;
 }) =>
-  WORKSPACE_PRIMARY_NAV_ITEMS.filter(
-    (item) => includePublicLaw || item.id !== "caseLaw",
-  );
+  WORKSPACE_PRIMARY_NAV_ITEMS.filter((item) => {
+    if (item.id === "caseLaw") {
+      return includePublicLaw;
+    }
+    if (item.id === "tools") {
+      return includePublicTools;
+    }
+    return true;
+  });

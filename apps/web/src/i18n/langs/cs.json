@@ -2543,6 +2543,12 @@
     "settingsDescription": "Upravte název a slug organizace",
     "switchOrganization": "Přepnout organizaci"
   },
+  "publicTools": {
+    "detailComingSoon": "Full details, content preview, and download are coming soon.",
+    "metaDescription": "Browse the open catalogue of skills, integrations, and built-in tools for legal work.",
+    "practiceArea": "Practice area",
+    "recommendedIn": "Recommended in {codes}"
+  },
   "routeError": {
     "backToMatters": "Zpět na spisy",
     "copyReference": "Kopírovat referenci chyby",

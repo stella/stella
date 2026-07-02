@@ -19,6 +19,7 @@ import { Route as LawRouteRouteImport } from './routes/law/route'
 import { Route as OnboardingRouteRouteImport } from './routes/onboarding/route'
 import { Route as RobotsDottxtRouteImport } from './routes/robots[.]txt'
 import { Route as SitemapDotxmlRouteImport } from './routes/sitemap[.]xml'
+import { Route as ToolsRouteRouteImport } from './routes/tools/route'
 import { Route as ProtectedChatRouteRouteImport } from './routes/_protected.chat/route'
 import { Route as ProtectedKnowledgeRouteRouteImport } from './routes/_protected.knowledge/route'
 import { Route as ProtectedSettingsRouteRouteImport } from './routes/_protected.settings/route'
@@ -30,6 +31,8 @@ import { Route as AuthTwoFactorRouteImport } from './routes/auth/two-factor'
 import { Route as LawIndexRouteImport } from './routes/law/index'
 import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
 import { Route as SitemapsLawDotxmlRouteImport } from './routes/sitemaps/law[.]xml'
+import { Route as ToolsIndexRouteImport } from './routes/tools/index'
+import { Route as ToolsSlugRouteImport } from './routes/tools/$slug'
 import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat/index'
 import { Route as ProtectedChatThreadIdRouteImport } from './routes/_protected.chat/$threadId'
 import { Route as ProtectedChatNewRouteImport } from './routes/_protected.chat_.new'
@@ -135,6 +138,11 @@ const SitemapDotxmlRoute = SitemapDotxmlRouteImport.update({
   path: '/sitemap.xml',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ToolsRouteRoute = ToolsRouteRouteImport.update({
+  id: '/tools',
+  path: '/tools',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const ProtectedChatRouteRoute = ProtectedChatRouteRouteImport.update({
   id: '/chat',
   path: '/chat',
@@ -189,6 +197,16 @@ const SitemapsLawDotxmlRoute = SitemapsLawDotxmlRouteImport.update({
   id: '/sitemaps/law.xml',
   path: '/sitemaps/law.xml',
   getParentRoute: () => rootRouteImport,
+} as any)
+const ToolsIndexRoute = ToolsIndexRouteImport.update({
+  id: '/',
+  path: '/',
+  getParentRoute: () => ToolsRouteRoute,
+} as any)
+const ToolsSlugRoute = ToolsSlugRouteImport.update({
+  id: '/$slug',
+  path: '/$slug',
+  getParentRoute: () => ToolsRouteRoute,
 } as any)
 const ProtectedChatIndexRoute = ProtectedChatIndexRouteImport.update({
   id: '/',
@@ -516,6 +534,7 @@ export interface FileRoutesByFullPath {
   '/auth': typeof AuthRouteRouteWithChildren
   '/law': typeof LawRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRoute
+  '/tools': typeof ToolsRouteRouteWithChildren
   '/agent-claim': typeof AgentClaimRoute
   '/consent': typeof ConsentRoute
   '/dev': typeof DevRoute
@@ -530,8 +549,10 @@ export interface FileRoutesByFullPath {
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
+  '/tools/$slug': typeof ToolsSlugRoute
   '/auth/': typeof AuthIndexRoute
   '/law/': typeof LawIndexRoute
+  '/tools/': typeof ToolsIndexRoute
   '/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   '/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
@@ -602,8 +623,10 @@ export interface FileRoutesByTo {
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
+  '/tools/$slug': typeof ToolsSlugRoute
   '/auth': typeof AuthIndexRoute
   '/law': typeof LawIndexRoute
+  '/tools': typeof ToolsIndexRoute
   '/chat/$threadId': typeof ProtectedChatThreadIdRoute
   '/chat/new': typeof ProtectedChatNewRoute
   '/contacts/$contactId': typeof ProtectedContactsContactIdRoute
@@ -663,6 +686,7 @@ export interface FileRoutesById {
   '/auth': typeof AuthRouteRouteWithChildren
   '/law': typeof LawRouteRouteWithChildren
   '/onboarding': typeof OnboardingRouteRoute
+  '/tools': typeof ToolsRouteRouteWithChildren
   '/_protected': typeof ProtectedRouteWithChildren
   '/agent-claim': typeof AgentClaimRoute
   '/consent': typeof ConsentRoute
@@ -678,8 +702,10 @@ export interface FileRoutesById {
   '/auth/two-factor': typeof AuthTwoFactorRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
+  '/tools/$slug': typeof ToolsSlugRoute
   '/auth/': typeof AuthIndexRoute
   '/law/': typeof LawIndexRoute
+  '/tools/': typeof ToolsIndexRoute
   '/_protected/settings/organization': typeof ProtectedSettingsOrganizationRouteRouteWithChildren
   '/_protected/workspaces/$workspaceId': typeof ProtectedWorkspacesWorkspaceIdRouteRouteWithChildren
   '/_protected/chat/$threadId': typeof ProtectedChatThreadIdRoute
@@ -743,6 +769,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/law'
     | '/onboarding'
+    | '/tools'
     | '/agent-claim'
     | '/consent'
     | '/dev'
@@ -757,8 +784,10 @@ export interface FileRouteTypes {
     | '/auth/two-factor'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
+    | '/tools/$slug'
     | '/auth/'
     | '/law/'
+    | '/tools/'
     | '/settings/organization'
     | '/workspaces/$workspaceId'
     | '/chat/$threadId'
@@ -829,8 +858,10 @@ export interface FileRouteTypes {
     | '/auth/two-factor'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
+    | '/tools/$slug'
     | '/auth'
     | '/law'
+    | '/tools'
     | '/chat/$threadId'
     | '/chat/new'
     | '/contacts/$contactId'
@@ -889,6 +920,7 @@ export interface FileRouteTypes {
     | '/auth'
     | '/law'
     | '/onboarding'
+    | '/tools'
     | '/_protected'
     | '/agent-claim'
     | '/consent'
@@ -904,8 +936,10 @@ export interface FileRouteTypes {
     | '/auth/two-factor'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
+    | '/tools/$slug'
     | '/auth/'
     | '/law/'
+    | '/tools/'
     | '/_protected/settings/organization'
     | '/_protected/workspaces/$workspaceId'
     | '/_protected/chat/$threadId'
@@ -968,6 +1002,7 @@ export interface RootRouteChildren {
   AuthRouteRoute: typeof AuthRouteRouteWithChildren
   LawRouteRoute: typeof LawRouteRouteWithChildren
   OnboardingRouteRoute: typeof OnboardingRouteRoute
+  ToolsRouteRoute: typeof ToolsRouteRouteWithChildren
   ProtectedRoute: typeof ProtectedRouteWithChildren
   AgentClaimRoute: typeof AgentClaimRoute
   ConsentRoute: typeof ConsentRoute
@@ -1052,6 +1087,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SitemapDotxmlRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/tools': {
+      id: '/tools'
+      path: '/tools'
+      fullPath: '/tools'
+      preLoaderRoute: typeof ToolsRouteRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/_protected/chat': {
       id: '/_protected/chat'
       path: '/chat'
@@ -1128,6 +1170,20 @@ declare module '@tanstack/react-router' {
       fullPath: '/sitemaps/law.xml'
       preLoaderRoute: typeof SitemapsLawDotxmlRouteImport
       parentRoute: typeof rootRouteImport
+    }
+    '/tools/': {
+      id: '/tools/'
+      path: '/'
+      fullPath: '/tools/'
+      preLoaderRoute: typeof ToolsIndexRouteImport
+      parentRoute: typeof ToolsRouteRoute
+    }
+    '/tools/$slug': {
+      id: '/tools/$slug'
+      path: '/$slug'
+      fullPath: '/tools/$slug'
+      preLoaderRoute: typeof ToolsSlugRouteImport
+      parentRoute: typeof ToolsRouteRoute
     }
     '/_protected/chat/': {
       id: '/_protected/chat/'
@@ -1557,6 +1613,20 @@ const LawRouteRouteWithChildren = LawRouteRoute._addFileChildren(
   LawRouteRouteChildren,
 )
 
+interface ToolsRouteRouteChildren {
+  ToolsSlugRoute: typeof ToolsSlugRoute
+  ToolsIndexRoute: typeof ToolsIndexRoute
+}
+
+const ToolsRouteRouteChildren: ToolsRouteRouteChildren = {
+  ToolsSlugRoute: ToolsSlugRoute,
+  ToolsIndexRoute: ToolsIndexRoute,
+}
+
+const ToolsRouteRouteWithChildren = ToolsRouteRoute._addFileChildren(
+  ToolsRouteRouteChildren,
+)
+
 interface ProtectedChatRouteRouteChildren {
   ProtectedChatThreadIdRoute: typeof ProtectedChatThreadIdRoute
   ProtectedChatIndexRoute: typeof ProtectedChatIndexRoute
@@ -1781,6 +1851,7 @@ const rootRouteChildren: RootRouteChildren = {
   AuthRouteRoute: AuthRouteRouteWithChildren,
   LawRouteRoute: LawRouteRouteWithChildren,
   OnboardingRouteRoute: OnboardingRouteRoute,
+  ToolsRouteRoute: ToolsRouteRouteWithChildren,
   ProtectedRoute: ProtectedRouteWithChildren,
   AgentClaimRoute: AgentClaimRoute,
   ConsentRoute: ConsentRoute,
