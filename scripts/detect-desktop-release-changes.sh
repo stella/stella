@@ -115,8 +115,11 @@ rebuild_paths=(
 )
 
 # Find the most recent prior tag on the SAME channel that has a
-# published desktop manifest (latest.json). bash 3.2 on macOS runners
-# has no `mapfile`, so stream `git tag` through a while-read loop.
+# published desktop manifest (latest.json). `--merged` restricts the
+# candidates to ancestors of the current tag: a retried run that
+# executes after a NEWER tag already exists must not pick that tag and
+# diff forward against it. bash 3.2 on macOS runners has no `mapfile`,
+# so stream `git tag` through a while-read loop.
 previous_tag=""
 while IFS= read -r tag; do
   [[ -z "$tag" || "$tag" == "$current_tag" ]] && continue
@@ -134,7 +137,7 @@ while IFS= read -r tag; do
     previous_tag="$tag"
     break
   fi
-done < <(git tag --sort=-creatordate --list 'v*')
+done < <(git tag --sort=-creatordate --merged "$current_tag" --list 'v*')
 
 if [[ -z "$previous_tag" ]]; then
   echo "No prior '$current_channel' release with a desktop manifest; building." >&2

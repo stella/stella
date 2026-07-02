@@ -243,6 +243,21 @@ tag_annotated "$d" "v0.3.0"
 expect_case "skips a prior tag without a manifest" \
   "$d" "v0.3.0" "v0.1.0" "true" "v0.1.0"
 
+# 9. Non-ancestor tags are ignored: a NEWER tag (with a manifest) that
+#    is a descendant of the current tag must not be selected as the
+#    comparison point (a retried run for an older tag would otherwise
+#    diff forward). v0.3.0 sits on top of v0.2.0; running for v0.2.0
+#    must still compare back to v0.1.0.
+d="$(new_repo case9)"
+commit_touching "$d" "apps/desktop/a.ts" "desktop a"
+tag_annotated "$d" "v0.1.0"
+commit_touching "$d" "apps/api/x.ts" "backend x"
+tag_annotated "$d" "v0.2.0"
+commit_touching "$d" "apps/desktop/b.ts" "desktop b"
+tag_annotated "$d" "v0.3.0"
+expect_case "ignores a newer non-ancestor tag" \
+  "$d" "v0.2.0" "v0.1.0 v0.3.0" "false" "v0.1.0"
+
 echo ""
 echo "Results: $PASS passed, $FAIL failed"
 if [[ "$FAIL" -ne 0 ]]; then
