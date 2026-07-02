@@ -3024,6 +3024,21 @@
       "noFilterResults": "لا توجد عناصر تطابق عوامل التصفية هذه",
       "noFilterResultsHint": "ستظهر هنا إذا أزلت بعض عوامل التصفية.",
       "removeAdvancedFilter": "إزالة عامل التصفية المتقدم",
+      "reportExport": {
+        "action": "تصدير التقرير…",
+        "completed": "التقرير جاهز",
+        "deliveryLabel": "التسليم",
+        "description": "أنشئ مستند تقرير من هذا العرض باستخدام قالب تقرير.",
+        "failed": "فشل تصدير التقرير",
+        "loadTemplatesFailed": "تعذّر تحميل قوالب التقارير.",
+        "loadingTemplates": "جارٍ تحميل القوالب…",
+        "noTemplates": "لا توجد قوالب تقارير متاحة.",
+        "openReport": "فتح التقرير",
+        "started": "جارٍ إعداد تقريرك…",
+        "submit": "تصدير التقرير",
+        "templateLabel": "قالب التقرير",
+        "title": "تصدير التقرير"
+      },
       "saveAsTemplate": "الحفظ كإعداد مسبق…",
       "selectProperty": "اختر الخاصية",
       "templates": {

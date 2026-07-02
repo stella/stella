@@ -1828,11 +1828,11 @@ export const REPORT_EXPORT_MODES = ["workspace", "download"] as const;
 export type ReportExportMode = (typeof REPORT_EXPORT_MODES)[number];
 
 /** Which template the export fills: a deployment built-in resolved by key, or
- *  a stored org template pinned to a version. No UUIDs reach the AI-visible
- *  report data; this ref is job metadata, not report content. */
+ *  a stored org template (filled at its current version). No UUIDs reach the
+ *  AI-visible report data; this ref is job metadata, not report content. */
 export type ReportTemplateRef =
   | { type: "builtin"; key: string }
-  | { type: "stored"; templateId: SafeId<"template">; version: number };
+  | { type: "stored"; templateId: SafeId<"template"> };
 
 export const reportExports = p.pgTable(
   "report_exports",

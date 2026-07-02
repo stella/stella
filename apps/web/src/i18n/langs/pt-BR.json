@@ -3024,6 +3024,21 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
+      "reportExport": {
+        "action": "Exportar relatório…",
+        "completed": "Relatório pronto",
+        "deliveryLabel": "Entrega",
+        "description": "Gere um documento de relatório a partir desta visualização usando um modelo de relatório.",
+        "failed": "Falha ao exportar o relatório",
+        "loadTemplatesFailed": "Não foi possível carregar os modelos de relatório.",
+        "loadingTemplates": "Carregando modelos…",
+        "noTemplates": "Nenhum modelo de relatório disponível.",
+        "openReport": "Abrir relatório",
+        "started": "Preparando seu relatório…",
+        "submit": "Exportar relatório",
+        "templateLabel": "Modelo de relatório",
+        "title": "Exportar relatório"
+      },
       "saveAsTemplate": "Salvar como predefinição…",
       "selectProperty": "Selecione a propriedade",
       "templates": {

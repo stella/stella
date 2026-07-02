@@ -3027,6 +3027,21 @@ type Messages = {
       "noFilterResults": "No items match these filters";
       "noFilterResultsHint": "They would show up here if you removed some filters.";
       "removeAdvancedFilter": "Remove advanced filter";
+      "reportExport": {
+        "action": "Export report…";
+        "completed": "Report ready";
+        "deliveryLabel": "Delivery";
+        "description": "Generate a report document from this view using a report template.";
+        "failed": "Report export failed";
+        "loadTemplatesFailed": "Couldn’t load report templates.";
+        "loadingTemplates": "Loading templates…";
+        "noTemplates": "No report templates available.";
+        "openReport": "Open report";
+        "started": "Preparing your report…";
+        "submit": "Export report";
+        "templateLabel": "Report template";
+        "title": "Export report";
+      };
       "saveAsTemplate": "Save as preset…";
       "selectProperty": "Select property";
       "templates": {

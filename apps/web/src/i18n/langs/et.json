@@ -3024,6 +3024,21 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
+      "reportExport": {
+        "action": "Ekspordi aruanne…",
+        "completed": "Aruanne on valmis",
+        "deliveryLabel": "Väljastus",
+        "description": "Loo sellest vaatest aruandedokument aruandemalli abil.",
+        "failed": "Aruande eksportimine ebaõnnestus",
+        "loadTemplatesFailed": "Aruandemalle ei õnnestunud laadida.",
+        "loadingTemplates": "Mallide laadimine…",
+        "noTemplates": "Aruandemalle pole saadaval.",
+        "openReport": "Ava aruanne",
+        "started": "Aruande ettevalmistamine…",
+        "submit": "Ekspordi aruanne",
+        "templateLabel": "Aruandemall",
+        "title": "Ekspordi aruanne"
+      },
       "saveAsTemplate": "Salvesta eelseadena…",
       "selectProperty": "Valige omadus",
       "templates": {

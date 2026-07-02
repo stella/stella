@@ -70,6 +70,7 @@ import { PropertyIcon } from "@/routes/_protected.workspaces/$workspaceId/-compo
 import { RowActions } from "@/routes/_protected.workspaces/$workspaceId/-components/row-actions";
 import { isDocumentTypeClassifier } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-columns";
 import { downloadFile } from "@/routes/_protected.workspaces/$workspaceId/-components/utils";
+import { ExportReportControl } from "@/routes/_protected.workspaces/$workspaceId/-components/view/export-report-dialog";
 import { FilterChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters";
 import { SortChips } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts";
 import type { TableContentMode } from "@/routes/_protected.workspaces/$workspaceId/-hooks/table-store";
@@ -243,6 +244,7 @@ export const ViewToolbar = ({ view, workspaceId }: ViewToolbarProps) => {
           />
           <TableContentModeControl viewId={view.id} />
           <TableExportMenu view={view} workspaceId={workspaceId} />
+          <ExportReportControl view={view} workspaceId={workspaceId} />
           <RunPlaybookControl workspaceId={workspaceId} />
           <BulkAddColumns triggerVariant="labelled" workspaceId={workspaceId} />
         </>

@@ -35,7 +35,6 @@ const templateRefSchema = t.Union([
   t.Object({
     type: t.Literal("stored"),
     templateId: tSafeId("template"),
-    version: t.Integer({ minimum: 1 }),
   }),
 ]);
 

@@ -3024,6 +3024,21 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
+      "reportExport": {
+        "action": "Eksportēt pārskatu…",
+        "completed": "Pārskats ir gatavs",
+        "deliveryLabel": "Piegāde",
+        "description": "Izveidojiet pārskata dokumentu no šī skata, izmantojot pārskata veidni.",
+        "failed": "Neizdevās eksportēt pārskatu",
+        "loadTemplatesFailed": "Neizdevās ielādēt pārskatu veidnes.",
+        "loadingTemplates": "Notiek veidņu ielāde…",
+        "noTemplates": "Nav pieejamu pārskatu veidņu.",
+        "openReport": "Atvērt pārskatu",
+        "started": "Notiek jūsu pārskata sagatavošana…",
+        "submit": "Eksportēt pārskatu",
+        "templateLabel": "Pārskata veidne",
+        "title": "Eksportēt pārskatu"
+      },
       "saveAsTemplate": "Saglabāt kā iepriekšiestatījumu…",
       "selectProperty": "Izvēlieties rekvizītu",
       "templates": {

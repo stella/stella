@@ -3024,6 +3024,21 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
+      "reportExport": {
+        "action": "Exportovať správu…",
+        "completed": "Správa je pripravená",
+        "deliveryLabel": "Doručenie",
+        "description": "Vytvorte dokument so správou z tohto zobrazenia pomocou vzoru správy.",
+        "failed": "Export správy zlyhal",
+        "loadTemplatesFailed": "Nepodarilo sa načítať vzory správ.",
+        "loadingTemplates": "Načítavajú sa vzory…",
+        "noTemplates": "Nie sú k dispozícii žiadne vzory správ.",
+        "openReport": "Otvoriť správu",
+        "started": "Pripravuje sa vaša správa…",
+        "submit": "Exportovať správu",
+        "templateLabel": "Vzor správy",
+        "title": "Exportovať správu"
+      },
       "saveAsTemplate": "Uložiť ako predvoľbu…",
       "selectProperty": "Vybrať vlastnosť",
       "templates": {

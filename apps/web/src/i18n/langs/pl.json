@@ -3024,6 +3024,21 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
+      "reportExport": {
+        "action": "Eksportuj raport…",
+        "completed": "Raport gotowy",
+        "deliveryLabel": "Dostarczenie",
+        "description": "Wygeneruj dokument raportu z tego widoku przy użyciu szablonu raportu.",
+        "failed": "Eksport raportu nie powiódł się",
+        "loadTemplatesFailed": "Nie udało się załadować szablonów raportów.",
+        "loadingTemplates": "Ładowanie szablonów…",
+        "noTemplates": "Brak dostępnych szablonów raportów.",
+        "openReport": "Otwórz raport",
+        "started": "Przygotowywanie raportu…",
+        "submit": "Eksportuj raport",
+        "templateLabel": "Szablon raportu",
+        "title": "Eksportuj raport"
+      },
       "saveAsTemplate": "Zapisz jako ustawienie wstępne…",
       "selectProperty": "Wybierz właściwość",
       "templates": {

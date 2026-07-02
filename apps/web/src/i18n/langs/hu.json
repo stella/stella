@@ -3024,6 +3024,21 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
+      "reportExport": {
+        "action": "Jelentés exportálása…",
+        "completed": "A jelentés elkészült",
+        "deliveryLabel": "Kézbesítés",
+        "description": "Készítsen jelentésdokumentumot ebből a nézetből jelentéssablon segítségével.",
+        "failed": "A jelentés exportálása sikertelen",
+        "loadTemplatesFailed": "A jelentéssablonok betöltése nem sikerült.",
+        "loadingTemplates": "Sablonok betöltése…",
+        "noTemplates": "Nincs elérhető jelentéssablon.",
+        "openReport": "Jelentés megnyitása",
+        "started": "A jelentés előkészítése…",
+        "submit": "Jelentés exportálása",
+        "templateLabel": "Jelentéssablon",
+        "title": "Jelentés exportálása"
+      },
       "saveAsTemplate": "Mentés előbeállításként…",
       "selectProperty": "Tulajdonság kiválasztása",
       "templates": {

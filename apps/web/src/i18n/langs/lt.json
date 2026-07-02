@@ -3024,6 +3024,21 @@
       "noFilterResults": "No items match these filters",
       "noFilterResultsHint": "They would show up here if you removed some filters.",
       "removeAdvancedFilter": "Remove advanced filter",
+      "reportExport": {
+        "action": "Eksportuoti ataskaitą…",
+        "completed": "Ataskaita paruošta",
+        "deliveryLabel": "Pateikimas",
+        "description": "Sukurkite ataskaitos dokumentą iš šio rodinio naudodami ataskaitos šabloną.",
+        "failed": "Nepavyko eksportuoti ataskaitos",
+        "loadTemplatesFailed": "Nepavyko įkelti ataskaitų šablonų.",
+        "loadingTemplates": "Įkeliami šablonai…",
+        "noTemplates": "Nėra ataskaitų šablonų.",
+        "openReport": "Atverti ataskaitą",
+        "started": "Ruošiama jūsų ataskaita…",
+        "submit": "Eksportuoti ataskaitą",
+        "templateLabel": "Ataskaitos šablonas",
+        "title": "Eksportuoti ataskaitą"
+      },
       "saveAsTemplate": "Išsaugoti kaip išankstinį nustatymą…",
       "selectProperty": "Pasirinkti savybę",
       "templates": {
