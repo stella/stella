@@ -193,6 +193,12 @@ export const LIMITS = {
   corpusIndexSearchScanLimit: 10_000,
   // Decisions pushed to corpus index per indexer batch.
   corpusIndexBatchSize: 50,
+  /** Wall-clock ceiling (ms) for a single corpus object read/write/delete.
+   *  Corpus payloads are individual court decisions or statute texts (a few
+   *  MB at most), so an operation that outlives this is a stalled socket, not
+   *  a slow-but-live transfer. Bounds every corpus S3 call so a wedged
+   *  transfer can never freeze a daemon loop. */
+  corpusObjectIoTimeoutMs: 60_000,
   infoSoudEventsMax: 200,
   infoSoudHearingsMax: 50,
   infoSoudRelatedCasesMax: 50,
