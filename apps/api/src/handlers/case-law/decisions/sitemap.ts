@@ -6,6 +6,7 @@ import type { Static } from "elysia";
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { groupableSql } from "@/api/lib/groupable-sql";
 import { LIMITS } from "@/api/lib/limits";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -75,9 +76,17 @@ type SitemapDecisionRow = SitemapDecisionAlternate & {
 // values (e.g. the user-supplied `bucket` in getShardConditions) stay bound.
 // Exported for the grouped-query regression test, which renders each fragment in
 // both the SELECT list and the GROUP BY to assert Postgres accepts the grouping.
-export const decisionYearSql = sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'YYYY'), ${sql.raw(`'${SITEMAP_UNDATED_YEAR}'`)})`;
-export const decisionMonthSql = sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'MM'), ${sql.raw(`'${SITEMAP_UNDATED_MONTH}'`)})`;
-export const decisionBucketSql = sql<string>`lpad(mod(hashtext(${caseLawDecisions.id}::text)::bigint + 2147483648, ${sql.raw(String(SITEMAP_SHARD_BUCKET_COUNT))})::text, ${sql.raw(String(SITEMAP_SHARD_BUCKET_WIDTH))}, '0')`;
+// `groupableSql` enforces the inlining invariant at construction: a bound
+// constant here would panic at module load rather than fail a live query.
+export const decisionYearSql = groupableSql(
+  sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'YYYY'), ${sql.raw(`'${SITEMAP_UNDATED_YEAR}'`)})`,
+);
+export const decisionMonthSql = groupableSql(
+  sql<string>`COALESCE(to_char(${caseLawDecisions.decisionDate}, 'MM'), ${sql.raw(`'${SITEMAP_UNDATED_MONTH}'`)})`,
+);
+export const decisionBucketSql = groupableSql(
+  sql<string>`lpad(mod(hashtext(${caseLawDecisions.id}::text)::bigint + 2147483648, ${sql.raw(String(SITEMAP_SHARD_BUCKET_COUNT))})::text, ${sql.raw(String(SITEMAP_SHARD_BUCKET_WIDTH))}, '0')`,
+);
 
 const getCountryPathSegment = (country: string): string =>
   country.toLowerCase();

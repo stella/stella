@@ -16,6 +16,7 @@ import { tConditionNode } from "@/api/lib/conditions/contract";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { buildFilterConditions } from "@/api/lib/entity-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { groupableSql } from "@/api/lib/groupable-sql";
 
 const STATUS_GROUP_ID = "_status";
 const KIND_GROUP_ID = "_kind";
@@ -29,8 +30,13 @@ const TASK_STATUS_VALUES = [
   "done",
   "cancelled",
 ] as const;
-const TASK_STATUS_SQL_VALUES = TASK_STATUS_VALUES.map(
-  (statusValue) => sql`${statusValue}`,
+// Inline the status literals with `sql.raw` rather than binding them: the
+// enclosing CASE expression is rendered into both the SELECT list and the
+// GROUP BY, and a bound value would get different placeholder numbers per
+// render, making Postgres reject the grouped query. These are fixed code
+// constants, never user input, so inlining is byte-identical and safe.
+const TASK_STATUS_SQL_VALUES = TASK_STATUS_VALUES.map((statusValue) =>
+  sql.raw(`'${statusValue}'`),
 );
 
 const readGroupCountsBodySchema = t.Object({
@@ -94,11 +100,11 @@ const readGroupCounts = createSafeHandler(
       // recognized task status collapse into the uncategorized (null) bucket;
       // mirrors buildStatusGroupCondition's value logic from
       // kanban-group-condition.
-      const statusBucketExpr = sql<string | null>`CASE
+      const statusBucketExpr = groupableSql(sql<string | null>`CASE
         WHEN ${entities.status} IN (${sql.join(TASK_STATUS_SQL_VALUES, sql`, `)})
         THEN ${entities.status}
         ELSE NULL
-      END`;
+      END`);
       const rows = yield* Result.await(
         safeDb((tx) =>
           tx
