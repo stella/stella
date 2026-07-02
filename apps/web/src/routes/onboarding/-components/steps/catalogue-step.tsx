@@ -18,6 +18,7 @@ import {
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
 import { Button } from "@stll/ui/components/button";
+import { Form } from "@stll/ui/components/form";
 import {
   InputGroup,
   InputGroupAddon,
@@ -236,263 +237,278 @@ export const CatalogueStep = ({
         {t("onboarding.catalogueSubtitle")}
       </p>
 
-      {/* Search input + jurisdiction filter inline on the same row.
+      {/* display:contents keeps the fragment's flex layout untouched while
+          still giving Enter native implicit form submission. */}
+      <Form
+        className="contents"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onNext();
+        }}
+      >
+        {/* Search input + jurisdiction filter inline on the same row.
           The dropdown trigger summarises the current selection;
           clicking opens a multi-select checklist with an explicit
           "Vše" reset at the top. */}
-      <div className="mt-6 flex items-center gap-2">
-        <InputGroup className="flex-1">
-          <InputGroupAddon>
-            <SearchIcon className="text-muted-foreground" />
-          </InputGroupAddon>
-          <InputGroupInput
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t("onboarding.catalogueSearchPlaceholder")}
-            value={query}
-          />
-          {query.length > 0 && (
-            <InputGroupAddon align="inline-end">
-              <Button
-                aria-label={t("onboarding.catalogueClearSearch")}
-                onClick={() => setQuery("")}
-                size="icon-xs"
-                type="button"
-                variant="ghost"
-              >
-                <XIcon />
-              </Button>
+        <div className="mt-6 flex items-center gap-2">
+          <InputGroup className="flex-1">
+            <InputGroupAddon>
+              <SearchIcon className="text-muted-foreground" />
             </InputGroupAddon>
-          )}
-        </InputGroup>
-        <Popover>
-          <PopoverTrigger
-            render={
-              <Button className="shrink-0" type="button" variant="outline" />
-            }
-          >
-            <GlobeIcon className="size-3.5" />
-            {jurisdictionFilter.size === 0
-              ? t("common.all")
-              : [...jurisdictionFilter].sort().join(", ")}
-            <ChevronDownIcon className="size-3.5" />
-          </PopoverTrigger>
-          <PopoverPopup align="end" className="w-60" side="bottom">
-            <div className="border-border border-b p-2">
-              <InputGroup>
-                <InputGroupAddon>
-                  <SearchIcon className="text-muted-foreground" />
-                </InputGroupAddon>
-                <InputGroupInput
-                  autoFocus
-                  onChange={(e) => setFilterQuery(e.target.value)}
-                  placeholder={t("common.search")}
-                  size="sm"
-                  value={filterQuery}
-                />
-              </InputGroup>
-            </div>
-            <div className="flex max-h-[260px] flex-col overflow-y-auto p-1">
-              {/* "ALL" — only shown when not filtering, so the user
+            <InputGroupInput
+              autoFocus
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder={t("onboarding.catalogueSearchPlaceholder")}
+              value={query}
+            />
+            {query.length > 0 && (
+              <InputGroupAddon align="inline-end">
+                <Button
+                  aria-label={t("onboarding.catalogueClearSearch")}
+                  onClick={() => setQuery("")}
+                  size="icon-xs"
+                  type="button"
+                  variant="ghost"
+                >
+                  <XIcon />
+                </Button>
+              </InputGroupAddon>
+            )}
+          </InputGroup>
+          <Popover>
+            <PopoverTrigger
+              render={
+                <Button className="shrink-0" type="button" variant="outline" />
+              }
+            >
+              <GlobeIcon className="size-3.5" />
+              {jurisdictionFilter.size === 0
+                ? t("common.all")
+                : [...jurisdictionFilter].sort().join(", ")}
+              <ChevronDownIcon className="size-3.5" />
+            </PopoverTrigger>
+            <PopoverPopup align="end" className="w-60" side="bottom">
+              <div className="border-border border-b p-2">
+                <InputGroup>
+                  <InputGroupAddon>
+                    <SearchIcon className="text-muted-foreground" />
+                  </InputGroupAddon>
+                  <InputGroupInput
+                    autoFocus
+                    onChange={(e) => setFilterQuery(e.target.value)}
+                    placeholder={t("common.search")}
+                    size="sm"
+                    value={filterQuery}
+                  />
+                </InputGroup>
+              </div>
+              <div className="flex max-h-[260px] flex-col overflow-y-auto p-1">
+                {/* "ALL" — only shown when not filtering, so the user
                   can quickly reset to the unfiltered view. */}
-              {filterQuery.trim() === "" && (
-                <>
-                  <button
-                    aria-pressed={jurisdictionFilter.size === 0}
-                    className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
-                    onClick={() => setJurisdictionFilter(new Set())}
-                    type="button"
-                  >
-                    <span
-                      className={cn(
-                        "border-border flex size-4 items-center justify-center rounded-sm border",
-                        jurisdictionFilter.size === 0 &&
-                          "border-foreground bg-foreground",
-                      )}
-                    >
-                      {jurisdictionFilter.size === 0 && (
-                        <CheckIcon className="text-background size-3" />
-                      )}
-                    </span>
-                    <span className="text-foreground font-medium">
-                      {t("common.all")}
-                    </span>
-                  </button>
-                  <div className="bg-border my-1 h-px" />
-                </>
-              )}
-              {(() => {
-                const filtered = allJurisdictionCodes.filter((code) =>
-                  code.toLowerCase().includes(filterQuery.trim().toLowerCase()),
-                );
-                if (filtered.length === 0) {
-                  return (
-                    <p className="text-muted-foreground px-2 py-3 text-center text-xs">
-                      {t("common.noResults")}
-                    </p>
-                  );
-                }
-                return filtered.map((code) => {
-                  const active = jurisdictionFilter.has(code);
-                  return (
+                {filterQuery.trim() === "" && (
+                  <>
                     <button
-                      aria-pressed={active}
+                      aria-pressed={jurisdictionFilter.size === 0}
                       className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
-                      key={code}
-                      onClick={() =>
-                        setJurisdictionFilter((prev) => {
-                          const next = new Set(prev);
-                          if (next.has(code)) {
-                            next.delete(code);
-                          } else {
-                            next.add(code);
-                          }
-                          return next;
-                        })
-                      }
+                      onClick={() => setJurisdictionFilter(new Set())}
                       type="button"
                     >
                       <span
                         className={cn(
                           "border-border flex size-4 items-center justify-center rounded-sm border",
-                          active && "border-foreground bg-foreground",
+                          jurisdictionFilter.size === 0 &&
+                            "border-foreground bg-foreground",
                         )}
                       >
-                        {active && (
+                        {jurisdictionFilter.size === 0 && (
                           <CheckIcon className="text-background size-3" />
                         )}
                       </span>
-                      <span className="text-foreground">{code}</span>
+                      <span className="text-foreground font-medium">
+                        {t("common.all")}
+                      </span>
                     </button>
+                    <div className="bg-border my-1 h-px" />
+                  </>
+                )}
+                {(() => {
+                  const filtered = allJurisdictionCodes.filter((code) =>
+                    code
+                      .toLowerCase()
+                      .includes(filterQuery.trim().toLowerCase()),
                   );
-                });
-              })()}
-            </div>
-          </PopoverPopup>
-        </Popover>
-      </div>
-
-      {/* Split list: recommended first, hairline divider with
-          "From the community" heading, then everything else. */}
-      <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pe-1">
-        {filteredEntries.length === 0 ? (
-          <div className="flex flex-col items-center gap-3 py-8 text-center">
-            <p className="text-muted-foreground text-xs">
-              {t("common.noResults")}
-            </p>
-            <a
-              className="border-border bg-background hover:bg-muted text-foreground inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
-              href={PROPOSE_TOOL_URL}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {t("onboarding.catalogueProposeTool")}
-              <ExternalLinkIcon className="size-3" />
-            </a>
-          </div>
-        ) : (
-          <>
-            {filteredEntries
-              .filter((entry) => recommendedSet.has(entry.slug))
-              .map((entry) => (
-                <OnboardingCatalogueRow
-                  addLabel={t("common.add")}
-                  entry={entry}
-                  focused={focusedSlug === entry.slug}
-                  key={`${entry.kind}-${entry.slug}`}
-                  onClick={() => handleRowClick(entry)}
-                  onToggleSelection={
-                    pinnedSlugSet.has(entry.slug)
-                      ? undefined
-                      : () => {
-                          if (selectedSet.has(entry.slug)) {
-                            onRemove(entry.slug);
-                          } else {
-                            onAdd(entry.slug);
-                          }
-                        }
+                  if (filtered.length === 0) {
+                    return (
+                      <p className="text-muted-foreground px-2 py-3 text-center text-xs">
+                        {t("common.noResults")}
+                      </p>
+                    );
                   }
-                  removeLabel={t("common.remove")}
-                  selected={selectedSet.has(entry.slug)}
-                />
-              ))}
-            {filteredEntries.some((entry) => !recommendedSet.has(entry.slug)) &&
-              filteredEntries.some((entry) =>
-                recommendedSet.has(entry.slug),
-              ) && (
-                <TextSeparator
-                  className="my-2"
-                  labelClassName="text-[10px] font-medium tracking-wider uppercase"
-                >
-                  {t("onboarding.catalogueCommunityHeading")}
-                </TextSeparator>
-              )}
-            {filteredEntries
-              .filter((entry) => !recommendedSet.has(entry.slug))
-              .map((entry) => (
-                <OnboardingCatalogueRow
-                  addLabel={t("common.add")}
-                  entry={entry}
-                  focused={focusedSlug === entry.slug}
-                  key={`${entry.kind}-${entry.slug}`}
-                  onClick={() => handleRowClick(entry)}
-                  onToggleSelection={
-                    pinnedSlugSet.has(entry.slug)
-                      ? undefined
-                      : () => {
-                          if (selectedSet.has(entry.slug)) {
-                            onRemove(entry.slug);
-                          } else {
-                            onAdd(entry.slug);
-                          }
+                  return filtered.map((code) => {
+                    const active = jurisdictionFilter.has(code);
+                    return (
+                      <button
+                        aria-pressed={active}
+                        className="hover:bg-muted flex items-center gap-2 rounded-sm px-2 py-1.5 text-sm transition-colors"
+                        key={code}
+                        onClick={() =>
+                          setJurisdictionFilter((prev) => {
+                            const next = new Set(prev);
+                            if (next.has(code)) {
+                              next.delete(code);
+                            } else {
+                              next.add(code);
+                            }
+                            return next;
+                          })
                         }
-                  }
-                  removeLabel={t("common.remove")}
-                  selected={selectedSet.has(entry.slug)}
-                />
-              ))}
-            {jurisdictionFilter.size > 0 && (
-              <div className="flex justify-center py-2">
-                <Button
-                  onClick={() => setJurisdictionFilter(new Set())}
-                  size="sm"
-                  type="button"
-                  variant="link"
-                >
-                  {t("common.showAll")}
-                </Button>
+                        type="button"
+                      >
+                        <span
+                          className={cn(
+                            "border-border flex size-4 items-center justify-center rounded-sm border",
+                            active && "border-foreground bg-foreground",
+                          )}
+                        >
+                          {active && (
+                            <CheckIcon className="text-background size-3" />
+                          )}
+                        </span>
+                        <span className="text-foreground">{code}</span>
+                      </button>
+                    );
+                  });
+                })()}
               </div>
-            )}
-          </>
-        )}
-      </div>
+            </PopoverPopup>
+          </Popover>
+        </div>
 
-      <p className="text-muted-foreground mt-4 text-xs">
-        {t.rich("onboarding.catalogueFootnote", {
-          link: (chunks) => (
-            <a
-              className="hover:text-foreground underline"
-              href={PROPOSE_TOOL_URL}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {chunks}
-            </a>
-          ),
-        })}
-      </p>
+        {/* Split list: recommended first, hairline divider with
+          "From the community" heading, then everything else. */}
+        <div className="mt-3 flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto pe-1">
+          {filteredEntries.length === 0 ? (
+            <div className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-muted-foreground text-xs">
+                {t("common.noResults")}
+              </p>
+              <a
+                className="border-border bg-background hover:bg-muted text-foreground inline-flex items-center gap-1.5 rounded-md border px-3 py-1.5 text-xs font-medium transition-colors"
+                href={PROPOSE_TOOL_URL}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {t("onboarding.catalogueProposeTool")}
+                <ExternalLinkIcon className="size-3" />
+              </a>
+            </div>
+          ) : (
+            <>
+              {filteredEntries
+                .filter((entry) => recommendedSet.has(entry.slug))
+                .map((entry) => (
+                  <OnboardingCatalogueRow
+                    addLabel={t("common.add")}
+                    entry={entry}
+                    focused={focusedSlug === entry.slug}
+                    key={`${entry.kind}-${entry.slug}`}
+                    onClick={() => handleRowClick(entry)}
+                    onToggleSelection={
+                      pinnedSlugSet.has(entry.slug)
+                        ? undefined
+                        : () => {
+                            if (selectedSet.has(entry.slug)) {
+                              onRemove(entry.slug);
+                            } else {
+                              onAdd(entry.slug);
+                            }
+                          }
+                    }
+                    removeLabel={t("common.remove")}
+                    selected={selectedSet.has(entry.slug)}
+                  />
+                ))}
+              {filteredEntries.some(
+                (entry) => !recommendedSet.has(entry.slug),
+              ) &&
+                filteredEntries.some((entry) =>
+                  recommendedSet.has(entry.slug),
+                ) && (
+                  <TextSeparator
+                    className="my-2"
+                    labelClassName="text-[10px] font-medium tracking-wider uppercase"
+                  >
+                    {t("onboarding.catalogueCommunityHeading")}
+                  </TextSeparator>
+                )}
+              {filteredEntries
+                .filter((entry) => !recommendedSet.has(entry.slug))
+                .map((entry) => (
+                  <OnboardingCatalogueRow
+                    addLabel={t("common.add")}
+                    entry={entry}
+                    focused={focusedSlug === entry.slug}
+                    key={`${entry.kind}-${entry.slug}`}
+                    onClick={() => handleRowClick(entry)}
+                    onToggleSelection={
+                      pinnedSlugSet.has(entry.slug)
+                        ? undefined
+                        : () => {
+                            if (selectedSet.has(entry.slug)) {
+                              onRemove(entry.slug);
+                            } else {
+                              onAdd(entry.slug);
+                            }
+                          }
+                    }
+                    removeLabel={t("common.remove")}
+                    selected={selectedSet.has(entry.slug)}
+                  />
+                ))}
+              {jurisdictionFilter.size > 0 && (
+                <div className="flex justify-center py-2">
+                  <Button
+                    onClick={() => setJurisdictionFilter(new Set())}
+                    size="sm"
+                    type="button"
+                    variant="link"
+                  >
+                    {t("common.showAll")}
+                  </Button>
+                </div>
+              )}
+            </>
+          )}
+        </div>
 
-      <div className="mt-auto flex items-center justify-between gap-3 pt-8">
-        <Button onClick={onSkip} type="button" variant="ghost">
-          {t("onboarding.skipStep")}
-        </Button>
-        <Button onClick={onNext} type="button">
-          {selectedSet.size === 0
-            ? t("onboarding.continue")
-            : t("onboarding.catalogueContinueWithCount", {
-                count: selectedSet.size,
-              })}
-        </Button>
-      </div>
+        <p className="text-muted-foreground mt-4 text-xs">
+          {t.rich("onboarding.catalogueFootnote", {
+            link: (chunks) => (
+              <a
+                className="hover:text-foreground underline"
+                href={PROPOSE_TOOL_URL}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {chunks}
+              </a>
+            ),
+          })}
+        </p>
+
+        <div className="mt-auto flex items-center justify-between gap-3 pt-8">
+          <Button onClick={onSkip} type="button" variant="ghost">
+            {t("onboarding.skipStep")}
+          </Button>
+          <Button type="submit">
+            {selectedSet.size === 0
+              ? t("onboarding.continue")
+              : t("onboarding.catalogueContinueWithCount", {
+                  count: selectedSet.size,
+                })}
+          </Button>
+        </div>
+      </Form>
     </>
   );
 };
