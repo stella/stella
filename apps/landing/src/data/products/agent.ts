@@ -1,8 +1,9 @@
 import type { Product } from "./types";
 
-// Screenshots are stubbed as placeholders; each note describes the exact
-// seeded state the Playwright capture should produce, so swapping in real
-// images later is a one-line change per section.
+// The hero is a video slot: ProductMediaFrame auto-detects the file at
+// /media/products/<slug>/ and shows a skeleton until it lands. Section
+// screenshots are stubbed as placeholders; each note describes the exact
+// seeded state the Playwright capture should produce.
 export const agent: Product = {
   slug: "agent",
   eyebrow: "AI agent",
@@ -10,8 +11,10 @@ export const agent: Product = {
   summary:
     "Chat with your matters, documents, registries, and connected tools in one place. The agent acts with approvals and source previews, grounds its answers in citations, and extends through skills and external connectors.",
   hero: {
-    type: "preview",
-    key: "agent-answer",
+    type: "video",
+    src: "/media/products/agent/hero.mp4",
+    poster: "/media/products/agent/hero.jpg",
+    alt: "Screen recording of stella's AI agent answering across matters and files, asking for approval, and citing its sources.",
     aspect: "16 / 10",
   },
   quickAnswer: {

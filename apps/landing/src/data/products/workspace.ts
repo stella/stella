@@ -1,8 +1,9 @@
 import type { Product } from "./types";
 
-// Screenshots are stubbed as placeholders; each note describes the exact
-// seeded state the Playwright capture should produce, so swapping in real
-// images later is a one-line change per section.
+// The hero is a video slot: ProductMediaFrame auto-detects the file at
+// /media/products/<slug>/ and shows a skeleton until it lands. Section
+// screenshots are stubbed as placeholders; each note describes the exact
+// seeded state the Playwright capture should produce.
 export const workspace: Product = {
   slug: "workspace",
   eyebrow: "Workspace",
@@ -10,8 +11,10 @@ export const workspace: Product = {
   summary:
     "A web app that brings matters, documents, Word .docx editing, review, research, chat, and knowledge tools together. A desktop app bridges local Office editing, and a stella MCP server exposes your matters, documents, and case law.",
   hero: {
-    type: "preview",
-    key: "workspace",
+    type: "video",
+    src: "/media/products/workspace/hero.mp4",
+    poster: "/media/products/workspace/hero.jpg",
+    alt: "Screen recording of stella moving between a matter's documents, review, and chat in one workspace.",
     aspect: "16 / 10",
   },
   quickAnswer: {

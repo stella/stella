@@ -10,8 +10,10 @@ export const publicData: Product = {
   summary:
     "Case law and company registries from official public sources, collected and structure-parsed by stella's Legal Atlas stack. Read a decision, look up a company, follow citations, and reference any of it from a matter or hand it to the AI agent.",
   hero: {
-    type: "preview",
-    key: "case-law-reader",
+    type: "video",
+    src: "/media/products/public-data/hero.mp4",
+    poster: "/media/products/public-data/hero.jpg",
+    alt: "Screen recording of stella reading an official decision, following its citations, and pulling a company registry record into a matter.",
     aspect: "16 / 10",
   },
   quickAnswer: {

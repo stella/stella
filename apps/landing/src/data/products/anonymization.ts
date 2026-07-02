@@ -1,8 +1,9 @@
 import type { Product } from "./types";
 
 // Anonymization is actively in development; this page is a light, high-level
-// scaffold. Screenshots are stubbed as placeholders, and each note describes a
-// future seeded state to capture once the feature lands.
+// scaffold. The hero is a video slot (ProductMediaFrame auto-detects the file
+// at /media/products/<slug>/ and shows a skeleton until it lands), and section
+// screenshots are stubbed as placeholders describing future seeded states.
 export const anonymization: Product = {
   slug: "anonymization",
   eyebrow: "Anonymization",
@@ -10,8 +11,10 @@ export const anonymization: Product = {
   summary:
     "WASM-backed anonymization tooling for legal AI workflows. It helps prepare material for AI without exposing names, entities, or identifying details, integrated through chat and document review. This is actively being built: more is coming soon.",
   hero: {
-    type: "preview",
-    key: "anonymization",
+    type: "video",
+    src: "/media/products/anonymization/hero.mp4",
+    poster: "/media/products/anonymization/hero.jpg",
+    alt: "Screen recording of stella preparing a document for an AI step by keeping names and identifying details out.",
     aspect: "16 / 10",
   },
   quickAnswer: {

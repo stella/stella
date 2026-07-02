@@ -1,15 +1,20 @@
 ---
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import type { ProductMedia } from "../data/products/types";
+import MediaSkeleton from "./MediaSkeleton.astro";
 import { ProductPreview } from "./react/previews/ProductPreview";
 
 type Props = { media: ProductMedia };
 const { media } = Astro.props;
 const aspect = media.aspect ?? "16 / 9";
 
-// Faint skeleton rows so a stubbed shot reads as "product UI slots in here",
-// not an empty void. Opacities step down to suggest depth.
-const sidebarRows = [0.1, 0.08, 0.08, 0.06, 0.06];
-const tableRows = [0.07, 0.06, 0.06, 0.05, 0.05];
+// A video slot upgrades from skeleton to <video> the moment its file lands in
+// public/. The build's cwd is the Astro project dir (apps/landing), so resolve
+// public assets from there; this runs at build time with no data edits.
+const videoOnDisk = (p: string) => existsSync(join(process.cwd(), "public", p));
+const videoReady = media.type === "video" && videoOnDisk(media.src);
+const posterReady = media.type === "video" && media.poster !== undefined && videoOnDisk(media.poster);
 ---
 
 <div
@@ -45,10 +50,10 @@ const tableRows = [0.07, 0.06, 0.06, 0.05, 0.05];
   }
 
   {
-    media.type === "video" && (
+    media.type === "video" && videoReady && (
       <video
         class="absolute inset-0 h-full w-full object-cover"
-        poster={media.poster}
+        poster={posterReady ? media.poster : undefined}
         aria-label={media.alt}
         autoplay
         muted
@@ -60,67 +65,7 @@ const tableRows = [0.07, 0.06, 0.06, 0.05, 0.05];
     )
   }
 
-  {
-    media.type === "placeholder" && (
-      <div class="absolute inset-0 flex flex-col">
-        {/* Faux window toolbar */}
-        <div
-          class="flex items-center gap-1.5 border-b px-4 py-3"
-          style="border-color: color-mix(in srgb, var(--border) 65%, transparent)"
-          aria-hidden="true"
-        >
-          <span class="h-2.5 w-2.5 rounded-full" style="background: color-mix(in srgb, var(--muted-foreground) 32%, transparent)" />
-          <span class="h-2.5 w-2.5 rounded-full" style="background: color-mix(in srgb, var(--muted-foreground) 22%, transparent)" />
-          <span class="h-2.5 w-2.5 rounded-full" style="background: color-mix(in srgb, var(--muted-foreground) 16%, transparent)" />
-          <span class="ms-3 h-2.5 w-32 rounded-full" style="background: color-mix(in srgb, var(--muted-foreground) 12%, transparent)" />
-        </div>
+  {media.type === "video" && !videoReady && <MediaSkeleton note={media.alt} />}
 
-        {/* Faint sidebar + table skeleton */}
-        <div class="flex flex-1 gap-4 p-4" aria-hidden="true">
-          <div class="hidden w-1/5 flex-col gap-2.5 sm:flex">
-            {sidebarRows.map((o) => (
-              <span
-                class="h-2.5 w-full rounded-full"
-                style={`background: color-mix(in srgb, var(--muted-foreground) ${o * 100}%, transparent)`}
-              />
-            ))}
-          </div>
-          <div class="flex flex-1 flex-col gap-2.5">
-            <span
-              class="h-3 w-full rounded"
-              style="background: color-mix(in srgb, var(--muted-foreground) 13%, transparent)"
-            />
-            {tableRows.map((o) => (
-              <span
-                class="h-2.5 w-full rounded"
-                style={`background: color-mix(in srgb, var(--muted-foreground) ${o * 100}%, transparent)`}
-              />
-            ))}
-          </div>
-        </div>
-
-        {/* Caption: what the captured shot will show */}
-        <div class="flex items-center justify-center gap-2 px-4 pb-3.5">
-          <svg
-            class="h-3.5 w-3.5 shrink-0"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="2"
-            style="color: color-mix(in srgb, var(--primary) 80%, transparent)"
-            aria-hidden="true"
-          >
-            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3Z" />
-            <circle cx="12" cy="13" r="3" />
-          </svg>
-          <span
-            class="text-[0.7rem] leading-[1.4]"
-            style="color: color-mix(in srgb, var(--muted-foreground) 85%, transparent)"
-          >
-            {media.note}
-          </span>
-        </div>
-      </div>
-    )
-  }
+  {media.type === "placeholder" && <MediaSkeleton note={media.note} />}
 </div>

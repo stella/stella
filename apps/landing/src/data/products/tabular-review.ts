@@ -1,8 +1,9 @@
 import type { Product } from "./types";
 
-// Screenshots are stubbed as placeholders; each note describes the exact
-// seeded state the Playwright capture should produce, so swapping in real
-// images later is a one-line change per section.
+// The hero is a video slot: ProductMediaFrame auto-detects the file at
+// /media/products/<slug>/ and shows a skeleton until it lands. Section
+// screenshots are stubbed as placeholders; each note describes the exact
+// seeded state the Playwright capture should produce.
 export const tabularReview: Product = {
   slug: "tabular-review",
   eyebrow: "Tabular Review",
@@ -10,8 +11,10 @@ export const tabularReview: Product = {
   summary:
     "Ask questions across a whole document set and get structured answers back as a matter-scoped table — sortable, filterable, and traceable to the source text. Built for due diligence, discovery, and research.",
   hero: {
-    type: "preview",
-    key: "review-grid",
+    type: "video",
+    src: "/media/products/tabular-review/hero.mp4",
+    poster: "/media/products/tabular-review/hero.jpg",
+    alt: "Screen recording of stella turning a document set into a reviewable, cited table.",
     aspect: "16 / 10",
   },
   quickAnswer: {
