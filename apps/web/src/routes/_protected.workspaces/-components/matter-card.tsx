@@ -93,7 +93,7 @@ export const MatterCard = ({
             render={
               <div
                 className={cn(
-                  "bg-card relative flex flex-col gap-1 overflow-hidden rounded-xl border px-3 py-2 transition-colors",
+                  "bg-card relative isolate flex flex-col gap-1 overflow-hidden rounded-xl border px-3 py-2 transition-colors",
                   isOverdue
                     ? "bg-destructive/[0.04] hover:bg-destructive/[0.08]"
                     : "hover:bg-[var(--matter-tint)]",
