@@ -90,27 +90,35 @@ const applyLowerings = (
     delete next["oneOf"];
   }
 
+  // Gemini's type enum has no "null"; nullability must be expressed via
+  // `nullable: true`. Lower a scalar "null", then any type union: strip
+  // "null" into `nullable`, keep the first remaining type, and record the
+  // rest as dropped.
   const typeValue = next["type"];
-  if (!Array.isArray(typeValue)) {
-    return next;
-  }
-
-  const nonNull = typeValue.filter((entry) => entry !== "null");
-  const hasNull = nonNull.length !== typeValue.length;
-
-  // ["X", "null"] -> type "X" + nullable: true
-  if (hasNull && typeValue.length === 2 && nonNull.length === 1) {
-    next["type"] = nonNull[0];
+  if (typeValue === "null") {
+    delete next["type"];
     if (!("nullable" in next)) {
       next["nullable"] = true;
     }
     return next;
   }
 
-  // Any other type array (bare union, or a union with "null" that is not the
-  // simple nullable case): keep the first entry, record the rest as dropped.
-  next["type"] = typeValue[0];
-  for (let index = 1; index < typeValue.length; index += 1) {
+  if (!Array.isArray(typeValue)) {
+    return next;
+  }
+
+  const nonNull = typeValue.filter((entry) => entry !== "null");
+  if (nonNull.length !== typeValue.length && !("nullable" in next)) {
+    next["nullable"] = true;
+  }
+
+  if (nonNull.length === 0) {
+    delete next["type"];
+    return next;
+  }
+
+  next["type"] = nonNull[0];
+  for (let index = 1; index < nonNull.length; index += 1) {
     dropped.push(`${joinPath(path, "type")}[${index}]`);
   }
   return next;

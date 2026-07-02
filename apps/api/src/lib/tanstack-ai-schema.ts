@@ -30,7 +30,14 @@ const strictifyObjectSchemas = (schema: unknown): unknown => {
     next[key] = strictifyObjectSchemas(value);
   }
 
-  if (next["type"] === "object" && next["additionalProperties"] === undefined) {
+  // Nullable object schemas can arrive as a type union (e.g.
+  // ["object", "null"]) before the provider-safe projection lowers them,
+  // so match "object" inside arrays too.
+  const typeValue = next["type"];
+  const isObjectType =
+    typeValue === "object" ||
+    (Array.isArray(typeValue) && typeValue.includes("object"));
+  if (isObjectType && next["additionalProperties"] === undefined) {
     next["additionalProperties"] = false;
   }
 
