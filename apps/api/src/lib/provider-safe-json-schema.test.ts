@@ -46,8 +46,14 @@ describe("projectToProviderSafeJsonSchema", () => {
     expect(collectKeywords(schema).has("propertyNames")).toBe(false);
     expect(droppedKeywords).toContain("properties.values.propertyNames");
 
-    const values = (schema["properties"] as Record<string, unknown>)["values"];
-    expect(values).toEqual({ type: "object", additionalProperties: {} });
+    expect(schema).toEqual({
+      type: "object",
+      properties: {
+        templateId: { type: "string" },
+        values: { type: "object", additionalProperties: {} },
+      },
+      required: ["templateId", "values"],
+    });
   });
 
   test("lowers const to enum", () => {
@@ -133,10 +139,15 @@ describe("projectToProviderSafeJsonSchema", () => {
     });
 
     expect(collectKeywords(schema).has("propertyNames")).toBe(false);
-    const items = schema["items"] as Record<string, unknown>;
-    const branches = items["anyOf"] as Record<string, unknown>[];
-    expect(branches[0]).toEqual({ type: "string", pattern: "^a" });
-    expect(branches[1]).toEqual({ type: "integer", minimum: 0 });
+    expect(schema).toEqual({
+      type: "array",
+      items: {
+        anyOf: [
+          { type: "string", pattern: "^a" },
+          { type: "integer", minimum: 0 },
+        ],
+      },
+    });
   });
 
   test("is idempotent: projecting a projected schema drops nothing", () => {
