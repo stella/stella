@@ -54,6 +54,16 @@ export const LEGAL_ATLAS_RUNNER_ENV = {
     fallback: 1_200_000,
     min: 0,
   }),
+  // Per-transaction budget for the index-maintenance backfill loops. Sized
+  // above CORPUS_BACKFILL_STATEMENT_TIMEOUT (15min), which the tsvector
+  // projection upserts deliberately raise for very long court decisions;
+  // every other backfill transaction (batch select, audit insert, CAS
+  // update) finishes in seconds. 0 disables the runner's bound.
+  dbBackfillTransactionTimeoutMs: readIntegerEnv({
+    name: "DB_BACKFILL_TRANSACTION_TIMEOUT_MS",
+    fallback: 960_000,
+    min: 0,
+  }),
   // Root-pool reads/writes (source lookup + one-time seed insert) are tiny;
   // a short ceiling fails fast on a dead connection at cycle start.
   dbRootQueryTimeoutMs: readIntegerEnv({

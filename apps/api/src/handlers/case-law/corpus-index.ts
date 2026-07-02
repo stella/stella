@@ -9,6 +9,7 @@ import {
 } from "@/api/db/schema";
 import { readCorpusText } from "@/api/handlers/case-law/corpus-storage";
 import { redistributableCaseLawSource } from "@/api/handlers/case-law/redistribution";
+import { captureError } from "@/api/lib/analytics";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getCorpusIndexClient,
@@ -42,13 +43,16 @@ type IndexableRow = {
   citationCount: number;
   textS3Key: string | null;
   astS3Key: string | null;
-  fulltext: string | null;
   contentHash: string | null;
   indexedHash: string | null;
   indexedGeneration: string | null;
   updatedAt: Date;
 };
 
+// Deliberately excludes `fulltext`: it is only the fallback for rows without
+// a canonical S3 object, and selecting it for every row would drag megabytes
+// of text through one batch transaction. Rows that need it fetch it lazily,
+// one small bounded read per document (see loadText / fetchFulltext).
 const SELECT_COLUMNS = {
   id: caseLawDecisions.id,
   sourceId: caseLawDecisions.sourceId,
@@ -63,7 +67,6 @@ const SELECT_COLUMNS = {
   citationCount: caseLawDecisions.citationCount,
   textS3Key: caseLawDecisions.textS3Key,
   astS3Key: caseLawDecisions.astS3Key,
-  fulltext: caseLawDecisions.fulltext,
   contentHash: caseLawDecisions.contentHash,
   indexedHash: caseLawDecisions.indexedHash,
   indexedGeneration: caseLawDecisions.indexedGeneration,
@@ -131,14 +134,129 @@ const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
   return doc;
 };
 
-const loadText = async (row: IndexableRow): Promise<string> => {
-  // No catch-and-fallback: a transient S3 failure must abort the batch so
-  // the daemon retries. Swallowing it would index empty text and then
+/** Lazy Postgres fulltext fallback for rows without a canonical S3 object. */
+type FetchFulltext = (id: SafeId<"caseLawDecision">) => Promise<string | null>;
+
+const loadText = async (
+  row: IndexableRow,
+  fetchFulltext: FetchFulltext,
+): Promise<string> => {
+  // No catch-and-fallback here: a read failure propagates so the caller
+  // can isolate this document (record it failed, drop it from the batch) and
+  // retry it next cycle. Swallowing it and indexing empty text would then
   // record indexedHash = contentHash, permanently pinning a broken entry.
   if (row.textS3Key !== null) {
     return await readCorpusText(row.textS3Key);
   }
-  return row.fulltext ?? "";
+  // Only rows without a corpus object read their Postgres fulltext, one
+  // small bounded query per such row; the batch SELECT never carries text.
+  return (await fetchFulltext(row.id)) ?? "";
+};
+
+type LoadedBatch = {
+  docs: { row: IndexableRow; doc: Record<string, unknown> }[];
+  readFailures: { indexId: string; job: JobInput; cause: unknown }[];
+};
+
+type LoadDocsForBatchOptions = {
+  generation: string;
+  fetchFulltext: FetchFulltext;
+  /** Override the per-row text load (test seam). */
+  readText?: (row: IndexableRow) => Promise<string>;
+};
+
+/**
+ * Build each row's index document from its canonical text, isolating per-row
+ * read failures. A bounded corpus read that times out or errors fails only its
+ * own document: that row is collected as a failed index job and dropped from
+ * the batch (never marked indexed, so a later cycle retries it), while its
+ * batch-mates still commit. Reads run in bounded-concurrency chunks so S3
+ * pressure stays capped. `readText` is injectable so the isolation can be
+ * exercised without a live object store.
+ */
+export const loadDocsForBatch = async (
+  rows: readonly IndexableRow[],
+  { generation, fetchFulltext, readText }: LoadDocsForBatchOptions,
+): Promise<LoadedBatch> => {
+  const loadRowText =
+    readText ??
+    (async (row: IndexableRow) => await loadText(row, fetchFulltext));
+  const docs: LoadedBatch["docs"] = [];
+  const readFailures: LoadedBatch["readFailures"] = [];
+  for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
+    const chunk = rows.slice(i, i + INDEX_CONCURRENCY);
+    // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
+    const built = await Promise.all(
+      chunk.map(async (row) => {
+        try {
+          return {
+            ok: true as const,
+            row,
+            doc: buildDoc(row, await loadRowText(row)),
+          };
+        } catch (error) {
+          return { ok: false as const, row, error };
+        }
+      }),
+    );
+    for (const entry of built) {
+      if (entry.ok) {
+        docs.push({ row: entry.row, doc: entry.doc });
+        continue;
+      }
+      readFailures.push({
+        indexId: corpusIndexId(generation, entry.row.country),
+        cause: entry.error,
+        job: {
+          decisionId: entry.row.id,
+          contentHash: entry.row.contentHash,
+          operation: "index",
+          status: "failed",
+          errorMessage: (entry.error instanceof Error
+            ? entry.error.message
+            : String(entry.error)
+          ).slice(0, 2048),
+        },
+      });
+    }
+  }
+  return { docs, readFailures };
+};
+
+/**
+ * Fail loud, continue: record isolated per-document read failures. Captures
+ * the underlying (tagged) error with jurisdiction/generation context — never
+ * decision text — and writes a failed index job (the established audit
+ * convention) under each affected jurisdiction index. The rows stay unindexed,
+ * so a later cycle retries them while the batch's healthy documents proceed.
+ */
+const recordReadFailures = async (
+  scopedDb: ScopedDb,
+  readFailures: LoadedBatch["readFailures"],
+  generation: string,
+): Promise<void> => {
+  const firstFailure = readFailures.at(0);
+  if (!firstFailure) {
+    return;
+  }
+  captureError(firstFailure.cause, {
+    step: "backfillCorpusIndex.loadText",
+    generation,
+    failed: String(readFailures.length),
+  });
+  const failuresByIndex = new Map<string, JobInput[]>();
+  for (const { indexId, job } of readFailures) {
+    const existing = failuresByIndex.get(indexId);
+    if (existing) {
+      existing.push(job);
+    } else {
+      failuresByIndex.set(indexId, [job]);
+    }
+  }
+  for (const [indexId, jobs] of failuresByIndex) {
+    // oxlint-disable-next-line no-await-in-loop -- sequential per-index audit writes preserve job ordering
+    await recordJobs(scopedDb, jobs, indexId);
+  }
 };
 
 /**
@@ -208,18 +326,23 @@ export const backfillCorpusIndex = async (
   }
 
   // Load text (S3) with bounded concurrency, then ingest one NDJSON batch.
-  const docs: { row: IndexableRow; doc: Record<string, unknown> }[] = [];
-  for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
-    const chunk = rows.slice(i, i + INDEX_CONCURRENCY);
-    // oxlint-disable-next-line no-await-in-loop -- bounded concurrency: drain one INDEX_CONCURRENCY chunk before loading the next so S3 reads stay capped
-    const built = await Promise.all(
-      chunk.map(async (row) => ({
-        row,
-        doc: buildDoc(row, await loadText(row)),
-      })),
+  // A per-document read failure fails only that document; record it and let
+  // the rest still commit.
+  const fetchFulltext: FetchFulltext = async (id) => {
+    const fallback = await scopedDb((tx) =>
+      tx
+        .select({ fulltext: caseLawDecisions.fulltext })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, id))
+        .limit(1),
     );
-    docs.push(...built);
-  }
+    return fallback.at(0)?.fulltext ?? null;
+  };
+  const { docs, readFailures } = await loadDocsForBatch(rows, {
+    generation,
+    fetchFulltext,
+  });
+  await recordReadFailures(scopedDb, readFailures, generation);
 
   // Route each doc to its jurisdiction's index (case_law_v1_<country>),
   // grouping so each index gets one NDJSON ingest. A group that fails to

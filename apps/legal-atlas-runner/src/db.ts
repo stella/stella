@@ -24,34 +24,59 @@ import { LEGAL_ATLAS_RUNNER_ENV } from "./env";
 
 const rawIngestionDb = createIngestionDb(rlsDb);
 const transactionTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbTransactionTimeoutMs;
+const backfillTransactionTimeoutMs =
+  LEGAL_ATLAS_RUNNER_ENV.dbBackfillTransactionTimeoutMs;
 const TRANSACTION_TIMEOUT_GRACE_MS = 30_000;
 const rootQueryTimeoutMs = LEGAL_ATLAS_RUNNER_ENV.dbRootQueryTimeoutMs;
 
 /**
- * `stella_ingestion`-scoped transaction runner. Postgres owns the normal
- * cancellation path through SET LOCAL statement_timeout; the outer wall-clock
- * grace only catches sockets that never deliver that server-side failure.
+ * Build a `stella_ingestion`-scoped transaction runner with a per-transaction
+ * budget. Postgres owns the normal cancellation path through SET LOCAL
+ * statement_timeout; the outer wall-clock grace only catches sockets that
+ * never deliver that server-side failure — including a statement that
+ * completed server-side but whose result a reaped connection never returns,
+ * which otherwise leaves the transaction idle and the awaiting caller
+ * suspended forever.
  */
-export const ingestionDb: ScopedDb = async (fn) => {
-  const operation = async () =>
-    await rawIngestionDb(async (tx) => {
-      if (transactionTimeoutMs > 0) {
-        await tx.execute(
-          sql`SELECT set_config('statement_timeout', ${`${transactionTimeoutMs}ms`}, true)`,
-        );
-      }
+const createBoundedIngestionDb =
+  (label: string, timeoutMs: number): ScopedDb =>
+  async (fn) => {
+    const operation = async () =>
+      await rawIngestionDb(async (tx) => {
+        if (timeoutMs > 0) {
+          await tx.execute(
+            sql`SELECT set_config('statement_timeout', ${`${timeoutMs}ms`}, true)`,
+          );
+        }
 
-      return await fn(tx);
+        return await fn(tx);
+      });
+
+    return await withTimeout(operation, {
+      label,
+      timeoutMs: timeoutMs === 0 ? 0 : timeoutMs + TRANSACTION_TIMEOUT_GRACE_MS,
     });
+  };
 
-  return await withTimeout(operation, {
-    label: "ingestion-db-transaction",
-    timeoutMs:
-      transactionTimeoutMs === 0
-        ? 0
-        : transactionTimeoutMs + TRANSACTION_TIMEOUT_GRACE_MS,
-  });
-};
+/** Transaction runner for adapter ingest cycles (long pipeline writes). */
+export const ingestionDb: ScopedDb = createBoundedIngestionDb(
+  "ingestion-db-transaction",
+  transactionTimeoutMs,
+);
+
+/**
+ * Transaction runner for the index-maintenance backfill loops. Same bounded
+ * mechanism as `ingestionDb`, but with its own tighter budget: a backfill
+ * transaction is a batch select, an audit insert, or a single-document
+ * projection upsert (the tsvector paths raise their statement_timeout to
+ * CORPUS_BACKFILL_STATEMENT_TIMEOUT, which this budget must stay above), so
+ * a wedged one rejects and retries on a backfill timescale instead of
+ * holding its loop for the full ingest ceiling.
+ */
+export const backfillDb: ScopedDb = createBoundedIngestionDb(
+  "backfill-db-transaction",
+  backfillTransactionTimeoutMs,
+);
 
 type CaseLawSource = typeof caseLawSources.$inferSelect;
 

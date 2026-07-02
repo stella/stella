@@ -41,7 +41,12 @@ import {
   refreshS3,
 } from "@/api/lib/s3";
 
-import { createCaseLawSource, findCaseLawSource, ingestionDb } from "../db";
+import {
+  backfillDb,
+  createCaseLawSource,
+  findCaseLawSource,
+  ingestionDb,
+} from "../db";
 import { LEGAL_ATLAS_RUNNER_ENV } from "../env";
 
 const formatLogDetail = (detail: unknown): string => {
@@ -157,6 +162,23 @@ const WATCHDOG_MAX_STARVED_TICKS = 3;
 // adapter. If a cycle outlives this ceiling — well above the longest adapter
 // maxCycleMs (30m) plus slack — the worker is wedged: exit so ECS relaunches.
 const CYCLE_HARD_DEADLINE_MS = 45 * 60 * 1000;
+
+// Hard wall-clock backstop for one backfill batch (the corpus-index and
+// search-index loops). Every external await inside a batch is individually
+// bounded — corpus S3 reads via the corpus-storage ceiling, the database via
+// the dedicated backfill transaction handle in ../db (statement_timeout +
+// wall-clock grace), the corpus-index engine via its own HTTP request
+// timeout — so this is a pure backstop: it guards against any FUTURE
+// unbounded await slipping into a batch, where the batch would never return
+// and the loop would stop making progress silently while the event loop
+// stays responsive (invisible to the lag watchdog). Sizing basis: the
+// realistic worst case of a fully-bounded batch is batch size × per-item
+// bounded I/O over the drain concurrency (e.g. 20 items drained 4 at a
+// time, reads bounded at a minute each) plus a handful of bounded DB
+// transactions. 45 minutes — matching the adapter cycle's ceiling — sits far
+// above that with headroom, so it never fires on a merely-slow batch while a
+// genuine wedge still exits within a bounded window.
+const BACKFILL_HARD_DEADLINE_MS = 45 * 60 * 1000;
 
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -285,6 +307,35 @@ const startEventLoopWatchdog = (): void => {
   };
 
   setTimeout(tick, WATCHDOG_TICK_MS).unref();
+};
+
+/**
+ * Run one loop iteration under a hard wall-clock backstop. The lag watchdog
+ * only catches a CPU-starved event loop; an await wedged on I/O-wait (a stalled
+ * socket that never settles) keeps the loop responsive yet parks the loop's
+ * forward progress forever. Bounding each iteration guarantees such a wedge
+ * eventually exits the task so ECS relaunches a healthy one, instead of a
+ * silent, indefinite freeze. The timer is unref'd so it never keeps the process
+ * alive on its own, and cleared once the iteration settles. This is the same
+ * mechanism the adapter cycle uses, shared so every daemon loop is covered.
+ */
+const runWithHardDeadline = async <T>(
+  label: string,
+  deadlineMs: number,
+  operation: () => Promise<T>,
+): Promise<T> => {
+  const deadline = setTimeout(() => {
+    logError(
+      `[${label}] iteration exceeded ${deadlineMs}ms hard deadline (wedged await); exiting for ECS restart`,
+    );
+    process.exit(1);
+  }, deadlineMs);
+  deadline.unref();
+  try {
+    return await operation();
+  } finally {
+    clearTimeout(deadline);
+  }
 };
 
 // Adapters to skip. Set DISABLED_ADAPTERS env var to a
@@ -522,22 +573,18 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
       // Hard wall-clock backstop on the held slot. runOneCycle has awaits that
       // ignore the per-cycle abort signal (the source lookup before it is
       // created, the event write after the pipeline); if one wedges on a
-      // broken connection the cycle never returns, the finally never runs, and
-      // the slot parks every other adapter. The lag watchdog can't see an
-      // I/O-wait hang (the loop stays responsive), so bound it here: if a cycle
-      // outlives the ceiling, exit so ECS relaunches a healthy task.
-      const deadline = setTimeout(() => {
-        logError(
-          `[${adapterKey}] cycle exceeded ${CYCLE_HARD_DEADLINE_MS}ms hard deadline (wedged await); exiting for ECS restart`,
-        );
-        process.exit(1);
-      }, CYCLE_HARD_DEADLINE_MS);
-      deadline.unref();
+      // broken connection the cycle never returns and the slot parks every
+      // other adapter. The lag watchdog can't see an I/O-wait hang (the loop
+      // stays responsive), so bound it here: if a cycle outlives the ceiling,
+      // exit so ECS relaunches a healthy task.
       try {
         // oxlint-disable-next-line no-await-in-loop -- continuous daemon: one cycle at a time per adapter so the persisted cursor advances in order
-        cycle = await runOneCycle(adapterKey, name);
+        cycle = await runWithHardDeadline(
+          adapterKey,
+          CYCLE_HARD_DEADLINE_MS,
+          async () => await runOneCycle(adapterKey, name),
+        );
       } finally {
-        clearTimeout(deadline);
         cycleSemaphore.release();
       }
       const { outcome, inserted, pagesProcessed } = cycle;
@@ -739,9 +786,11 @@ export const runCaseLawIngest = async (
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
-        const indexed = await backfillSearchIndex(
-          ingestionDb,
-          SEARCH_INDEX_BATCH_SIZE,
+        const indexed = await runWithHardDeadline(
+          "search-index",
+          BACKFILL_HARD_DEADLINE_MS,
+          async () =>
+            await backfillSearchIndex(backfillDb, SEARCH_INDEX_BATCH_SIZE),
         );
         if (indexed > 0) {
           logInfo(`[search-index] Indexed ${indexed} decisions (backfill)`);
@@ -798,10 +847,15 @@ export const runCaseLawIngest = async (
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
-        const indexed = await backfillCorpusIndex(
-          ingestionDb,
-          LIMITS.corpusIndexBatchSize,
-          generation,
+        const indexed = await runWithHardDeadline(
+          "corpus-index",
+          BACKFILL_HARD_DEADLINE_MS,
+          async () =>
+            await backfillCorpusIndex(
+              backfillDb,
+              LIMITS.corpusIndexBatchSize,
+              generation,
+            ),
         );
         if (indexed > 0) {
           logInfo(`[corpus-index] Indexed ${indexed} decisions`);
@@ -825,9 +879,14 @@ export const runCaseLawIngest = async (
       await Bun.sleep(SEARCH_INDEX_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
-        const indexed = await backfillLegislationSearchIndex(
-          ingestionDb,
-          SEARCH_INDEX_BATCH_SIZE,
+        const indexed = await runWithHardDeadline(
+          "legislation-search-index",
+          BACKFILL_HARD_DEADLINE_MS,
+          async () =>
+            await backfillLegislationSearchIndex(
+              backfillDb,
+              SEARCH_INDEX_BATCH_SIZE,
+            ),
         );
         if (indexed > 0) {
           logInfo(`[legislation-search-index] Indexed ${indexed} documents`);
@@ -857,10 +916,15 @@ export const runCaseLawIngest = async (
       await Bun.sleep(CORPUS_INDEX_INTERVAL_MS);
       try {
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
-        const indexed = await backfillLegislationCorpusIndex(
-          ingestionDb,
-          LIMITS.corpusIndexBatchSize,
-          generation,
+        const indexed = await runWithHardDeadline(
+          "legislation-corpus-index",
+          BACKFILL_HARD_DEADLINE_MS,
+          async () =>
+            await backfillLegislationCorpusIndex(
+              backfillDb,
+              LIMITS.corpusIndexBatchSize,
+              generation,
+            ),
         );
         if (indexed > 0) {
           logInfo(`[legislation-corpus-index] Indexed ${indexed} documents`);
