@@ -1,0 +1,17 @@
+{
+  "$schema": "../../../schema.json",
+  "kind": "skill",
+  "source": "github",
+  "slug": "legal-diagram",
+  "displayName": "Legal Diagram",
+  "description": "Turns legal material (documents, matter descriptions, processes) into a fitting Mermaid diagram: timelines of events, party maps, obligation maps, corporate structures, funds flows, or compliance workflows, with an optional downloadable HTML figure. A Python extraction engine builds a typed ground truth that drives diagram generation.",
+  "author": "Sam Zhai",
+  "license": "MIT",
+  "cost": "free",
+  "setup": "none",
+  "homepage": "https://github.com/nanparth/ai-skill-hub/tree/main/legal-diagram",
+  "tags": ["corporate", "litigation"],
+  "repo": "nanparth/ai-skill-hub",
+  "rev": "096a2dc0944c0526446efe75ab8d34aea496ed34",
+  "directory": "legal-diagram"
+}
