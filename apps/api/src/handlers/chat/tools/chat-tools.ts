@@ -28,6 +28,10 @@ import { createChatExecutionTools } from "@/api/handlers/chat/tools/execute/chat
 import type { ChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import { createInfosoudTools } from "@/api/handlers/chat/tools/infosoud-tools";
 import { createOrgTools } from "@/api/handlers/chat/tools/org-tools";
+import {
+  createRememberTool,
+  REMEMBER_TOOL_NAME,
+} from "@/api/handlers/chat/tools/remember-tool";
 import { createSkillTools } from "@/api/handlers/chat/tools/skill-tools";
 import {
   createTemplateAuthoringTools,
@@ -89,6 +93,7 @@ type CurrentSkillEditTools = Partial<
 >;
 type TemplateTools = ReturnType<typeof createTemplateTools>;
 type TemplateAuthoringTools = ReturnType<typeof createTemplateAuthoringTools>;
+type RememberTools = ReturnType<typeof createRememberTools>;
 
 type BuiltInChatTools = OrgTools &
   ChatExecutionTools &
@@ -103,7 +108,8 @@ type BuiltInChatTools = OrgTools &
   WebSearchTools &
   ChatHistoryTools &
   TemplateTools &
-  TemplateAuthoringTools;
+  TemplateAuthoringTools &
+  RememberTools;
 
 export type ChatTools = BuiltInChatTools;
 type BuiltInChatToolPolicyName =
@@ -128,6 +134,13 @@ type GetChatToolsProps = {
   // every caller must thread it through explicitly.
   orgAIConfig: OrgAIConfig | null;
   threadId: SafeId<"chatThread">;
+  /**
+   * The matter this chat is bound to, when any. `null` for global
+   * chats. Distinct from `toolWorkspaceIds` (the read-authorized
+   * matter set): this is the single matter that scopes workspace
+   * memory writes via the `remember` tool.
+   */
+  workspaceId: SafeId<"workspace"> | null;
   excludedChatHistoryMessageIds?: readonly SafeId<"chatMessage">[] | undefined;
   userId: SafeId<"user">;
   // Use `resolveToolWorkspaceIds` to construct this — that helper is
@@ -181,6 +194,30 @@ const createCreateDocumentTools = () => ({
   [CREATE_DOCUMENT_TOOL_NAME]: createCreateDocumentTool(),
 });
 
+type CreateRememberToolsProps = {
+  organizationId: SafeId<"organization">;
+  recordAuditEvent: AuditRecorder;
+  safeDb: SafeDb;
+  userId: SafeId<"user">;
+  workspaceId: SafeId<"workspace"> | null;
+};
+
+const createRememberTools = ({
+  organizationId,
+  recordAuditEvent,
+  safeDb,
+  userId,
+  workspaceId,
+}: CreateRememberToolsProps) => ({
+  [REMEMBER_TOOL_NAME]: createRememberTool({
+    organizationId,
+    recordAuditEvent,
+    safeDb,
+    userId,
+    workspaceId,
+  }),
+});
+
 const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   [APPLY_ACTIVE_DOCX_EDITS_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   "ask-user": CHAT_TOOL_POLICY_KIND.internal,
@@ -207,6 +244,7 @@ const BUILT_IN_CHAT_TOOL_POLICY_KINDS = {
   list_templates: CHAT_TOOL_POLICY_KIND.internal,
   "load-skill": CHAT_TOOL_POLICY_KIND.internal,
   "read-skill-resource": CHAT_TOOL_POLICY_KIND.internal,
+  [REMEMBER_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   "run-stella-query": CHAT_TOOL_POLICY_KIND.internal,
   [SEARCH_CHAT_HISTORY_TOOL_NAME]: CHAT_TOOL_POLICY_KIND.internal,
   suggest_template_fields: CHAT_TOOL_POLICY_KIND.internal,
@@ -226,6 +264,7 @@ export const getChatTools = ({
   memberRole,
   orgAIConfig,
   threadId,
+  workspaceId,
   excludedChatHistoryMessageIds,
   userId,
   toolWorkspaceIds,
@@ -298,6 +337,19 @@ export const getChatTools = ({
     safeDb,
     threadId,
   });
+  // Memory writes audit like the REST memories handlers, so the tool
+  // needs a recorder; callers without one (schema-only construction)
+  // get no remember tool rather than an unaudited write path.
+  const rememberTools =
+    recordAuditEvent === undefined
+      ? {}
+      : createRememberTools({
+          organizationId,
+          recordAuditEvent,
+          safeDb,
+          userId,
+          workspaceId,
+        });
   const externalChatTools = applyChatToolPolicies({
     defaultPolicyKind: CHAT_TOOL_POLICY_KIND.external,
     tools: externalTools,
@@ -365,6 +417,7 @@ export const getChatTools = ({
       ...templateTools,
       ...templateAuthoringTools,
       ...historyTools,
+      ...rememberTools,
       ...createDocumentTools,
       ...activeDocxEditTools,
       ...webSearchTools,

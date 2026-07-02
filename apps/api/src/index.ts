@@ -36,6 +36,7 @@ import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { mcpConnectorsRoute } from "@/api/handlers/mcp-connectors/routes";
 import { mcpRoute } from "@/api/handlers/mcp/routes";
 import { meRoute } from "@/api/handlers/me/routes";
+import { memoriesRoute } from "@/api/handlers/memories/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { playbooksRoute } from "@/api/handlers/playbooks/routes";
 import { playbookRunsRoute } from "@/api/handlers/playbooks/run-route";
@@ -320,6 +321,7 @@ const api = new Elysia()
   .use(hostedUsageWebhookRoute)
   .use(mcpRoute)
   .use(aiAutocompleteRoute)
+  .use(memoriesRoute)
   .use(devPublicRoute)
   .use(smokeRoute)
   .mount(getAuth().handler)

@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Číslo sociálneho poistenia",
       "taxIdentificationNumber": "DIČ"
     },
+    "archive": "Archivovať",
     "back": "Späť",
     "cancel": "Zrušiť",
     "captions": "Titulky",
@@ -1653,6 +1654,37 @@
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
   },
+  "memory": {
+    "addPlaceholder": "Pridajte poznámku, ktorú si má asistent zapamätať…",
+    "createdToast": "Uložené do pamäte",
+    "empty": "Zatiaľ žiadna pamäť.",
+    "kinds": {
+      "decision": "Rozhodnutie",
+      "fact": "Fakt",
+      "instruction": "Pokyn",
+      "preference": "Preferencia",
+      "relationship": "Vzťah"
+    },
+    "matterPicker": {
+      "empty": "Vyberte spis, aby ste zobrazili jeho pamäť.",
+      "placeholder": "Vyberte spis"
+    },
+    "pageDescription": "Poznámky a kontext, ktoré si asistent pamätá naprieč chatmi.",
+    "pageTitle": "Pamäť",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "Extrahované",
+      "tool": "Nástroj",
+      "user": "Pridané vami"
+    },
+    "suggestionsDescription": "Asistent navrhol zapamätať si tieto položky. Prijmite ich, ak ich chcete zachovať, alebo ich odmietnite, ak ich chcete zahodiť.",
+    "suggestionsTitle": "Návrhy",
+    "tabs": {
+      "firm": "Knižnica tímu",
+      "matter": "Tento spis",
+      "mine": "Moje poznámky"
+    }
+  },
   "navigation": {
     "chat": "Chat",
     "contacts": "Kontakty",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "Číslovanie spisov",
       "matterNumberingDescription": "Nakonfigurujte, ako sa generujú referenčné čísla nových spisov",
       "membersDescription": "Spravujte, kto má prístup k tejto organizácii a všetky čakajúce pozvánky",
+      "memoryExtraction": {
+        "description": "Keď je zapnuté, stella na pozadí prechádza zhrnuté vlákna chatov a navrhuje záznamy do pamäte, ktoré musí človek potvrdiť, než ovplyvnia asistenta. Beží to na vlastnom kľúči poskytovateľa AI vášho tímu, takže to nechajte vypnuté, pokiaľ nechcete, aby sa toto využitie AI na pozadí účtovalo na váš kľúč.",
+        "title": "Extrakcia pamäte",
+        "toggleLabel": "Navrhovať záznamy do pamäte z histórie chatov na pozadí"
+      },
       "pendingInvitations": "Čakajúce pozvánky",
       "practiceJurisdictions": "Jurisdikcie",
       "practiceJurisdictionsDescription": "Vyberte jurisdikcie, ktoré sú pre vás relevantné.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "Číslovanie spisov aktualizované",
     "memberAdded": "Člen pridaný",
     "memberRemoved": "Člen odstránený",
+    "memoryExtractionUpdated": "Nastavenie extrakcie pamäte aktualizované",
     "organizationUpdated": "Organizácia aktualizovaná",
     "otherSessionsRevoked": "Ostatné relácie boli odhlásené",
     "partyAdded": "Strana pridaná",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archivovať",
     "copyToMatter": {
       "copied": "Skopírované do spisu",
       "copyOption": "Kopírovať (ponechať originál)",

@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Číslo sociálního pojištění",
       "taxIdentificationNumber": "DIČ"
     },
+    "archive": "Archivovat",
     "back": "Zpět",
     "cancel": "Zrušit",
     "captions": "Titulky",
@@ -1653,6 +1654,37 @@
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
   },
+  "memory": {
+    "addPlaceholder": "Přidejte poznámku, kterou si má asistent zapamatovat…",
+    "createdToast": "Uloženo do paměti",
+    "empty": "Zatím žádná paměť.",
+    "kinds": {
+      "decision": "Rozhodnutí",
+      "fact": "Fakt",
+      "instruction": "Pokyn",
+      "preference": "Preference",
+      "relationship": "Vztah"
+    },
+    "matterPicker": {
+      "empty": "Vyberte spis, abyste zobrazili jeho paměť.",
+      "placeholder": "Vyberte spis"
+    },
+    "pageDescription": "Poznámky a kontext, které si asistent pamatuje napříč chaty.",
+    "pageTitle": "Paměť",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "Extrahováno",
+      "tool": "Nástroj",
+      "user": "Přidáno vámi"
+    },
+    "suggestionsDescription": "Asistent navrhuje zapamatovat si tyto poznámky. Přijetím je uložíte, odmítnutím zahodíte.",
+    "suggestionsTitle": "Návrhy",
+    "tabs": {
+      "firm": "Knihovna týmu",
+      "matter": "Tento spis",
+      "mine": "Moje poznámky"
+    }
+  },
   "navigation": {
     "chat": "Chat",
     "contacts": "Kontakty",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "Číslování spisů",
       "matterNumberingDescription": "Nastavte, jak se generují referenční čísla nových spisů",
       "membersDescription": "Spravujte, kdo má přístup k této organizaci, a čekající pozvánky",
+      "memoryExtraction": {
+        "description": "Když je zapnuto, stella na pozadí prochází shrnutá vlákna chatů a navrhuje záznamy do paměti, které musí člověk potvrdit, než ovlivní asistenta. Běží to na vlastním klíči poskytovatele AI vašeho týmu, takže to nechte vypnuté, pokud nechcete, aby se toto využití AI na pozadí účtovalo na váš klíč.",
+        "title": "Extrakce paměti",
+        "toggleLabel": "Navrhovat záznamy do paměti z historie chatů na pozadí"
+      },
       "pendingInvitations": "Čekající pozvánky",
       "practiceJurisdictions": "Jurisdikce",
       "practiceJurisdictionsDescription": "Vyberte jurisdikce, které jsou pro vás relevantní.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "Číslování spisů aktualizováno",
     "memberAdded": "Člen přidán",
     "memberRemoved": "Člen odebrán",
+    "memoryExtractionUpdated": "Nastavení extrakce paměti aktualizováno",
     "organizationUpdated": "Organizace aktualizována",
     "otherSessionsRevoked": "Ostatní sezení odhlášena",
     "partyAdded": "Strana přidána",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Archivovat",
     "copyToMatter": {
       "copied": "Zkopírováno do spisu",
       "copyOption": "Kopírovat (ponechat originál)",

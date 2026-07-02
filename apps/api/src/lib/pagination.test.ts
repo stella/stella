@@ -8,6 +8,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
   isDateOnlyPaginationCursorPart,
+  isMicrosecondTimestampPaginationCursorPart,
   isUuidPaginationCursorPart,
   parseDateTimePaginationCursorPart,
 } from "@/api/lib/pagination";
@@ -85,6 +86,29 @@ describe("cursor pagination", () => {
     expect(
       parseDateTimePaginationCursorPart("2026-05-16T10:30:00Z"),
     ).toBeNull();
+  });
+
+  test("validates microsecond timestamp cursor parts", () => {
+    // to_char(ts, 'YYYY-MM-DD"T"HH24:MI:SS.US') output — accepted verbatim.
+    expect(
+      isMicrosecondTimestampPaginationCursorPart("2026-05-16T10:30:00.123456"),
+    ).toBe(true);
+    // The millisecond ISO form Date.toISOString() emits must be rejected:
+    // it is the format that silently broke cursor decoding.
+    expect(
+      isMicrosecondTimestampPaginationCursorPart("2026-05-16T10:30:00.123Z"),
+    ).toBe(false);
+    expect(
+      isMicrosecondTimestampPaginationCursorPart("2026-05-16T10:30:00.000Z"),
+    ).toBe(false);
+    // Out-of-range calendar values are rejected.
+    expect(
+      isMicrosecondTimestampPaginationCursorPart("2026-13-01T00:00:00.000000"),
+    ).toBe(false);
+    expect(isMicrosecondTimestampPaginationCursorPart("not-a-timestamp")).toBe(
+      false,
+    );
+    expect(isMicrosecondTimestampPaginationCursorPart(12345)).toBe(false);
   });
 });
 
@@ -214,6 +238,18 @@ describe("cursor pagination — properties", () => {
         expect(parseDateTimePaginationCursorPart(stripped)).toBeNull();
       }),
       propertyConfig(),
+    );
+  });
+
+  test("isMicrosecondTimestampPaginationCursorPart accepts to_char-style microsecond timestamps", () => {
+    fc.assert(
+      fc.property(boundedDate, (d) => {
+        // Mimic Postgres to_char(...'.US'): ISO without Z, ms padded to µs.
+        const microsecond = d.toISOString().replace(/\.(\d{3})Z$/u, ".$1000");
+        expect(isMicrosecondTimestampPaginationCursorPart(microsecond)).toBe(
+          true,
+        );
+      }),
     );
   });
 

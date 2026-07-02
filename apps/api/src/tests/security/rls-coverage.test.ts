@@ -73,6 +73,11 @@ describe("policy coverage", () => {
     "usage_entitlements",
     "usage_allocations",
     "usage_events",
+    // AI memory is multi-scope (org OR user OR workspace in one table)
+    // and archive-only (no permissive DELETE). The generic workspace /
+    // org loops can't express either shape; the dedicated test below
+    // asserts its real policy boundaries.
+    "ai_memories",
   ]);
   const APPEND_ONLY = new Set(["audit_logs"]);
   const GLOBAL_CASE_LAW_TABLES = [
@@ -223,6 +228,43 @@ describe("policy coverage", () => {
       expect(denyPolicy?.permissive).toBe(false);
       expect(denyPolicy?.using_expr).toBe("false");
     }
+  });
+
+  test("ai_memories is multi-scope and archive-only (no permissive delete)", async () => {
+    const policies = await fetchStellaPolicies(testDb);
+    const tablePolicies = policies.filter(
+      (p) => p.table_name === "ai_memories",
+    );
+    const cmds = new Set(tablePolicies.map((p) => p.command));
+
+    // SELECT / INSERT / UPDATE are permissive and scope-aware: a row is
+    // visible only to its firm (organization), its owning user, or a
+    // session-accessible matter, and matter-derived rows are gated by the
+    // source_data_workspace_ids subset check (the ethical wall).
+    expect(cmds).toContain("r");
+    expect(cmds).toContain("a");
+    expect(cmds).toContain("w");
+    for (const command of ["r", "a", "w"] as const) {
+      const policy = tablePolicies.find((p) => p.command === command);
+      expect(policy?.permissive).toBe(true);
+      const expr = command === "a" ? policy?.check_expr : policy?.using_expr;
+      expect(expr).toContain("organization_id");
+      expect(expr).toContain(SETTING_ORGANIZATION_ID);
+      expect(expr).toContain("user_id");
+      expect(expr).toContain(SETTING_USER_ID);
+      expect(expr).toContain("workspace_id");
+      expect(expr).toContain(SETTING_WORKSPACE_IDS);
+      expect(expr).toContain("source_data_workspace_ids");
+    }
+
+    // Archive-only: DELETE is locked by a single RESTRICTIVE `false`
+    // policy so a later permissive DELETE cannot silently unlock hard
+    // deletes (same durability guarantee as audit_logs).
+    const deletePolicies = tablePolicies.filter((p) => p.command === "d");
+    expect(deletePolicies).toHaveLength(1);
+    const deletePolicy = deletePolicies.at(0);
+    expect(deletePolicy?.permissive).toBe(false);
+    expect(deletePolicy?.using_expr).toBe("false");
   });
 
   test("usage governance tables expose only intended app-role access", async () => {

@@ -671,6 +671,7 @@
       "socialSecurityNumber": "Número de seguro social",
       "taxIdentificationNumber": "CPF / CNPJ"
     },
+    "archive": "Arquivar",
     "back": "Voltar",
     "cancel": "Cancelar",
     "captions": "Legendas",
@@ -1653,6 +1654,37 @@
     "showFormatted": "Formatted",
     "showRaw": "Show raw"
   },
+  "memory": {
+    "addPlaceholder": "Adicione uma nota para o assistente lembrar…",
+    "createdToast": "Salvo na memória",
+    "empty": "Ainda não há nada na memória.",
+    "kinds": {
+      "decision": "Decisão",
+      "fact": "Fato",
+      "instruction": "Instrução",
+      "preference": "Preferência",
+      "relationship": "Relação"
+    },
+    "matterPicker": {
+      "empty": "Selecione um caso para ver sua memória.",
+      "placeholder": "Selecione um caso"
+    },
+    "pageDescription": "Notas e contexto que o assistente lembra entre os chats.",
+    "pageTitle": "Memória",
+    "provenance": "{source} · {date}",
+    "sources": {
+      "extracted": "Extraído",
+      "tool": "Ferramenta",
+      "user": "Adicionado por você"
+    },
+    "suggestionsDescription": "O assistente sugeriu lembrar destes itens. Aceite para mantê-los ou recuse para descartá-los.",
+    "suggestionsTitle": "Sugestões",
+    "tabs": {
+      "firm": "Biblioteca da equipe",
+      "matter": "Este caso",
+      "mine": "Minhas notas"
+    }
+  },
   "navigation": {
     "chat": "Bate-papo",
     "contacts": "Contatos",
@@ -1987,6 +2019,11 @@
       "matterNumbering": "Numeração de casos",
       "matterNumberingDescription": "Configure como os novos números de referência de casos são gerados",
       "membersDescription": "Gerenciar quem tem acesso a esta organização e quaisquer convites pendentes",
+      "memoryExtraction": {
+        "description": "Quando ativado, o stella revisa em segundo plano as conversas resumidas e propõe memórias que uma pessoa precisa confirmar antes que influenciem o assistente. Isso funciona com a própria chave do provedor de IA da sua equipe, então deixe desativado, a menos que queira que esse uso de IA em segundo plano seja cobrado na sua chave.",
+        "title": "Extração de memória",
+        "toggleLabel": "Sugerir memórias do histórico de chat em segundo plano"
+      },
       "pendingInvitations": "Convites pendentes",
       "practiceJurisdictions": "Jurisdições",
       "practiceJurisdictionsDescription": "Selecione as jurisdições relevantes para você.",
@@ -2040,6 +2077,7 @@
     "matterNumberingUpdated": "Numeração de casos atualizada",
     "memberAdded": "Membro adicionado",
     "memberRemoved": "Membro removido",
+    "memoryExtractionUpdated": "Preferência de extração de memória atualizada",
     "organizationUpdated": "Organização atualizada",
     "otherSessionsRevoked": "Outras sessões revogadas",
     "partyAdded": "Parte adicionada",
@@ -2455,7 +2493,6 @@
     }
   },
   "workspaces": {
-    "archiveMatter": "Arquivar",
     "copyToMatter": {
       "copied": "Copiado para o caso",
       "copyOption": "Copiar (manter original)",
