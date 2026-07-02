@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { loadDocsForBatch } from "@/api/handlers/case-law/corpus-index";
+import { loadDocsForBatch } from "@/api/handlers/legislation/corpus-index";
 import { toSafeId } from "@/api/lib/branded-types";
 import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
@@ -12,15 +12,16 @@ type MakeRowOptions = {
 };
 
 const makeRow = ({ id, contentHash, textS3Key }: MakeRowOptions) => ({
-  id: toSafeId<"caseLawDecision">(id),
-  sourceId: toSafeId<"caseLawSource">("src_1"),
-  caseNumber: `case-${id}`,
-  ecli: null,
-  court: "Test Court",
+  id: toSafeId<"legislationDocument">(id),
+  sourceId: toSafeId<"legislationSource">("src_1"),
+  eli: `/eli/cz/act/2024/${id}`,
+  title: `Act ${id}`,
   country: "CZ",
   language: "cs",
-  decisionDate: "2024-01-01",
-  decisionType: null,
+  documentType: null,
+  status: "in_force",
+  effectiveDate: "2024-01-01",
+  versionValidFrom: null,
   citationAuthority: 0,
   citationCount: 0,
   textS3Key:
@@ -32,11 +33,11 @@ const makeRow = ({ id, contentHash, textS3Key }: MakeRowOptions) => ({
   updatedAt: new Date("2024-01-01T00:00:00Z"),
 });
 
-describe("loadDocsForBatch read-failure isolation", () => {
+describe("legislation loadDocsForBatch read-failure isolation", () => {
   test("a single document's read failure is recorded while the batch continues", async () => {
-    const generation = "case_law_v1";
-    const okRow = makeRow({ id: "dec_ok", contentHash: "hash_ok" });
-    const badRow = makeRow({ id: "dec_bad", contentHash: "hash_bad" });
+    const generation = "legislation_v1";
+    const okRow = makeRow({ id: "leg_ok", contentHash: "hash_ok" });
+    const badRow = makeRow({ id: "leg_bad", contentHash: "hash_bad" });
 
     const { docs, readFailures } = await loadDocsForBatch([okRow, badRow], {
       generation,
@@ -63,7 +64,7 @@ describe("loadDocsForBatch read-failure isolation", () => {
     const failure = readFailures.at(0);
     expect(failure?.indexId).toBe(corpusIndexId(generation, "CZ"));
     expect(failure?.job).toMatchObject({
-      decisionId: badRow.id,
+      documentId: badRow.id,
       contentHash: "hash_bad",
       operation: "index",
       status: "failed",
@@ -73,9 +74,9 @@ describe("loadDocsForBatch read-failure isolation", () => {
   });
 
   test("a row without a corpus object gets its fulltext via the lazy fallback", async () => {
-    const generation = "case_law_v1";
+    const generation = "legislation_v1";
     const legacyRow = makeRow({
-      id: "dec_legacy",
+      id: "leg_legacy",
       contentHash: "hash_legacy",
       textS3Key: null,
     });

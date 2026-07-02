@@ -43,13 +43,16 @@ type IndexableRow = {
   citationCount: number;
   textS3Key: string | null;
   astS3Key: string | null;
-  fulltext: string | null;
   contentHash: string | null;
   indexedHash: string | null;
   indexedGeneration: string | null;
   updatedAt: Date;
 };
 
+// Deliberately excludes `fulltext`: it is only the fallback for rows without
+// a canonical S3 object, and selecting it for every row would drag megabytes
+// of text through one batch transaction. Rows that need it fetch it lazily,
+// one small bounded read per document (see loadText / fetchFulltext).
 const SELECT_COLUMNS = {
   id: caseLawDecisions.id,
   sourceId: caseLawDecisions.sourceId,
@@ -64,7 +67,6 @@ const SELECT_COLUMNS = {
   citationCount: caseLawDecisions.citationCount,
   textS3Key: caseLawDecisions.textS3Key,
   astS3Key: caseLawDecisions.astS3Key,
-  fulltext: caseLawDecisions.fulltext,
   contentHash: caseLawDecisions.contentHash,
   indexedHash: caseLawDecisions.indexedHash,
   indexedGeneration: caseLawDecisions.indexedGeneration,
@@ -132,20 +134,35 @@ const buildDoc = (row: IndexableRow, text: string): Record<string, unknown> => {
   return doc;
 };
 
-const loadText = async (row: IndexableRow): Promise<string> => {
-  // No catch-and-fallback here: a corpus read failure propagates so the caller
+/** Lazy Postgres fulltext fallback for rows without a canonical S3 object. */
+type FetchFulltext = (id: SafeId<"caseLawDecision">) => Promise<string | null>;
+
+const loadText = async (
+  row: IndexableRow,
+  fetchFulltext: FetchFulltext,
+): Promise<string> => {
+  // No catch-and-fallback here: a read failure propagates so the caller
   // can isolate this document (record it failed, drop it from the batch) and
   // retry it next cycle. Swallowing it and indexing empty text would then
   // record indexedHash = contentHash, permanently pinning a broken entry.
   if (row.textS3Key !== null) {
     return await readCorpusText(row.textS3Key);
   }
-  return row.fulltext ?? "";
+  // Only rows without a corpus object read their Postgres fulltext, one
+  // small bounded query per such row; the batch SELECT never carries text.
+  return (await fetchFulltext(row.id)) ?? "";
 };
 
 type LoadedBatch = {
   docs: { row: IndexableRow; doc: Record<string, unknown> }[];
   readFailures: { indexId: string; job: JobInput; cause: unknown }[];
+};
+
+type LoadDocsForBatchOptions = {
+  generation: string;
+  fetchFulltext: FetchFulltext;
+  /** Override the per-row text load (test seam). */
+  readText?: (row: IndexableRow) => Promise<string>;
 };
 
 /**
@@ -159,9 +176,11 @@ type LoadedBatch = {
  */
 export const loadDocsForBatch = async (
   rows: readonly IndexableRow[],
-  generation: string,
-  readText: (row: IndexableRow) => Promise<string> = loadText,
+  { generation, fetchFulltext, readText }: LoadDocsForBatchOptions,
 ): Promise<LoadedBatch> => {
+  const loadRowText =
+    readText ??
+    (async (row: IndexableRow) => await loadText(row, fetchFulltext));
   const docs: LoadedBatch["docs"] = [];
   const readFailures: LoadedBatch["readFailures"] = [];
   for (let i = 0; i < rows.length; i += INDEX_CONCURRENCY) {
@@ -173,7 +192,7 @@ export const loadDocsForBatch = async (
           return {
             ok: true as const,
             row,
-            doc: buildDoc(row, await readText(row)),
+            doc: buildDoc(row, await loadRowText(row)),
           };
         } catch (error) {
           return { ok: false as const, row, error };
@@ -309,7 +328,20 @@ export const backfillCorpusIndex = async (
   // Load text (S3) with bounded concurrency, then ingest one NDJSON batch.
   // A per-document read failure fails only that document; record it and let
   // the rest still commit.
-  const { docs, readFailures } = await loadDocsForBatch(rows, generation);
+  const fetchFulltext: FetchFulltext = async (id) => {
+    const fallback = await scopedDb((tx) =>
+      tx
+        .select({ fulltext: caseLawDecisions.fulltext })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, id))
+        .limit(1),
+    );
+    return fallback.at(0)?.fulltext ?? null;
+  };
+  const { docs, readFailures } = await loadDocsForBatch(rows, {
+    generation,
+    fetchFulltext,
+  });
   await recordReadFailures(scopedDb, readFailures, generation);
 
   // Route each doc to its jurisdiction's index (case_law_v1_<country>),

@@ -13,7 +13,7 @@ describe("readCorpusText bounded corpus read", () => {
         // Intentionally never calls resolve/reject.
       });
       await readCorpusText("legal-corpus/never/text.zst", {
-        read: () => neverSettles,
+        read: async () => await neverSettles,
         timeoutMs: 25,
       });
     } catch (error) {
