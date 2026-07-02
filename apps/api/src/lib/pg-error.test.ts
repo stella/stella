@@ -126,6 +126,26 @@ describe("pgErrorFields", () => {
     ).toEqual({});
   });
 
+  it("ignores five-letter Node system codes that fit the SQLSTATE shape", () => {
+    // EPIPE/EPERM are five chars from the SQLSTATE alphabet; the digit
+    // requirement and the syscall marker must each keep them out.
+    const epipe = Object.assign(new Error("broken pipe"), {
+      code: "EPIPE",
+      errno: -32,
+      syscall: "write",
+    });
+    expect(pgErrorFields(epipe)).toEqual({});
+    expect(
+      pgErrorFields(new DrizzleQueryError("query failed", [], epipe)),
+    ).toEqual({});
+
+    // Even without a syscall marker, an all-letter code is not a SQLSTATE.
+    const eperm = Object.assign(new Error("not permitted"), {
+      code: "EPERM",
+    });
+    expect(pgErrorFields(eperm)).toEqual({});
+  });
+
   it("returns {} for a non-Postgres error and non-object input", () => {
     expect(pgErrorFields(new Error("plain"))).toEqual({});
     expect(pgErrorFields("boom")).toEqual({});

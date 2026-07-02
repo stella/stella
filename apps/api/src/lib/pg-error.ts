@@ -50,10 +50,12 @@ export const PG_ERROR = {
 } as const;
 
 // A SQLSTATE is exactly five characters from the class/subclass alphabet
-// (`0`-`9`, `A`-`Z`). Gating on this shape distinguishes a Postgres driver
-// error from a Node system error that also carries a `.code` (`ECONNRESET`,
-// `ENOENT`), so the cause-chain walk below does not misclassify those.
-const PG_SQLSTATE_PATTERN = /^[0-9A-Z]{5}$/u;
+// (`0`-`9`, `A`-`Z`). Shape alone is not enough: five-letter Node system
+// codes (`EPIPE`, `EPERM`) fit it too, so the check also requires at least
+// one digit (every standard SQLSTATE contains one; Node codes are all
+// letters) and `sqlStateOf` skips nodes carrying `syscall`, which every Node
+// system error has and no Postgres driver error does.
+const PG_SQLSTATE_PATTERN = /^(?=.*[0-9])[0-9A-Z]{5}$/u;
 
 // Schema identifiers Postgres attaches to a server error. These name database
 // objects, never row data, so they are safe to ship to a log sink. `detail`,
@@ -88,6 +90,9 @@ const readNonEmptyString = (value: object, key: string): string | undefined => {
 // pg/PGlite put it in `code`. Prefer `errno`, fall back to `code`, and require
 // the SQLSTATE shape so non-Postgres codes are ignored.
 const sqlStateOf = (node: object): string | undefined => {
+  if (readProperty(node, "syscall") !== undefined) {
+    return undefined;
+  }
   const errno = readNonEmptyString(node, "errno");
   if (errno !== undefined && PG_SQLSTATE_PATTERN.test(errno)) {
     return errno;
