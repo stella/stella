@@ -21,6 +21,8 @@ import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-reg
 import { getChatToolPolicy } from "@/api/handlers/chat/tools/tool-policy";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS } from "@/api/lib/provider-safe-json-schema";
+import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 
 import { createOrgTools } from "./org-tools";
 import { createSkillTools } from "./skill-tools";
@@ -349,6 +351,129 @@ describe("chat tool schemas", () => {
       needsApproval: false,
       requiresAnonymization: false,
     });
+  });
+
+  test("every registered chat tool serializes to a provider-safe JSON schema", () => {
+    // Construct args so every conditional tool group registers: owner role
+    // (template use + create), active docx edit client, web search enabled with
+    // a resolved provider, and an editable active skill context. BOE, infosoud,
+    // and business-registry tools register by default (no disabled slugs).
+    const webSearchProvider: WebSearchProvider = {
+      name: "tavily",
+      search: async () => ({ results: [] }),
+    };
+    const urlFetcher: UrlFetcher = {
+      name: "jina",
+      fetch: async () => ({
+        url: "",
+        content: "",
+        truncated: false,
+        provider: "jina",
+      }),
+    };
+
+    const tools = getChatTools({
+      orgAIConfig: null,
+      memberRole: "owner",
+      organizationId,
+      refRegistry: createChatRefRegistry(),
+      safeDb: unusedSafeDb,
+      scopedDb: unusedScopedDb,
+      threadId,
+      userId,
+      toolWorkspaceIds: resolveToolWorkspaceIds({
+        pinnedIds: [],
+        accessibleWorkspaceIds: [workspaceId],
+      }),
+      hasActiveDocxEditClient: true,
+      webSearchEnabled: true,
+      webSearchProviders: { webSearchProvider, urlFetcher },
+      activeSkillContext: editableActiveSkillContext,
+      recordAuditEvent: noopAuditRecorder,
+      skillMetadata: [
+        {
+          description: editableActiveSkillContext.description,
+          name: editableActiveSkillContext.toolName,
+          version: editableActiveSkillContext.version,
+        },
+      ],
+    });
+
+    // Sanity: the groups we depend on for coverage are actually present.
+    for (const requiredTool of [
+      "fill_template",
+      "suggest_template_fields",
+      "business_registry_lookup",
+      "web_search",
+      "create-document",
+    ]) {
+      expect(tools).toHaveProperty(requiredTool);
+    }
+
+    const allowedKeywords = new Set<string>(PROVIDER_SAFE_JSON_SCHEMA_KEYWORDS);
+    const isSchemaObject = (value: unknown): value is Record<string, unknown> =>
+      typeof value === "object" && value !== null && !Array.isArray(value);
+
+    const violations: string[] = [];
+    const assertProviderSafe = (
+      node: unknown,
+      path: string,
+      toolName: string,
+    ): void => {
+      if (!isSchemaObject(node)) {
+        return;
+      }
+
+      for (const key of Object.keys(node)) {
+        if (!allowedKeywords.has(key)) {
+          violations.push(
+            `tool "${toolName}" schema at "${path ? `${path}.${key}` : key}" carries non-provider-safe keyword "${key}"`,
+          );
+        }
+      }
+
+      const { properties, items, anyOf, additionalProperties } = node;
+      if (isSchemaObject(properties)) {
+        for (const [name, child] of Object.entries(properties)) {
+          assertProviderSafe(
+            child,
+            `${path ? `${path}.` : ""}properties.${name}`,
+            toolName,
+          );
+        }
+      }
+      if (Array.isArray(items)) {
+        for (const [index, child] of items.entries()) {
+          assertProviderSafe(child, `${path}.items[${index}]`, toolName);
+        }
+      } else if (isSchemaObject(items)) {
+        assertProviderSafe(items, `${path}.items`, toolName);
+      }
+      if (Array.isArray(anyOf)) {
+        for (const [index, child] of anyOf.entries()) {
+          assertProviderSafe(child, `${path}.anyOf[${index}]`, toolName);
+        }
+      }
+      if (isSchemaObject(additionalProperties)) {
+        assertProviderSafe(
+          additionalProperties,
+          `${path}.additionalProperties`,
+          toolName,
+        );
+      }
+    };
+
+    for (const [name, tool] of Object.entries(tools)) {
+      const inputSchema = tool?.inputSchema;
+      if (!inputSchema) {
+        continue;
+      }
+      // Serialize through the exact conversion the runtime hands to providers.
+      const serialized = convertSchemaToJsonSchema(inputSchema);
+      assertProviderSafe(serialized, "", name);
+    }
+
+    expect(violations).toEqual([]);
   });
 
   test("created document output includes the canonical entity mention", () => {
