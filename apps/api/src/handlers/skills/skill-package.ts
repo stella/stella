@@ -137,6 +137,40 @@ export const fetchSkillPackageFromUrl = async (
     catch: toHandlerError,
   });
 
+/**
+ * Raw-byte fetcher shape used by the catalogue skill fetch. Defaults to
+ * `fetchSafeBytes`; tests inject a fake so the network is not touched.
+ */
+type FetchSkillBytes = (
+  url: URL,
+  maxBytes: number,
+) => Promise<{ body: ArrayBuffer }>;
+
+/**
+ * Fetch and parse a github-sourced catalogue skill from its pinned
+ * raw-content base URL (must end in a trailing slash). Only `SKILL.md`
+ * is fetched here: resource files (scripts/, references/, ...) are
+ * deliberately not mirrored, because enumerating the upstream tree is
+ * not cheap and the commit-SHA pin already makes the content immutable.
+ * The byte cap and timeout are enforced by `fetchSafeBytes`.
+ */
+export const fetchGithubCatalogueSkillPackage = async (
+  rawContentBaseUrl: string,
+  fetchBytes: FetchSkillBytes = fetchSafeBytes,
+): Promise<Result<ParsedSkillPackage, HandlerError>> =>
+  await Result.tryPromise({
+    try: async () => {
+      const url = new URL(`${rawContentBaseUrl}${SKILL_FILE_NAME}`);
+      const response = await fetchBytes(url, GITHUB_SKILL_FILE_MAX_BYTES);
+      const parsed = parseMarkdownSkillPackage(decodeUtf8(response.body));
+      return {
+        ...parsed,
+        sourceUrl: redactSkillSourceUrlForStorage(url.toString()),
+      };
+    },
+    catch: toHandlerError,
+  });
+
 const parseMarkdownSkillPackage = (source: string): ParsedSkillPackage =>
   parseSkillFiles([
     {

@@ -2,9 +2,11 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 
 import {
+  fetchGithubCatalogueSkillPackage,
   fetchSkillPackageFromUrl,
   isZipSkillSource,
   parseUploadedSkillPackage,
@@ -263,5 +265,96 @@ Instructions.`,
       ref: "release/2026",
       rootPath: "skills/review",
     });
+  });
+});
+
+const GITHUB_SKILL_FILE_MAX_BYTES = LIMITS.agentSkillResourceMaxChars * 4;
+const PINNED_BASE_URL =
+  "https://raw.githubusercontent.com/acme/legal-skills/" +
+  `${"a".repeat(40)}/skills/german-law/`;
+
+const toArrayBuffer = (value: string): ArrayBuffer => {
+  const bytes = new TextEncoder().encode(value);
+  const buffer = new ArrayBuffer(bytes.byteLength);
+  new Uint8Array(buffer).set(bytes);
+  return buffer;
+};
+
+describe("github catalogue skill fetch", () => {
+  test("appends SKILL.md to the pinned base url and caps the byte size", async () => {
+    let requestedUrl: URL | null = null;
+    let requestedMaxBytes = 0;
+
+    const result = await fetchGithubCatalogueSkillPackage(
+      PINNED_BASE_URL,
+      async (url, maxBytes) => {
+        requestedUrl = url;
+        requestedMaxBytes = maxBytes;
+        return {
+          body: toArrayBuffer(
+            `---
+name: german-law
+description: Community skill for German legal drafting.
+license: MIT
+---
+
+Draft in German.`,
+          ),
+        };
+      },
+    );
+
+    expect(Result.isOk(result)).toBe(true);
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(requestedUrl?.toString()).toBe(`${PINNED_BASE_URL}SKILL.md`);
+    expect(requestedMaxBytes).toBe(GITHUB_SKILL_FILE_MAX_BYTES);
+    expect(result.value.name).toBe("german-law");
+    expect(result.value.license).toBe("MIT");
+    expect(result.value.resources).toEqual([]);
+    // v1 mirrors only SKILL.md, so the stored provenance points at it.
+    expect(result.value.sourceUrl).toBe(`${PINNED_BASE_URL}SKILL.md`);
+  });
+
+  test("surfaces a non-200 upstream response as an error", async () => {
+    const result = await fetchGithubCatalogueSkillPackage(
+      PINNED_BASE_URL,
+      async () => {
+        throw new HandlerError({
+          status: 400,
+          message: "Skill source returned HTTP 404",
+        });
+      },
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected a non-200 response to fail");
+    }
+    expect(result.error.message).toBe("Skill source returned HTTP 404");
+  });
+
+  test("rejects a SKILL.md whose instructions exceed the size cap", async () => {
+    const result = await fetchGithubCatalogueSkillPackage(
+      PINNED_BASE_URL,
+      async () => ({
+        body: toArrayBuffer(
+          `---
+name: german-law
+description: Community skill for German legal drafting.
+license: MIT
+---
+
+${"x".repeat(LIMITS.agentSkillBodyMaxChars + 1)}`,
+        ),
+      }),
+    );
+
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isOk(result)) {
+      throw new Error("expected an oversized skill body to fail");
+    }
+    expect(result.error.message).toBe("Skill instructions are too large");
   });
 });

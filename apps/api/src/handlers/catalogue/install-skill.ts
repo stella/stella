@@ -1,18 +1,12 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
-
 import type { AGENT_SKILL_SCOPES } from "@/api/db/schema";
 import { installSkill } from "@/api/handlers/skills/install";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
-import {
-  toParsedBundledSkillPackage,
-  toParsedBundledSkillResources,
-} from "./bundled-skill-resources";
+import { resolveCatalogueSkillPackage } from "./catalogue-skill-package";
 
 const installSkillScopeValues = [
   "team",
@@ -48,36 +42,19 @@ const installBundledSkill = createSafeRootHandler(
     session,
     user,
   }) {
-    const payload = findCatalogueSkillInstallPayload(body.slug);
-    if (!payload) {
-      return Result.err(
-        new HandlerError({
-          status: 404,
-          message: `Bundled skill not found in catalogue: ${body.slug}`,
-        }),
-      );
-    }
-
-    const resourcesResult = toParsedBundledSkillResources(
-      payload.resourceFiles,
-    );
-    if (Result.isError(resourcesResult)) {
-      return Result.err(resourcesResult.error);
-    }
-
-    const packageResult = toParsedBundledSkillPackage({
-      expectedSlug: payload.slug,
-      resources: resourcesResult.value,
-      source: payload.body,
-    });
-    if (Result.isError(packageResult)) {
-      return Result.err(packageResult.error);
+    const parsedResult = await resolveCatalogueSkillPackage(body.slug);
+    if (Result.isError(parsedResult)) {
+      return yield* Result.err(parsedResult.error);
     }
 
     const installResult = await installSkill({
       memberRole,
+      // Both in-tree and github-sourced catalogue skills are curated content
+      // pinned by the catalogue (github skills by commit SHA), so they use the
+      // non-editable `bundled` origin rather than the user-editable `url`
+      // origin; re-installing is how an updated catalogue entry propagates.
       origin: "bundled",
-      parsed: packageResult.value,
+      parsed: parsedResult.value,
       recordAuditEvent,
       safeDb,
       scope: body.scope ?? "team",
@@ -88,7 +65,7 @@ const installBundledSkill = createSafeRootHandler(
       return yield* Result.err(installResult.error);
     }
 
-    return Result.ok({ slug: packageResult.value.name });
+    return Result.ok({ slug: parsedResult.value.name });
   },
 );
 
