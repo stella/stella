@@ -1,6 +1,5 @@
 ---
 import Base from "../../layouts/Base.astro";
-import SiteHeader from "../../components/SiteHeader.astro";
 import ProductMediaFrame from "../../components/ProductMediaFrame.astro";
 import ConnectedSources from "../../components/ConnectedSources.astro";
 import { products } from "../../data/products/registry";
@@ -27,7 +26,11 @@ const faqJsonLd = {
 };
 ---
 
-<Base title={`stella | ${product.eyebrow}`} description={product.summary}>
+<Base
+  title={`stella | ${product.eyebrow}`}
+  description={product.summary}
+  current="product"
+>
   <script
     is:inline
     type="application/ld+json"
@@ -35,8 +38,6 @@ const faqJsonLd = {
   />
 
   <div class="flex min-h-dvh flex-col">
-    <SiteHeader current="product" />
-
     <main class="flex-1">
       {/* ——— Hero ——— */}
       <section class="px-6 pt-12 pb-10 lg:pt-16">

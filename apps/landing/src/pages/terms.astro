@@ -1,5 +1,4 @@
 ---
-import ThemeToggle from "../components/ThemeToggle.astro";
 import Base from "../layouts/Base.astro";
 
 const sections = [
@@ -86,22 +85,6 @@ const sections = [
   description="Terms of service for stella's hosted website, cloud, beta features, and support. Separate from the open-source license for the source code."
 >
   <div class="flex min-h-dvh flex-col">
-    <nav class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
-      <a href="/">
-        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
-      </a>
-      <div class="flex items-center gap-4">
-        <ThemeToggle />
-        <a
-          href="mailto:contact@stll.app"
-          class="text-sm font-medium transition-colors whitespace-nowrap"
-          style="color: var(--muted-foreground)"
-        >
-          Contact
-        </a>
-      </div>
-    </nav>
-
     <main class="flex-1 px-6 py-14 lg:py-20">
       <div class="mx-auto grid w-full max-w-300 grid-cols-1 gap-12 lg:grid-cols-[minmax(0,0.85fr)_minmax(0,1.35fr)] lg:gap-20">
         <header>

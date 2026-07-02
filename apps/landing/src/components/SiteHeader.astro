@@ -2,6 +2,7 @@
 import ThemeToggle from "./ThemeToggle.astro";
 import MainNav from "./MainNav.astro";
 import LanguageSwitcher from "./LanguageSwitcher.astro";
+import GitHubIcon from "./GitHubIcon.astro";
 import { getTranslations } from "../i18n/utils";
 import { defaultLocale, isLocale } from "../i18n/config";
 
@@ -14,6 +15,7 @@ const locale = isLocale(rawLocale) ? rawLocale : defaultLocale;
 const t = getTranslations(locale);
 
 const appUrl = "https://my.stll.app";
+const githubUrl = "https://github.com/stella/stella";
 ---
 
 <header
@@ -24,9 +26,36 @@ const appUrl = "https://my.stll.app";
     class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-4"
   >
     <div class="flex items-center gap-6">
-      <a href="/" class="shrink-0">
-        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
-      </a>
+      <div class="flex items-center gap-3">
+        <a href="/" class="shrink-0">
+          <img
+            src={locale === "ar"
+              ? "/images/stella-logo-ar.svg"
+              : "/images/stella-logo.svg"}
+            alt="stella"
+            class="h-6 dark:invert"
+          />
+        </a>
+        <span
+          class="border-border text-muted-foreground rounded-sm border px-1.5 py-0.5 text-[0.625rem] font-medium tracking-[0.1em] uppercase"
+        >
+          {t("nav.beta")}
+        </span>
+        <span
+          class="h-4 w-px"
+          style="background: var(--border)"
+          aria-hidden="true"></span>
+        <a
+          href={githubUrl}
+          class="inline-flex transition-opacity hover:opacity-70"
+          style="color: var(--muted-foreground)"
+          target="_blank"
+          rel="noopener noreferrer"
+          aria-label="stella on GitHub"
+        >
+          <GitHubIcon class="h-5 w-5" />
+        </a>
+      </div>
 
       <MainNav current={current} />
     </div>

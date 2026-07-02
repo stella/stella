@@ -40,7 +40,7 @@ const options = localeCodes.map((code) => ({
       <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"></path>
       <path d="M2 12h20"></path>
     </svg>
-    {locales[current].label}
+    <span class="inline-block w-5 text-center">{current.slice(0, 2).toUpperCase()}</span>
   </summary>
   <div
     class="lang-menu absolute end-0 top-full mt-2 min-w-[11rem] rounded-xl border p-1"

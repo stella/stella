@@ -1,11 +1,13 @@
 {/*
   Theme toggle button with dark/light label swap.
-  Include once per page; the script handles the click.
+  Safe to include more than once per page (e.g. header + footer): the
+  button is marked with a data attribute, not a unique id, and a single
+  delegated click listener handles every instance.
 */}
 <button
-  id="theme-toggle"
   type="button"
-  class="cursor-pointer text-sm transition-colors"
+  data-theme-toggle
+  class="cursor-pointer text-sm transition-colors inline-flex w-11 justify-center"
   style="color: var(--muted-foreground)"
   aria-label="Toggle theme"
 >
@@ -21,16 +23,23 @@
 </style>
 
 <script is:inline>
-  document.querySelector("#theme-toggle").addEventListener("click", () => {
-    const d = document.documentElement.classList;
-    const isDark = d.contains("dark");
-    const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
-    d.toggle("dark", !isDark);
-    // If toggling back to what the system prefers, clear the override
-    if ((!isDark && systemDark) || (isDark && !systemDark)) {
-      localStorage.removeItem("theme");
-    } else {
-      localStorage.setItem("theme", isDark ? "light" : "dark");
-    }
-  });
+  // Delegated + guarded so multiple toggles on one page bind exactly one
+  // listener, and repeated component includes don't double-bind.
+  if (!window.__themeToggleBound) {
+    window.__themeToggleBound = true;
+    document.addEventListener("click", (e) => {
+      const btn = e.target.closest("[data-theme-toggle]");
+      if (!btn) {return;}
+      const d = document.documentElement.classList;
+      const isDark = d.contains("dark");
+      const systemDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+      d.toggle("dark", !isDark);
+      // If toggling back to what the system prefers, clear the override
+      if ((!isDark && systemDark) || (isDark && !systemDark)) {
+        localStorage.removeItem("theme");
+      } else {
+        localStorage.setItem("theme", isDark ? "light" : "dark");
+      }
+    });
+  }
 </script>

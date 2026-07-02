@@ -1,26 +1,13 @@
 ---
 import Base from "../layouts/Base.astro";
-import ThemeToggle from "../components/ThemeToggle.astro";
 ---
 
-<Base title="stella | security" description="How stella protects your data. Security controls and data handling.">
+<Base
+  title="stella | security"
+  description="How stella protects your data. Security controls and data handling."
+  current="security"
+>
   <div class="flex min-h-dvh flex-col">
-    <nav class="mx-auto flex w-full max-w-300 items-center justify-between px-6 py-5">
-      <a href="/">
-        <img src="/images/stella-logo.svg" alt="stella" class="h-6 dark:invert" />
-      </a>
-      <div class="flex items-center gap-4">
-        <ThemeToggle />
-        <a
-          href="mailto:security@stll.app"
-          class="inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90"
-          style="background: var(--primary); color: var(--primary-foreground)"
-        >
-          Contact security
-        </a>
-      </div>
-    </nav>
-
     <main class="flex-1">
       {/* ——— Hero ——— */}
       <section class="px-6 pt-16 pb-8 lg:pt-24 lg:pb-10">
@@ -35,6 +22,13 @@ import ThemeToggle from "../components/ThemeToggle.astro";
               workspace isolation, and encryption for the parts of the system
               that handle customer data.
             </p>
+            <a
+              href="mailto:security@stll.app"
+              class="mt-6 inline-flex h-9 items-center rounded-[0.625rem] px-4 text-sm font-medium transition-opacity hover:opacity-90"
+              style="background: var(--primary); color: var(--primary-foreground)"
+            >
+              Contact security
+            </a>
             <div
               class="mt-8 rounded-2xl p-6"
               style="background: var(--card); border: 1px solid var(--border)"

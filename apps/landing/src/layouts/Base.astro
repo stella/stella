@@ -8,12 +8,15 @@ import {
   type Locale,
 } from "../i18n/config";
 import { getAlternates, stripLocale } from "../i18n/utils";
+import SiteHeader from "../components/SiteHeader.astro";
 
 type Props = {
   title?: string;
   description?: string;
   socialImage?: string;
   socialImageAlt?: string;
+  header?: boolean;
+  current?: string;
 };
 
 const {
@@ -21,6 +24,8 @@ const {
   description = "Open source legal workspace for documents, matters, review, and research. Self-host or use our cloud. Usage-based AI, no lock-in.",
   socialImage = "/images/og-card.png",
   socialImageAlt = description,
+  header = true,
+  current = undefined,
 } = Astro.props;
 
 const canonicalUrl = new URL(Astro.url.pathname, Astro.site);
@@ -219,6 +224,7 @@ const ogAlternates = localeCodes
     </style>
   </head>
   <body class="antialiased">
+    {header && <SiteHeader current={current} />}
     <slot />
 
     {/*
