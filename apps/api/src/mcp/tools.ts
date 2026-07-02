@@ -11,6 +11,7 @@ import {
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { finalizeMcpEgress } from "@/api/mcp/egress";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
   getGatewayMcpToolDefinition,
@@ -134,11 +135,12 @@ export const handleMcpToolCall = async ({
   }
 
   try {
-    return await handler({
-      args,
-      context,
-      mode,
-    });
+    // Handlers never see the mode: they return either a finished result or an
+    // egress plan. The central pipeline applies anonymization (anonymized mode)
+    // before windowing, then serializes. Both steps run inside this try so an
+    // anonymization or windowing failure is captured like any handler failure.
+    const response = await handler({ args, context });
+    return await finalizeMcpEgress({ context, mode, response });
   } catch (error) {
     captureError(error, { source: "mcp", toolName });
     return errorResult("Tool execution failed");

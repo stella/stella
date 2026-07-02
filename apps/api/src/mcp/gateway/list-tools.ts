@@ -18,7 +18,18 @@ import {
   getStaticMcpToolDefinition,
   listStaticMcpToolDefinitions,
 } from "@/api/mcp/static-tool-definitions";
-import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
+import type {
+  McpAnonymizedPolicy,
+  McpToolDefinition,
+  ToolScope,
+} from "@/api/mcp/tool-types";
+
+// Skills and external connector tools are resolved by the dynamic gateway in
+// default mode only; they are never part of the anonymized projection.
+const DYNAMIC_GATEWAY_ANONYMIZED = {
+  exposure: "excluded",
+  reason: "dynamic_gateway",
+} as const satisfies McpAnonymizedPolicy;
 
 export const listGatewayMcpToolDefinitions = async ({
   context,
@@ -42,6 +53,7 @@ export const listGatewayMcpToolDefinitions = async ({
         ...(tool.cachedTool.readOnlyHint === undefined
           ? {}
           : { annotations: { readOnlyHint: tool.cachedTool.readOnlyHint } }),
+        anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
         description: externalToolDescription({
           connectorDisplayName: tool.connectorDisplayName,
           description: tool.cachedTool.description,
@@ -57,6 +69,7 @@ export const listGatewayMcpToolDefinitions = async ({
     for (const skill of await loadVisibleSkillTools({ context })) {
       definitions.push({
         annotations: { readOnlyHint: true },
+        anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
         description: skill.description,
         inputSchema: {
           type: "object",
@@ -103,6 +116,7 @@ export const getGatewayMcpToolDefinition = async ({
               readOnlyHint: externalTool.cachedTool.readOnlyHint,
             },
           }),
+      anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
       description: externalToolDescription({
         connectorDisplayName: externalTool.connectorDisplayName,
         description: externalTool.cachedTool.description,
@@ -124,6 +138,7 @@ export const getGatewayMcpToolDefinition = async ({
 
   return {
     annotations: { readOnlyHint: true },
+    anonymized: DYNAMIC_GATEWAY_ANONYMIZED,
     description: skill.description,
     inputSchema: {
       type: "object",

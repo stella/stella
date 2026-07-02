@@ -1,72 +1,84 @@
 import { unreachable } from "@/api/lib/errors/tagged-errors";
-import {
-  ANONYMIZED_COMPAT_TOOL_DEFINITIONS,
-  COMPAT_TOOL_DEFINITIONS,
-} from "@/api/mcp/compat-tools";
+import { COMPAT_TOOL_DEFINITIONS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import { STELLA_TOOL_DEFINITIONS } from "@/api/mcp/stella-tools";
 import { TEMPLATE_TOOL_DEFINITIONS } from "@/api/mcp/template-tools";
-import type { McpToolDefinition } from "@/api/mcp/tool-types";
+import type { McpToolDefinition, ToolScope } from "@/api/mcp/tool-types";
 
-const DEFAULT_TOOL_DEFINITIONS = [
+/**
+ * The single MCP tool registry. Every mode-specific surface (default list,
+ * anonymized projection, scopes) is derived from this one array, so adding a
+ * tool without an anonymization decision is a compile error, not a review
+ * catch.
+ */
+export const DEFAULT_MCP_TOOL_DEFINITIONS = [
   ...COMPAT_TOOL_DEFINITIONS,
   ...STELLA_TOOL_DEFINITIONS,
   ...TEMPLATE_TOOL_DEFINITIONS,
 ] as const satisfies readonly McpToolDefinition[];
 
-const toAnonymizedToolDefinition = (
+/**
+ * Default -> anonymized scope remap. A tool available in anonymized mode keeps
+ * its schema and (usually) description but is advertised under the paired
+ * `stella:*_anonymized` scope so anonymized-mode tokens cannot reach the
+ * default surface and vice versa.
+ */
+// Annotated (not `as const satisfies`) on purpose: the wide `ToolScope` key
+// type is what lets the projection look a tool's scope up by value and get
+// `ToolScope | undefined` back, instead of erroring on an out-of-set key.
+const ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE: Partial<Record<ToolScope, ToolScope>> =
+  {
+    "stella:search": "stella:search_anonymized",
+    "stella:read": "stella:read_anonymized",
+  };
+
+const toAnonymizedProjection = (
   tool: McpToolDefinition,
 ): McpToolDefinition | null => {
-  switch (tool.name) {
-    case "read_case_law_decision": {
-      if (tool.scope !== "stella:read") {
-        return unreachable(
-          `read_case_law_decision must use stella:read, got ${tool.scope}`,
-        );
-      }
-
-      return {
-        ...tool,
-        scope: "stella:read_anonymized",
-      };
-    }
-
-    case "search_case_law": {
-      if (tool.scope !== "stella:search") {
-        return unreachable(
-          `search_case_law must use stella:search, got ${tool.scope}`,
-        );
-      }
-
-      return {
-        ...tool,
-        scope: "stella:search_anonymized",
-      };
-    }
-
-    default:
-      return null;
+  if (tool.anonymized.exposure === "excluded") {
+    return null;
   }
+
+  const anonymizedScope =
+    ANONYMIZED_SCOPE_BY_DEFAULT_SCOPE[tool.scope] ??
+    unreachable(
+      `Tool ${tool.name} is exposed in anonymized mode but scope ${tool.scope} has no anonymized pairing`,
+    );
+
+  const description =
+    tool.anonymized.exposure === "anonymize" &&
+    tool.anonymized.description !== undefined
+      ? tool.anonymized.description
+      : tool.description;
+
+  return {
+    ...tool,
+    description,
+    scope: anonymizedScope,
+  };
 };
 
-const ANONYMIZED_STELLA_TOOL_DEFINITIONS = STELLA_TOOL_DEFINITIONS.flatMap(
-  (tool) => {
-    const anonymized = toAnonymizedToolDefinition(tool);
-    return anonymized === null ? [] : [anonymized];
-  },
-) satisfies readonly McpToolDefinition[];
+export const ANONYMIZED_MCP_TOOL_DEFINITIONS =
+  DEFAULT_MCP_TOOL_DEFINITIONS.flatMap((tool) => {
+    const projected = toAnonymizedProjection(tool);
+    return projected === null ? [] : [projected];
+  }) satisfies readonly McpToolDefinition[];
 
-const ANONYMIZED_TOOL_DEFINITIONS = [
-  ...ANONYMIZED_COMPAT_TOOL_DEFINITIONS,
-  ...ANONYMIZED_STELLA_TOOL_DEFINITIONS,
-] as const satisfies readonly McpToolDefinition[];
+/**
+ * Scopes actually used by the anonymized projection. A test cross-checks this
+ * against `MCP_ANONYMIZED_RESOURCE_SCOPES` so no advertised scope is orphaned
+ * and no projected scope goes unadvertised.
+ */
+export const MCP_ANONYMIZED_PROJECTED_SCOPES: readonly ToolScope[] = [
+  ...new Set(ANONYMIZED_MCP_TOOL_DEFINITIONS.map((tool) => tool.scope)),
+];
 
 const MCP_TOOL_DEFINITION_MAPS = {
   default: new Map<string, McpToolDefinition>(
-    DEFAULT_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
+    DEFAULT_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
   ),
   anonymized: new Map<string, McpToolDefinition>(
-    ANONYMIZED_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
+    ANONYMIZED_MCP_TOOL_DEFINITIONS.map((tool) => [tool.name, tool]),
   ),
 } satisfies Record<McpMode, Map<string, McpToolDefinition>>;
 
@@ -78,4 +90,6 @@ export const getStaticMcpToolDefinition = (
 export const listStaticMcpToolDefinitions = (
   mode: McpMode = "default",
 ): readonly McpToolDefinition[] =>
-  mode === "default" ? DEFAULT_TOOL_DEFINITIONS : ANONYMIZED_TOOL_DEFINITIONS;
+  mode === "default"
+    ? DEFAULT_MCP_TOOL_DEFINITIONS
+    : ANONYMIZED_MCP_TOOL_DEFINITIONS;
