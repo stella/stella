@@ -7,6 +7,42 @@ import {
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
 import { namespaceMcpToolName } from "@/api/lib/mcp-upstream/namespace";
+import { logger } from "@/api/lib/observability/logger";
+import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
+
+// External MCP tools arrive with a raw JSON Schema `inputSchema` straight from
+// the upstream server (see `toServerTools` in @tanstack/ai-mcp). Providers such
+// as Gemini reject schemas that carry keywords outside their OpenAPI-3.0
+// subset, so project each one into the portable subset before it backs schema
+// validation and the live `mcp` source. Standard-schema wrappers (which carry
+// `~standard`) are first-party tools already projected at their own seam and
+// are left untouched.
+const isPlainJsonSchema = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" &&
+  value !== null &&
+  !Array.isArray(value) &&
+  !("~standard" in value);
+
+const projectExternalMcpToolSchema = (tool: ChatTool): ChatTool => {
+  const { inputSchema } = tool;
+  if (!isPlainJsonSchema(inputSchema)) {
+    return tool;
+  }
+
+  const { schema, droppedKeywords } =
+    projectToProviderSafeJsonSchema(inputSchema);
+  if (droppedKeywords.length > 0) {
+    // Telemetry only: never throw. Attribute keys must dodge the API logger's
+    // sensitive-key sanitizer (drops keys matching name/title/etc.), so use
+    // `tool` and `droppedKeywords`, not `toolName`.
+    logger.warn("Projected external MCP tool schema to provider-safe subset", {
+      tool: tool.name,
+      droppedKeywords: droppedKeywords.join(", "),
+    });
+  }
+
+  return { ...tool, inputSchema: schema };
+};
 
 type NormalizeExternalMcpToolsForChatInput = {
   allowedTools: readonly string[] | null;
@@ -39,11 +75,11 @@ export const normalizeExternalMcpToolsForChat = ({
       connectorSlug,
       toolName: rawToolName,
     });
-    loadedTools[exposedToolName] = {
+    loadedTools[exposedToolName] = projectExternalMcpToolSchema({
       ...toolDefinition,
       name: exposedToolName,
       lazy: true,
-    };
+    });
   }
 
   // External MCP tools must always require approval here, regardless of the
