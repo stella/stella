@@ -22,7 +22,9 @@ import { Route as IndexRouteImport } from './routes/index'
 import { Route as ToolsIndexRouteImport } from './routes/tools/index'
 import { Route as LawIndexRouteImport } from './routes/law/index'
 import { Route as AuthIndexRouteImport } from './routes/auth/index'
+import { Route as ToolsContributeRouteImport } from './routes/tools/contribute'
 import { Route as ToolsSlugRouteImport } from './routes/tools/$slug'
+import { Route as SitemapsToolsDotxmlRouteImport } from './routes/sitemaps/tools[.]xml'
 import { Route as SitemapsLawDotxmlRouteImport } from './routes/sitemaps/law[.]xml'
 import { Route as McpOauthCallbackRouteImport } from './routes/mcp.oauth-callback'
 import { Route as AuthOtpRouteImport } from './routes/auth/otp'
@@ -38,6 +40,7 @@ import { Route as ProtectedSettingsIndexRouteImport } from './routes/_protected.
 import { Route as ProtectedKnowledgeIndexRouteImport } from './routes/_protected.knowledge/index'
 import { Route as ProtectedContactsIndexRouteImport } from './routes/_protected.contacts/index'
 import { Route as ProtectedChatIndexRouteImport } from './routes/_protected.chat/index'
+import { Route as ToolsSlugDownloadRouteImport } from './routes/tools/$slug_.download'
 import { Route as AuthAcceptInvitationInvitationIdRouteImport } from './routes/auth/accept-invitation.$invitationId'
 import { Route as ProtectedKnowledgeToolsRouteImport } from './routes/_protected.knowledge/tools'
 import { Route as ProtectedKnowledgeTemplatesRouteImport } from './routes/_protected.knowledge/templates'
@@ -147,10 +150,20 @@ const AuthIndexRoute = AuthIndexRouteImport.update({
   path: '/',
   getParentRoute: () => AuthRouteRoute,
 } as any)
+const ToolsContributeRoute = ToolsContributeRouteImport.update({
+  id: '/contribute',
+  path: '/contribute',
+  getParentRoute: () => ToolsRouteRoute,
+} as any)
 const ToolsSlugRoute = ToolsSlugRouteImport.update({
   id: '/$slug',
   path: '/$slug',
   getParentRoute: () => ToolsRouteRoute,
+} as any)
+const SitemapsToolsDotxmlRoute = SitemapsToolsDotxmlRouteImport.update({
+  id: '/sitemaps/tools.xml',
+  path: '/sitemaps/tools.xml',
+  getParentRoute: () => rootRouteImport,
 } as any)
 const SitemapsLawDotxmlRoute = SitemapsLawDotxmlRouteImport.update({
   id: '/sitemaps/law.xml',
@@ -227,6 +240,11 @@ const ProtectedChatIndexRoute = ProtectedChatIndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => ProtectedChatRouteRoute,
+} as any)
+const ToolsSlugDownloadRoute = ToolsSlugDownloadRouteImport.update({
+  id: '/$slug_/download',
+  path: '/$slug/download',
+  getParentRoute: () => ToolsRouteRoute,
 } as any)
 const AuthAcceptInvitationInvitationIdRoute =
   AuthAcceptInvitationInvitationIdRouteImport.update({
@@ -507,7 +525,9 @@ export interface FileRoutesByFullPath {
   '/auth/otp': typeof AuthOtpRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
+  '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
   '/tools/$slug': typeof ToolsSlugRoute
+  '/tools/contribute': typeof ToolsContributeRoute
   '/auth/': typeof AuthIndexRoute
   '/law/': typeof LawIndexRoute
   '/tools/': typeof ToolsIndexRoute
@@ -526,6 +546,7 @@ export interface FileRoutesByFullPath {
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
+  '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat/': typeof ProtectedChatIndexRoute
   '/contacts/': typeof ProtectedContactsIndexRoute
   '/knowledge/': typeof ProtectedKnowledgeIndexRoute
@@ -575,7 +596,9 @@ export interface FileRoutesByTo {
   '/auth/otp': typeof AuthOtpRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
+  '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
   '/tools/$slug': typeof ToolsSlugRoute
+  '/tools/contribute': typeof ToolsContributeRoute
   '/auth': typeof AuthIndexRoute
   '/law': typeof LawIndexRoute
   '/tools': typeof ToolsIndexRoute
@@ -592,6 +615,7 @@ export interface FileRoutesByTo {
   '/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
+  '/tools/$slug/download': typeof ToolsSlugDownloadRoute
   '/chat': typeof ProtectedChatIndexRoute
   '/contacts': typeof ProtectedContactsIndexRoute
   '/knowledge': typeof ProtectedKnowledgeIndexRoute
@@ -648,7 +672,9 @@ export interface FileRoutesById {
   '/auth/otp': typeof AuthOtpRoute
   '/mcp/oauth-callback': typeof McpOauthCallbackRoute
   '/sitemaps/law.xml': typeof SitemapsLawDotxmlRoute
+  '/sitemaps/tools.xml': typeof SitemapsToolsDotxmlRoute
   '/tools/$slug': typeof ToolsSlugRoute
+  '/tools/contribute': typeof ToolsContributeRoute
   '/auth/': typeof AuthIndexRoute
   '/law/': typeof LawIndexRoute
   '/tools/': typeof ToolsIndexRoute
@@ -667,6 +693,7 @@ export interface FileRoutesById {
   '/_protected/knowledge/templates': typeof ProtectedKnowledgeTemplatesRoute
   '/_protected/knowledge/tools': typeof ProtectedKnowledgeToolsRoute
   '/auth/accept-invitation/$invitationId': typeof AuthAcceptInvitationInvitationIdRoute
+  '/tools/$slug_/download': typeof ToolsSlugDownloadRoute
   '/_protected/chat/': typeof ProtectedChatIndexRoute
   '/_protected/contacts/': typeof ProtectedContactsIndexRoute
   '/_protected/knowledge/': typeof ProtectedKnowledgeIndexRoute
@@ -724,7 +751,9 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
+    | '/sitemaps/tools.xml'
     | '/tools/$slug'
+    | '/tools/contribute'
     | '/auth/'
     | '/law/'
     | '/tools/'
@@ -743,6 +772,7 @@ export interface FileRouteTypes {
     | '/knowledge/templates'
     | '/knowledge/tools'
     | '/auth/accept-invitation/$invitationId'
+    | '/tools/$slug/download'
     | '/chat/'
     | '/contacts/'
     | '/knowledge/'
@@ -792,7 +822,9 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
+    | '/sitemaps/tools.xml'
     | '/tools/$slug'
+    | '/tools/contribute'
     | '/auth'
     | '/law'
     | '/tools'
@@ -809,6 +841,7 @@ export interface FileRouteTypes {
     | '/knowledge/templates'
     | '/knowledge/tools'
     | '/auth/accept-invitation/$invitationId'
+    | '/tools/$slug/download'
     | '/chat'
     | '/contacts'
     | '/knowledge'
@@ -864,7 +897,9 @@ export interface FileRouteTypes {
     | '/auth/otp'
     | '/mcp/oauth-callback'
     | '/sitemaps/law.xml'
+    | '/sitemaps/tools.xml'
     | '/tools/$slug'
+    | '/tools/contribute'
     | '/auth/'
     | '/law/'
     | '/tools/'
@@ -883,6 +918,7 @@ export interface FileRouteTypes {
     | '/_protected/knowledge/templates'
     | '/_protected/knowledge/tools'
     | '/auth/accept-invitation/$invitationId'
+    | '/tools/$slug_/download'
     | '/_protected/chat/'
     | '/_protected/contacts/'
     | '/_protected/knowledge/'
@@ -934,6 +970,7 @@ export interface RootRouteChildren {
   SitemapDotxmlRoute: typeof SitemapDotxmlRoute
   McpOauthCallbackRoute: typeof McpOauthCallbackRoute
   SitemapsLawDotxmlRoute: typeof SitemapsLawDotxmlRoute
+  SitemapsToolsDotxmlRoute: typeof SitemapsToolsDotxmlRoute
   SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute: typeof SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute
   SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute: typeof SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute
 }
@@ -1031,12 +1068,26 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthIndexRouteImport
       parentRoute: typeof AuthRouteRoute
     }
+    '/tools/contribute': {
+      id: '/tools/contribute'
+      path: '/contribute'
+      fullPath: '/tools/contribute'
+      preLoaderRoute: typeof ToolsContributeRouteImport
+      parentRoute: typeof ToolsRouteRoute
+    }
     '/tools/$slug': {
       id: '/tools/$slug'
       path: '/$slug'
       fullPath: '/tools/$slug'
       preLoaderRoute: typeof ToolsSlugRouteImport
       parentRoute: typeof ToolsRouteRoute
+    }
+    '/sitemaps/tools.xml': {
+      id: '/sitemaps/tools.xml'
+      path: '/sitemaps/tools.xml'
+      fullPath: '/sitemaps/tools.xml'
+      preLoaderRoute: typeof SitemapsToolsDotxmlRouteImport
+      parentRoute: typeof rootRouteImport
     }
     '/sitemaps/law.xml': {
       id: '/sitemaps/law.xml'
@@ -1142,6 +1193,13 @@ declare module '@tanstack/react-router' {
       fullPath: '/chat/'
       preLoaderRoute: typeof ProtectedChatIndexRouteImport
       parentRoute: typeof ProtectedChatRouteRoute
+    }
+    '/tools/$slug_/download': {
+      id: '/tools/$slug_/download'
+      path: '/$slug/download'
+      fullPath: '/tools/$slug/download'
+      preLoaderRoute: typeof ToolsSlugDownloadRouteImport
+      parentRoute: typeof ToolsRouteRoute
     }
     '/auth/accept-invitation/$invitationId': {
       id: '/auth/accept-invitation/$invitationId'
@@ -1494,12 +1552,16 @@ const LawRouteRouteWithChildren = LawRouteRoute._addFileChildren(
 
 interface ToolsRouteRouteChildren {
   ToolsSlugRoute: typeof ToolsSlugRoute
+  ToolsContributeRoute: typeof ToolsContributeRoute
   ToolsIndexRoute: typeof ToolsIndexRoute
+  ToolsSlugDownloadRoute: typeof ToolsSlugDownloadRoute
 }
 
 const ToolsRouteRouteChildren: ToolsRouteRouteChildren = {
   ToolsSlugRoute: ToolsSlugRoute,
+  ToolsContributeRoute: ToolsContributeRoute,
   ToolsIndexRoute: ToolsIndexRoute,
+  ToolsSlugDownloadRoute: ToolsSlugDownloadRoute,
 }
 
 const ToolsRouteRouteWithChildren = ToolsRouteRoute._addFileChildren(
@@ -1728,6 +1790,7 @@ const rootRouteChildren: RootRouteChildren = {
   SitemapDotxmlRoute: SitemapDotxmlRoute,
   McpOauthCallbackRoute: McpOauthCallbackRoute,
   SitemapsLawDotxmlRoute: SitemapsLawDotxmlRoute,
+  SitemapsToolsDotxmlRoute: SitemapsToolsDotxmlRoute,
   SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute:
     SitemapsLawCasesCountryYearChar123monthChar125DotxmlRoute,
   SitemapsLawCasesCountryYearMonthChar123bucketChar125DotxmlRoute:

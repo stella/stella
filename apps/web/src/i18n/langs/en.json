@@ -2090,10 +2090,35 @@
     "settingsDescription": "Edit your organization name and slug"
   },
   "publicTools": {
-    "detailComingSoon": "Full details, content preview, and download are coming soon.",
+    "addToStella": "Add to stella",
+    "content": "Content",
+    "contentUnavailable": "This skill's content could not be loaded. View it on GitHub instead.",
+    "contribute": {
+      "contributingLink": "Read the contributing guide",
+      "cta": "Contribute",
+      "githubBody": "Large or independently maintained skills stay in their own GitHub repository, pinned to a commit. A scheduled check opens a pull request when the upstream repository changes, so the pinned version stays current after review.",
+      "githubTitle": "GitHub-pinned skill:",
+      "inTreeBody": "Small skills live in this repository next to their manifest, up to 10 MB per entry. Their content is served and packaged directly from the catalogue.",
+      "inTreeTitle": "In-repository folder:",
+      "intro": "The catalogue lists skills, integrations, and built-in tools for legal work. Anyone can propose an entry through a pull request.",
+      "licenseBody": "Every entry declares a license from the permissive allowlist below. Copyleft licenses are not accepted so that self-hosters can redistribute freely.",
+      "licenseTitle": "License allowlist",
+      "mcpBody": "Integrations are described by a manifest with the server URL, authentication type, and requested scopes. No credentials are stored in the catalogue; users provide their own in their client.",
+      "mcpTitle": "MCP integrations",
+      "recommendedBody": "The \"Recommended\" badge is curated by maintainers in a version-controlled file. There is no way to set it from the public site or from a pull request alone.",
+      "recommendedTitle": "Recommended status",
+      "repoLink": "Browse catalogue entries",
+      "title": "Contribute a tool"
+    },
+    "documentation": "Documentation",
+    "downloadUpstream": "Download upstream archive",
+    "mcpConfigHint": "Client-agnostic connection details. Paste into any MCP-compatible client and add your own credentials.",
     "metaDescription": "Browse the open catalogue of skills, integrations, and built-in tools for legal work.",
+    "nativeToolInfo": "This is a built-in stella capability. Enable it from your workspace to use it in chat.",
     "practiceArea": "Practice area",
-    "recommendedIn": "Recommended in {codes}"
+    "recommendedIn": "Recommended in {codes}",
+    "tokenHelp": "How to get a token",
+    "viewOnGithub": "View on GitHub"
   },
   "search": {
     "aiRefine": "Improve query with AI",
