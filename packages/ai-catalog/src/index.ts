@@ -17,6 +17,10 @@
  * ID here against live provider/aggregator listings so a retired model
  * fails CI instead of 400-ing a user at runtime.
  */
+import type { AnthropicModelInputModalitiesByName } from "@tanstack/ai-anthropic";
+import type { BedrockModelInputModalitiesByName } from "@tanstack/ai-bedrock";
+import type { GeminiModelInputModalitiesByName } from "@tanstack/ai-gemini";
+import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
 
 /**
  * Logical model roles. Call sites declare *what* they need, not
@@ -183,31 +187,95 @@ export const BYOK_MODEL_OPTIONS = {
 
 export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 
-/**
- * Role-level provider support that is narrower than the provider's
- * model catalog. Mistral is usable for text/image chat flows through
- * TanStack AI, but its adapter does not accept TanStack document parts
- * yet, so Stella must not route native PDF flows through it.
- */
-export const BYOK_UNSUPPORTED_MODEL_ROLES = {
-  google: [],
-  anthropic: [],
-  openai: [],
-  openrouter: [],
-  bedrock: [],
-  mistral: ["pdf"],
-} as const satisfies Record<BYOKProvider, readonly ModelRole[]>;
+type ModelInputModalitiesByName = Record<string, readonly string[]>;
 
-export const BYOK_MODEL_UNSUPPORTED_ROLES: Partial<
-  Record<BYOKProvider, Partial<Record<string, readonly ModelRole[]>>>
-> = {
-  bedrock: {
-    "us.amazon.nova-micro-v1:0": ["pdf"],
-    "openai.gpt-oss-120b-1:0": ["pdf"],
-    "openai.gpt-oss-20b-1:0": ["pdf"],
-    "us.deepseek.r1-v1:0": ["pdf"],
-  },
-} as const;
+type ModelWithInputModality<
+  TModels extends ModelInputModalitiesByName,
+  TModality extends string,
+> = Extract<
+  {
+    [TModel in keyof TModels]: TModality extends TModels[TModel][number]
+      ? TModel
+      : never;
+  }[keyof TModels],
+  string
+>;
+
+type TanStackDocumentInputModelByProvider = {
+  anthropic: ModelWithInputModality<
+    AnthropicModelInputModalitiesByName,
+    "document"
+  >;
+  bedrock: ModelWithInputModality<
+    BedrockModelInputModalitiesByName,
+    "document"
+  >;
+  google: ModelWithInputModality<GeminiModelInputModalitiesByName, "document">;
+  openrouter: ModelWithInputModality<
+    OpenRouterModelInputModalitiesByName,
+    "document"
+  >;
+};
+
+type BYOKModelIdByProvider = {
+  [TProvider in BYOKProvider]: (typeof BYOK_MODEL_OPTIONS)[TProvider][number];
+};
+
+const TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS = {
+  anthropic: ["claude-sonnet-4-6"],
+  bedrock: [
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+    "us.amazon.nova-pro-v1:0",
+    "us.amazon.nova-lite-v1:0",
+  ],
+  google: [
+    "gemini-3.1-pro-preview",
+    "gemini-3.5-flash",
+    "gemini-3.1-flash-lite",
+  ],
+  openrouter: [
+    "google/gemini-3.1-pro-preview",
+    "google/gemini-3.5-flash",
+    "google/gemini-3.1-flash-lite",
+    "anthropic/claude-opus-4.8",
+    "anthropic/claude-sonnet-4.6",
+    "openai/gpt-5.5",
+    "openai/gpt-5.4-mini",
+  ],
+} as const satisfies {
+  [TProvider in keyof TanStackDocumentInputModelByProvider]: readonly Extract<
+    BYOKModelIdByProvider[TProvider],
+    TanStackDocumentInputModelByProvider[TProvider]
+  >[];
+};
+
+const STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS = {
+  anthropic: [
+    "claude-fable-5",
+    "claude-opus-4-8",
+    "claude-opus-4-7",
+    "claude-opus-4-6",
+    "claude-haiku-4-5-20251001",
+  ],
+  openai: ["gpt-5.5", "gpt-5.4", "gpt-5.4-mini", "gpt-5.4-nano", "gpt-5.2"],
+} as const satisfies Partial<{
+  [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
+}>;
+
+export const BYOK_DOCUMENT_INPUT_MODEL_OPTIONS = {
+  anthropic: [
+    ...TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.anthropic,
+    ...STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.anthropic,
+  ],
+  bedrock: TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.bedrock,
+  google: TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.google,
+  mistral: [],
+  openai: STELLA_EXTENDED_DOCUMENT_INPUT_MODEL_OPTIONS.openai,
+  openrouter: TANSTACK_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter,
+} as const satisfies {
+  [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
+};
 
 export const isBYOKProviderRoleSupported = ({
   provider,
@@ -215,11 +283,8 @@ export const isBYOKProviderRoleSupported = ({
 }: {
   provider: BYOKProvider;
   role: ModelRole;
-}): boolean => {
-  const unsupportedRoles: readonly ModelRole[] =
-    BYOK_UNSUPPORTED_MODEL_ROLES[provider];
-  return !unsupportedRoles.includes(role);
-};
+}): boolean =>
+  role !== "pdf" || BYOK_DOCUMENT_INPUT_MODEL_OPTIONS[provider].length > 0;
 
 export const isBYOKModelRoleSupported = ({
   provider,
@@ -230,13 +295,12 @@ export const isBYOKModelRoleSupported = ({
   modelId: string;
   role: ModelRole;
 }): boolean => {
-  if (!isBYOKProviderRoleSupported({ provider, role })) {
-    return false;
+  if (role !== "pdf") {
+    return true;
   }
-
-  const unsupportedRoles: readonly ModelRole[] =
-    BYOK_MODEL_UNSUPPORTED_ROLES[provider]?.[modelId] ?? [];
-  return !unsupportedRoles.includes(role);
+  const supportedModels: readonly string[] =
+    BYOK_DOCUMENT_INPUT_MODEL_OPTIONS[provider];
+  return supportedModels.includes(modelId);
 };
 
 /**

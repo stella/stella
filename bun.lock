@@ -338,6 +338,10 @@
       "version": "0.0.0",
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
+        "@tanstack/ai-anthropic": "catalog:",
+        "@tanstack/ai-bedrock": "catalog:",
+        "@tanstack/ai-gemini": "catalog:",
+        "@tanstack/ai-openrouter": "catalog:",
         "@types/bun": "catalog:",
       },
     },
