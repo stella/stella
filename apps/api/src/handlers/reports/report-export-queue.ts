@@ -33,11 +33,10 @@ import {
   fillStoredTemplateDocx,
   fillTemplateDocx,
 } from "@/api/handlers/templates/template-fill-service";
+import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
-import { hasInstanceProvider } from "@/api/lib/ai-models";
-import type { OrgAIConfig } from "@/api/lib/ai-models";
 import { captureError } from "@/api/lib/analytics";
-import { createAIAnalyticsCallbacks } from "@/api/lib/analytics/ai";
+import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -54,6 +53,7 @@ import {
   brandValidatedWorkflowActorKey,
 } from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { hasTanStackInstanceProvider } from "@/api/lib/tanstack-ai-models";
 import { parseViewLayout } from "@/api/lib/views-schema";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -502,7 +502,7 @@ const buildReportAiGenerators = ({
   actor: ExportActor;
   orgAIConfig: OrgAIConfig | null;
 }): ReportAiGenerators => {
-  const aiAnalytics = createAIAnalyticsCallbacks({
+  const aiAnalytics = createTanStackAIAnalyticsCallbacks({
     usageMetering: {
       actionType: "chat",
       organizationId: actor.organizationId,
@@ -519,7 +519,7 @@ const buildReportAiGenerators = ({
   });
 
   const assertUsageAvailable =
-    orgAIConfig || hasInstanceProvider()
+    orgAIConfig || hasTanStackInstanceProvider()
       ? async () =>
           await assertUsageAvailableForHandler({
             metering: { actionType: "chat", modelRole: "fast" },

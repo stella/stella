@@ -26,6 +26,7 @@ const downloadFileName = (resultS3Key: string): string =>
 
 const config = {
   permissions: { workspace: ["read"] },
+  mcp: { type: "pending" },
   params: workspaceParams({ exportId: tSafeId("reportExport") }),
 } satisfies HandlerConfig;
 

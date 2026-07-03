@@ -28,6 +28,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
   permissions: { workspace: ["read"], template: ["create"] },
+  mcp: { type: "pending" },
   params: workspaceParams({}),
   body: t.Object({ key: t.String({ minLength: 1 }) }),
 } satisfies HandlerConfig;
