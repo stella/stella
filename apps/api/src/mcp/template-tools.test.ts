@@ -19,6 +19,8 @@ const loadOrgAIConfigMock = mock();
 const captureErrorMock = mock();
 const anonymizeTextFieldsMock = mock();
 const loadAnonymizationGazetteerEntriesMock = mock();
+const realAnonymizationBlacklist =
+  await import("@/api/lib/anonymization-blacklist");
 
 void mock.module("@/api/lib/analytics", () => ({
   captureError: captureErrorMock,
@@ -31,6 +33,7 @@ void mock.module("@/api/mcp/anonymization", () => ({
 }));
 
 void mock.module("@/api/lib/anonymization-blacklist", () => ({
+  ...realAnonymizationBlacklist,
   loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
 }));
 
