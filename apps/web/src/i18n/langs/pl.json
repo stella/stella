@@ -2181,7 +2181,6 @@
     "directiveEndEach": "Koniec pętli",
     "directiveEndIf": "Koniec warunku",
     "directiveIf": "Jeśli: {expression}",
-    "discovering": "Analizowanie...",
     "discoveryFailed": "Nie udało się przeanalizować szablonu",
     "downloadAnyway": "Pobierz mimo to",
     "downloadDocx": "Pobierz DOCX",

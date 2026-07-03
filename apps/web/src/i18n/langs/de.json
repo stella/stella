@@ -2181,7 +2181,6 @@
     "directiveEndEach": "Schleife beenden",
     "directiveEndIf": "Wenn beenden",
     "directiveIf": "Wenn: {expression}",
-    "discovering": "Analyse...",
     "discoveryFailed": "Vorlage konnte nicht analysiert werden",
     "downloadAnyway": "Trotzdem herunterladen",
     "downloadDocx": "DOCX herunterladen",

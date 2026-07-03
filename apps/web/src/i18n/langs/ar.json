@@ -2181,7 +2181,6 @@
     "directiveEndEach": "نهاية الحلقة",
     "directiveEndIf": "نهاية الشرط",
     "directiveIf": "إذا: {expression}",
-    "discovering": "جارٍ التحليل...",
     "discoveryFailed": "تعذّر تحليل القالب",
     "downloadAnyway": "التنزيل على أي حال",
     "downloadDocx": "تنزيل DOCX",

@@ -2184,7 +2184,6 @@ type Messages = {
     "directiveEndEach": "End loop";
     "directiveEndIf": "End if";
     "directiveIf": "If: {expression}";
-    "discovering": "Analyzing...";
     "discoveryFailed": "Failed to analyze template";
     "downloadAnyway": "Download anyway";
     "downloadDocx": "Download DOCX";

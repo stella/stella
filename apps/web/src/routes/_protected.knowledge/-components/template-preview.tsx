@@ -276,7 +276,7 @@ const SectionDivider = ({ label }: { label: string }) => (
 const protectedRouteApi = getRouteApi("/_protected");
 
 export const TemplatePreview = ({ templateId }: { templateId: string }) => {
-  const t = useTranslations("templates");
+  const t = useTranslations();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
   });
@@ -288,7 +288,7 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("discovering")}</p>
+        <p className="text-muted-foreground text-sm">{t("common.loading")}</p>
       </div>
     );
   }
@@ -296,7 +296,9 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   if (isError || !data || data instanceof Response || !("paragraphs" in data)) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("previewFailed")}</p>
+        <p className="text-muted-foreground text-sm">
+          {t("templates.previewFailed")}
+        </p>
       </div>
     );
   }
@@ -306,7 +308,9 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
   if (paragraphs.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
-        <p className="text-muted-foreground text-sm">{t("previewEmpty")}</p>
+        <p className="text-muted-foreground text-sm">
+          {t("templates.previewEmpty")}
+        </p>
       </div>
     );
   }
@@ -333,12 +337,12 @@ export const TemplatePreview = ({ templateId }: { templateId: string }) => {
 
         const sectionLabel = (() => {
           if (source === "header") {
-            return t("previewSectionHeader");
+            return t("templates.previewSectionHeader");
           }
           if (source === "footer") {
-            return t("previewSectionFooter");
+            return t("templates.previewSectionFooter");
           }
-          return t("previewSectionBody");
+          return t("templates.previewSectionBody");
         })();
 
         return (

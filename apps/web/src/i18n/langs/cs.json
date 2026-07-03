@@ -2181,7 +2181,6 @@
     "directiveEndEach": "Konec smyčky",
     "directiveEndIf": "Konec pokud",
     "directiveIf": "Pokud: {expression}",
-    "discovering": "Analyzování...",
     "discoveryFailed": "Nepodařilo se analyzovat vzor",
     "downloadAnyway": "Přesto stáhnout",
     "downloadDocx": "Stáhnout DOCX",

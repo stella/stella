@@ -202,9 +202,7 @@ export const TemplateUpload = ({
               variant="outline"
             >
               <UploadIcon />
-              {loading
-                ? t("templates.discovering")
-                : t("templates.browseFiles")}
+              {loading ? t("common.loading") : t("templates.browseFiles")}
             </Button>
             <Button
               disabled={loading}

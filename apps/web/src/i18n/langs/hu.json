@@ -2181,7 +2181,6 @@
     "directiveEndEach": "Ciklus vége",
     "directiveEndIf": "Ha vége",
     "directiveIf": "Ha: {expression}",
-    "discovering": "Elemzés...",
     "discoveryFailed": "Nem sikerült elemezni a sablont",
     "downloadAnyway": "Letöltés így is",
     "downloadDocx": "Letöltés DOCX-ként",

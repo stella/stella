@@ -2181,7 +2181,6 @@
     "directiveEndEach": "Tsükli lõpp",
     "directiveEndIf": "Tingimuse lõpp",
     "directiveIf": "Kui: {expression}",
-    "discovering": "Analüüsimine...",
     "discoveryFailed": "Malli analüüsimine ebaõnnestus",
     "downloadAnyway": "Laadi ikkagi alla",
     "downloadDocx": "Laadi alla DOCX",

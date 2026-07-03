@@ -2181,7 +2181,6 @@
     "directiveEndEach": "Fin del bucle",
     "directiveEndIf": "Fin del condicional",
     "directiveIf": "Si: {expression}",
-    "discovering": "Analizando...",
     "discoveryFailed": "No se pudo analizar la plantilla",
     "downloadAnyway": "Descargar de todos modos",
     "downloadDocx": "Descargar DOCX",

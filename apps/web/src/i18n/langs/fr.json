@@ -2181,7 +2181,6 @@
     "directiveEndEach": "Fin de boucle",
     "directiveEndIf": "Fin de condition",
     "directiveIf": "Si : {expression}",
-    "discovering": "Analyse...",
     "discoveryFailed": "Impossible d'analyser le modèle",
     "downloadAnyway": "Télécharger quand même",
     "downloadDocx": "Télécharger en DOCX",
