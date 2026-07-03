@@ -130,6 +130,7 @@ const HEALTH_INTERVAL_MS = 30_000;
 const SUSTAINED_FAILURE_THRESHOLD = 5;
 const SEARCH_INDEX_INTERVAL_MS = 10_000;
 const SEARCH_INDEX_BATCH_SIZE = 20;
+const SEARCH_INDEX_DRAIN_CONCURRENCY = 4;
 const CORPUS_INDEX_INTERVAL_MS = 15_000;
 // Citation authority decays slowly; a periodic full recompute keeps the
 // materialized ranking signal fresh without per-cycle cost.
@@ -162,6 +163,7 @@ const WATCHDOG_MAX_STARVED_TICKS = 3;
 // adapter. If a cycle outlives this ceiling — well above the longest adapter
 // maxCycleMs (30m) plus slack — the worker is wedged: exit so ECS relaunches.
 const CYCLE_HARD_DEADLINE_MS = 45 * 60 * 1000;
+const BACKFILL_DEADLINE_TRANSACTION_GRACE_MS = 60_000;
 
 // Hard wall-clock backstop for one backfill batch (the corpus-index and
 // search-index loops). Every external await inside a batch is individually
@@ -179,6 +181,12 @@ const CYCLE_HARD_DEADLINE_MS = 45 * 60 * 1000;
 // above that with headroom, so it never fires on a merely-slow batch while a
 // genuine wedge still exits within a bounded window.
 const BACKFILL_HARD_DEADLINE_MS = 45 * 60 * 1000;
+const SEARCH_INDEX_HARD_DEADLINE_MS = Math.max(
+  BACKFILL_HARD_DEADLINE_MS,
+  Math.ceil(SEARCH_INDEX_BATCH_SIZE / SEARCH_INDEX_DRAIN_CONCURRENCY) *
+    (LEGAL_ATLAS_RUNNER_ENV.dbBackfillTransactionTimeoutMs +
+      BACKFILL_DEADLINE_TRANSACTION_GRACE_MS),
+);
 
 type Semaphore = {
   acquire: (signal?: AbortSignal) => Promise<void>;
@@ -788,7 +796,7 @@ export const runCaseLawIngest = async (
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await runWithHardDeadline(
           "search-index",
-          BACKFILL_HARD_DEADLINE_MS,
+          SEARCH_INDEX_HARD_DEADLINE_MS,
           async () =>
             await backfillSearchIndex(backfillDb, SEARCH_INDEX_BATCH_SIZE),
         );
@@ -881,7 +889,7 @@ export const runCaseLawIngest = async (
         // oxlint-disable-next-line no-await-in-loop -- one bounded backfill batch per interval; the next poll only runs after this batch completes
         const indexed = await runWithHardDeadline(
           "legislation-search-index",
-          BACKFILL_HARD_DEADLINE_MS,
+          SEARCH_INDEX_HARD_DEADLINE_MS,
           async () =>
             await backfillLegislationSearchIndex(
               backfillDb,
