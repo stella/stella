@@ -36,7 +36,11 @@ import {
 import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchProvider } from "@/api/lib/search/provider";
 import type { McpRequestContext } from "@/api/mcp/context";
-import type { McpToolDefinition, McpToolHandler } from "@/api/mcp/tool-types";
+import type {
+  McpStructuredTextField,
+  McpToolDefinition,
+  McpToolHandler,
+} from "@/api/mcp/tool-types";
 import {
   buildCaseLawDecisionAppUrl,
   DEFAULT_LIST_LIMIT,
@@ -56,7 +60,6 @@ import {
   resolveWindowBounds,
   stringProp,
   textResult,
-  windowTextByCursor,
 } from "@/api/mcp/tool-utils";
 
 const MCP_CONTENT_MAX_CHARS = 8000;
@@ -74,6 +77,27 @@ type StellaToolName =
   | "set_practice_jurisdictions";
 
 const ISO_DATE_PATTERN = /^\d{4}-\d{2}-\d{2}$/u;
+
+/**
+ * Queue one anonymizable text field onto a structured egress plan, skipping
+ * null/empty values (no PII to redact, and an empty batch entry is wasted
+ * work). `apply` writes the anonymized value back into the payload.
+ */
+const collectAnonymizableField = ({
+  apply,
+  fields,
+  value,
+  workspaceId,
+}: {
+  apply: (value: string) => void;
+  fields: McpStructuredTextField[];
+  value: string | null | undefined;
+  workspaceId: string;
+}): void => {
+  if (typeof value === "string" && value.length > 0) {
+    fields.push({ apply, value, workspaceId });
+  }
+};
 
 export const STELLA_TOOL_DEFINITIONS = [
   {
@@ -95,7 +119,7 @@ export const STELLA_TOOL_DEFINITIONS = [
         ),
       },
     },
-    anonymized: { exposure: "excluded", reason: "pending_projection" },
+    anonymized: { exposure: "anonymize", textFields: ["matters[].name"] },
     name: "list_matters",
     scope: "stella:read",
   },
@@ -111,7 +135,17 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["matter_id"],
     },
-    anonymized: { exposure: "excluded", reason: "pending_projection" },
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [
+        "matter.name",
+        "matter.clientName",
+        "overview.recentEntities[].name",
+        "overview.recentEntities[].createdBy",
+        "overview.recentEntities[].assignedTo",
+        "contacts[].displayName",
+      ],
+    },
     name: "get_matter_overview",
     scope: "stella:read",
   },
@@ -137,7 +171,10 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["query"],
     },
-    anonymized: { exposure: "excluded", reason: "pending_projection" },
+    anonymized: {
+      exposure: "anonymize",
+      textFields: ["hits[].name", "hits[].headline", "hits[].workspaceName"],
+    },
     name: "search_across_matters",
     scope: "stella:search",
   },
@@ -200,7 +237,7 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["entity_id"],
     },
-    anonymized: { exposure: "excluded", reason: "pending_projection" },
+    anonymized: { exposure: "anonymize", textFields: ["name", "text"] },
     name: "read_content_across_matters",
     scope: "stella:read",
   },
@@ -238,7 +275,17 @@ export const STELLA_TOOL_DEFINITIONS = [
       },
       required: ["contact_id"],
     },
-    anonymized: { exposure: "excluded", reason: "pending_projection" },
+    anonymized: {
+      exposure: "anonymize",
+      textFields: [
+        "displayName",
+        "firstName",
+        "lastName",
+        "organizationName",
+        "emails[].address",
+        "phones[].number",
+      ],
+    },
     name: "read_contact",
     scope: "stella:read",
   },
@@ -414,23 +461,52 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
     cursorForItem: (item) => encodePaginationCursor([item.id]),
   });
 
-  const result = textResult({
-    matters: page.items.map((matter) => ({
-      id: matter.id,
-      name: matter.name,
-      reference: matter.reference,
-      status: matter.status,
-      lastActivityAt: matter.lastActivityAt.toISOString(),
-      createdAt: matter.createdAt.toISOString(),
-    })),
-    nextCursor: page.nextCursor,
-  });
+  const matters = page.items.map((matter) => ({
+    id: matter.id,
+    name: matter.name,
+    reference: matter.reference,
+    status: matter.status,
+    lastActivityAt: matter.lastActivityAt.toISOString(),
+    createdAt: matter.createdAt.toISOString(),
+  }));
 
-  return await withOnboardingHintIfApplicable({
-    context,
-    isEmpty: page.items.length === 0,
-    result,
-  });
+  // An empty page carries no tenant text to anonymize, so return the finished
+  // result directly (and let the onboarding hint attach). A non-empty page runs
+  // through the egress pipeline, which anonymizes each matter's name under its
+  // own workspace scope in anonymized mode. The matter id is its workspace id.
+  if (matters.length === 0) {
+    return await withOnboardingHintIfApplicable({
+      context,
+      isEmpty: true,
+      result: textResult({ matters, nextCursor: page.nextCursor }),
+    });
+  }
+
+  const textFields: McpStructuredTextField[] = [];
+  for (const matter of matters) {
+    collectAnonymizableField({
+      apply: (value) => {
+        matter.name = value;
+      },
+      fields: textFields,
+      value: matter.name,
+      workspaceId: matter.id,
+    });
+    collectAnonymizableField({
+      apply: (value) => {
+        matter.reference = value;
+      },
+      fields: textFields,
+      value: matter.reference,
+      workspaceId: matter.id,
+    });
+  }
+
+  return {
+    egress: "structured",
+    payload: { matters, nextCursor: page.nextCursor },
+    textFields,
+  };
 };
 
 const handleGetMatterOverviewTool: McpToolHandler = async ({
@@ -470,29 +546,109 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
     return errorResult("Matter not found or not accessible");
   }
 
-  return textResult({
-    matter: {
-      id: workspace.id,
-      name: workspace.name,
-      reference: workspace.reference,
-      status: workspace.status,
-      clientName: workspace.client?.displayName ?? null,
-    },
-    overview,
-    contacts: contacts.flatMap((workspaceContact) => {
-      if (!workspaceContact.contact) {
-        return [];
-      }
-      return [
-        {
-          contactId: workspaceContact.contact.id,
-          displayName: workspaceContact.contact.displayName,
-          role: workspaceContact.role,
-          type: workspaceContact.contact.type,
-        },
-      ];
-    }),
+  const matter = {
+    id: workspace.id,
+    name: workspace.name,
+    reference: workspace.reference,
+    status: workspace.status,
+    clientName: workspace.client?.displayName ?? null,
+  };
+  const contactCards = contacts.flatMap((workspaceContact) => {
+    if (!workspaceContact.contact) {
+      return [];
+    }
+    return [
+      {
+        contactId: workspaceContact.contact.id,
+        displayName: workspaceContact.contact.displayName,
+        role: workspaceContact.role,
+        type: workspaceContact.contact.type,
+      },
+    ];
   });
+
+  const overviewWithoutAvatarUrls = {
+    ...overview,
+    recentEntities: overview.recentEntities.map(
+      ({
+        assignedToImage: _assignedToImage,
+        createdByImage: _createdByImage,
+        ...entity
+      }) => entity,
+    ),
+  };
+  const payload = {
+    matter,
+    overview: overviewWithoutAvatarUrls,
+    contacts: contactCards,
+  };
+
+  // Everything below belongs to one matter, so it all anonymizes under this
+  // single workspace scope. Ids/status/dates pass through; user-authored
+  // matter references and free-text party/person names are redacted.
+  const textFields: McpStructuredTextField[] = [];
+  collectAnonymizableField({
+    apply: (value) => {
+      matter.name = value;
+    },
+    fields: textFields,
+    value: matter.name,
+    workspaceId,
+  });
+  collectAnonymizableField({
+    apply: (value) => {
+      matter.reference = value;
+    },
+    fields: textFields,
+    value: matter.reference,
+    workspaceId,
+  });
+  collectAnonymizableField({
+    apply: (value) => {
+      matter.clientName = value;
+    },
+    fields: textFields,
+    value: matter.clientName,
+    workspaceId,
+  });
+  for (const entity of overview.recentEntities) {
+    collectAnonymizableField({
+      apply: (value) => {
+        entity.name = value;
+      },
+      fields: textFields,
+      value: entity.name,
+      workspaceId,
+    });
+    collectAnonymizableField({
+      apply: (value) => {
+        entity.createdBy = value;
+      },
+      fields: textFields,
+      value: entity.createdBy,
+      workspaceId,
+    });
+    collectAnonymizableField({
+      apply: (value) => {
+        entity.assignedTo = value;
+      },
+      fields: textFields,
+      value: entity.assignedTo,
+      workspaceId,
+    });
+  }
+  for (const contactCard of contactCards) {
+    collectAnonymizableField({
+      apply: (value) => {
+        contactCard.displayName = value;
+      },
+      fields: textFields,
+      value: contactCard.displayName,
+      workspaceId,
+    });
+  }
+
+  return { egress: "structured", payload, textFields };
 };
 
 const handleSearchAcrossMattersTool: McpToolHandler = async ({
@@ -535,18 +691,55 @@ const handleSearchAcrossMattersTool: McpToolHandler = async ({
     ...(cursor === undefined ? {} : { cursor }),
   });
 
-  return textResult({
-    totalCount: result.totalCount,
-    nextCursor: result.nextCursor,
-    hits: result.hits.map((hit) => ({
-      entityId: hit.entityId,
+  const hits = result.hits.map((hit) => ({
+    entityId: hit.entityId,
+    workspaceId: hit.workspaceId,
+    workspaceName: hit.workspaceName,
+    name: hit.title,
+    kind: hit.kind,
+    headline: hit.headline,
+  }));
+
+  // Hits span multiple matters; each anonymizes under its own workspace scope.
+  // `workspaceName` embeds the matter name (party names), so it is redacted
+  // alongside the hit name and headline to stay consistent with list_matters.
+  const textFields: McpStructuredTextField[] = [];
+  for (const hit of hits) {
+    collectAnonymizableField({
+      apply: (value) => {
+        hit.name = value;
+      },
+      fields: textFields,
+      value: hit.name,
       workspaceId: hit.workspaceId,
-      workspaceName: hit.workspaceName,
-      name: hit.title,
-      kind: hit.kind,
-      headline: hit.headline,
-    })),
-  });
+    });
+    collectAnonymizableField({
+      apply: (value) => {
+        hit.headline = value;
+      },
+      fields: textFields,
+      value: hit.headline,
+      workspaceId: hit.workspaceId,
+    });
+    collectAnonymizableField({
+      apply: (value) => {
+        hit.workspaceName = value;
+      },
+      fields: textFields,
+      value: hit.workspaceName,
+      workspaceId: hit.workspaceId,
+    });
+  }
+
+  return {
+    egress: "structured",
+    payload: {
+      totalCount: result.totalCount,
+      nextCursor: result.nextCursor,
+      hits,
+    },
+    textFields,
+  };
 };
 
 const parseOptionalStringArg = ({
@@ -723,25 +916,53 @@ const handleReadContentAcrossMattersTool: McpToolHandler = async ({
     row.iv,
   );
 
-  const textWindow = windowTextByCursor({
-    cursor,
-    maxChars: MCP_CONTENT_MAX_CHARS,
-    text: plaintext,
-  });
-  if (isToolErrorResult(textWindow)) {
-    return textWindow;
-  }
-
-  return textResult({
-    charCount: textWindow.charCount,
+  const workspaceId = row.entity.workspaceId;
+  // Carry the FULL decrypted text and window it in the egress pipeline, so an
+  // anonymized read redacts the whole document before slicing (slicing raw text
+  // first could split an entity name across the window boundary and leak its
+  // prefix). Default mode leaves name/text as-is and windows the same way.
+  const payload = {
+    charCount: plaintext.length,
     entityId,
     kind: row.entity.kind,
     name: row.entity.name,
-    text: textWindow.text,
-    truncated: textWindow.truncated,
-    nextCursor: textWindow.nextCursor,
-    workspaceId: row.entity.workspaceId,
-  });
+    text: plaintext,
+    truncated: false,
+    nextCursor: null as string | null,
+    workspaceId,
+  };
+
+  return {
+    egress: "structured",
+    payload,
+    textFields: [
+      {
+        apply: (value) => {
+          payload.name = value;
+        },
+        value: payload.name,
+        workspaceId,
+      },
+      {
+        apply: (value) => {
+          payload.text = value;
+        },
+        value: payload.text,
+        workspaceId,
+      },
+    ],
+    window: {
+      cursor,
+      maxChars: MCP_CONTENT_MAX_CHARS,
+      read: () => payload.text,
+      apply: (textWindow) => {
+        payload.text = textWindow.text;
+        payload.charCount = textWindow.charCount;
+        payload.truncated = textWindow.truncated;
+        payload.nextCursor = textWindow.nextCursor;
+      },
+    },
+  };
 };
 
 const handleSearchCaseLawTool: McpToolHandler = async ({ args, context }) => {
@@ -1056,16 +1277,94 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
     return errorResult("Contact not found");
   }
 
-  return textResult({
+  // Contacts are organization-scoped (no owning workspace), so the org id is
+  // the anonymization scope. The placeholder card is intentional and consistent
+  // with how chat anonymizes contact fields.
+  const workspaceId = context.organizationId;
+  const payload = {
     contactId: contact.id,
     type: contact.type,
     displayName: contact.displayName,
     firstName: contact.firstName,
     lastName: contact.lastName,
     organizationName: contact.organizationName,
+    // The rows are request-scoped and owned by this handler, so the address /
+    // number fields are anonymized in place below.
     emails: contact.emails ?? [],
     phones: contact.phones ?? [],
+  };
+
+  const textFields: McpStructuredTextField[] = [];
+  collectAnonymizableField({
+    apply: (value) => {
+      payload.displayName = value;
+    },
+    fields: textFields,
+    value: payload.displayName,
+    workspaceId,
   });
+  collectAnonymizableField({
+    apply: (value) => {
+      payload.firstName = value;
+    },
+    fields: textFields,
+    value: payload.firstName,
+    workspaceId,
+  });
+  collectAnonymizableField({
+    apply: (value) => {
+      payload.lastName = value;
+    },
+    fields: textFields,
+    value: payload.lastName,
+    workspaceId,
+  });
+  collectAnonymizableField({
+    apply: (value) => {
+      payload.organizationName = value;
+    },
+    fields: textFields,
+    value: payload.organizationName,
+    workspaceId,
+  });
+  for (const email of payload.emails) {
+    collectAnonymizableField({
+      apply: (value) => {
+        email.label = value;
+      },
+      fields: textFields,
+      value: email.label,
+      workspaceId,
+    });
+    collectAnonymizableField({
+      apply: (value) => {
+        email.address = value;
+      },
+      fields: textFields,
+      value: email.address,
+      workspaceId,
+    });
+  }
+  for (const phone of payload.phones) {
+    collectAnonymizableField({
+      apply: (value) => {
+        phone.label = value;
+      },
+      fields: textFields,
+      value: phone.label,
+      workspaceId,
+    });
+    collectAnonymizableField({
+      apply: (value) => {
+        phone.number = value;
+      },
+      fields: textFields,
+      value: phone.number,
+      workspaceId,
+    });
+  }
+
+  return { egress: "structured", payload, textFields };
 };
 
 const countryCodeSchema = v.picklist(COUNTRY_CODES);

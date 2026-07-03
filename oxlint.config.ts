@@ -331,6 +331,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-route-query-client.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
     "./.oxlint-plugins/require-safe-route-handlers.ts",
+    "./.oxlint-plugins/no-inline-endpoint-in-routes.ts",
     "./.oxlint-plugins/security-guards.ts",
     "./.oxlint-plugins/no-unbranded-ownership-id-param.ts",
     "./.oxlint-plugins/no-raw-user-id-schema.ts",
@@ -1687,6 +1688,23 @@ export default defineConfig({
       ],
       rules: {
         "require-safe-route-handlers/require-safe-route-handlers": "error",
+        "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes": "error",
+      },
+    },
+    {
+      // Grandfathered inline endpoint definitions (plan 046 Wave 0). These
+      // route files define endpoints inline via createSafe*Handler; the rule is
+      // enabled for new route files but these are not migrated in this pass.
+      files: [
+        "apps/api/src/handlers/case-law/routes.ts",
+        "apps/api/src/handlers/files/routes.ts",
+        "apps/api/src/handlers/search/routes.ts",
+        "apps/api/src/handlers/tasks/my-tasks-route.ts",
+        "apps/api/src/handlers/time-entries/routes.ts",
+        "apps/api/src/handlers/workspaces/routes.ts",
+      ],
+      rules: {
+        "no-inline-endpoint-in-routes/no-inline-endpoint-in-routes": "off",
       },
     },
     {
