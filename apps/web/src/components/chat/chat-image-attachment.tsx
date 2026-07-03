@@ -43,7 +43,7 @@ export const ChatImageAttachment = ({
         />
       </button>
       <Dialog onOpenChange={setOpen} open={open}>
-        <DialogPopup className="max-w-4xl">
+        <DialogPopup bottomStickOnMobile={false} className="max-w-4xl">
           <DialogTitle className="sr-only">{alt}</DialogTitle>
           <DialogPanel className="flex justify-center p-2">
             <img

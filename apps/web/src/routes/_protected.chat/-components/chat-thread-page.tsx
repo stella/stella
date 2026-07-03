@@ -400,7 +400,7 @@ export const ChatThreadPage = ({
         }}
       >
         <div className="relative flex w-full flex-1 flex-col overflow-hidden">
-          <div className="bg-background absolute inset-x-0 top-0 z-10 mx-auto flex w-full max-w-5xl items-center justify-between gap-2 px-4 py-2">
+          <div className="bg-background mx-auto flex w-full max-w-5xl shrink-0 items-center justify-between gap-2 px-4 py-2">
             <div className="flex min-w-0 items-center gap-2">
               <NewChatButton
                 hasMessages={messages.length > 0}
@@ -436,138 +436,134 @@ export const ChatThreadPage = ({
             </div>
           </div>
 
-          <Conversation>
-            <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pt-14 pb-36">
-              {messages.length === 0 && !isGenerating && !error ? (
-                <div className="m-auto w-full max-w-md px-4">
-                  <PromptSuggestions
-                    onSelect={selectPrompt}
-                    prompts={prompts}
-                  />
-                </div>
-              ) : (
-                <>
-                  <ChatThreadMessages
-                    approvalPendingMessageId={approvalPendingMessageId}
-                    error={error}
-                    hasOlderMessages={olderCursor !== null}
-                    isGenerating={isGenerating}
-                    isLoadingOlder={isLoadingOlder}
-                    loadOlderError={loadOlderError}
-                    messages={messages}
-                    onLoadOlder={loadOlder}
-                    onAskUserEditAndRerun={handleAskUserEditAndRerun}
-                    onAskUserEditingChange={handleAskUserEditingChange}
-                    onAskUserSubmit={handleAskUserSubmit}
-                    onCreateDocumentResolve={handleCreateDocumentResolve}
-                    onOpenCreatedDocument={handleOpenCreatedDocument}
-                    onRemoveQueuedMessage={removeQueuedMessage}
-                    onResend={resendLatestMessage}
-                    onSendWithoutAnonymization={sendWithoutAnonymization}
-                    queuedMessages={queuedMessages}
-                    showThinkingIndicator
-                    streamdownComponents={streamdownComponents}
-                    workspaceId={workspaceId}
-                  />
-                  <ChatThreadRecap
-                    activeOrganizationId={activeOrganizationId}
-                    isGenerating={isGenerating}
-                    key={threadRef.threadId}
-                    lastActivityAt={data.lastActivityAt}
-                    lastMessageId={messages.at(-1)?.id ?? null}
-                    lastMessageRole={messages.at(-1)?.role ?? null}
-                    messageCount={messages.length}
-                    threadRef={threadRef}
-                  />
-                </>
-              )}
-            </ConversationContent>
-            <ConversationScrollButton className="bottom-28" />
-          </Conversation>
+          <div className="relative flex min-h-0 flex-1 flex-col">
+            <Conversation className="min-h-0">
+              <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-36">
+                {messages.length === 0 && !isGenerating && !error ? (
+                  <div className="m-auto w-full max-w-md px-4">
+                    <PromptSuggestions
+                      onSelect={selectPrompt}
+                      prompts={prompts}
+                    />
+                  </div>
+                ) : (
+                  <>
+                    <ChatThreadMessages
+                      approvalPendingMessageId={approvalPendingMessageId}
+                      error={error}
+                      hasOlderMessages={olderCursor !== null}
+                      isGenerating={isGenerating}
+                      isLoadingOlder={isLoadingOlder}
+                      loadOlderError={loadOlderError}
+                      messages={messages}
+                      onLoadOlder={loadOlder}
+                      onAskUserEditAndRerun={handleAskUserEditAndRerun}
+                      onAskUserEditingChange={handleAskUserEditingChange}
+                      onAskUserSubmit={handleAskUserSubmit}
+                      onCreateDocumentResolve={handleCreateDocumentResolve}
+                      onOpenCreatedDocument={handleOpenCreatedDocument}
+                      onRemoveQueuedMessage={removeQueuedMessage}
+                      onResend={resendLatestMessage}
+                      onSendWithoutAnonymization={sendWithoutAnonymization}
+                      queuedMessages={queuedMessages}
+                      showThinkingIndicator
+                      streamdownComponents={streamdownComponents}
+                      workspaceId={workspaceId}
+                    />
+                    <ChatThreadRecap
+                      activeOrganizationId={activeOrganizationId}
+                      isGenerating={isGenerating}
+                      key={threadRef.threadId}
+                      lastActivityAt={data.lastActivityAt}
+                      lastMessageId={messages.at(-1)?.id ?? null}
+                      lastMessageRole={messages.at(-1)?.role ?? null}
+                      messageCount={messages.length}
+                      threadRef={threadRef}
+                    />
+                  </>
+                )}
+              </ConversationContent>
+              <ConversationScrollButton className="bottom-28" />
+            </Conversation>
 
-          <ChatAnonymizationLayer
-            editor={controller.editor}
-            enabled={anonymized}
-            workspaceId={workspaceId ?? threadRef.threadId}
-          />
-          {/* Soft fades so messages dissolve into the floating header and
-              composer instead of being clipped at a hard edge. Only when a
+            <ChatAnonymizationLayer
+              editor={controller.editor}
+              enabled={anonymized}
+              workspaceId={workspaceId ?? threadRef.threadId}
+            />
+            {/* Soft fade so messages dissolve into the floating composer
+              instead of being clipped at a hard edge. Only when a
               conversation exists — the centered empty-state suggestions
               must stay crisp, not dimmed by the bottom fade. */}
-          {messages.length > 0 && (
-            <>
-              <div
-                aria-hidden="true"
-                className="from-background pointer-events-none absolute inset-x-0 top-12 mx-auto h-10 w-full max-w-5xl bg-linear-to-b to-transparent"
-              />
+            {messages.length > 0 && (
               <div
                 aria-hidden="true"
                 className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
               />
-            </>
-          )}
-          <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-5xl px-4 pb-4">
-            <SuggestedFollowupChips
-              isGenerating={isGenerating}
-              isEmpty={
-                controller.isEmpty && controller.attachments.length === 0
-              }
-              lastMessageId={messages.at(-1)?.id ?? null}
-              lastMessageRole={messages.at(-1)?.role ?? null}
-              messageCount={messages.length}
-              prompts={suggestedFollowupPrompts}
-              onSelect={(prompt) => {
-                controller.setContent(prompt);
-                void controller.submit(async (draft) => {
+            )}
+            <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-5xl px-4 pb-4">
+              <SuggestedFollowupChips
+                isGenerating={isGenerating}
+                isEmpty={
+                  controller.isEmpty && controller.attachments.length === 0
+                }
+                lastMessageId={messages.at(-1)?.id ?? null}
+                lastMessageRole={messages.at(-1)?.role ?? null}
+                messageCount={messages.length}
+                prompts={suggestedFollowupPrompts}
+                onSelect={(prompt) => {
+                  controller.setContent(prompt);
+                  void controller.submit(async (draft) => {
+                    if (!(await ensureAIAvailable())) {
+                      return;
+                    }
+                    await sendMessage(await buildChatRequestMessage(draft));
+                  });
+                }}
+              />
+              <ChatInputSurface
+                anonymized={anonymized}
+                autoFocus
+                controller={controller}
+                isGenerating={isGenerating}
+                onStop={() => {
+                  stop();
+                }}
+                onSubmit={async (draft) => {
+                  const reservedCommand = matchReservedChatCommand(draft.html);
+                  if (reservedCommand?.id === "new") {
+                    // Abort any live stream first: `chatThreadOptions` keeps the
+                    // in-flight Chat alive in the query cache, so navigating away
+                    // would leave it streaming against the abandoned thread.
+                    stop();
+                    controller.setContent("");
+                    if (threadRef.scope === "workspace") {
+                      void navigate({
+                        to: "/chat/workspaces/$workspaceId/new",
+                        params: { workspaceId: threadRef.workspaceId },
+                        replace: true,
+                      });
+                    } else {
+                      void navigate({
+                        to: "/chat/new",
+                        replace: true,
+                      });
+                    }
+                    return;
+                  }
+                  if (reservedCommand?.id === "model") {
+                    controller.setContent("");
+                    useModelSelectorStore.getState().open();
+                    return;
+                  }
+
                   if (!(await ensureAIAvailable())) {
                     return;
                   }
                   await sendMessage(await buildChatRequestMessage(draft));
-                });
-              }}
-            />
-            <ChatInputSurface
-              anonymized={anonymized}
-              autoFocus
-              controller={controller}
-              isGenerating={isGenerating}
-              onStop={() => {
-                stop();
-              }}
-              onSubmit={async (draft) => {
-                const reservedCommand = matchReservedChatCommand(draft.html);
-                if (reservedCommand?.id === "new") {
-                  // Abort any live stream first: `chatThreadOptions` keeps the
-                  // in-flight Chat alive in the query cache, so navigating away
-                  // would leave it streaming against the abandoned thread.
-                  stop();
-                  controller.setContent("");
-                  if (threadRef.scope === "workspace") {
-                    void navigate({
-                      to: "/chat/workspaces/$workspaceId/new",
-                      params: { workspaceId: threadRef.workspaceId },
-                      replace: true,
-                    });
-                  } else {
-                    void navigate({
-                      to: "/chat/new",
-                      replace: true,
-                    });
-                  }
-                  return;
-                }
-                if (reservedCommand?.id === "model") {
-                  controller.setContent("");
-                  useModelSelectorStore.getState().open();
-                  return;
-                }
-
-                if (!(await ensureAIAvailable())) {
-                  return;
-                }
-                await sendMessage(await buildChatRequestMessage(draft));
-              }}
-            />
+                }}
+              />
+            </div>
           </div>
         </div>
       </ChatApprovalContext>
