@@ -68,6 +68,11 @@ import {
   workspaceViews,
 } from "./files-views";
 import {
+  flowDefinitions,
+  flowRunSteps,
+  flowRuns,
+} from "./flows";
+import {
   mcpConnectors,
   mcpOAuthClients,
   mcpOAuthState,
@@ -118,6 +123,9 @@ export const relations = defineRelations(
     playbookDefinitions,
     playbookDefinitionVersions,
     documentTypes,
+    flowDefinitions,
+    flowRuns,
+    flowRunSteps,
     entities,
     taskAssignees,
     entityLinks,
@@ -230,6 +238,36 @@ export const relations = defineRelations(
       createdByUser: r.one.user({
         from: r.infoSoudTrackedCases.createdBy,
         to: r.user.id,
+      }),
+    },
+    flowDefinitions: {
+      createdByUser: r.one.user({
+        from: r.flowDefinitions.createdByUserId,
+        to: r.user.id,
+      }),
+      runs: r.many.flowRuns({
+        from: r.flowDefinitions.id,
+        to: r.flowRuns.definitionId,
+      }),
+    },
+    flowRuns: {
+      definition: r.one.flowDefinitions({
+        from: r.flowRuns.definitionId,
+        to: r.flowDefinitions.id,
+      }),
+      workspace: r.one.workspaces({
+        from: r.flowRuns.workspaceId,
+        to: r.workspaces.id,
+      }),
+      steps: r.many.flowRunSteps({
+        from: r.flowRuns.id,
+        to: r.flowRunSteps.runId,
+      }),
+    },
+    flowRunSteps: {
+      run: r.one.flowRuns({
+        from: r.flowRunSteps.runId,
+        to: r.flowRuns.id,
       }),
     },
     contactRelationships: {
