@@ -486,13 +486,14 @@ const withParsedToolCallInput = (part: ChatPart): ChatPart => {
   if (input === undefined) {
     return part;
   }
+  const withInput = { ...part, input };
   // SAFETY: `arguments` is validated against the tool's inputSchema on
   // the server (validateToolCallPart) before the part is streamed or
   // persisted, so its parsed form conforms to this part's `input` type.
   // `JSON.parse` is read as `unknown` above; this narrows it back onto
   // the discriminated tool-call union without widening the part.
   // eslint-disable-next-line typescript/no-unsafe-type-assertion -- parsed arguments conform to the tool inputSchema (validated server-side)
-  return { ...part, input } as ChatToolCallPart;
+  return withInput as ChatToolCallPart;
 };
 
 /**
@@ -518,15 +519,10 @@ export const withParsedToolCallInputs = (
   messages: readonly PersistedChatMessage[],
 ): PersistedChatMessage[] =>
   messages.map((message) => {
-    let partsChanged = false;
-    const parts = message.parts.map((part) => {
-      const nextPart = withParsedToolCallInput(part);
-      if (nextPart !== part) {
-        partsChanged = true;
-      }
-      return nextPart;
-    });
-    // eslint-disable-next-line oxc/no-map-spread -- immutable per-message rebuild, only when a tool-call input was filled; preserves refs otherwise
+    const parts = message.parts.map(withParsedToolCallInput);
+    const partsChanged = parts.some(
+      (part, index) => part !== message.parts[index],
+    );
     return partsChanged ? { ...message, parts } : message;
   });
 

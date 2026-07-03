@@ -778,7 +778,7 @@ describe("chat runtime identity across query refetch", () => {
     // so sending through it panics ("Missing thread send capability"). This
     // is the corruption `chatThreadOptions`' `structuralSharing: false` avoids
     // by handing the registered runtime back verbatim.
-    await expect(
+    expect(
       sendThreadChatMessage(
         shared.chat,
         createOutgoingMessage("22222222-2222-4222-8222-2222222222aa"),
