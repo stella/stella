@@ -18,6 +18,7 @@ import {
   loadActiveMcpConnectionsForUser,
 } from "@/api/lib/mcp-upstream/connections";
 import type { LoadedMcpConnection } from "@/api/lib/mcp-upstream/connections";
+import type { NullUnionStrategy } from "@/api/lib/provider-safe-json-schema";
 
 export type LoadedExternalMcpTools = {
   close: () => Promise<void> | void;
@@ -36,10 +37,12 @@ export type LoadedExternalMcpConnector = {
 };
 
 export const loadExternalMcpToolsForUser = async ({
+  nullUnionStrategy,
   organizationId,
   safeDb,
   userId,
 }: {
+  nullUnionStrategy: NullUnionStrategy;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -61,6 +64,7 @@ export const loadExternalMcpToolsForUser = async ({
       clients,
       connectors,
       loadedTools,
+      nullUnionStrategy,
       organizationId,
       row,
       safeDb,
@@ -129,6 +133,7 @@ const loadConnectorTools = async ({
   clients,
   connectors,
   loadedTools,
+  nullUnionStrategy,
   organizationId,
   row,
   safeDb,
@@ -138,6 +143,7 @@ const loadConnectorTools = async ({
   clients: MCPClient[];
   connectors: LoadedExternalMcpConnector[];
   loadedTools: ChatToolMap;
+  nullUnionStrategy: NullUnionStrategy;
   organizationId: SafeId<"organization">;
   row: LoadedMcpConnection;
   safeDb: SafeDb;
@@ -160,6 +166,7 @@ const loadConnectorTools = async ({
     const normalized = normalizeExternalMcpToolsForChat({
       allowedTools: row.allowedTools,
       connectorSlug: row.slug,
+      nullUnionStrategy,
       tools,
     });
     Object.assign(loadedTools, normalized.tools);

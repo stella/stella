@@ -9,6 +9,7 @@ import type {
   ChatMiddleware,
   ChatMiddlewareConfig,
   ModelMessage,
+  ServerTool,
   StreamChunk,
   TokenUsage,
   UIMessage,
@@ -79,6 +80,7 @@ import {
   ChatLoopDetectedError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
+import { nullUnionStrategyForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import {
   abortControllerFromSignal,
   mergeGenerationOptions,
@@ -86,6 +88,7 @@ import {
   systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
 
 const MAX_TOOL_STEPS = 100;
 const THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE =
@@ -352,6 +355,93 @@ const chatAttemptTerminalError = (
 ): ChatLoopDetectedError | ChatEmptyCompletionError | null =>
   state.finalLoopDetection ?? state.emptyCompletion;
 
+const projectChatToolSchemasForProvider = ({
+  modelTools,
+  provider,
+}: {
+  modelTools: ReturnType<typeof chatToolMapToArray>;
+  provider: string;
+}): ReturnType<typeof chatToolMapToArray> => {
+  const projectionOptions = {
+    nullUnionStrategy: nullUnionStrategyForTanStackProvider(provider),
+  };
+  const projectedTools: ReturnType<typeof chatToolMapToArray> = [];
+  for (const tool of modelTools) {
+    const projectedTool = { ...tool };
+    if (tool.inputSchema !== undefined) {
+      const inputSchema = projectSchemaInputJsonSchema(
+        tool.inputSchema,
+        projectionOptions,
+      );
+      if (inputSchema !== undefined) {
+        projectedTool.inputSchema = inputSchema;
+      }
+    }
+    if (tool.outputSchema !== undefined) {
+      const outputSchema = projectSchemaInputJsonSchema(
+        tool.outputSchema,
+        projectionOptions,
+      );
+      if (outputSchema !== undefined) {
+        projectedTool.outputSchema = outputSchema;
+      }
+    }
+    projectedTools.push(projectedTool);
+  }
+  return projectedTools;
+};
+
+const projectServerToolsForProvider = ({
+  provider,
+  serverTools,
+}: {
+  provider: string;
+  serverTools: readonly ServerTool[];
+}): ServerTool[] => {
+  const projectionOptions = {
+    nullUnionStrategy: nullUnionStrategyForTanStackProvider(provider),
+  };
+  const projectedTools: ServerTool[] = [];
+  for (const tool of serverTools) {
+    const projectedTool = { ...tool };
+    if (tool.inputSchema !== undefined) {
+      const inputSchema = projectSchemaInputJsonSchema(
+        tool.inputSchema,
+        projectionOptions,
+      );
+      if (inputSchema !== undefined) {
+        projectedTool.inputSchema = inputSchema;
+      }
+    }
+    if (tool.outputSchema !== undefined) {
+      const outputSchema = projectSchemaInputJsonSchema(
+        tool.outputSchema,
+        projectionOptions,
+      );
+      if (outputSchema !== undefined) {
+        projectedTool.outputSchema = outputSchema;
+      }
+    }
+    projectedTools.push(projectedTool);
+  }
+  return projectedTools;
+};
+
+const projectMcpToolSourceSchemasForProvider = ({
+  provider,
+  source,
+}: {
+  provider: string;
+  source: StellaMcpToolSource;
+}): StellaMcpToolSource => ({
+  close: source.close,
+  tools: async (options) =>
+    projectServerToolsForProvider({
+      provider,
+      serverTools: await source.tools(options),
+    }),
+});
+
 type ResolveFallbackTextModelProps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
@@ -615,14 +705,20 @@ const runChatAttempt = async function* ({
   const stream = chat({
     adapter: model.adapter,
     messages: preparedMessages,
-    tools: modelTools,
+    tools: projectChatToolSchemasForProvider({
+      modelTools,
+      provider: model.provider,
+    }),
     ...(externalMcpToolSource
       ? {
           mcp: {
             clients: [
               prepareMcpToolSourceForThirdParty({
                 boundary: thirdPartyBoundary,
-                source: externalMcpToolSource,
+                source: projectMcpToolSourceSchemasForProvider({
+                  provider: model.provider,
+                  source: externalMcpToolSource,
+                }),
               }),
             ],
             connection: "close",

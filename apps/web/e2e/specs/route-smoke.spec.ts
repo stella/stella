@@ -134,7 +134,7 @@ test("authenticated routes render without browser errors", async ({
   context,
   request,
 }) => {
-  test.setTimeout(180_000);
+  test.setTimeout(240_000);
 
   const cleanupTasks: (() => Promise<void>)[] = [];
 

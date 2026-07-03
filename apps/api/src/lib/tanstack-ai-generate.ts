@@ -18,6 +18,7 @@ import type {
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { nullUnionStrategyForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { tanStackCacheControl } from "@/api/lib/tanstack-ai-caching";
 import {
   getTanStackTextModelById,
@@ -332,7 +333,9 @@ export const generateTanStackObjectForRole = async <
   const abortController = options.abortSignal
     ? abortControllerFromSignal(options.abortSignal)
     : undefined;
-  const tanStackOutputSchema = toTanStackValibotSchema(outputSchema);
+  const tanStackOutputSchema = toTanStackValibotSchema(outputSchema, {
+    nullUnionStrategy: nullUnionStrategyForTanStackProvider(model.provider),
+  });
 
   const output = await withStandardServiceTierFallback({
     model,
@@ -417,7 +420,9 @@ const streamTanStackStructuredOutput = async function* <
 }): AsyncIterable<TanStackStructuredOutputEvent<v.InferOutput<TSchema>>> {
   let completed = false;
   let rawJson = "";
-  const tanStackOutputSchema = toTanStackValibotSchema(outputSchema);
+  const tanStackOutputSchema = toTanStackValibotSchema(outputSchema, {
+    nullUnionStrategy: nullUnionStrategyForTanStackProvider(model.provider),
+  });
 
   const stream = iterateWithStandardServiceTierFallback({
     model,
