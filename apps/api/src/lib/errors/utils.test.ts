@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { DrizzleQueryError } from "drizzle-orm";
 
 import {
   connectionErrorFields,
@@ -216,6 +217,50 @@ describe("errorFingerprint", () => {
     for (const value of Object.values(fingerprint)) {
       expect(value).not.toContain("merger-secret");
     }
+  });
+
+  // A failed Drizzle query wraps the driver's PostgresError as a cause. The
+  // SQLSTATE (here 42803, a GROUP BY error) and schema identifiers are the
+  // actionable, non-PII detail; without them the 5xx fingerprint would carry
+  // only error types and diagnosis would need the RDS server logs.
+  test("surfaces the driver SQLSTATE and schema identifiers, all sanitizer-safe", () => {
+    const cause = Object.assign(new Error("grouping error"), {
+      code: "42803",
+      severity: "ERROR",
+      table: "entities",
+      routine: "check_ungrouped_columns",
+    });
+    const error = new DrizzleQueryError("query failed", [], cause);
+
+    const fingerprint = errorFingerprint(error);
+    expect(fingerprint["error.cause.pg_code"]).toBe("42803");
+    expect(fingerprint["error.cause.pg_table"]).toBe("entities");
+    expect(fingerprint["error.cause.pg_routine"]).toBe(
+      "check_ungrouped_columns",
+    );
+
+    // The whole fingerprint, pg fields included, survives the logger's key
+    // sanitizer unchanged: the SQLSTATE actually reaches the log sink.
+    const sanitized = sanitizeLogAttributes(fingerprint);
+    for (const [key, value] of Object.entries(fingerprint)) {
+      expect(sanitized?.[key]).toBe(value);
+    }
+    expect(sanitized?.["log.attributes_dropped"]).toBeUndefined();
+  });
+
+  test("adds nothing for a non-Postgres error, leaving key-dropping unchanged", () => {
+    const fingerprint = errorFingerprint(new Error("plain"));
+    for (const key of Object.keys(fingerprint)) {
+      expect(key.startsWith("error.cause.pg_")).toBe(false);
+    }
+    // Sensitive keys are still dropped normally; the pg additions do not widen
+    // what the sanitizer keeps.
+    const sanitized = sanitizeLogAttributes({
+      ...fingerprint,
+      userName: "alice",
+    });
+    expect(sanitized?.["userName"]).toBeUndefined();
+    expect(sanitized?.["log.attributes_dropped"]).toBe(1);
   });
 });
 

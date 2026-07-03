@@ -48,3 +48,114 @@ export const PG_ERROR = {
   UNIQUE_VIOLATION: "23505",
   INSUFFICIENT_PRIVILEGE: "42501",
 } as const;
+
+// A SQLSTATE is exactly five characters from the class/subclass alphabet
+// (`0`-`9`, `A`-`Z`). Shape alone is not enough: five-letter Node system
+// codes (`EPIPE`, `EPERM`) fit it too, so the check also requires at least
+// one digit (every standard SQLSTATE contains one; Node codes are all
+// letters) and `sqlStateOf` skips nodes carrying `syscall`, which every Node
+// system error has and no Postgres driver error does.
+const PG_SQLSTATE_PATTERN = /^(?=.*[0-9])[0-9A-Z]{5}$/u;
+
+// Schema identifiers Postgres attaches to a server error. These name database
+// objects, never row data, so they are safe to ship to a log sink. `detail`,
+// `hint`, `where`, `internalQuery`, and `query` are deliberately excluded:
+// they can embed the offending row's column values.
+const PG_SAFE_STRING_FIELDS = [
+  { key: "error.cause.pg_severity", property: "severity" },
+  { key: "error.cause.pg_constraint", property: "constraint" },
+  { key: "error.cause.pg_table", property: "table" },
+  { key: "error.cause.pg_column", property: "column" },
+  { key: "error.cause.pg_schema", property: "schema" },
+  { key: "error.cause.pg_routine", property: "routine" },
+] as const;
+
+const MAX_CAUSE_DEPTH = 6;
+
+const readProperty = (value: object, key: string): unknown => {
+  try {
+    return Reflect.get(value, key);
+  } catch {
+    return undefined;
+  }
+};
+
+const readNonEmptyString = (value: object, key: string): string | undefined => {
+  const raw = readProperty(value, key);
+  return typeof raw === "string" && raw !== "" ? raw : undefined;
+};
+
+// Returns a node's SQLSTATE when it is shaped like a Postgres driver error.
+// Bun's `Bun.sql` puts the SQLSTATE in `errno` (`code` is a generic category);
+// pg/PGlite put it in `code`. Prefer `errno`, fall back to `code`, and require
+// the SQLSTATE shape so non-Postgres codes are ignored.
+const sqlStateOf = (node: object): string | undefined => {
+  if (readProperty(node, "syscall") !== undefined) {
+    return undefined;
+  }
+  const errno = readNonEmptyString(node, "errno");
+  if (errno !== undefined && PG_SQLSTATE_PATTERN.test(errno)) {
+    return errno;
+  }
+  const code = readNonEmptyString(node, "code");
+  if (code !== undefined && PG_SQLSTATE_PATTERN.test(code)) {
+    return code;
+  }
+  return undefined;
+};
+
+const readSafePgStringFields = (node: object): Record<string, string> => {
+  const fields: Record<string, string> = {};
+  for (const { key, property } of PG_SAFE_STRING_FIELDS) {
+    const value = readNonEmptyString(node, property);
+    if (value !== undefined) {
+      fields[key] = value;
+    }
+  }
+  return fields;
+};
+
+const collectPgErrorFields = (error: unknown): Record<string, string> => {
+  const seen = new WeakSet<object>();
+  let current: unknown = error;
+  let depth = 0;
+  let sqlState: string | undefined;
+  const fields: Record<string, string> = {};
+
+  while (
+    current !== null &&
+    typeof current === "object" &&
+    depth < MAX_CAUSE_DEPTH &&
+    !seen.has(current)
+  ) {
+    seen.add(current);
+    const currentSqlState = sqlStateOf(current);
+    sqlState ??= currentSqlState;
+    if (currentSqlState !== undefined) {
+      Object.assign(fields, readSafePgStringFields(current));
+    }
+    current = readProperty(current, "cause");
+    depth += 1;
+  }
+
+  if (sqlState === undefined) {
+    return {};
+  }
+
+  return { "error.cause.pg_code": sqlState, ...fields };
+};
+
+/**
+ * Extract safe, structured fields from a Postgres driver error anywhere in an
+ * error's `.cause` chain, for observability. Drizzle wraps the driver error
+ * (`DrizzleQueryError`), so on a failed query the SQLSTATE lives one or more
+ * `.cause` hops down and would otherwise never reach the log sink.
+ *
+ * Returns the SQLSTATE under `error.cause.pg_code` plus any present schema
+ * identifiers (severity, constraint, table, column, schema, routine). Every
+ * key is chosen to NOT match the logger's PII redaction regex, so the fields
+ * survive `sanitizeLogAttributes`. Returns `{}` when no Postgres error is
+ * found. Never throws: property access is fully guarded.
+ */
+export const pgErrorFields = (error: unknown): Record<string, string> =>
+  collectPgErrorFields(error);
