@@ -109,11 +109,10 @@ export const ThreadsSheet = ({
       ) : (
         <SheetTrigger
           render={
-            <Button aria-label={triggerLabel} size="sm" variant="ghost" />
+            <Button aria-label={triggerLabel} size="icon-sm" variant="ghost" />
           }
         >
           <MessageSquareIcon className="size-4" />
-          {triggerLabel}
         </SheetTrigger>
       )}
       <SheetPopup side="inline-end">
