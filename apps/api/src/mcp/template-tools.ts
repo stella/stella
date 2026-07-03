@@ -422,6 +422,17 @@ const handleListTemplatesTool: McpToolHandler = async ({ args, context }) => {
       value: template.whenNotToUse,
       workspaceId,
     });
+    const tags = template.tags ?? [];
+    for (const [index, tag] of tags.entries()) {
+      pushTemplateTextField({
+        apply: (value) => {
+          tags[index] = value;
+        },
+        fields: textFields,
+        value: tag,
+        workspaceId,
+      });
+    }
   }
 
   return {
@@ -449,6 +460,81 @@ const pushTemplateTextField = ({
 }): void => {
   if (typeof value === "string" && value.length > 0) {
     fields.push({ apply, value, workspaceId });
+  }
+};
+
+type TemplateAnonymizableField = {
+  formats?: { template: string }[] | null | undefined;
+  lookup?: { formats: { template: string }[] } | null | undefined;
+  options?: string[] | null | undefined;
+  parts?:
+    | {
+        label?: string | null | undefined;
+        options?: string[] | null | undefined;
+      }[]
+    | null
+    | undefined;
+};
+
+const pushTemplateFieldNestedTextFields = ({
+  field,
+  fields,
+  workspaceId,
+}: {
+  field: TemplateAnonymizableField;
+  fields: McpStructuredTextField[];
+  workspaceId: string;
+}): void => {
+  if (field.options) {
+    for (const [index, option] of field.options.entries()) {
+      pushTemplateTextField({
+        apply: (value) => {
+          field.options?.splice(index, 1, value);
+        },
+        fields,
+        value: option,
+        workspaceId,
+      });
+    }
+  }
+
+  if (field.parts) {
+    for (const part of field.parts) {
+      pushTemplateTextField({
+        apply: (value) => {
+          part.label = value;
+        },
+        fields,
+        value: part.label,
+        workspaceId,
+      });
+      if (part.options) {
+        for (const [index, option] of part.options.entries()) {
+          pushTemplateTextField({
+            apply: (value) => {
+              part.options?.splice(index, 1, value);
+            },
+            fields,
+            value: option,
+            workspaceId,
+          });
+        }
+      }
+    }
+  }
+
+  const formats = field.formats ?? field.lookup?.formats;
+  if (formats) {
+    for (const format of formats) {
+      pushTemplateTextField({
+        apply: (value) => {
+          format.template = value;
+        },
+        fields,
+        value: format.template,
+        workspaceId,
+      });
+    }
   }
 };
 
@@ -530,6 +616,11 @@ const handleDescribeTemplateTool: McpToolHandler = async ({
       },
       fields: textFields,
       value: field.aiPrompt,
+      workspaceId,
+    });
+    pushTemplateFieldNestedTextFields({
+      field,
+      fields: textFields,
       workspaceId,
     });
   }

@@ -17,11 +17,21 @@ const recordTemplateFillMock = mock();
 const configureTemplateFieldsMock = mock();
 const loadOrgAIConfigMock = mock();
 const captureErrorMock = mock();
+const anonymizeTextFieldsMock = mock();
+const loadAnonymizationGazetteerEntriesMock = mock();
 
 void mock.module("@/api/lib/analytics", () => ({
   captureError: captureErrorMock,
   captureRequestError: captureErrorMock,
   getAnalytics: () => ({ capture: mock(), flush: mock(async () => undefined) }),
+}));
+
+void mock.module("@/api/mcp/anonymization", () => ({
+  anonymizeTextFields: anonymizeTextFieldsMock,
+}));
+
+void mock.module("@/api/lib/anonymization-blacklist", () => ({
+  loadAnonymizationGazetteerEntries: loadAnonymizationGazetteerEntriesMock,
 }));
 
 // Stub every export this service has, not only the two the MCP tools use, so
@@ -138,6 +148,9 @@ describe("MCP template tools", () => {
     loadOrgAIConfigMock.mockReset();
     loadOrgAIConfigMock.mockResolvedValue(null);
     captureErrorMock.mockReset();
+    anonymizeTextFieldsMock.mockReset();
+    loadAnonymizationGazetteerEntriesMock.mockReset();
+    loadAnonymizationGazetteerEntriesMock.mockResolvedValue([]);
   });
 
   afterAll(() => {
@@ -261,6 +274,46 @@ describe("MCP template tools", () => {
     });
   });
 
+  test("list_templates anonymizes template tags in anonymized mode", async () => {
+    const rows = [
+      {
+        id: "t1",
+        name: "Smith NDA",
+        fieldCount: 4,
+        tags: ["Smith acquisition"],
+        whenToUse: "Use for Smith acquisition",
+        whenNotToUse: null,
+      },
+    ];
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 3,
+      fields: ["[MATTER_1] NDA", "Use for [MATTER_1]", "[MATTER_1]"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: {},
+      context: createContext({ scopedDb: createScopedDb(rows) }),
+      mode: "anonymized",
+      toolName: "list_templates",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      templates: [
+        {
+          ...rows[0],
+          name: "[MATTER_1] NDA",
+          tags: ["[MATTER_1]"],
+          whenToUse: "Use for [MATTER_1]",
+        },
+      ],
+      nextCursor: null,
+    });
+    expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0]).toMatchObject({
+      fields: ["Smith NDA", "Use for Smith acquisition", "Smith acquisition"],
+      workspaceId: "org_1",
+    });
+  });
+
   test("describe_template surfaces the full field config for round-tripping", async () => {
     describeStoredTemplateMock.mockResolvedValue({
       name: "Company POA",
@@ -340,6 +393,83 @@ describe("MCP template tools", () => {
         }),
       ],
       computed: [{ name: "total", expression: "rent * 12" }],
+    });
+  });
+
+  test("describe_template anonymizes nested field option text", async () => {
+    describeStoredTemplateMock.mockResolvedValue({
+      name: "Smith POA",
+      fields: [
+        {
+          path: "role",
+          label: "Smith role",
+          inputType: "select",
+          options: ["Smith director"],
+          parts: [
+            {
+              key: "capacity",
+              label: "Smith capacity",
+              inputType: "select",
+              options: ["Smith signatory"],
+            },
+          ],
+          formats: [
+            { key: "default", template: "[company name], Smith registry" },
+          ],
+        },
+      ],
+      conditions: [],
+      computed: [],
+    });
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 6,
+      fields: [
+        "[PERSON_1] POA",
+        "[PERSON_1] role",
+        "[PERSON_1] director",
+        "[PERSON_1] capacity",
+        "[PERSON_1] signatory",
+        "[company name], [PERSON_1] registry",
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { template_id: "t1" },
+      context: createContext(),
+      mode: "anonymized",
+      toolName: "describe_template",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      name: "[PERSON_1] POA",
+      fields: [
+        {
+          label: "[PERSON_1] role",
+          options: ["[PERSON_1] director"],
+          parts: [
+            {
+              label: "[PERSON_1] capacity",
+              options: ["[PERSON_1] signatory"],
+            },
+          ],
+          formats: [
+            {
+              template: "[company name], [PERSON_1] registry",
+            },
+          ],
+        },
+      ],
+    });
+    expect(anonymizeTextFieldsMock.mock.calls.at(0)?.[0]).toMatchObject({
+      fields: [
+        "Smith POA",
+        "Smith role",
+        "Smith director",
+        "Smith capacity",
+        "Smith signatory",
+        "[company name], Smith registry",
+      ],
+      workspaceId: "org_1",
     });
   });
 

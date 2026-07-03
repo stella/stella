@@ -482,16 +482,30 @@ const handleListMattersTool: McpToolHandler = async ({ args, context }) => {
     });
   }
 
-  return {
-    egress: "structured",
-    payload: { matters, nextCursor: page.nextCursor },
-    textFields: matters.map((matter) => ({
+  const textFields: McpStructuredTextField[] = [];
+  for (const matter of matters) {
+    collectAnonymizableField({
       apply: (value) => {
         matter.name = value;
       },
+      fields: textFields,
       value: matter.name,
       workspaceId: matter.id,
-    })),
+    });
+    collectAnonymizableField({
+      apply: (value) => {
+        matter.reference = value;
+      },
+      fields: textFields,
+      value: matter.reference,
+      workspaceId: matter.id,
+    });
+  }
+
+  return {
+    egress: "structured",
+    payload: { matters, nextCursor: page.nextCursor },
+    textFields,
   };
 };
 
@@ -553,11 +567,25 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
     ];
   });
 
-  const payload = { matter, overview, contacts: contactCards };
+  const overviewWithoutAvatarUrls = {
+    ...overview,
+    recentEntities: overview.recentEntities.map(
+      ({
+        assignedToImage: _assignedToImage,
+        createdByImage: _createdByImage,
+        ...entity
+      }) => entity,
+    ),
+  };
+  const payload = {
+    matter,
+    overview: overviewWithoutAvatarUrls,
+    contacts: contactCards,
+  };
 
   // Everything below belongs to one matter, so it all anonymizes under this
-  // single workspace scope. Ids/status/reference/dates pass through; only the
-  // free-text party/person names are redacted.
+  // single workspace scope. Ids/status/dates pass through; user-authored
+  // matter references and free-text party/person names are redacted.
   const textFields: McpStructuredTextField[] = [];
   collectAnonymizableField({
     apply: (value) => {
@@ -565,6 +593,14 @@ const handleGetMatterOverviewTool: McpToolHandler = async ({
     },
     fields: textFields,
     value: matter.name,
+    workspaceId,
+  });
+  collectAnonymizableField({
+    apply: (value) => {
+      matter.reference = value;
+    },
+    fields: textFields,
+    value: matter.reference,
     workspaceId,
   });
   collectAnonymizableField({
@@ -1294,6 +1330,14 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
   for (const email of payload.emails) {
     collectAnonymizableField({
       apply: (value) => {
+        email.label = value;
+      },
+      fields: textFields,
+      value: email.label,
+      workspaceId,
+    });
+    collectAnonymizableField({
+      apply: (value) => {
         email.address = value;
       },
       fields: textFields,
@@ -1302,6 +1346,14 @@ const handleReadContactTool: McpToolHandler = async ({ args, context }) => {
     });
   }
   for (const phone of payload.phones) {
+    collectAnonymizableField({
+      apply: (value) => {
+        phone.label = value;
+      },
+      fields: textFields,
+      value: phone.label,
+      workspaceId,
+    });
     collectAnonymizableField({
       apply: (value) => {
         phone.number = value;
