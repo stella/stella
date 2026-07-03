@@ -13,7 +13,9 @@ import {
   isChatTurnInFlight,
   isPublicOfficialChatToolName,
   isToolApprovedByGrant,
+  withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
+import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 
 describe("chat tool titles", () => {
   test("maps stella API tools to translation keys", () => {
@@ -452,6 +454,109 @@ describe("isChatTurnInFlight", () => {
 
   test("is idle without an active request or running tool call", () => {
     expect(isChatTurnInFlight({ status: "ready", messages: [] })).toBe(false);
+  });
+});
+
+describe("withParsedToolCallInputs", () => {
+  const askUserArguments = JSON.stringify({
+    analysis: "Which company did you mean?",
+    questions: [
+      {
+        default: "Alza.cz a.s.",
+        question: "Which entity should I look up?",
+        options: ["Alza.cz a.s.", "Alzashop.com"],
+      },
+    ],
+  });
+
+  const argumentsOnlyMessages = (part: ChatPart): PersistedChatMessage[] => [
+    { id: "message-1", parts: [part], role: "assistant" },
+  ];
+
+  test("derives input from arguments on an input-complete tool call", () => {
+    // Exactly the persisted/streamed shape TanStack produces: a valid
+    // `arguments` JSON string with no `input` field.
+    const part = {
+      arguments: askUserArguments,
+      id: "tool-call-1",
+      name: "ask-user",
+      state: "input-complete",
+      type: "tool-call",
+    } satisfies ChatPart;
+
+    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
+    const normalized = message?.parts[0];
+    if (normalized?.type !== "tool-call" || normalized.name !== "ask-user") {
+      throw new Error("Expected a normalized ask-user tool-call part");
+    }
+
+    expect(normalized.input).toEqual({
+      analysis: "Which company did you mean?",
+      questions: [
+        {
+          default: "Alza.cz a.s.",
+          question: "Which entity should I look up?",
+          options: ["Alza.cz a.s.", "Alzashop.com"],
+        },
+      ],
+    });
+  });
+
+  test("leaves input undefined for invalid JSON arguments without throwing", () => {
+    const part = {
+      arguments: '{"questions":[',
+      id: "tool-call-1",
+      name: "ask-user",
+      state: "input-complete",
+      type: "tool-call",
+    } satisfies ChatPart;
+
+    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
+    const normalized = message?.parts[0];
+    if (normalized?.type !== "tool-call") {
+      throw new Error("Expected a tool-call part");
+    }
+
+    expect(normalized.input).toBeUndefined();
+    // The part is unchanged, so its reference is preserved.
+    expect(normalized).toBe(part);
+  });
+
+  test("does not parse arguments while the tool call is still streaming", () => {
+    const part = {
+      arguments: '{"questions":[{"quest',
+      id: "tool-call-1",
+      name: "ask-user",
+      state: "input-streaming",
+      type: "tool-call",
+    } satisfies ChatPart;
+
+    const [message] = withParsedToolCallInputs(argumentsOnlyMessages(part));
+    const normalized = message?.parts[0];
+    if (normalized?.type !== "tool-call") {
+      throw new Error("Expected a tool-call part");
+    }
+
+    expect(normalized.input).toBeUndefined();
+    expect(normalized).toBe(part);
+  });
+
+  test("preserves an already-populated input and message identity", () => {
+    const part = {
+      arguments: JSON.stringify({ query: "consumer credit" }),
+      id: "tool-call-1",
+      input: { query: "consumer credit" },
+      name: "mcp__salvia__search_decisions",
+      state: "input-complete",
+      type: "tool-call",
+    } satisfies ChatPart;
+    const messages = argumentsOnlyMessages(part);
+
+    const result = withParsedToolCallInputs(messages);
+
+    // Nothing to fill: the message object keeps its reference so
+    // downstream memoization is not invalidated.
+    expect(result[0]).toBe(messages[0]);
   });
 });
 

@@ -60,9 +60,10 @@ export const NeedsMatterCard = ({
   } = useChatMatters();
   const t = useTranslations();
 
-  // Streaming-tolerant input read. While the model is producing the
-  // tool call, TanStack populates `part.input` incrementally; show
-  // whatever has arrived so far.
+  // Streaming-tolerant input read. `part.input` is derived from the
+  // part's `arguments` at the session boundary (see
+  // `withParsedToolCallInputs`) once the tool call reaches
+  // `input-complete`; show whatever has arrived so far.
   const partialInput =
     part.state === "input-streaming" ||
     part.state === "input-complete" ||

@@ -9,13 +9,36 @@ export const DESCRIBE_STELLA_API_TOOL_DESCRIPTION =
   "stores records in `result.items`; paginated lists also " +
   "include `result.hasMore` and `result.nextOffset`.";
 
-export const RUN_STELLA_QUERY_TOOL_DESCRIPTION =
+type RunStellaQueryToolDescriptionOptions = {
+  /**
+   * Whether the web research tools (`web_search` / `fetch_url`) are
+   * actually registered for this turn. When they are not, the
+   * description must not point at them — otherwise the model is told
+   * to use a tool it cannot call.
+   */
+  webResearchAvailable: boolean;
+};
+
+// Same "not a code sandbox" warning either way; only the pointer to
+// the web research tools is conditional on their registration.
+const RUN_STELLA_QUERY_SCOPE_WITH_WEB =
+  "NOT a general code sandbox, scratchpad, or way to call external " +
+  "APIs — for legal research, public-web facts, or current events " +
+  "use `web_search`/`fetch_url` instead, and never submit a no-op " +
+  "program just to 'think out loud'. ";
+
+const RUN_STELLA_QUERY_SCOPE_NO_WEB =
+  "NOT a general code sandbox, scratchpad, or way to call external " +
+  "APIs, and never submit a no-op program just to 'think out loud'. ";
+
+export const buildRunStellaQueryToolDescription = ({
+  webResearchAvailable,
+}: RunStellaQueryToolDescriptionOptions) =>
   "SCOPE: stella's internal workspace/organization data only " +
-  "(matters, entities, contacts, etc. via `read.*`). NOT a " +
-  "general code sandbox, scratchpad, or way to call external " +
-  "APIs — for legal research, public-web facts, or current " +
-  "events use `web_search`/`fetch_url` instead, and never " +
-  "submit a no-op program just to 'think out loud'. " +
+  "(matters, entities, contacts, etc. via `read.*`). " +
+  (webResearchAvailable
+    ? RUN_STELLA_QUERY_SCOPE_WITH_WEB
+    : RUN_STELLA_QUERY_SCOPE_NO_WEB) +
   "Call with TypeScript that uses `read.<functionName>(input)`; " +
   "read returned records from `result.items`. The compact " +
   "function catalog is in the system prompt; call " +

@@ -564,7 +564,10 @@ export function AppSidebar(props: AppSidebarProps) {
             </SidebarGroup>
           )}
 
-          <RecentChatsGroup activeOrganizationId={user.activeOrganizationId} />
+          <RecentChatsGroup
+            activeOrganizationId={user.activeOrganizationId}
+            showSeparator={pinned.length > 0 || recents.length > 0}
+          />
         </SidebarContextArea>
       </SidebarContent>
 
@@ -611,8 +614,10 @@ type RecentChatThread =
 
 const RecentChatsGroup = ({
   activeOrganizationId,
+  showSeparator,
 }: {
   activeOrganizationId: string;
+  showSeparator: boolean;
 }) => {
   const t = useTranslations();
   const mounted = useHasMounted();
@@ -657,7 +662,7 @@ const RecentChatsGroup = ({
 
   return (
     <>
-      <SidebarSeparator />
+      {showSeparator && <SidebarSeparator />}
       <SidebarGroup className="min-h-0 flex-1">
         <SidebarGroupLabel>{t("chat.landing.recentChats")}</SidebarGroupLabel>
         <SidebarGroupContent className={SCROLLABLE_GROUP_CONTENT}>

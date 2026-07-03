@@ -69,6 +69,44 @@ export const isWebSearchAvailable = ({
   return webSearchProviderAvailable && !webSearchOrgDisabled;
 };
 
+type WebResearchToolsRegisteredProps = {
+  webSearchEnabled: boolean;
+  webSearchProviders: ResolvedWebSearchProviders;
+  disabledNativeToolSlugs?: readonly string[] | undefined;
+};
+
+/**
+ * Single source of truth for "are `web_search` / `fetch_url`
+ * registered on this turn". `getChatTools` uses it to decide
+ * registration; prompt construction uses it (via the same inputs) to
+ * decide whether to instruct the model to use those tools. Deriving
+ * both from one predicate is what prevents the prompt from naming a
+ * tool the model was never handed.
+ */
+export const areWebResearchToolsRegistered = ({
+  webSearchEnabled,
+  webSearchProviders,
+  disabledNativeToolSlugs,
+}: WebResearchToolsRegisteredProps): boolean =>
+  webSearchEnabled &&
+  webSearchProviders.webSearchProvider !== null &&
+  isWebSearchAvailable({
+    webSearchProviderAvailable: webSearchProviders.webSearchProvider !== null,
+    disabledNativeToolSlugs,
+  });
+
+/**
+ * Single source of truth for "is `suggest_template_fields` registered
+ * on this turn". The tool widens a fill-only role into template
+ * authoring, so it maps to `template: ["create"]` rather than the
+ * broader `["use"]`. `getChatTools` uses this to decide registration;
+ * prompt construction uses it to decide whether the active-template
+ * section may steer the model to the tool.
+ */
+export const areTemplateAuthoringToolsRegistered = (
+  memberRole: keyof typeof roles,
+): boolean => roles[memberRole].authorize({ template: ["create"] }).success;
+
 type WorkspaceTools = ReturnType<typeof createWorkspaceTools>;
 type OrgTools = ReturnType<typeof createOrgTools>;
 type ChatExecutionTools = ReturnType<typeof createChatExecutionTools>;
@@ -244,12 +282,18 @@ export const getChatTools = ({
     organizationId,
     scopedDb,
   });
+  const webResearchAvailable = areWebResearchToolsRegistered({
+    webSearchEnabled,
+    webSearchProviders,
+    disabledNativeToolSlugs,
+  });
   const executionTools = createChatExecutionTools({
     accessibleWorkspaceIds: toolWorkspaceIds,
     organizationId,
     refRegistry,
     safeDb,
     userId,
+    webResearchAvailable,
   });
   const skillTools = createSkillTools({
     activeSkillContext,
@@ -280,14 +324,10 @@ export const getChatTools = ({
     disabledNativeToolSlugs?.includes("infosoud") ?? false;
   const infosoudTools = infosoudDisabled ? {} : createInfosoudTools();
   const { webSearchProvider, urlFetcher } = webSearchProviders;
-  const webSearchToolsAvailable = isWebSearchAvailable({
-    webSearchProviderAvailable: webSearchProvider !== null,
-    disabledNativeToolSlugs,
-  });
   // The `webSearchProvider !== null` re-check narrows the type for
-  // createWebSearchTools; it is implied by webSearchToolsAvailable.
+  // createWebSearchTools; it is implied by `webResearchAvailable`.
   const webSearchTools =
-    webSearchEnabled && webSearchToolsAvailable && webSearchProvider !== null
+    webResearchAvailable && webSearchProvider !== null
       ? createWebSearchTools({ webSearchProvider, urlFetcher })
       : {};
   const activeDocxEditTools = hasActiveDocxEditClient
@@ -334,10 +374,7 @@ export const getChatTools = ({
   // placeholders, i.e. it assists template authoring, not filling. Gate it
   // behind `template: ["create"]` so a fill-only role (e.g. intern, which has
   // `use` but not `create`) cannot reach authoring assistance.
-  const canAuthorTemplates = roles[memberRole].authorize({
-    template: ["create"],
-  }).success;
-  const templateAuthoringTools = canAuthorTemplates
+  const templateAuthoringTools = areTemplateAuthoringToolsRegistered(memberRole)
     ? createTemplateAuthoringTools({
         safeDb,
         organizationId,

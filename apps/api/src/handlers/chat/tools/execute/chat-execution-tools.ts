@@ -4,8 +4,8 @@ import * as v from "valibot";
 
 import type { SafeDb } from "@/api/db";
 import {
+  buildRunStellaQueryToolDescription,
   DESCRIBE_STELLA_API_TOOL_DESCRIPTION,
-  RUN_STELLA_QUERY_TOOL_DESCRIPTION,
 } from "@/api/handlers/chat/tools/execute/chat-execution-tool-descriptions";
 import { createReadonlyOrgFunctionRegistry } from "@/api/handlers/chat/tools/execute/org-function-registry";
 import { readonlyOrgFunctionContracts } from "@/api/handlers/chat/tools/execute/org-manifest";
@@ -30,6 +30,12 @@ type CreateChatExecutionToolsProps = {
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   userId: SafeId<"user">;
+  /**
+   * Whether the web research tools are registered for this turn. The
+   * run-stella-query description points at `web_search` / `fetch_url`
+   * only when true, so the prompt never names a tool the model lacks.
+   */
+  webResearchAvailable: boolean;
 };
 
 const readonlyFunctionContracts: readonly ReadonlyFunctionContract[] = [
@@ -98,6 +104,7 @@ export const createChatExecutionTools = ({
   refRegistry,
   safeDb,
   userId,
+  webResearchAvailable,
 }: CreateChatExecutionToolsProps) => {
   const readonlySandboxRegistry = buildReadonlySandboxRegistry({
     accessibleWorkspaceIds,
@@ -155,7 +162,7 @@ export const createChatExecutionTools = ({
 
     "run-stella-query": toolDefinition({
       name: "run-stella-query",
-      description: RUN_STELLA_QUERY_TOOL_DESCRIPTION,
+      description: buildRunStellaQueryToolDescription({ webResearchAvailable }),
       inputSchema: toTanStackToolSchema(
         v.strictObject({
           code: v.pipe(
