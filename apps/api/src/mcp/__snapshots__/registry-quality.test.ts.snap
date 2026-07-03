@@ -1097,12 +1097,12 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "label": {
           "type": "string",
-          "description": "New label for version_id; pass an empty string is not allowed, omit to leave unchanged",
+          "description": "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
           "maxLength": 128
         },
         "description": {
           "type": "string",
-          "description": "New description for version_id; omit to leave unchanged",
+          "description": "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
           "maxLength": 1024
         }
       },

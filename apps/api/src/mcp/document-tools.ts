@@ -210,11 +210,11 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
           "Version ID to annotate; required when setting label or description",
         ),
         label: stringProp(
-          "New label for version_id; pass an empty string is not allowed, omit to leave unchanged",
+          "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
           { maxLength: 128 },
         ),
         description: stringProp(
-          "New description for version_id; omit to leave unchanged",
+          "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
           { maxLength: 1024 },
         ),
       },
@@ -455,20 +455,42 @@ const pushEntityFieldsTexts = ({
   }
 };
 
-/** Resolve the accessible workspace that owns an entity, or null if none. */
+/** Entity kind the document tools operate on (same set list_documents surfaces). */
+type DocumentEntityKind = (typeof LISTABLE_ENTITY_KINDS)[number];
+
+const isDocumentEntityKind = (kind: string): kind is DocumentEntityKind =>
+  (LISTABLE_ENTITY_KINDS as readonly string[]).includes(kind);
+
+/**
+ * Outcome of resolving an entity for a document tool. `wrong-kind` is kept
+ * distinct from `not-found` so callers can tell a caller that their own
+ * (accessible) entity is a task/message/link rather than silently 404ing.
+ */
+type ResolvedDocumentEntity =
+  | {
+      status: "ok";
+      workspaceId: SafeId<"workspace">;
+      kind: DocumentEntityKind;
+      name: string;
+    }
+  | { status: "not-found" }
+  | { status: "wrong-kind" };
+
+/**
+ * Resolve the accessible workspace that owns an entity. The document tools
+ * (read/update/delete/set_field_value) only operate on the kinds list_documents
+ * surfaces (document, folder); other kinds an entity ID happens to name are
+ * rejected as `wrong-kind` rather than acted on.
+ */
 const resolveEntityWorkspace = async ({
   context,
   entityId,
 }: {
   context: McpRequestContext;
   entityId: SafeId<"entity">;
-}): Promise<{
-  workspaceId: SafeId<"workspace">;
-  kind: string;
-  name: string;
-} | null> => {
+}): Promise<ResolvedDocumentEntity> => {
   if (context.accessibleWorkspaceIds.length === 0) {
-    return null;
+    return { status: "not-found" };
   }
   const entity = await context.scopedDb((tx) =>
     tx.query.entities.findFirst({
@@ -479,8 +501,31 @@ const resolveEntityWorkspace = async ({
       columns: { workspaceId: true, kind: true, name: true },
     }),
   );
-  return entity ?? null;
+  if (!entity) {
+    return { status: "not-found" };
+  }
+  if (!isDocumentEntityKind(entity.kind)) {
+    return { status: "wrong-kind" };
+  }
+  return {
+    status: "ok",
+    workspaceId: entity.workspaceId,
+    kind: entity.kind,
+    name: entity.name,
+  };
 };
+
+/**
+ * Map a non-`ok` entity resolution to a tool error. `wrong-kind` names the
+ * caller's own accessible entity's shape (no cross-tenant disclosure); a
+ * miss stays a generic not-found so a probed ID reveals nothing.
+ */
+const documentEntityNotAvailable = (
+  resolution: { status: "not-found" } | { status: "wrong-kind" },
+) =>
+  resolution.status === "wrong-kind"
+    ? errorResult("Not a document or folder entity")
+    : errorResult("Document not found or not accessible");
 
 // The list cursor is [createdAt, entityId]; the query resolves the (createdAt,
 // id) boundary via the keyset condition. A malformed cursor is rejected here so
@@ -646,6 +691,26 @@ const readDocumentArgsSchema = v.strictObject({
   versions_cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
 });
 
+/**
+ * One version-history entry. `label` and `description` are tenant-authored, so
+ * both must be pushed through `pushTextField` on the anonymized surface; typing
+ * them concretely (rather than `unknown[]` at the call site) is what makes that
+ * omission visible.
+ */
+type VersionHistoryEntry = {
+  id: SafeId<"entityVersion">;
+  versionNumber: number;
+  stamp: string | null;
+  label: string | null;
+  description: string | null;
+  createdAt: string;
+};
+
+type VersionHistoryPage = {
+  versions: VersionHistoryEntry[];
+  nextCursor: string | null;
+};
+
 const loadVersionHistory = async ({
   context,
   workspaceId,
@@ -656,7 +721,7 @@ const loadVersionHistory = async ({
   workspaceId: SafeId<"workspace">;
   entityId: SafeId<"entity">;
   cursor: string | undefined;
-}) => {
+}): Promise<VersionHistoryPage | ReturnType<typeof errorResult>> => {
   let boundary: { versionNumber: number; id: SafeId<"entityVersion"> } | null =
     null;
   if (cursor !== undefined) {
@@ -734,8 +799,8 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);
   const owner = await resolveEntityWorkspace({ context, entityId });
-  if (!owner) {
-    return errorResult("Document not found or not accessible");
+  if (owner.status !== "ok") {
+    return documentEntityNotAvailable(owner);
   }
   const { workspaceId } = owner;
 
@@ -907,9 +972,7 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
   }
   const current = currentResult.value;
 
-  let versionHistory:
-    | { versions: unknown[]; nextCursor: string | null }
-    | undefined;
+  let versionHistory: VersionHistoryPage | undefined;
   if (parsed.output.include_versions === true) {
     const history = await loadVersionHistory({
       context,
@@ -950,6 +1013,29 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
     fields: textFields,
     workspaceId,
   });
+  // Version history carries tenant-authored label/description. payload.versions
+  // holds the same entry references, so writing back here anonymizes the
+  // payload in place, matching the specific-version branch above.
+  if (versionHistory) {
+    for (const version of versionHistory.versions) {
+      pushTextField({
+        apply: (value) => {
+          version.label = value;
+        },
+        fields: textFields,
+        value: version.label,
+        workspaceId,
+      });
+      pushTextField({
+        apply: (value) => {
+          version.description = value;
+        },
+        fields: textFields,
+        value: version.description,
+        workspaceId,
+      });
+    }
+  }
 
   return { egress: "structured", payload, textFields };
 };
@@ -1019,9 +1105,119 @@ const updateDocumentArgsSchema = v.strictObject({
   parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
   move_to_root: v.optional(v.boolean()),
   version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  label: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(128)))),
-  description: v.optional(v.nullable(v.pipe(v.string(), v.maxLength(1024)))),
+  label: v.optional(
+    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  ),
+  description: v.optional(
+    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1024))),
+  ),
 });
+
+/**
+ * Validate the entities update_document will touch before any mutation runs, so
+ * an invalid target cannot fail after an earlier rename already committed. Not
+ * transactional: a target could be deleted or change kind between this check
+ * and the mutation (an accepted TOCTOU window); this only removes the common
+ * partial-mutation failure mode. Returns an error result, or null when valid.
+ */
+const validateUpdateDocumentTargets = async ({
+  context,
+  entityId,
+  parentId,
+  versionId,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  entityId: SafeId<"entity">;
+  parentId: SafeId<"entity"> | undefined;
+  versionId: SafeId<"entityVersion"> | undefined;
+  workspaceId: SafeId<"workspace">;
+}): Promise<ReturnType<typeof errorResult> | null> => {
+  if (parentId !== undefined) {
+    const parent = await context.scopedDb((tx) =>
+      tx.query.entities.findFirst({
+        where: {
+          id: { eq: parentId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { kind: true },
+      }),
+    );
+    if (!parent) {
+      return errorResult("Target folder not found or not accessible");
+    }
+    if (parent.kind !== "folder") {
+      return errorResult("parent_id must be a folder entity");
+    }
+  }
+  if (versionId !== undefined) {
+    const version = await context.scopedDb((tx) =>
+      tx.query.entityVersions.findFirst({
+        where: {
+          id: { eq: versionId },
+          entityId: { eq: entityId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { id: true },
+      }),
+    );
+    if (!version) {
+      return errorResult("Version not found");
+    }
+  }
+  return null;
+};
+
+/** Apply the version label/description edits. Returns an error result or null. */
+const applyVersionAnnotations = async ({
+  context,
+  description,
+  entityId,
+  label,
+  recordAuditEvent,
+  versionId,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  description: string | null | undefined;
+  entityId: SafeId<"entity">;
+  label: string | null | undefined;
+  recordAuditEvent: AuditRecorder;
+  versionId: SafeId<"entityVersion">;
+  workspaceId: SafeId<"workspace">;
+}): Promise<ReturnType<typeof errorResult> | null> => {
+  if (label !== undefined) {
+    const labelled = await Result.gen(() =>
+      updateVersionLabelHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        entityId,
+        versionId,
+        label,
+        recordAuditEvent,
+      }),
+    );
+    if (Result.isError(labelled)) {
+      return errorResult(labelled.error.message);
+    }
+  }
+  if (description !== undefined) {
+    const described = await Result.gen(() =>
+      updateVersionDescriptionHandler({
+        safeDb: context.safeDb,
+        workspaceId,
+        entityId,
+        versionId,
+        description,
+        recordAuditEvent,
+      }),
+    );
+    if (Result.isError(described)) {
+      return errorResult(described.error.message);
+    }
+  }
+  return null;
+};
 
 const handleUpdateDocumentTool: McpToolHandler = async ({ args, context }) => {
   const hasPermission = roles[context.memberRole].authorize({
@@ -1061,11 +1257,31 @@ const handleUpdateDocumentTool: McpToolHandler = async ({ args, context }) => {
 
   const entityId = brandPersistedEntityId(input.entity_id);
   const owner = await resolveEntityWorkspace({ context, entityId });
-  if (!owner) {
-    return errorResult("Document not found or not accessible");
+  if (owner.status !== "ok") {
+    return documentEntityNotAvailable(owner);
   }
   const { workspaceId } = owner;
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
+
+  const parentId =
+    input.parent_id === undefined
+      ? undefined
+      : brandPersistedEntityId(input.parent_id);
+  const versionId =
+    input.version_id === undefined
+      ? undefined
+      : brandPersistedEntityVersionId(input.version_id);
+
+  const targetError = await validateUpdateDocumentTargets({
+    context,
+    entityId,
+    parentId,
+    versionId,
+    workspaceId,
+  });
+  if (targetError) {
+    return targetError;
+  }
 
   if (input.name !== undefined) {
     const name = input.name;
@@ -1088,13 +1304,7 @@ const handleUpdateDocumentTool: McpToolHandler = async ({ args, context }) => {
         safeDb: context.safeDb,
         workspaceId,
         recordAuditEvent,
-        body: {
-          entityId,
-          parentId:
-            input.parent_id === undefined
-              ? null
-              : brandPersistedEntityId(input.parent_id),
-        },
+        body: { entityId, parentId: parentId ?? null },
       }),
     );
     if (Result.isError(moved)) {
@@ -1102,39 +1312,18 @@ const handleUpdateDocumentTool: McpToolHandler = async ({ args, context }) => {
     }
   }
 
-  if (input.version_id !== undefined) {
-    const versionId = brandPersistedEntityVersionId(input.version_id);
-    const label = input.label;
-    const description = input.description;
-    if (label !== undefined) {
-      const labelled = await Result.gen(() =>
-        updateVersionLabelHandler({
-          safeDb: context.safeDb,
-          workspaceId,
-          entityId,
-          versionId,
-          label,
-          recordAuditEvent,
-        }),
-      );
-      if (Result.isError(labelled)) {
-        return errorResult(labelled.error.message);
-      }
-    }
-    if (description !== undefined) {
-      const described = await Result.gen(() =>
-        updateVersionDescriptionHandler({
-          safeDb: context.safeDb,
-          workspaceId,
-          entityId,
-          versionId,
-          description,
-          recordAuditEvent,
-        }),
-      );
-      if (Result.isError(described)) {
-        return errorResult(described.error.message);
-      }
+  if (versionId !== undefined) {
+    const annotationError = await applyVersionAnnotations({
+      context,
+      description: input.description,
+      entityId,
+      label: input.label,
+      recordAuditEvent,
+      versionId,
+      workspaceId,
+    });
+    if (annotationError) {
+      return annotationError;
     }
   }
 
@@ -1156,8 +1345,8 @@ const handleDeleteDocumentTool: McpToolHandler = async ({ args, context }) => {
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);
   const owner = await resolveEntityWorkspace({ context, entityId });
-  if (!owner) {
-    return errorResult("Document not found or not accessible");
+  if (owner.status !== "ok") {
+    return documentEntityNotAvailable(owner);
   }
   const { workspaceId } = owner;
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
@@ -1388,8 +1577,8 @@ const handleSetFieldValueTool: McpToolHandler = async ({ args, context }) => {
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);
   const owner = await resolveEntityWorkspace({ context, entityId });
-  if (!owner) {
-    return errorResult("Document not found or not accessible");
+  if (owner.status !== "ok") {
+    return documentEntityNotAvailable(owner);
   }
   const { workspaceId } = owner;
 

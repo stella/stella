@@ -1564,4 +1564,152 @@ describe("OpenAI-compatible MCP tools", () => {
       { source: "mcp", toolName: "search" },
     );
   });
+
+  // Document tools share resolveEntityWorkspace, which confines them to the
+  // document/folder kinds list_documents surfaces. An entity ID that names a
+  // task/message/link (kinds hidden from list_documents) must be rejected, not
+  // acted on, even though the caller can read that workspace.
+  const createEntityKindScopedDb = (kind: string) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              entities: {
+                findFirst: () => Promise<{
+                  kind: string;
+                  name: string;
+                  workspaceId: string;
+                }>;
+              };
+            };
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              entities: {
+                findFirst: async () => ({
+                  kind,
+                  name: "Weekly sync",
+                  workspaceId: "ws_1",
+                }),
+              },
+            },
+          }),
+      ),
+    );
+
+  test("read_document rejects an entity that is not a document or folder", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_task" },
+      context: createContext({ scopedDb: createEntityKindScopedDb("task") }),
+      toolName: "read_document",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Not a document or folder entity" }],
+      isError: true,
+    });
+  });
+
+  test("update_document rejects an entity that is not a document or folder", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_message", name: "Renamed" },
+      context: createContext({ scopedDb: createEntityKindScopedDb("message") }),
+      toolName: "update_document",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "Not a document or folder entity" }],
+      isError: true,
+    });
+  });
+
+  // read_document's default branch returns the version history. Each version's
+  // label/description are tenant-authored, so they must be pushed through the
+  // anonymization plan (not left raw) on the anonymized surface.
+  type VersionHistoryRow = {
+    createdAt: Date;
+    description: string | null;
+    id: string;
+    label: string | null;
+    stamp: string | null;
+    versionNumber: number;
+  };
+
+  const createVersionHistoryScopedDb = (rows: VersionHistoryRow[]) =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(async (callback: (tx: unknown) => unknown) => {
+        const selectBuilder = {
+          from: () => selectBuilder,
+          where: () => selectBuilder,
+          orderBy: () => selectBuilder,
+          limit: () => rows,
+        };
+        // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+        return await callback({
+          query: {
+            entities: {
+              findFirst: async () => ({
+                currentVersionId: "ver_current",
+                kind: "document",
+                name: "Secret Doc for John Smith",
+                workspaceId: "ws_1",
+              }),
+            },
+            fields: {
+              findMany: async () => [],
+            },
+          },
+          select: () => selectBuilder,
+        });
+      }),
+    );
+
+  test("read_document anonymizes version-history labels and descriptions", async () => {
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: ["[DOC]", "[PERSON_1] draft", "Redacted note"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1", include_versions: true },
+      context: createContext({
+        scopedDb: createVersionHistoryScopedDb([
+          {
+            createdAt: new Date("2026-01-01T00:00:00.000Z"),
+            description: "Note authored by John Smith",
+            id: "ver_1",
+            label: "Draft by John Smith",
+            stamp: null,
+            versionNumber: 2,
+          },
+        ]),
+      }),
+      mode: "anonymized",
+      toolName: "read_document",
+    });
+
+    // The version label and description reach the redactor as raw text fields;
+    // without the fix they would never be enqueued and would leak verbatim.
+    const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
+    expect(anonymizeInput).toMatchObject({
+      fields: [
+        "Secret Doc for John Smith",
+        "Draft by John Smith",
+        "Note authored by John Smith",
+      ],
+      workspaceId: "ws_1",
+    });
+
+    expect(parseToolPayload(result)).toMatchObject({
+      versions: [
+        expect.objectContaining({
+          description: "Redacted note",
+          label: "[PERSON_1] draft",
+        }),
+      ],
+    });
+  });
 });

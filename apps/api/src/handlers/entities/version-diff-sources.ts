@@ -187,7 +187,7 @@ export const loadEntityVersionDocxText = async function* ({
     ),
   );
   if (!version) {
-    return yield* Result.err(
+    return Result.err(
       new HandlerError({ status: 404, message: "Version not found" }),
     );
   }
@@ -206,7 +206,7 @@ export const loadEntityVersionDocxText = async function* ({
 
   const file = findDocxFile(versionFields);
   if (!file) {
-    return yield* Result.err(
+    return Result.err(
       new HandlerError({
         status: 400,
         message: "Version does not contain a DOCX file",
