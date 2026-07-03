@@ -4,6 +4,7 @@ import {
   AI_PROVIDERS,
   ANTHROPIC_ADAPTIVE_THINKING_MODELS,
   BYOK_DEFAULT_MODELS,
+  BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
@@ -46,6 +47,20 @@ describe("BYOK_MODEL_OPTIONS", () => {
 });
 
 describe("BYOK provider role support", () => {
+  test("documents the curated PDF-capable model set", () => {
+    expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.google).toContain(
+      "gemini-3.5-flash",
+    );
+    expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.openrouter).toContain(
+      "google/gemini-3.5-flash",
+    );
+    expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.bedrock).toContain(
+      "us.amazon.nova-pro-v1:0",
+    );
+    expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.openai).toContain("gpt-5.4");
+    expect(BYOK_DOCUMENT_INPUT_MODEL_OPTIONS.mistral).toEqual([]);
+  });
+
   test("does not route PDF flows through Mistral document-unsupported models", () => {
     expect(
       isBYOKProviderRoleSupported({ provider: "mistral", role: "chat" }),
@@ -60,6 +75,13 @@ describe("BYOK provider role support", () => {
       isBYOKModelRoleSupported({
         provider: "bedrock",
         modelId: "us.anthropic.claude-sonnet-4-5-20250929-v1:0",
+        role: "pdf",
+      }),
+    ).toBe(true);
+    expect(
+      isBYOKModelRoleSupported({
+        provider: "bedrock",
+        modelId: "us.amazon.nova-pro-v1:0",
         role: "pdf",
       }),
     ).toBe(true);
