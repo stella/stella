@@ -176,7 +176,7 @@ export const BYOK_MODEL_OPTIONS = {
     "mistral-medium-latest",
     "mistral-small-latest",
     "magistral-medium-latest",
-    "magistral-small-latest",
+    "magistral-small",
     "pixtral-large-latest",
   ],
 } as const satisfies Record<TanStackAIProvider, readonly string[]>;
@@ -416,6 +416,10 @@ export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
   "magistral-medium-latest": {
     inputPerMTok: 200_000,
     outputPerMTok: 500_000,
+  },
+  "magistral-small": {
+    inputPerMTok: 50_000,
+    outputPerMTok: 150_000,
   },
   "magistral-small-latest": {
     inputPerMTok: 50_000,
