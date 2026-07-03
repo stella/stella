@@ -569,18 +569,29 @@ type SelfhostBootstrapSignUpInput = {
 const signUpWithSelfhostBootstrap = async (
   body: SelfhostBootstrapSignUpInput,
 ) => {
-  const response = await fetch(
-    `${env.VITE_API_URL}${BETTER_AUTH_SIGN_UP_EMAIL_PATH}`,
-    {
-      method: "POST",
-      credentials: "include",
-      signal: AbortSignal.timeout(10_000),
-      headers: {
-        "Content-Type": "application/json",
+  let response: Response;
+  try {
+    response = await fetch(
+      `${env.VITE_API_URL}${BETTER_AUTH_SIGN_UP_EMAIL_PATH}`,
+      {
+        method: "POST",
+        credentials: "include",
+        signal: AbortSignal.timeout(10_000),
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(body),
       },
-      body: JSON.stringify(body),
-    },
-  );
+    );
+  } catch {
+    return {
+      error: {
+        status: 0,
+        statusText: "Network Error",
+        message: undefined,
+      },
+    };
+  }
 
   if (response.ok) {
     return { error: null };

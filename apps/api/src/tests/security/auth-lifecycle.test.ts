@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
+import { isBootstrapTokenMatch } from "@/api/lib/selfhost-auth";
+
 const readSecurityFixture = (relativePath: string) =>
   readFileSync(path.join(import.meta.dir, relativePath), "utf-8");
 
@@ -59,7 +61,22 @@ describe("self-host auth bootstrap lifecycle", () => {
     expect(selfhostAuthSource).toContain('"/sign-up/email"');
     expect(selfhostAuthSource).toContain("SELFHOST_BOOTSTRAP_TOKEN");
     expect(selfhostAuthSource).toContain("hasAnyAuthUsers()");
-    expect(selfhostAuthSource).toContain('new Bun.CryptoHasher("sha256")');
+    expect(selfhostAuthSource).toContain("timingSafeEqual");
+  });
+
+  test("bootstrap token comparison matches only the configured token", () => {
+    expect(
+      isBootstrapTokenMatch({
+        candidate: "railway-bootstrap-token",
+        expected: "railway-bootstrap-token",
+      }),
+    ).toBe(true);
+    expect(
+      isBootstrapTokenMatch({
+        candidate: "railway-bootstrap-token",
+        expected: "different-bootstrap-token",
+      }),
+    ).toBe(false);
   });
 
   test("password bootstrap has a database-level singleton guard", () => {

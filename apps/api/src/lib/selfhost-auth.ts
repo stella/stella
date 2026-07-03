@@ -1,4 +1,5 @@
 import { APIError } from "better-auth/api";
+import { timingSafeEqual } from "node:crypto";
 
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
@@ -30,11 +31,9 @@ export const isBootstrapTokenMatch = ({
 }) => {
   const candidateHash = new Bun.CryptoHasher("sha256")
     .update(candidate)
-    .digest("hex");
-  const expectedHash = new Bun.CryptoHasher("sha256")
-    .update(expected)
-    .digest("hex");
-  return candidateHash === expectedHash;
+    .digest();
+  const expectedHash = new Bun.CryptoHasher("sha256").update(expected).digest();
+  return timingSafeEqual(candidateHash, expectedHash);
 };
 
 export const isSelfhostBootstrapAvailable = async () =>
