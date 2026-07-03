@@ -293,7 +293,7 @@ describe("chat thread messages", () => {
     expect(html).toContain("/v1/user-files/file_test123/thumbnail");
     expect(html).toContain("background-image");
     expect(html).toContain("data:image/png;base64,AAAA");
-    expect(html).toContain('aria-label="Preview"');
+    expect(html).toContain('aria-label="Preview: evidence.png"');
     expect(html).not.toContain('target="_blank"');
     expect(html).not.toContain('href="/v1/user-files/file_test123/content"');
   });

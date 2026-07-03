@@ -28,7 +28,7 @@ export const ChatImageAttachment = ({
   return (
     <>
       <button
-        aria-label={t("common.preview")}
+        aria-label={`${t("common.preview")}: ${alt}`}
         className="focus-visible:ring-ring cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:outline-none"
         onClick={() => setOpen(true)}
         type="button"
