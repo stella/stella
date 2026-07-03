@@ -466,6 +466,7 @@ describe("withParsedToolCallInputs", () => {
       {
         default: "Alza.cz a.s.",
         question: "Which entity should I look up?",
+        reason: "The lookup needs the exact legal entity.",
         options: ["Alza.cz a.s.", "Alzashop.com"],
       },
     ],
@@ -498,6 +499,7 @@ describe("withParsedToolCallInputs", () => {
         {
           default: "Alza.cz a.s.",
           question: "Which entity should I look up?",
+          reason: "The lookup needs the exact legal entity.",
           options: ["Alza.cz a.s.", "Alzashop.com"],
         },
       ],

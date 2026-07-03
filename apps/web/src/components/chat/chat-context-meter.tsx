@@ -66,7 +66,7 @@ type ContextPart = {
 };
 
 export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
-  const t = useTranslations();
+  const t = useTranslations("chat.contextMeter");
   const format = useFormatter();
 
   const percent = Math.min(
@@ -78,14 +78,16 @@ export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
   const compact = (value: number) =>
     format.number(value, { notation: "compact", maximumFractionDigits: 1 });
 
-  const parts = buildContextParts({ t, usage });
+  const parts = buildContextParts({ t, format, usage });
 
   return (
     <Popover>
       <PopoverTrigger
         render={
           <Button
-            aria-label={t("chat.contextMeter.triggerLabel", { percent })}
+            aria-label={t("triggerLabel", {
+              percent: format.number(percent),
+            })}
             className={cn("font-normal", TONE_TEXT_CLASS[tone])}
             size="xs"
             variant="ghost"
@@ -95,21 +97,19 @@ export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
         <ContextRing percent={percent} />
         {showPercent && (
           <span className="text-xs">
-            {t("chat.contextMeter.percent", { percent })}
+            {t("percent", { percent: format.number(percent) })}
           </span>
         )}
       </PopoverTrigger>
       <PopoverPopup align="end" className="w-96" side="top">
         <div className="flex flex-col gap-3">
-          <PopoverTitle className="text-sm">
-            {t("chat.contextMeter.title")}
-          </PopoverTitle>
+          <PopoverTitle className="text-sm">{t("title")}</PopoverTitle>
           <div className="flex items-baseline justify-between gap-2">
             <span className={cn("text-sm font-medium", TONE_TEXT_CLASS[tone])}>
-              {t("chat.contextMeter.full", { percent })}
+              {t("full", { percent: format.number(percent) })}
             </span>
             <span className="text-muted-foreground text-xs tabular-nums">
-              {t("chat.contextMeter.tokens", {
+              {t("tokens", {
                 used: compact(usage.estimatedTokens),
                 total: compact(usage.triggerTokens),
               })}
@@ -118,8 +118,8 @@ export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
           <ContextBar parts={parts} usage={usage} />
           <ContextLegend compact={compact} parts={parts} />
           <div className="text-muted-foreground flex flex-col gap-1 text-xs">
-            <p>{t("chat.contextMeter.autoCompact")}</p>
-            <p>{t("chat.contextMeter.cache")}</p>
+            <p>{t("autoCompact")}</p>
+            <p>{t("cache")}</p>
           </div>
         </div>
       </PopoverPopup>
@@ -127,36 +127,39 @@ export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
   );
 };
 
-type TranslateFn = ReturnType<typeof useTranslations>;
+type TranslateFn = ReturnType<typeof useTranslations<"chat.contextMeter">>;
+type FormatFn = ReturnType<typeof useFormatter>;
 
 const buildContextParts = ({
   t,
+  format,
   usage,
 }: {
   t: TranslateFn;
+  format: FormatFn;
   usage: ChatContextUsage;
 }): ContextPart[] => {
   const { breakdown, summarizedMessageCount } = usage;
   const summaryLabel =
     summarizedMessageCount > 0
-      ? t("chat.contextMeter.summaryWithCount", {
-          count: summarizedMessageCount,
+      ? t("summaryWithCount", {
+          count: format.number(summarizedMessageCount),
         })
-      : t("chat.contextMeter.summary");
+      : t("summary");
 
   return [
     {
       id: "prompt",
       tokens: breakdown.promptTokens,
       swatch: PROMPT_SWATCH,
-      label: t("chat.contextMeter.instructions"),
+      label: t("instructions"),
       cached: true,
     },
     {
       id: "tools",
       tokens: breakdown.toolTokens,
       swatch: TOOL_SWATCH,
-      label: t("chat.contextMeter.tools"),
+      label: t("tools"),
       cached: true,
     },
     {
@@ -170,14 +173,14 @@ const buildContextParts = ({
       id: "attachments",
       tokens: breakdown.attachmentTokens,
       swatch: ATTACHMENT_SWATCH,
-      label: t("chat.contextMeter.attachments"),
+      label: t("attachments"),
       cached: false,
     },
     {
       id: "conversation",
       tokens: breakdown.conversationTokens,
       swatch: CONVERSATION_SWATCH,
-      label: t("chat.contextMeter.conversation"),
+      label: t("conversation"),
       cached: false,
     },
   ];
@@ -260,7 +263,7 @@ type ContextLegendProps = {
 };
 
 const ContextLegend = ({ compact, parts }: ContextLegendProps) => {
-  const t = useTranslations();
+  const t = useTranslations("chat.contextMeter");
   const visibleParts = parts.filter((part) => part.tokens > 0);
   if (visibleParts.length === 0) {
     return null;
@@ -277,7 +280,7 @@ const ContextLegend = ({ compact, parts }: ContextLegendProps) => {
           <span className="text-foreground">{part.label}</span>
           {part.cached && (
             <span className="bg-muted text-muted-foreground rounded-sm px-1 leading-tight">
-              {t("chat.contextMeter.cached")}
+              {t("cached")}
             </span>
           )}
           <span className="text-muted-foreground ms-auto tabular-nums">
