@@ -66,7 +66,8 @@ jobs:
           # "Null" in PR summaries even though package manifests declare
           # allowed licenses. It also fails to parse some Cargo crates' dual
           # SPDX license expressions (e.g. brotli-decompressor "BSD-3-Clause OR
-          # MIT", filetime "MIT OR Apache-2.0"), reporting them as an
+          # MIT", filetime "MIT OR Apache-2.0", mac-notification-sys
+          # "MIT OR Apache-2.0"), reporting them as an
           # unrecognized LicenseRef even though both halves are allowed above.
           # Keep these exceptions package-scoped; do not add namespace/group
           # exceptions.
@@ -120,5 +121,7 @@ jobs:
             pkg:npm/y-prosemirror,
             pkg:npm/yjs,
             pkg:cargo/brotli-decompressor,
-            pkg:cargo/filetime
+            pkg:cargo/dbus,
+            pkg:cargo/filetime,
+            pkg:cargo/mac-notification-sys
           comment-summary-in-pr: always

@@ -12,7 +12,7 @@ describe("parseAttachments", () => {
   });
 
   it("filters to PDF attachments with content and filename", () => {
-    const result = parseAttachments({
+    const attachments = {
       "file1.pdf": {
         content: new Uint8Array([1, 2, 3]),
         filename: "file1.pdf",
@@ -26,7 +26,41 @@ describe("parseAttachments", () => {
         content: new Uint8Array([6]),
         filename: "file2.PDF",
       },
-    });
+    };
+
+    const result = parseAttachments(attachments);
+
+    expect(result).toHaveLength(2);
+    expect(result[0]?.filename).toBe("file1.pdf");
+    expect(result[1]?.filename).toBe("file2.PDF");
+  });
+
+  it("filters PDF attachments when getAttachments() returns a Map (pdfjs v6.1+)", () => {
+    const attachments = new Map([
+      [
+        "file1.pdf",
+        {
+          content: new Uint8Array([1, 2, 3]),
+          filename: "file1.pdf",
+        },
+      ],
+      [
+        "image.png",
+        {
+          content: new Uint8Array([4, 5]),
+          filename: "image.png",
+        },
+      ],
+      [
+        "file2.PDF",
+        {
+          content: new Uint8Array([6]),
+          filename: "file2.PDF",
+        },
+      ],
+    ]);
+
+    const result = parseAttachments(attachments);
 
     expect(result).toHaveLength(2);
     expect(result[0]?.filename).toBe("file1.pdf");
