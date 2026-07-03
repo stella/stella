@@ -355,6 +355,26 @@ export const findHiddenEndpointMismatches = ({
   return mismatches.sort((a, b) => a.id.localeCompare(b.id));
 };
 
+/**
+ * A stale allowlist entry is a fail-open hole, not just clutter: once a file's
+ * inline endpoints are migrated out (or the file is deleted), discovery skips
+ * it entirely (0 factory call sites), so the mismatch check never runs there —
+ * and the lingering entry would silently admit that many brand-new inline
+ * endpoints later. Pure so the self-test can exercise it.
+ */
+export const findStaleAllowlistEntries = ({
+  files,
+  allowlist,
+}: {
+  files: readonly FileEndpointCount[];
+  allowlist: Record<string, number>;
+}): string[] => {
+  const discovered = new Set(files.map(({ id }) => id));
+  return Object.keys(allowlist)
+    .filter((id) => !discovered.has(id))
+    .sort((a, b) => a.localeCompare(b));
+};
+
 const readBaseline = async (): Promise<string[]> => {
   const file = Bun.file(BASELINE_PATH);
   if (!(await file.exists())) {
@@ -514,6 +534,20 @@ const runCheck = async (): Promise<number> => {
       console.error(
         `  ${id}: ${callCount} createSafe*Handler calls but ${enumerable}`,
       );
+    }
+  }
+
+  const staleAllowlistEntries = findStaleAllowlistEntries({
+    files,
+    allowlist: INLINE_ENDPOINT_ALLOWLIST,
+  });
+  if (staleAllowlistEntries.length > 0) {
+    hiddenEndpointFailed = true;
+    console.error(
+      "\nmcp-coverage-guard: these INLINE_ENDPOINT_ALLOWLIST entries no longer match a file with `createSafe*Handler` call sites (renamed, deleted, or fully migrated to endpoint modules). Remove them so they cannot admit future inline endpoints:",
+    );
+    for (const id of staleAllowlistEntries) {
+      console.error(`  ${id}`);
     }
   }
 
@@ -701,6 +735,16 @@ const runSelfTest = (): number => {
   ) {
     failures.push(
       "findHiddenEndpointMismatches did not flag an allowlisted file with one extra inline endpoint",
+    );
+  }
+
+  const staleEntries = findStaleAllowlistEntries({
+    files: [{ id: "live.ts", callCount: 2, enumerableCount: 2 }],
+    allowlist: { "live.ts": 0, "gone.ts": 5 },
+  });
+  if (staleEntries.length !== 1 || staleEntries[0] !== "gone.ts") {
+    failures.push(
+      "findStaleAllowlistEntries did not flag the allowlist entry with no discovered file",
     );
   }
 

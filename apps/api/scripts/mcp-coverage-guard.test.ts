@@ -5,6 +5,7 @@ import {
   computeBaselineDiff,
   enumerateModuleEndpoints,
   findHiddenEndpointMismatches,
+  findStaleAllowlistEntries,
   isEndpointModule,
   parseExposure,
   toEndpointIdentifier,
@@ -177,6 +178,26 @@ describe("findHiddenEndpointMismatches", () => {
       findHiddenEndpointMismatches({
         files: [{ id: "read.ts", callCount: 1, enumerableCount: 1 }],
         allowlist: {},
+      }),
+    ).toEqual([]);
+  });
+});
+
+describe("findStaleAllowlistEntries", () => {
+  test("flags an allowlist entry whose file was not discovered", () => {
+    expect(
+      findStaleAllowlistEntries({
+        files: [{ id: "live.ts", callCount: 3, enumerableCount: 0 }],
+        allowlist: { "live.ts": 3, "gone.ts": 5 },
+      }),
+    ).toEqual(["gone.ts"]);
+  });
+
+  test("passes when every allowlist entry matches a discovered file", () => {
+    expect(
+      findStaleAllowlistEntries({
+        files: [{ id: "inline.ts", callCount: 5, enumerableCount: 0 }],
+        allowlist: { "inline.ts": 5 },
       }),
     ).toEqual([]);
   });
