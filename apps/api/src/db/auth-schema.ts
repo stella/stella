@@ -1,4 +1,4 @@
-import { defineRelationsPart } from "drizzle-orm";
+import { defineRelationsPart, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
@@ -116,6 +116,9 @@ export const account = pgTable(
   },
   (table) => [
     index("account_userId_idx").on(table.userId),
+    uniqueIndex("account_credential_singleton_uidx")
+      .on(table.providerId)
+      .where(sql`${table.providerId} = 'credential'`),
     ...denyStellaAccessPolicies(),
   ],
 );

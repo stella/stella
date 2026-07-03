@@ -61,4 +61,16 @@ describe("self-host auth bootstrap lifecycle", () => {
     expect(selfhostAuthSource).toContain("hasAnyAuthUsers()");
     expect(selfhostAuthSource).toContain('new Bun.CryptoHasher("sha256")');
   });
+
+  test("password bootstrap has a database-level singleton guard", () => {
+    const authSchemaSource = readSecurityFixture("../../db/auth-schema.ts");
+    const migrationSource = readRootFixture(
+      "apps/api/drizzle/20260703233000_account_credential_singleton/migration.sql",
+    );
+
+    expect(authSchemaSource).toContain("account_credential_singleton_uidx");
+    expect(authSchemaSource).toContain("'credential'");
+    expect(migrationSource).toContain("account_credential_singleton_uidx");
+    expect(migrationSource).toContain("WHERE provider_id = 'credential'");
+  });
 });

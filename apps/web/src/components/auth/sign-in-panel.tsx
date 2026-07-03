@@ -17,6 +17,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { env } from "@/env";
+import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { authClient, HTTP_TOO_MANY_REQUESTS } from "@/lib/auth";
@@ -306,6 +307,7 @@ function PasswordSignInForm({ redirectTo }: { redirectTo: string }) {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const invalidateSession = useInvalidateSession();
   const form = useForm({
     defaultValues: { email: "", password: "" },
     validators: {
@@ -333,6 +335,7 @@ function PasswordSignInForm({ redirectTo }: { redirectTo: string }) {
         return;
       }
 
+      await invalidateSession.mutateAsync();
       await navigate({
         to: "/auth/organization",
         search: { redirectTo },
@@ -413,6 +416,7 @@ function BootstrapSignUpForm({ redirectTo }: { redirectTo: string }) {
   const t = useTranslations();
   const analytics = useAnalytics();
   const navigate = useNavigate();
+  const invalidateSession = useInvalidateSession();
   const form = useForm({
     defaultValues: { email: "", password: "", bootstrapToken: "" },
     validators: {
@@ -443,6 +447,7 @@ function BootstrapSignUpForm({ redirectTo }: { redirectTo: string }) {
         return;
       }
 
+      await invalidateSession.mutateAsync();
       await navigate({
         to: "/auth/organization",
         search: { redirectTo },
