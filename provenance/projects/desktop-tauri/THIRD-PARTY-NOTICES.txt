@@ -508,6 +508,7 @@ Project: desktop-tauri
 - tray-icon 0.24.1 — Apache-2.0 OR MIT
 - tree_magic_mini 3.2.2 — MIT
 - try-lock 0.2.5 — MIT
+- typed-path 0.12.3 — Apache-2.0 OR MIT
 - typeid 1.0.3 — Apache-2.0 OR MIT
 - typenum 1.20.1 — Apache-2.0 OR MIT
 - uds_windows 1.2.1 — MIT
@@ -647,6 +648,7 @@ Project: desktop-tauri
 - zerovec 0.11.6 — Unicode-3.0
 - zerovec-derive 0.11.3 — Unicode-3.0
 - zip 4.6.1 — MIT
+- zip 8.6.0 — MIT
 - zmij 1.0.21 — MIT
 - zune-core 0.5.1 — Apache-2.0 OR MIT OR Zlib
 - zune-jpeg 0.5.15 — Apache-2.0 OR MIT OR Zlib

@@ -2,2464 +2,6 @@
   "bomFormat": "CycloneDX",
   "components": [
     {
-      "bom-ref": "pkg:npm/@ai-sdk/anthropic@3.0.85",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/anthropic/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/anthropic/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ai-models.ts#25"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "anthropic",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/anthropic/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/anthropic@3.0.85",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "3.0.85"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/azure@3.0.77",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/azure/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/azure/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ai-models.ts#26"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "azure",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/azure/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/azure@3.0.77",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "3.0.77"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/devtools@0.0.20",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/devtools/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/devtools/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ai-models.ts#27"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "devtools",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/devtools/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/devtools@0.0.20",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "0.0.20"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/google-vertex@4.0.148",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/google-vertex/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/google-vertex/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ai-models.ts#30"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "google-vertex",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/google-vertex/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/google-vertex@4.0.148",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "4.0.148"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/google@3.0.83",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/google/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/google/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ai-models.ts#28"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#29"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "google",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/google/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/google@3.0.83",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "3.0.83"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/mcp@1.0.52",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/mcp/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/mcp/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/mcp-upstream/cached-tools.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#2"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "mcp",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/mcp/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/mcp@1.0.52",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "1.0.52"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/mistral@3.0.40",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/mistral/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/mistral/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ai-models.ts#31"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "mistral",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/mistral/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/mistral@3.0.40",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "3.0.40"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/openai@3.0.74",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/openai/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/openai/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ai-models.ts#32"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#33"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "openai",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/openai/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/openai@3.0.74",
-      "scope": "required",
-      "tags": [
-        "framework",
-        "ml"
-      ],
-      "type": "framework",
-      "version": "3.0.74"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/provider-utils@4.0.30",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/provider-utils/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/provider-utils/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#3"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "provider-utils",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/provider-utils/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/provider-utils@4.0.30",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "4.0.30"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/provider@3.0.10",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/provider/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/provider/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/dev/register-mock-ai.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#34"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#41"
-          },
-          {
-            "location": "apps/api/src/lib/ai-output-schema.ts#25"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "provider",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/provider/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/provider@3.0.10",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "3.0.10"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/react@3.0.210",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/react/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/react/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#13"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/use-ai-suggestion-thread.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/autocomplete/use-autocomplete-stream.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/docx-preview-zoom.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/docx-preview-zoom.ts#2"
-          },
-          {
-            "location": "apps/web/src/components/inspector/use-docx-tab-edit-session.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/use-file-tab-rename.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/use-pdf-tab-zoom.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/view-registry.ts#1"
-          },
-          {
-            "location": "apps/web/src/components/usage/use-usage-limit.ts#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/types.ts#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/use-decision-analysis.ts#8"
-          },
-          {
-            "location": "apps/web/src/hooks/use-chrome-query.ts#1"
-          },
-          {
-            "location": "apps/web/src/hooks/use-effect.ts#1"
-          },
-          {
-            "location": "apps/web/src/hooks/use-effect.ts#2"
-          },
-          {
-            "location": "apps/web/src/hooks/use-external-file-drop.ts#1"
-          },
-          {
-            "location": "apps/web/src/hooks/use-inline-rename.ts#1"
-          },
-          {
-            "location": "apps/web/src/hooks/use-pulse.ts#1"
-          },
-          {
-            "location": "apps/web/src/hooks/use-stick-to-bottom.ts#1"
-          },
-          {
-            "location": "apps/web/src/hooks/use-stick-to-bottom.ts#2"
-          },
-          {
-            "location": "apps/web/src/lib/anonymize/use-chat-anonymize.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/anonymize/use-overlay-rects.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/hooks/use-page-visibility.ts#2"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/hooks/use-pdf-controlled-scale-offset.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/hooks/use-pdf-external-page-sync.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/hooks/use-pdf-external-page-sync.ts#2"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/hooks/use-pdf-fit-to-width.ts#2"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/hooks/use-text-selection.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/use-anonymized-field-ids.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/sse.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-docx-block-scroll.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-edit-session.ts#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/use-folio-collaboration-session.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/custom-mention.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/group-scope.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-default-view-redirect.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-create-b-boxes.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-justifications.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-sync-selected-entities.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-table-state.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/use-version-or-new-file-drop.ts#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.props.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/findReplaceDialogLayout.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/useFindReplace.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useContextMenu.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useDocumentLoader.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useEditorMode.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useFindReplace.ts#10"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHeaderFooterEditor.ts#6"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useHyperlinkHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useImageHandlers.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#1"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useKeyboardShortcuts.ts#2"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#7"
-          },
-          {
-            "location": "packages/folio/src/components/hooks/useZoomAndPageInfo.ts#8"
-          },
-          {
-            "location": "packages/folio/src/components/useFolioComments.ts#17"
-          },
-          {
-            "location": "packages/folio/src/hooks/useHistory.ts#11"
-          },
-          {
-            "location": "packages/folio/src/hooks/useTableSelection.ts#8"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useDragAutoScroll.ts#9"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/useVisualLineNavigation.ts#14"
-          },
-          {
-            "location": "packages/folio/src/utils/contained-handler.ts#1"
-          },
-          {
-            "location": "packages/transactional/emails/_shared.ts#1"
-          },
-          {
-            "location": "packages/ui/src/hooks/use-contained-handler.ts#1"
-          },
-          {
-            "location": "packages/ui/src/hooks/use-content-dir.ts#1"
-          },
-          {
-            "location": "packages/ui/src/hooks/use-mobile.ts#1"
-          },
-          {
-            "location": "apps/desktop/src/mainview/App.tsx#1"
-          },
-          {
-            "location": "apps/desktop/src/mainview/main.tsx#1"
-          },
-          {
-            "location": "apps/playground/src/App.tsx#1"
-          },
-          {
-            "location": "apps/web/src/app-providers.tsx#1"
-          },
-          {
-            "location": "apps/web/src/app-providers.tsx#2"
-          },
-          {
-            "location": "apps/web/src/client.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/ai-elements/conversation.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/ai-elements/message-response.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/ai-elements/message-response.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/ai-elements/message.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/ai-elements/message.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/ai-prompt-input/ai-prompt-input.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/ai-provider-icons.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#24"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#25"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#16"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.impl.tsx#17"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/file-viewer-with-ai.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#24"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/host.tsx#29"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#8"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.impl.tsx#9"
-          },
-          {
-            "location": "apps/web/src/components/ai-suggestions/review-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/app-sidebar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/app-sidebar.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/auth/otp-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/auth/otp-panel.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/auth/sign-in-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/auth/sign-in-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/auth/sign-in-panel.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/authenticated-case-law-workspace.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/authenticated-case-law-workspace.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/breadcrumbs/app-breadcrumbs.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/breadcrumbs/shared.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/anonymized-span.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-approval-context.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-matter-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-matters-context.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/chat/needs-matter-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/prompt-slash-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/prompt-slash-list.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/chat/source-chips.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/chat/tool-approval-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#10"
-          },
-          {
-            "location": "apps/web/src/components/chat-editor-provider.tsx#11"
-          },
-          {
-            "location": "apps/web/src/components/chat-input-surface.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/chat-mention-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat-mention-list.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/chat-mention-providers.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/chat-pasted-text-node.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/conditions/condition-builder.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/conditions/formula-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/contact-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/contact-picker.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/context-menu.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/dev-root.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/dev-sidebar-group.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/docx/app-docx-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/drag-preview.tsx#10"
-          },
-          {
-            "location": "apps/web/src/components/empty-screen.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/empty-screen.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/file-drop-zone.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/file-tree/file-tree.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/file-tree/folder-expand-toggle.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inline-pill.tsx#6"
-          },
-          {
-            "location": "apps/web/src/components/inspector/anonymization-context-menu.tsx#13"
-          },
-          {
-            "location": "apps/web/src/components/inspector/anonymization-facet.tsx#16"
-          },
-          {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#18"
-          },
-          {
-            "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#19"
-          },
-          {
-            "location": "apps/web/src/components/inspector/document-ai-source-bar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/docx-desktop-open-button.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/entity-metadata-panel.tsx#9"
-          },
-          {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#8"
-          },
-          {
-            "location": "apps/web/src/components/inspector/external-reference-panel.tsx#9"
-          },
-          {
-            "location": "apps/web/src/components/inspector/file-facets.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/file-tab-panel.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/inspector/inspector-facet-bar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/inspector-panel.tsx#8"
-          },
-          {
-            "location": "apps/web/src/components/inspector/inspector-rail.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/suggestions-facet.tsx#23"
-          },
-          {
-            "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/inspector/use-anchored-menu.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/inspector/versions-facet.tsx#11"
-          },
-          {
-            "location": "apps/web/src/components/inspector-side-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/jurisdiction-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.impl.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/markdown/markdown-folio-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/markdown-icon.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/markdown-preview.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/matter-target-picker.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/mcp-icon.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/prompt-editor.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/query-suspense-boundary.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/query-suspense-boundary.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/require-ai-key.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/require-ai-key.tsx#9"
-          },
-          {
-            "location": "apps/web/src/components/responsive-action-toolbar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/route-components.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/search-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/selfhost-update-banner.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/shortcut-hints-overlay.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/sidebar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/stella-mark.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/stella-wordmark.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/suggested-actions.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/table-skeleton-rows.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/theme-provider.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/theme-provider.tsx#2"
-          },
-          {
-            "location": "apps/web/src/components/tooltip.tsx#1"
-          },
-          {
-            "location": "apps/web/src/components/translate-document-dialog.tsx#10"
-          },
-          {
-            "location": "apps/web/src/components/versions/version-list.tsx#12"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#8"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/analysis/margin-notes.tsx#9"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-text.tsx#2"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/decision-workspace.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/case-viewer/metadata-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/features/case-law/components/decision-filters.tsx#1"
-          },
-          {
-            "location": "apps/web/src/lib/analytics/provider.tsx#1"
-          },
-          {
-            "location": "apps/web/src/lib/analytics/provider.tsx#2"
-          },
-          {
-            "location": "apps/web/src/lib/authenticated-user-context.tsx#1"
-          },
-          {
-            "location": "apps/web/src/lib/authenticated-user-context.tsx#2"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/pdf-context.tsx#7"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/pdf-context.tsx#8"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/pdf-error-boundary.tsx#1"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/pdf-error-boundary.tsx#2"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/pdf-page.tsx#1"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/pdf-page.tsx#2"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#9"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/pdf-viewport.tsx#10"
-          },
-          {
-            "location": "apps/web/src/lib/render-justification-content.tsx#1"
-          },
-          {
-            "location": "apps/web/src/lib/render-justification-content.tsx#2"
-          },
-          {
-            "location": "apps/web/src/lib/slot.tsx#25"
-          },
-          {
-            "location": "apps/web/src/routes/__root.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/__root.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-page.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-components/chat-thread-recap.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-components/threads-sheet.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/index.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/workspaces/$workspaceId/new.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat_.new.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/$contactId.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/-components/contact-custom-fields-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/-components/contact-notes-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.dev_.autocomplete.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/blueprint-gallery-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/add-mcp-server-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-browser.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/catalogue-detail-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/catalogue/install-pack-button.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/category-sidebar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/category-sidebar.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-detail.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-directive-node.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-form-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-import-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/fill-clauses-section.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-check-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-clauses-tab.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-field-mention.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-prefill-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#23"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#24"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-upload.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/tools.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/account/sessions-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/ai-config-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/anonymization-deny-list-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/deepl-key-card.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/jurisdictions-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/list-toolbar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/matter-numbering-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/web-search-keys-card.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/account.desktop.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/account.profile.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/organization.members.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/organization.usage.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.todos/index.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/duration-input.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/expense-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/expense-list-view.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/rate-management-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/split-entry-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/timesheet-day-view.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/bulk-add-columns.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-day-cell.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-entity-chip.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/calendar/current-time-indicator.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/cell-metadata-flags.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/conditions/condition-select-values.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/copy-to-matter-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/create-property.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#13"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/docx/docx-browser-editor.tsx#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/editable-field.tsx#13"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/empty-state.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/existing-file-organizer-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-column.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/matter-metadata-sheet.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/members-section.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/members-section.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/new-document-from-template-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/overview-view.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/parties-section.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/page-anonymization.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/page-citation.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/pdf/versions-sidebar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/inline-option-editor.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-conditions.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/input.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/mention-list.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-input/mention-list.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-helpers.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/property-popover.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/grouped-table-layout.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/mobile-table-orientation-gate.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-columns.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools-gate.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-layout.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/index.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/internals.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-panel.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/save-as-template-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-filters.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-start-confirmation-prompt.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/route.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/alphabet-index.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/matter-card.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/matter-context-menu.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/matters-table.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-components/pdf-viewer-controls.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-filters/client-filter-popover.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/-filters/team-filter-popover.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/auth/accept-invitation.$invitationId.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/auth/organization.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/consent.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/autocomplete-playground.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/dev/-components/ui-playground.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/dev.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/law/-case-detail.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/law/-components/public-law-shell.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/law/cases/index.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/onboarding-layout.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/onboarding-wizard.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/sidebar-preview.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/steps/ai-step.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/steps/catalogue-step.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/steps/creating-step.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/steps/invite-step.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/steps/jurisdiction-step.tsx#1"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/CommentsSidebar.tsx#19"
-          },
-          {
-            "location": "packages/folio/src/components/ContentControlWidgetsOverlay.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/DocumentOutline.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#22"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditor.tsx#23"
-          },
-          {
-            "location": "packages/folio/src/components/DocxEditorDialogs.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#16"
-          },
-          {
-            "location": "packages/folio/src/components/ErrorBoundary.tsx#17"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#11"
-          },
-          {
-            "location": "packages/folio/src/components/FormattingBar.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#31"
-          },
-          {
-            "location": "packages/folio/src/components/HiddenHeaderFooterPMs.tsx#32"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#28"
-          },
-          {
-            "location": "packages/folio/src/components/InlineHeaderFooterEditor.tsx#29"
-          },
-          {
-            "location": "packages/folio/src/components/TextContextMenu.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/Toolbar.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FindReplaceDialog.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/FootnotePropertiesDialog.tsx#7"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePositionDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/ImagePropertiesDialog.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/PageSetupDialog.tsx#10"
-          },
-          {
-            "location": "packages/folio/src/components/dialogs/TablePropertiesDialog.tsx#5"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/toolbarPrimitives.tsx#9"
-          },
-          {
-            "location": "packages/folio/src/components/ui/AlignmentButtons.tsx#6"
-          },
-          {
-            "location": "packages/folio/src/components/ui/HyperlinkPopup.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/components/ui/StylePicker.tsx#8"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/components/ui/Tooltip.tsx#2"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AISuggestionRectsOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AnonymizationRectsOverlay.tsx#27"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/AutocompleteCaretOverlay.tsx#20"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/HiddenProseMirror.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/ImageSelectionOverlay.tsx#13"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#25"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/PagedEditor.tsx#26"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/SelectionOverlay.tsx#12"
-          },
-          {
-            "location": "packages/folio/src/paged-editor/TemplateDirectivesOverlay.tsx#15"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#1"
-          },
-          {
-            "location": "packages/folio/src/ui/folio-ui.tsx#9"
-          },
-          {
-            "location": "packages/ui/src/components/alert-dialog.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/bidi-text.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/breadcrumb.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/button.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/color-picker.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/color-picker.tsx#4"
-          },
-          {
-            "location": "packages/ui/src/components/combobox.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/command.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/date-picker-popover.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/destructive-action-confirmation.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/destructive-confirm-dialog.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/dialog.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/frame.tsx#1"
-          },
-          {
-            "location": "packages/ui/src/components/hex-color-picker.tsx#18"
-          },
-          {
-            "location": "packages/ui/src/components/hex-color-picker.tsx#19"
-          },
-          {
-            "location": "packages/ui/src/components/input-group.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/input-otp.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/input.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/menu.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/outline-rail.tsx#25"
-          },
-          {
-            "location": "packages/ui/src/components/pagination.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/popover.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/popover.tsx#4"
-          },
-          {
-            "location": "packages/ui/src/components/preview-card.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/preview-pane.tsx#1"
-          },
-          {
-            "location": "packages/ui/src/components/scroll-area.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/scroll-to-top.tsx#9"
-          },
-          {
-            "location": "packages/ui/src/components/segmented-icon-toggle.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/select.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/separator.tsx#1"
-          },
-          {
-            "location": "packages/ui/src/components/sheet.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/table.tsx#1"
-          },
-          {
-            "location": "packages/ui/src/components/textarea.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/toast.tsx#3"
-          },
-          {
-            "location": "packages/ui/src/components/tooltip-trigger-helper.tsx#3"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "react",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/react/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/react@3.0.210",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "3.0.210"
-    },
-    {
-      "bom-ref": "pkg:npm/@ai-sdk/valibot@2.0.31",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@ai-sdk/valibot/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@ai-sdk/valibot/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#16"
-          },
-          {
-            "location": "apps/api/scripts/seed-case-law.ts#23"
-          },
-          {
-            "location": "apps/api/scripts/seed-usage-policies.ts#9"
-          },
-          {
-            "location": "apps/api/src/env-base.ts#12"
-          },
-          {
-            "location": "apps/api/src/env.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#12"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#6"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/org-manifest.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/pagination.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/readonly-manifest.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/workspace-manifest.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#5"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/template-tools.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
-          },
-          {
-            "location": "apps/api/src/handlers/clauses/rewrite.ts#19"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#13"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/template-manifest.ts#16"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/types.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#6"
-          },
-          {
-            "location": "apps/api/src/handlers/hosted-usage-webhook/event-schemas.ts#14"
-          },
-          {
-            "location": "apps/api/src/handlers/hosted-usage-webhook/receive.ts#29"
-          },
-          {
-            "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/search/ai.ts#6"
-          },
-          {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/template-recipes/definition.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/template-recipes/recipes.ts#5"
-          },
-          {
-            "location": "apps/api/src/handlers/templates/prefill.ts#4"
-          },
-          {
-            "location": "apps/api/src/handlers/templates/suggest-template-fields.ts#13"
-          },
-          {
-            "location": "apps/api/src/lib/ai-change-summary.ts#10"
-          },
-          {
-            "location": "apps/api/src/lib/ai-config-crypto.ts#10"
-          },
-          {
-            "location": "apps/api/src/lib/ai-output-schema.ts#29"
-          },
-          {
-            "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/conditions/parse-stored.ts#9"
-          },
-          {
-            "location": "apps/api/src/lib/deepl/client.ts#17"
-          },
-          {
-            "location": "apps/api/src/lib/safe-outbound-fetch.ts#7"
-          },
-          {
-            "location": "apps/api/src/lib/views-schema.ts#3"
-          },
-          {
-            "location": "apps/api/src/lib/web-search/tavily.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/web-search/types.ts#2"
-          },
-          {
-            "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
-          },
-          {
-            "location": "apps/api/src/mcp/stella-tools.ts#3"
-          },
-          {
-            "location": "apps/api/src/mcp/template-tools.ts#3"
-          },
-          {
-            "location": "apps/api/src/scripts/post-deploy-smoke.ts#26"
-          },
-          {
-            "location": "apps/collab/src/env.ts#2"
-          },
-          {
-            "location": "apps/collab/src/server.ts#6"
-          },
-          {
-            "location": "apps/web/src/env.ts#3"
-          },
-          {
-            "location": "apps/web/src/lib/dev-otp.ts#2"
-          },
-          {
-            "location": "apps/web/src/lib/mcp-oauth-channel.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/pdf/parse-attachments.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/public-law-sitemap.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/redirect.ts#1"
-          },
-          {
-            "location": "apps/web/src/lib/schema.ts#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/-components/contact-metadata.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.organization/-utils.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-hooks/table-store.ts#6"
-          },
-          {
-            "location": "packages/anonymize-chat/src/index.ts#1"
-          },
-          {
-            "location": "packages/catalogue/scripts/validate.ts#13"
-          },
-          {
-            "location": "packages/catalogue/src/loader.ts#2"
-          },
-          {
-            "location": "packages/catalogue/src/schema.ts#1"
-          },
-          {
-            "location": "packages/conditions/src/schema.ts#13"
-          },
-          {
-            "location": "packages/folio/src/core/docx/parserEnums.ts#23"
-          },
-          {
-            "location": "packages/legal-ast/src/analysis.ts#5"
-          },
-          {
-            "location": "apps/web/src/components/api-version-mismatch-banner.tsx#5"
-          },
-          {
-            "location": "apps/web/src/components/auth/sign-in-panel.tsx#8"
-          },
-          {
-            "location": "apps/web/src/components/selfhost-update-banner.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/-components/contact-communication-editor.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.contacts/index.tsx#30"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#52"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.knowledge/tools.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/-components/organization/profile-card.tsx#7"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.settings/organization.route.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.document.tsx#30"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/$viewId.route.tsx#8"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/edit-field-dialog.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId.tsx#21"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/index.tsx#15"
-          },
-          {
-            "location": "apps/web/src/routes/auth/error.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/auth/index.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/auth/organization.tsx#9"
-          },
-          {
-            "location": "apps/web/src/routes/auth/otp.tsx#2"
-          },
-          {
-            "location": "apps/web/src/routes/consent.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/law/-case-detail.tsx#5"
-          },
-          {
-            "location": "apps/web/src/routes/law/cases/index.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/mcp.oauth-callback.tsx#3"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/-components/steps/organization-step.tsx#6"
-          },
-          {
-            "location": "apps/web/src/routes/onboarding/route.tsx#2"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "@ai-sdk",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "valibot",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@ai-sdk/valibot/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40ai-sdk/valibot@2.0.31",
-      "scope": "required",
-      "tags": [
-        "framework"
-      ],
-      "type": "framework",
-      "version": "2.0.31"
-    },
-    {
       "authors": [
         {
           "name": "withastro"
@@ -2484,7 +26,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#13"
+            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-ai-suggestion-thread.ts#1"
@@ -2988,6 +530,9 @@
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#18"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -3255,6 +800,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
@@ -3298,6 +849,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -3364,6 +918,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx#1"
@@ -3496,9 +1053,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -5282,7 +2836,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#13"
+            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-ai-suggestion-thread.ts#1"
@@ -5786,6 +3340,9 @@
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#18"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -6053,6 +3610,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
@@ -6096,6 +3659,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -6162,6 +3728,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx#1"
@@ -6294,9 +3863,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -7143,7 +4709,7 @@
       "version": "3.5.1"
     },
     {
-      "bom-ref": "pkg:npm/@formatjs/icu-messageformat-parser@3.5.11",
+      "bom-ref": "pkg:npm/@formatjs/icu-messageformat-parser@3.5.12",
       "evidence": {
         "identity": [
           {
@@ -7190,13 +4756,121 @@
           "value": "node_modules/@formatjs/icu-messageformat-parser/package.json"
         }
       ],
-      "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.11",
+      "purl": "pkg:npm/%40formatjs/icu-messageformat-parser@3.5.12",
       "scope": "required",
       "tags": [
         "parse"
       ],
       "type": "library",
-      "version": "3.5.11"
+      "version": "3.5.12"
+    },
+    {
+      "bom-ref": "pkg:npm/@google/genai@1.52.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@google/genai/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@google/genai/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/googleapis/js-genai#readme"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/googleapis/js-genai.git"
+        }
+      ],
+      "group": "@google",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "genai",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@google/genai/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40google/genai@1.52.0",
+      "scope": "required",
+      "type": "library",
+      "version": "1.52.0"
+    },
+    {
+      "bom-ref": "pkg:npm/@google/genai@2.10.0",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-gemini/node_modules/@google/genai/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-gemini/node_modules/@google/genai/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "https://github.com/googleapis/js-genai#readme"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/googleapis/js-genai.git"
+        }
+      ],
+      "group": "@google",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0",
+            "url": "https://opensource.org/licenses/Apache-2.0"
+          }
+        }
+      ],
+      "name": "genai",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-gemini/node_modules/@google/genai/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40google/genai@2.10.0",
+      "scope": "required",
+      "type": "library",
+      "version": "2.10.0"
     },
     {
       "bom-ref": "pkg:npm/@hocuspocus/provider@4.3.0",
@@ -7483,7 +5157,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/lib/mcp-upstream/connections.ts#7"
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#4"
+          },
+          {
+            "location": "apps/api/src/mcp/egress.ts#1"
           },
           {
             "location": "apps/api/src/mcp/gateway/dispatch-call.ts#1"
@@ -7547,60 +5224,6 @@
       "scope": "required",
       "type": "library",
       "version": "1.29.0"
-    },
-    {
-      "bom-ref": "pkg:npm/@openrouter/ai-sdk-provider@2.9.1",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/@openrouter/ai-sdk-provider/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/@openrouter/ai-sdk-provider/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/src/lib/ai-models.ts#42"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "vcs",
-          "url": "https://github.com/OpenRouterTeam/ai-sdk-provider"
-        },
-        {
-          "type": "vcs",
-          "url": "git+https://github.com/OpenRouterTeam/ai-sdk-provider.git"
-        }
-      ],
-      "group": "@openrouter",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "ai-sdk-provider",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/@openrouter/ai-sdk-provider/package.json"
-        }
-      ],
-      "purl": "pkg:npm/%40openrouter/ai-sdk-provider@2.9.1",
-      "scope": "required",
-      "type": "library",
-      "version": "2.9.1"
     },
     {
       "authors": [
@@ -7751,7 +5374,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#13"
+            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-ai-suggestion-thread.ts#1"
@@ -8255,6 +5878,9 @@
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#18"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -8522,6 +6148,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
@@ -8565,6 +6197,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -8631,6 +6266,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx#1"
@@ -8763,9 +6401,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -9558,13 +7193,13 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/src/handlers/properties/create-schema.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/properties/preview.ts#1"
+            "location": "apps/api/scripts/exact-mirror-guard.ts#34"
           },
           {
             "location": "apps/api/src/lib/conditions/contract.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/conditions/contract.ts#10"
           },
           {
             "location": "apps/api/src/lib/custom-schema.ts#1"
@@ -9574,6 +7209,12 @@
           },
           {
             "location": "apps/api/src/lib/views-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/create-schema.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/properties/preview.ts#1"
           }
         ]
       },
@@ -9603,6 +7244,66 @@
       "scope": "required",
       "type": "library",
       "version": "0.34.49"
+    },
+    {
+      "authors": [
+        {
+          "name": "Colin McDonnell"
+        }
+      ],
+      "bom-ref": "pkg:npm/@standard-schema/spec@1.1.0",
+      "description": "A family of specs for interoperable TypeScript",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@standard-schema/spec/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@standard-schema/spec/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-schema.ts#4"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://standardschema.dev"
+        },
+        {
+          "type": "vcs",
+          "url": "https://github.com/standard-schema/standard-schema"
+        }
+      ],
+      "group": "@standard-schema",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "spec",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@standard-schema/spec/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40standard-schema/spec@1.1.0",
+      "scope": "required",
+      "type": "library",
+      "version": "1.1.0"
     },
     {
       "authors": [
@@ -9900,7 +7601,719 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.7",
+      "bom-ref": "pkg:npm/@tanstack/ai-anthropic@0.15.12",
+      "description": "Anthropic Claude adapter for TanStack AI chat, tool calling, thinking, and structured outputs.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-anthropic/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-anthropic/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-caching.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#4"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#5"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#5"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://tanstack.com/ai"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai-anthropic",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-anthropic/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai-anthropic@0.15.12",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "0.15.12"
+    },
+    {
+      "bom-ref": "pkg:npm/@tanstack/ai-bedrock@0.1.0",
+      "description": "Amazon Bedrock adapter for TanStack AI — OpenAI-compatible chat, responses, tools, and reasoning.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-bedrock/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-bedrock/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#7"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai-bedrock",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-bedrock/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai-bedrock@0.1.0",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "0.1.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "Tanner Linsley"
+        }
+      ],
+      "bom-ref": "pkg:npm/@tanstack/ai-client@0.19.1",
+      "description": "Framework-agnostic headless client for TanStack AI chat, realtime sessions, streaming transports, and media generations.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-client/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-client/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/handlers/chat/types.ts#2"
+          },
+          {
+            "location": "apps/web/src/components/chat/chat-ui-tools.ts#6"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-lib/build-chat-request-message.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-queries.ts#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.chat/-queries.ts#7"
+          },
+          {
+            "location": "apps/web/src/components/ai-elements/message.tsx#6"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://tanstack.com/ai"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai-client",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-client/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai-client@0.19.1",
+      "scope": "required",
+      "tags": [
+        "ai",
+        "framework"
+      ],
+      "type": "framework",
+      "version": "0.19.1"
+    },
+    {
+      "authors": [
+        {
+          "name": "Tanner Linsley"
+        }
+      ],
+      "bom-ref": "pkg:npm/@tanstack/ai-gemini@0.18.4",
+      "description": "Google Gemini adapter for TanStack AI chat, images, speech, audio generation, and structured outputs.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-gemini/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-gemini/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#8"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#9"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://tanstack.com/ai"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai-gemini",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-gemini/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai-gemini@0.18.4",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "0.18.4"
+    },
+    {
+      "authors": [
+        {
+          "name": "Tanner Linsley"
+        }
+      ],
+      "bom-ref": "pkg:npm/@tanstack/ai-mcp@0.2.1",
+      "description": "Host-side Model Context Protocol client for TanStack AI: discover and run MCP server tools, resources, and prompts in any adapter's chat() loop, with generated end-to-end types.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-mcp/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-mcp/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tool-definitions.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#7"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://tanstack.com/ai"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai-mcp",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-mcp/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai-mcp@0.2.1",
+      "scope": "required",
+      "type": "library",
+      "version": "0.2.1"
+    },
+    {
+      "bom-ref": "pkg:npm/@tanstack/ai-mistral@0.2.0",
+      "description": "Mistral adapter for TanStack AI",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-mistral/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-mistral/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#10"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#11"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai-mistral",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-mistral/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai-mistral@0.2.0",
+      "scope": "required",
+      "type": "library",
+      "version": "0.2.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "Tanner Linsley"
+        }
+      ],
+      "bom-ref": "pkg:npm/@tanstack/ai-openai@0.15.10",
+      "description": "OpenAI adapter for TanStack AI chat, tools, images, video, speech, transcription, realtime, and structured outputs.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-openai/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-openai/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#7"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#12"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#13"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://tanstack.com/ai"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai-openai",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-openai/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai-openai@0.15.10",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "0.15.10"
+    },
+    {
+      "authors": [
+        {
+          "name": "Tanner Linsley"
+        }
+      ],
+      "bom-ref": "pkg:npm/@tanstack/ai-openrouter@0.15.6",
+      "description": "TanStack AI adapter for OpenRouter chat, provider tools, structured outputs, and access to hundreds of LLMs.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai-openrouter/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai-openrouter/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#8"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#17"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://tanstack.com/ai"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai-openrouter",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai-openrouter/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai-openrouter@0.15.6",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "0.15.6"
+    },
+    {
+      "authors": [
+        {
+          "name": "Tanner Linsley"
+        }
+      ],
+      "bom-ref": "pkg:npm/@tanstack/ai@0.39.0",
+      "description": "Type-safe TypeScript AI SDK for streaming chat, tool calling, agents, structured outputs, and multimodal generation.",
+      "evidence": {
+        "identity": [
+          {
+            "concludedValue": "node_modules/@tanstack/ai/package.json",
+            "confidence": 0.7,
+            "field": "purl",
+            "methods": [
+              {
+                "confidence": 0.7,
+                "technique": "manifest-analysis",
+                "value": "node_modules/@tanstack/ai/package.json"
+              }
+            ]
+          }
+        ],
+        "occurrences": [
+          {
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#12"
+          },
+          {
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#13"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#1"
+          },
+          {
+            "location": "apps/api/src/dev/register-mock-ai.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-message-parts.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/compaction.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#7"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/stream-chat.ts#15"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/chat-tool-types.ts#7"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/template-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/types.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#12"
+          },
+          {
+            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#13"
+          },
+          {
+            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/mcp-upstream/connections.ts#5"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-caching.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#6"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#2"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/types.ts#3"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/streaming-answer.ts#1"
+          }
+        ]
+      },
+      "externalReferences": [
+        {
+          "type": "website",
+          "url": "https://tanstack.com/ai"
+        },
+        {
+          "type": "vcs",
+          "url": "git+https://github.com/TanStack/ai.git"
+        }
+      ],
+      "group": "@tanstack",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT",
+            "url": "https://opensource.org/licenses/MIT"
+          }
+        }
+      ],
+      "name": "ai",
+      "properties": [
+        {
+          "name": "SrcFile",
+          "value": "node_modules/@tanstack/ai/package.json"
+        }
+      ],
+      "purl": "pkg:npm/%40tanstack/ai@0.39.0",
+      "scope": "required",
+      "tags": [
+        "ai"
+      ],
+      "type": "library",
+      "version": "0.39.0"
+    },
+    {
+      "authors": [
+        {
+          "name": "Tanner Linsley"
+        }
+      ],
+      "bom-ref": "pkg:npm/@tanstack/react-devtools@0.10.8",
       "description": "TanStack Devtools is a set of tools for building advanced devtools for your React application.",
       "evidence": {
         "identity": [
@@ -9949,13 +8362,13 @@
           "value": "node_modules/@tanstack/react-devtools/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.7",
+      "purl": "pkg:npm/%40tanstack/react-devtools@0.10.8",
       "scope": "required",
       "tags": [
         "tools"
       ],
       "type": "library",
-      "version": "0.10.7"
+      "version": "0.10.8"
     },
     {
       "authors": [
@@ -10303,7 +8716,7 @@
             "location": "apps/web/src/routes/_protected.account/-queries.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#13"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#11"
           },
           {
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#3"
@@ -10312,10 +8725,10 @@
             "location": "apps/web/src/routes/_protected.chat/-hooks/use-workspace-chat-mention-registration.ts#4"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#2"
+            "location": "apps/web/src/routes/_protected.chat/-queries.ts#8"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#3"
+            "location": "apps/web/src/routes/_protected.chat/-queries.ts#9"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-caches.ts#1"
@@ -10435,7 +8848,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/calendar-tasks.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entities.ts#7"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/entity-versions.ts#1"
@@ -10445,9 +8858,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/invoices.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/playbooks.ts#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-queries/properties.ts#1"
@@ -10591,6 +9001,9 @@
             "location": "apps/web/src/components/inspector/inspector-rail.tsx#3"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#20"
+          },
+          {
             "location": "apps/web/src/components/inspector/versions-facet.tsx#13"
           },
           {
@@ -10678,6 +9091,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#4"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#3"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#3"
           },
           {
@@ -10712,6 +9131,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#3"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#3"
@@ -10859,9 +9281,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#12"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/property-conditions.tsx#3"
@@ -11377,6 +9796,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/mcp.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#4"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/prompts.tsx#1"
           },
           {
@@ -11504,6 +9926,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/template-picker-dialog.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workspace-drop-zone.tsx#4"
@@ -11671,7 +10096,7 @@
             "location": "apps/web/src/lib/beta-features.ts#1"
           },
           {
-            "location": "apps/web/src/routeTree.gen.ts#1557"
+            "location": "apps/web/src/routeTree.gen.ts#1579"
           },
           {
             "location": "apps/web/src/lib/beta-features.ts#2"
@@ -12054,7 +10479,7 @@
           "name": "Tanner Linsley"
         }
       ],
-      "bom-ref": "pkg:npm/@tanstack/react-virtual@3.14.3",
+      "bom-ref": "pkg:npm/@tanstack/react-virtual@3.14.4",
       "description": "Headless UI for virtualizing scrollable elements in React",
       "evidence": {
         "identity": [
@@ -12112,10 +10537,10 @@
           "value": "node_modules/@tanstack/react-virtual/package.json"
         }
       ],
-      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.3",
+      "purl": "pkg:npm/%40tanstack/react-virtual@3.14.4",
       "scope": "required",
       "type": "library",
-      "version": "3.14.3"
+      "version": "3.14.4"
     },
     {
       "bom-ref": "pkg:npm/@tauri-apps/api@2.11.1",
@@ -12988,7 +11413,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#13"
+            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-ai-suggestion-thread.ts#1"
@@ -13492,6 +11917,9 @@
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#18"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -13759,6 +12187,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
@@ -13802,6 +12236,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -13868,6 +12305,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx#1"
@@ -14000,9 +12440,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -14594,10 +13031,10 @@
             "location": "apps/api/src/handlers/chat/tools/execute/readonly-manifest.ts#2"
           },
           {
-            "location": "apps/api/src/lib/ai-output-schema.ts#26"
+            "location": "apps/api/src/lib/json-schema/json-schema-to-type.ts#1"
           },
           {
-            "location": "apps/api/src/lib/json-schema/json-schema-to-type.ts#1"
+            "location": "apps/api/src/lib/tanstack-ai-schema.ts#5"
           }
         ]
       },
@@ -14634,292 +13071,6 @@
       ],
       "type": "library",
       "version": "1.7.1"
-    },
-    {
-      "bom-ref": "pkg:npm/ai@6.0.208",
-      "description": "AI SDK by Vercel - build apps like ChatGPT, Claude, Gemini, and more with a single interface for any model using the Vercel AI Gateway or go direct to OpenAI, Anthropic, Google, or any other model provider.",
-      "evidence": {
-        "identity": [
-          {
-            "concludedValue": "node_modules/ai/package.json",
-            "confidence": 0.7,
-            "field": "purl",
-            "methods": [
-              {
-                "confidence": 0.7,
-                "technique": "manifest-analysis",
-                "value": "node_modules/ai/package.json"
-              }
-            ]
-          }
-        ],
-        "occurrences": [
-          {
-            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#13"
-          },
-          {
-            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#14"
-          },
-          {
-            "location": "apps/api/src/dev/register-mock-ai.ts#2"
-          },
-          {
-            "location": "apps/api/src/dev/register-mock-ai.ts#3"
-          },
-          {
-            "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
-          },
-          {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/attachment-validation.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/compaction.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/compaction.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/get-suggested-prompts.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/loop-detector.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/send-message.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#9"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/stream-chat.ts#15"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/thread-recap.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/chat-tools.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/external-mcp-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/template-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/tool-policy.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/tool-scope.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/types.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/upload-files.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/chat/upload-files.ts#2"
-          },
-          {
-            "location": "apps/api/src/handlers/clauses/rewrite.ts#16"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#12"
-          },
-          {
-            "location": "apps/api/src/handlers/docx/ai-skill-tools.ts#17"
-          },
-          {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/search/ai.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/templates/prefill.ts#1"
-          },
-          {
-            "location": "apps/api/src/handlers/templates/suggest-template-fields.ts#12"
-          },
-          {
-            "location": "apps/api/src/lib/ai-caching.ts#16"
-          },
-          {
-            "location": "apps/api/src/lib/ai-change-summary.ts#9"
-          },
-          {
-            "location": "apps/api/src/lib/ai-error.ts#9"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#43"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#44"
-          },
-          {
-            "location": "apps/api/src/lib/ai-output-schema.ts#27"
-          },
-          {
-            "location": "apps/api/src/lib/ai-output-schema.ts#28"
-          },
-          {
-            "location": "apps/api/src/lib/analytics/ai.ts#6"
-          },
-          {
-            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#2"
-          },
-          {
-            "location": "apps/api/src/mcp/tool-utils.ts#2"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-ui-tools.ts#6"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-lib/build-chat-request-message.ts#1"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#8"
-          },
-          {
-            "location": "apps/web/src/components/ai-elements/message.tsx#6"
-          },
-          {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#4"
-          },
-          {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#5"
-          },
-          {
-            "location": "apps/web/src/components/chat/needs-matter-card.tsx#3"
-          },
-          {
-            "location": "apps/web/src/components/chat/source-chips.tsx#5"
-          },
-          {
-            "location": "apps/web/src/components/chat/source-chips.tsx#6"
-          },
-          {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#4"
-          },
-          {
-            "location": "apps/api/src/dev/register-mock-ai.ts#3"
-          }
-        ]
-      },
-      "externalReferences": [
-        {
-          "type": "website",
-          "url": "https://ai-sdk.dev/docs"
-        },
-        {
-          "type": "vcs",
-          "url": "https://github.com/vercel/ai"
-        }
-      ],
-      "group": "",
-      "licenses": [
-        {
-          "license": {
-            "id": "Apache-2.0",
-            "url": "https://opensource.org/licenses/Apache-2.0"
-          }
-        }
-      ],
-      "name": "ai",
-      "properties": [
-        {
-          "name": "SrcFile",
-          "value": "node_modules/ai/package.json"
-        }
-      ],
-      "purl": "pkg:npm/ai@6.0.208",
-      "scope": "required",
-      "tags": [
-        "ai"
-      ],
-      "type": "library",
-      "version": "6.0.208"
     },
     {
       "authors": [
@@ -15175,7 +13326,13 @@
             "location": "apps/api/scripts/backfill-image-thumbnails.ts#21"
           },
           {
-            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#15"
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#14"
+          },
+          {
+            "location": "apps/api/scripts/exact-mirror-guard.ts#35"
+          },
+          {
+            "location": "apps/api/scripts/mcp-coverage-guard.ts#36"
           },
           {
             "location": "apps/api/scripts/seed-case-law.ts#19"
@@ -15214,7 +13371,7 @@
             "location": "apps/api/src/env.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#2"
+            "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#1"
           },
           {
             "location": "apps/api/src/handlers/ai-config/validate-provider.ts#1"
@@ -15277,7 +13434,7 @@
             "location": "apps/api/src/handlers/case-law/ingestion/pipeline.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#11"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#10"
           },
           {
             "location": "apps/api/src/handlers/case-law/public-routes.ts#1"
@@ -15301,19 +13458,19 @@
             "location": "apps/api/src/handlers/catalogue/skill-handles.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/attachment-validation.ts#3"
+            "location": "apps/api/src/handlers/chat/attachment-validation.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-prompt.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#3"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#6"
           },
           {
             "location": "apps/api/src/handlers/chat/chat-scope.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/compaction.ts#3"
+            "location": "apps/api/src/handlers/chat/compaction.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/data-scope.ts#1"
@@ -15325,7 +13482,7 @@
             "location": "apps/api/src/handlers/chat/errors.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#2"
+            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/get-messages.ts#1"
@@ -15334,7 +13491,7 @@
             "location": "apps/api/src/handlers/chat/get-older-messages.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-suggested-prompts.ts#2"
+            "location": "apps/api/src/handlers/chat/get-suggested-prompts.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/get-thread-recap.ts#1"
@@ -15349,7 +13506,7 @@
             "location": "apps/api/src/handlers/chat/message-page.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#2"
+            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#1"
@@ -15361,7 +13518,7 @@
             "location": "apps/api/src/handlers/chat/rotate-template-thread.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/send-message.ts#2"
+            "location": "apps/api/src/handlers/chat/send-message.ts#1"
           },
           {
             "location": "apps/api/src/handlers/chat/skills.ts#1"
@@ -15370,13 +13527,16 @@
             "location": "apps/api/src/handlers/chat/stream-chat.ts#16"
           },
           {
-            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#3"
+            "location": "apps/api/src/handlers/chat/third-party-boundary.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/chat-tool-types.ts#8"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#1"
@@ -15412,16 +13572,16 @@
             "location": "apps/api/src/handlers/chat/tools/execute/workspace-manifest.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/update-thread.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/upload-files.ts#3"
+            "location": "apps/api/src/handlers/chat/upload-files.ts#1"
           },
           {
             "location": "apps/api/src/handlers/clauses/categories.ts#1"
@@ -15442,7 +13602,7 @@
             "location": "apps/api/src/handlers/clauses/read.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/clauses/rewrite.ts#17"
+            "location": "apps/api/src/handlers/clauses/rewrite.ts#16"
           },
           {
             "location": "apps/api/src/handlers/clauses/search-vector.ts#1"
@@ -15488,6 +13648,9 @@
           },
           {
             "location": "apps/api/src/handlers/contacts/update-by-id.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/read-list.ts#1"
           },
           {
             "location": "apps/api/src/handlers/docx/edit-with-tracking.ts#9"
@@ -15562,7 +13725,7 @@
             "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#2"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/query-entities.ts#1"
@@ -15859,7 +14022,7 @@
             "location": "apps/api/src/handlers/organization-settings/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/apply.ts#1"
+            "location": "apps/api/src/handlers/playbooks/auto-run.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/create.ts#1"
@@ -15868,7 +14031,25 @@
             "location": "apps/api/src/handlers/playbooks/delete-by-id.ts#1"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/materialize-run.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/positions-validation.ts#1"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/read.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/review-extract.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/review-grade.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/review.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/run.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/update-by-id.ts#1"
@@ -15889,7 +14070,7 @@
             "location": "apps/api/src/handlers/properties/read.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#2"
+            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#1"
           },
           {
             "location": "apps/api/src/handlers/properties/update-by-id.ts#1"
@@ -15931,7 +14112,7 @@
             "location": "apps/api/src/handlers/rates/update.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#2"
+            "location": "apps/api/src/handlers/search/ai.ts#1"
           },
           {
             "location": "apps/api/src/handlers/search/routes.ts#1"
@@ -15949,7 +14130,7 @@
             "location": "apps/api/src/handlers/skills/from-blueprint.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#2"
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/get.ts#1"
@@ -15979,7 +14160,7 @@
             "location": "apps/api/src/handlers/skills/resources/rename.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#2"
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#1"
           },
           {
             "location": "apps/api/src/handlers/skills/resources/update.ts#1"
@@ -16117,7 +14298,7 @@
             "location": "apps/api/src/handlers/templates/manifest.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/templates/prefill.ts#2"
+            "location": "apps/api/src/handlers/templates/prefill.ts#1"
           },
           {
             "location": "apps/api/src/handlers/templates/prepare.ts#1"
@@ -16345,16 +14526,10 @@
             "location": "apps/api/src/lib/account-deletion-cleanup-queue.ts#1"
           },
           {
-            "location": "apps/api/src/lib/ai-models-no-provider.scenario.ts#1"
-          },
-          {
-            "location": "apps/api/src/lib/ai-models.ts#45"
-          },
-          {
             "location": "apps/api/src/lib/ai-provider-probe.ts#8"
           },
           {
-            "location": "apps/api/src/lib/analytics/ai.ts#7"
+            "location": "apps/api/src/lib/analytics/tanstack-ai.ts#2"
           },
           {
             "location": "apps/api/src/lib/anonymization-blacklist.ts#1"
@@ -16372,7 +14547,7 @@
             "location": "apps/api/src/lib/azure-foundry.ts#1"
           },
           {
-            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#2"
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#3"
           },
           {
             "location": "apps/api/src/lib/bbox/generate-b-boxes-shared.ts#2"
@@ -16471,6 +14646,9 @@
             "location": "apps/api/src/lib/subprocess.ts#1"
           },
           {
+            "location": "apps/api/src/lib/tanstack-ai-models.ts#18"
+          },
+          {
             "location": "apps/api/src/lib/usage/index.ts#31"
           },
           {
@@ -16480,7 +14658,7 @@
             "location": "apps/api/src/lib/web-search/types.ts#1"
           },
           {
-            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#3"
+            "location": "apps/api/src/lib/workflow/ai-generate-batch.ts#6"
           },
           {
             "location": "apps/api/src/lib/workflow/ai-validators.ts#1"
@@ -16499,6 +14677,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/run-logic.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/verdict-engine.ts#1"
           },
           {
             "location": "apps/api/src/lib/workflow-queue.ts#1"
@@ -16531,7 +14712,7 @@
             "location": "apps/api/src/mcp/template-tools.ts#1"
           },
           {
-            "location": "apps/api/src/mcp/tool-utils.ts#3"
+            "location": "apps/api/src/mcp/tool-utils.ts#2"
           },
           {
             "location": "apps/api/src/scripts/post-deploy-smoke.ts#25"
@@ -16547,6 +14728,9 @@
           },
           {
             "location": "apps/legal-atlas-runner/src/runners/case-law-ingest.ts#20"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/playbook-review-store.ts#16"
           },
           {
             "location": "apps/web/src/components/chat/chat-ui-tools.ts#7"
@@ -16588,10 +14772,10 @@
             "location": "apps/web/src/lib/secret-token.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#15"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#9"
+            "location": "apps/web/src/routes/_protected.chat/-queries.ts#10"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/-components/use-template-fill-schema.ts#3"
@@ -16804,6 +14988,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#14"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#5"
+          },
+          {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#7"
           },
           {
@@ -16816,16 +15003,13 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/field-value.tsx#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#4"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/row-actions.tsx#5"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/header-cells.tsx#14"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#5"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/-components/create-matter-dialog.tsx#5"
@@ -17869,7 +16053,7 @@
             "location": "apps/api/src/handlers/billing-codes/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#9"
           },
           {
             "location": "apps/api/src/handlers/case-law/citation-authority.ts#1"
@@ -17909,6 +16093,12 @@
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/sitemap.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/slug-backfill.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/case-law/decisions/slug-backfill.ts#2"
           },
           {
             "location": "apps/api/src/handlers/case-law/decisions/slug.ts#2"
@@ -17956,7 +16146,7 @@
             "location": "apps/api/src/handlers/chat/delete-thread.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#3"
+            "location": "apps/api/src/handlers/chat/generate-thread-title.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/get-thread-recap.ts#2"
@@ -17974,22 +16164,22 @@
             "location": "apps/api/src/handlers/chat/message-page.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#3"
+            "location": "apps/api/src/handlers/chat/persistent-compaction.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/resolve-file-thread.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/send-message.ts#3"
+            "location": "apps/api/src/handlers/chat/send-message.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/skills.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#4"
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#5"
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#4"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/org-function-registry.ts#2"
@@ -17998,16 +16188,16 @@
             "location": "apps/api/src/handlers/chat/tools/execute/workspace-function-registry.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#4"
+            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/update-thread.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/upload-files.ts#4"
+            "location": "apps/api/src/handlers/chat/upload-files.ts#2"
           },
           {
             "location": "apps/api/src/handlers/clauses/categories.ts#2"
@@ -18062,6 +16252,9 @@
           },
           {
             "location": "apps/api/src/handlers/dev/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/read-list.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/check-stamp.ts#2"
@@ -18136,7 +16329,7 @@
             "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#3"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#2"
           },
           {
             "location": "apps/api/src/handlers/entities/query-entities.ts#11"
@@ -18328,7 +16521,7 @@
             "location": "apps/api/src/handlers/organization-settings/update-anonymization-blacklist.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/playbooks/apply.ts#2"
+            "location": "apps/api/src/handlers/playbooks/auto-run.ts#2"
           },
           {
             "location": "apps/api/src/handlers/playbooks/create.ts#2"
@@ -18337,7 +16530,16 @@
             "location": "apps/api/src/handlers/playbooks/delete-by-id.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/materialize-run.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/positions-validation.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/read.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/resolve-standards.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/update-by-id.ts#2"
@@ -18385,7 +16587,7 @@
             "location": "apps/api/src/handlers/rates/update.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#3"
+            "location": "apps/api/src/handlers/search/ai.ts#2"
           },
           {
             "location": "apps/api/src/handlers/shortcuts/list.ts#2"
@@ -18418,7 +16620,7 @@
             "location": "apps/api/src/handlers/skills/resources/rename.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#3"
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/resources/update.ts#2"
@@ -18802,12 +17004,6 @@
             "location": "apps/api/src/scripts/adapter-health.ts#17"
           },
           {
-            "location": "apps/api/src/scripts/backfill-case-law-slugs.ts#1"
-          },
-          {
-            "location": "apps/api/src/scripts/backfill-case-law-slugs.ts#2"
-          },
-          {
             "location": "apps/api/src/scripts/backfill-corpus-storage.ts#1"
           },
           {
@@ -18994,6 +17190,9 @@
         ],
         "occurrences": [
           {
+            "location": "apps/api/scripts/exact-mirror-guard.ts#36"
+          },
+          {
             "location": "apps/api/src/db/billing-validators.ts#1"
           },
           {
@@ -19009,7 +17208,7 @@
             "location": "apps/api/src/handlers/ai-autocomplete/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#3"
+            "location": "apps/api/src/handlers/ai-autocomplete/stream.ts#2"
           },
           {
             "location": "apps/api/src/handlers/ai-config/routes.ts#1"
@@ -19093,10 +17292,10 @@
             "location": "apps/api/src/handlers/catalogue/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#4"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#8"
           },
           {
-            "location": "apps/api/src/handlers/chat/chat-schema.ts#5"
+            "location": "apps/api/src/handlers/chat/chat-schema.ts#9"
           },
           {
             "location": "apps/api/src/handlers/chat/delete-thread.ts#4"
@@ -19108,7 +17307,7 @@
             "location": "apps/api/src/handlers/chat/get-older-messages.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/get-suggested-prompts.ts#3"
+            "location": "apps/api/src/handlers/chat/get-suggested-prompts.ts#2"
           },
           {
             "location": "apps/api/src/handlers/chat/get-thread-recap.ts#3"
@@ -19129,7 +17328,7 @@
             "location": "apps/api/src/handlers/chat/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/chat/send-message.ts#4"
+            "location": "apps/api/src/handlers/chat/send-message.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/update-thread.ts#3"
@@ -19168,7 +17367,7 @@
             "location": "apps/api/src/handlers/clauses/read.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/clauses/rewrite.ts#18"
+            "location": "apps/api/src/handlers/clauses/rewrite.ts#17"
           },
           {
             "location": "apps/api/src/handlers/clauses/routes.ts#1"
@@ -19244,6 +17443,9 @@
           },
           {
             "location": "apps/api/src/handlers/dev/routes.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/document-types/routes.ts#1"
           },
           {
             "location": "apps/api/src/handlers/entities/check-stamp.ts#3"
@@ -19336,10 +17538,10 @@
             "location": "apps/api/src/handlers/entities/open-folio-collab-session.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#4"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#4"
           },
           {
             "location": "apps/api/src/handlers/entities/read-filesystem-tree.ts#3"
@@ -19597,10 +17799,28 @@
             "location": "apps/api/src/handlers/organization-settings/update.ts#2"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/position-facets.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/position-facets.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/positions.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/positions.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/read.ts#3"
           },
           {
+            "location": "apps/api/src/handlers/playbooks/review.ts#2"
+          },
+          {
             "location": "apps/api/src/handlers/playbooks/routes.ts#1"
+          },
+          {
+            "location": "apps/api/src/handlers/playbooks/run-route.ts#1"
           },
           {
             "location": "apps/api/src/handlers/playbooks/schema.ts#1"
@@ -19618,7 +17838,7 @@
             "location": "apps/api/src/handlers/properties/routes.ts#1"
           },
           {
-            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#3"
+            "location": "apps/api/src/handlers/properties/suggest-prompt.ts#2"
           },
           {
             "location": "apps/api/src/handlers/properties/update-by-id.ts#3"
@@ -19654,10 +17874,10 @@
             "location": "apps/api/src/handlers/rates/update.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#4"
+            "location": "apps/api/src/handlers/search/ai.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#5"
+            "location": "apps/api/src/handlers/search/ai.ts#4"
           },
           {
             "location": "apps/api/src/handlers/search/facets.ts#1"
@@ -19687,7 +17907,7 @@
             "location": "apps/api/src/handlers/skills/from-blueprint.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#3"
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#2"
           },
           {
             "location": "apps/api/src/handlers/skills/get.ts#3"
@@ -19708,7 +17928,7 @@
             "location": "apps/api/src/handlers/skills/resources/rename.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#4"
+            "location": "apps/api/src/handlers/skills/resources/rewrite.ts#3"
           },
           {
             "location": "apps/api/src/handlers/skills/resources/update.ts#3"
@@ -19837,7 +18057,7 @@
             "location": "apps/api/src/handlers/templates/manifest.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/templates/prefill.ts#3"
+            "location": "apps/api/src/handlers/templates/prefill.ts#2"
           },
           {
             "location": "apps/api/src/handlers/templates/prepare.ts#2"
@@ -20044,10 +18264,10 @@
             "location": "apps/api/src/lib/auth.ts#16"
           },
           {
-            "location": "apps/api/src/lib/conditions/contract.ts#10"
+            "location": "apps/api/src/lib/conditions/contract.ts#11"
           },
           {
-            "location": "apps/api/src/lib/conditions/contract.ts#11"
+            "location": "apps/api/src/lib/conditions/contract.ts#12"
           },
           {
             "location": "apps/api/src/lib/custom-schema.ts#3"
@@ -20724,7 +18944,7 @@
             "location": "apps/web/src/components/breadcrumbs/workspace-breadcrumb.tsx#6"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#10"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#9"
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#3"
@@ -20736,16 +18956,16 @@
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#4"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#14"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#13"
           },
           {
             "location": "apps/web/src/components/chat/entity-link.tsx#9"
           },
           {
-            "location": "apps/web/src/components/chat/needs-matter-card.tsx#12"
+            "location": "apps/web/src/components/chat/needs-matter-card.tsx#11"
           },
           {
-            "location": "apps/web/src/components/chat/source-chips.tsx#7"
+            "location": "apps/web/src/components/chat/source-chips.tsx#5"
           },
           {
             "location": "apps/web/src/components/chat/streamdown-mention-link.tsx#14"
@@ -20754,7 +18974,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#12"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#13"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#12"
           },
           {
             "location": "apps/web/src/components/chat/web-search-sources.tsx#1"
@@ -20781,7 +19001,7 @@
             "location": "apps/web/src/components/contact-picker.tsx#5"
           },
           {
-            "location": "apps/web/src/components/dev-sidebar-group.tsx#12"
+            "location": "apps/web/src/components/dev-sidebar-group.tsx#10"
           },
           {
             "location": "apps/web/src/components/drag-preview.tsx#14"
@@ -20839,6 +19059,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#3"
+          },
+          {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#21"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#3"
@@ -20979,6 +19202,15 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#6"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#4"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#10"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#17"
           },
           {
@@ -21018,7 +19250,7 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-wizard.tsx#10"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#9"
+            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#10"
           },
           {
             "location": "apps/web/src/routes/_protected.organization/-components/invite-member-dialog.tsx#8"
@@ -21183,9 +19415,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#20"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#10"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives.tsx#7"
           },
           {
@@ -21246,7 +19475,10 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#12"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#3"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#10"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#11"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-badges.tsx#7"
@@ -21279,7 +19511,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts.tsx#6"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#17"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#20"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/expenses.tsx#4"
@@ -21464,9 +19696,6 @@
       ],
       "purl": "pkg:npm/lucide-react@1.21.0",
       "scope": "required",
-      "tags": [
-        "cloud"
-      ],
       "type": "library",
       "version": "1.21.0"
     },
@@ -21851,7 +20080,7 @@
           "name": "Andris Reinman"
         }
       ],
-      "bom-ref": "pkg:npm/postal-mime@2.7.4",
+      "bom-ref": "pkg:npm/postal-mime@2.7.5",
       "description": "Email parser for Node.js and browser environments",
       "evidence": {
         "identity": [
@@ -21900,10 +20129,10 @@
           "value": "node_modules/postal-mime/package.json"
         }
       ],
-      "purl": "pkg:npm/postal-mime@2.7.4",
+      "purl": "pkg:npm/postal-mime@2.7.5",
       "scope": "required",
       "type": "library",
-      "version": "2.7.4"
+      "version": "2.7.5"
     },
     {
       "authors": [
@@ -21911,7 +20140,7 @@
           "name": "engineering@posthog.com"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-js@1.393.0",
+      "bom-ref": "pkg:npm/posthog-js@1.395.0",
       "description": "Posthog-js allows you to automatically capture usage and send events to PostHog.",
       "evidence": {
         "identity": [
@@ -21960,10 +20189,10 @@
           "value": "node_modules/posthog-js/lib/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-js@1.393.0",
+      "purl": "pkg:npm/posthog-js@1.395.0",
       "scope": "required",
       "type": "library",
-      "version": "1.393.0"
+      "version": "1.395.0"
     },
     {
       "authors": [
@@ -21971,7 +20200,7 @@
           "name": "PostHog <engineering@posthog.com> (https://posthog.com)"
         }
       ],
-      "bom-ref": "pkg:npm/posthog-node@5.38.3",
+      "bom-ref": "pkg:npm/posthog-node@5.38.6",
       "description": "PostHog Node.js integration",
       "evidence": {
         "identity": [
@@ -22016,10 +20245,10 @@
           "value": "node_modules/posthog-node/package.json"
         }
       ],
-      "purl": "pkg:npm/posthog-node@5.38.3",
+      "purl": "pkg:npm/posthog-node@5.38.6",
       "scope": "required",
       "type": "library",
-      "version": "5.38.3"
+      "version": "5.38.6"
     },
     {
       "bom-ref": "pkg:npm/prosemirror-commands@1.7.1",
@@ -23311,7 +21540,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#13"
+            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#19"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/use-ai-suggestion-thread.ts#1"
@@ -23815,6 +22044,9 @@
             "location": "apps/web/src/components/inspector/measured-pdf-provider.tsx#2"
           },
           {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#18"
+          },
+          {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#1"
           },
           {
@@ -24082,6 +22314,12 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/link-clause-dialog.tsx#2"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#1"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#1"
           },
           {
@@ -24125,6 +22363,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/index.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#1"
@@ -24191,6 +22432,9 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#1"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/billing-codes-dialog.tsx#1"
@@ -24323,9 +22567,6 @@
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#10"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#1"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/form.tsx#1"
@@ -24954,7 +23195,7 @@
             "location": "apps/web/src/components/ai-elements/message-response.tsx#9"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#11"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#10"
           }
         ]
       },
@@ -25134,10 +23375,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#12"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#11"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#15"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#14"
           }
         ]
       },
@@ -25241,6 +23482,9 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/clause-list.tsx#10"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#11"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio.tsx#50"
           },
           {
@@ -25325,7 +23569,7 @@
             "location": "apps/web/src/hooks/use-sign-out.ts#3"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#16"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#13"
           },
           {
             "location": "apps/web/src/routes/_protected.contacts/-components/contact-caches.ts#4"
@@ -25400,6 +23644,9 @@
             "location": "apps/web/src/components/breadcrumbs/clauses-breadcrumb.tsx#1"
           },
           {
+            "location": "apps/web/src/components/breadcrumbs/playbooks-breadcrumb.tsx#1"
+          },
+          {
             "location": "apps/web/src/components/breadcrumbs/templates-breadcrumb.tsx#1"
           },
           {
@@ -25412,7 +23659,7 @@
             "location": "apps/web/src/components/chat/anonymized-span.tsx#3"
           },
           {
-            "location": "apps/web/src/components/chat/ask-user-card.tsx#13"
+            "location": "apps/web/src/components/chat/ask-user-card.tsx#12"
           },
           {
             "location": "apps/web/src/components/chat/chat-composer-action-button.tsx#4"
@@ -25424,13 +23671,13 @@
             "location": "apps/web/src/components/chat/chat-matter-picker.tsx#5"
           },
           {
-            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#16"
+            "location": "apps/web/src/components/chat/chat-thread-messages.tsx#15"
           },
           {
             "location": "apps/web/src/components/chat/model-selector-dialog.tsx#1"
           },
           {
-            "location": "apps/web/src/components/chat/needs-matter-card.tsx#13"
+            "location": "apps/web/src/components/chat/needs-matter-card.tsx#12"
           },
           {
             "location": "apps/web/src/components/chat/prompt-slash-list.tsx#5"
@@ -25445,7 +23692,7 @@
             "location": "apps/web/src/components/chat/tool-approval-card.tsx#13"
           },
           {
-            "location": "apps/web/src/components/chat/tool-call-card.tsx#14"
+            "location": "apps/web/src/components/chat/tool-call-card.tsx#13"
           },
           {
             "location": "apps/web/src/components/chat/web-search-sources.tsx#2"
@@ -25527,6 +23774,9 @@
           },
           {
             "location": "apps/web/src/components/inspector/inspector-tab-header.tsx#4"
+          },
+          {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#22"
           },
           {
             "location": "apps/web/src/components/inspector/skill-resource-panel.tsx#4"
@@ -25700,6 +23950,15 @@
             "location": "apps/web/src/routes/_protected.knowledge/-components/paragraph-rendering.tsx#1"
           },
           {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-editor.tsx#5"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/playbook-list.tsx#2"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/position-editor.tsx#12"
+          },
+          {
             "location": "apps/web/src/routes/_protected.knowledge/-components/skill-editor.tsx#18"
           },
           {
@@ -25745,7 +24004,10 @@
             "location": "apps/web/src/routes/_protected.knowledge/clauses.tsx#5"
           },
           {
-            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#10"
+            "location": "apps/web/src/routes/_protected.knowledge/index.tsx#11"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/playbooks.tsx#6"
           },
           {
             "location": "apps/web/src/routes/_protected.knowledge/templates.tsx#5"
@@ -25826,7 +24088,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/add-entity-menu.tsx#11"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx#1"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/ai-cell-source-card.tsx#3"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/billing/batch-action-bar.tsx#8"
@@ -25973,9 +24235,6 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/peek/peek-pdf-viewer.tsx#21"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/playbooks-manager.tsx#11"
-          },
-          {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/properties/composer-primitives.tsx#9"
           },
           {
@@ -26033,7 +24292,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/workspace-table/row-cells.tsx#13"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#4"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table-column.tsx#12"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/tasks/task-badges.tsx#8"
@@ -26072,7 +24331,7 @@
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar-sorts.tsx#7"
           },
           {
-            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#18"
+            "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar.tsx#21"
           },
           {
             "location": "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/workflow-service-tier-prompt.tsx#4"
@@ -26289,13 +24548,16 @@
             "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#17"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#10"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#31"
+          },
+          {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#23"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#32"
           }
         ]
       },
@@ -26352,13 +24614,16 @@
             "location": "apps/web/src/lib/chat-thread-ref.ts#1"
           },
           {
-            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#17"
-          },
-          {
-            "location": "apps/web/src/routes/_protected.chat/-queries.ts#10"
+            "location": "apps/web/src/routes/_protected.chat/-hooks/use-chat-session.ts#14"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/file-chat-overlay.tsx#31"
+          },
+          {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#23"
+          },
+          {
+            "location": "apps/web/src/routes/_protected.knowledge/-components/template-studio-chat.tsx#32"
           }
         ]
       },
@@ -26414,7 +24679,7 @@
         ],
         "occurrences": [
           {
-            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#16"
+            "location": "apps/api/scripts/benchmark-chat-read-surface.ts#15"
           },
           {
             "location": "apps/api/scripts/seed-case-law.ts#23"
@@ -26429,25 +24694,28 @@
             "location": "apps/api/src/env.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#12"
+            "location": "apps/api/src/handlers/case-law/analysis/generate.ts#10"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#3"
+            "location": "apps/api/src/handlers/case-law/polarity/llm-classifier.ts#11"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/active-docx-edit-tool.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/boe-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#6"
+            "location": "apps/api/src/handlers/chat/tools/business-registry-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/chat-history-tools.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#4"
+            "location": "apps/api/src/handlers/chat/tools/create-document-tool.ts#2"
+          },
+          {
+            "location": "apps/api/src/handlers/chat/tools/execute/chat-execution-tools.ts#3"
           },
           {
             "location": "apps/api/src/handlers/chat/tools/execute/execute-tool-function.ts#3"
@@ -26465,28 +24733,28 @@
             "location": "apps/api/src/handlers/chat/tools/execute/workspace-manifest.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/infosoud-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/org-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#5"
+            "location": "apps/api/src/handlers/chat/tools/skill-tools.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/template-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/template-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#3"
+            "location": "apps/api/src/handlers/chat/tools/web-search-tools.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#5"
+            "location": "apps/api/src/handlers/chat/tools/workspace-tools.ts#4"
           },
           {
-            "location": "apps/api/src/handlers/clauses/rewrite.ts#19"
+            "location": "apps/api/src/handlers/clauses/rewrite.ts#18"
           },
           {
-            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#13"
+            "location": "apps/api/src/handlers/docx/ai-field-generator.ts#14"
           },
           {
             "location": "apps/api/src/handlers/docx/template-manifest.ts#16"
@@ -26495,7 +24763,7 @@
             "location": "apps/api/src/handlers/docx/types.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#6"
+            "location": "apps/api/src/handlers/entities/organize-suggestions.ts#5"
           },
           {
             "location": "apps/api/src/handlers/hosted-usage-webhook/event-schemas.ts#14"
@@ -26507,10 +24775,10 @@
             "location": "apps/api/src/handlers/mcp-connectors/oauth.ts#2"
           },
           {
-            "location": "apps/api/src/handlers/search/ai.ts#6"
+            "location": "apps/api/src/handlers/search/ai.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/skills/generate-draft.ts#4"
+            "location": "apps/api/src/handlers/skills/generate-draft.ts#3"
           },
           {
             "location": "apps/api/src/handlers/template-recipes/definition.ts#1"
@@ -26519,19 +24787,19 @@
             "location": "apps/api/src/handlers/template-recipes/recipes.ts#5"
           },
           {
-            "location": "apps/api/src/handlers/templates/prefill.ts#4"
+            "location": "apps/api/src/handlers/templates/prefill.ts#3"
           },
           {
-            "location": "apps/api/src/handlers/templates/suggest-template-fields.ts#13"
+            "location": "apps/api/src/handlers/templates/suggest-template-fields.ts#12"
           },
           {
-            "location": "apps/api/src/lib/ai-change-summary.ts#10"
+            "location": "apps/api/src/lib/ai-change-summary.ts#9"
           },
           {
             "location": "apps/api/src/lib/ai-config-crypto.ts#10"
           },
           {
-            "location": "apps/api/src/lib/ai-output-schema.ts#29"
+            "location": "apps/api/src/lib/bbox/ai-generate-b-boxes.ts#4"
           },
           {
             "location": "apps/api/src/lib/bbox/ai-prompts.ts#1"
@@ -26546,6 +24814,12 @@
             "location": "apps/api/src/lib/safe-outbound-fetch.ts#7"
           },
           {
+            "location": "apps/api/src/lib/tanstack-ai-generate.ts#9"
+          },
+          {
+            "location": "apps/api/src/lib/tanstack-ai-schema.ts#6"
+          },
+          {
             "location": "apps/api/src/lib/views-schema.ts#3"
           },
           {
@@ -26556,6 +24830,9 @@
           },
           {
             "location": "apps/api/src/lib/workflow/ai-prompts.ts#1"
+          },
+          {
+            "location": "apps/api/src/lib/workflow/verdict-engine.ts#2"
           },
           {
             "location": "apps/api/src/mcp/stella-tools.ts#3"
@@ -26894,7 +25171,10 @@
         ],
         "occurrences": [
           {
-            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#15"
+            "location": "apps/web/src/components/ai-suggestions/active-docx-store.ts#21"
+          },
+          {
+            "location": "apps/web/src/components/ai-suggestions/playbook-review-store.ts#17"
           },
           {
             "location": "apps/web/src/components/ai-suggestions/review-store.ts#11"
@@ -27008,13 +25288,16 @@
             "location": "apps/web/src/components/dev-root.tsx#3"
           },
           {
-            "location": "apps/web/src/components/dev-sidebar-group.tsx#13"
+            "location": "apps/web/src/components/dev-sidebar-group.tsx#11"
           },
           {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#29"
           },
           {
             "location": "apps/web/src/components/inspector/inspector-panel.tsx#13"
+          },
+          {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#24"
           },
           {
             "location": "apps/web/src/components/inspector/suggestions-facet.tsx#25"
@@ -27086,10 +25369,13 @@
             "location": "apps/web/src/components/dev-root.tsx#3"
           },
           {
-            "location": "apps/web/src/components/dev-sidebar-group.tsx#13"
+            "location": "apps/web/src/components/dev-sidebar-group.tsx#11"
           },
           {
             "location": "apps/web/src/components/inspector/chat-tab-panel.tsx#29"
+          },
+          {
+            "location": "apps/web/src/components/inspector/playbook-facet.tsx#24"
           },
           {
             "location": "apps/web/src/components/inspector/suggestions-facet.tsx#25"
