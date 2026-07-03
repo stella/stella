@@ -555,6 +555,7 @@
       "exactCall": "Dokładne wywołanie",
       "field": "Pole",
       "input": "Dane wejściowe",
+      "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
       "toggleDetails": "Przełącz szczegóły"

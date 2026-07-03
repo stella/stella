@@ -558,6 +558,7 @@ type Messages = {
       "exactCall": "Exact call";
       "field": "Field";
       "input": "Input";
+      "interrupted": "Interrupted before finishing";
       "output": "Output";
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";

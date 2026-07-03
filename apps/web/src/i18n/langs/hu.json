@@ -555,6 +555,7 @@
       "exactCall": "Pontos hívás",
       "field": "Mező",
       "input": "Bemenet",
+      "interrupted": "Befejezés előtt megszakadt",
       "output": "Kimenet",
       "sourceCode": "Forráskód",
       "toggleDetails": "Részletek megjelenítése"

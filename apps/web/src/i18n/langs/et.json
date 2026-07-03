@@ -555,6 +555,7 @@
       "exactCall": "Täpne kutse",
       "field": "Väli",
       "input": "Sisend",
+      "interrupted": "Katkes enne lõpetamist",
       "output": "Väljund",
       "sourceCode": "Lähtekood",
       "toggleDetails": "Üksikasjade lülitamine"

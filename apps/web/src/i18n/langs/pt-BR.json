@@ -555,6 +555,7 @@
       "exactCall": "Chamada exata",
       "field": "Campo",
       "input": "Entrada",
+      "interrupted": "Interrompido antes de concluir",
       "output": "Saída",
       "sourceCode": "Código fonte",
       "toggleDetails": "Alternar detalhes"

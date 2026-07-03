@@ -12,6 +12,7 @@ import {
   isChatTurnInFlight,
   isPublicOfficialChatToolName,
   isToolApprovedByGrant,
+  sanitizeHydratedRunningToolCalls,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import type {
@@ -456,6 +457,144 @@ describe("isChatTurnInFlight", () => {
 
   test("is idle without an active request or running tool call", () => {
     expect(isChatTurnInFlight({ status: "ready", messages: [] })).toBe(false);
+  });
+});
+
+describe("sanitizeHydratedRunningToolCalls", () => {
+  const runningToolPart = {
+    arguments: JSON.stringify({ query: "consumer credit" }),
+    id: "tool-call-1",
+    input: { query: "consumer credit" },
+    name: "mcp__salvia__search_decisions",
+    state: "input-complete",
+    type: "tool-call",
+  } satisfies ChatPart;
+
+  test("rewrites a dead running tool call in the last assistant message to the terminal error state", () => {
+    const messages: PersistedChatMessage[] = [
+      { id: "message-1", parts: [runningToolPart], role: "assistant" },
+    ];
+
+    const sanitized = sanitizeHydratedRunningToolCalls(messages);
+    const part = sanitized[0]?.parts[0];
+    if (part?.type !== "tool-call") {
+      throw new Error("Expected a tool-call part");
+    }
+
+    expect(part.state).toBe("error");
+    // The wedge driver now reads the freshly loaded thread as idle.
+    expect(
+      hasRunningToolCallInLatestAssistantMessage({ messages: sanitized }),
+    ).toBe(false);
+  });
+
+  test("also sanitizes a dead running tool call in an earlier assistant message", () => {
+    const messages: PersistedChatMessage[] = [
+      { id: "message-1", parts: [runningToolPart], role: "assistant" },
+      {
+        id: "message-2",
+        parts: [{ content: "follow-up prompt", type: "text" }],
+        role: "user",
+      },
+    ];
+
+    const sanitized = sanitizeHydratedRunningToolCalls(messages);
+    const part = sanitized[0]?.parts[0];
+    if (part?.type !== "tool-call") {
+      throw new Error("Expected a tool-call part");
+    }
+
+    expect(part.state).toBe("error");
+    // The trailing user message is untouched (reference preserved).
+    expect(sanitized[1]).toBe(messages[1]);
+  });
+
+  test("leaves ask-user prompts awaiting a user answer untouched", () => {
+    const messages: PersistedChatMessage[] = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({ analysis: "", questions: [] }),
+            id: "tool-call-1",
+            input: { analysis: "", questions: [] },
+            name: "ask-user",
+            state: "input-complete",
+            type: "tool-call",
+          } satisfies ChatPart,
+        ],
+        role: "assistant",
+      },
+    ];
+
+    // Long-lived by design: the message keeps its reference (no change).
+    expect(sanitizeHydratedRunningToolCalls(messages)[0]).toBe(messages[0]);
+  });
+
+  test("leaves an approval-requested tool call untouched", () => {
+    const messages: PersistedChatMessage[] = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            approval: { id: "approval-1", needsApproval: true },
+            arguments: JSON.stringify({ query: "civil code" }),
+            id: "tool-call-1",
+            input: { query: "civil code" },
+            name: "mcp__salvia__search_decisions",
+            state: "approval-requested",
+            type: "tool-call",
+          } satisfies ChatPart,
+        ],
+        role: "assistant",
+      },
+    ];
+
+    expect(sanitizeHydratedRunningToolCalls(messages)[0]).toBe(messages[0]);
+  });
+
+  test("leaves a completed tool call untouched", () => {
+    const messages: PersistedChatMessage[] = [
+      {
+        id: "message-1",
+        parts: [
+          {
+            arguments: JSON.stringify({ query: "consumer credit" }),
+            id: "tool-call-1",
+            input: { query: "consumer credit" },
+            output: { content: [] },
+            name: "mcp__salvia__search_decisions",
+            state: "complete",
+            type: "tool-call",
+          } satisfies ChatPart,
+        ],
+        role: "assistant",
+      },
+    ];
+
+    expect(sanitizeHydratedRunningToolCalls(messages)[0]).toBe(messages[0]);
+  });
+
+  test("is a no-op for an empty thread or a user-last transcript", () => {
+    expect(sanitizeHydratedRunningToolCalls([])).toEqual([]);
+
+    const messages: PersistedChatMessage[] = [
+      {
+        id: "message-1",
+        parts: [{ content: "Assistant reply", type: "text" }],
+        role: "assistant",
+      },
+      {
+        id: "message-2",
+        parts: [{ content: "Latest prompt", type: "text" }],
+        role: "user",
+      },
+    ];
+
+    const sanitized = sanitizeHydratedRunningToolCalls(messages);
+    // Nothing running anywhere: every message keeps its reference.
+    expect(sanitized[0]).toBe(messages[0]);
+    expect(sanitized[1]).toBe(messages[1]);
   });
 });
 

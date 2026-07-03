@@ -555,6 +555,7 @@
       "exactCall": "Precīzs izsaukums",
       "field": "Lauks",
       "input": "Ievade",
+      "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
       "toggleDetails": "Pārslēgt detaļas"

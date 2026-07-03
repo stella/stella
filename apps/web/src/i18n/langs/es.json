@@ -555,6 +555,7 @@
       "exactCall": "Llamada exacta",
       "field": "Campo",
       "input": "Entrada",
+      "interrupted": "Interrumpido antes de finalizar",
       "output": "Salida",
       "sourceCode": "Código fuente",
       "toggleDetails": "Mostrar detalles"

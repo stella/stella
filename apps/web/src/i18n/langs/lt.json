@@ -555,6 +555,7 @@
       "exactCall": "Tikslus iškvietimas",
       "field": "Laukas",
       "input": "Įvestis",
+      "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pradinis kodas",
       "toggleDetails": "Perjungti detales"

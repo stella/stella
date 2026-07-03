@@ -555,6 +555,7 @@
       "exactCall": "Appel exact",
       "field": "Champ",
       "input": "Entrée",
+      "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
       "toggleDetails": "Afficher les détails"

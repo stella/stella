@@ -19,6 +19,7 @@ import type {
   ChatUITools,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { sanitizeHydratedRunningToolCalls } from "@/components/chat/chat-ui-tools";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { apiUrl } from "@/lib/api-url";
@@ -1271,7 +1272,12 @@ export const chatThreadOptions = ({
 
       const chat = createChatRuntime({
         context,
-        initialMessages: messages,
+        // Thread hydration is the one place persisted messages enter a
+        // fresh runtime with no live turn; drop any tool-call part left
+        // running by a stream that died mid call so the session does not
+        // load already wedged as "generating". See
+        // `sanitizeHydratedRunningToolCalls`.
+        initialMessages: sanitizeHydratedRunningToolCalls(messages),
         key,
         onError: (error) => {
           getAnalytics().captureError(error);

@@ -555,6 +555,7 @@
       "exactCall": "Přesné volání",
       "field": "Pole",
       "input": "Vstup",
+      "interrupted": "Přerušeno před dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
       "toggleDetails": "Přepnout detaily"
