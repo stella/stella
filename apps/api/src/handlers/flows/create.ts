@@ -84,8 +84,9 @@ const createFlowDefinition = createSafeRootHandler(
       panic("Failed to create flow definition");
     }
 
-    // Phase 3 seam: keep the scheduler row in sync with the trigger.
-    syncFlowScheduleTrigger({
+    // Keep the scheduler row in sync with the trigger (post-commit reconcile;
+    // never throws).
+    await syncFlowScheduleTrigger({
       id: flowId,
       trigger: input.trigger,
       enabled: input.enabled,

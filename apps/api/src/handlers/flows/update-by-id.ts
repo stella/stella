@@ -82,9 +82,9 @@ const updateFlowDefinition = createSafeRootHandler(
       );
     }
 
-    // Phase 3 seam: a changed / removed schedule trigger (or a disabled flow)
-    // must reconcile the scheduler row.
-    syncFlowScheduleTrigger({
+    // A changed / removed schedule trigger (or a disabled flow) must reconcile
+    // the scheduler row (post-commit; never throws).
+    await syncFlowScheduleTrigger({
       id: params.flowId,
       trigger: input.trigger,
       enabled: input.enabled,

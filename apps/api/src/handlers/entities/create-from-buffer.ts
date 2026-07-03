@@ -239,6 +239,11 @@ export const createEntityFromBuffer = async ({
     throw error;
   }
 
+  // LOOP-GUARD INVARIANT: this is the server-side entity-creation path (flow
+  // `create-document` step, template fill, translation, legal-source import). It
+  // must NOT invoke `maybeStartUploadTriggeredFlows` — only genuine USER uploads
+  // fire the file-upload trigger, so a flow-created document can never spawn
+  // another flow run. Keep the upload trigger out of this call site.
   processExtraction(entityId).catch(captureError);
 
   enqueuePdfDerivativeOrMarkFailed({

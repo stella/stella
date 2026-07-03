@@ -57,6 +57,7 @@ import {
   enqueueImageThumbnailOrMarkFailed,
   enqueuePdfDerivativeOrMarkFailed,
 } from "@/api/lib/file-derivative-queue";
+import { maybeStartUploadTriggeredFlows } from "@/api/lib/flows/maybe-start-upload-triggered-flows";
 import { LIMITS } from "@/api/lib/limits";
 import { getS3 } from "@/api/lib/s3";
 import type { SanitizedFileName } from "@/api/lib/sanitize-filename";
@@ -755,6 +756,16 @@ export const finalizeEntityCreate = async function* ({
     // consumers never read a final key before it exists.
     processExtraction(entityId).catch((error: unknown) => {
       captureError(error, { entityId, mimeType: declaredMime });
+    });
+    // File-upload flow trigger. Fire-and-forget on the USER upload path only;
+    // flow-created documents (create-document step) never reach this call site.
+    maybeStartUploadTriggeredFlows({
+      entityId,
+      workspaceId,
+      organizationId,
+      fileName: finalized.fileName,
+    }).catch((error: unknown) => {
+      captureError(error, { entityId, workspaceId });
     });
     enqueuePdfDerivativeOrMarkFailed({
       encrypted,

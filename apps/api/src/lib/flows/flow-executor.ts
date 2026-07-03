@@ -96,9 +96,19 @@ export const executeFlowStep = async (
   }
 
   const scope = await resolveRunScope(run);
+  if (scope.actorUserId === null) {
+    // The trigger guarantees an actor before starting an automated run; a null
+    // here means the definition's author was deleted mid-flight. Fail cleanly
+    // with a TaggedError (never a panic) so the worker finalizes the run.
+    throw new FlowStepError({
+      message:
+        "The user who owns this automated flow was removed; the run cannot continue.",
+    });
+  }
+  const actorUserId = scope.actorUserId;
   const scopedDb = createRootScopedDb({
     organizationId: scope.organizationId,
-    userId: scope.actorUserId,
+    userId: actorUserId,
     workspaceIds: [run.workspaceId],
   });
 
@@ -154,7 +164,7 @@ export const executeFlowStep = async (
         stepIndex,
         run,
         organizationId: scope.organizationId,
-        actorUserId: scope.actorUserId,
+        actorUserId,
         scopedDb,
       });
       await completeStepAndAdvance({
@@ -211,7 +221,9 @@ const loadStep = async (runId: SafeId<"flowRun">, stepIndex: number) =>
 
 type RunScope = {
   organizationId: SafeId<"organization">;
-  actorUserId: SafeId<"user">;
+  // `null` only for an automated run whose definition author was deleted after
+  // the run started; the trigger guarantees a non-null actor at start time.
+  actorUserId: SafeId<"user"> | null;
 };
 
 const resolveRunScope = async (run: LoadedRun): Promise<RunScope> => {
@@ -230,10 +242,15 @@ const resolveRunScope = async (run: LoadedRun): Promise<RunScope> => {
 
 /**
  * The user credited as the run's actor (document `createdBy`, audit rows). A
- * manual run carries the launcher's id; an automated run (Phase 3) falls back
- * to the definition author. Phase 2 only produces manual runs.
+ * manual run carries the launcher's id; an automated run falls back to the
+ * definition author. Returns `null` for an automated run whose author was
+ * deleted mid-flight — the trigger already refuses to start such a run, so this
+ * only happens if the author is removed after the run begins; callers fail the
+ * run cleanly rather than panicking.
  */
-const resolveActorUserId = async (run: LoadedRun): Promise<SafeId<"user">> => {
+const resolveActorUserId = async (
+  run: LoadedRun,
+): Promise<SafeId<"user"> | null> => {
   if (run.triggerSource.type === "manual") {
     return brandPersistedUserId(run.triggerSource.userId);
   }
@@ -246,7 +263,7 @@ const resolveActorUserId = async (run: LoadedRun): Promise<SafeId<"user">> => {
       return brandPersistedUserId(definition.createdByUserId);
     }
   }
-  return panic("automated flow run has no resolvable actor user");
+  return null;
 };
 
 // ── Step executors ──────────────────────────────────────
@@ -596,15 +613,12 @@ export const failFlowRunFromWorker = async (
     return;
   }
   const scope = await resolveRunScope(run);
-  const scopedDb = createRootScopedDb({
-    organizationId: scope.organizationId,
-    userId: scope.actorUserId,
-    workspaceIds: [run.workspaceId],
-  });
   const message = errorMessage(error);
   const now = new Date();
 
-  const payload = await scopedDb(async (tx) => {
+  const writeFailure = async (
+    tx: Transaction,
+  ): Promise<FlowRunUpdatePayload> => {
     await tx
       .update(flowRunSteps)
       .set({ status: "failed", error: message, finishedAt: now })
@@ -616,7 +630,19 @@ export const failFlowRunFromWorker = async (
       .set({ status: "failed", error: message, finishedAt: now })
       .where(eq(flowRuns.id, runId));
     return await readRunProgress(tx, runId);
-  });
+  };
+
+  // A null actor (automated run whose author was deleted) has no RLS-scoped
+  // handle to write through; fall back to `rootDb` so the run still finalizes
+  // instead of being stranded non-terminal.
+  const payload =
+    scope.actorUserId === null
+      ? await rootDb.transaction(writeFailure)
+      : await createRootScopedDb({
+          organizationId: scope.organizationId,
+          userId: scope.actorUserId,
+          workspaceIds: [run.workspaceId],
+        })(writeFailure);
   broadcastFlowRunUpdate(run.workspaceId, payload);
 };
 

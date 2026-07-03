@@ -62,8 +62,9 @@ const deleteFlowDefinition = createSafeRootHandler(
       );
     }
 
-    // Phase 3 seam: remove the scheduler row for a deleted definition.
-    syncFlowScheduleTrigger({
+    // Remove the scheduler row for a deleted definition (post-commit; never
+    // throws).
+    await syncFlowScheduleTrigger({
       id: deleted.id,
       trigger: deleted.trigger,
       enabled: false,

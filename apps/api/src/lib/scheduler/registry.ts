@@ -4,6 +4,10 @@ import {
   expireDesktopEditSessions,
 } from "@/api/lib/scheduler/tasks/desktop-edit-session-expiry";
 import {
+  FLOW_RUN_TASK,
+  runScheduledFlow,
+} from "@/api/lib/scheduler/tasks/flow-run";
+import {
   INFO_SOUD_SYNC_TRACKED_CASES_TASK,
   syncInfoSoudTrackedCases,
 } from "@/api/lib/scheduler/tasks/infosoud";
@@ -22,4 +26,5 @@ export const createSchedulerTaskRegistry = (): SchedulerTaskRegistry =>
     ["scheduler.dispatchBullMq", createBullMqDispatchTask()],
     [INFO_SOUD_SYNC_TRACKED_CASES_TASK, syncInfoSoudTrackedCases],
     [EXPIRE_DESKTOP_EDIT_SESSIONS_TASK, expireDesktopEditSessions],
+    [FLOW_RUN_TASK, runScheduledFlow],
   ]);

@@ -85,16 +85,24 @@ const flowStepJobId = (runId: string, stepIndex: number): string =>
 /**
  * Enqueue one step of a run. Called by `startFlowRun` (step 0), by the
  * executor when advancing to the next step, and by `resolveFlowReviewGate`
- * when a gate is approved.
+ * when a gate is approved. `delayMs` (file-upload trigger only) defers step 0
+ * so async extraction can populate `extractedContent` first; the job data stays
+ * minimal ({runId, stepIndex}) so a stale job can never carry outdated state.
  */
+export type EnqueueFlowStepOptions = FlowStepJobData & { delayMs?: number };
+
 export const enqueueFlowStep = async ({
   runId,
   stepIndex,
-}: FlowStepJobData): Promise<void> => {
+  delayMs,
+}: EnqueueFlowStepOptions): Promise<void> => {
   await getQueue().add(
     "flow-step",
     { runId, stepIndex },
-    { jobId: flowStepJobId(runId, stepIndex) },
+    {
+      jobId: flowStepJobId(runId, stepIndex),
+      ...(delayMs !== undefined && { delay: delayMs }),
+    },
   );
 };
 

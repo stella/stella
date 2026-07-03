@@ -37,6 +37,12 @@ export type StartFlowRunOptions = {
   definitionId: SafeId<"flowDefinition">;
   triggerSource: FlowTriggerSource;
   inputEntityIds: SafeId<"entity">[];
+  /**
+   * Optional delay (ms) before step 0 becomes visible to the worker. Used by
+   * the file-upload trigger to defer the first step past async extraction so an
+   * `ai` step with `includeDocuments` sees populated `extractedContent`.
+   */
+  enqueueDelayMs?: number;
 };
 
 export type StartFlowRunResult = {
@@ -51,6 +57,7 @@ export const startFlowRun = ({
   definitionId,
   triggerSource,
   inputEntityIds,
+  enqueueDelayMs,
 }: StartFlowRunOptions): Promise<
   Result<StartFlowRunResult, FlowRunStartError | SafeDbError>
 > =>
@@ -120,7 +127,12 @@ export const startFlowRun = ({
     // never permanently stranded.
     yield* Result.await(
       Result.tryPromise({
-        try: () => enqueueFlowStep({ runId, stepIndex: 0 }),
+        try: () =>
+          enqueueFlowStep({
+            runId,
+            stepIndex: 0,
+            ...(enqueueDelayMs !== undefined && { delayMs: enqueueDelayMs }),
+          }),
         catch: (cause) =>
           new FlowRunStartError({
             reason: "enqueue-failed",
