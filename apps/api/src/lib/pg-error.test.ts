@@ -115,6 +115,29 @@ describe("pgErrorFields", () => {
     });
   });
 
+  it("continues past SQLSTATE-only wrappers to collect driver schema identifiers", () => {
+    const driver = pgCause({
+      code: "23505",
+      severity: "ERROR",
+      constraint: "users_email_key",
+      table: "users",
+      column: "email",
+    });
+    const drizzle = new DrizzleQueryError("query failed", [], driver);
+    const databaseError = Object.assign(new Error("Database query failed"), {
+      code: "23505",
+      cause: drizzle,
+    });
+
+    expect(pgErrorFields(databaseError)).toEqual({
+      "error.cause.pg_code": "23505",
+      "error.cause.pg_severity": "ERROR",
+      "error.cause.pg_constraint": "users_email_key",
+      "error.cause.pg_table": "users",
+      "error.cause.pg_column": "email",
+    });
+  });
+
   it("ignores a Node system error whose `code` is not a SQLSTATE", () => {
     const sys = Object.assign(new Error("socket"), {
       code: "ECONNRESET",

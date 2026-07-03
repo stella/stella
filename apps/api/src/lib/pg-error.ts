@@ -104,12 +104,24 @@ const sqlStateOf = (node: object): string | undefined => {
   return undefined;
 };
 
-type PgErrorNode = { error: object; sqlState: string };
+const readSafePgStringFields = (node: object): Record<string, string> => {
+  const fields: Record<string, string> = {};
+  for (const { key, property } of PG_SAFE_STRING_FIELDS) {
+    const value = readNonEmptyString(node, property);
+    if (value !== undefined) {
+      fields[key] = value;
+    }
+  }
+  return fields;
+};
 
-const findPgErrorNode = (error: unknown): PgErrorNode | undefined => {
+const collectPgErrorFields = (error: unknown): Record<string, string> => {
   const seen = new WeakSet<object>();
   let current: unknown = error;
   let depth = 0;
+  let sqlState: string | undefined;
+  const fields: Record<string, string> = {};
+
   while (
     current !== null &&
     typeof current === "object" &&
@@ -117,14 +129,20 @@ const findPgErrorNode = (error: unknown): PgErrorNode | undefined => {
     !seen.has(current)
   ) {
     seen.add(current);
-    const sqlState = sqlStateOf(current);
-    if (sqlState !== undefined) {
-      return { error: current, sqlState };
+    const currentSqlState = sqlStateOf(current);
+    sqlState ??= currentSqlState;
+    if (currentSqlState !== undefined) {
+      Object.assign(fields, readSafePgStringFields(current));
     }
     current = readProperty(current, "cause");
     depth += 1;
   }
-  return undefined;
+
+  if (sqlState === undefined) {
+    return {};
+  }
+
+  return { "error.cause.pg_code": sqlState, ...fields };
 };
 
 /**
@@ -139,20 +157,5 @@ const findPgErrorNode = (error: unknown): PgErrorNode | undefined => {
  * survive `sanitizeLogAttributes`. Returns `{}` when no Postgres error is
  * found. Never throws: property access is fully guarded.
  */
-export const pgErrorFields = (error: unknown): Record<string, string> => {
-  const node = findPgErrorNode(error);
-  if (node === undefined) {
-    return {};
-  }
-
-  const fields: Record<string, string> = {
-    "error.cause.pg_code": node.sqlState,
-  };
-  for (const { key, property } of PG_SAFE_STRING_FIELDS) {
-    const value = readNonEmptyString(node.error, property);
-    if (value !== undefined) {
-      fields[key] = value;
-    }
-  }
-  return fields;
-};
+export const pgErrorFields = (error: unknown): Record<string, string> =>
+  collectPgErrorFields(error);
