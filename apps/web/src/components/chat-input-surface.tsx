@@ -1,10 +1,11 @@
 import "./chat-editor.css";
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
 
 import { PaperclipIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/components/button";
+import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";
 
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
@@ -13,6 +14,8 @@ import type {
   ChatInputDraft,
 } from "@/components/chat-editor-provider";
 import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
+import { ChatContextMeter } from "@/components/chat/chat-context-meter";
+import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
 import { PromptEditorContent } from "@/components/prompt-editor";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
@@ -42,10 +45,12 @@ type ChatInputSurfaceProps = {
    * shield on raw requests or hide it on protected ones.
    */
   anonymized?: boolean;
-};
-
-const captureChatSubmitError = (error: unknown): void => {
-  getAnalytics().captureError(error);
+  /**
+   * Model-context estimate for this thread's next send. Renders a small ring
+   * meter in the footer that opens an explainer popover. Undefined on the
+   * new-chat surface (no thread yet), where nothing is rendered.
+   */
+  contextUsage?: ChatContextUsage | undefined;
 };
 
 export const ChatInputSurface = ({
@@ -58,6 +63,7 @@ export const ChatInputSurface = ({
   isGenerating = false,
   onStop,
   anonymized = false,
+  contextUsage,
 }: ChatInputSurfaceProps) => {
   const t = useTranslations();
   const rootRef = useRef<HTMLDivElement>(null);
@@ -84,11 +90,26 @@ export const ChatInputSurface = ({
   // the response finishes, so overlapping requests can't happen.
   const submitDisabled = disabled;
 
+  // A failed send has already restored the draft (see `submit` in
+  // chat-editor-provider), so the only thing missing is a user-visible
+  // signal. Route it through analytics AND a toast: swallowing the
+  // failure into telemetry alone leaves the send silently lost.
+  const handleSubmitError = useCallback(
+    (error: unknown): void => {
+      getAnalytics().captureError(error);
+      stellaToast.add({
+        title: t("common.somethingWentWrong"),
+        type: "error",
+      });
+    },
+    [t],
+  );
+
   const { submitDraft } = useChatComposerWiring({
     controller,
     inputDisabled,
     onSubmit,
-    onSubmitError: captureChatSubmitError,
+    onSubmitError: handleSubmitError,
     submitDisabled,
   });
 
@@ -172,6 +193,7 @@ export const ChatInputSurface = ({
           type="file"
         />
         <div className="ms-auto flex items-center gap-1">
+          {contextUsage && <ChatContextMeter usage={contextUsage} />}
           <ChatSubmitButton
             canSend={!submitDisabled && canSubmit}
             isGenerating={isGenerating}

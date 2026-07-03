@@ -10,14 +10,23 @@ import {
   compactChatMessages,
   compactModelMessagesForModel,
   compactModelMessages,
+  computeThreadContextUsage,
   parseChatCompactionSummary,
   planChatCompaction,
   planModelCompaction,
   renderChatMessagesForCompaction,
   renderModelMessagesForCompaction,
+  resolveCompactionTriggerTokens,
+  resolvePreserveTokensForTrigger,
   shouldCompactChatMessages,
   summarizeChatCompaction,
 } from "./compaction";
+
+// Mirrors the stable estimator contract in compaction.ts. If these change, the
+// exact-value assertions below intentionally fail so the meter math is revisited.
+const MESSAGE_OVERHEAD_TOKENS = 12;
+const FILE_PART_ESTIMATED_TOKENS = 8000;
+const DEFAULT_TRIGGER_TOKENS = 64_000;
 
 const textMessage = ({
   id,
@@ -583,5 +592,189 @@ Answer the latest question.
     ]);
 
     expect(transcript).toContain("[unserializable]");
+  });
+});
+
+describe("thread context usage", () => {
+  const attachmentPart = () =>
+    createChatAttachmentPart({
+      filename: "contract.pdf",
+      mimeType: "application/pdf",
+      url: "stella-user-file://file_1",
+    });
+
+  test("reports an all-zero breakdown for an empty thread", () => {
+    const usage = computeThreadContextUsage({ messages: [], summary: null });
+
+    expect(usage).toEqual({
+      estimatedTokens: 0,
+      triggerTokens: DEFAULT_TRIGGER_TOKENS,
+      cacheStableTokens: 0,
+      summarizedMessageCount: 0,
+      breakdown: {
+        promptTokens: 0,
+        toolTokens: 0,
+        summaryTokens: 0,
+        attachmentTokens: 0,
+        conversationTokens: 0,
+      },
+    });
+  });
+
+  test("counts only conversation tokens for a summary-free text thread", () => {
+    const usage = computeThreadContextUsage({
+      messages: [
+        textMessage({ id: "msg_1", role: "user", text: "hello" }),
+        textMessage({ id: "msg_2", role: "assistant", text: "hi there" }),
+      ],
+      summary: null,
+    });
+
+    // "hello" (5 chars) and "hi there" (8 chars) round up to 2 tokens each,
+    // plus the per-message overhead.
+    const expected = 2 * MESSAGE_OVERHEAD_TOKENS + 2 + 2;
+    expect(usage.breakdown).toEqual({
+      promptTokens: 0,
+      toolTokens: 0,
+      summaryTokens: 0,
+      attachmentTokens: 0,
+      conversationTokens: expected,
+    });
+    expect(usage.estimatedTokens).toBe(expected);
+  });
+
+  test("folds prompt and tool estimates into the sum and cache-stable total", () => {
+    const usage = computeThreadContextUsage({
+      messages: [textMessage({ id: "msg_1", role: "user", text: "hello" })],
+      summary: {
+        summarizedMessageCount: 7,
+        summaryMarkdown: "## Goal\nContinue the analysis.",
+      },
+      promptTokens: 1500,
+      toolTokens: 900,
+    });
+
+    const {
+      promptTokens,
+      toolTokens,
+      summaryTokens,
+      attachmentTokens,
+      conversationTokens,
+    } = usage.breakdown;
+
+    expect(promptTokens).toBe(1500);
+    expect(toolTokens).toBe(900);
+    expect(usage.cacheStableTokens).toBe(2400);
+    expect(usage.summarizedMessageCount).toBe(7);
+    // The invariant the segmented bar relies on: all five parts reconstruct the
+    // whole, now including the cache-stable prefix.
+    expect(usage.estimatedTokens).toBe(
+      promptTokens +
+        toolTokens +
+        summaryTokens +
+        attachmentTokens +
+        conversationTokens,
+    );
+  });
+
+  test("attributes each file part to attachmentTokens, its text to conversation", () => {
+    const usage = computeThreadContextUsage({
+      messages: [
+        {
+          id: "msg_1",
+          role: "user",
+          parts: [
+            { type: "text", content: "see attached" },
+            attachmentPart(),
+            attachmentPart(),
+          ],
+        },
+      ],
+      summary: null,
+    });
+
+    // "see attached" is 12 chars -> 3 tokens, plus the message overhead.
+    expect(usage.breakdown.conversationTokens).toBe(
+      MESSAGE_OVERHEAD_TOKENS + 3,
+    );
+    expect(usage.breakdown.attachmentTokens).toBe(
+      2 * FILE_PART_ESTIMATED_TOKENS,
+    );
+    expect(usage.breakdown.summaryTokens).toBe(0);
+  });
+
+  test("keeps the three parts summing to estimatedTokens with an active summary", () => {
+    const usage = computeThreadContextUsage({
+      messages: [
+        textMessage({ id: "msg_1", role: "user", text: "old context here" }),
+        {
+          id: "msg_2",
+          role: "user",
+          parts: [{ type: "text", content: "see attached" }, attachmentPart()],
+        },
+      ],
+      summary: {
+        summarizedMessageCount: 3,
+        summaryMarkdown: "## Goal\nContinue the analysis.",
+      },
+    });
+
+    const { summaryTokens, conversationTokens, attachmentTokens } =
+      usage.breakdown;
+
+    expect(summaryTokens).toBeGreaterThan(0);
+    expect(conversationTokens).toBeGreaterThan(0);
+    expect(attachmentTokens).toBe(FILE_PART_ESTIMATED_TOKENS);
+    // The invariant the frontend relies on: no reconciliation needed because the
+    // three segments reconstruct the whole.
+    expect(usage.estimatedTokens).toBe(
+      summaryTokens + conversationTokens + attachmentTokens,
+    );
+  });
+
+  test("honors a custom trigger and leaves the estimate independent of it", () => {
+    const usage = computeThreadContextUsage({
+      messages: [textMessage({ id: "msg_1", role: "user", text: "hello" })],
+      summary: null,
+      triggerTokens: 1000,
+    });
+
+    expect(usage.triggerTokens).toBe(1000);
+    expect(usage.estimatedTokens).toBe(MESSAGE_OVERHEAD_TOKENS + 2);
+  });
+});
+
+describe("per-model compaction budget", () => {
+  test("uses half the window, clamped to [64k, 200k]", () => {
+    // 128k window -> 64k (lower clamp), 200k -> 100k, 300k -> 150k,
+    // 400k/1M -> 200k (upper clamp).
+    expect(resolveCompactionTriggerTokens(128_000)).toBe(
+      DEFAULT_TRIGGER_TOKENS,
+    );
+    expect(resolveCompactionTriggerTokens(200_000)).toBe(100_000);
+    expect(resolveCompactionTriggerTokens(300_000)).toBe(150_000);
+    expect(resolveCompactionTriggerTokens(400_000)).toBe(200_000);
+    expect(resolveCompactionTriggerTokens(1_048_576)).toBe(200_000);
+  });
+
+  test("never drops below the default trigger even for tiny windows", () => {
+    expect(resolveCompactionTriggerTokens(32_000)).toBe(DEFAULT_TRIGGER_TOKENS);
+  });
+
+  test("falls back to the default trigger for an unknown window", () => {
+    expect(resolveCompactionTriggerTokens(undefined)).toBe(
+      DEFAULT_TRIGGER_TOKENS,
+    );
+  });
+
+  test("scales the preserved tail proportionally to the trigger", () => {
+    // At the default trigger the preserve budget is unchanged (38k); a 100k
+    // trigger scales it up by the same 100k/64k ratio.
+    expect(resolvePreserveTokensForTrigger(DEFAULT_TRIGGER_TOKENS)).toBe(
+      38_000,
+    );
+    expect(resolvePreserveTokensForTrigger(200_000)).toBe(
+      Math.floor((200_000 * 38_000) / DEFAULT_TRIGGER_TOKENS),
+    );
   });
 });

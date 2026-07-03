@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "Eingereihte Nachricht abbrechen",
     "caseLawGreeting": "Stelle Fragen zu dieser Entscheidung — der vollständige Text ist hier verfügbar.",
     "chatAbout": "In AI-Chat einfügen",
+    "contextMeter": {
+      "attachments": "Angehängte Dokumente",
+      "autoCompact": "Bei 100 % fasst stella ältere Nachrichten automatisch zusammen, um Platz zu schaffen.",
+      "cache": "Schnelle Rückfragen nutzen die zwischengespeicherte bisherige Unterhaltung. Der feste Teil (Systemanweisungen, Tools) ist immer zwischengespeichert.",
+      "cached": "zwischengespeichert",
+      "conversation": "Unterhaltung",
+      "full": "{percent} % voll",
+      "instructions": "Systemanweisungen",
+      "percent": "{percent} %",
+      "summary": "Zusammenfassung älterer Nachrichten",
+      "summaryWithCount": "Zusammenfassung von {count} älteren Nachrichten",
+      "title": "Kontext der Unterhaltung",
+      "tokens": "~{used} / {total} Tokens",
+      "tools": "Tools",
+      "triggerLabel": "Kontext der Unterhaltung: {percent} % voll"
+    },
     "contextPlaceholder": "Chat über {context}, / für Skills, @ für Kontext",
     "createDocument": {
       "continue": "Dokument erstellen",

@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "Anuluj wiadomość w kolejce",
     "caseLawGreeting": "Zapytaj mnie o to orzeczenie — mam dostęp do pełnej treści.",
     "chatAbout": "Omów na czacie",
+    "contextMeter": {
+      "attachments": "Załączone dokumenty",
+      "autoCompact": "Przy 100% stella automatycznie podsumowuje starsze wiadomości, aby zwolnić miejsce.",
+      "cache": "Szybkie kontynuacje wykorzystują dotychczasową rozmowę z pamięci podręcznej. Stała część (instrukcje systemowe, narzędzia) jest w pamięci podręcznej zawsze.",
+      "cached": "w pamięci podręcznej",
+      "conversation": "Rozmowa",
+      "full": "{percent}% zapełnienia",
+      "instructions": "Instrukcje systemowe",
+      "percent": "{percent}%",
+      "summary": "Podsumowanie starszych wiadomości",
+      "summaryWithCount": "Podsumowanie {count} starszych wiadomości",
+      "title": "Kontekst rozmowy",
+      "tokens": "~{used} / {total} tokenów",
+      "tools": "Narzędzia",
+      "triggerLabel": "Kontekst rozmowy: {percent}% zapełnienia"
+    },
     "contextPlaceholder": "Czat o {context}, / dla umiejętności, @ aby dodać kontekst",
     "createDocument": {
       "continue": "Utwórz dokument",

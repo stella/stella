@@ -26,6 +26,13 @@ const MESSAGE_OVERHEAD_TOKENS = 12;
 const FILE_PART_ESTIMATED_TOKENS = 8000;
 const DEFAULT_TRIGGER_TOKENS = 64_000;
 const DEFAULT_PRESERVE_TOKENS = 38_000;
+/**
+ * Upper bound on the per-model compaction trigger. Even a 1M-token model
+ * checkpoints well before its hard limit: summaries stay cheap, the tail
+ * we resummarize stays bounded, and provider latency/cost stay sane. The
+ * lower bound is `DEFAULT_TRIGGER_TOKENS` (the historical single value).
+ */
+const MAX_TRIGGER_TOKENS = 200_000;
 const MAX_TEXT_PART_CHARS = 8000;
 const MAX_STRUCTURED_PART_CHARS = 4000;
 const MAX_SUMMARY_OUTPUT_TOKENS = 1800;
@@ -110,6 +117,136 @@ export const shouldCompactChatMessages = (
   messages: readonly ChatMessage[],
   triggerTokens: number = DEFAULT_TRIGGER_TOKENS,
 ): boolean => estimateMessagesTokens(messages) > triggerTokens;
+
+/**
+ * Per-model compaction trigger: half the model's documented input window,
+ * clamped to `[DEFAULT_TRIGGER_TOKENS, MAX_TRIGGER_TOKENS]`. Half-window
+ * leaves room for the reply plus the untrusted suffix and tool traffic the
+ * estimate here does not model. An undefined window (unknown model) falls
+ * back to the historical single trigger so behaviour never regresses.
+ */
+export const resolveCompactionTriggerTokens = (
+  contextWindowTokens: number | undefined,
+): number => {
+  if (contextWindowTokens === undefined) {
+    return DEFAULT_TRIGGER_TOKENS;
+  }
+  return Math.min(
+    MAX_TRIGGER_TOKENS,
+    Math.max(DEFAULT_TRIGGER_TOKENS, Math.floor(contextWindowTokens / 2)),
+  );
+};
+
+/**
+ * Scale the preserved-tail budget proportionally to the resolved trigger so
+ * the summarize/keep ratio stays constant as the trigger grows with the
+ * model's window.
+ */
+export const resolvePreserveTokensForTrigger = (
+  triggerTokens: number,
+): number =>
+  Math.floor(
+    (triggerTokens * DEFAULT_PRESERVE_TOKENS) / DEFAULT_TRIGGER_TOKENS,
+  );
+
+export type ThreadContextUsage = {
+  estimatedTokens: number;
+  triggerTokens: number;
+  /** Prompt-cache-stable prefix (instructions + tool catalog). Equal to
+   *  `breakdown.promptTokens + breakdown.toolTokens`. */
+  cacheStableTokens: number;
+  /** Messages folded into the active checkpoint summary; 0 when none. */
+  summarizedMessageCount: number;
+  /** Five parts in legend/render order. They sum to `estimatedTokens`
+   *  exactly, so the segmented bar needs no reconciliation. */
+  breakdown: {
+    promptTokens: number;
+    toolTokens: number;
+    summaryTokens: number;
+    attachmentTokens: number;
+    conversationTokens: number;
+  };
+};
+
+type ComputeThreadContextUsageOptions = {
+  messages: readonly ChatMessage[];
+  /** Active compaction checkpoint carried into the next send, or null when the
+   *  thread has not been summarized yet. Its rendered summary message is what
+   *  the model actually receives, so it is estimated the same way here. */
+  summary: {
+    summarizedMessageCount: number;
+    summaryMarkdown: string;
+  } | null;
+  /** System-prompt estimate (core rules + skill catalog). Supplied by the
+   *  caller from the shared prompt builders; defaults to 0 for pure
+   *  token-math callers/tests. */
+  promptTokens?: number | undefined;
+  /** Tool-catalog estimate (the read.* API surface in the system prompt).
+   *  Supplied by the caller; defaults to 0. */
+  toolTokens?: number | undefined;
+  triggerTokens?: number | undefined;
+};
+
+/**
+ * Estimate the model context a thread's next send would carry, split into the
+ * five parts the composer meter renders: the cache-stable prefix (system
+ * prompt + tool catalog), the active compaction summary, the attachment file
+ * parts, and the conversation text. The message-derived parts reuse the same
+ * estimators as `planChatCompaction`, so the conversation/summary/attachment
+ * split tracks what `shouldCompactChatMessages` sees; the five parts sum to
+ * `estimatedTokens` exactly.
+ */
+export const computeThreadContextUsage = ({
+  messages,
+  summary,
+  promptTokens = 0,
+  toolTokens = 0,
+  triggerTokens = DEFAULT_TRIGGER_TOKENS,
+}: ComputeThreadContextUsageOptions): ThreadContextUsage => {
+  const summaryTokens = summary
+    ? estimateMessageTokens(
+        createCompactionSummaryMessage({
+          summarizedMessageCount: summary.summarizedMessageCount,
+          summary: summary.summaryMarkdown,
+        }),
+      )
+    : 0;
+
+  let conversationTokens = 0;
+  let attachmentTokens = 0;
+  for (const message of messages) {
+    const messageAttachmentTokens =
+      countAttachmentParts(message) * FILE_PART_ESTIMATED_TOKENS;
+    attachmentTokens += messageAttachmentTokens;
+    // The message's non-attachment share (overhead + text/structured parts) is
+    // whatever estimateMessageTokens counts beyond its file parts, so the split
+    // stays exact against the estimator the send path uses.
+    conversationTokens +=
+      estimateMessageTokens(message) - messageAttachmentTokens;
+  }
+
+  return {
+    estimatedTokens:
+      promptTokens +
+      toolTokens +
+      summaryTokens +
+      attachmentTokens +
+      conversationTokens,
+    triggerTokens,
+    cacheStableTokens: promptTokens + toolTokens,
+    summarizedMessageCount: summary?.summarizedMessageCount ?? 0,
+    breakdown: {
+      promptTokens,
+      toolTokens,
+      summaryTokens,
+      attachmentTokens,
+      conversationTokens,
+    },
+  };
+};
+
+const countAttachmentParts = (message: ChatMessage): number =>
+  message.parts.filter(isChatAttachmentPart).length;
 
 export const planChatCompaction = ({
   messages,
@@ -813,7 +950,11 @@ const estimatePartTokens = (part: ChatMessage["parts"][number]): number => {
   return estimateTextTokens(safeStringify(part));
 };
 
-const estimateTextTokens = (text: string): number =>
+/**
+ * Canonical chars/4 token estimate. Shared with the prompt builders so the
+ * meter's prompt/tool parts use the same estimator as the message parts.
+ */
+export const estimateTextTokens = (text: string): number =>
   Math.ceil(text.length / ESTIMATED_CHARS_PER_TOKEN);
 
 const startsWithUserMessage = (

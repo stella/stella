@@ -150,8 +150,10 @@ type PersistChatCompactionCheckpointProps = {
   onSummaryError?: ((error: HandlerError<500>) => void) | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  preserveTokens?: number | undefined;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  triggerTokens?: number | undefined;
 };
 
 export const persistChatCompactionCheckpoint = async ({
@@ -163,8 +165,10 @@ export const persistChatCompactionCheckpoint = async ({
   onSummaryError,
   organizationId,
   orgAIConfig,
+  preserveTokens,
   safeDb,
   threadId,
+  triggerTokens,
 }: PersistChatCompactionCheckpointProps): Promise<
   Result<void, HandlerError<422 | 500> | SafeDbError>
 > => {
@@ -176,6 +180,8 @@ export const persistChatCompactionCheckpoint = async ({
     onSummaryError,
     organizationId,
     orgAIConfig,
+    preserveTokens,
+    triggerTokens,
   });
   if (Result.isError(checkpointResult)) {
     return Result.err(checkpointResult.error);

@@ -6,6 +6,9 @@ import {
   BYOK_DEFAULT_MODELS,
   BYOK_DOCUMENT_INPUT_MODEL_OPTIONS,
   BYOK_MODEL_OPTIONS,
+  CONTEXT_WINDOW_TOKENS,
+  DEFAULT_CONTEXT_WINDOW_TOKENS,
+  getContextWindowTokens,
   isBYOKModelRoleSupported,
   isBYOKProviderRoleSupported,
   DEFAULT_MODELS,
@@ -144,4 +147,35 @@ describe("MODEL_RATES economic ordering", () => {
       expect(Number.isFinite(rate.outputPerMTok)).toBe(true);
     });
   }
+});
+
+describe("CONTEXT_WINDOW_TOKENS", () => {
+  // Every metered first-party model must declare a window, or the
+  // per-model compaction trigger silently degrades to the conservative
+  // default for a model users actively pick.
+  test("covers every model with a ledger rate", () => {
+    for (const modelId of Object.keys(MODEL_RATES)) {
+      expect(CONTEXT_WINDOW_TOKENS[modelId]).toBeGreaterThan(0);
+    }
+  });
+
+  test("windows are never below the conservative default", () => {
+    for (const window of Object.values(CONTEXT_WINDOW_TOKENS)) {
+      expect(window).toBeGreaterThanOrEqual(DEFAULT_CONTEXT_WINDOW_TOKENS);
+    }
+  });
+
+  test("falls back to the default for unlisted model IDs", () => {
+    expect(getContextWindowTokens("speakleash/Bielik-11B-v2.3-Instruct")).toBe(
+      DEFAULT_CONTEXT_WINDOW_TOKENS,
+    );
+    expect(getContextWindowTokens("default")).toBe(
+      DEFAULT_CONTEXT_WINDOW_TOKENS,
+    );
+  });
+
+  test("returns the documented window for a listed model ID", () => {
+    expect(getContextWindowTokens("claude-sonnet-4-6")).toBe(200_000);
+    expect(getContextWindowTokens("gpt-5.4")).toBe(400_000);
+  });
 });

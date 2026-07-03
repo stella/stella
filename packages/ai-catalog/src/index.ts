@@ -495,3 +495,84 @@ export const MODEL_RATES: Readonly<Record<string, ModelRate>> = {
   },
 } satisfies Record<OfferedFirstPartyModelId, ModelRate> &
   Record<string, ModelRate>;
+
+/**
+ * Documented input context-window sizes (in tokens) per model ID.
+ *
+ * Keys are the canonical model IDs stella resolves for the provider
+ * adapters (the same forms used in `MODEL_RATES`, `BYOK_MODEL_OPTIONS`,
+ * and `DEFAULT_MODELS`, including OpenRouter provider-prefixed slugs and
+ * AWS Bedrock IDs). Values are the providers' publicly documented input
+ * windows; where a provider offers a larger beta window we intentionally
+ * take the conservative default (e.g. Claude's standard 200K rather than
+ * the 1M beta) so context budgeting never overpromises.
+ *
+ * Consumers must go through `getContextWindowTokens`, which falls back to
+ * `DEFAULT_CONTEXT_WINDOW_TOKENS` for any unlisted ID. Unlike
+ * `MODEL_RATES`, the nightly `model-catalog-upstream` check does not
+ * validate this map, so an unknown model degrades to the conservative
+ * default rather than failing CI.
+ */
+export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
+  // Google Gemini: 1M-token input window across the current lineup.
+  "gemini-2.5-flash": 1_048_576,
+  "gemini-2.5-pro": 1_048_576,
+  "gemini-3.1-flash-lite": 1_048_576,
+  "gemini-3.5-flash": 1_048_576,
+  "gemini-3.1-pro-preview": 1_048_576,
+  // OpenAI: GPT-4o family 128K; GPT-5 family 400K input.
+  "gpt-4o-mini": 128_000,
+  "gpt-4o": 128_000,
+  "gpt-5.2": 400_000,
+  "gpt-5.4-nano": 400_000,
+  "gpt-5.4-mini": 400_000,
+  "gpt-5.4": 400_000,
+  "gpt-5.5": 400_000,
+  // Anthropic Claude: standard 200K window (1M is beta-gated; not assumed).
+  "claude-haiku-4-5-20251001": 200_000,
+  "claude-sonnet-4-6": 200_000,
+  "claude-opus-4-6": 200_000,
+  "claude-opus-4-7": 200_000,
+  "claude-opus-4-8": 200_000,
+  "claude-fable-5": 200_000,
+  // Mistral: 128K across the offered text/vision models.
+  "mistral-small-latest": 128_000,
+  "mistral-large-latest": 128_000,
+  "mistral-medium-latest": 128_000,
+  "mistral-medium-3-5": 128_000,
+  "magistral-medium-latest": 128_000,
+  "magistral-small-latest": 128_000,
+  "pixtral-large-latest": 128_000,
+  // OpenRouter provider-prefixed slugs mirror their upstream windows.
+  "google/gemini-3.1-pro-preview": 1_048_576,
+  "google/gemini-3.5-flash": 1_048_576,
+  "google/gemini-3.1-flash-lite": 1_048_576,
+  "anthropic/claude-opus-4.8": 200_000,
+  "anthropic/claude-sonnet-4.6": 200_000,
+  "openai/gpt-5.5": 400_000,
+  "openai/gpt-5.4-mini": 400_000,
+  // AWS Bedrock IDs.
+  "us.anthropic.claude-sonnet-4-5-20250929-v1:0": 200_000,
+  "us.anthropic.claude-haiku-4-5-20251001-v1:0": 200_000,
+  "us.amazon.nova-pro-v1:0": 300_000, // Nova Pro/Lite: 300K input.
+  "us.amazon.nova-lite-v1:0": 300_000,
+  "us.amazon.nova-micro-v1:0": 128_000, // Nova Micro: 128K input.
+  "openai.gpt-oss-120b-1:0": 128_000, // gpt-oss on Bedrock: 128K.
+  "openai.gpt-oss-20b-1:0": 128_000,
+  "us.deepseek.r1-v1:0": 128_000, // DeepSeek-R1: 128K.
+};
+
+/**
+ * Conservative window assumed for any model ID absent from
+ * `CONTEXT_WINDOW_TOKENS` (custom deployments, OpenAI-compatible
+ * endpoints, brand-new IDs not yet catalogued).
+ */
+export const DEFAULT_CONTEXT_WINDOW_TOKENS = 128_000;
+
+/**
+ * Documented input context window for a model ID, or the conservative
+ * default for unlisted IDs. Callers must never index
+ * `CONTEXT_WINDOW_TOKENS` directly.
+ */
+export const getContextWindowTokens = (modelId: string): number =>
+  CONTEXT_WINDOW_TOKENS[modelId] ?? DEFAULT_CONTEXT_WINDOW_TOKENS;

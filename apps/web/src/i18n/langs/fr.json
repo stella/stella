@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "Annuler le message en file d’attente",
     "caseLawGreeting": "Pose des questions sur cette décision — le texte complet est disponible ici.",
     "chatAbout": "Insérer dans le chat IA",
+    "contextMeter": {
+      "attachments": "Documents joints",
+      "autoCompact": "À 100 %, stella résume automatiquement les anciens messages pour libérer de la place.",
+      "cache": "Les suites rapides réutilisent la discussion mise en cache. La partie fixe (instructions système, outils) est toujours en cache.",
+      "cached": "en cache",
+      "conversation": "Discussion",
+      "full": "{percent} % plein",
+      "instructions": "Instructions système",
+      "percent": "{percent} %",
+      "summary": "Résumé des anciens messages",
+      "summaryWithCount": "Résumé de {count} anciens messages",
+      "title": "Contexte de la discussion",
+      "tokens": "~{used} / {total} jetons",
+      "tools": "Outils",
+      "triggerLabel": "Contexte de la discussion : {percent} % plein"
+    },
     "contextPlaceholder": "Chat sur {context}, / pour les skills, @ pour ajouter du contexte",
     "createDocument": {
       "continue": "Créer le document",

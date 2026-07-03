@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "Cancelar mensaje en cola",
     "caseLawGreeting": "Pregunta sobre esta decisión — el texto completo está disponible aquí.",
     "chatAbout": "Insertar en chat de IA",
+    "contextMeter": {
+      "attachments": "Documentos adjuntos",
+      "autoCompact": "Al 100 % stella resume automáticamente los mensajes más antiguos para liberar espacio.",
+      "cache": "Las continuaciones rápidas reutilizan la conversación almacenada en caché. La parte fija (instrucciones del sistema, herramientas) siempre está en caché.",
+      "cached": "en caché",
+      "conversation": "Conversación",
+      "full": "{percent}% lleno",
+      "instructions": "Instrucciones del sistema",
+      "percent": "{percent}%",
+      "summary": "Resumen de los mensajes más antiguos",
+      "summaryWithCount": "Resumen de {count} mensajes más antiguos",
+      "title": "Contexto de la conversación",
+      "tokens": "~{used} de {total} tokens",
+      "tools": "Herramientas",
+      "triggerLabel": "Contexto de la conversación: {percent}% lleno"
+    },
     "contextPlaceholder": "Chat sobre {context}, / para skills, @ para añadir contexto",
     "createDocument": {
       "continue": "Crear documento",

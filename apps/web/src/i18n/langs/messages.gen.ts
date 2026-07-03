@@ -376,6 +376,22 @@ type Messages = {
     "cancelQueuedMessage": "Cancel queued message";
     "caseLawGreeting": "Ask about this decision — its full text is available here.";
     "chatAbout": "Chat about this";
+    "contextMeter": {
+      "attachments": "Attached documents";
+      "autoCompact": "At 100% stella automatically summarizes older messages to free space.";
+      "cache": "Quick follow-ups reuse the cached conversation so far. The fixed part (system instructions, tools) is always cached.";
+      "cached": "cached";
+      "conversation": "Conversation";
+      "full": "{percent}% full";
+      "instructions": "System instructions";
+      "percent": "{percent}%";
+      "summary": "Summary of older messages";
+      "summaryWithCount": "Summary of {count} older messages";
+      "title": "Conversation context";
+      "tokens": "~{used} / {total} tokens";
+      "tools": "Tools";
+      "triggerLabel": "Conversation context: {percent}% full";
+    };
     "contextPlaceholder": "Chat about {context}, / for skills, @ to add context";
     "createDocument": {
       "continue": "Create document";

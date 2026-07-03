@@ -1,3 +1,4 @@
+import { replaceEqualDeep } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -727,5 +728,74 @@ describe("chat runtime", () => {
     await responseRequested;
     releaseResponse();
     await started.stream;
+  });
+});
+
+describe("chat runtime identity across query refetch", () => {
+  // Shape a `ChatThreadFetched`-like value: a live runtime plus the
+  // post-turn context estimate that changes every turn. Each queryFn run
+  // creates and registers a fresh runtime, so consecutive fetches carry
+  // distinct runtime identities.
+  const buildFetched = (estimatedTokens: number) => ({
+    chat: createChatRuntime({
+      context: undefined,
+      initialMessages: [],
+      key: { scope: "global", threadId: toChatThreadId("thread-shared") },
+      onError: () => {},
+      onFinish: () => {},
+    }),
+    olderCursor: null as string | null,
+    contextMatterIds: [] as string[],
+    lastActivityAt: null as string | null,
+    webSearchAvailable: false,
+    webSearchEnabled: false,
+    context: {
+      estimatedTokens,
+      triggerTokens: 200_000,
+      breakdown: {
+        summaryTokens: 0,
+        conversationTokens: estimatedTokens,
+        attachmentTokens: 0,
+      },
+    },
+  });
+
+  test("structural sharing would strip the runtime's send capability", async () => {
+    const prev = buildFetched(100);
+    const next = buildFetched(200);
+
+    // This is exactly what TanStack's default structural sharing does on a
+    // refetch. Because `context` changed it rebuilds the parent, and because
+    // the runtime's method closures differ across runs it rebuilds `chat`
+    // into a fresh `{}` copy: neither the previous nor the freshly registered
+    // runtime, and (via `Object.keys`) without the runtime's `Symbol` brand.
+    const shared = replaceEqualDeep(prev, next);
+
+    expect(shared.chat).not.toBe(prev.chat);
+    expect(shared.chat).not.toBe(next.chat);
+
+    // The rebuilt copy was never registered in the send-capability WeakMap,
+    // so sending through it panics ("Missing thread send capability"). This
+    // is the corruption `chatThreadOptions`' `structuralSharing: false` avoids
+    // by handing the registered runtime back verbatim.
+    await expect(
+      sendThreadChatMessage(
+        shared.chat,
+        createOutgoingMessage("22222222-2222-4222-8222-2222222222aa"),
+      ),
+    ).rejects.toThrow("Missing thread send capability");
+  });
+
+  test("chatThreadOptions opts out of structural sharing", () => {
+    const options = chatThreadOptions({
+      activeOrganizationId: "org-A",
+      key: { scope: "global", threadId: toChatThreadId("thread-opts") },
+      context: { allowMissingThread: true },
+    });
+
+    // Guards the invariant: the query data embeds a `ChatRuntime` whose
+    // identity and `Symbol` brand must survive every refetch, so this query
+    // must never run through `replaceEqualDeep`.
+    expect(options.structuralSharing).toBe(false);
   });
 });
