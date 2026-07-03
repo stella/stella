@@ -23,19 +23,28 @@ const parsePdfAttachment = v.safeParser(pdfAttachmentSchema);
  * `PDFDocumentProxy.getAttachments()`.
  *
  * pdfjs-dist v5.5+ returns `null` when there are no attachments;
- * older versions returned `undefined`. This function handles both.
+ * older versions returned `undefined`. v6.1+ returns a `Map` instead of
+ * a plain record. This function handles all three shapes.
  */
+const attachmentEntries = (attachments: unknown): unknown[] => {
+  if (attachments instanceof Map) {
+    return [...attachments.values()];
+  }
+
+  if (isRecord(attachments)) {
+    return Object.values(attachments);
+  }
+
+  return [];
+};
+
 export const parseAttachments = (attachments?: unknown): PDFAttachment[] => {
   // eslint-disable-next-line no-eq-null, eqeqeq -- getAttachments() returns null (v5.5) or undefined (older)
   if (attachments == null) {
     return [];
   }
 
-  if (!isRecord(attachments)) {
-    return [];
-  }
-
-  return Object.values(attachments).flatMap((entry) => {
+  return attachmentEntries(attachments).flatMap((entry) => {
     const result = parsePdfAttachment(entry);
     return result.success ? [result.output] : [];
   });
