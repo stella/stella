@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, desc, eq, ne } from "drizzle-orm";
 
 import type { SafeDb } from "@/api/db";
@@ -109,13 +109,19 @@ export const deleteEntityVersionHandler = async function* ({
       }),
     ),
   );
-  if (entity?.readOnly) {
+  // An entityVersion row was already found for this entityId+workspaceId and
+  // entityVersions FKs to entities, so a missing entity here is a structural
+  // invariant violation, not a writable/non-current entity.
+  if (!entity) {
+    panic("Entity missing for an existing entity version");
+  }
+  if (entity.readOnly) {
     return Result.err(
       new HandlerError({ status: 409, message: "Entity is read-only" }),
     );
   }
 
-  const isDeletingCurrent = entity?.currentVersionId === params.versionId;
+  const isDeletingCurrent = entity.currentVersionId === params.versionId;
 
   // Get file fields for S3 cleanup
   const versionFields = yield* Result.await(

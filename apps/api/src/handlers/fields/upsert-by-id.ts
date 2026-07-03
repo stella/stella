@@ -185,6 +185,10 @@ export const upsertFieldHandler = async function* ({
     );
   }
 
+  // The clip variant has no `value`, but it cannot reach here: the property /
+  // body content-type match above narrows `body.content` to the five
+  // value-bearing variants (property content types never include clip), so
+  // `body.content.value` is always defined.
   const isEmpty =
     body.content.value === null ||
     body.content.value === "" ||
