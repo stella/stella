@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, desc, eq, gt, inArray, lt, or, sql } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -94,11 +94,15 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         mode: enumProp(
           "'flat' lists every document and folder in the matter; 'children' " +
             "lists only the direct children of parent_id (or the matter root " +
-            "when parent_id is omitted). Defaults to 'flat'.",
+            "when parent_id is omitted). Defaults to 'flat', or 'children' when " +
+            "parent_id is provided. Passing parent_id with mode 'flat' is " +
+            "rejected.",
           ["flat", "children"],
         ),
         parent_id: stringProp(
-          "Folder entity ID whose direct children to list (children mode only)",
+          "Folder entity ID whose direct children to list. Only valid in " +
+            "children mode; supplying it selects children mode when mode is " +
+            "omitted and is rejected together with mode 'flat'.",
         ),
         limit: intProp("Max entities to return", {
           min: 1,
@@ -544,15 +548,47 @@ const decodeEntityPageCursor = (
   return { createdAt, id: brandPersistedEntityId(id) };
 };
 
-const listDocumentsArgsSchema = v.strictObject({
-  matter_id: v.pipe(v.string(), v.minLength(1)),
-  mode: v.optional(v.picklist(["flat", "children"])),
-  parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  limit: v.optional(
-    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(MAX_LIST_LIMIT)),
+/**
+ * Prefer a cross-field (`partial_check`) validation message when one is
+ * present, falling back to the hand-written shape hint for structural failures.
+ * The partialCheck rules carry actionable messages ("parent_id requires mode
+ * 'children'", etc.); valibot's raw structural errors are less useful to a tool
+ * caller than the generic shape summary.
+ */
+const crossFieldOrGeneric = (
+  issues: readonly v.BaseIssue<unknown>[],
+  genericMessage: string,
+): string =>
+  issues.find((issue) => issue.type === "partial_check")?.message ??
+  genericMessage;
+
+const listDocumentsArgsSchema = v.pipe(
+  v.strictObject({
+    matter_id: v.pipe(v.string(), v.minLength(1)),
+    mode: v.optional(v.picklist(["flat", "children"])),
+    parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    limit: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MAX_LIST_LIMIT),
+      ),
+    ),
+    cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  }),
+  // parent_id scopes to a folder's children, so it is meaningless in flat mode
+  // (which enumerates the whole matter). Reject the explicit contradiction; an
+  // omitted mode with parent_id resolves to children (see handler default).
+  v.forward(
+    v.partialCheck(
+      [["mode"], ["parent_id"]],
+      ({ mode, parent_id }) => mode !== "flat" || parent_id === undefined,
+      "parent_id requires mode 'children'",
+    ),
+    ["parent_id"],
   ),
-  cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
-});
+);
 
 // In children mode the parent filter narrows to one folder's direct children
 // (or the matter root when parent_id is absent); flat mode ignores parent_id
@@ -584,7 +620,10 @@ const handleListDocumentsTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(listDocumentsArgsSchema, args);
   if (!parsed.success) {
     return errorResult(
-      "Invalid input: expected { matter_id: string, mode?: 'flat'|'children', parent_id?: string, limit?: integer, cursor?: string }",
+      crossFieldOrGeneric(
+        parsed.issues,
+        "Invalid input: expected { matter_id: string, mode?: 'flat'|'children', parent_id?: string, limit?: integer, cursor?: string }",
+      ),
     );
   }
 
@@ -596,11 +635,14 @@ const handleListDocumentsTool: McpToolHandler = async ({ args, context }) => {
     return errorResult("Matter not found or not accessible");
   }
 
-  const mode = parsed.output.mode ?? "flat";
   const parentId =
     parsed.output.parent_id === undefined
       ? undefined
       : brandPersistedEntityId(parsed.output.parent_id);
+  // parent_id implies children mode: passing a folder to enumerate its children
+  // is the only reason to send it, and flat + parent_id is rejected upstream.
+  const mode =
+    parsed.output.mode ?? (parentId !== undefined ? "children" : "flat");
 
   let boundary: { createdAt: string; id: SafeId<"entity"> } | null = null;
   if (parsed.output.cursor !== undefined) {
@@ -683,13 +725,26 @@ const decodeVersionsPageCursor = (
   return { versionNumber, id: brandPersistedEntityVersionId(id) };
 };
 
-const readDocumentArgsSchema = v.strictObject({
-  entity_id: v.pipe(v.string(), v.minLength(1)),
-  version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  compare_with_version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  include_versions: v.optional(v.boolean()),
-  versions_cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
-});
+const readDocumentArgsSchema = v.pipe(
+  v.strictObject({
+    entity_id: v.pipe(v.string(), v.minLength(1)),
+    version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    compare_with_version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    include_versions: v.optional(v.boolean()),
+    versions_cursor: v.optional(v.pipe(v.string(), v.maxLength(512))),
+  }),
+  // A diff needs both endpoints: compare_with_version_id (base) is only
+  // meaningful alongside version_id (target).
+  v.forward(
+    v.partialCheck(
+      [["version_id"], ["compare_with_version_id"]],
+      ({ version_id, compare_with_version_id }) =>
+        compare_with_version_id === undefined || version_id !== undefined,
+      "compare_with_version_id requires version_id (the target version)",
+    ),
+    ["compare_with_version_id"],
+  ),
+);
 
 /**
  * One version-history entry. `label` and `description` are tenant-authored, so
@@ -794,7 +849,12 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(readDocumentArgsSchema, args);
   if (!parsed.success) {
-    return errorResult("Invalid input: expected { entity_id: string, ... }");
+    return errorResult(
+      crossFieldOrGeneric(
+        parsed.issues,
+        "Invalid input: expected { entity_id: string, ... }",
+      ),
+    );
   }
 
   const entityId = brandPersistedEntityId(parsed.output.entity_id);
@@ -806,14 +866,12 @@ const handleReadDocumentTool: McpToolHandler = async ({ args, context }) => {
 
   // Version comparison: plain-text line diff of two versions' DOCX content.
   if (parsed.output.compare_with_version_id !== undefined) {
-    if (parsed.output.version_id === undefined) {
-      return errorResult(
-        "compare_with_version_id requires version_id (the target version)",
-      );
-    }
-    const targetVersionId = brandPersistedEntityVersionId(
-      parsed.output.version_id,
-    );
+    // The schema's partialCheck guarantees version_id is present whenever
+    // compare_with_version_id is; a missing target here is an invariant break.
+    const targetVersion =
+      parsed.output.version_id ??
+      panic("compare_with_version_id passed schema check without version_id");
+    const targetVersionId = brandPersistedEntityVersionId(targetVersion);
     const baseVersionId = brandPersistedEntityVersionId(
       parsed.output.compare_with_version_id,
     );
@@ -1097,21 +1155,72 @@ const handleCreateDocumentTool: McpToolHandler = async ({ args, context }) => {
   return textResult({ entityId: created.value.entityId });
 };
 
-const updateDocumentArgsSchema = v.strictObject({
-  entity_id: v.pipe(v.string(), v.minLength(1)),
-  name: v.optional(
-    v.pipe(v.string(), v.minLength(1), v.maxLength(LIMITS.entityNameMaxLength)),
+const updateDocumentArgsSchema = v.pipe(
+  v.strictObject({
+    entity_id: v.pipe(v.string(), v.minLength(1)),
+    name: v.optional(
+      v.pipe(
+        v.string(),
+        v.minLength(1),
+        v.maxLength(LIMITS.entityNameMaxLength),
+      ),
+    ),
+    parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    move_to_root: v.optional(v.boolean()),
+    version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
+    label: v.optional(
+      v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+    ),
+    description: v.optional(
+      v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1024))),
+    ),
+  }),
+  // At least one mutation must be requested; an empty update is a no-op the
+  // caller almost certainly did not intend. Root-level (no single culprit
+  // field to forward the issue onto).
+  v.partialCheck(
+    [
+      ["name"],
+      ["parent_id"],
+      ["move_to_root"],
+      ["version_id"],
+      ["label"],
+      ["description"],
+    ],
+    (input) => {
+      const wantsRename = input.name !== undefined;
+      const wantsMove =
+        input.parent_id !== undefined || input.move_to_root === true;
+      const wantsVersionEdit =
+        input.version_id !== undefined &&
+        (input.label !== undefined || input.description !== undefined);
+      return wantsRename || wantsMove || wantsVersionEdit;
+    },
+    "Provide at least one change: name, parent_id/move_to_root, or version_id with label/description",
   ),
-  parent_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  move_to_root: v.optional(v.boolean()),
-  version_id: v.optional(v.pipe(v.string(), v.minLength(1))),
-  label: v.optional(
-    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(128))),
+  // parent_id (move into folder) and move_to_root (move to matter root) are
+  // opposite moves; accepting both is ambiguous.
+  v.forward(
+    v.partialCheck(
+      [["parent_id"], ["move_to_root"]],
+      ({ parent_id, move_to_root }) =>
+        parent_id === undefined || move_to_root !== true,
+      "Provide either parent_id or move_to_root, not both",
+    ),
+    ["move_to_root"],
   ),
-  description: v.optional(
-    v.nullable(v.pipe(v.string(), v.minLength(1), v.maxLength(1024))),
+  // label/description annotate a specific version, so they require version_id.
+  v.forward(
+    v.partialCheck(
+      [["version_id"], ["label"], ["description"]],
+      ({ version_id, label, description }) =>
+        (label === undefined && description === undefined) ||
+        version_id !== undefined,
+      "label and description require version_id",
+    ),
+    ["version_id"],
   ),
-});
+);
 
 /**
  * Validate the entities update_document will touch before any mutation runs, so
@@ -1229,31 +1338,20 @@ const handleUpdateDocumentTool: McpToolHandler = async ({ args, context }) => {
 
   const parsed = v.safeParse(updateDocumentArgsSchema, args);
   if (!parsed.success) {
-    return errorResult("Invalid input: expected { entity_id: string, ... }");
+    return errorResult(
+      crossFieldOrGeneric(
+        parsed.issues,
+        "Invalid input: expected { entity_id: string, ... }",
+      ),
+    );
   }
   const input = parsed.output;
 
-  const wantsRename = input.name !== undefined;
+  // Cross-field shape rules (at least one change, parent_id/move_to_root
+  // exclusivity, label/description require version_id) are enforced by
+  // updateDocumentArgsSchema above; only DB-dependent target validation remains.
   const wantsMove =
     input.parent_id !== undefined || input.move_to_root === true;
-  const wantsVersionEdit =
-    input.version_id !== undefined &&
-    (input.label !== undefined || input.description !== undefined);
-
-  if (!wantsRename && !wantsMove && !wantsVersionEdit) {
-    return errorResult(
-      "Provide at least one change: name, parent_id/move_to_root, or version_id with label/description",
-    );
-  }
-  if (input.parent_id !== undefined && input.move_to_root === true) {
-    return errorResult("Provide either parent_id or move_to_root, not both");
-  }
-  if (
-    (input.label !== undefined || input.description !== undefined) &&
-    input.version_id === undefined
-  ) {
-    return errorResult("label and description require version_id");
-  }
 
   const entityId = brandPersistedEntityId(input.entity_id);
   const owner = await resolveEntityWorkspace({ context, entityId });

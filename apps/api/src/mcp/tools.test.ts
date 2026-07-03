@@ -1626,6 +1626,98 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  // Cross-field shape rules live in the tool schemas (v.partialCheck), so an
+  // invalid combination fails at parse time before any workspace/DB access; the
+  // partial_check message is surfaced instead of the generic shape hint.
+
+  test("list_documents rejects flat mode combined with parent_id", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", mode: "flat", parent_id: "entity_folder" },
+      context: createContext(),
+      toolName: "list_documents",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "parent_id requires mode 'children'" }],
+      isError: true,
+    });
+  });
+
+  test("read_document rejects compare_with_version_id without version_id", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1", compare_with_version_id: "ver_base" },
+      context: createContext(),
+      toolName: "read_document",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "compare_with_version_id requires version_id (the target version)",
+        },
+      ],
+      isError: true,
+    });
+  });
+
+  test("update_document rejects an empty update", async () => {
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1" },
+      context: createContext(),
+      toolName: "update_document",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "Provide at least one change: name, parent_id/move_to_root, or version_id with label/description",
+        },
+      ],
+      isError: true,
+    });
+  });
+
+  test("update_document rejects parent_id together with move_to_root", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        entity_id: "entity_1",
+        move_to_root: true,
+        parent_id: "entity_folder",
+      },
+      context: createContext(),
+      toolName: "update_document",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "Provide either parent_id or move_to_root, not both",
+        },
+      ],
+      isError: true,
+    });
+  });
+
+  test("update_document rejects label without version_id", async () => {
+    // A rename keeps rule 1 (at least one change) satisfied so the failure
+    // isolates the label-requires-version_id rule.
+    const result = await handleMcpToolCall({
+      args: { entity_id: "entity_1", name: "Renamed", label: "Signed copy" },
+      context: createContext(),
+      toolName: "update_document",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "label and description require version_id" },
+      ],
+      isError: true,
+    });
+  });
+
   // read_document's default branch returns the version history. Each version's
   // label/description are tenant-authored, so they must be pushed through the
   // anonymization plan (not left raw) on the anonymized surface.
@@ -1647,7 +1739,6 @@ describe("OpenAI-compatible MCP tools", () => {
           orderBy: () => selectBuilder,
           limit: () => rows,
         };
-        // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
         return await callback({
           query: {
             entities: {

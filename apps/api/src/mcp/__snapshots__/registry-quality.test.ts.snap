@@ -972,11 +972,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "flat",
             "children"
           ],
-          "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat'."
+          "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected."
         },
         "parent_id": {
           "type": "string",
-          "description": "Folder entity ID whose direct children to list (children mode only)"
+          "description": "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'."
         },
         "limit": {
           "type": "integer",
@@ -1565,11 +1565,11 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
             "flat",
             "children"
           ],
-          "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat'."
+          "description": "'flat' lists every document and folder in the matter; 'children' lists only the direct children of parent_id (or the matter root when parent_id is omitted). Defaults to 'flat', or 'children' when parent_id is provided. Passing parent_id with mode 'flat' is rejected."
         },
         "parent_id": {
           "type": "string",
-          "description": "Folder entity ID whose direct children to list (children mode only)"
+          "description": "Folder entity ID whose direct children to list. Only valid in children mode; supplying it selects children mode when mode is omitted and is rejected together with mode 'flat'."
         },
         "limit": {
           "type": "integer",

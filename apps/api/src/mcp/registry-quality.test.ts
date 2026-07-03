@@ -26,17 +26,18 @@ const SURFACES = [
 
 type SurfaceMode = (typeof SURFACES)[number]["mode"];
 
-// Default 23 tools (16 + the documents/fields surface), anonymized 15 tools
-// (12 + the three new read tools; writes stay excluded from the anonymized
-// projection).
+// Zero-buffer ceilings pinned to the measured counts: default 23 tools (16 +
+// the documents/fields surface), anonymized 15 tools (12 + the three new read
+// tools; writes stay excluded from the anonymized projection). Any tool added
+// to either surface must bump the matching ceiling deliberately.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
   default: 23,
-  anonymized: 18,
+  anonymized: 15,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
-// `toMcpTools`). Measured: default 25_098 chars (~6.3k tokens), anonymized
-// 10_259 chars (~2.6k tokens). Ceilings sit ~10-15% above so organic growth
+// `toMcpTools`). Measured: default 25_357 chars (~6.3k tokens), anonymized
+// 10_457 chars (~2.6k tokens). Ceilings sit ~10-15% above so organic growth
 // fits but a surface-size jump must be a deliberate constant bump.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
   default: 28_000,
