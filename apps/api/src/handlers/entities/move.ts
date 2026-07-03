@@ -22,14 +22,14 @@ const moveEntityBodySchema = t.Object({
 
 type MoveEntityBodySchema = Static<typeof moveEntityBodySchema>;
 
-type MoveEntityHandlerProps = {
+export type MoveEntityHandlerProps = {
   safeDb: SafeDb;
   workspaceId: SafeId<"workspace">;
   recordAuditEvent: AuditRecorder;
   body: MoveEntityBodySchema;
 };
 
-const moveEntityHandler = async function* ({
+export const moveEntityHandler = async function* ({
   safeDb,
   workspaceId,
   recordAuditEvent,
@@ -229,7 +229,7 @@ const checkIsDescendant = async (
 
 const config = {
   permissions: { entity: ["update"] },
-  mcp: { type: "pending" },
+  mcp: { type: "covered", by: "update_document" },
   body: moveEntityBodySchema,
 } satisfies HandlerConfig;
 

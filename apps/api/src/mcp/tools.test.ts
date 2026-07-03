@@ -584,6 +584,9 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_templates",
       "describe_template",
       "template_marker_reference",
+      "list_documents",
+      "read_document",
+      "list_properties",
     ]);
   });
 

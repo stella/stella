@@ -7,7 +7,7 @@ import { deserializeAITool } from "@/api/lib/markdown/ai-tool";
 
 const config = {
   permissions: { workspace: ["read"] },
-  mcp: { type: "pending" },
+  mcp: { type: "tool", name: "list_properties" },
 } satisfies HandlerConfig;
 
 const readProperties = createSafeHandler(

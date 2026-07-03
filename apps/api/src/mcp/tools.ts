@@ -11,6 +11,7 @@ import {
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeMcpEgress } from "@/api/mcp/egress";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
@@ -57,6 +58,13 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
     "template_marker_reference",
     TEMPLATE_TOOL_HANDLERS.template_marker_reference,
   ],
+  ["list_documents", DOCUMENT_TOOL_HANDLERS.list_documents],
+  ["read_document", DOCUMENT_TOOL_HANDLERS.read_document],
+  ["create_document", DOCUMENT_TOOL_HANDLERS.create_document],
+  ["update_document", DOCUMENT_TOOL_HANDLERS.update_document],
+  ["delete_document", DOCUMENT_TOOL_HANDLERS.delete_document],
+  ["list_properties", DOCUMENT_TOOL_HANDLERS.list_properties],
+  ["set_field_value", DOCUMENT_TOOL_HANDLERS.set_field_value],
 ]);
 
 export const getMcpToolDefinition = async (
