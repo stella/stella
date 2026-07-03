@@ -423,6 +423,7 @@
     "greetingSubtitle": "Start with a matter, document, or plain question.",
     "hideThread": "Hide conversation",
     "inDocument": "In document",
+    "jumpToMessage": "Jump to this message",
     "landing": {
       "lastAccessedMatters": "Last accessed matters",
       "noMatters": "No matters yet",

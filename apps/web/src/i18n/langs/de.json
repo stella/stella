@@ -423,6 +423,7 @@
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
     "inDocument": "Im Dokument",
+    "jumpToMessage": "Zu dieser Nachricht springen",
     "landing": {
       "lastAccessedMatters": "Zuletzt geöffnete Akten",
       "noMatters": "Noch keine Akten",

@@ -423,6 +423,7 @@
     "greetingSubtitle": "ابدأ بملف أو مستند أو سؤال مباشر.",
     "hideThread": "إخفاء المحادثة",
     "inDocument": "في المستند",
+    "jumpToMessage": "الانتقال إلى هذه الرسالة",
     "landing": {
       "lastAccessedMatters": "آخر الملفات التي تم الوصول إليها",
       "noMatters": "لا توجد ملفات بعد",

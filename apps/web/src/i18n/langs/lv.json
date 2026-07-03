@@ -423,6 +423,7 @@
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
     "inDocument": "Dokumentā",
+    "jumpToMessage": "Pāriet uz šo ziņu",
     "landing": {
       "lastAccessedMatters": "Pēdējās atvērtās lietas",
       "noMatters": "Lietu vēl nav",

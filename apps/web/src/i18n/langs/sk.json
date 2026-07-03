@@ -423,6 +423,7 @@
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
     "inDocument": "V dokumente",
+    "jumpToMessage": "Prejsť na túto správu",
     "landing": {
       "lastAccessedMatters": "Naposledy otvorené spisy",
       "noMatters": "Zatiaľ žiadne spisy",

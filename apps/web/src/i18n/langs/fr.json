@@ -423,6 +423,7 @@
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
     "inDocument": "Dans le document",
+    "jumpToMessage": "Aller à ce message",
     "landing": {
       "lastAccessedMatters": "Dossiers consultés récemment",
       "noMatters": "Aucun dossier pour le moment",

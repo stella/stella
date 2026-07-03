@@ -467,6 +467,7 @@ export const ChatThreadPage = ({
                       onSendWithoutAnonymization={sendWithoutAnonymization}
                       queuedMessages={queuedMessages}
                       showThinkingIndicator
+                      stickyUserMessages
                       streamdownComponents={streamdownComponents}
                       workspaceId={workspaceId}
                     />

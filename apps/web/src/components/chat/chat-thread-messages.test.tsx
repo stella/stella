@@ -14,7 +14,7 @@ import type Messages from "@/i18n/langs/messages.gen";
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
 
-const { ChatThreadMessages } =
+const { ChatThreadMessages, buildMessageTurns } =
   await import("@/components/chat/chat-thread-messages");
 
 afterAll(() => {
@@ -465,5 +465,57 @@ describe("chat thread messages", () => {
     expect(html).toContain("stella could not anonymize one attachment");
     expect(html).toContain("Send without anonymization");
     expect(html).not.toContain("Cannot send this attachment");
+  });
+});
+
+describe("buildMessageTurns", () => {
+  const userMessage = (id: string): PersistedChatMessage => ({
+    id,
+    parts: [{ type: "text", content: id }],
+    role: "user",
+  });
+  const assistantMessage = (id: string): PersistedChatMessage => ({
+    id,
+    parts: [{ type: "text", content: id }],
+    role: "assistant",
+  });
+
+  test("opens a turn per user message and attaches following answers to it", () => {
+    const turns = buildMessageTurns([
+      userMessage("u1"),
+      assistantMessage("a1"),
+      assistantMessage("a2"),
+      userMessage("u2"),
+      assistantMessage("a3"),
+    ]);
+
+    expect(turns.map((turn) => turn.type)).toEqual(["user", "user"]);
+    const [first, second] = turns;
+    if (first?.type !== "user" || second?.type !== "user") {
+      throw new Error("expected two user-led turns");
+    }
+    expect(first.header.id).toBe("u1");
+    expect(first.index).toBe(0);
+    expect(first.body.map((item) => item.message.id)).toEqual(["a1", "a2"]);
+    // Flat indices are preserved so downstream restoration/retry lookups match.
+    expect(first.body.map((item) => item.index)).toEqual([1, 2]);
+    expect(second.header.id).toBe("u2");
+    expect(second.index).toBe(3);
+    expect(second.body.map((item) => item.index)).toEqual([4]);
+  });
+
+  test("groups assistant messages preceding any user message into an orphan turn", () => {
+    const turns = buildMessageTurns([
+      assistantMessage("a1"),
+      assistantMessage("a2"),
+      userMessage("u1"),
+    ]);
+
+    expect(turns.map((turn) => turn.type)).toEqual(["orphan", "user"]);
+    const [orphan] = turns;
+    if (orphan?.type !== "orphan") {
+      throw new Error("expected a leading orphan turn");
+    }
+    expect(orphan.body.map((item) => item.index)).toEqual([0, 1]);
   });
 });

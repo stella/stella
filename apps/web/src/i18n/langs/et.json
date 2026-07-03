@@ -423,6 +423,7 @@
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
     "inDocument": "Dokumendis",
+    "jumpToMessage": "Liigu selle sõnumi juurde",
     "landing": {
       "lastAccessedMatters": "Viimati avatud toimikud",
       "noMatters": "Toimikuid veel pole",

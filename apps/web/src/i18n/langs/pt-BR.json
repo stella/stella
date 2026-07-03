@@ -423,6 +423,7 @@
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
     "inDocument": "No documento",
+    "jumpToMessage": "Ir para esta mensagem",
     "landing": {
       "lastAccessedMatters": "Últimos casos acessados",
       "noMatters": "Ainda não há casos",

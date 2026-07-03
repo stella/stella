@@ -423,6 +423,7 @@
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",
     "inDocument": "A dokumentumban",
+    "jumpToMessage": "Ugrás ehhez az üzenethez",
     "landing": {
       "lastAccessedMatters": "Legutóbb megnyitott ügyek",
       "noMatters": "Még nincsenek ügyek",

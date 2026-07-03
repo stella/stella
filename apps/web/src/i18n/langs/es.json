@@ -423,6 +423,7 @@
     "greetingSubtitle": "Empiece con un asunto, un documento o una pregunta sencilla.",
     "hideThread": "Ocultar conversación",
     "inDocument": "En el documento",
+    "jumpToMessage": "Ir a este mensaje",
     "landing": {
       "lastAccessedMatters": "Asuntos abiertos recientemente",
       "noMatters": "Aún no hay asuntos",
