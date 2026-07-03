@@ -542,6 +542,7 @@ export const CONTEXT_WINDOW_TOKENS: Readonly<Record<string, number>> = {
   "mistral-medium-3-5": 128_000,
   "magistral-medium-latest": 128_000,
   "magistral-small-latest": 128_000,
+  "magistral-small": 128_000,
   "pixtral-large-latest": 128_000,
   // OpenRouter provider-prefixed slugs mirror their upstream windows.
   "google/gemini-3.1-pro-preview": 1_048_576,
