@@ -27,6 +27,7 @@ import {
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import { AskUserCard } from "@/components/chat/ask-user-card";
 import { useChatApproval } from "@/components/chat/chat-approval-context";
+import { ChatImageAttachment } from "@/components/chat/chat-image-attachment";
 import type {
   AskUserOutput,
   ChatAnonRestoration,
@@ -479,24 +480,21 @@ const UserAttachments = ({
             ? (getUserFileThumbnailUrl(url) ?? contentUrl)
             : contentUrl;
           return (
-            <a href={contentUrl} key={key} rel="noreferrer" target="_blank">
-              <img
-                alt={filename ?? t("chat.attachedImage")}
-                className="max-h-32 rounded-md object-cover"
-                height={128}
-                src={imageSrc}
-                style={
-                  placeholder
-                    ? {
-                        backgroundImage: `url("${placeholder}")`,
-                        backgroundSize: "cover",
-                        backgroundPosition: "center",
-                      }
-                    : undefined
-                }
-                width={128}
-              />
-            </a>
+            <ChatImageAttachment
+              alt={filename ?? t("chat.attachedImage")}
+              fullSrc={contentUrl}
+              key={key}
+              thumbnailSrc={imageSrc}
+              thumbnailStyle={
+                placeholder
+                  ? {
+                      backgroundImage: `url("${placeholder}")`,
+                      backgroundSize: "cover",
+                      backgroundPosition: "center",
+                    }
+                  : undefined
+              }
+            />
           );
         }
 
