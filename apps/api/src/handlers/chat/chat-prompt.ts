@@ -24,6 +24,7 @@ import type {
   IncomingActiveTemplate,
   IncomingUserContext,
 } from "@/api/handlers/chat/chat-schema";
+import { estimateTextTokens } from "@/api/handlers/chat/compaction";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
@@ -70,12 +71,49 @@ const buildPromptMentionExample = ({
   id,
 }: BuildPromptMentionExampleProps) => `[${label}](${prefix}${id})`;
 
-const CORE_RULE_SECTIONS = [
+/**
+ * Which conditionally-registered tools this turn actually handed to
+ * the model. The prompt must never instruct the model to call a tool
+ * that is not in the registered `ChatToolMap`; capability flags flow
+ * from the same predicates that gate registration (see
+ * `areWebResearchToolsRegistered` in chat-tools.ts) so the two cannot
+ * drift.
+ */
+export type ChatToolAvailability = {
+  /**
+   * `suggest_template_fields` is registered for this turn: the
+   * caller's role has the `template: ["create"]` grant (see
+   * `areTemplateAuthoringToolsRegistered` in chat-tools.ts).
+   */
+  templateAuthoring: boolean;
+  /** `web_search` + `fetch_url` are registered for this turn. */
+  webResearch: boolean;
+};
+
+const DEFAULT_CHAT_TOOL_AVAILABILITY = {
+  templateAuthoring: true,
+  webResearch: true,
+} as const satisfies ChatToolAvailability;
+
+// EXTERNAL-FACT SOURCING has two shapes: with web research the model
+// is steered to `web_search`/`fetch_url`; without it, to skills and
+// then its own knowledge (with an explicit no-source flag). The
+// run-stella-query warning is identical either way — it is never an
+// external-research tool.
+const EXTERNAL_FACT_SOURCING_WITH_WEB =
+  "EXTERNAL-FACT SOURCING: Always try to ground factual answers in an external source before falling back to your own knowledge. The skill catalog is in this prompt — pick a matching skill and `load-skill` if one fits; otherwise call `web_search` (with `fetch_url` follow-up when snippets are short or contradict). Only when those tools return nothing usable may you answer from your own knowledge, and you MUST flag that you have no source for the claim. Never use `run-stella-query` for external research — that tool reads stella's internal workspace data only. Cite tool-returned sources in the reply.";
+
+const EXTERNAL_FACT_SOURCING_NO_WEB =
+  "EXTERNAL-FACT SOURCING: Ground factual answers in a matching skill when one fits — the skill catalog is in this prompt; `load-skill` before applying it. Web research is not enabled for this thread, so when no skill fits, answer from your own knowledge and explicitly flag that no external source was available in this conversation (the user can enable web search to add one). Never use `run-stella-query` for external research — that tool reads stella's internal workspace data only.";
+
+const buildCoreRuleSections = ({
+  webResearch,
+}: ChatToolAvailability): readonly string[] => [
   "You are an AI inside stella, a legal workspace. Answer directly; skip greetings and persona. For complex or ambiguous tasks, call `ask-user` to gather requirements before acting.",
-  "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (web_search, run-stella-query, etc.) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic. EXCEPTION: `load-skill` may immediately precede `ask-user` in the same turn so the clarifying questions can be informed by the skill's methodology.",
+  "ASK-USER BOUNDARY: Use `ask-user` only for missing task facts (preferences, jurisdiction, parties, scope). Never use it to request tool-call permission or consent — stella handles approvals outside the model. When you decide to call `ask-user`, do not emit any other tool calls (e.g. `run-stella-query`) in the same turn — wait for the user's answer first; otherwise the user sees retrieved data before they have answered the clarifying question and that data may be off-topic. EXCEPTION: `load-skill` may immediately precede `ask-user` in the same turn so the clarifying questions can be informed by the skill's methodology.",
   "REPEATED-QUESTION GUARD: When the user answers a question (even tersely — 'Yes', 'Czechia', 'all parties'), treat the answer as the answer and advance to the next step. Do not re-ask the same question with cosmetic rewording or restate it as confirmation. If their answer leaves a required fact still missing, ask ONLY for that missing fact, never the one they already answered.",
   "TRUTHFULNESS: Never guess, infer, or fabricate document content — retrieve via tools first. Only claim an action occurred when its tool returned success for that action; surface skips, no-ops, and errors plainly.",
-  "EXTERNAL-FACT SOURCING: Always try to ground factual answers in an external source before falling back to your own knowledge. The skill catalog is in this prompt — pick a matching skill and `load-skill` if one fits; otherwise call `web_search` (with `fetch_url` follow-up when snippets are short or contradict). Only when those tools return nothing usable may you answer from your own knowledge, and you MUST flag that you have no source for the claim. Never use `run-stella-query` for external research — that tool reads stella's internal workspace data only. Cite tool-returned sources in the reply.",
+  webResearch ? EXTERNAL_FACT_SOURCING_WITH_WEB : EXTERNAL_FACT_SOURCING_NO_WEB,
   "POST-LOAD-SKILL: After `load-skill` returns, never produce a 'Loaded the X skill' confirmation message. In the SAME turn, do one of: (a) immediately apply the skill's methodology to the user's stated task using the appropriate tool(s) and surface the result as your answer; or (b) if the user's request is bare (just a skill reference) or missing facts the skill explicitly requires (jurisdiction, parties, scope, parameters), call `ask-user` with the SPECIFIC clarifying questions the skill methodology calls for — never generic 'what do you want me to do?'. Read the skill body; ask only for what the skill needs to proceed.",
   "SKILL-RESOURCES: When `load-skill` returns a non-empty `resources` list, treat those paths as part of the skill's methodology — not optional appendices. Before producing the final answer, call `read-skill-resource` on every resource the user's task plausibly depends on (criteria checklists, jurisdictional references, templates the skill prescribes). EMIT ALL READ CALLS IN A SINGLE ASSISTANT TURN — multiple `read-skill-resource` invocations issued together execute in parallel and finish in one round-trip; issuing them across separate turns serializes the reads and multiplies latency. Never claim you 'applied the skill' if you only read the top-level instructions; if you skip resources, say so plainly and offer to re-run with the resources read.",
   "SKILL-REF LINKS: When the user's message contains a markdown link of the form `[name](#stella-skill-ref=slug)`, treat it as an explicit request to use that skill. Call `load-skill` with `skillName: slug` immediately (unless that skill is already loaded in this thread), then follow POST-LOAD-SKILL. Do not echo the link or narrate the load.",
@@ -83,7 +121,7 @@ const CORE_RULE_SECTIONS = [
   "CITATIONS: When a tool returns a stable URL, cite each individual claim inline with its OWN Markdown link — one citation per sentence (or per discrete fact) rather than a single trailing 'Sources:' block. Anchor text should be short (source domain, citation, or `[1]`-style footnote), and each link must point to the specific URL that supports THAT claim. The stella inspector opens these links in-app on click, so prefer them over plain text. Never invent URLs.",
   "LEGAL REFERENCE RESOLUTION: Citation resolvers are exact-match. On a no-match, retry with a broader search tool using citation variants before declaring it unavailable.",
   "USER-FACING LANGUAGE: Speak in legal-work terms; never expose internal names, tool names, or schema identifiers — refer to documents, matters, and folders by their human names. Reply in the user's UI language (see user context); switch only if the user themselves writes a natural-language message in another language. Copy `mention` strings from tool outputs verbatim instead of rewriting refs.",
-] as const;
+];
 
 export type UserContext = IncomingUserContext;
 
@@ -218,6 +256,12 @@ type BuildChatSystemPromptProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
+  /**
+   * The conditionally-registered tools handed to the model this turn.
+   * Prompt text is gated on these flags so it never names a tool that
+   * is absent from the registered `ChatToolMap`.
+   */
+  toolAvailability: ChatToolAvailability;
   userContext: IncomingUserContext | undefined;
   workspaceId: SafeId<"workspace"> | null;
   organizationId?: SafeId<"organization"> | undefined;
@@ -241,6 +285,7 @@ export const buildChatSystemPromptParts = async ({
   practiceJurisdictions,
   refRegistry,
   safeDb,
+  toolAvailability,
   userContext,
   userId,
   workspaceId,
@@ -287,6 +332,7 @@ export const buildChatSystemPromptParts = async ({
         ? buildGlobalPromptParts({
             practiceJurisdictions,
             skillMetadata: promptSkillMetadata,
+            toolAvailability,
             userContext: userContext ?? null,
           })
         : yield* Result.await(
@@ -295,6 +341,7 @@ export const buildChatSystemPromptParts = async ({
               refRegistry,
               safeDb,
               skillMetadata: promptSkillMetadata,
+              toolAvailability,
               userContext: userContext ?? null,
               workspaceId,
             }),
@@ -357,7 +404,10 @@ export const buildChatSystemPromptParts = async ({
         ),
       );
       if (template) {
-        activeTemplateSection = buildActiveTemplatePrompt(activeTemplate);
+        activeTemplateSection = buildActiveTemplatePrompt(
+          activeTemplate,
+          toolAvailability,
+        );
       }
     }
 
@@ -473,37 +523,81 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 type BuildGlobalPromptProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
+  toolAvailability?: ChatToolAvailability | undefined;
   userContext: UserContext | null;
 };
 
 export const buildGlobalPrompt = ({
   practiceJurisdictions = [],
   skillMetadata = getChatSkillMetadata(),
+  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
 }: BuildGlobalPromptProps) =>
   buildGlobalPromptParts({
     practiceJurisdictions,
     skillMetadata,
+    toolAvailability,
     userContext,
   }).fullPrompt;
 
 export const buildGlobalPromptParts = ({
   practiceJurisdictions = [],
   skillMetadata = getChatSkillMetadata(),
+  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
 }: BuildGlobalPromptProps): ChatPromptParts =>
   buildPromptParts({
     practiceJurisdictions,
     requestContextSections: [],
     skillMetadata,
+    toolAvailability,
     userContext,
   });
+
+export type ChatContextPromptEstimate = {
+  /** System-prompt tokens: core rule sections + built-in skill catalog. */
+  promptTokens: number;
+  /** Tool-catalog tokens: the compact `read.*` API surface (`READONLY_API_HINT`). */
+  toolTokens: number;
+};
+
+/**
+ * Token estimate for the cache-stable prompt prefix, split into the
+ * instructions (`promptTokens`) and tool-catalog (`toolTokens`) halves the
+ * context meter renders. Uses the same section builders as `buildPromptParts`
+ * and the shared chars/4 estimator, so it tracks what the send path actually
+ * caches.
+ *
+ * Deliberately excluded (kept cheap and deterministic for the read path, and
+ * documented so the meter's honesty is auditable): org-installed skill
+ * metadata, the workspace "Connected to matter" section, the practice-
+ * jurisdiction line, the user-context block, and the executable tool JSON
+ * schemas passed separately to the provider. These are per-request/per-org and
+ * would require extra DB reads the meter does not otherwise need.
+ */
+export const estimateChatContextPromptTokens = ({
+  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
+  skillMetadata = getChatSkillMetadata(),
+}: {
+  toolAvailability?: ChatToolAvailability | undefined;
+  skillMetadata?: readonly PromptSkillMetadata[] | undefined;
+} = {}): ChatContextPromptEstimate => {
+  const instructionsText = joinPromptSections([
+    ...buildCoreRuleSections(toolAvailability),
+    buildSkillCatalogSection(skillMetadata),
+  ]);
+  return {
+    promptTokens: estimateTextTokens(instructionsText),
+    toolTokens: estimateTextTokens(READONLY_API_HINT),
+  };
+};
 
 type BuildWorkspacePromptProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
+  toolAvailability: ChatToolAvailability;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
 };
@@ -513,6 +607,7 @@ const buildWorkspacePromptPartsFromDb = async ({
   refRegistry,
   safeDb,
   skillMetadata = getChatSkillMetadata(),
+  toolAvailability,
   userContext,
   workspaceId,
 }: BuildWorkspacePromptProps): Promise<Result<ChatPromptParts, SafeDbError>> =>
@@ -530,6 +625,7 @@ const buildWorkspacePromptPartsFromDb = async ({
         practiceJurisdictions,
         refRegistry,
         skillMetadata,
+        toolAvailability,
         userContext,
         workspaceId,
         workspaceName: workspacePromptData.workspaceName,
@@ -603,6 +699,7 @@ type BuildWorkspacePromptTextProps = {
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
   skillMetadata?: readonly PromptSkillMetadata[] | undefined;
+  toolAvailability?: ChatToolAvailability | undefined;
   userContext: UserContext | null;
   workspaceId: SafeId<"workspace">;
   workspaceName: string;
@@ -613,6 +710,7 @@ export const buildWorkspacePromptText = ({
   practiceJurisdictions = [],
   refRegistry,
   skillMetadata = getChatSkillMetadata(),
+  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
   workspaceId,
   workspaceName,
@@ -622,6 +720,7 @@ export const buildWorkspacePromptText = ({
     practiceJurisdictions,
     refRegistry,
     skillMetadata,
+    toolAvailability,
     userContext,
     workspaceId,
     workspaceName,
@@ -632,6 +731,7 @@ export const buildWorkspacePromptParts = ({
   practiceJurisdictions = [],
   refRegistry,
   skillMetadata = getChatSkillMetadata(),
+  toolAvailability = DEFAULT_CHAT_TOOL_AVAILABILITY,
   userContext,
   workspaceId,
   workspaceName,
@@ -645,6 +745,7 @@ export const buildWorkspacePromptParts = ({
       workspaceName,
     }),
     skillMetadata,
+    toolAvailability,
     userContext,
   });
 
@@ -743,6 +844,7 @@ const buildEditableBlocksPromptParts = (snapshot: ActiveDocxEditSnapshot) => {
  */
 export const buildActiveTemplatePrompt = (
   activeTemplate: IncomingActiveTemplate,
+  toolAvailability: ChatToolAvailability,
 ) => {
   const safeName = sanitizePromptValue({
     maxLength: 200,
@@ -750,7 +852,9 @@ export const buildActiveTemplatePrompt = (
   });
   const snapshot = activeTemplate.docxEditSnapshot;
   const editingSections =
-    snapshot === undefined ? [] : buildActiveTemplateEditSections(snapshot);
+    snapshot === undefined
+      ? []
+      : buildActiveTemplateEditSections({ snapshot, toolAvailability });
 
   return [
     `ACTIVE TEMPLATE: The user is authoring the reusable document template "${safeName}" in the template studio. It is an org-level template, not a matter document — do not call matter retrieval (\`read.*\`) or \`create-document\` for requests about it; the full text is in the block list below. Plain questions about the template get a normal text answer.`,
@@ -759,15 +863,32 @@ export const buildActiveTemplatePrompt = (
   ].join("\n");
 };
 
-const buildActiveTemplateEditSections = (
-  snapshot: ActiveDocxEditSnapshot,
-): string[] => {
+// FIELD SUGGESTIONS has two shapes: with template authoring the model
+// is steered to `suggest_template_fields` for the analysis pass;
+// without it, straight to `apply-active-docx-edits` replacements.
+const FIELD_SUGGESTIONS_WITH_AUTHORING =
+  "FIELD SUGGESTIONS: When the user asks which literal values should become fillable fields (or uses the suggest-fields preset), first call `suggest_template_fields` with the document text (block texts joined with newlines) and any user guidance as `instructions`. Then apply the suggestions you keep with `apply-active-docx-edits`: one `replaceInBlock` per occurrence, `find` = the exact literalText, `replace` = the `{{fieldPath}}` marker verbatim (e.g. `{{company.name}}`). Reuse the same fieldPath for every occurrence of the same value.";
+
+const FIELD_SUGGESTIONS_NO_AUTHORING =
+  "FIELD SUGGESTIONS: When the user asks which literal values should become fillable fields, propose them with `apply-active-docx-edits`: one `replaceInBlock` per occurrence, `find` = the exact literal text, `replace` = the `{{fieldPath}}` marker verbatim (e.g. `{{company.name}}`). Reuse the same fieldPath for every occurrence of the same value.";
+
+type BuildActiveTemplateEditSectionsProps = {
+  snapshot: ActiveDocxEditSnapshot;
+  toolAvailability: ChatToolAvailability;
+};
+
+const buildActiveTemplateEditSections = ({
+  snapshot,
+  toolAvailability,
+}: BuildActiveTemplateEditSectionsProps): string[] => {
   const { blocks, truncationNotice } = buildEditableBlocksPromptParts(snapshot);
 
   return [
     "TEMPLATE EDITING: When the user asks — in any language — to change, edit, replace, rewrite, fix, correct, review, or revise the template text, you MUST call `apply-active-docx-edits` in the same turn before claiming any work. Operations are queued as in-document suggestions the user accepts or dismisses one by one; NEVER claim the document was changed (only ids in `applied` represent real changes, which this surface does not produce).",
     "SUPPORTED OPERATIONS: only `replaceInBlock` (exact `find`, copied verbatim from the block text), `replaceBlock`, and `deleteBlock`. The template studio cannot honour `insertAfterBlock`, `insertBeforeBlock`, `commentOnBlock`, or `insertSignatureTable` — such operations are skipped; do not emit them and do not promise insertions.",
-    "FIELD SUGGESTIONS: When the user asks which literal values should become fillable fields (or uses the suggest-fields preset), first call `suggest_template_fields` with the document text (block texts joined with newlines) and any user guidance as `instructions`. Then apply the suggestions you keep with `apply-active-docx-edits`: one `replaceInBlock` per occurrence, `find` = the exact literalText, `replace` = the `{{fieldPath}}` marker verbatim (e.g. `{{company.name}}`). Reuse the same fieldPath for every occurrence of the same value.",
+    toolAvailability.templateAuthoring
+      ? FIELD_SUGGESTIONS_WITH_AUTHORING
+      : FIELD_SUGGESTIONS_NO_AUTHORING,
     'ALWAYS set `severity` and `area` on each operation (`severity`: "low" | "medium" | "high"; `area`: short topic label such as "Fields", "Names", "Wording").',
     "After the tool returns, reply with ONE short sentence (in the user's language) covering the count and the goal — the suggestions already render in the document with full context; do not enumerate them.",
     truncationNotice,
@@ -1169,6 +1290,7 @@ type BuildPromptProps = {
   practiceJurisdictions: readonly PracticeJurisdiction[];
   requestContextSections: string[];
   skillMetadata: readonly PromptSkillMetadata[];
+  toolAvailability: ChatToolAvailability;
   userContext: UserContext | null;
 };
 
@@ -1176,13 +1298,14 @@ const buildPromptParts = ({
   practiceJurisdictions,
   requestContextSections,
   skillMetadata,
+  toolAvailability,
   userContext,
 }: BuildPromptProps): ChatPromptParts => {
   const { safeSkillMetadata, untrustedSkillMetadata } =
     splitSkillMetadataForPrompt(skillMetadata);
   const cacheStablePrefix = brandChatCacheStablePrefix(
     joinPromptSections([
-      ...CORE_RULE_SECTIONS,
+      ...buildCoreRuleSections(toolAvailability),
       buildSkillCatalogSection(safeSkillMetadata),
       READONLY_API_HINT,
     ]),

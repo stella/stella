@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "Sorba állított üzenet visszavonása",
     "caseLawGreeting": "Kérdezz erről a határozatról — a teljes szöveg itt elérhető.",
     "chatAbout": "Beszúrás az AI chatbe",
+    "contextMeter": {
+      "attachments": "Csatolt dokumentumok",
+      "autoCompact": "100%-nál a stella automatikusan összefoglalja a korábbi üzeneteket, hogy helyet szabadítson fel.",
+      "cache": "A gyors folytatások a gyorsítótárazott eddigi beszélgetést használják újra. A rögzített rész (rendszerutasítások, eszközök) mindig gyorsítótárban van.",
+      "cached": "gyorsítótárban",
+      "conversation": "Beszélgetés",
+      "full": "{percent}% megtelt",
+      "instructions": "Rendszerutasítások",
+      "percent": "{percent}%",
+      "summary": "Korábbi üzenetek összefoglalója",
+      "summaryWithCount": "{count} korábbi üzenet összefoglalója",
+      "title": "Beszélgetés kontextusa",
+      "tokens": "~{used} / {total} token",
+      "tools": "Eszközök",
+      "triggerLabel": "Beszélgetés kontextusa: {percent}% megtelt"
+    },
     "contextPlaceholder": "Chat erről: {context}, / a skillekhez, @ kontextus hozzáadásához",
     "createDocument": {
       "continue": "Dokumentum létrehozása",

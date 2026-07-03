@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "Atcelt rindā gaidošo ziņojumu",
     "caseLawGreeting": "Uzdod jautājumus par šo lēmumu — pilns teksts ir pieejams šeit.",
     "chatAbout": "Ievietot AI čatā",
+    "contextMeter": {
+      "attachments": "Pievienotie dokumenti",
+      "autoCompact": "Sasniedzot 100%, stella automātiski apkopo vecākos ziņojumus, lai atbrīvotu vietu.",
+      "cache": "Ātri turpinājumi atkārtoti izmanto kešatmiņā saglabāto līdzšinējo sarunu. Fiksētā daļa (sistēmas norādes, rīki) kešatmiņā ir vienmēr.",
+      "cached": "kešatmiņā",
+      "conversation": "Saruna",
+      "full": "Aizpildīts par {percent}%",
+      "instructions": "Sistēmas norādes",
+      "percent": "{percent}%",
+      "summary": "Vecāko ziņojumu kopsavilkums",
+      "summaryWithCount": "{count} vecāko ziņojumu kopsavilkums",
+      "title": "Sarunas konteksts",
+      "tokens": "~{used} / {total} tokeni",
+      "tools": "Rīki",
+      "triggerLabel": "Sarunas konteksts: aizpildīts par {percent}%"
+    },
     "contextPlaceholder": "Tērzēt par {context}, / prasmēm, @ konteksta pievienošanai",
     "createDocument": {
       "continue": "Izveidot dokumentu",

@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "Zrušit zařazenou zprávu",
     "caseLawGreeting": "Zeptejte se na toto rozhodnutí — plný text je k dispozici.",
     "chatAbout": "Vložit do AI chatu",
+    "contextMeter": {
+      "attachments": "Připojené dokumenty",
+      "autoCompact": "Při 100 % stella automaticky shrne starší zprávy, aby uvolnila místo.",
+      "cache": "Rychlé navázání využívá dosavadní konverzaci z mezipaměti. Pevná část (systémové pokyny, nástroje) je v mezipaměti vždy.",
+      "cached": "v mezipaměti",
+      "conversation": "Konverzace",
+      "full": "{percent} % zaplněno",
+      "instructions": "Systémové pokyny",
+      "percent": "{percent} %",
+      "summary": "Shrnutí starších zpráv",
+      "summaryWithCount": "Shrnutí {count} starších zpráv",
+      "title": "Kontext konverzace",
+      "tokens": "~{used} / {total} tokenů",
+      "tools": "Nástroje",
+      "triggerLabel": "Kontext konverzace: {percent} % zaplněno"
+    },
     "contextPlaceholder": "Chat o {context}, / pro dovednosti, @ pro přidání kontextu",
     "createDocument": {
       "continue": "Vytvořit dokument",

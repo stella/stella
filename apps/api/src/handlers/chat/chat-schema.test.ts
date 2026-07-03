@@ -302,6 +302,58 @@ describe("validateMessage", () => {
     expectInvalidChatMessage(result);
   });
 
+  test("accepts an input-complete tool call that carries only arguments", async () => {
+    // The wire/persist shape TanStack actually produces: a valid
+    // `arguments` JSON string and no `input` field. The client derives
+    // `input` from `arguments` at the UI boundary, so the server must
+    // keep accepting arguments-only tool-call parts.
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_arguments_only_tool_call"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: "contract" }),
+            state: "input-complete",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_arguments_only_tool_call"),
+      tools: searchTools,
+      userId: userId("user_arguments_only_tool_call"),
+    });
+
+    expect(Result.isOk(result)).toBe(true);
+  });
+
+  test("rejects an input-complete tool call whose arguments fail the tool schema", async () => {
+    const result = await validateMessage({
+      message: {
+        id: chatMessageId("msg_arguments_only_invalid"),
+        role: "assistant",
+        parts: [
+          {
+            type: "tool-call",
+            id: "tool-call-1",
+            name: "search-documents",
+            arguments: JSON.stringify({ query: 123 }),
+            state: "input-complete",
+          },
+        ],
+      },
+      safeDb: noDbReads,
+      threadId: chatThreadId("thread_arguments_only_invalid"),
+      tools: searchTools,
+      userId: userId("user_arguments_only_invalid"),
+    });
+
+    expectInvalidChatMessage(result);
+  });
+
   test("rejects tool call outputs that fail the tool schema", async () => {
     const result = await validateMessage({
       message: {

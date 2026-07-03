@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "Tühista järjekorras sõnum",
     "caseLawGreeting": "Esita küsimusi selle otsuse kohta — täistekst on siin saadaval.",
     "chatAbout": "Lisa AI vestlusesse",
+    "contextMeter": {
+      "attachments": "Manustatud dokumendid",
+      "autoCompact": "100% juures teeb stella vanematest sõnumitest automaatselt kokkuvõtte, et ruumi vabastada.",
+      "cache": "Kiired jätkud kasutavad vahemällu salvestatud senist vestlust. Püsiv osa (süsteemi juhised, tööriistad) on alati vahemälus.",
+      "cached": "vahemälus",
+      "conversation": "Vestlus",
+      "full": "{percent}% täis",
+      "instructions": "Süsteemi juhised",
+      "percent": "{percent}%",
+      "summary": "Vanemate sõnumite kokkuvõte",
+      "summaryWithCount": "{count} vanema sõnumi kokkuvõte",
+      "title": "Vestluse kontekst",
+      "tokens": "~{used} / {total} tokenit",
+      "tools": "Tööriistad",
+      "triggerLabel": "Vestluse kontekst: {percent}% täis"
+    },
     "contextPlaceholder": "Vestle teemal {context}, / oskuste jaoks, @ konteksti lisamiseks",
     "createDocument": {
       "continue": "Loo dokument",

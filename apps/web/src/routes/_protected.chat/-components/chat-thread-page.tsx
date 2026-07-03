@@ -524,6 +524,7 @@ export const ChatThreadPage = ({
               <ChatInputSurface
                 anonymized={anonymized}
                 autoFocus
+                contextUsage={data.context ?? undefined}
                 controller={controller}
                 isGenerating={isGenerating}
                 onStop={() => {

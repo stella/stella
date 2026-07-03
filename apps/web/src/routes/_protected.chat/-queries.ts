@@ -12,6 +12,7 @@ import { panic } from "better-result";
 import { CHAT_SEND_MODE, isChatSendMode } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
+import type { ChatContextUsage } from "@/components/chat/chat-context-meter";
 import type {
   ChatClientTools,
   ChatMessageMetadata,
@@ -289,6 +290,9 @@ type ThreadFetch = {
   lastActivityAt: string | null;
   webSearchAvailable: boolean;
   webSearchEnabled: boolean;
+  /** Model-context estimate for the next send; null for a missing or empty
+   *  thread (nothing to meter yet). */
+  context: ChatContextUsage | null;
 };
 
 export type ChatUserMessageInput = MultimodalContent & {
@@ -404,6 +408,7 @@ const fetchThreadMessages = async (
         lastActivityAt: null,
         webSearchAvailable: false,
         webSearchEnabled: false,
+        context: null,
       };
     }
 
@@ -417,6 +422,7 @@ const fetchThreadMessages = async (
     lastActivityAt: response.data.lastActivityAt,
     webSearchAvailable: response.data.webSearchAvailable,
     webSearchEnabled: response.data.webSearchEnabled,
+    context: response.data.context,
   };
 };
 
@@ -1179,6 +1185,11 @@ export type ChatThreadFetched = {
    * fetch_url tools to the model.
    */
   webSearchEnabled: boolean;
+  /**
+   * Model-context estimate for the next send, driving the composer
+   * meter. Null for a missing or empty thread (nothing to meter yet).
+   */
+  context: ChatContextUsage | null;
 };
 
 type FileChatThreadOptionsArgs = {
@@ -1225,6 +1236,21 @@ export const chatThreadOptions = ({
   queryOptions({
     staleTime: STALE_TIME.FIVETEEN.MINUTES,
     gcTime: STALE_TIME.FIVETEEN.MINUTES,
+    // The query data carries a live `ChatRuntime`: a plain object with a
+    // `Symbol` brand key and function-valued methods, registered by object
+    // identity in `threadSendMessageByRuntime`. TanStack's default
+    // structural sharing (`replaceEqualDeep`) walks the data on every
+    // refetch and, because the runtime's method closures differ across
+    // queryFn runs, rebuilds `data.chat` into a fresh `{}` copy. That copy
+    // is a distinct identity the WeakMap never saw, and `Object.keys`
+    // iteration drops the `Symbol` brand, so `sendThreadChatMessage` would
+    // panic with "Missing thread send capability". Each queryFn run already
+    // creates and registers a new runtime (see `onFinish` invalidation and
+    // the `seededChat` re-seed in useChatSession), so there is nothing for
+    // structural sharing to preserve here: hand the registered runtime back
+    // verbatim. INVARIANT: any query whose data embeds a `ChatRuntime` must
+    // opt out of structural sharing.
+    structuralSharing: false,
     queryKey: chatKeys.thread(activeOrganizationId, {
       ...key,
       allowMissingThread: context.allowMissingThread,
@@ -1238,6 +1264,7 @@ export const chatThreadOptions = ({
         lastActivityAt,
         webSearchAvailable,
         webSearchEnabled,
+        context: contextUsage,
       } = await fetchThreadMessages(key, {
         allowMissingThread: context.allowMissingThread,
       });
@@ -1264,6 +1291,7 @@ export const chatThreadOptions = ({
         lastActivityAt,
         webSearchAvailable,
         webSearchEnabled,
+        context: contextUsage,
       };
     },
   });

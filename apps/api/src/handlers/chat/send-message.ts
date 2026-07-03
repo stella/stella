@@ -20,6 +20,7 @@ import {
 } from "@/api/handlers/chat/chat-prompt";
 import type {
   ChatSafePrompt,
+  ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
@@ -40,6 +41,7 @@ import {
   compactChatMessagesForModel,
   shouldCompactChatMessages,
 } from "@/api/handlers/chat/compaction";
+import { resolveChatCompactionBudget } from "@/api/handlers/chat/compaction-budget";
 import {
   expandThreadDataScope,
   extractAssistantWorkspaceIds,
@@ -79,7 +81,11 @@ import {
   intersectAccessibleWorkspaceIds,
   resolveToolWorkspaceIds,
 } from "@/api/handlers/chat/tools/authorized-workspace-ids";
-import { getChatTools } from "@/api/handlers/chat/tools/chat-tools";
+import {
+  areTemplateAuthoringToolsRegistered,
+  areWebResearchToolsRegistered,
+  getChatTools,
+} from "@/api/handlers/chat/tools/chat-tools";
 import { createChatRefRegistry } from "@/api/handlers/chat/tools/execute/ref-registry";
 import {
   buildExternalMcpSystemHint,
@@ -545,6 +551,18 @@ const sendMessage = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       safeDb,
       sendMode: body.sendMode,
+      // Derived from the same predicates/inputs `getChatTools` uses to
+      // register `web_search`/`fetch_url` and `suggest_template_fields`
+      // below, so the prompt only steers the model to tools that are
+      // actually handed to it.
+      toolAvailability: {
+        templateAuthoring: areTemplateAuthoringToolsRegistered(memberRole.role),
+        webResearch: areWebResearchToolsRegistered({
+          webSearchEnabled: thread.data.webSearchEnabled,
+          webSearchProviders,
+          disabledNativeToolSlugs,
+        }),
+      },
       userContext: body.userContext,
       userId: user.id,
       workspaceId,
@@ -958,6 +976,12 @@ const compactMessagesForContext = async ({
     traceId: Bun.randomUUIDv7(),
   });
 
+  const { triggerTokens, preserveTokens } = resolveChatCompactionBudget({
+    devModelId,
+    orgAIConfig,
+    organizationId,
+  });
+
   return await compactChatMessagesForModel({
     abortSignal,
     aiAnalytics,
@@ -972,6 +996,8 @@ const compactMessagesForContext = async ({
     },
     organizationId,
     orgAIConfig,
+    preserveTokens,
+    triggerTokens,
   });
 };
 
@@ -1027,11 +1053,17 @@ const scheduleChatCompactionCheckpoint = ({
   safeDb,
   threadId,
 }: ScheduleChatCompactionCheckpointProps): void => {
+  const { triggerTokens, preserveTokens } = resolveChatCompactionBudget({
+    devModelId,
+    orgAIConfig,
+    organizationId,
+  });
+
   // Cheap token-estimate gate over the per-send window. For non-anonymized
   // threads (the only ones that schedule a checkpoint) the window now holds the
   // full pre-checkpoint history, so it accurately signals whether compaction is
   // due; the common case is under the trigger and issues no full-history read.
-  if (!shouldCompactChatMessages(messages)) {
+  if (!shouldCompactChatMessages(messages, triggerTokens)) {
     return;
   }
 
@@ -1041,8 +1073,10 @@ const scheduleChatCompactionCheckpoint = ({
     devModelId,
     organizationId,
     orgAIConfig,
+    preserveTokens,
     safeDb,
     threadId,
+    triggerTokens,
   }).catch((error: unknown) => {
     captureError(error, {
       threadId,
@@ -1054,8 +1088,10 @@ const scheduleChatCompactionCheckpoint = ({
 type RunChatCompactionCheckpointProps = ChatCompactionModelProps & {
   abortSignal: AbortSignal;
   boundary: ReturnType<typeof createChatThirdPartyBoundary>;
+  preserveTokens: number;
   safeDb: SafeDb;
   threadId: SafeId<"chatThread">;
+  triggerTokens: number;
 };
 
 const runChatCompactionCheckpoint = async ({
@@ -1064,8 +1100,10 @@ const runChatCompactionCheckpoint = async ({
   devModelId,
   organizationId,
   orgAIConfig,
+  preserveTokens,
   safeDb,
   threadId,
+  triggerTokens,
 }: RunChatCompactionCheckpointProps): Promise<void> => {
   // Summarize from the true start of the conversation. The window passed to
   // the gate above is enough to know a checkpoint is due, but the durable
@@ -1114,8 +1152,10 @@ const runChatCompactionCheckpoint = async ({
     },
     organizationId,
     orgAIConfig,
+    preserveTokens,
     safeDb,
     threadId,
+    triggerTokens,
   });
   if (Result.isError(persistResult)) {
     captureError(persistResult.error, {
@@ -1546,6 +1586,7 @@ type PrepareChatContextProps = {
   refRegistry: ReturnType<typeof createChatRefRegistry>;
   safeDb: SafeDb;
   sendMode: ChatSendMode;
+  toolAvailability: ChatToolAvailability;
   userContext: IncomingUserContext | undefined;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -1585,6 +1626,7 @@ const prepareChatContext = async ({
   refRegistry,
   safeDb,
   sendMode,
+  toolAvailability,
   userContext,
   userId,
   workspaceId,
@@ -1613,6 +1655,7 @@ const prepareChatContext = async ({
         practiceJurisdictions,
         refRegistry,
         safeDb,
+        toolAvailability,
         userContext,
         userId,
         workspaceId,

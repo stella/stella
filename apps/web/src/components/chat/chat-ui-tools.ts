@@ -455,6 +455,81 @@ export const isChatTurnInFlight = ({
   return hasRunningToolCallInLatestAssistantMessage({ messages });
 };
 
+/**
+ * Parse a completed tool-call part's raw `arguments` JSON.
+ *
+ * Arguments stream in incrementally, so the part carries no usable
+ * payload while it is `awaiting-input` / `input-streaming`; parsing is
+ * skipped for those states. Invalid or empty JSON yields `undefined`
+ * rather than throwing (JSON boundary, so a local try/catch is fine).
+ */
+const parseCompletedToolCallArguments = (part: ChatToolCallPart): unknown => {
+  if (part.state === "awaiting-input" || part.state === "input-streaming") {
+    return undefined;
+  }
+  const raw = part.arguments.trim();
+  if (raw.length === 0) {
+    return undefined;
+  }
+  try {
+    return JSON.parse(raw) as unknown;
+  } catch {
+    return undefined;
+  }
+};
+
+const withParsedToolCallInput = (part: ChatPart): ChatPart => {
+  if (part.type !== "tool-call" || part.input !== undefined) {
+    return part;
+  }
+  const input = parseCompletedToolCallArguments(part);
+  if (input === undefined) {
+    return part;
+  }
+  // SAFETY: `arguments` is validated against the tool's inputSchema on
+  // the server (validateToolCallPart) before the part is streamed or
+  // persisted, so its parsed form conforms to this part's `input` type.
+  // `JSON.parse` is read as `unknown` above; this narrows it back onto
+  // the discriminated tool-call union without widening the part.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- parsed arguments conform to the tool inputSchema (validated server-side)
+  return { ...part, input } as ChatToolCallPart;
+};
+
+/**
+ * Fill each tool-call part's typed `input` from its raw `arguments`.
+ *
+ * TanStack's stream processor and its persisted-message projection
+ * only ever populate `arguments` (the raw JSON string) on a tool-call
+ * part; `input` is optional at the type level and never set at runtime
+ * (the parsed value stays inside the processor as `parsedArguments`).
+ * Reading `part.input` directly therefore always yields `undefined` —
+ * identically in live streaming, transcript re-send, and reload from
+ * persistence.
+ *
+ * Deriving `input` here, once, at the single point where messages
+ * leave the chat runtime for the UI (`useChatSession`), gives every
+ * consumer (ask-user / create-document / approval cards, generic
+ * tool-call card, active-DOCX-edit recovery) a parsed `input` without
+ * scattering `JSON.parse` across components. Messages and parts that
+ * need no change are returned by reference so downstream memoization
+ * and referential-equality checks stay stable.
+ */
+export const withParsedToolCallInputs = (
+  messages: readonly PersistedChatMessage[],
+): PersistedChatMessage[] =>
+  messages.map((message) => {
+    let partsChanged = false;
+    const parts = message.parts.map((part) => {
+      const nextPart = withParsedToolCallInput(part);
+      if (nextPart !== part) {
+        partsChanged = true;
+      }
+      return nextPart;
+    });
+    // eslint-disable-next-line oxc/no-map-spread -- immutable per-message rebuild, only when a tool-call input was filled; preserves refs otherwise
+    return partsChanged ? { ...message, parts } : message;
+  });
+
 export const getUserMessageHtmlHistory = (
   messages: readonly PersistedChatMessage[],
 ) => {

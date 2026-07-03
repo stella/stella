@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "إلغاء الرسالة المُدرجة في قائمة الانتظار",
     "caseLawGreeting": "اسأل عن هذا القرار — نصّه الكامل متاح هنا.",
     "chatAbout": "تحدّث عن هذا",
+    "contextMeter": {
+      "attachments": "المستندات المرفقة",
+      "autoCompact": "عند 100% تلخّص stella الرسائل الأقدم تلقائيًا لإتاحة مساحة.",
+      "cache": "المتابعات السريعة تعيد استخدام المحادثة المخزَّنة مؤقتًا حتى الآن. الجزء الثابت (تعليمات النظام والأدوات) مخزَّن مؤقتًا دائمًا.",
+      "cached": "مخزَّن مؤقتًا",
+      "conversation": "المحادثة",
+      "full": "ممتلئة بنسبة {percent}%",
+      "instructions": "تعليمات النظام",
+      "percent": "{percent}%",
+      "summary": "ملخّص الرسائل الأقدم",
+      "summaryWithCount": "ملخّص {count} من الرسائل الأقدم",
+      "title": "سياق المحادثة",
+      "tokens": "~{used} / {total} رمز",
+      "tools": "الأدوات",
+      "triggerLabel": "سياق المحادثة: ممتلئة بنسبة {percent}%"
+    },
     "contextPlaceholder": "تحدّث عن {context}، / للمهارات، @ لإضافة سياق",
     "createDocument": {
       "continue": "إنشاء مستند",

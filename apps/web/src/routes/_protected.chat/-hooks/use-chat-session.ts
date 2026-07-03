@@ -33,6 +33,7 @@ import {
   isApprovalToolName,
   isExternalMcpToolName,
   isToolApprovalGrant,
+  withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import type { NeedsMatterMatter } from "@/components/chat/needs-matter-card";
@@ -167,7 +168,16 @@ export const useChatSession = ({
     chat.getSnapshot,
     chat.getSnapshot,
   );
-  const { error, messages, sessionGenerating, status } = snapshot;
+  const { error, sessionGenerating, status } = snapshot;
+  // TanStack only populates a tool-call part's raw `arguments`; its
+  // typed `input` is filled here, once, as messages leave the runtime
+  // for the UI, so every consumer reads a parsed `input` the same way
+  // across live streaming, transcript re-send, and reload. Memoized on
+  // the runtime's message identity; unchanged messages keep their refs.
+  const messages = useMemo(
+    () => withParsedToolCallInputs(snapshot.messages),
+    [snapshot.messages],
+  );
   const sendChatMessage = useCallback(
     async (message: ChatUserMessageInput, options?: ChatSendMessageOptions) => {
       await sendThreadChatMessage(chat, message, options);

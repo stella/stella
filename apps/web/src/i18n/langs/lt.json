@@ -373,6 +373,22 @@
     "cancelQueuedMessage": "Atšaukti eilėje esančią žinutę",
     "caseLawGreeting": "Klausk apie šį sprendimą — visas tekstas pasiekiamas čia.",
     "chatAbout": "Įterpti į AI pokalbį",
+    "contextMeter": {
+      "attachments": "Pridėti dokumentai",
+      "autoCompact": "Pasiekus 100%, stella automatiškai apibendrina senesnes žinutes, kad atlaisvintų vietos.",
+      "cache": "Greiti tęsiniai pakartotinai naudoja podėlyje saugomą ligšiolinį pokalbį. Pastovioji dalis (sistemos instrukcijos, įrankiai) podėlyje saugoma visada.",
+      "cached": "podėlyje",
+      "conversation": "Pokalbis",
+      "full": "Užpildyta {percent}%",
+      "instructions": "Sistemos instrukcijos",
+      "percent": "{percent}%",
+      "summary": "Senesnių žinučių santrauka",
+      "summaryWithCount": "{count} senesnių žinučių santrauka",
+      "title": "Pokalbio kontekstas",
+      "tokens": "~{used} / {total} tokenų",
+      "tools": "Įrankiai",
+      "triggerLabel": "Pokalbio kontekstas: užpildyta {percent}%"
+    },
     "contextPlaceholder": "Pokalbis apie {context}, / įgūdžiams, @ kontekstui pridėti",
     "createDocument": {
       "continue": "Sukurti dokumentą",
