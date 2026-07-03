@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import type { ChatPart } from "@/components/chat/chat-ui-tools";
 import {
   getChatToolTitleKey,
   getApprovalToolName,
@@ -15,7 +14,10 @@ import {
   isToolApprovedByGrant,
   withParsedToolCallInputs,
 } from "@/components/chat/chat-ui-tools";
-import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
+import type {
+  ChatPart,
+  PersistedChatMessage,
+} from "@/components/chat/chat-ui-tools";
 
 describe("chat tool titles", () => {
   test("maps stella API tools to translation keys", () => {
