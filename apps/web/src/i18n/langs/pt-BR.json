@@ -962,7 +962,8 @@
     "user": "Usuário",
     "verify": "Verificar",
     "version": "Versão",
-    "versionLabel": "Versão {version}"
+    "versionLabel": "Versão {version}",
+    "workflows": "Fluxos de trabalho"
   },
   "consent": {
     "allow": "Permitir",
@@ -1318,6 +1319,114 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Criar fluxo de trabalho",
+    "created": "Fluxo de trabalho criado",
+    "deleteFailed": "Não foi possível excluir o fluxo de trabalho.",
+    "deleteFlow": "Excluir fluxo de trabalho",
+    "deleted": "Fluxo de trabalho excluído",
+    "descriptionPlaceholder": "O que este fluxo de trabalho faz",
+    "disableFlow": "Desativar fluxo de trabalho",
+    "empty": "Ainda não há fluxos de trabalho",
+    "emptyDescription": "Crie um fluxo de trabalho para transformar documentos e um objetivo em um resultado finalizado.",
+    "enableFlow": "Ativar fluxo de trabalho",
+    "enabledDescription": "Fluxos de trabalho desativados não podem ser executados nem acionados.",
+    "enabledLabel": "Ativado",
+    "fileUpload": {
+      "allWorkspaces": "Todos os casos",
+      "anyExtension": "Qualquer tipo de arquivo",
+      "extensions": "Tipos de arquivo",
+      "extensionsPlaceholder": "Adicione um tipo de arquivo (ex.: pdf) e pressione Enter"
+    },
+    "loadFailed": "Não foi possível carregar os fluxos de trabalho.",
+    "loading": "Carregando fluxo de trabalho…",
+    "namePlaceholder": "ex.: Revisão de recebimento de NDA",
+    "nameRequired": "Insira um nome para o fluxo de trabalho.",
+    "runs": {
+      "activeSublabel": "ativo",
+      "cancel": "Cancelar execução",
+      "cancelFailed": "Não foi possível cancelar a execução.",
+      "cancelled": "Execução cancelada",
+      "confirmCancel": "Cancelar esta execução? As etapas concluídas são mantidas.",
+      "createdDocument": "Documento criado",
+      "empty": "Ainda não há execuções",
+      "emptyDescription": "As execuções que você iniciar aparecerão aqui.",
+      "history": "Histórico de execuções",
+      "inputDocuments": "Documentos de entrada",
+      "launch": "Executar um fluxo de trabalho",
+      "loadFailed": "Não foi possível carregar esta execução.",
+      "noEnabledFlows": "Nenhum fluxo de trabalho ativado. Crie um em Conhecimento › Fluxos de trabalho.",
+      "openDocument": "Abrir documento",
+      "review": {
+        "approve": "Aprovar",
+        "approved": "Aprovado",
+        "failed": "Não foi possível enviar a revisão.",
+        "note": "Nota (opcional)",
+        "notePlaceholder": "Adicione uma nota para o registro",
+        "priorOutput": "Resultado anterior",
+        "reject": "Rejeitar",
+        "rejected": "Rejeitado",
+        "title": "Revisão necessária"
+      },
+      "selectFlow": "Escolha um fluxo de trabalho",
+      "start": "Iniciar",
+      "startFailed": "Não foi possível iniciar o fluxo de trabalho.",
+      "started": "Fluxo de trabalho iniciado",
+      "stepProgress": "Etapa {current} de {total}"
+    },
+    "saveFailed": "Não foi possível salvar o fluxo de trabalho.",
+    "schedule": {
+      "daily": "Diariamente",
+      "dayOfMonth": "Dia do mês",
+      "dayOfWeek": "Dia da semana",
+      "frequency": "Frequência",
+      "hour": "Hora (UTC)",
+      "monthly": "Mensalmente",
+      "selectWorkspace": "Selecione um caso",
+      "utcHint": "Os horários agendados estão em UTC.",
+      "weekly": "Semanalmente",
+      "workspaceRequired": "Selecione um caso para o agendamento."
+    },
+    "status": {
+      "awaitingReview": "Aguardando revisão",
+      "cancelled": "Cancelado",
+      "completed": "Concluído",
+      "failed": "Falhou",
+      "pending": "Pendente",
+      "running": "Em execução",
+      "skipped": "Ignorado"
+    },
+    "stepCount": "{count, plural, one {# etapa} other {# etapas}}",
+    "steps": {
+      "add": "Adicionar etapa:",
+      "ai": "Etapa de IA",
+      "createDocument": "Criar documento",
+      "documentTitle": "Título do documento",
+      "documentTitlePlaceholder": "ex.: Memorando de resumo",
+      "documentTitleRequired": "Insira um título de documento.",
+      "empty": "Adicione pelo menos uma etapa.",
+      "includeDocuments": "Incluir documentos de entrada",
+      "instructions": "Instruções",
+      "instructionsPlaceholder": "O que o revisor deve verificar",
+      "namePlaceholder": "Nome da etapa",
+      "nameRequired": "Insira um nome para cada etapa.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Instruções para a etapa de IA",
+      "promptRequired": "Insira um prompt para a etapa de IA.",
+      "required": "Adicione pelo menos uma etapa.",
+      "reviewGate": "Ponto de revisão",
+      "title": "Etapas"
+    },
+    "trigger": {
+      "fileUpload": "Upload de arquivo",
+      "manual": "Manual",
+      "manualHint": "Execute este fluxo de trabalho sob demanda a partir de um caso.",
+      "schedule": "Agendamento",
+      "title": "Gatilho",
+      "typeLabel": "Tipo de gatilho"
+    },
+    "updated": "Fluxo de trabalho atualizado"
   },
   "folio": {
     "acceptChange": "Aceitar alteração",
@@ -1834,6 +1943,9 @@
       "tools": {
         "description": "Conecte stella a registros públicos e outras fontes",
         "title": "Ferramentas"
+      },
+      "workflows": {
+        "description": "Automatize o trabalho com documentos usando fluxos de trabalho reutilizáveis de várias etapas."
       }
     },
     "skills": {

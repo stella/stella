@@ -962,7 +962,8 @@
     "user": "Lietotājs",
     "verify": "Verificēt",
     "version": "Versija",
-    "versionLabel": "{version}. versija"
+    "versionLabel": "{version}. versija",
+    "workflows": "Darbplūsmas"
   },
   "consent": {
     "allow": "Atļaut",
@@ -1318,6 +1319,114 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Izveidot darbplūsmu",
+    "created": "Darbplūsma izveidota",
+    "deleteFailed": "Neizdevās izdzēst darbplūsmu.",
+    "deleteFlow": "Dzēst darbplūsmu",
+    "deleted": "Darbplūsma izdzēsta",
+    "descriptionPlaceholder": "Ko šī darbplūsma dara",
+    "disableFlow": "Atspējot darbplūsmu",
+    "empty": "Vēl nav darbplūsmu",
+    "emptyDescription": "Izveidojiet darbplūsmu, lai no dokumentiem un mērķa iegūtu pabeigtu rezultātu.",
+    "enableFlow": "Iespējot darbplūsmu",
+    "enabledDescription": "Atspējotas darbplūsmas nevar palaist vai aktivizēt.",
+    "enabledLabel": "Iespējota",
+    "fileUpload": {
+      "allWorkspaces": "Visas lietas",
+      "anyExtension": "Jebkurš faila tips",
+      "extensions": "Failu tipi",
+      "extensionsPlaceholder": "Pievienojiet faila tipu (piem., pdf) un nospiediet Enter"
+    },
+    "loadFailed": "Neizdevās ielādēt darbplūsmas.",
+    "loading": "Notiek darbplūsmas ielāde…",
+    "namePlaceholder": "piem., NDA saņemšanas pārbaude",
+    "nameRequired": "Ievadiet darbplūsmas nosaukumu.",
+    "runs": {
+      "activeSublabel": "aktīva",
+      "cancel": "Atcelt izpildi",
+      "cancelFailed": "Neizdevās atcelt izpildi.",
+      "cancelled": "Izpilde atcelta",
+      "confirmCancel": "Atcelt šo izpildi? Pabeigtie soļi tiek saglabāti.",
+      "createdDocument": "Izveidotais dokuments",
+      "empty": "Vēl nav izpilžu",
+      "emptyDescription": "Jūsu sāktās izpildes tiks parādītas šeit.",
+      "history": "Izpilžu vēsture",
+      "inputDocuments": "Ievades dokumenti",
+      "launch": "Palaist darbplūsmu",
+      "loadFailed": "Neizdevās ielādēt šo izpildi.",
+      "noEnabledFlows": "Nav iespējotu darbplūsmu. Izveidojiet to sadaļā Zināšanas › Darbplūsmas.",
+      "openDocument": "Atvērt dokumentu",
+      "review": {
+        "approve": "Apstiprināt",
+        "approved": "Apstiprināts",
+        "failed": "Neizdevās iesniegt pārbaudi.",
+        "note": "Piezīme (neobligāti)",
+        "notePlaceholder": "Pievienojiet piezīmi ierakstam",
+        "priorOutput": "Iepriekšējais rezultāts",
+        "reject": "Noraidīt",
+        "rejected": "Noraidīts",
+        "title": "Nepieciešama pārbaude"
+      },
+      "selectFlow": "Izvēlieties darbplūsmu",
+      "start": "Sākt",
+      "startFailed": "Neizdevās palaist darbplūsmu.",
+      "started": "Darbplūsma palaista",
+      "stepProgress": "{current}. solis no {total}"
+    },
+    "saveFailed": "Neizdevās saglabāt darbplūsmu.",
+    "schedule": {
+      "daily": "Katru dienu",
+      "dayOfMonth": "Mēneša diena",
+      "dayOfWeek": "Nedēļas diena",
+      "frequency": "Biežums",
+      "hour": "Stunda (UTC)",
+      "monthly": "Katru mēnesi",
+      "selectWorkspace": "Izvēlieties lietu",
+      "utcHint": "Ieplānotie laiki ir norādīti UTC.",
+      "weekly": "Katru nedēļu",
+      "workspaceRequired": "Izvēlieties lietu grafikam."
+    },
+    "status": {
+      "awaitingReview": "Gaida pārbaudi",
+      "cancelled": "Atcelts",
+      "completed": "Pabeigts",
+      "failed": "Neizdevās",
+      "pending": "Gaida",
+      "running": "Darbojas",
+      "skipped": "Izlaists"
+    },
+    "stepCount": "{count, plural, zero {# soļu} one {# solis} other {# soļi}}",
+    "steps": {
+      "add": "Pievienot soli:",
+      "ai": "AI solis",
+      "createDocument": "Izveidot dokumentu",
+      "documentTitle": "Dokumenta nosaukums",
+      "documentTitlePlaceholder": "piem., Kopsavilkuma memorands",
+      "documentTitleRequired": "Ievadiet dokumenta nosaukumu.",
+      "empty": "Pievienojiet vismaz vienu soli.",
+      "includeDocuments": "Iekļaut ievades dokumentus",
+      "instructions": "Norādījumi",
+      "instructionsPlaceholder": "Kas pārbaudītājam jāpārbauda",
+      "namePlaceholder": "Soļa nosaukums",
+      "nameRequired": "Ievadiet nosaukumu katram solim.",
+      "prompt": "Uzvedne",
+      "promptPlaceholder": "Norādījumi AI solim",
+      "promptRequired": "Ievadiet uzvedni AI solim.",
+      "required": "Pievienojiet vismaz vienu soli.",
+      "reviewGate": "Pārbaudes kontrolpunkts",
+      "title": "Soļi"
+    },
+    "trigger": {
+      "fileUpload": "Faila augšupielāde",
+      "manual": "Manuāli",
+      "manualHint": "Palaidiet šo darbplūsmu pēc pieprasījuma no lietas.",
+      "schedule": "Grafiks",
+      "title": "Aktivizētājs",
+      "typeLabel": "Aktivizētāja tips"
+    },
+    "updated": "Darbplūsma atjaunināta"
   },
   "folio": {
     "acceptChange": "Pieņemt izmaiņu",
@@ -1834,6 +1943,9 @@
       "tools": {
         "description": "Savienojiet stella ar publiskiem reģistriem un citiem avotiem",
         "title": "Rīki"
+      },
+      "workflows": {
+        "description": "Automatizējiet darbu ar dokumentiem, izmantojot atkārtoti lietojamas, vairāku soļu darbplūsmas."
       }
     },
     "skills": {

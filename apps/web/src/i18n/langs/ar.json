@@ -962,7 +962,8 @@
     "user": "المستخدم",
     "verify": "تحقّق",
     "version": "الإصدار",
-    "versionLabel": "الإصدار {version}"
+    "versionLabel": "الإصدار {version}",
+    "workflows": "مسارات العمل"
   },
   "consent": {
     "allow": "السماح",
@@ -1318,6 +1319,114 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "يبدأ بـ"
+  },
+  "flows": {
+    "createFlow": "إنشاء مسار عمل",
+    "created": "تم إنشاء مسار العمل",
+    "deleteFailed": "تعذّر حذف مسار العمل.",
+    "deleteFlow": "حذف مسار العمل",
+    "deleted": "تم حذف مسار العمل",
+    "descriptionPlaceholder": "ما الذي يقوم به مسار العمل هذا",
+    "disableFlow": "تعطيل مسار العمل",
+    "empty": "لا توجد مسارات عمل بعد",
+    "emptyDescription": "أنشئ مسار عمل لتحويل المستندات وهدف محدد إلى مُخرَج نهائي.",
+    "enableFlow": "تفعيل مسار العمل",
+    "enabledDescription": "لا يمكن تشغيل مسارات العمل المعطّلة أو تفعيل مشغّلاتها.",
+    "enabledLabel": "مُفعَّل",
+    "fileUpload": {
+      "allWorkspaces": "جميع الملفات",
+      "anyExtension": "أي نوع ملف",
+      "extensions": "أنواع الملفات",
+      "extensionsPlaceholder": "أضف نوع ملف (مثل pdf) واضغط Enter"
+    },
+    "loadFailed": "تعذّر تحميل مسارات العمل.",
+    "loading": "جارٍ تحميل مسار العمل…",
+    "namePlaceholder": "مثال: مراجعة استلام اتفاقية عدم إفصاح",
+    "nameRequired": "أدخل اسم مسار العمل.",
+    "runs": {
+      "activeSublabel": "نشط",
+      "cancel": "إلغاء التشغيل",
+      "cancelFailed": "تعذّر إلغاء التشغيل.",
+      "cancelled": "تم إلغاء التشغيل",
+      "confirmCancel": "هل تريد إلغاء هذا التشغيل؟ يتم الاحتفاظ بالخطوات المكتملة.",
+      "createdDocument": "المستند المُنشأ",
+      "empty": "لا توجد عمليات تشغيل بعد",
+      "emptyDescription": "ستظهر هنا عمليات التشغيل التي تبدأها.",
+      "history": "سجل عمليات التشغيل",
+      "inputDocuments": "مستندات الإدخال",
+      "launch": "تشغيل مسار عمل",
+      "loadFailed": "تعذّر تحميل هذا التشغيل.",
+      "noEnabledFlows": "لا توجد مسارات عمل مُفعَّلة. أنشئ واحدًا في المعرفة › مسارات العمل.",
+      "openDocument": "فتح المستند",
+      "review": {
+        "approve": "موافقة",
+        "approved": "تمت الموافقة",
+        "failed": "تعذّر إرسال المراجعة.",
+        "note": "ملاحظة (اختياري)",
+        "notePlaceholder": "أضف ملاحظة للسجل",
+        "priorOutput": "المُخرَج السابق",
+        "reject": "رفض",
+        "rejected": "تم الرفض",
+        "title": "المراجعة مطلوبة"
+      },
+      "selectFlow": "اختر مسار عمل",
+      "start": "بدء",
+      "startFailed": "تعذّر بدء مسار العمل.",
+      "started": "تم بدء مسار العمل",
+      "stepProgress": "الخطوة {current} من {total}"
+    },
+    "saveFailed": "تعذّر حفظ مسار العمل.",
+    "schedule": {
+      "daily": "يوميًا",
+      "dayOfMonth": "يوم من الشهر",
+      "dayOfWeek": "يوم من الأسبوع",
+      "frequency": "التكرار",
+      "hour": "الساعة (بالتوقيت العالمي المنسّق)",
+      "monthly": "شهريًا",
+      "selectWorkspace": "اختر ملفًا",
+      "utcHint": "الأوقات المجدولة بالتوقيت العالمي المنسّق (UTC).",
+      "weekly": "أسبوعيًا",
+      "workspaceRequired": "اختر ملفًا للجدولة."
+    },
+    "status": {
+      "awaitingReview": "في انتظار المراجعة",
+      "cancelled": "أُلغي",
+      "completed": "اكتمل",
+      "failed": "فشل",
+      "pending": "قيد الانتظار",
+      "running": "قيد التشغيل",
+      "skipped": "تم التخطي"
+    },
+    "stepCount": "{count, plural, zero {# خطوة} one {# خطوة} two {# خطوتان} few {# خطوات} many {# خطوة} other {# خطوة}}",
+    "steps": {
+      "add": "إضافة خطوة:",
+      "ai": "خطوة AI",
+      "createDocument": "إنشاء مستند",
+      "documentTitle": "عنوان المستند",
+      "documentTitlePlaceholder": "مثال: مذكرة ملخّص",
+      "documentTitleRequired": "أدخل عنوان المستند.",
+      "empty": "أضف خطوة واحدة على الأقل.",
+      "includeDocuments": "تضمين مستندات الإدخال",
+      "instructions": "التعليمات",
+      "instructionsPlaceholder": "ما الذي ينبغي أن يتحقق منه المراجع",
+      "namePlaceholder": "اسم الخطوة",
+      "nameRequired": "أدخل اسمًا لكل خطوة.",
+      "prompt": "المُوجَّه",
+      "promptPlaceholder": "تعليمات لخطوة AI",
+      "promptRequired": "أدخل مُوجَّهًا لخطوة AI.",
+      "required": "أضف خطوة واحدة على الأقل.",
+      "reviewGate": "بوابة المراجعة",
+      "title": "الخطوات"
+    },
+    "trigger": {
+      "fileUpload": "رفع ملف",
+      "manual": "يدوي",
+      "manualHint": "شغّل مسار العمل هذا عند الطلب من أحد الملفات.",
+      "schedule": "جدولة",
+      "title": "المُشغّل",
+      "typeLabel": "نوع المُشغّل"
+    },
+    "updated": "تم تحديث مسار العمل"
   },
   "folio": {
     "acceptChange": "قبول التغيير",
@@ -1834,6 +1943,9 @@
       "tools": {
         "description": "المهارات، والأنظمة المدمجة، والأدوات المتاحة دائماً والتي يمكن للذكاء الاصطناعي استخدامها لمعالجة الاستفسارات",
         "title": "الأدوات"
+      },
+      "workflows": {
+        "description": "أتمتة العمل على المستندات باستخدام مسارات عمل قابلة لإعادة الاستخدام ومتعددة الخطوات."
       }
     },
     "skills": {

@@ -962,7 +962,8 @@
     "user": "Utilisateur",
     "verify": "Vérifier",
     "version": "Version",
-    "versionLabel": "Version {version}"
+    "versionLabel": "Version {version}",
+    "workflows": "Flux de travail"
   },
   "consent": {
     "allow": "Autoriser",
@@ -1318,6 +1319,114 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Créer un flux de travail",
+    "created": "Flux de travail créé",
+    "deleteFailed": "Impossible de supprimer le flux de travail.",
+    "deleteFlow": "Supprimer le flux de travail",
+    "deleted": "Flux de travail supprimé",
+    "descriptionPlaceholder": "Ce que fait ce flux de travail",
+    "disableFlow": "Désactiver le flux de travail",
+    "empty": "Aucun flux de travail pour l’instant",
+    "emptyDescription": "Créez un flux de travail pour transformer des documents et un objectif en un livrable finalisé.",
+    "enableFlow": "Activer le flux de travail",
+    "enabledDescription": "Les flux de travail désactivés ne peuvent pas être exécutés ni déclenchés.",
+    "enabledLabel": "Activé",
+    "fileUpload": {
+      "allWorkspaces": "Tous les dossiers",
+      "anyExtension": "Tout type de fichier",
+      "extensions": "Types de fichier",
+      "extensionsPlaceholder": "Ajoutez un type de fichier (p. ex. pdf) et appuyez sur Entrée"
+    },
+    "loadFailed": "Impossible de charger les flux de travail.",
+    "loading": "Chargement du flux de travail…",
+    "namePlaceholder": "p. ex. Examen de réception d’un NDA",
+    "nameRequired": "Saisissez un nom de flux de travail.",
+    "runs": {
+      "activeSublabel": "actif",
+      "cancel": "Annuler l’exécution",
+      "cancelFailed": "Impossible d’annuler l’exécution.",
+      "cancelled": "Exécution annulée",
+      "confirmCancel": "Annuler cette exécution ? Les étapes terminées sont conservées.",
+      "createdDocument": "Document créé",
+      "empty": "Aucune exécution pour l’instant",
+      "emptyDescription": "Les exécutions que vous lancez apparaîtront ici.",
+      "history": "Historique des exécutions",
+      "inputDocuments": "Documents d’entrée",
+      "launch": "Exécuter un flux de travail",
+      "loadFailed": "Impossible de charger cette exécution.",
+      "noEnabledFlows": "Aucun flux de travail activé. Créez-en un dans Connaissances › Flux de travail.",
+      "openDocument": "Ouvrir le document",
+      "review": {
+        "approve": "Approuver",
+        "approved": "Approuvé",
+        "failed": "Impossible de soumettre la revue.",
+        "note": "Note (facultatif)",
+        "notePlaceholder": "Ajoutez une note au dossier",
+        "priorOutput": "Résultat précédent",
+        "reject": "Rejeter",
+        "rejected": "Rejeté",
+        "title": "Revue requise"
+      },
+      "selectFlow": "Choisissez un flux de travail",
+      "start": "Démarrer",
+      "startFailed": "Impossible de démarrer le flux de travail.",
+      "started": "Flux de travail démarré",
+      "stepProgress": "Étape {current} sur {total}"
+    },
+    "saveFailed": "Impossible d’enregistrer le flux de travail.",
+    "schedule": {
+      "daily": "Quotidien",
+      "dayOfMonth": "Jour du mois",
+      "dayOfWeek": "Jour de la semaine",
+      "frequency": "Fréquence",
+      "hour": "Heure (UTC)",
+      "monthly": "Mensuel",
+      "selectWorkspace": "Sélectionnez un dossier",
+      "utcHint": "Les horaires programmés sont en UTC.",
+      "weekly": "Hebdomadaire",
+      "workspaceRequired": "Sélectionnez un dossier pour la planification."
+    },
+    "status": {
+      "awaitingReview": "En attente de revue",
+      "cancelled": "Annulé",
+      "completed": "Terminé",
+      "failed": "Échoué",
+      "pending": "En attente",
+      "running": "En cours",
+      "skipped": "Ignoré"
+    },
+    "stepCount": "{count, plural, one {# étape} other {# étapes}}",
+    "steps": {
+      "add": "Ajouter une étape :",
+      "ai": "Étape IA",
+      "createDocument": "Créer un document",
+      "documentTitle": "Titre du document",
+      "documentTitlePlaceholder": "p. ex. Note de synthèse",
+      "documentTitleRequired": "Saisissez un titre de document.",
+      "empty": "Ajoutez au moins une étape.",
+      "includeDocuments": "Inclure les documents d’entrée",
+      "instructions": "Instructions",
+      "instructionsPlaceholder": "Ce que le relecteur doit vérifier",
+      "namePlaceholder": "Nom de l’étape",
+      "nameRequired": "Saisissez un nom pour chaque étape.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Instructions pour l’étape IA",
+      "promptRequired": "Saisissez un prompt pour l’étape IA.",
+      "required": "Ajoutez au moins une étape.",
+      "reviewGate": "Point de contrôle",
+      "title": "Étapes"
+    },
+    "trigger": {
+      "fileUpload": "Téléversement de fichier",
+      "manual": "Manuel",
+      "manualHint": "Exécutez ce flux de travail à la demande depuis un dossier.",
+      "schedule": "Planification",
+      "title": "Déclencheur",
+      "typeLabel": "Type de déclencheur"
+    },
+    "updated": "Flux de travail mis à jour"
   },
   "folio": {
     "acceptChange": "Accepter la modification",
@@ -1834,6 +1943,9 @@
       "tools": {
         "description": "Connectez stella aux registres publics et autres sources",
         "title": "Outils"
+      },
+      "workflows": {
+        "description": "Automatisez le travail documentaire avec des flux de travail réutilisables en plusieurs étapes."
       }
     },
     "skills": {

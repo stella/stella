@@ -962,7 +962,8 @@
     "user": "Kasutaja",
     "verify": "Kinnita",
     "version": "Versioon",
-    "versionLabel": "Versioon {version}"
+    "versionLabel": "Versioon {version}",
+    "workflows": "Töövood"
   },
   "consent": {
     "allow": "Luba",
@@ -1318,6 +1319,114 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Loo töövoog",
+    "created": "Töövoog loodud",
+    "deleteFailed": "Töövoogu ei õnnestunud kustutada.",
+    "deleteFlow": "Kustuta töövoog",
+    "deleted": "Töövoog kustutatud",
+    "descriptionPlaceholder": "Mida see töövoog teeb",
+    "disableFlow": "Keela töövoog",
+    "empty": "Töövoogusid veel pole",
+    "emptyDescription": "Loo töövoog, et muuta dokumendid ja eesmärk valmis tulemuseks.",
+    "enableFlow": "Luba töövoog",
+    "enabledDescription": "Keelatud töövoogusid ei saa käivitada ega vallandada.",
+    "enabledLabel": "Lubatud",
+    "fileUpload": {
+      "allWorkspaces": "Kõik toimikud",
+      "anyExtension": "Mis tahes failitüüp",
+      "extensions": "Failitüübid",
+      "extensionsPlaceholder": "Lisa failitüüp (nt pdf) ja vajuta Enter"
+    },
+    "loadFailed": "Töövoogusid ei õnnestunud laadida.",
+    "loading": "Töövoo laadimine…",
+    "namePlaceholder": "nt NDA vastuvõtu ülevaatus",
+    "nameRequired": "Sisesta töövoo nimi.",
+    "runs": {
+      "activeSublabel": "aktiivne",
+      "cancel": "Tühista käivitus",
+      "cancelFailed": "Käivitust ei õnnestunud tühistada.",
+      "cancelled": "Käivitus tühistatud",
+      "confirmCancel": "Kas tühistada see käivitus? Lõpetatud sammud säilitatakse.",
+      "createdDocument": "Loodud dokument",
+      "empty": "Käivitusi veel pole",
+      "emptyDescription": "Sinu käivitatud käivitused ilmuvad siia.",
+      "history": "Käivituste ajalugu",
+      "inputDocuments": "Sisenddokumendid",
+      "launch": "Käivita töövoog",
+      "loadFailed": "Seda käivitust ei õnnestunud laadida.",
+      "noEnabledFlows": "Lubatud töövoogusid pole. Loo see jaotises Teadmus › Töövood.",
+      "openDocument": "Ava dokument",
+      "review": {
+        "approve": "Kinnita",
+        "approved": "Kinnitatud",
+        "failed": "Ülevaatust ei õnnestunud esitada.",
+        "note": "Märkus (valikuline)",
+        "notePlaceholder": "Lisa märkus dokumenteerimiseks",
+        "priorOutput": "Eelmine tulemus",
+        "reject": "Lükka tagasi",
+        "rejected": "Tagasi lükatud",
+        "title": "Ülevaatus on nõutav"
+      },
+      "selectFlow": "Vali töövoog",
+      "start": "Alusta",
+      "startFailed": "Töövoogu ei õnnestunud käivitada.",
+      "started": "Töövoog käivitatud",
+      "stepProgress": "Samm {current} / {total}"
+    },
+    "saveFailed": "Töövoogu ei õnnestunud salvestada.",
+    "schedule": {
+      "daily": "Iga päev",
+      "dayOfMonth": "Kuupäev",
+      "dayOfWeek": "Nädalapäev",
+      "frequency": "Sagedus",
+      "hour": "Tund (UTC)",
+      "monthly": "Iga kuu",
+      "selectWorkspace": "Vali toimik",
+      "utcHint": "Ajastatud ajad on UTC-s.",
+      "weekly": "Iga nädal",
+      "workspaceRequired": "Vali ajastuse jaoks toimik."
+    },
+    "status": {
+      "awaitingReview": "Ootab ülevaatust",
+      "cancelled": "Tühistatud",
+      "completed": "Lõpetatud",
+      "failed": "Ebaõnnestus",
+      "pending": "Ootel",
+      "running": "Töötab",
+      "skipped": "Vahele jäetud"
+    },
+    "stepCount": "{count, plural, one {# samm} other {# sammu}}",
+    "steps": {
+      "add": "Lisa samm:",
+      "ai": "AI samm",
+      "createDocument": "Loo dokument",
+      "documentTitle": "Dokumendi pealkiri",
+      "documentTitlePlaceholder": "nt Kokkuvõtte memo",
+      "documentTitleRequired": "Sisesta dokumendi pealkiri.",
+      "empty": "Lisa vähemalt üks samm.",
+      "includeDocuments": "Kaasa sisenddokumendid",
+      "instructions": "Juhised",
+      "instructionsPlaceholder": "Mida ülevaataja peaks kontrollima",
+      "namePlaceholder": "Sammu nimi",
+      "nameRequired": "Sisesta igale sammule nimi.",
+      "prompt": "Viip",
+      "promptPlaceholder": "Juhised AI sammu jaoks",
+      "promptRequired": "Sisesta AI sammu jaoks viip.",
+      "required": "Lisa vähemalt üks samm.",
+      "reviewGate": "Ülevaatuse värav",
+      "title": "Sammud"
+    },
+    "trigger": {
+      "fileUpload": "Faili üleslaadimine",
+      "manual": "Käsitsi",
+      "manualHint": "Käivita see töövoog vajadusel toimikust.",
+      "schedule": "Ajastus",
+      "title": "Käivitaja",
+      "typeLabel": "Käivitaja tüüp"
+    },
+    "updated": "Töövoog uuendatud"
   },
   "folio": {
     "acceptChange": "Nõustu muudatusega",
@@ -1834,6 +1943,9 @@
       "tools": {
         "description": "Ühenda stella avalike registritega ja muude allikatega",
         "title": "Tööriistad"
+      },
+      "workflows": {
+        "description": "Automatiseeri dokumenditööd korduvkasutatavate mitmeastmeliste töövoogudega."
       }
     },
     "skills": {

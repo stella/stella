@@ -962,7 +962,8 @@
     "user": "Používateľ",
     "verify": "Overiť",
     "version": "Verzia",
-    "versionLabel": "Verzia {version}"
+    "versionLabel": "Verzia {version}",
+    "workflows": "Pracovné postupy"
   },
   "consent": {
     "allow": "Povoliť",
@@ -1318,6 +1319,114 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Vytvoriť pracovný postup",
+    "created": "Pracovný postup vytvorený",
+    "deleteFailed": "Pracovný postup sa nepodarilo odstrániť.",
+    "deleteFlow": "Odstrániť pracovný postup",
+    "deleted": "Pracovný postup odstránený",
+    "descriptionPlaceholder": "Čo tento pracovný postup robí",
+    "disableFlow": "Zakázať pracovný postup",
+    "empty": "Zatiaľ žiadne pracovné postupy",
+    "emptyDescription": "Vytvorte pracovný postup, ktorý z dokumentov a cieľa vytvorí hotový výstup.",
+    "enableFlow": "Povoliť pracovný postup",
+    "enabledDescription": "Zakázané pracovné postupy nie je možné spustiť ani vyvolať.",
+    "enabledLabel": "Povolené",
+    "fileUpload": {
+      "allWorkspaces": "Všetky spisy",
+      "anyExtension": "Akýkoľvek typ súboru",
+      "extensions": "Typy súborov",
+      "extensionsPlaceholder": "Pridajte typ súboru (napr. pdf) a stlačte Enter"
+    },
+    "loadFailed": "Pracovné postupy sa nepodarilo načítať.",
+    "loading": "Načítava sa pracovný postup…",
+    "namePlaceholder": "napr. Kontrola prijatia NDA",
+    "nameRequired": "Zadajte názov pracovného postupu.",
+    "runs": {
+      "activeSublabel": "aktívny",
+      "cancel": "Zrušiť spustenie",
+      "cancelFailed": "Spustenie sa nepodarilo zrušiť.",
+      "cancelled": "Spustenie zrušené",
+      "confirmCancel": "Zrušiť toto spustenie? Dokončené kroky zostanú zachované.",
+      "createdDocument": "Vytvorený dokument",
+      "empty": "Zatiaľ žiadne spustenia",
+      "emptyDescription": "Spustenia, ktoré začnete, sa zobrazia tu.",
+      "history": "História spustení",
+      "inputDocuments": "Vstupné dokumenty",
+      "launch": "Spustiť pracovný postup",
+      "loadFailed": "Toto spustenie sa nepodarilo načítať.",
+      "noEnabledFlows": "Žiadne povolené pracovné postupy. Vytvorte ho v Znalosti › Pracovné postupy.",
+      "openDocument": "Otvoriť dokument",
+      "review": {
+        "approve": "Schváliť",
+        "approved": "Schválené",
+        "failed": "Kontrolu sa nepodarilo odoslať.",
+        "note": "Poznámka (voliteľné)",
+        "notePlaceholder": "Pridajte poznámku do záznamu",
+        "priorOutput": "Predchádzajúci výstup",
+        "reject": "Zamietnuť",
+        "rejected": "Zamietnuté",
+        "title": "Vyžaduje sa kontrola"
+      },
+      "selectFlow": "Vyberte pracovný postup",
+      "start": "Spustiť",
+      "startFailed": "Pracovný postup sa nepodarilo spustiť.",
+      "started": "Pracovný postup spustený",
+      "stepProgress": "Krok {current} z {total}"
+    },
+    "saveFailed": "Pracovný postup sa nepodarilo uložiť.",
+    "schedule": {
+      "daily": "Denne",
+      "dayOfMonth": "Deň v mesiaci",
+      "dayOfWeek": "Deň v týždni",
+      "frequency": "Frekvencia",
+      "hour": "Hodina (UTC)",
+      "monthly": "Mesačne",
+      "selectWorkspace": "Vyberte spis",
+      "utcHint": "Naplánované časy sú v UTC.",
+      "weekly": "Týždenne",
+      "workspaceRequired": "Vyberte spis pre plán."
+    },
+    "status": {
+      "awaitingReview": "Čaká na kontrolu",
+      "cancelled": "Zrušené",
+      "completed": "Dokončené",
+      "failed": "Zlyhalo",
+      "pending": "Čaká",
+      "running": "Prebieha",
+      "skipped": "Preskočené"
+    },
+    "stepCount": "{count, plural, one {# krok} few {# kroky} many {# kroku} other {# krokov}}",
+    "steps": {
+      "add": "Pridať krok:",
+      "ai": "Krok AI",
+      "createDocument": "Vytvoriť dokument",
+      "documentTitle": "Názov dokumentu",
+      "documentTitlePlaceholder": "napr. Súhrnná správa",
+      "documentTitleRequired": "Zadajte názov dokumentu.",
+      "empty": "Pridajte aspoň jeden krok.",
+      "includeDocuments": "Zahrnúť vstupné dokumenty",
+      "instructions": "Pokyny",
+      "instructionsPlaceholder": "Čo má kontrolór skontrolovať",
+      "namePlaceholder": "Názov kroku",
+      "nameRequired": "Zadajte názov pre každý krok.",
+      "prompt": "Prompt",
+      "promptPlaceholder": "Pokyny pre krok AI",
+      "promptRequired": "Zadajte prompt pre krok AI.",
+      "required": "Pridajte aspoň jeden krok.",
+      "reviewGate": "Kontrolný bod",
+      "title": "Kroky"
+    },
+    "trigger": {
+      "fileUpload": "Nahranie súboru",
+      "manual": "Ručne",
+      "manualHint": "Spustite tento pracovný postup na požiadanie zo spisu.",
+      "schedule": "Plán",
+      "title": "Spúšťač",
+      "typeLabel": "Typ spúšťača"
+    },
+    "updated": "Pracovný postup aktualizovaný"
   },
   "folio": {
     "acceptChange": "Prijať zmenu",
@@ -1834,6 +1943,9 @@
       "tools": {
         "description": "Pripojte stella k verejným registrom a ďalším zdrojom",
         "title": "Nástroje"
+      },
+      "workflows": {
+        "description": "Automatizujte prácu s dokumentmi pomocou opakovane použiteľných viackrokových pracovných postupov."
       }
     },
     "skills": {

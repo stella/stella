@@ -54,6 +54,7 @@
     "billing.invoices.dueDate",
     "billing.invoices.statuses.draft",
     "billing.invoices.statuses.paid",
+    "billing.running",
     "billing.selectedCount",
     "billing.statuses.approved",
     "billing.statuses.draft",
@@ -95,6 +96,7 @@
     "docxReview.severityMedium",
     "docxReview.statusAccepted",
     "docxReview.statusRejected",
+    "docxReview.statusSkipped",
     "docxReview.wordShortcutPlaceholder",
     "errors.failedToDeleteTemplate",
     "errors.failedToSaveTemplate",
@@ -105,11 +107,23 @@
     "filters.contains",
     "filters.eq",
     "filters.neq",
+    "flows.enabledLabel",
+    "flows.fileUpload.allWorkspaces",
+    "flows.runs.review.approve",
+    "flows.runs.review.approved",
+    "flows.runs.review.reject",
+    "flows.runs.review.rejected",
+    "flows.status.cancelled",
+    "flows.status.pending",
+    "flows.status.running",
+    "flows.status.skipped",
+    "flows.steps.createDocument",
     "inspector.anonymization.deleteAction",
     "inspector.anonymization.labelPickerAriaLabel",
     "inspector.anonymization.labelPickerEmpty",
     "inspector.anonymization.labelPickerPlaceholder",
     "inspector.facet.anonymization",
+    "inspector.matterPicker.allMatters",
     "inspector.metadata.author",
     "inspector.metadata.updatedAt",
     "knowledge.agentSkills.enabled",
@@ -151,6 +165,7 @@
     "organization.aiConfig.roles.reasoning",
     "organization.aiConfig.title",
     "organization.invitations.statuses.accepted",
+    "organization.invitations.statuses.pending",
     "organization.invitations.statuses.rejected",
     "organization.matterNumber.description",
     "organization.matterNumber.title",
@@ -609,6 +624,9 @@
       "de",
       "fr"
     ],
+    "common.workflows": [
+      "de"
+    ],
     "contacts.communication.emailPlaceholder": [
       "ar",
       "de"
@@ -854,6 +872,23 @@
       "pl",
       "pt-BR",
       "sk"
+    ],
+    "flows.steps.instructions": [
+      "fr"
+    ],
+    "flows.steps.prompt": [
+      "cs",
+      "de",
+      "es",
+      "fr",
+      "hu",
+      "pl",
+      "pt-BR",
+      "sk"
+    ],
+    "flows.trigger.manual": [
+      "es",
+      "pt-BR"
     ],
     "folio.fontGroup": [
       "et"

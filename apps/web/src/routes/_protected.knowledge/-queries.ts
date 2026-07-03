@@ -26,6 +26,10 @@ type TemplatesPageKey = {
   limit: number;
 };
 
+type FlowsPageKey = {
+  limit: number;
+};
+
 type ClausesListKey = {
   categoryId?: string | null | undefined;
   search?: string | undefined;
@@ -137,6 +141,19 @@ export const knowledgeKeys = {
   },
   playbookStarters: {
     all: (organizationId: string) => ["playbook-starters", organizationId],
+  },
+  flows: {
+    all: (organizationId: string) => ["flows", organizationId],
+    list: (organizationId: string, { limit }: FlowsPageKey) => [
+      ...knowledgeKeys.flows.all(organizationId),
+      "list",
+      { limit },
+    ],
+    detail: (organizationId: string, flowId: string) => [
+      ...knowledgeKeys.flows.all(organizationId),
+      flowId,
+      "detail",
+    ],
   },
   mcp: {
     all: (organizationId: string) => ["mcp", organizationId],
@@ -570,6 +587,53 @@ export const playbookVersionsOptions = (
       const response = await api
         .playbooks({ playbookId: toSafeId<"playbookDefinition">(playbookId) })
         .versions.get({ fetch: { signal } });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+// ── Flow (Workflows) queries ────────────────────────
+
+// The org flow cap equals the API's max page size, so a single request can
+// return every enabled flow; the workspace run launcher needs them all
+// selectable rather than the first default page.
+export const FLOW_PICKER_LIMIT = 100;
+
+const FLOWS_PAGE_SIZE = 50;
+
+export const flowsOptions = (
+  organizationId: string,
+  limit: number = FLOWS_PAGE_SIZE,
+) =>
+  queryOptions({
+    queryKey: knowledgeKeys.flows.list(organizationId, { limit }),
+    queryFn: async ({ signal }) => {
+      const response = await api.flows.get({
+        query: { limit },
+        fetch: { signal },
+      });
+
+      if (response.error) {
+        throw toAPIError(response.error);
+      }
+
+      return response.data;
+    },
+    staleTime: STALE_TIME.FIVE.MINUTES,
+  });
+
+export const flowDetailOptions = (organizationId: string, flowId: string) =>
+  queryOptions({
+    queryKey: knowledgeKeys.flows.detail(organizationId, flowId),
+    queryFn: async ({ signal }) => {
+      const response = await api
+        .flows({ flowId: toSafeId<"flowDefinition">(flowId) })
+        .get({ fetch: { signal } });
 
       if (response.error) {
         throw toAPIError(response.error);

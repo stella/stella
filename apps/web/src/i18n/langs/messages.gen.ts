@@ -966,6 +966,7 @@ type Messages = {
     "verify": "Verify";
     "version": "Version";
     "versionLabel": "Version {version}";
+    "workflows": "Workflows";
   };
   "consent": {
     "allow": "Allow";
@@ -1321,6 +1322,114 @@ type Messages = {
     "numLte": "≤";
     "numNeq": "≠";
     "starts_with": "starts with";
+  };
+  "flows": {
+    "createFlow": "Create workflow";
+    "created": "Workflow created";
+    "deleteFailed": "Couldn't delete the workflow.";
+    "deleteFlow": "Delete workflow";
+    "deleted": "Workflow deleted";
+    "descriptionPlaceholder": "What this workflow does";
+    "disableFlow": "Disable workflow";
+    "empty": "No workflows yet";
+    "emptyDescription": "Create a workflow to turn documents and a goal into a finished deliverable.";
+    "enableFlow": "Enable workflow";
+    "enabledDescription": "Disabled workflows can't be run or triggered.";
+    "enabledLabel": "Enabled";
+    "fileUpload": {
+      "allWorkspaces": "All matters";
+      "anyExtension": "Any file type";
+      "extensions": "File types";
+      "extensionsPlaceholder": "Add a file type (e.g. pdf) and press Enter";
+    };
+    "loadFailed": "Couldn't load workflows.";
+    "loading": "Loading workflow…";
+    "namePlaceholder": "e.g. NDA intake review";
+    "nameRequired": "Enter a workflow name.";
+    "runs": {
+      "activeSublabel": "active";
+      "cancel": "Cancel run";
+      "cancelFailed": "Couldn't cancel the run.";
+      "cancelled": "Run cancelled";
+      "confirmCancel": "Cancel this run? Completed steps are kept.";
+      "createdDocument": "Created document";
+      "empty": "No runs yet";
+      "emptyDescription": "Runs you start will appear here.";
+      "history": "Run history";
+      "inputDocuments": "Input documents";
+      "launch": "Run a workflow";
+      "loadFailed": "Couldn't load this run.";
+      "noEnabledFlows": "No enabled workflows. Create one in Knowledge › Workflows.";
+      "openDocument": "Open document";
+      "review": {
+        "approve": "Approve";
+        "approved": "Approved";
+        "failed": "Couldn't submit the review.";
+        "note": "Note (optional)";
+        "notePlaceholder": "Add a note for the record";
+        "priorOutput": "Previous output";
+        "reject": "Reject";
+        "rejected": "Rejected";
+        "title": "Review required";
+      };
+      "selectFlow": "Choose a workflow";
+      "start": "Start";
+      "startFailed": "Couldn't start the workflow.";
+      "started": "Workflow started";
+      "stepProgress": "Step {current} of {total}";
+    };
+    "saveFailed": "Couldn't save the workflow.";
+    "schedule": {
+      "daily": "Daily";
+      "dayOfMonth": "Day of month";
+      "dayOfWeek": "Day of week";
+      "frequency": "Frequency";
+      "hour": "Hour (UTC)";
+      "monthly": "Monthly";
+      "selectWorkspace": "Select a matter";
+      "utcHint": "Scheduled times are in UTC.";
+      "weekly": "Weekly";
+      "workspaceRequired": "Select a matter for the schedule.";
+    };
+    "status": {
+      "awaitingReview": "Awaiting review";
+      "cancelled": "Cancelled";
+      "completed": "Completed";
+      "failed": "Failed";
+      "pending": "Pending";
+      "running": "Running";
+      "skipped": "Skipped";
+    };
+    "stepCount": "{count, plural, one {# step} other {# steps}}";
+    "steps": {
+      "add": "Add step:";
+      "ai": "AI step";
+      "createDocument": "Create document";
+      "documentTitle": "Document title";
+      "documentTitlePlaceholder": "e.g. Summary memo";
+      "documentTitleRequired": "Enter a document title.";
+      "empty": "Add at least one step.";
+      "includeDocuments": "Include input documents";
+      "instructions": "Instructions";
+      "instructionsPlaceholder": "What the reviewer should check";
+      "namePlaceholder": "Step name";
+      "nameRequired": "Enter a name for each step.";
+      "prompt": "Prompt";
+      "promptPlaceholder": "Instructions for the AI step";
+      "promptRequired": "Enter a prompt for the AI step.";
+      "required": "Add at least one step.";
+      "reviewGate": "Review gate";
+      "title": "Steps";
+    };
+    "trigger": {
+      "fileUpload": "File upload";
+      "manual": "Manual";
+      "manualHint": "Run this workflow on demand from a matter.";
+      "schedule": "Schedule";
+      "title": "Trigger";
+      "typeLabel": "Trigger type";
+    };
+    "updated": "Workflow updated";
   };
   "folio": {
     "acceptChange": "Accept Change";
@@ -1837,6 +1946,9 @@ type Messages = {
       "tools": {
         "description": "Skills, integrations, and always-available tools the AI can use in chat";
         "title": "Tools";
+      };
+      "workflows": {
+        "description": "Automate document work with reusable, multi-step workflows.";
       };
     };
     "skills": {

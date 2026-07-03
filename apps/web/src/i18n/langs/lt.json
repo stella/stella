@@ -962,7 +962,8 @@
     "user": "Naudotojas",
     "verify": "Patvirtinti",
     "version": "Versija",
-    "versionLabel": "{version} versija"
+    "versionLabel": "{version} versija",
+    "workflows": "Darbo eigos"
   },
   "consent": {
     "allow": "Leisti",
@@ -1318,6 +1319,114 @@
     "numLte": "≤",
     "numNeq": "≠",
     "starts_with": "starts with"
+  },
+  "flows": {
+    "createFlow": "Sukurti darbo eigą",
+    "created": "Darbo eiga sukurta",
+    "deleteFailed": "Nepavyko ištrinti darbo eigos.",
+    "deleteFlow": "Ištrinti darbo eigą",
+    "deleted": "Darbo eiga ištrinta",
+    "descriptionPlaceholder": "Ką atlieka ši darbo eiga",
+    "disableFlow": "Išjungti darbo eigą",
+    "empty": "Darbo eigų dar nėra",
+    "emptyDescription": "Sukurkite darbo eigą, kad iš dokumentų ir tikslo gautumėte baigtą rezultatą.",
+    "enableFlow": "Įjungti darbo eigą",
+    "enabledDescription": "Išjungtų darbo eigų negalima paleisti ar suaktyvinti.",
+    "enabledLabel": "Įjungta",
+    "fileUpload": {
+      "allWorkspaces": "Visos bylos",
+      "anyExtension": "Bet koks failo tipas",
+      "extensions": "Failų tipai",
+      "extensionsPlaceholder": "Pridėkite failo tipą (pvz., pdf) ir paspauskite Enter"
+    },
+    "loadFailed": "Nepavyko įkelti darbo eigų.",
+    "loading": "Įkeliama darbo eiga…",
+    "namePlaceholder": "pvz., NDA priėmimo peržiūra",
+    "nameRequired": "Įveskite darbo eigos pavadinimą.",
+    "runs": {
+      "activeSublabel": "aktyvi",
+      "cancel": "Atšaukti vykdymą",
+      "cancelFailed": "Nepavyko atšaukti vykdymo.",
+      "cancelled": "Vykdymas atšauktas",
+      "confirmCancel": "Atšaukti šį vykdymą? Užbaigti žingsniai išsaugomi.",
+      "createdDocument": "Sukurtas dokumentas",
+      "empty": "Vykdymų dar nėra",
+      "emptyDescription": "Jūsų pradėti vykdymai bus rodomi čia.",
+      "history": "Vykdymų istorija",
+      "inputDocuments": "Įvesties dokumentai",
+      "launch": "Paleisti darbo eigą",
+      "loadFailed": "Nepavyko įkelti šio vykdymo.",
+      "noEnabledFlows": "Nėra įjungtų darbo eigų. Sukurkite ją skiltyje Žinios › Darbo eigos.",
+      "openDocument": "Atidaryti dokumentą",
+      "review": {
+        "approve": "Patvirtinti",
+        "approved": "Patvirtinta",
+        "failed": "Nepavyko pateikti peržiūros.",
+        "note": "Pastaba (nebūtina)",
+        "notePlaceholder": "Pridėkite pastabą įrašui",
+        "priorOutput": "Ankstesnis rezultatas",
+        "reject": "Atmesti",
+        "rejected": "Atmesta",
+        "title": "Reikalinga peržiūra"
+      },
+      "selectFlow": "Pasirinkite darbo eigą",
+      "start": "Pradėti",
+      "startFailed": "Nepavyko paleisti darbo eigos.",
+      "started": "Darbo eiga paleista",
+      "stepProgress": "{current} žingsnis iš {total}"
+    },
+    "saveFailed": "Nepavyko išsaugoti darbo eigos.",
+    "schedule": {
+      "daily": "Kasdien",
+      "dayOfMonth": "Mėnesio diena",
+      "dayOfWeek": "Savaitės diena",
+      "frequency": "Dažnumas",
+      "hour": "Valanda (UTC)",
+      "monthly": "Kas mėnesį",
+      "selectWorkspace": "Pasirinkite bylą",
+      "utcHint": "Suplanuoti laikai nurodyti UTC.",
+      "weekly": "Kas savaitę",
+      "workspaceRequired": "Pasirinkite bylą tvarkaraščiui."
+    },
+    "status": {
+      "awaitingReview": "Laukiama peržiūros",
+      "cancelled": "Atšaukta",
+      "completed": "Užbaigta",
+      "failed": "Nepavyko",
+      "pending": "Laukiama",
+      "running": "Vykdoma",
+      "skipped": "Praleista"
+    },
+    "stepCount": "{count, plural, one {# žingsnis} few {# žingsniai} other {# žingsnių}}",
+    "steps": {
+      "add": "Pridėti žingsnį:",
+      "ai": "DI žingsnis",
+      "createDocument": "Sukurti dokumentą",
+      "documentTitle": "Dokumento pavadinimas",
+      "documentTitlePlaceholder": "pvz., Santraukos memorandumas",
+      "documentTitleRequired": "Įveskite dokumento pavadinimą.",
+      "empty": "Pridėkite bent vieną žingsnį.",
+      "includeDocuments": "Įtraukti įvesties dokumentus",
+      "instructions": "Nurodymai",
+      "instructionsPlaceholder": "Ką turėtų patikrinti peržiūrėtojas",
+      "namePlaceholder": "Žingsnio pavadinimas",
+      "nameRequired": "Įveskite kiekvieno žingsnio pavadinimą.",
+      "prompt": "Užklausa",
+      "promptPlaceholder": "Nurodymai DI žingsniui",
+      "promptRequired": "Įveskite DI žingsnio užklausą.",
+      "required": "Pridėkite bent vieną žingsnį.",
+      "reviewGate": "Peržiūros kontrolė",
+      "title": "Žingsniai"
+    },
+    "trigger": {
+      "fileUpload": "Failo įkėlimas",
+      "manual": "Rankinis",
+      "manualHint": "Paleiskite šią darbo eigą pagal poreikį iš bylos.",
+      "schedule": "Tvarkaraštis",
+      "title": "Aktyviklis",
+      "typeLabel": "Aktyviklio tipas"
+    },
+    "updated": "Darbo eiga atnaujinta"
   },
   "folio": {
     "acceptChange": "Priimti pakeitimą",
@@ -1834,6 +1943,9 @@
       "tools": {
         "description": "Sujunkite stella su viešais registrais ir kitais šaltiniais",
         "title": "Įrankiai"
+      },
+      "workflows": {
+        "description": "Automatizuokite darbą su dokumentais naudodami pakartotinai naudojamas, kelių žingsnių darbo eigas."
       }
     },
     "skills": {
