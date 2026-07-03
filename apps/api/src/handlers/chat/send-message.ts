@@ -173,6 +173,7 @@ const sendMessage = createSafeRootHandler(
     });
 
     yield* assertDevModelOverride(body.devModelId, orgAIConfig);
+    const externalMcpNullUnionStrategy = "json-schema";
 
     const accessibleWorkspaceIds = activeWorkspaceIds;
     /* eslint-disable no-body-ownership-ids/no-body-ownership-ids -- root handler; resolveChatScope validates against accessibleWorkspaceIds */
@@ -241,6 +242,7 @@ const sendMessage = createSafeRootHandler(
       body.message,
     )
       ? await loadExternalMcpToolsForUser({
+          nullUnionStrategy: externalMcpNullUnionStrategy,
           organizationId: session.activeOrganizationId,
           safeDb,
           userId: user.id,
@@ -618,6 +620,7 @@ const sendMessage = createSafeRootHandler(
     );
 
     const externalMcpTools = await loadExternalMcpToolsForUser({
+      nullUnionStrategy: externalMcpNullUnionStrategy,
       organizationId: session.activeOrganizationId,
       safeDb,
       userId: user.id,

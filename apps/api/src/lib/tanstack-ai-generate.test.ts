@@ -5,7 +5,10 @@ import * as v from "valibot";
 import type { CachingDecision } from "@/api/lib/ai-config";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import * as realTanStackAIModels from "@/api/lib/tanstack-ai-models";
-import { toTanStackValibotSchema } from "@/api/lib/tanstack-ai-schema";
+import {
+  projectSchemaInputJsonSchema,
+  toTanStackValibotSchema,
+} from "@/api/lib/tanstack-ai-schema";
 
 type CapturedChatOptions = {
   modelOptions?: unknown;
@@ -83,6 +86,27 @@ describe("TanStack AI structured output generation", () => {
     }
     expect(jsonSchema.type).toBe("object");
     expect(jsonSchema.properties).toHaveProperty("answer");
+  });
+
+  test("projects plain JSON schemas even when they contain a standard-looking key", () => {
+    const schema = projectSchemaInputJsonSchema(
+      {
+        type: "object",
+        "~standard": {},
+        propertyNames: { type: "string" },
+        properties: {
+          mode: { enum: ["auto", null] },
+        },
+      },
+      { nullUnionStrategy: "openapi" },
+    );
+
+    expect(schema).toEqual({
+      type: "object",
+      properties: {
+        mode: { enum: ["auto"], nullable: true },
+      },
+    });
   });
 
   test("passes converted Valibot schemas to TanStack object generation", async () => {

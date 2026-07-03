@@ -26,6 +26,7 @@ describe("external MCP chat tools", () => {
     const normalized = normalizeExternalMcpToolsForChat({
       allowedTools: ["lookup"],
       connectorSlug: "ares",
+      nullUnionStrategy: "json-schema",
       tools: [tool("lookup"), tool("deleteEverything")],
     });
 
@@ -39,6 +40,7 @@ describe("external MCP chat tools", () => {
     const normalized = normalizeExternalMcpToolsForChat({
       allowedTools: null,
       connectorSlug: "public registry",
+      nullUnionStrategy: "json-schema",
       tools: [original],
     });
 
@@ -57,11 +59,60 @@ describe("external MCP chat tools", () => {
     const normalized = normalizeExternalMcpToolsForChat({
       allowedTools: null,
       connectorSlug: "registry",
+      nullUnionStrategy: "json-schema",
       tools: [tool("lookup")],
     });
 
     expect(tool("lookup").needsApproval).toBeUndefined();
     expect(normalized.tools["mcp__registry__lookup"]?.needsApproval).toBe(true);
+  });
+
+  test("projects raw MCP JSON schemas even when they contain a standard-looking key", () => {
+    const normalized = normalizeExternalMcpToolsForChat({
+      allowedTools: null,
+      connectorSlug: "registry",
+      nullUnionStrategy: "openapi",
+      tools: [
+        {
+          ...tool("lookup"),
+          inputSchema: {
+            type: "object",
+            "~standard": {},
+            propertyNames: { type: "string" },
+            properties: {
+              mode: { enum: ["auto", null] },
+            },
+          },
+        },
+      ],
+    });
+
+    expect(normalized.tools["mcp__registry__lookup"]?.inputSchema).toEqual({
+      type: "object",
+      properties: {
+        mode: { enum: ["auto"], nullable: true },
+      },
+    });
+  });
+
+  test("keeps literal-null MCP branches through the JSON Schema validation prepass", () => {
+    const normalized = normalizeExternalMcpToolsForChat({
+      allowedTools: null,
+      connectorSlug: "registry",
+      nullUnionStrategy: "json-schema",
+      tools: [
+        {
+          ...tool("lookup"),
+          inputSchema: {
+            anyOf: [{ type: "string", minLength: 1 }, { const: null }],
+          },
+        },
+      ],
+    });
+
+    expect(normalized.tools["mcp__registry__lookup"]?.inputSchema).toEqual({
+      anyOf: [{ type: "string", minLength: 1 }, { type: "null" }],
+    });
   });
 });
 

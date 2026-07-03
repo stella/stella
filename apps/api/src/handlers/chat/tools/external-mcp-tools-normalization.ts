@@ -8,36 +8,48 @@ import {
 } from "@/api/handlers/chat/tools/tool-policy";
 import { namespaceMcpToolName } from "@/api/lib/mcp-upstream/namespace";
 import { logger } from "@/api/lib/observability/logger";
+import type { NullUnionStrategy } from "@/api/lib/provider-safe-json-schema";
 import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
 
 // External MCP tools arrive with a raw JSON Schema `inputSchema` straight from
 // the upstream server (see `toServerTools` in @tanstack/ai-mcp). Providers such
 // as Gemini reject schemas that carry keywords outside their OpenAPI-3.0
 // subset, so project each one into the portable subset before it backs schema
-// validation and the live `mcp` source. Standard-schema wrappers (which carry
-// `~standard`) are first-party tools already projected at their own seam and
-// are left untouched.
+// validation and the live `mcp` source. Actual Standard Schema wrappers are
+// first-party tools already projected at their own seam and are left untouched.
 const isPlainJsonSchema = (value: unknown): value is Record<string, unknown> =>
-  typeof value === "object" &&
-  value !== null &&
-  !Array.isArray(value) &&
-  !("~standard" in value);
+  typeof value === "object" && value !== null && !Array.isArray(value);
 
-const projectExternalMcpToolSchema = (tool: ChatTool): ChatTool => {
+const isStandardSchemaInput = (value: unknown): boolean => {
+  if (!isPlainJsonSchema(value)) {
+    return false;
+  }
+  const standard = value["~standard"];
+  return (
+    isPlainJsonSchema(standard) && typeof standard["validate"] === "function"
+  );
+};
+
+const projectExternalMcpToolSchema = (
+  tool: ChatTool,
+  nullUnionStrategy: NullUnionStrategy,
+): ChatTool => {
   const { inputSchema } = tool;
-  if (!isPlainJsonSchema(inputSchema)) {
+  if (!isPlainJsonSchema(inputSchema) || isStandardSchemaInput(inputSchema)) {
     return tool;
   }
 
-  const { schema, droppedKeywords } =
-    projectToProviderSafeJsonSchema(inputSchema);
+  const { schema, droppedKeywords } = projectToProviderSafeJsonSchema(
+    inputSchema,
+    {
+      nullUnionStrategy,
+    },
+  );
   if (droppedKeywords.length > 0) {
-    // Telemetry only: never throw. Attribute keys must dodge the API logger's
-    // sensitive-key sanitizer (drops keys matching name/title/etc.), so use
-    // `tool` and `droppedKeywords`, not `toolName`.
+    // Telemetry only: never throw. External MCP metadata is user-configured, so
+    // log only aggregate projection data.
     logger.warn("Projected external MCP tool schema to provider-safe subset", {
-      tool: tool.name,
-      droppedKeywords: droppedKeywords.join(", "),
+      "schema.dropped_keyword_count": droppedKeywords.length,
     });
   }
 
@@ -47,6 +59,7 @@ const projectExternalMcpToolSchema = (tool: ChatTool): ChatTool => {
 type NormalizeExternalMcpToolsForChatInput = {
   allowedTools: readonly string[] | null;
   connectorSlug: string;
+  nullUnionStrategy: NullUnionStrategy;
   tools: readonly ChatTool[];
 };
 
@@ -58,6 +71,7 @@ type NormalizedExternalMcpToolsForChat = {
 export const normalizeExternalMcpToolsForChat = ({
   allowedTools,
   connectorSlug,
+  nullUnionStrategy,
   tools,
 }: NormalizeExternalMcpToolsForChatInput): NormalizedExternalMcpToolsForChat => {
   const allowedToolNames = allowedTools ? new Set(allowedTools) : null;
@@ -75,11 +89,14 @@ export const normalizeExternalMcpToolsForChat = ({
       connectorSlug,
       toolName: rawToolName,
     });
-    loadedTools[exposedToolName] = projectExternalMcpToolSchema({
-      ...toolDefinition,
-      name: exposedToolName,
-      lazy: true,
-    });
+    loadedTools[exposedToolName] = projectExternalMcpToolSchema(
+      {
+        ...toolDefinition,
+        name: exposedToolName,
+        lazy: true,
+      },
+      nullUnionStrategy,
+    );
   }
 
   // External MCP tools must always require approval here, regardless of the

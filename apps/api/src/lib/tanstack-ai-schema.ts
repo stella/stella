@@ -2,9 +2,11 @@ import type {
   StandardJSONSchemaV1,
   StandardSchemaV1,
 } from "@standard-schema/spec";
+import type { SchemaInput } from "@tanstack/ai";
 import { toStandardJsonSchema } from "@valibot/to-json-schema";
 import type { GenericSchema, InferInput, InferOutput } from "valibot";
 
+import type { ProviderSafeJsonSchemaProjectionOptions } from "@/api/lib/provider-safe-json-schema";
 import { projectToProviderSafeJsonSchema } from "@/api/lib/provider-safe-json-schema";
 
 export type TanStackValibotSchema<TSchema extends GenericSchema> =
@@ -15,6 +17,36 @@ type JsonObject = Record<string, unknown>;
 
 const isJsonObject = (value: unknown): value is JsonObject =>
   typeof value === "object" && value !== null && !Array.isArray(value);
+
+const isProjectableJsonSchemaInput = (
+  value: SchemaInput | undefined,
+): value is StandardJSONSchemaV1 => {
+  if (!isJsonObject(value)) {
+    return false;
+  }
+  const schemaObject: JsonObject = value;
+  const standard = schemaObject["~standard"];
+  if (!isJsonObject(standard)) {
+    return false;
+  }
+  const jsonSchema = standard["jsonSchema"];
+  return (
+    isJsonObject(jsonSchema) &&
+    typeof jsonSchema["input"] === "function" &&
+    typeof jsonSchema["output"] === "function"
+  );
+};
+
+const isStandardSchemaInput = (
+  value: SchemaInput | undefined,
+): value is StandardSchemaV1 => {
+  if (!isJsonObject(value)) {
+    return false;
+  }
+  const schemaObject: JsonObject = value;
+  const standard = schemaObject["~standard"];
+  return isJsonObject(standard) && typeof standard["validate"] === "function";
+};
 
 const strictifyObjectSchemas = (schema: unknown): unknown => {
   if (!isJsonObject(schema)) {
@@ -58,13 +90,18 @@ const strictifyJsonSchema = (
 // this pure path does not log.
 const toProviderSafeJsonSchema = (
   schema: Record<string, unknown>,
+  options: ProviderSafeJsonSchemaProjectionOptions,
 ): Record<string, unknown> =>
-  projectToProviderSafeJsonSchema(strictifyJsonSchema(schema)).schema;
+  projectToProviderSafeJsonSchema(strictifyJsonSchema(schema), options).schema;
 
 export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
   schema: TSchema,
+  projectionOptions?: ProviderSafeJsonSchemaProjectionOptions,
 ): TanStackValibotSchema<TSchema> => {
   const standardSchema = toStandardJsonSchema(schema);
+  const providerProjectionOptions = projectionOptions ?? {
+    nullUnionStrategy: "json-schema",
+  };
   return {
     ...standardSchema,
     "~standard": {
@@ -73,12 +110,46 @@ export const toTanStackValibotSchema = <TSchema extends GenericSchema>(
         input: (options) =>
           toProviderSafeJsonSchema(
             standardSchema["~standard"].jsonSchema.input(options),
+            providerProjectionOptions,
           ),
         output: (options) =>
           toProviderSafeJsonSchema(
             standardSchema["~standard"].jsonSchema.output(options),
+            providerProjectionOptions,
           ),
       },
     },
   };
+};
+
+export const projectSchemaInputJsonSchema = (
+  schema: SchemaInput | undefined,
+  projectionOptions: ProviderSafeJsonSchemaProjectionOptions,
+): SchemaInput | undefined => {
+  if (isProjectableJsonSchemaInput(schema)) {
+    return {
+      ...schema,
+      "~standard": {
+        ...schema["~standard"],
+        jsonSchema: {
+          input: (options) =>
+            toProviderSafeJsonSchema(
+              schema["~standard"].jsonSchema.input(options),
+              projectionOptions,
+            ),
+          output: (options) =>
+            toProviderSafeJsonSchema(
+              schema["~standard"].jsonSchema.output(options),
+              projectionOptions,
+            ),
+        },
+      },
+    };
+  }
+
+  if (!isJsonObject(schema) || isStandardSchemaInput(schema)) {
+    return schema;
+  }
+
+  return projectToProviderSafeJsonSchema(schema, projectionOptions).schema;
 };
