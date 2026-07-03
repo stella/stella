@@ -17,7 +17,7 @@ CREATE TABLE "flow_definitions" (
 CREATE TABLE "flow_runs" (
 	"id" uuid PRIMARY KEY NOT NULL,
 	"workspace_id" uuid NOT NULL,
-	"definition_id" uuid NOT NULL,
+	"definition_id" uuid,
 	"definition_snapshot" jsonb NOT NULL,
 	"status" text DEFAULT 'pending' NOT NULL,
 	"current_step_index" integer DEFAULT 0 NOT NULL,
@@ -49,7 +49,7 @@ ALTER TABLE "flow_run_steps" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "flow_definitions" ADD CONSTRAINT "flow_definitions_org_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "flow_definitions" ADD CONSTRAINT "flow_definitions_created_by_fk" FOREIGN KEY ("created_by_user_id") REFERENCES "user"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_workspace_fk" FOREIGN KEY ("workspace_id") REFERENCES "workspaces"("id") ON DELETE CASCADE ON UPDATE NO ACTION;--> statement-breakpoint
-ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_definition_fk" FOREIGN KEY ("definition_id") REFERENCES "flow_definitions"("id") ON DELETE CASCADE ON UPDATE NO ACTION;--> statement-breakpoint
+ALTER TABLE "flow_runs" ADD CONSTRAINT "flow_runs_definition_fk" FOREIGN KEY ("definition_id") REFERENCES "flow_definitions"("id") ON DELETE SET NULL ON UPDATE NO ACTION;--> statement-breakpoint
 ALTER TABLE "flow_run_steps" ADD CONSTRAINT "flow_run_steps_run_fk" FOREIGN KEY ("run_id","workspace_id") REFERENCES "flow_runs"("id","workspace_id") ON DELETE CASCADE ON UPDATE NO ACTION;--> statement-breakpoint
 CREATE INDEX "flow_definitions_organization_id_idx" ON "flow_definitions" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX "flow_definitions_org_created_at_idx" ON "flow_definitions" USING btree ("organization_id","created_at");--> statement-breakpoint

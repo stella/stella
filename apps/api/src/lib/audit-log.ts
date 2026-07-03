@@ -14,6 +14,8 @@ export const AUDIT_ACTION = {
   DOWNLOAD: "download",
   EXECUTE: "execute",
   ACCESS: "access",
+  CANCEL: "cancel",
+  REVIEW: "review",
 } as const;
 
 export type AuditAction = (typeof AUDIT_ACTION)[keyof typeof AUDIT_ACTION];
@@ -42,6 +44,8 @@ export const AUDIT_RESOURCE_TYPE = {
   ENTITY_VERSION: "entity_version",
   EXPENSE: "expense",
   FIELD: "field",
+  FLOW_DEFINITION: "flow_definition",
+  FLOW_RUN: "flow_run",
   FOLIO_COLLAB_SESSION: "folio_collab_session",
   INVOICE: "invoice",
   MCP_GATEWAY_TOOL: "mcp_gateway_tool",

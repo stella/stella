@@ -76,8 +76,11 @@ export type FlowTrigger =
       schedule: {
         frequency: FlowScheduleFrequency;
         hourUtc: number;
-        dayOfWeek?: number;
-        dayOfMonth?: number;
+        // `| undefined` matches the valibot/TypeBox boundary output under
+        // exactOptionalPropertyTypes, so a parsed definition is assignable to
+        // this column type without a cast.
+        dayOfWeek?: number | undefined;
+        dayOfMonth?: number | undefined;
       };
     }
   | {

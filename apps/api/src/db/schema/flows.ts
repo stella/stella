@@ -73,9 +73,13 @@ export const flowRuns = p.pgTable(
     workspaceId: safeWorkspaceId("workspace_id")
       .notNull()
       .references(() => workspaces.id, { onDelete: "cascade" }),
-    definitionId: safeUuid<"flowDefinition">("definition_id")
-      .notNull()
-      .references(() => flowDefinitions.id, { onDelete: "cascade" }),
+    // Nullable + ON DELETE SET NULL: a run must outlive its definition.
+    // `definitionSnapshot` makes an in-flight/historical run self-contained,
+    // so deleting the definition nulls this reference rather than the run.
+    definitionId: safeUuid<"flowDefinition">("definition_id").references(
+      () => flowDefinitions.id,
+      { onDelete: "set null" },
+    ),
     definitionSnapshot: jsonb("definition_snapshot")
       .$type<FlowDefinitionSnapshot>()
       .notNull(),

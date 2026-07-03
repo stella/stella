@@ -48,6 +48,16 @@ export const LIMITS = {
   playbookDefinitionsCount: 100,
   playbookDefinitionsPageSizeDefault: 50,
   playbookDefinitionsPageSizeMax: 100,
+  /** Per-org cap on saved flow (Workflows) definitions. Per-definition size
+   *  is bounded by MAX_FLOW_STEPS in flow-types.ts. */
+  flowDefinitionsCount: 100,
+  flowDefinitionsPageSizeDefault: 50,
+  flowDefinitionsPageSizeMax: 100,
+  /** Page size for a workspace's flow-run history (newest first). */
+  flowRunsPageSizeDefault: 50,
+  flowRunsPageSizeMax: 100,
+  /** Max input documents a single flow run may be launched against. */
+  flowRunInputEntitiesMax: 50,
   /** Per-org cap on the editable document-type taxonomy. The taxonomy is
    *  inherently bounded (a few dozen contract categories), so the list
    *  endpoint returns a plain ordered array rather than a paginated page. */
