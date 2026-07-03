@@ -121,6 +121,7 @@ jobs:
             pkg:npm/y-prosemirror,
             pkg:npm/yjs,
             pkg:cargo/brotli-decompressor,
+            pkg:cargo/dbus,
             pkg:cargo/filetime,
             pkg:cargo/mac-notification-sys
           comment-summary-in-pr: always
