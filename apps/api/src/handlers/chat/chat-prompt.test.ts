@@ -21,9 +21,9 @@ import {
 import type {
   ChatCacheStablePrefix,
   ChatSafePrompt,
+  ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "./chat-prompt";
-import type { ChatToolAvailability } from "./chat-prompt";
 import {
   ACTIVE_SKILL_BODY_PROMPT_MAX_CHARS,
   type ActiveChatSkillContext,
@@ -497,8 +497,8 @@ describe("system prompt tool-reference guard", () => {
 
   const extractToolNameTokens = (prompt: string): string[] => {
     const tokens: string[] = [];
-    for (const match of prompt.matchAll(/`([^`]+)`/gu)) {
-      const span = match[1];
+    for (const match of prompt.matchAll(/`(?<span>[^`]+)`/gu)) {
+      const span = match.groups?.["span"];
       if (span !== undefined && TOOL_NAME_SHAPE.test(span)) {
         tokens.push(span);
       }

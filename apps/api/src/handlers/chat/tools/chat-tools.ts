@@ -89,7 +89,6 @@ export const areWebResearchToolsRegistered = ({
   disabledNativeToolSlugs,
 }: WebResearchToolsRegisteredProps): boolean =>
   webSearchEnabled &&
-  webSearchProviders.webSearchProvider !== null &&
   isWebSearchAvailable({
     webSearchProviderAvailable: webSearchProviders.webSearchProvider !== null,
     disabledNativeToolSlugs,

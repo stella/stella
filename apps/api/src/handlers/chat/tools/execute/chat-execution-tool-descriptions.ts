@@ -31,14 +31,7 @@ const RUN_STELLA_QUERY_SCOPE_NO_WEB =
   "NOT a general code sandbox, scratchpad, or way to call external " +
   "APIs, and never submit a no-op program just to 'think out loud'. ";
 
-export const buildRunStellaQueryToolDescription = ({
-  webResearchAvailable,
-}: RunStellaQueryToolDescriptionOptions) =>
-  "SCOPE: stella's internal workspace/organization data only " +
-  "(matters, entities, contacts, etc. via `read.*`). " +
-  (webResearchAvailable
-    ? RUN_STELLA_QUERY_SCOPE_WITH_WEB
-    : RUN_STELLA_QUERY_SCOPE_NO_WEB) +
+const RUN_STELLA_QUERY_USAGE =
   "Call with TypeScript that uses `read.<functionName>(input)`; " +
   "read returned records from `result.items`. The compact " +
   "function catalog is in the system prompt; call " +
@@ -57,3 +50,12 @@ export const buildRunStellaQueryToolDescription = ({
   `${DEFAULT_SANDBOX_LIMITS.maxDurationMs.toLocaleString()}ms, ` +
   `${DEFAULT_SANDBOX_LIMITS.maxHostCalls.toLocaleString()} host calls, ` +
   `${(DEFAULT_SANDBOX_LIMITS.maxReturnBytes / 1024).toLocaleString()} KiB returned.`;
+
+export const buildRunStellaQueryToolDescription = ({
+  webResearchAvailable,
+}: RunStellaQueryToolDescriptionOptions) =>
+  `SCOPE: stella's internal workspace/organization data only (matters, entities, contacts, etc. via \`read.*\`). ${
+    webResearchAvailable
+      ? RUN_STELLA_QUERY_SCOPE_WITH_WEB
+      : RUN_STELLA_QUERY_SCOPE_NO_WEB
+  }${RUN_STELLA_QUERY_USAGE}`;

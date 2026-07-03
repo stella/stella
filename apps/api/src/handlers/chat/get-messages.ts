@@ -54,6 +54,7 @@ const getMessages = createSafeRootHandler(
             workspaceId: true,
             contextMatterIds: true,
             webSearchEnabled: true,
+            usedAnonymization: true,
           },
         }),
       ),
@@ -132,12 +133,21 @@ const getMessages = createSafeRootHandler(
     // path: the active compaction summary plus the same windowed history the
     // model receives. Computed only here (the initial page); the /older
     // pagination endpoint does not carry it.
-    const checkpoint = yield* Result.await(
+    // Independent reads, fetched in parallel. `isAnonymized` mirrors the
+    // thread's persisted flag: anonymized threads never checkpoint, so the
+    // capped branch bounds this read the same way the send path bounds its
+    // history window (a long anonymized thread must not scan every row just
+    // to render the meter).
+    const [checkpointResult, windowedMessagesResult] = await Promise.all([
       readLatestChatCompaction({ safeDb, threadId }),
-    );
-    const windowedMessages = yield* Result.await(
-      loadWindowedThreadMessages({ safeDb, threadId, isAnonymized: false }),
-    );
+      loadWindowedThreadMessages({
+        safeDb,
+        threadId,
+        isAnonymized: thread.usedAnonymization,
+      }),
+    ]);
+    const checkpoint = yield* checkpointResult;
+    const windowedMessages = yield* windowedMessagesResult;
     // Null for a fresh, empty thread (nothing to meter yet); the frontend
     // renders nothing. Keeping the value nullable also unifies this branch with
     // the missing-thread branch (context: null) into one response type.
