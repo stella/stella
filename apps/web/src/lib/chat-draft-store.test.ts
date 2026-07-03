@@ -9,6 +9,7 @@ import {
   createChatDraftState,
   createEmptyChatDraftDoc,
   nextDraftForEditorUpdate,
+  shouldApplyStoredDraftToEditor,
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
 import { getChatThreadKey, toChatThreadId } from "@/lib/chat-thread-ref";
@@ -104,6 +105,80 @@ describe("nextDraftForEditorUpdate", () => {
     expect(result).not.toBeNull();
     expect(result?.doc).toEqual(nextDoc);
     expect(result?.attachments).toBe(attachments);
+  });
+});
+
+describe("shouldApplyStoredDraftToEditor", () => {
+  // Regression guard for the "Maximum update depth exceeded" loop that
+  // returned via the DOM-mutation (`readDOMChange`) path during fast typing.
+  // The draft-apply effect runs post-paint, so it lags the live editor: it
+  // closes over an old `draftDoc` snapshot while `editorDoc` (read live) is
+  // already several keystrokes ahead. Re-applying that editor-authored
+  // snapshot would `setContent` the editor back to stale content, drop the
+  // in-flight keystrokes, and thrash. An editor-authored draft must never be
+  // applied, even when it differs structurally from the live editor doc.
+  test("never re-applies an editor-authored draft, even when it differs", () => {
+    expect(
+      shouldApplyStoredDraftToEditor({
+        draftDoc: docWithText("stale"),
+        editorAuthoredDraft: true,
+        editorDoc: docWithText("live and ahead"),
+      }),
+    ).toBe(false);
+  });
+
+  // A non-idempotent `setContent`/`getJSON` roundtrip (split text nodes here;
+  // the same class covers dropped default attrs and mark reordering) makes two
+  // semantically-equal docs compare unequal by value. Because the
+  // editor-authored check is identity-based, such drift can never ping-pong.
+  test("ignores structural roundtrip drift for editor-authored drafts", () => {
+    const splitTextDoc: JSONContent = {
+      type: "doc",
+      content: [
+        {
+          type: "paragraph",
+          content: [
+            { type: "text", text: "a" },
+            { type: "text", text: "b" },
+          ],
+        },
+      ],
+    };
+    const mergedTextDoc = docWithText("ab");
+
+    // The two docs are semantically identical but not JSON-equal.
+    expect(areDraftDocsEqual(splitTextDoc, mergedTextDoc)).toBe(false);
+    expect(
+      shouldApplyStoredDraftToEditor({
+        draftDoc: splitTextDoc,
+        editorAuthoredDraft: true,
+        editorDoc: mergedTextDoc,
+      }),
+    ).toBe(false);
+  });
+
+  test("applies an external draft that differs from the live editor doc", () => {
+    // Thread switch / restore: the store holds content the editor never
+    // authored, so it must be pushed into the editor.
+    expect(
+      shouldApplyStoredDraftToEditor({
+        draftDoc: docWithText("restored"),
+        editorAuthoredDraft: false,
+        editorDoc: createEmptyChatDraftDoc(),
+      }),
+    ).toBe(true);
+  });
+
+  test("skips an external draft already matching the live editor doc", () => {
+    // e.g. an attachments-only change stores the editor's current doc verbatim;
+    // no `setContent` should run.
+    expect(
+      shouldApplyStoredDraftToEditor({
+        draftDoc: docWithText("same"),
+        editorAuthoredDraft: false,
+        editorDoc: docWithText("same"),
+      }),
+    ).toBe(false);
   });
 });
 

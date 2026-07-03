@@ -18,7 +18,7 @@ import Paragraph from "@tiptap/extension-paragraph";
 import Placeholder from "@tiptap/extension-placeholder";
 import Text from "@tiptap/extension-text";
 import type { EditorState, Plugin, PluginKey } from "@tiptap/pm/state";
-import type { Editor } from "@tiptap/react";
+import type { Editor, JSONContent } from "@tiptap/react";
 import { useEditor } from "@tiptap/react";
 import { panic, Result } from "better-result";
 import { useDebouncedCallback } from "use-debounce";
@@ -59,6 +59,7 @@ import {
   createChatDraftState,
   createEmptyChatDraftDoc,
   nextDraftForEditorUpdate,
+  shouldApplyStoredDraftToEditor,
   useChatDraftStore,
 } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -529,6 +530,14 @@ export const useChatEditor = ({
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
   const editorRef = useRef<Editor | null>(null);
   const isApplyingStoredDraftRef = useRef(false);
+  // Every `doc` object this editor's own `onUpdate` persists to the draft
+  // store is recorded here by identity. The draft-apply effect consults it to
+  // avoid ever pushing editor-authored content back into the editor (see
+  // `shouldApplyStoredDraftToEditor`). A WeakSet lets superseded draft docs be
+  // collected once the store drops them, and identity membership survives even
+  // when the store has already advanced past a given snapshot — which is what
+  // a lagging passive effect closes over during fast typing.
+  const editorAuthoredDocsRef = useRef(new WeakSet<JSONContent>());
   const isNavigatingHistoryRef = useRef(false);
   const draftStartedThreadKeyRef = useRef<string | null>(null);
   const sentMessageHistoryHtmlRef = useRef<readonly string[]>([]);
@@ -745,6 +754,10 @@ export const useChatEditor = ({
       messageHistoryIndexRef.current = null;
     }
 
+    // Mark this doc as editor-authored so the (lagging) draft-apply effect
+    // never reverts the editor to it. `nextDraft.doc` is the exact object the
+    // store will hand back as `draftDoc`, so identity membership is reliable.
+    editorAuthoredDocsRef.current.add(nextDraft.doc);
     setDraft(threadKey, nextDraft);
 
     if (!nextEditor.isEmpty) {
@@ -1060,7 +1073,22 @@ export const useChatEditor = ({
     if (!isUsableEditor(editor)) {
       return undefined;
     }
-    if (areDraftDocsEqual(editor.getJSON(), draftDoc)) {
+
+    // This effect is passive (post-paint), so during fast typing it lags the
+    // live editor: `editor.getJSON()` can be ahead of the `draftDoc` snapshot
+    // this run closed over. Re-applying an editor-authored draft here would
+    // `setContent` the editor back to stale content and drop in-flight
+    // keystrokes, looping until React throws "Maximum update depth exceeded".
+    // Only apply genuinely external drafts (thread switch, restore, mention
+    // inserted while inactive); `isApplyingStoredDraftRef` still suppresses the
+    // resulting `onUpdate`.
+    if (
+      !shouldApplyStoredDraftToEditor({
+        draftDoc,
+        editorAuthoredDraft: editorAuthoredDocsRef.current.has(draftDoc),
+        editorDoc: editor.getJSON(),
+      })
+    ) {
       setIsEmpty(editor.isEmpty);
       return undefined;
     }

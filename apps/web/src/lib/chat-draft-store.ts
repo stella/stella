@@ -117,6 +117,46 @@ export const nextDraftForEditorUpdate = ({
     ? null
     : createChatDraftState({ attachments, doc: nextDoc });
 
+type ShouldApplyStoredDraftOptions = {
+  draftDoc: JSONContent;
+  editorAuthoredDraft: boolean;
+  editorDoc: JSONContent;
+};
+
+// Decides whether the draft-apply sync effect should push a stored draft back
+// into the editor via `setContent`. The chat editor owns its own content; the
+// draft store only mirrors it. Two invariants make re-applying an
+// editor-authored draft actively harmful, so this returns false for any draft
+// the editor itself produced:
+//
+//   1. The sync effect is a passive effect (runs post-paint), so during fast
+//      input it lags the live editor: by the time it runs, `editorDoc` (read
+//      live) is several keystrokes ahead of the `draftDoc` snapshot the effect
+//      closed over. `setContent`-ing that stale snapshot would revert the
+//      in-flight keystrokes.
+//   2. ProseMirror's DOMObserver can flush a pending DOM mutation as a
+//      transaction after the effect's synchronous `isApplyingStoredDraftRef`
+//      window has already closed, so a boolean guard cannot bound the churn.
+//
+// Either way, re-applying editor-authored content loops
+// render -> effect -> setContent -> update -> render until React throws
+// "Maximum update depth exceeded". Only genuinely external drafts (thread
+// switch, restore, a mention inserted while this editor was inactive) are
+// applied, and only when they actually differ from the live editor content.
+// Because the authored check is identity-based, it is immune to non-idempotent
+// `setContent`/`getJSON` roundtrips (split text nodes, dropped default attrs,
+// mark ordering) that would make a structural equality check ping-pong.
+export const shouldApplyStoredDraftToEditor = ({
+  draftDoc,
+  editorAuthoredDraft,
+  editorDoc,
+}: ShouldApplyStoredDraftOptions): boolean => {
+  if (editorAuthoredDraft) {
+    return false;
+  }
+  return !areDraftDocsEqual(editorDoc, draftDoc);
+};
+
 export const useChatDraftStore = create<ChatDraftStore>((set, get) => ({
   clearDraft: (threadKey) =>
     set((state) => {
