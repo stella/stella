@@ -2,7 +2,7 @@
   "metadata": {
     "name": "stella",
     "category": "AI/ML",
-    "description": "Self-host stella with web, API, Postgres, Redis, private Gotenberg conversion, and Railway object storage.",
+    "description": "Self-host stella with web, API, Postgres, Redis, and object storage.",
     "image": "https://raw.githubusercontent.com/stella/stella/main/apps/desktop/icon.iconset/icon_512x512.png",
     "readmeFile": "railway/template-readme.md"
   },
