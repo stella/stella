@@ -13,6 +13,25 @@ import { createSESTransport } from "./ses";
 import { createSMTPTransport } from "./smtp";
 import type { EmailTransport } from "./transport";
 
+export const isTransactionalEmailConfigured = () => {
+  if (!env.TRANSACTIONAL_EMAIL_FROM) {
+    return false;
+  }
+
+  switch (env.EMAIL_PROVIDER) {
+    case "ses":
+      return !!env.SES_REGION;
+    case "smtp":
+      return !!env.SMTP_HOST && env.SMTP_PORT !== undefined;
+    case undefined:
+      return false;
+    default: {
+      const _exhaustive: never = env.EMAIL_PROVIDER;
+      return _exhaustive;
+    }
+  }
+};
+
 const resolveTransport = (): EmailTransport => {
   switch (env.EMAIL_PROVIDER) {
     case "ses":
@@ -44,6 +63,10 @@ const resolveTransport = (): EmailTransport => {
         }),
         requireTLS: !env.isDev,
       });
+    case undefined:
+      return panic(
+        "EMAIL_PROVIDER is required before sending transactional email",
+      );
     default: {
       const _exhaustive: never = env.EMAIL_PROVIDER;
       return _exhaustive;
@@ -59,7 +82,10 @@ const getTransport = (): EmailTransport => {
 };
 
 const getTransactionalEmailFrom = () =>
-  formatTransactionalEmailFrom(env.TRANSACTIONAL_EMAIL_FROM);
+  formatTransactionalEmailFrom(
+    env.TRANSACTIONAL_EMAIL_FROM ??
+      panic("TRANSACTIONAL_EMAIL_FROM is required before sending email"),
+  );
 
 type SendOTPEmailProps = {
   email: string;

@@ -59,12 +59,14 @@ type Messages = {
   };
   "auth": {
     "betaNoticeTitle": "Beta";
+    "bootstrapToken": "Setup token";
     "checkSpamHint": "If you don't see it, check your spam folder.";
     "chooseOrganization": "Choose which organization to work in";
     "codeSentAgain": "We sent a new code.";
     "continueWithEmail": "Continue";
     "continueWithGoogle": "Continue with Google";
     "continueWithMicrosoft": "Continue with Microsoft";
+    "createFirstAccount": "Create first account";
     "createFirstOrganization": "Create your first organization to get started";
     "createOrganization": "Create an organization";
     "createOrganizationButton": "Create organization";
@@ -87,11 +89,13 @@ type Messages = {
     "openInProvider": "Open {provider}";
     "orSignInWithEmail": "or sign in with email";
     "organizationNamePlaceholder": "My organization";
+    "password": "Password";
     "rateLimitExceeded": "Too many attempts. Please try again later.";
     "resendCode": "Send code again to <email>{emailAddress}</email>";
     "selectOrganization": "Select an organization";
     "signIn": "Sign in";
     "signInBeforeInvitation": "You need to sign in before you can accept an invitation to an organization.";
+    "signInWithPassword": "Sign in with password";
     "subtitle": "Documents, case law, and review under control. Powered by AI.";
     "useDifferentEmail": "Use a different email";
     "weSentCodeTo": "We sent a code to <email>{emailAddress}</email>";

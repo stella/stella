@@ -45,3 +45,20 @@ describe("organization member auth lifecycle", () => {
     expect(pluginSource).toContain("return firstArgument.property.name");
   });
 });
+
+describe("self-host auth bootstrap lifecycle", () => {
+  test("password sign-up is guarded by the self-host bootstrap hook", () => {
+    const authSource = readSecurityFixture("../../lib/auth.ts");
+    const selfhostAuthSource = readSecurityFixture(
+      "../../lib/selfhost-auth.ts",
+    );
+
+    expect(authSource).toContain("emailAndPassword");
+    expect(authSource).toContain("isSelfhostLocalPasswordAuthEnabled()");
+    expect(authSource).toContain("assertSelfhostBootstrapSignUp(ctx.body)");
+    expect(selfhostAuthSource).toContain('"/sign-up/email"');
+    expect(selfhostAuthSource).toContain("SELFHOST_BOOTSTRAP_TOKEN");
+    expect(selfhostAuthSource).toContain("hasAnyAuthUsers()");
+    expect(selfhostAuthSource).toContain('new Bun.CryptoHasher("sha256")');
+  });
+});

@@ -39,10 +39,11 @@ because it is an internal document conversion dependency.
 
 ### Deployment Dependencies
 
-- An SMTP password/API key and verified sender address are required before the
-  first production login. The template defaults to Resend-compatible SMTP
-  settings (`smtp.resend.com`, port `587`, username `resend`). stella uses
-  email OTPs for sign-in, invitations, and account security emails.
+- No external auth or email provider is required for the first login. The
+  template generates a setup token; use it on the first sign-in screen to
+  create the owner account.
+- SMTP or SES can be added later for email OTP sign-in, invitations, and
+  account security emails.
 - The Railway storage bucket is provisioned by the template and wired to the
   API with reference variables.
 - Generated application secrets stay in Railway variables and should not be
@@ -75,10 +76,11 @@ the self-hosting model: the deployer owns the Railway project and its data.
 ## After Deploying
 
 1. Open the `web` public domain.
-2. Create the first account with an email address that can receive OTPs.
-3. Confirm the API `/health` endpoint is passing.
-4. Upload a small test document to confirm storage and Gotenberg are reachable.
-5. Connect the signed desktop app if local document editing is needed.
+2. Copy `SELFHOST_BOOTSTRAP_TOKEN` from the `api` service variables.
+3. Create the first account with your email, a password, and the setup token.
+4. Confirm the API `/health` endpoint is passing.
+5. Upload a small test document to confirm storage and Gotenberg are reachable.
+6. Connect the signed desktop app if local document editing is needed.
 
 ## Updating
 

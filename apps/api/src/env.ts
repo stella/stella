@@ -95,12 +95,18 @@ const envApi = createEnv({
         v.picklist(["ses", "smtp"]),
         v.check((provider) => {
           if (provider === "ses") {
-            return !!process.env["SES_REGION"];
+            return !!(
+              process.env["SES_REGION"] &&
+              process.env["TRANSACTIONAL_EMAIL_FROM"]
+            );
           }
-          return !!(process.env["SMTP_HOST"] && process.env["SMTP_PORT"]);
+          return !!(
+            process.env["SMTP_HOST"] &&
+            process.env["SMTP_PORT"] &&
+            process.env["TRANSACTIONAL_EMAIL_FROM"]
+          );
         }, "Missing required env vars for the selected EMAIL_PROVIDER"),
       ),
-      "smtp",
     ),
     SES_REGION: v.optional(v.string()),
     SES_ACCESS_KEY_ID: v.optional(v.string()),
@@ -119,7 +125,7 @@ const envApi = createEnv({
     ),
     SMTP_USERNAME: v.optional(v.string()),
     SMTP_PASSWORD: v.optional(v.string()),
-    TRANSACTIONAL_EMAIL_FROM: v.string(),
+    TRANSACTIONAL_EMAIL_FROM: v.optional(v.string()),
     FRONTEND_URL: v.pipe(v.string(), v.url()),
     PUBLIC_URL: v.optional(v.pipe(v.string(), v.url())),
     GOTENBERG_URL: v.pipe(v.string(), v.url()),
@@ -135,6 +141,15 @@ const envApi = createEnv({
       ),
     ),
     EXTENSION_ORIGIN: v.optional(v.pipe(v.string(), v.url())),
+
+    /**
+     * Self-host escape hatch for deployments without SMTP/OAuth. When enabled,
+     * Better Auth's email/password endpoints are available, but sign-up is
+     * limited to first-user bootstrap guarded by SELFHOST_BOOTSTRAP_TOKEN.
+     * Hosted deployments should leave this off.
+     */
+    SELFHOST_LOCAL_PASSWORD_AUTH: featureFlagSchema,
+    SELFHOST_BOOTSTRAP_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
 
     /**
      * Comma-separated CIDRs of proxies the API may trust to set

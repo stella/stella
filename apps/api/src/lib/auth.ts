@@ -36,6 +36,7 @@ import { tUuid } from "@/api/lib/custom-schema";
 import { DEV_INSPECTOR_ORIGINS, frontendOrigins } from "@/api/lib/dev-origins";
 import { stashDevOtp } from "@/api/lib/dev-otp-store";
 import {
+  isTransactionalEmailConfigured,
   sendNewDeviceLoginEmail,
   sendOrganizationInvitation,
   sendOTPEmail,
@@ -55,6 +56,11 @@ import {
   readAuthorizedMemberRole,
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
+import {
+  assertSelfhostBootstrapSignUp,
+  isSelfhostLocalPasswordAuthEnabled,
+  shouldHandleSelfhostBootstrapPath,
+} from "@/api/lib/selfhost-auth";
 import {
   getMcpResourceUrl,
   MCP_ALL_RESOURCE_SCOPES,
@@ -246,6 +252,14 @@ const createAuth = () => {
         "/reset-password": AUTH_RATE_LIMITS.resetPassword,
       },
     },
+    emailAndPassword: isSelfhostLocalPasswordAuthEnabled()
+      ? {
+          enabled: true,
+          autoSignIn: true,
+          minPasswordLength: 12,
+          requireEmailVerification: false,
+        }
+      : undefined,
     databaseHooks: {
       user: {
         create: {
@@ -307,6 +321,12 @@ const createAuth = () => {
             console.log(`[DEV] OTP for ${email}: ${otp} (type: ${type})`);
             stashDevOtp(email, otp);
             return;
+          }
+
+          if (!isTransactionalEmailConfigured()) {
+            throw new APIError("BAD_REQUEST", {
+              message: "Email sign-in is not configured for this instance.",
+            });
           }
 
           const lang = extractLangFromRequest(ctx?.request);
@@ -414,6 +434,13 @@ const createAuth = () => {
       }) as BetterAuthPlugin,
     ],
     hooks: {
+      before: createAuthMiddleware(async (ctx) => {
+        if (!shouldHandleSelfhostBootstrapPath(ctx.path)) {
+          return;
+        }
+
+        await assertSelfhostBootstrapSignUp(ctx.body);
+      }),
       after: createAuthMiddleware(async (ctx) => {
         if (ctx.path !== VERIFY_EMAIL_PATH || env.isDev) {
           return;

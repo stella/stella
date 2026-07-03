@@ -9,6 +9,11 @@ import {
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
 } from "@/api/lib/auth-paths";
+import { isTransactionalEmailConfigured } from "@/api/lib/email";
+import {
+  isSelfhostBootstrapAvailable,
+  isSelfhostLocalPasswordAuthEnabled,
+} from "@/api/lib/selfhost-auth";
 
 const applyHeaders = ({
   headers,
@@ -62,3 +67,11 @@ export const authMetadataRoute = new Elysia()
     async ({ request }) =>
       await handleOAuthAuthorizationServerMetadataRequest(request),
   );
+
+export const authCapabilitiesRoute = new Elysia({
+  prefix: "/auth",
+}).get("/capabilities", async () => ({
+  emailOtp: isTransactionalEmailConfigured(),
+  localPassword: isSelfhostLocalPasswordAuthEnabled(),
+  bootstrap: await isSelfhostBootstrapAvailable(),
+}));
