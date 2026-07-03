@@ -15,14 +15,24 @@
 //   4. a ratcheted baseline of `pending` endpoints that can only shrink: any
 //      new `pending` fails, and any baseline entry that is no longer `pending`
 //      (or no longer exists) is stale and must be removed.
+//   5. a hidden-endpoint invariant: per file, the number of `createSafe*Handler`
+//      factory call sites must equal the number of `{ config, handler }` exports
+//      the guard could enumerate (plus a pinned inline count for allowlisted
+//      files). A factory call whose result is never exported as `{ config,
+//      handler }` — inline in a route file, or assigned to a non-exported local —
+//      would otherwise carry an `mcp` disposition the ratchet never sees.
 //
-// Enumeration is by module glob + dynamic import of each handler module's
-// default `{ config, handler }` export, NOT Elysia route introspection: the
-// `mcp` field lives on the endpoint config and is never threaded into the
-// route wiring, so the composed app cannot see it. Route wiring itself stays
-// typecheck-enforced separately. The trade-off: endpoints defined inline in a
-// `routes.ts` (not default-exported) are typecheck-enforced for `mcp` but not
-// enumerated here; the few such endpoints that back a tool are pinned in
+// Enumeration is by module glob + dynamic import of every `{ config, handler }`
+// export a handler module exposes (the default export and any named exports),
+// NOT Elysia route introspection: the `mcp` field lives on the endpoint config
+// and is never threaded into the route wiring, so the composed app cannot see
+// it. Route wiring itself stays typecheck-enforced separately. An endpoint's
+// identifier is its repo-relative module path for the default export, or
+// `path#exportName` for a named export. Endpoints defined inline in a route file
+// (not exported as `{ config, handler }`) are typecheck-enforced for `mcp` but
+// not enumerated here; those files are pinned in INLINE_ENDPOINT_ALLOWLIST with
+// their exact inline call count so a new inline endpoint fails check (5), and the
+// few inline endpoints that back a tool are pinned in
 // TOOLS_WITHOUT_ENUMERABLE_ENDPOINT so the orphan check stays honest.
 //
 // Modes:
@@ -56,9 +66,36 @@ type ExposureType = (typeof EXPOSURE_TYPES)[number];
  * module top level); importing those would execute their side effects and
  * can kill the guard process. Files without a factory call cannot define an
  * endpoint config, so skipping them without importing is sound.
+ *
+ * Global so `String.prototype.match` can count call sites per file for the
+ * hidden-endpoint invariant. The trailing `[<(]` excludes bare identifier
+ * mentions (imports, re-exports) and only matches a call or generic
+ * instantiation, so an `import { createSafeHandler }` line is never counted.
  */
 const SAFE_HANDLER_CALL_PATTERN =
-  /createSafe(?:Root|Session|Token|Public)?Handler[<(]/u;
+  /createSafe(?:Root|Session|Token|Public)?Handler[<(]/gu;
+
+/**
+ * Files that legitimately define endpoints inline (via a `createSafe*Handler`
+ * call whose result is mounted directly into an Elysia instance, never exported
+ * as a `{ config, handler }` module) rather than as an enumerable export. Each
+ * entry pins the exact number of inline factory call sites so the
+ * hidden-endpoint invariant still fails if one more inline endpoint is added.
+ * These are the route files where `no-inline-endpoint-in-routes` is disabled or
+ * does not run (their names do not match the lint rule's `routes.ts`/`*route.ts`
+ * globs). The `mcp` disposition on each inline endpoint stays typecheck-enforced;
+ * only enumeration into the ratchet is waived.
+ */
+const INLINE_ENDPOINT_ALLOWLIST: Record<string, number> = {
+  "apps/api/src/handlers/case-law/public-routes.ts": 7,
+  "apps/api/src/handlers/case-law/routes.ts": 5,
+  "apps/api/src/handlers/files/routes.ts": 4,
+  "apps/api/src/handlers/legislation/corpus-routes.ts": 2,
+  "apps/api/src/handlers/search/routes.ts": 5,
+  "apps/api/src/handlers/tasks/my-tasks-route.ts": 1,
+  "apps/api/src/handlers/time-entries/routes.ts": 3,
+  "apps/api/src/handlers/workspaces/routes.ts": 6,
+};
 
 /**
  * Static MCP tools with no default-exported endpoint module for the glob to
@@ -146,6 +183,43 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
     return { type: "internal", reason };
   }
   return { type: "invalid", raw: mcp };
+};
+
+/**
+ * Enumerate every `{ config, handler }` export a module exposes as an endpoint,
+ * deduplicated by object identity. The default export takes the plain module id;
+ * a named export takes `id#exportName`. An object exported as both default and a
+ * name is recorded once under the default id, so existing baseline entries stay
+ * valid. Pure (a plain record in, no I/O) so the self-test can exercise it.
+ */
+export const enumerateModuleEndpoints = (
+  mod: Record<string, unknown>,
+  moduleId: string,
+): { id: string; exposure: ParsedExposure }[] => {
+  const endpoints: { id: string; exposure: ParsedExposure }[] = [];
+  const claimed = new Set<object>();
+
+  const defaultExport = mod["default"];
+  if (isEndpointModule(defaultExport)) {
+    claimed.add(defaultExport);
+    endpoints.push({
+      id: moduleId,
+      exposure: parseExposure(defaultExport.config["mcp"]),
+    });
+  }
+
+  for (const [key, value] of Object.entries(mod)) {
+    if (key === "default" || !isEndpointModule(value) || claimed.has(value)) {
+      continue;
+    }
+    claimed.add(value);
+    endpoints.push({
+      id: `${moduleId}#${key}`,
+      exposure: parseExposure(value.config["mcp"]),
+    });
+  }
+
+  return endpoints;
 };
 
 export type CoverageIssues = {
@@ -248,6 +322,39 @@ export const computeBaselineDiff = ({
   return { newPending, stalePending };
 };
 
+export type FileEndpointCount = {
+  id: string;
+  callCount: number;
+  enumerableCount: number;
+};
+
+export type HiddenEndpointMismatch = FileEndpointCount & { allowed: number };
+
+/**
+ * Hidden-endpoint invariant: per file, the factory call-site count must equal
+ * the enumerable `{ config, handler }` endpoints plus the allowlisted inline
+ * count (0 when not allowlisted). A mismatch means a factory call carries an
+ * `mcp` disposition the ratchet cannot see — the endpoint must be exported as a
+ * `{ config, handler }` object, or the file allowlisted with its exact inline
+ * count. Pure so the self-test can exercise it.
+ */
+export const findHiddenEndpointMismatches = ({
+  files,
+  allowlist,
+}: {
+  files: readonly FileEndpointCount[];
+  allowlist: Record<string, number>;
+}): HiddenEndpointMismatch[] => {
+  const mismatches: HiddenEndpointMismatch[] = [];
+  for (const { id, callCount, enumerableCount } of files) {
+    const allowed = allowlist[id] ?? 0;
+    if (callCount !== enumerableCount + allowed) {
+      mismatches.push({ id, callCount, enumerableCount, allowed });
+    }
+  }
+  return mismatches.sort((a, b) => a.id.localeCompare(b.id));
+};
+
 const readBaseline = async (): Promise<string[]> => {
   const file = Bun.file(BASELINE_PATH);
   if (!(await file.exists())) {
@@ -279,6 +386,7 @@ const writeBaseline = async (pending: readonly string[]): Promise<void> => {
 type Discovered = {
   endpoints: { id: string; exposure: ParsedExposure }[];
   importErrors: { id: string; message: string }[];
+  files: FileEndpointCount[];
 };
 
 const discoverEndpoints = async (): Promise<Discovered> => {
@@ -290,13 +398,15 @@ const discoverEndpoints = async (): Promise<Discovered> => {
 
   const endpoints: { id: string; exposure: ParsedExposure }[] = [];
   const importErrors: { id: string; message: string }[] = [];
+  const files: FileEndpointCount[] = [];
 
   for await (const rel of glob.scan({ cwd: REPO_ROOT, absolute: true })) {
     if (rel.endsWith(".test.ts")) {
       continue;
     }
     const source = await Bun.file(rel).text();
-    if (!SAFE_HANDLER_CALL_PATTERN.test(source)) {
+    const callCount = (source.match(SAFE_HANDLER_CALL_PATTERN) ?? []).length;
+    if (callCount === 0) {
       continue;
     }
     const id = toEndpointIdentifier(rel, REPO_ROOT);
@@ -310,17 +420,17 @@ const discoverEndpoints = async (): Promise<Discovered> => {
       });
       continue;
     }
-    if (!isRecord(mod) || !isEndpointModule(mod["default"])) {
+    if (!isRecord(mod)) {
       continue;
     }
-    endpoints.push({
-      id,
-      exposure: parseExposure(mod["default"].config["mcp"]),
-    });
+    const moduleEndpoints = enumerateModuleEndpoints(mod, id);
+    endpoints.push(...moduleEndpoints);
+    files.push({ id, callCount, enumerableCount: moduleEndpoints.length });
   }
 
   endpoints.sort((a, b) => a.id.localeCompare(b.id));
-  return { endpoints, importErrors };
+  files.sort((a, b) => a.id.localeCompare(b.id));
+  return { endpoints, importErrors, files };
 };
 
 const printIssues = (issues: CoverageIssues): boolean => {
@@ -374,7 +484,7 @@ const printIssues = (issues: CoverageIssues): boolean => {
 };
 
 const runCheck = async (): Promise<number> => {
-  const { endpoints, importErrors } = await discoverEndpoints();
+  const { endpoints, importErrors, files } = await discoverEndpoints();
 
   if (importErrors.length > 0) {
     console.error(
@@ -384,6 +494,27 @@ const runCheck = async (): Promise<number> => {
       console.error(`  ${id}: ${message}`);
     }
     return 1;
+  }
+
+  const hiddenEndpoints = findHiddenEndpointMismatches({
+    files,
+    allowlist: INLINE_ENDPOINT_ALLOWLIST,
+  });
+  let hiddenEndpointFailed = false;
+  if (hiddenEndpoints.length > 0) {
+    hiddenEndpointFailed = true;
+    console.error(
+      "\nmcp-coverage-guard: these files have `createSafe*Handler` call sites that the guard cannot enumerate into the ratchet. Export each endpoint as a `{ config, handler }` object, or allowlist the file in INLINE_ENDPOINT_ALLOWLIST with its exact inline count:",
+    );
+    for (const { id, callCount, enumerableCount, allowed } of hiddenEndpoints) {
+      const enumerable =
+        allowed > 0
+          ? `${enumerableCount} enumerable endpoint configs + ${allowed} allowlisted inline`
+          : `${enumerableCount} enumerable endpoint configs`;
+      console.error(
+        `  ${id}: ${callCount} createSafe*Handler calls but ${enumerable}`,
+      );
+    }
   }
 
   if (endpoints.length === 0) {
@@ -433,7 +564,7 @@ const runCheck = async (): Promise<number> => {
     }
   }
 
-  if (coverageFailed || ratchetFailed) {
+  if (coverageFailed || ratchetFailed || hiddenEndpointFailed) {
     return 1;
   }
 
@@ -510,6 +641,67 @@ const runSelfTest = (): number => {
   });
   if (!missing.missingMcp.includes("x.ts")) {
     failures.push("classifyCoverage did not flag a missing mcp disposition");
+  }
+
+  const sharedEndpoint = {
+    config: { mcp: { type: "internal", reason: "webhook" } },
+    handler: () => null,
+  };
+  const namedEndpoint = {
+    config: { mcp: { type: "pending" } },
+    handler: () => null,
+  };
+  const enumerated = enumerateModuleEndpoints(
+    {
+      default: sharedEndpoint,
+      primary: sharedEndpoint,
+      extra: namedEndpoint,
+      schema: { not: "an endpoint" },
+    },
+    "m.ts",
+  );
+  const enumeratedIds = enumerated.map(({ id }) => id).sort();
+  if (
+    enumeratedIds.length !== 2 ||
+    enumeratedIds[0] !== "m.ts" ||
+    enumeratedIds[1] !== "m.ts#extra"
+  ) {
+    failures.push(
+      "enumerateModuleEndpoints did not discover the named export (or did not dedupe the default)",
+    );
+  }
+
+  const mismatch = findHiddenEndpointMismatches({
+    files: [{ id: "hidden.ts", callCount: 2, enumerableCount: 1 }],
+    allowlist: {},
+  });
+  if (mismatch.length !== 1 || mismatch[0]?.id !== "hidden.ts") {
+    failures.push(
+      "findHiddenEndpointMismatches did not flag a file with an un-enumerable call site",
+    );
+  }
+
+  const allowlistedExact = findHiddenEndpointMismatches({
+    files: [{ id: "inline.ts", callCount: 5, enumerableCount: 0 }],
+    allowlist: { "inline.ts": 5 },
+  });
+  if (allowlistedExact.length !== 0) {
+    failures.push(
+      "findHiddenEndpointMismatches flagged an allowlisted file whose inline count matched",
+    );
+  }
+
+  const allowlistedOverflow = findHiddenEndpointMismatches({
+    files: [{ id: "inline.ts", callCount: 6, enumerableCount: 0 }],
+    allowlist: { "inline.ts": 5 },
+  });
+  if (
+    allowlistedOverflow.length !== 1 ||
+    allowlistedOverflow[0]?.id !== "inline.ts"
+  ) {
+    failures.push(
+      "findHiddenEndpointMismatches did not flag an allowlisted file with one extra inline endpoint",
+    );
   }
 
   if (failures.length > 0) {

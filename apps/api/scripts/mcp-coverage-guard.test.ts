@@ -3,6 +3,8 @@ import { describe, expect, test } from "bun:test";
 import {
   classifyCoverage,
   computeBaselineDiff,
+  enumerateModuleEndpoints,
+  findHiddenEndpointMismatches,
   isEndpointModule,
   parseExposure,
   toEndpointIdentifier,
@@ -96,6 +98,87 @@ describe("computeBaselineDiff (ratchet)", () => {
     });
     expect(diff.newPending).toEqual([]);
     expect(diff.stalePending).toEqual([]);
+  });
+});
+
+describe("enumerateModuleEndpoints", () => {
+  const endpoint = (mcp: unknown) => ({ config: { mcp }, handler: () => {} });
+
+  test("records the default export under the plain module id", () => {
+    const enumerated = enumerateModuleEndpoints(
+      { default: endpoint({ type: "pending" }) },
+      "m.ts",
+    );
+    expect(enumerated).toEqual([{ id: "m.ts", exposure: { type: "pending" } }]);
+  });
+
+  test("records named exports as id#exportName and ignores non-endpoints", () => {
+    const enumerated = enumerateModuleEndpoints(
+      {
+        named: endpoint({ type: "pending" }),
+        schema: { not: "an endpoint" },
+      },
+      "m.ts",
+    );
+    expect(enumerated).toEqual([
+      { id: "m.ts#named", exposure: { type: "pending" } },
+    ]);
+  });
+
+  test("dedupes an object exported as both default and a name under the default id", () => {
+    const shared = endpoint({ type: "internal", reason: "webhook" });
+    const enumerated = enumerateModuleEndpoints(
+      {
+        default: shared,
+        primary: shared,
+        other: endpoint({ type: "pending" }),
+      },
+      "m.ts",
+    );
+    expect(enumerated.map(({ id }) => id).sort()).toEqual([
+      "m.ts",
+      "m.ts#other",
+    ]);
+  });
+});
+
+describe("findHiddenEndpointMismatches", () => {
+  test("flags a file whose call sites exceed its enumerable endpoints", () => {
+    const mismatches = findHiddenEndpointMismatches({
+      files: [{ id: "hidden.ts", callCount: 2, enumerableCount: 1 }],
+      allowlist: {},
+    });
+    expect(mismatches).toEqual([
+      { id: "hidden.ts", callCount: 2, enumerableCount: 1, allowed: 0 },
+    ]);
+  });
+
+  test("passes an allowlisted inline file whose count matches", () => {
+    expect(
+      findHiddenEndpointMismatches({
+        files: [{ id: "inline.ts", callCount: 5, enumerableCount: 0 }],
+        allowlist: { "inline.ts": 5 },
+      }),
+    ).toEqual([]);
+  });
+
+  test("flags an allowlisted file with one extra inline endpoint", () => {
+    const mismatches = findHiddenEndpointMismatches({
+      files: [{ id: "inline.ts", callCount: 6, enumerableCount: 0 }],
+      allowlist: { "inline.ts": 5 },
+    });
+    expect(mismatches).toEqual([
+      { id: "inline.ts", callCount: 6, enumerableCount: 0, allowed: 5 },
+    ]);
+  });
+
+  test("passes a plain endpoint file with one call and one enumerable export", () => {
+    expect(
+      findHiddenEndpointMismatches({
+        files: [{ id: "read.ts", callCount: 1, enumerableCount: 1 }],
+        allowlist: {},
+      }),
+    ).toEqual([]);
   });
 });
 
