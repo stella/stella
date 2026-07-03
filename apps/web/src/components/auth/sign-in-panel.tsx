@@ -51,6 +51,7 @@ const authErrorResponseSchema = v.object({
   message: v.optional(v.string()),
 });
 
+const BETTER_AUTH_SIGN_UP_EMAIL_PATH = "/api/auth/sign-up/email";
 const hasSocialProviders = env.VITE_AUTH_GOOGLE || env.VITE_AUTH_MICROSOFT;
 const termsUrl = sanitizeHref(env.VITE_TERMS_URL) ?? "/terms";
 const authCapabilitiesFallback = {
@@ -563,15 +564,18 @@ type SelfhostBootstrapSignUpInput = {
 const signUpWithSelfhostBootstrap = async (
   body: SelfhostBootstrapSignUpInput,
 ) => {
-  const response = await fetch(`${env.VITE_API_URL}/sign-up/email`, {
-    method: "POST",
-    credentials: "include",
-    signal: AbortSignal.timeout(10_000),
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${env.VITE_API_URL}${BETTER_AUTH_SIGN_UP_EMAIL_PATH}`,
+    {
+      method: "POST",
+      credentials: "include",
+      signal: AbortSignal.timeout(10_000),
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(body),
     },
-    body: JSON.stringify(body),
-  });
+  );
 
   if (response.ok) {
     return { error: null };
