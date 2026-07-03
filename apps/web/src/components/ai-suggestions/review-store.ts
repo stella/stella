@@ -16,7 +16,7 @@ import type {
   FolioAIEditOperation,
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
-} from "@stll/folio";
+} from "@stll/folio-react";
 
 export const REVIEW_UNSPECIFIED_AREA = "Unspecified";
 export type ReviewSeverityKey = FolioAIEditSeverity | "unspecified";

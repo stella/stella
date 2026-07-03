@@ -19,7 +19,7 @@ import { createRef } from "react";
 
 import { beforeEach, describe, expect, test } from "bun:test";
 
-import type { DocxEditorRef } from "@stll/folio";
+import type { DocxEditorRef } from "@stll/folio-react";
 
 import {
   activeDocxKey,

@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import JSZip from "jszip";
 
-import { createDocx, createEmptyDocument } from "@stll/folio/server";
+import { createDocx, createEmptyDocument } from "@stll/folio-core/server";
 
 import { discoverTemplate } from "@/api/handlers/docx/discover-template";
 import { readManifest } from "@/api/handlers/docx/template-manifest";

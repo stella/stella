@@ -1,7 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import { Schema } from "prosemirror-model";
 
-import { resolveSuggestionAnchor } from "@stll/folio";
+import { resolveSuggestionAnchor } from "@stll/folio-react";
 
 import {
   buildOperationSpecs,

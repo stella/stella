@@ -16,7 +16,7 @@
 import type { ReactNode, RefObject } from "react";
 import { startTransition, useState } from "react";
 
-import type { DocxEditorRef } from "@stll/folio";
+import type { DocxEditorRef } from "@stll/folio-react";
 
 import type { ChatThreadId } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";

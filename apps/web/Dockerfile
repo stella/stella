@@ -18,6 +18,12 @@ FROM base AS pruner
 # Keep in sync with the turbo version in the root package.json.
 RUN bun install -g turbo@2.10.0
 COPY . .
+# The prune graph must contain every workspace package that bun.lock resolves
+# npm dependencies to: @stll/folio-core (npm) depends on @stll/docx-core,
+# @stll/docx-utils, and @stll/template-conditions, which the lockfile links to
+# their workspace copies. apps/web declares all three explicitly so the pruned
+# context carries their sources even if the transitive workspace graph
+# (@stll/web -> @stll/api -> ...) changes.
 RUN turbo prune @stll/web --docker
 
 FROM base AS deps

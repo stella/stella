@@ -3,7 +3,11 @@
 @source "../../../apps/**/*.{ts,tsx}";
 @source "../../../components/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
-@source "../../../folio/src/**/*.{ts,tsx}";
+/* The folio editor chrome uses Tailwind utilities but ships no utility CSS of
+ * its own (its editor.css only carries document/ProseMirror styles), so the
+ * compiled package output must be scanned explicitly: node_modules is outside
+ * Tailwind's default source detection. */
+@source "../../../../node_modules/@stll/folio-react/dist/**/*.js";
 
 @custom-variant dark (&:is(.dark *));
 

@@ -2,6 +2,7 @@ import { createFormatter, createTranslator } from "use-intl/core";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
+import { getFolioMessages } from "@stll/folio-react/messages";
 import { isUiLocale, resolveUiLocale } from "@stll/locales";
 import type { UiLocale } from "@stll/locales";
 
@@ -145,20 +146,60 @@ const detectRegion = (): string => {
   return "";
 };
 
+type MessageTree = { [key: string]: string | MessageTree };
+
+const mergeMessageTrees = (
+  base: MessageTree,
+  override: MessageTree,
+): MessageTree => {
+  const merged: MessageTree = { ...base };
+  for (const [key, value] of Object.entries(override)) {
+    const current = merged[key];
+    merged[key] =
+      typeof value !== "string" && typeof current === "object"
+        ? mergeMessageTrees(current, value)
+        : value;
+  }
+  return merged;
+};
+
+/**
+ * The folio editor ships its own UI catalog (`@stll/folio-react/messages`)
+ * and reads the `folio.*` namespace from the app's IntlProvider. Merge the
+ * package catalog under the app's own `folio.*` keys (the app wins on shared
+ * keys, per the package's documented contract) so new editor strings resolve
+ * at runtime without copying keys into the app language files.
+ */
+const withFolioMessages = (
+  lang: SupportedLanguage,
+  messages: LocaleMessages,
+): LocaleMessages => ({
+  ...messages,
+  // SAFETY: the merge starts from the app's own `folio` subtree and only
+  // adds package keys next to it, so every key the generated `Messages`
+  // shape requires is still present with its original value type.
+  // eslint-disable-next-line typescript/no-unsafe-type-assertion -- folio message-merge boundary; app keys are preserved verbatim, the package catalog only adds keys
+  folio: mergeMessageTrees(
+    getFolioMessages(lang).folio,
+    messages.folio,
+  ) as LocaleMessages["folio"],
+});
+
 const defaultLanguage = detectLang();
 const defaultRegion = detectRegion();
-const defaultMessages = en;
+const defaultMessages = withFolioMessages("en", en);
 
 /**
  * The statically bundled English messages. Server-rendered public pages
  * render with these until hydration completes, so client markup can
  * match the server's regardless of the persisted locale.
  */
-export const bundledEnglishMessages = en;
+export const bundledEnglishMessages = defaultMessages;
 
 export const loadLocaleMessages = async (
   lang: SupportedLanguage,
-): Promise<LocaleMessages> => await messageLoaders[lang]();
+): Promise<LocaleMessages> =>
+  withFolioMessages(lang, await messageLoaders[lang]());
 
 let translator = createTranslator({
   locale: "en",
@@ -358,7 +399,7 @@ export const useI18nStore = create<State & Actions>()(
 
         let messages: LocaleMessages;
         try {
-          messages = await messageLoaders[lang]();
+          messages = await loadLocaleMessages(lang);
         } catch {
           if (requestId !== loadRequestId) {
             return;

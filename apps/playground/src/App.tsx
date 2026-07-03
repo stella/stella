@@ -2,12 +2,12 @@ import React, { useState, useRef, useCallback, useEffect } from "react";
 
 import { EyeIcon, MinusIcon, PenLineIcon, PlusIcon } from "lucide-react";
 
-import { DocxEditor, createEmptyDocument } from "@stll/folio";
+import { DocxEditor, createEmptyDocument } from "@stll/folio-react";
 import type {
   Document as FolioDocument,
   DocxEditorRef,
   EditorMode,
-} from "@stll/folio";
+} from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
 import { Separator } from "@stll/ui/components/separator";
 

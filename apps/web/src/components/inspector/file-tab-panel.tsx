@@ -13,7 +13,7 @@ import {
 } from "lucide-react";
 import { useTranslations } from "use-intl";
 
-import type { DocxCompatibility } from "@stll/folio";
+import type { DocxCompatibility } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
 import { stellaToast } from "@stll/ui/components/toast";
 import { cn } from "@stll/ui/lib/utils";

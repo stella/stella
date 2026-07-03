@@ -29,14 +29,14 @@ import {
   FolioUIProvider,
   FormattingBar,
   setAnonymizationTermsMeta,
-} from "@stll/folio";
+} from "@stll/folio-react";
 import type {
   AnonymizationTerm,
   DocxCompatibility,
   DocxEditorCollaboration,
   DocxEditorRef,
   EditorMode,
-} from "@stll/folio";
+} from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
 import {
   Select as StSelect,
@@ -50,7 +50,7 @@ import { stellaToast } from "@stll/ui/components/toast";
 import { useActiveDocxStore } from "@/components/ai-suggestions/active-docx-store";
 import type { ActiveDocxRegistrationToken } from "@/components/ai-suggestions/active-docx-store";
 import { FileViewerWithAI } from "@/components/ai-suggestions/file-viewer-with-ai";
-import "@stll/folio/editor.css";
+import "@stll/folio-react/editor.css";
 
 import { useAutocompleteStream } from "@/components/autocomplete/use-autocomplete-stream";
 import {

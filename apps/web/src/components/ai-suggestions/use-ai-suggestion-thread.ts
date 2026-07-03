@@ -2,8 +2,8 @@ import { useEffect, useState } from "react";
 
 import type { EditorView } from "prosemirror-view";
 
-import { resolveSuggestionAnchor } from "@stll/folio";
-import type { AICitation, AISuggestion } from "@stll/folio";
+import { resolveSuggestionAnchor } from "@stll/folio-react";
+import type { AICitation, AISuggestion } from "@stll/folio-react";
 
 import type {
   AssistantThreadMessage,

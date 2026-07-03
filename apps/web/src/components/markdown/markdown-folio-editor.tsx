@@ -2,8 +2,8 @@ import { lazy, Suspense } from "react";
 
 import type { MarkdownFolioEditorProps } from "./markdown-folio-editor.impl";
 
-// The implementation imports `@stll/folio` (ProseMirror editor + Yjs + fonts)
-// and `@stll/folio/editor.css` — a browser-only, heavy graph. `lazy()` keeps it
+// The implementation imports `@stll/folio-react` (ProseMirror editor + Yjs + fonts)
+// and `@stll/folio-react/editor.css` — a browser-only, heavy graph. `lazy()` keeps it
 // out of SSR and off routes that never open a markdown file, matching the
 // file-viewer's folio-loading pattern.
 const LazyMarkdownFolioEditor = lazy(async () => {

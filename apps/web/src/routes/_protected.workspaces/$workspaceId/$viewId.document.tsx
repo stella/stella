@@ -29,7 +29,7 @@ import { UploadIcon } from "lucide-react";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import type { DocxEditorRef } from "@stll/folio";
+import type { DocxEditorRef } from "@stll/folio-react";
 import { Button } from "@stll/ui/components/button";
 import {
   Dialog,
@@ -40,7 +40,7 @@ import {
   DialogPopup,
   DialogTitle,
 } from "@stll/ui/components/dialog";
-import "@stll/folio/editor.css";
+import "@stll/folio-react/editor.css";
 import { cn } from "@stll/ui/lib/utils";
 
 import {
@@ -82,7 +82,7 @@ const ReadOnlyDocxViewer = lazy(async () => {
   return { default: m.DocxEditor };
 });
 
-// Lazy-load DocxBrowserEditor so the @stll/folio editor graph
+// Lazy-load DocxBrowserEditor so the @stll/folio-react editor graph
 // (DocxEditor, FormattingBar, prosemirror-tables, yjs, utif2, …)
 // stays out of the eager preload list. Without this the static
 // import below pulled the whole vendor-folio chunk (~490 KB gz)

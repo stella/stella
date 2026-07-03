@@ -35,7 +35,7 @@ import type {
   FolioAIEditOperation,
   FolioAIEditSeverity,
   FolioAIEditSnapshot,
-} from "@stll/folio";
+} from "@stll/folio-react";
 import { BidiText } from "@stll/ui/components/bidi-text";
 import { cn } from "@stll/ui/lib/utils";
 

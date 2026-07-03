@@ -17,8 +17,8 @@
 #
 # The desktop app bundles only its own settings UI plus its single
 # workspace dependency @stll/ui (packages/ui), which itself has no
-# runtime workspace deps. It does NOT embed apps/web or
-# packages/folio: desktop<->web compatibility is guaranteed by the
+# runtime workspace deps. It does NOT embed apps/web or the
+# @stll/folio-* editor packages: desktop<->web compatibility is guaranteed by the
 # bridge protocol version handshake (BRIDGE_VERSION in
 # apps/desktop/src-tauri/src/types.rs vs MIN_DESKTOP_BRIDGE_VERSION
 # in apps/web/src/lib/desktop-bridge.ts), not by version lockstep. So
@@ -99,9 +99,9 @@ echo "Current tag $current_tag is on channel '$current_channel'" >&2
 #   - scripts/detect-desktop-release-changes.sh  this decision itself
 #   - .github/workflows/release-desktop.yml  the pipeline definition
 # Deliberately NOT included:
-#   - apps/web/ and packages/folio/: not bundled by the desktop app
-#     (the old "the Tauri build embeds the web bundle" comment was
-#     stale and wrong; compatibility is the bridge handshake).
+#   - apps/web/ and the @stll/folio-* editor packages: not bundled by
+#     the desktop app (the old "the Tauri build embeds the web bundle"
+#     comment was stale and wrong; compatibility is the bridge handshake).
 #   - VERSION: every tag exists because VERSION bumped, so including
 #     it would make the diff never empty and defeat the skip entirely.
 #   - Root package.json / bun.lock: these change with nearly every

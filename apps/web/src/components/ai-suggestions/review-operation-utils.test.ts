@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import type { FolioAIEditOperation } from "@stll/folio";
+import type { FolioAIEditOperation } from "@stll/folio-react";
 
 import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
 
