@@ -149,7 +149,7 @@ function AuditLogsPage() {
         <FramePanel>
           <div className="flex flex-col gap-6">
             {/* Filters Row */}
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-end bg-muted/30 p-4 rounded-lg border">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-2 items-end bg-muted/30 p-4 rounded-lg border">
               <div className="flex flex-col gap-1.5">
                 <label className="text-xs font-medium text-muted-foreground" htmlFor="userId-input">
                   {t("common.user")} ID
@@ -171,7 +171,7 @@ function AuditLogsPage() {
                   value={filterAction || "all"}
                   onValueChange={(val) => handleFilterChange(setFilterAction, !val || val === "all" ? "" : val)}
                 >
-                  <SelectTrigger>
+                  <SelectTrigger className="w-full">
                     <SelectValue placeholder="All Actions" />
                   </SelectTrigger>
                   <SelectPopup>
