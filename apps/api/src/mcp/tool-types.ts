@@ -3,6 +3,7 @@ import type {
   Tool as McpTool,
 } from "@modelcontextprotocol/sdk/types.js";
 
+import type { env } from "@/api/env";
 import type { MCP_ALL_RESOURCE_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { TextWindowResult } from "@/api/mcp/tool-utils";
@@ -10,6 +11,16 @@ import type { TextWindowResult } from "@/api/mcp/tool-utils";
 export type JsonSchema = McpTool["inputSchema"];
 
 export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
+
+/**
+ * Deployment feature flag that gates a tool's backing surface. Derived
+ * structurally from the `FEATURE_*` keys of the API env schema, so a tool can
+ * only name a flag that actually exists: a typo or a removed flag fails
+ * typecheck. A tool tagged with a flag is advertised and dispatchable only when
+ * that flag is on (or the deployment is running in dev); see
+ * `isMcpToolFeatureEnabled` in `gateway/list-tools.ts`.
+ */
+export type McpToolFeatureFlag = Extract<keyof typeof env, `FEATURE_${string}`>;
 
 /**
  * Closed set of reasons a tool is kept off the anonymized surface. No
@@ -59,6 +70,12 @@ export type McpToolDefinition = {
   annotations?: McpTool["annotations"];
   anonymized: McpAnonymizedPolicy;
   description: string;
+  /**
+   * Deployment feature flag gating this tool. When set, the tool is dropped
+   * from the advertised list and its dispatch is rejected unless the flag is on
+   * (or the deployment runs in dev). Omitted for always-available tools.
+   */
+  feature?: McpToolFeatureFlag;
   inputSchema: JsonSchema;
   name: string;
   scope: ToolScope;

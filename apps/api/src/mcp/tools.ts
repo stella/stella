@@ -16,6 +16,7 @@ import { finalizeMcpEgress } from "@/api/mcp/egress";
 import { dispatchGatewayToolCall } from "@/api/mcp/gateway/dispatch-call";
 import {
   getGatewayMcpToolDefinition,
+  isMcpToolFeatureEnabled,
   listGatewayMcpToolDefinitions,
   toMcpTools,
 } from "@/api/mcp/gateway/list-tools";
@@ -142,8 +143,16 @@ export const handleMcpToolCall = async ({
     return gatewayResult;
   }
 
-  if (!getStaticMcpToolDefinition(toolName, mode)) {
+  const staticTool = getStaticMcpToolDefinition(toolName, mode);
+  if (!staticTool) {
     return errorResult(`Unknown tool: ${toolName}`);
+  }
+
+  // Reject a gated-off tool even when the caller names it directly: the list
+  // surface hides it, and this closes the guess-the-name bypass so the gate
+  // holds on both the advertisement and the dispatch path.
+  if (!isMcpToolFeatureEnabled(staticTool.feature)) {
+    return errorResult("This feature is not enabled on this deployment");
   }
 
   const handler = MCP_TOOL_HANDLERS.get(toolName);
