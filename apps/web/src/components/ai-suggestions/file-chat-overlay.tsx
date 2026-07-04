@@ -37,9 +37,8 @@ import type {
   FolioAIEditSnapshot,
 } from "@stll/folio-react";
 import { BidiText } from "@stll/ui/components/bidi-text";
-import { cn } from "@stll/ui/lib/utils";
 
-import { PromptBar } from "@/components/ai-suggestions/host";
+import { ChatThreadCard, PromptBar } from "@/components/ai-suggestions/host";
 import { isNoopReviewOperation } from "@/components/ai-suggestions/review-operation-utils";
 import {
   REVIEW_UNSPECIFIED_AREA,
@@ -50,7 +49,10 @@ import type {
   ReviewSuggestionPreview,
 } from "@/components/ai-suggestions/review-store";
 import { useChatEditor } from "@/components/chat-editor-provider";
+import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
+import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getActiveDocxEditApprovalPart } from "@/components/chat/chat-ui-tools";
@@ -59,6 +61,10 @@ import { useAIKeyGate } from "@/components/require-ai-key";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { ChatAnonymizationLayer } from "@/lib/anonymize/use-chat-anonymization-layer";
+import {
+  getChatSendMode,
+  useChatAnonymized,
+} from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
@@ -772,6 +778,40 @@ const FileChatOverlayInner = ({
   });
   const userContext = useChatUserContext();
   const getUserContext = useEffectEvent(() => userContext);
+  const threadRef = useMemo<ChatThreadRef>(
+    () =>
+      workspaceId === undefined
+        ? {
+            scope: "global",
+            threadId: chatThreadId,
+          }
+        : {
+            scope: "workspace",
+            threadId: chatThreadId,
+            workspaceId,
+          },
+    [chatThreadId, workspaceId],
+  );
+  // Per-send anonymization now reads the shared per-thread store keyed by
+  // `threadRef`, same as every other chat surface: the dock's shield
+  // shows `useChatAnonymized(threadRef)`, the transport reads
+  // `getChatSendMode(threadRef)`, and `ChatAnonymizationLayer` drives the
+  // in-editor highlight cue — one source, so display and send agree.
+  const anonymized = useChatAnonymized(threadRef);
+  const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
+  // Context matters this file chat draws on. Same plumbing as the main
+  // chat and inspector: local state is seeded from the server's persisted
+  // set (or, for a fresh thread, the file's own matter), the picker mutates
+  // it directly, and the transport pulls the latest value via
+  // `getContextMatterIds` on every send — so the displayed selection and
+  // the sent context are provably one source. Null until seeded below.
+  const [contextMatterIds, setContextMatterIds] = useState<string[] | null>(
+    null,
+  );
+  const [seededContextForThreadId, setSeededContextForThreadId] = useState<
+    string | null
+  >(null);
+  const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
   const lastSentDocxEditSnapshotRef = useRef<FolioAIEditSnapshot | null>(null);
   const hasDocxEditSurface =
     activeFile !== undefined && docxEditorRef !== undefined;
@@ -934,27 +974,14 @@ const FileChatOverlayInner = ({
     ? ACTIVE_FILE_BLOCKED_APPROVAL_TOOLS
     : undefined;
 
-  const threadRef = useMemo<ChatThreadRef>(
-    () =>
-      workspaceId === undefined
-        ? {
-            scope: "global",
-            threadId: chatThreadId,
-          }
-        : {
-            scope: "workspace",
-            threadId: chatThreadId,
-            workspaceId,
-          },
-    [chatThreadId, workspaceId],
-  );
-
   const { data } = useSuspenseQuery(
     chatThreadOptions({
       activeOrganizationId,
       key: threadRef,
       context: {
         allowMissingThread: true,
+        getContextMatterIds,
+        getSendMode,
         getUserContext,
         ...(activeExternal
           ? { getActiveExternal: () => getActiveExternal() }
@@ -971,6 +998,26 @@ const FileChatOverlayInner = ({
     }),
   );
   const { chat } = data;
+  // Seed the picker once per thread. Prefer the server's persisted set;
+  // for a brand-new file thread (empty set) fall back to the file's own
+  // matter so "the matter this file lives in" is the default context. A
+  // global file preview (no workspace) seeds empty and lets the user add
+  // context matters explicitly.
+  useExternalSyncEffect(() => {
+    if (seededContextForThreadId === chatThreadId) {
+      return;
+    }
+    setSeededContextForThreadId(chatThreadId);
+    const ownMatter = workspaceId !== undefined ? [workspaceId] : [];
+    setContextMatterIds(
+      data.contextMatterIds.length > 0 ? data.contextMatterIds : ownMatter,
+    );
+  }, [
+    chatThreadId,
+    data.contextMatterIds,
+    seededContextForThreadId,
+    workspaceId,
+  ]);
 
   const {
     error,
@@ -1003,29 +1050,38 @@ const FileChatOverlayInner = ({
   } = useChatSession({
     chat,
     conversationId: threadRef.threadId,
+    getSendMode,
     initialOlderCursor: data.olderCursor,
     threadRef,
     workspaceId,
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
   const [panelOpen, setPanelOpen] = useState(false);
-  const handlePromptSubmit = useEffectEvent(async (prompt: string) => {
-    try {
-      if (!(await ensureAIAvailable())) {
-        return;
-      }
+  const handlePromptSubmit = useEffectEvent(
+    async ({
+      prompt,
+      files,
+    }: {
+      prompt: string;
+      files: ChatDraftAttachment[];
+    }) => {
+      try {
+        if (!(await ensureAIAvailable())) {
+          return;
+        }
 
-      // Always pop the thread open on send, even if the user
-      // minimised it earlier — they're sending a new prompt
-      // and want to see the response stream in.
-      setPanelOpen(true);
-      await sendMessage(
-        await buildChatRequestMessage({ files: [], html: prompt }),
-      );
-    } catch (submitError) {
-      capturePromptSubmitError(submitError);
-    }
-  });
+        // Always pop the thread open on send, even if the user
+        // minimised it earlier — they're sending a new prompt
+        // and want to see the response stream in.
+        setPanelOpen(true);
+        await sendMessage(
+          await buildChatRequestMessage({ files, html: prompt }),
+        );
+      } catch (submitError) {
+        capturePromptSubmitError(submitError);
+      }
+    },
+  );
 
   // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (open AI-key gate on mount/dep change), move into handler
   useEffect(() => {
@@ -1183,6 +1239,34 @@ const FileChatOverlayInner = ({
       setPanelOpen(true);
     }
   }
+  // Escape collapses the open thread card (typically pressed while the
+  // composer is focused). Window-level listener gated on `panelOpen`,
+  // same idiom as the AI-suggestions surface's panel; the card reopens
+  // automatically on the next send.
+  useExternalSyncEffect(() => {
+    if (!panelOpen) {
+      return undefined;
+    }
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        setPanelOpen(false);
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => {
+      window.removeEventListener("keydown", handler);
+    };
+  }, [panelOpen]);
+  // One handler for every new-thread entry point (dock icon and the
+  // `/new` reserved command): abort any live stream first — the
+  // rotation remount only swaps the surface, while the old Chat
+  // instance would keep streaming inside the query cache.
+  const startNewThread = () => {
+    stop();
+    shouldFocusComposerAfterNewThreadRef.current = true;
+    setPanelOpen(false);
+    onNewThread();
+  };
   useLayoutEffect(() => {
     const scrollElement = threadScrollRef.current;
     if (!scrollElement) {
@@ -1215,102 +1299,76 @@ const FileChatOverlayInner = ({
         }}
       >
         {panelOpen && hasThreadContent && (
-          <div
-            aria-label={t("chat.aiThread")}
-            className={cn(
-              // Sizing rules: grows with content but caps at ~45dvh
-              // / 380px so the panel doesn't dominate the file
-              // viewer. No min-height — short threads stay short.
-              "absolute start-1/2 bottom-[88px] z-40 flex max-h-[min(45dvh,380px)] min-h-0 w-[min(560px,calc(100%-2rem))] -translate-x-1/2 flex-col overflow-hidden rounded-2xl border",
-              "bg-popover/90 border-border text-popover-foreground",
-              "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
-              "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
-              "hover:bg-popover focus-within:bg-popover",
-              "transition-[background-color,border-color] duration-200 ease-out",
-              "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
-              "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1",
-            )}
-            role="dialog"
+          <ChatThreadCard
+            onCollapse={() => setPanelOpen(false)}
+            scrollRef={threadScrollRef}
           >
-            {/* Plain scroll container — bypasses the legacy
-                Conversation's `size-full` chain, which only resolves
-                correctly when the parent has an explicit height
-                (this overlay uses `max-h` only, so flex-1 children
-                don't get a definite size to base `size-full` on). */}
-            <div
-              ref={threadScrollRef}
-              className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3"
-              style={{ scrollbarGutter: "stable" }}
-            >
-              <ChatThreadMessages
-                approvalPendingMessageId={approvalPendingMessageId}
-                error={error}
-                hasOlderMessages={olderCursor !== null}
-                isGenerating={isGenerating}
-                isLoadingOlder={isLoadingOlder}
-                loadOlderError={loadOlderError}
-                messages={messages}
-                onAskUserEditAndRerun={handleAskUserEditAndRerun}
-                onAskUserSubmit={handleAskUserSubmit}
-                onCreateDocumentResolve={handleCreateDocumentResolve}
-                onLoadOlder={loadOlder}
-                onOpenCreatedDocument={handleOpenCreatedDocument}
-                onRemoveQueuedMessage={removeQueuedMessage}
-                onResend={resendLatestMessage}
-                queuedMessages={queuedMessages}
-                scrollContainerRef={threadScrollRef}
-                showThinkingIndicator
-                streamdownComponents={streamdownComponents}
-                workspaceId={workspaceId}
-              />
-            </div>
-          </div>
+            <ChatThreadMessages
+              approvalPendingMessageId={approvalPendingMessageId}
+              error={error}
+              hasOlderMessages={olderCursor !== null}
+              isGenerating={isGenerating}
+              isLoadingOlder={isLoadingOlder}
+              loadOlderError={loadOlderError}
+              messages={messages}
+              onAskUserEditAndRerun={handleAskUserEditAndRerun}
+              onAskUserSubmit={handleAskUserSubmit}
+              onCreateDocumentResolve={handleCreateDocumentResolve}
+              onLoadOlder={loadOlder}
+              onOpenCreatedDocument={handleOpenCreatedDocument}
+              onRemoveQueuedMessage={removeQueuedMessage}
+              onResend={resendLatestMessage}
+              queuedMessages={queuedMessages}
+              scrollContainerRef={threadScrollRef}
+              showThinkingIndicator
+              streamdownComponents={streamdownComponents}
+              workspaceId={workspaceId}
+            />
+          </ChatThreadCard>
         )}
 
         <ChatAnonymizationLayer
           editor={editorController.editor}
-          enabled={false}
+          enabled={anonymized}
           workspaceId={workspaceId ?? threadRef.threadId}
         />
-        {/* Float the chips above the floating composer (matching the bar's
-            centered width) instead of leaving them in normal flow after the
-            full-height viewer; z below the thread panel so the panel wins. */}
-        <div className="absolute start-1/2 bottom-[88px] z-30 flex w-[min(560px,calc(100%-2rem))] -translate-x-1/2 px-1">
-          <SuggestedFollowupChips
-            isGenerating={isGenerating}
-            isEmpty={
-              editorController.isEmpty &&
-              editorController.attachments.length === 0
-            }
-            lastMessageId={messages.at(-1)?.id ?? null}
-            lastMessageRole={messages.at(-1)?.role ?? null}
-            messageCount={messages.length}
-            prompts={suggestedPrompts}
-            onSelect={(prompt) => {
-              // Mirror the PromptBar send guard: when an editable DOCX's edit
-              // snapshot isn't ready, block the chip send too so the model
-              // never sees a follow-up without current edit context.
-              if (!canSubmitWithCurrentDocxSnapshot()) {
-                return;
-              }
-              editorController.setContent(prompt);
-              void editorController.submit(async (draft) => {
-                if (!(await ensureAIAvailable())) {
-                  return;
-                }
-                // Pop the thread open on send (mirrors the PromptBar submit
-                // path) so a chip sent while the thread is collapsed still
-                // streams the reply into view.
-                setPanelOpen(true);
-                await sendMessage(await buildChatRequestMessage(draft));
-              });
-            }}
-          />
-        </div>
         <PromptBar
+          attachmentsEnabled
           attentionPulseSeq={attentionPulseSeq}
           canSubmitNow={canSubmitWithCurrentDocxSnapshot}
           editorController={editorController}
+          followupChips={
+            <SuggestedFollowupChips
+              isGenerating={isGenerating}
+              isEmpty={
+                editorController.isEmpty &&
+                editorController.attachments.length === 0
+              }
+              lastMessageId={messages.at(-1)?.id ?? null}
+              lastMessageRole={messages.at(-1)?.role ?? null}
+              messageCount={messages.length}
+              prompts={suggestedPrompts}
+              onSelect={(prompt) => {
+                // Mirror the PromptBar send guard: when an editable DOCX's edit
+                // snapshot isn't ready, block the chip send too so the model
+                // never sees a follow-up without current edit context.
+                if (!canSubmitWithCurrentDocxSnapshot()) {
+                  return;
+                }
+                editorController.setContent(prompt);
+                void editorController.submit(async (draft) => {
+                  if (!(await ensureAIAvailable())) {
+                    return;
+                  }
+                  // Pop the thread open on send (mirrors the PromptBar submit
+                  // path) so a chip sent while the thread is collapsed still
+                  // streams the reply into view.
+                  setPanelOpen(true);
+                  await sendMessage(await buildChatRequestMessage(draft));
+                });
+              }}
+            />
+          }
           emptyPlaceholder={
             (activeFile || activeExternal) && filePlaceholderAction ? (
               <span className="text-foreground-ghost flex min-w-0 items-center gap-1.5 text-[13px] leading-5">
@@ -1325,28 +1383,13 @@ const FileChatOverlayInner = ({
             ) : undefined
           }
           layout="floating"
-          newThreadLabel={t("chat.newChat")}
-          onNewThread={() => {
-            // Abort any live stream first: the rotation remount only
-            // swaps the surface, while the old Chat instance would
-            // keep streaming inside the query cache.
-            stop();
-            shouldFocusComposerAfterNewThreadRef.current = true;
-            setPanelOpen(false);
-            onNewThread();
-          }}
           onStop={() => {
             stop();
           }}
-          onSubmit={({ prompt }) => {
+          onSubmit={({ prompt, files }) => {
             const reservedCommand = matchReservedChatCommand(prompt);
             if (reservedCommand?.id === "new") {
-              // Mirror the New Chat button: abort any live stream before
-              // rotating, or the old Chat keeps streaming in the query cache.
-              stop();
-              shouldFocusComposerAfterNewThreadRef.current = true;
-              setPanelOpen(false);
-              onNewThread();
+              startNewThread();
               editorController.setContent("");
               return;
             }
@@ -1356,10 +1399,8 @@ const FileChatOverlayInner = ({
               return;
             }
 
-            void handlePromptSubmit(prompt);
+            void handlePromptSubmit({ prompt, files: files ?? [] });
           }}
-          onTogglePanel={() => setPanelOpen((v) => !v)}
-          panelOpen={panelOpen}
           pendingCount={0}
           queueWhileGenerating
           sendDisabledReason={
@@ -1367,8 +1408,28 @@ const FileChatOverlayInner = ({
               ? "editor-loading"
               : undefined
           }
-          showThreadToggle={hasThreadContent}
           status={isGenerating ? "generating" : "idle"}
+          dock={
+            <ChatComposerDock
+              data={data}
+              onNewThread={startNewThread}
+              leadingContext={
+                // The matter control is a real picker on every surface, so
+                // the user can widen or narrow the file chat's context just
+                // like the main chat and inspector. Seeded (below) with the
+                // file's own matter by default. Legibility over the document
+                // comes from the veil behind the docked composer stack (see
+                // `DockedComposer`), not from per-control chrome.
+                contextMatterIds !== null ? (
+                  <ChatMatterPicker
+                    matterIds={contextMatterIds}
+                    onChange={setContextMatterIds}
+                  />
+                ) : undefined
+              }
+              threadRef={threadRef}
+            />
+          }
         />
       </ChatApprovalContext>
     </ChatMattersContext>

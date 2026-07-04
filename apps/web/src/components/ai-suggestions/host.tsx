@@ -1,31 +1,24 @@
 /**
- * File-anchored AI chat host.
+ * Docked AI-chat composer primitives.
  *
- * Renders a floating prompt bar at the bottom of the file viewer plus,
- * when expanded, a thread panel above it. The thread is the primary
- * UI — same interaction model as Stella's regular chat, but bound to
- * a single file in view. Each user prompt yields one assistant
- * message that may carry markdown text, suggested edits, or both.
- *
- * The host owns: thread state, prompt bar, slash menu, paste chip,
- * pending-accept queue, and decoration push for the editor view (when
- * one is supplied — DOCX). For PDFs `editorView` is null; the host
- * still renders the bar + thread, but accept buttons are hidden.
+ * The shared building blocks every chat surface mounts: the docked
+ * `PromptBar` (rich composer + preset chips + attachment tray + the
+ * send/stop/retry action), its `DockedComposer` geometry owner, the
+ * floating glass `ChatThreadCard`, the suggestion stepper, and the
+ * `SuggestionCard` used to render an edit
+ * suggestion. Surfaces (the file-chat overlay, Template Studio, the
+ * inspector chat tab) own their own thread state and wire these
+ * together; this module owns only the presentation and geometry so the
+ * surfaces can never drift.
  */
 
 import "@/components/chat-editor.css";
-import {
-  forwardRef,
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type {
   ComponentProps,
   KeyboardEvent as ReactKeyboardEvent,
   ReactNode,
+  RefObject,
 } from "react";
 
 import {
@@ -34,142 +27,45 @@ import {
   ChevronLeftIcon,
   ChevronRightIcon,
   LoaderCircleIcon,
-  SquareIcon,
-  SquarePenIcon,
   UserIcon,
   WandSparklesIcon,
 } from "lucide-react";
 import type { EditorView } from "prosemirror-view";
 import { useFormatter, useTranslations } from "use-intl";
 
-import {
-  applySuggestions,
-  resolveSuggestionAnchor,
-  scrollFolioPositionIntoView,
-  setActiveCitationMeta,
-  setAICitationsMeta,
-  setAISuggestionsMeta,
-  setFocusedSuggestionMeta,
-} from "@stll/folio-react";
+import { scrollFolioPositionIntoView } from "@stll/folio-react";
 import type {
-  AIChatMode,
-  AICitation,
-  AICitationRange,
-  AIGenerateInput,
   AISuggestion,
-  AISuggestionApplyMode,
   AISuggestionPreset,
   AISuggestionSeverity,
 } from "@stll/folio-react";
-import { BidiText } from "@stll/ui/components/bidi-text";
 import { Button } from "@stll/ui/components/button";
 import { DirectionalIcon } from "@stll/ui/components/directional-icon";
 import {
   Tooltip,
   TooltipPopup,
-  TooltipProvider,
   TooltipTrigger,
 } from "@stll/ui/components/tooltip";
 import { cn } from "@stll/ui/lib/utils";
 
-import {
-  Message,
-  MessageContent,
-  MessageResponse,
-} from "@/components/ai-elements/message";
 import { useChatComposerWiring } from "@/components/chat-editor-provider";
-import type { ChatEditorController } from "@/components/chat-editor-provider";
-import { ChatComposerActionButton } from "@/components/chat/chat-composer-action-button";
+import type {
+  ChatEditorController,
+  ChatInputDraft,
+} from "@/components/chat-editor-provider";
+import {
+  ChatComposerActionButton,
+  resolveChatComposerAction,
+} from "@/components/chat/chat-composer-action-button";
+import { ChatDraftAttachmentChips } from "@/components/chat/chat-draft-attachment-chips";
+import { ComposerPlusMenu } from "@/components/chat/composer-plus-menu";
+import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptEditorContent } from "@/components/prompt-editor";
-import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { usePulse } from "@/hooks/use-pulse";
-import { getFormattingLocale } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { isValueTypeKind, VALUE_TYPE_META } from "@/lib/value-types";
 
-import {
-  anchorSuggestion,
-  buildGenerateInput,
-  deriveChatStatus,
-  joinPromptWithPasted,
-  parseStoredApplyMode,
-  resolveAcceptGroupGate,
-  resolveAcceptOneGate,
-  resolveApplyMode,
-  selectResponseSuggestions,
-} from "./host.logic";
-import type { PendingFirstAccept } from "./host.logic";
-import type {
-  AssistantThreadMessage,
-  FileAIChatConfig,
-  FileAIChatStatus,
-  ThreadMessage,
-  UserThreadMessage,
-} from "./types";
-import { useAISuggestionThread } from "./use-ai-suggestion-thread";
-
-/**
- * localStorage key for the per-user "apply with tracked changes?"
- * preference. Asked once on the first accept, then remembered.
- */
-const APPLY_MODE_STORAGE_KEY = "stella:ai-suggestions:apply-mode";
-
-function readStoredApplyMode(): AISuggestionApplyMode | null {
-  try {
-    return parseStoredApplyMode(localStorage.getItem(APPLY_MODE_STORAGE_KEY));
-  } catch {
-    // localStorage may be disabled (private mode, third-party cookie
-    // restrictions); fall through to "no preference".
-    return null;
-  }
-}
-
-/**
- * Flatten the TipTap editor's HTML draft into the plain-text
- * "prompt" the host's generators expect. Entity-mention nodes —
- * which render as `<entity-mention data-label="…">` — collapse to
- * `@<label>` so pattern matchers still see the mentioned thing as
- * a token. Other tags lose their structure but keep textContent.
- */
-function htmlToPromptText(html: string): string {
-  if (typeof document === "undefined" || html.length === 0) {
-    return html;
-  }
-  const container = document.createElement("div");
-  // safe-html: detached element, never inserted into the document; innerHTML is set only to read back textContent, and `html` is the TipTap editor's own serialized draft
-  container.innerHTML = html;
-  for (const mention of container.querySelectorAll("entity-mention")) {
-    const label =
-      mention instanceof HTMLElement ? (mention.dataset["label"] ?? "") : "";
-    mention.replaceWith(document.createTextNode(`@${label}`));
-  }
-  return container.textContent.trim();
-}
-
-function writeStoredApplyMode(mode: AISuggestionApplyMode): void {
-  try {
-    localStorage.setItem(APPLY_MODE_STORAGE_KEY, mode);
-  } catch {
-    // best-effort; lack of persistence just means we'll re-ask next session
-  }
-}
-
-/**
- * Composer commands (plain text after `htmlToPromptText`) that reset
- * the thread instead of generating a response.
- */
-const NEW_THREAD_COMMANDS = new Set(["/new", "/clear"]);
-
-/**
- * The raw input a generation was started with (composer HTML plus
- * optional preset/paste payload). Kept verbatim so a stopped run can
- * be retried with the exact same input.
- */
-type GenerateBarInput = {
-  prompt: string;
-  presetId?: string;
-  pastedText?: string;
-};
+import type { FileAIChatStatus } from "./types";
 
 const SEVERITY_DOT_CLASS: Record<AISuggestionSeverity, string> = {
   substantive: "bg-destructive",
@@ -184,976 +80,19 @@ const SEVERITY_LABEL_KEYS = {
 } as const satisfies Record<AISuggestionSeverity, TranslationKey>;
 
 /**
- * Visual layout mode.
+ * Visual layout mode consumed by `PromptBar`.
  *
- * - `floating` (default): bar + thread are absolutely positioned over
- *   a file viewer. Thread is glass and toggles open/closed. Used by
- *   `FileViewerWithAI`.
- * - `standalone`: bar + thread fill their parent container. Thread is
- *   always visible (flex-1, scrollable), bar sits at the bottom in
- *   flow. Used by the sidepeek Chat tab where there's no doc behind.
+ * The bar is docked identically in both modes (`DockedComposer` owns
+ * its geometry); `layout` only gates surface features on the bar:
+ *
+ * - `floating` (default): the bar offers preset chips + the pending-
+ *   suggestion badge, and the surface floats a `ChatThreadCard` over a
+ *   file viewer. Used by the file-overlay and Template Studio chats.
+ * - `standalone`: no preset chips or badge; the surface renders its own
+ *   always-visible transcript above the bar. Used by the sidepeek Chat
+ *   tab where there's no doc behind.
  */
-export type FileAIChatLayout = "floating" | "standalone";
-
-type FileAIChatHostProps = {
-  config: FileAIChatConfig;
-  /**
-   * Live ProseMirror view for the editable file (DOCX). When null,
-   * the host runs in read-only/no-apply mode (PDF or any non-editable
-   * viewer).
-   */
-  editorView: EditorView | null;
-  /** Plain-text snapshot of the file used when no editor view is available. */
-  documentText?: string;
-  /** Whether the underlying viewer is locked for editing (e.g., DOCX preview). */
-  readOnly: boolean;
-  /** Container the bar anchors against (used to detect compact mode). */
-  containerEl: HTMLElement | null;
-  /** Author label fallback when the host config doesn't set one. */
-  authorFallback: string;
-  /**
-   * Fired when the user clicks a citation chip. The wrapper plugs
-   * this into the PDF justification store so the existing PageCitation
-   * overlay can render bbox highlights for non-PM viewers. Folio
-   * decorations are pushed directly via PM meta inside the host.
-   */
-  onCitationActivate?: (citation: AICitation | null) => void;
-  /** See `FileAIChatLayout`. Defaults to `floating`. */
-  layout?: FileAIChatLayout;
-  /**
-   * TipTap composer controller from `useChatEditor`. The bar renders
-   * the rich editor (with `@`-mention chips, drafts, attachments) on
-   * top of this controller; the host intercepts `controller.submit`
-   * and forwards the resulting HTML to `config.onGenerate` as
-   * `prompt`. Every host instance has one — file-overlay chats and
-   * standalone chat tabs alike — so the composer experience stays
-   * identical across surfaces.
-   */
-  editorController: ChatEditorController;
-  emptyPlaceholder?: ReactNode | undefined;
-};
-
-export function FileAIChatHost(props: FileAIChatHostProps) {
-  const {
-    config,
-    editorView,
-    documentText: documentTextProp,
-    readOnly,
-    authorFallback,
-    onCitationActivate,
-    layout = "floating",
-    editorController,
-  } = props;
-  const t = useTranslations();
-  const author = config.applyAuthor ?? authorFallback;
-
-  /**
-   * The viewer is editable when a PM view is mounted. PDFs are never
-   * editable; DOCX always exposes a view (preview + edit).
-   */
-  const canEdit = editorView !== null;
-
-  /**
-   * Mode is fully derived from context: Ask for PDFs and locked
-   * DOCX previews; Edit only when the user is actively editing an
-   * unlocked DOCX. There's no manual toggle — the document state is
-   * the source of truth, which keeps the bar uncluttered.
-   */
-  const mode: AIChatMode = canEdit && !readOnly ? "edit" : "ask";
-  /**
-   * Persisted apply-mode preference. Null when the user hasn't yet
-   * answered the one-time "apply with tracked changes?" prompt; we
-   * gate the first accept on this answer and remember it for next
-   * time via localStorage.
-   */
-  const [applyModeStored, setApplyModeStored] =
-    useState<AISuggestionApplyMode | null>(() => readStoredApplyMode());
-  /**
-   * The accept the user most recently triggered while the apply-mode
-   * preference was unset. Held until they answer the prompt; then
-   * applied with the chosen mode.
-   */
-  const [pendingFirstAccept, setPendingFirstAccept] =
-    useState<PendingFirstAccept | null>(null);
-  const {
-    messages,
-    setMessages,
-    allSuggestions,
-    allCitations,
-    pendingAccepts,
-    setPendingAccepts,
-    updateAssistantMessage,
-    updateSuggestion,
-    applyResultToMessages,
-  } = useAISuggestionThread({ editorView });
-  const [panelOpen, setPanelOpen] = useState(false);
-  const [focusedId, setFocusedId] = useState<string | null>(null);
-  const [activeCitationId, setActiveCitationId] = useState<string | null>(null);
-  /**
-   * User-set panel height in px. Null means "use the default
-   * max-height" (~58% of viewport). Set on drag of the resize
-   * handle at the top of the panel.
-   */
-  const [panelHeight, setPanelHeight] = useState<number | null>(null);
-
-  /**
-   * Effective apply mode. When the stored preference is null we
-   * still need a value to fall back to in code paths that read it
-   * (e.g., the auto-flush effect after unlock); use the host's
-   * default. The user-facing "ask once" prompt only blocks the very
-   * first accept attempt. A pinned config (promptForApplyMode: false)
-   * wins over the stored preference so the surface stays on its mode.
-   */
-  const applyMode: AISuggestionApplyMode = resolveApplyMode(
-    config.promptForApplyMode === false ? null : applyModeStored,
-    config.defaultApplyMode,
-  );
-
-  const persistApplyMode = useCallback((next: AISuggestionApplyMode) => {
-    setApplyModeStored(next);
-    writeStoredApplyMode(next);
-  }, []);
-
-  const generationToken = useRef(0);
-
-  /**
-   * Input of the most recently started generation, kept so a
-   * user-initiated stop can offer Retry. Only `handleStop` promotes
-   * it into `retryInput`; normal completion never does.
-   */
-  const lastGenerateInput = useRef<GenerateBarInput | null>(null);
-  /**
-   * When non-null, the bar's action button shows Retry (re-sending
-   * this input) instead of the send arrow. Set on stop; cleared by
-   * typing a new draft, Escape, a new thread, or starting any
-   * generation.
-   */
-  const [retryInput, setRetryInput] = useState<GenerateBarInput | null>(null);
-
-  // ---- derived state -------------------------------------------------------
-
-  /**
-   * Folio range citations flattened for the decoration plugin.
-   * PDF-bbox citations are forwarded through `onCitationActivate`
-   * to the wrapper's PDF overlay.
-   */
-  const folioCitationRanges = useMemo<AICitationRange[]>(() => {
-    const out: AICitationRange[] = [];
-    for (const c of allCitations) {
-      if (c.source.kind === "folio-range") {
-        out.push({ id: c.id, from: c.source.from, to: c.source.to });
-      }
-    }
-    return out;
-  }, [allCitations]);
-
-  const pendingCount = useMemo(
-    () => allSuggestions.filter((s) => s.status === "pending").length,
-    [allSuggestions],
-  );
-
-  const generating = messages.some(
-    (m) => m.role === "assistant" && m.status === "loading",
-  );
-
-  const status: FileAIChatStatus = deriveChatStatus(generating, pendingCount);
-
-  // ---- decoration push (DOCX only) ----------------------------------------
-
-  // The decoration plugin has at most one writer at a time. The
-  // active-docx-edit flow (apply-active-docx-edits tool → review
-  // store) pushes its own suggestion list from `DocxBrowserEditor`;
-  // dispatching an empty list here would race with that and clear
-  // its decorations. Skip when we have nothing to add — the review
-  // store path handles the cleared/transitioning case via its
-  // own effect.
-  useExternalSyncEffect(() => {
-    if (!editorView || allSuggestions.length === 0) {
-      return;
-    }
-    const meta = setAISuggestionsMeta(allSuggestions);
-    editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
-  }, [editorView, allSuggestions]);
-
-  useExternalSyncEffect(() => {
-    if (!editorView) {
-      return;
-    }
-    const meta = setFocusedSuggestionMeta(focusedId);
-    editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
-  }, [editorView, focusedId]);
-
-  // Push folio citation ranges to the decoration plugin.
-  useExternalSyncEffect(() => {
-    if (!editorView) {
-      return;
-    }
-    const meta = setAICitationsMeta(folioCitationRanges);
-    editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
-  }, [editorView, folioCitationRanges]);
-
-  useExternalSyncEffect(() => {
-    if (!editorView) {
-      return;
-    }
-    const meta = setActiveCitationMeta(activeCitationId);
-    editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
-  }, [editorView, activeCitationId]);
-
-  // ---- stop / new thread ---------------------------------------------------
-
-  /**
-   * Cancels the in-flight generation. Bumping the run token makes the
-   * pending `onGenerate` promise resolve against a stale token (its
-   * result is dropped); flipping the loading assistant bubble to an
-   * error returns the derived bar status to idle.
-   */
-  const handleStop = useCallback(() => {
-    generationToken.current += 1;
-    setRetryInput(lastGenerateInput.current);
-    setMessages((prev) =>
-      prev.map<ThreadMessage>((m) =>
-        m.role === "assistant" && m.status === "loading"
-          ? {
-              id: m.id,
-              role: "assistant",
-              text: m.text,
-              suggestions: m.suggestions,
-              citations: m.citations,
-              mode: m.mode,
-              createdAt: m.createdAt,
-              status: "error",
-              error: t("chat.stopped"),
-            }
-          : m,
-      ),
-    );
-  }, [setMessages, t]);
-
-  /**
-   * Resets the thread: drops messages, queued accepts, focus, and the
-   * first-accept prompt, then clears this host's suggestion
-   * decorations from the editor. The decoration-push effect skips
-   * empty lists (to avoid racing the review-store writer), so the
-   * empty push has to happen explicitly here. The run-token bump
-   * keeps a generation started before the reset from landing into
-   * the fresh thread.
-   */
-  const handleNewThread = useCallback(() => {
-    generationToken.current += 1;
-    setRetryInput(null);
-    setMessages([]);
-    setPendingAccepts([]);
-    setPendingFirstAccept(null);
-    setFocusedId(null);
-    setActiveCitationId(null);
-    setPanelOpen(false);
-    if (editorView) {
-      const meta = setAISuggestionsMeta([]);
-      editorView.dispatch(editorView.state.tr.setMeta(meta.key, meta.payload));
-    }
-  }, [editorView, setMessages, setPendingAccepts]);
-
-  // ---- generate ------------------------------------------------------------
-
-  const handleGenerate = useCallback(
-    async (input: GenerateBarInput) => {
-      if (generating) {
-        return;
-      }
-
-      // The bar emits prompt as HTML from the TipTap editor — entity
-      // mentions live as `<entity-mention data-label="…">` nodes.
-      // Flatten to plain text (with mentions inlined as `@Label`) so
-      // pattern-matching generators don't have to parse HTML.
-      const promptText = htmlToPromptText(input.prompt);
-
-      if (NEW_THREAD_COMMANDS.has(promptText)) {
-        handleNewThread();
-        return;
-      }
-
-      lastGenerateInput.current = input;
-      setRetryInput(null);
-
-      const userMessage: UserThreadMessage = {
-        id: `u-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`,
-        role: "user",
-        prompt: promptText,
-        mode,
-        createdAt: Date.now(),
-        ...(input.presetId === undefined ? {} : { presetId: input.presetId }),
-        ...(input.pastedText === undefined
-          ? {}
-          : { pastedText: input.pastedText }),
-      };
-      const assistantId = `a-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 6)}`;
-      const assistantPlaceholder: AssistantThreadMessage = {
-        id: assistantId,
-        role: "assistant",
-        text: "",
-        suggestions: [],
-        citations: [],
-        mode,
-        status: "loading",
-        createdAt: Date.now(),
-      };
-
-      setMessages((prev) => [...prev, userMessage, assistantPlaceholder]);
-      setPanelOpen(true);
-
-      const token = ++generationToken.current;
-
-      const fullPrompt = joinPromptWithPasted(promptText, input.pastedText);
-
-      const docText = editorView
-        ? editorView.state.doc.textBetween(
-            0,
-            editorView.state.doc.content.size,
-            "\n",
-            "\n",
-          )
-        : (documentTextProp ?? "");
-      const selection =
-        editorView !== null &&
-        editorView.state.selection.from !== editorView.state.selection.to
-          ? editorView.state.selection
-          : null;
-      const selectionText =
-        selection !== null && editorView !== null
-          ? editorView.state.doc.textBetween(
-              selection.from,
-              selection.to,
-              "\n",
-              "\n",
-            )
-          : "";
-      const cursorPosition =
-        editorView !== null
-          ? {
-              from: editorView.state.selection.from,
-              to: editorView.state.selection.to,
-            }
-          : null;
-      const visible = editorView ? computeVisibleRange(editorView) : null;
-      const visibleText =
-        visible !== null && editorView !== null
-          ? editorView.state.doc.textBetween(
-              visible.from,
-              visible.to,
-              "\n",
-              "\n",
-            )
-          : "";
-      const generateInput: AIGenerateInput = buildGenerateInput({
-        fullPrompt,
-        mode,
-        selectionText,
-        selectionRange:
-          selection !== null
-            ? { from: selection.from, to: selection.to }
-            : null,
-        cursorPosition,
-        documentText: docText,
-        visibleText,
-        visibleRange: visible,
-        presetId: input.presetId,
-      });
-
-      try {
-        const response = await config.onGenerate(generateInput);
-        if (generationToken.current !== token) {
-          return;
-        }
-        const rawSuggestions = selectResponseSuggestions(
-          mode,
-          response.suggestions,
-        );
-        const anchored: AISuggestion[] = [];
-        for (const s of rawSuggestions) {
-          const anchor = editorView
-            ? resolveSuggestionAnchor(editorView.state.doc, s)
-            : undefined;
-          anchored.push(anchorSuggestion(s, anchor));
-        }
-        updateAssistantMessage(assistantId, (m) => ({
-          id: m.id,
-          role: "assistant",
-          mode: m.mode,
-          createdAt: m.createdAt,
-          status: "complete",
-          text: response.text ?? "",
-          suggestions: anchored,
-          citations: response.citations ?? [],
-        }));
-      } catch (error) {
-        if (generationToken.current !== token) {
-          return;
-        }
-        updateAssistantMessage(assistantId, (m) => ({
-          id: m.id,
-          role: "assistant",
-          mode: m.mode,
-          createdAt: m.createdAt,
-          text: m.text,
-          suggestions: m.suggestions,
-          citations: m.citations,
-          status: "error",
-          error: error instanceof Error ? error.message : "Generation failed",
-        }));
-      }
-    },
-    [
-      generating,
-      editorView,
-      documentTextProp,
-      config,
-      updateAssistantMessage,
-      setMessages,
-      mode,
-      handleNewThread,
-    ],
-  );
-
-  // ---- retry after stop ------------------------------------------------------
-
-  /** Re-runs the prompt whose generation the user just stopped. */
-  const handleRetry = useCallback(() => {
-    const input = retryInput;
-    if (input === null) {
-      return;
-    }
-    setRetryInput(null);
-    void handleGenerate(input);
-  }, [retryInput, handleGenerate]);
-
-  // A non-empty draft means the user has moved on to a new prompt;
-  // drop the retry offer so the action button reverts to send (and
-  // stays send even if they delete the draft again).
-  const composerIsEmpty = editorController.isEmpty;
-  // Drop the retry offer during render (adjust-state-during-render) rather than
-  // in an effect; guarded on retryInput !== null so it converges in one pass.
-  if (!composerIsEmpty && retryInput !== null) {
-    setRetryInput(null);
-  }
-
-  // ---- accept / reject -----------------------------------------------------
-
-  const findSuggestion = useCallback(
-    (suggestionId: string) =>
-      allSuggestions.find((s) => s.id === suggestionId) ?? null,
-    [allSuggestions],
-  );
-
-  const findOwningMessageId = useCallback(
-    (suggestionId: string): string | null => {
-      for (const m of messages) {
-        if (m.role !== "assistant") {
-          continue;
-        }
-        if (m.suggestions.some((s) => s.id === suggestionId)) {
-          return m.id;
-        }
-      }
-      return null;
-    },
-    [messages],
-  );
-
-  // Report each successfully applied suggestion to the mounting surface
-  // (config.onSuggestionApplied), from whichever path applied it.
-  const notifyApplied = useCallback(
-    (candidates: AISuggestion[], appliedIds: readonly string[]) => {
-      const onApplied = config.onSuggestionApplied;
-      if (!onApplied) {
-        return;
-      }
-      const applied = new Set(appliedIds);
-      for (const suggestion of candidates) {
-        if (applied.has(suggestion.id)) {
-          onApplied(suggestion);
-        }
-      }
-    },
-    [config.onSuggestionApplied],
-  );
-
-  // Apply a single suggestion at the given mode. Split out from
-  // handleAcceptOne so resolveFirstAccept can re-run the deferred
-  // accept against the *freshly chosen* mode without going back
-  // through the first-accept gate that captured `applyModeStored ===
-  // null` in the original closure.
-  const acceptOneAtMode = useCallback(
-    (suggestionId: string, applyAt: AISuggestionApplyMode) => {
-      const target = findSuggestion(suggestionId);
-      if (!target || target.status !== "pending") {
-        return;
-      }
-      if (readOnly) {
-        if (!config.onUnlockRequest) {
-          return;
-        }
-        setPendingAccepts((prev) =>
-          prev.includes(suggestionId) ? prev : [...prev, suggestionId],
-        );
-        config.onUnlockRequest();
-        return;
-      }
-      if (!editorView) {
-        return;
-      }
-      const result = applySuggestions({
-        view: editorView,
-        suggestions: [target],
-        mode: applyAt,
-        author,
-      });
-      applyResultToMessages(result);
-      notifyApplied([target], result.applied);
-    },
-    [
-      findSuggestion,
-      readOnly,
-      config,
-      editorView,
-      author,
-      applyResultToMessages,
-      notifyApplied,
-      setPendingAccepts,
-    ],
-  );
-
-  const handleAcceptOne = useCallback(
-    (suggestionId: string) => {
-      // First-time accept: ask whether to apply with tracked changes,
-      // remember the answer, and defer this accept until they pick.
-      // Surfaces with a pinned mode (promptForApplyMode: false) skip the gate.
-      if (config.promptForApplyMode !== false) {
-        const target = findSuggestion(suggestionId);
-        const gate = resolveAcceptOneGate(
-          applyModeStored,
-          suggestionId,
-          target?.status === "pending",
-        );
-        if (gate.type === "noop") {
-          return;
-        }
-        if (gate.type === "defer") {
-          setPendingFirstAccept(gate.pending);
-          return;
-        }
-      }
-      acceptOneAtMode(suggestionId, applyMode);
-    },
-    [
-      applyModeStored,
-      config.promptForApplyMode,
-      findSuggestion,
-      acceptOneAtMode,
-      applyMode,
-    ],
-  );
-
-  const handleRejectOne = useCallback(
-    (suggestionId: string) => {
-      const messageId = findOwningMessageId(suggestionId);
-      if (!messageId) {
-        return;
-      }
-      updateSuggestion(messageId, suggestionId, (s) => ({
-        ...s,
-        status: "rejected",
-      }));
-    },
-    [findOwningMessageId, updateSuggestion],
-  );
-
-  // Apply every pending suggestion in a message at the given mode.
-  // Mirror of acceptOneAtMode, with the same rationale.
-  const acceptGroupAtMode = useCallback(
-    (messageId: string, applyAt: AISuggestionApplyMode) => {
-      const message = messages.find(
-        (m): m is AssistantThreadMessage =>
-          m.role === "assistant" && m.id === messageId,
-      );
-      if (!message) {
-        return;
-      }
-      const targets = message.suggestions.filter((s) => s.status === "pending");
-      if (targets.length === 0) {
-        return;
-      }
-      if (readOnly) {
-        if (!config.onUnlockRequest) {
-          return;
-        }
-        const ids = targets.map((s) => s.id);
-        setPendingAccepts((prev) => {
-          const merged = new Set(prev);
-          for (const id of ids) {
-            merged.add(id);
-          }
-          return [...merged];
-        });
-        config.onUnlockRequest();
-        return;
-      }
-      if (!editorView) {
-        return;
-      }
-      const result = applySuggestions({
-        view: editorView,
-        suggestions: targets,
-        mode: applyAt,
-        author,
-      });
-      applyResultToMessages(result);
-      notifyApplied(targets, result.applied);
-    },
-    [
-      messages,
-      readOnly,
-      config,
-      editorView,
-      author,
-      applyResultToMessages,
-      notifyApplied,
-      setPendingAccepts,
-    ],
-  );
-
-  const handleAcceptGroup = useCallback(
-    (messageId: string) => {
-      // Surfaces with a pinned mode (promptForApplyMode: false) skip the gate.
-      if (config.promptForApplyMode !== false) {
-        const message = messages.find(
-          (m): m is AssistantThreadMessage =>
-            m.role === "assistant" && m.id === messageId,
-        );
-        const hasPending =
-          message?.suggestions.some((s) => s.status === "pending") ?? false;
-        const gate = resolveAcceptGroupGate(
-          applyModeStored,
-          messageId,
-          hasPending,
-        );
-        if (gate.type === "noop") {
-          return;
-        }
-        if (gate.type === "defer") {
-          setPendingFirstAccept(gate.pending);
-          return;
-        }
-      }
-      acceptGroupAtMode(messageId, applyMode);
-    },
-    [
-      applyModeStored,
-      config.promptForApplyMode,
-      messages,
-      acceptGroupAtMode,
-      applyMode,
-    ],
-  );
-
-  const handleRejectGroup = useCallback(
-    (messageId: string) => {
-      updateAssistantMessage(messageId, (m) => ({
-        ...m,
-        suggestions: m.suggestions.map((s) =>
-          s.status === "pending" ? { ...s, status: "rejected" } : s,
-        ),
-      }));
-    },
-    [updateAssistantMessage],
-  );
-
-  /**
-   * Called from the apply-mode prompt: persist the user's choice and
-   * re-run whichever accept they had just attempted, against the
-   * freshly chosen mode (we go around the apply-mode gate in
-   * `handleAcceptOne`/`handleAcceptGroup` because that gate would
-   * still see `applyModeStored === null` until React re-renders).
-   */
-  const resolveFirstAccept = useCallback(
-    (chosen: AISuggestionApplyMode) => {
-      const queued = pendingFirstAccept;
-      persistApplyMode(chosen);
-      setPendingFirstAccept(null);
-      if (!queued) {
-        return;
-      }
-      if (queued.kind === "one") {
-        acceptOneAtMode(queued.suggestionId, chosen);
-      } else {
-        acceptGroupAtMode(queued.messageId, chosen);
-      }
-    },
-    [pendingFirstAccept, persistApplyMode, acceptOneAtMode, acceptGroupAtMode],
-  );
-
-  // ---- pending-accept flush on unlock --------------------------------------
-
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (unlock flag → flush queued accepts + setState); move into the unlock handler
-  useEffect(() => {
-    if (readOnly || !editorView || pendingAccepts.length === 0) {
-      return;
-    }
-    const queued = new Set(pendingAccepts);
-    setPendingAccepts([]);
-    const targets = allSuggestions.filter(
-      (s) => queued.has(s.id) && s.status === "pending",
-    );
-    if (targets.length === 0) {
-      return;
-    }
-    const result = applySuggestions({
-      view: editorView,
-      suggestions: targets,
-      mode: applyMode,
-      author,
-    });
-    applyResultToMessages(result);
-    notifyApplied(targets, result.applied);
-  }, [
-    readOnly,
-    editorView,
-    pendingAccepts,
-    allSuggestions,
-    applyMode,
-    author,
-    applyResultToMessages,
-    notifyApplied,
-    setPendingAccepts,
-  ]);
-
-  // ---- focus + scroll-to ---------------------------------------------------
-
-  const handleFocusSuggestion = useCallback(
-    (suggestionId: string) => {
-      setFocusedId(suggestionId);
-      const target = findSuggestion(suggestionId);
-      if (!editorView || !target) {
-        return;
-      }
-      const anchor = resolveSuggestionAnchor(editorView.state.doc, target);
-      if (!anchor) {
-        return;
-      }
-      scrollEditorToPos(editorView, anchor.from);
-    },
-    [editorView, findSuggestion],
-  );
-
-  // ---- suggestion stepper --------------------------------------------------
-
-  // Pending suggestions in document order — the go-over-the-doc review walks
-  // them top to bottom.
-  const orderedPending = useMemo(
-    () =>
-      allSuggestions
-        .filter((s) => s.status === "pending")
-        .toSorted((a, b) => a.range.from - b.range.from),
-    [allSuggestions],
-  );
-
-  const focusedPendingIndex = focusedId
-    ? orderedPending.findIndex((s) => s.id === focusedId)
-    : -1;
-  const stepperIndex = focusedPendingIndex === -1 ? 0 : focusedPendingIndex;
-
-  const stepBy = useCallback(
-    (delta: number) => {
-      if (orderedPending.length === 0) {
-        return;
-      }
-      const target = orderedPending.at(
-        (stepperIndex + delta + orderedPending.length) % orderedPending.length,
-      );
-      if (target) {
-        handleFocusSuggestion(target.id);
-      }
-    },
-    [orderedPending, stepperIndex, handleFocusSuggestion],
-  );
-
-  // Accept/dismiss the focused suggestion and advance to the next pending one
-  // (the one after it in document order, else the previous).
-  const resolveCurrent = useCallback(
-    (action: "accept" | "dismiss") => {
-      const current = orderedPending.at(stepperIndex);
-      if (!current) {
-        return;
-      }
-      const next =
-        orderedPending.at(stepperIndex + 1) ??
-        (stepperIndex > 0 ? orderedPending.at(stepperIndex - 1) : undefined);
-      if (action === "accept") {
-        handleAcceptOne(current.id);
-      } else {
-        handleRejectOne(current.id);
-      }
-      if (next) {
-        handleFocusSuggestion(next.id);
-      } else {
-        setFocusedId(null);
-      }
-    },
-    [
-      orderedPending,
-      stepperIndex,
-      handleAcceptOne,
-      handleRejectOne,
-      handleFocusSuggestion,
-    ],
-  );
-
-  // When a generation lands new suggestions, jump to the first one so the
-  // review starts immediately.
-  const seenSuggestionIdsRef = useRef<Set<string>>(new Set());
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (generation lands fresh suggestions → focus the first one); the trigger is async suggestion data, not a single setter call-site, so move into the generation-complete flow
-  useEffect(() => {
-    const seen = seenSuggestionIdsRef.current;
-    const fresh = orderedPending.find((s) => !seen.has(s.id));
-    for (const s of orderedPending) {
-      seen.add(s.id);
-    }
-    if (fresh) {
-      handleFocusSuggestion(fresh.id);
-    }
-  }, [orderedPending, handleFocusSuggestion]);
-
-  // ---- citation activate ---------------------------------------------------
-
-  const handleActivateCitation = useCallback(
-    (citation: AICitation) => {
-      setActiveCitationId(citation.id);
-      // PDF: notify the wrapper to drive its own bbox overlay.
-      onCitationActivate?.(citation);
-      // Folio: scroll the editor to the cited range.
-      if (citation.source.kind === "folio-range" && editorView) {
-        scrollEditorToPos(editorView, citation.source.from);
-      }
-    },
-    [editorView, onCitationActivate],
-  );
-
-  // ---- keybindings ---------------------------------------------------------
-
-  // Escape closes the floating thread panel and dismisses a pending
-  // retry offer. The listener is only installed while it has work to
-  // do: in standalone there's no panel to close (the thread is always
-  // visible alongside the bar), so only an active retry offer keeps
-  // the binding alive there.
-  const panelClosableByEscape = layout === "floating" && panelOpen;
-  useExternalSyncEffect(() => {
-    if (!panelClosableByEscape && retryInput === null) {
-      return undefined;
-    }
-    const handler = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") {
-        return;
-      }
-      setRetryInput(null);
-      if (panelClosableByEscape) {
-        setPanelOpen(false);
-      }
-    };
-    window.addEventListener("keydown", handler);
-    return () => {
-      window.removeEventListener("keydown", handler);
-    };
-  }, [panelClosableByEscape, retryInput]);
-
-  // (Mode is derived from canEdit + readOnly — no auto-sync needed.)
-
-  // ---- render --------------------------------------------------------------
-
-  const hasMessages = messages.length > 0;
-  const showAcceptUI = editorView !== null || readOnly; // hide for true PDF (no view, not readOnly)
-
-  // In standalone the thread is always visible (it fills the
-  // container alongside the bar), so the floating-only "open/close"
-  // toggle is irrelevant.
-  const threadVisible = layout === "standalone" || (panelOpen && hasMessages);
-
-  const threadPanel = threadVisible ? (
-    <ThreadPanel
-      layout={layout}
-      messages={messages}
-      focusedId={focusedId}
-      activeCitationId={activeCitationId}
-      showAcceptUI={showAcceptUI && mode === "edit"}
-      pendingFirstAccept={pendingFirstAccept !== null}
-      onResolveFirstAccept={resolveFirstAccept}
-      height={panelHeight}
-      onResize={setPanelHeight}
-      onAcceptOne={handleAcceptOne}
-      onRejectOne={handleRejectOne}
-      onAcceptGroup={handleAcceptGroup}
-      onRejectGroup={handleRejectGroup}
-      onFocusSuggestion={handleFocusSuggestion}
-      onActivateCitation={handleActivateCitation}
-    />
-  ) : null;
-
-  const promptBar = (
-    <PromptBar
-      layout={layout}
-      status={status}
-      pendingCount={pendingCount}
-      panelOpen={panelOpen}
-      showThreadToggle={layout === "floating" && hasMessages}
-      presets={config.presets}
-      threadHasMessages={hasMessages}
-      onSubmit={(input) => {
-        void handleGenerate(input);
-      }}
-      onStop={handleStop}
-      onRetry={retryInput !== null ? handleRetry : undefined}
-      onNewThread={hasMessages ? handleNewThread : undefined}
-      newThreadLabel={t("chat.newChat")}
-      onTogglePanel={() => setPanelOpen((v) => !v)}
-      editorController={editorController}
-    />
-  );
-
-  // The go-over-the-doc review bar: floats above the prompt bar while there
-  // are pending suggestions, stepping through them in document order.
-  const stepperBar =
-    layout === "floating" &&
-    !threadVisible &&
-    mode === "edit" &&
-    showAcceptUI &&
-    orderedPending.length > 0 ? (
-      <SuggestionStepper
-        index={stepperIndex}
-        total={orderedPending.length}
-        onStep={stepBy}
-        onAccept={() => resolveCurrent("accept")}
-        onDismiss={() => resolveCurrent("dismiss")}
-      />
-    ) : null;
-
-  if (layout === "standalone") {
-    return (
-      <TooltipProvider delay={300}>
-        <div className="flex h-full min-h-0 flex-col">
-          {threadPanel}
-          {promptBar}
-        </div>
-      </TooltipProvider>
-    );
-  }
-
-  return (
-    <TooltipProvider delay={300}>
-      {threadPanel}
-      {stepperBar}
-      {promptBar}
-    </TooltipProvider>
-  );
-}
+type FileAIChatLayout = "floating" | "standalone";
 
 // ===========================================================================
 // View helpers
@@ -1187,45 +126,6 @@ export function scrollEditorToPos(view: EditorView, pos: number): void {
   });
 }
 
-/**
- * Best-effort PM range of what the user is currently looking at,
- * scoped to the editor's scroll container. The model uses this to
- * bias answers toward the visible region — "what does this section
- * say?" implicitly means "this section in front of me".
- *
- * Falls back to null when the scroll container or coordinate lookup
- * isn't reachable (initial render, detached view).
- */
-function computeVisibleRange(
-  view: EditorView,
-): { from: number; to: number } | null {
-  const scrollContainer = view.dom.closest("[data-folio-scroll]");
-  if (scrollContainer === null) {
-    return null;
-  }
-  const rect = scrollContainer.getBoundingClientRect();
-  // Probe a small inset from each edge so we don't catch ghost gaps
-  // between pages or padding.
-  const PROBE_INSET = 12;
-  const top = view.posAtCoords({
-    left: rect.left + PROBE_INSET,
-    top: rect.top + PROBE_INSET,
-  });
-  const bottom = view.posAtCoords({
-    left: rect.left + PROBE_INSET,
-    top: rect.bottom - PROBE_INSET,
-  });
-  if (!top || !bottom) {
-    return null;
-  }
-  const from = Math.min(top.pos, bottom.pos);
-  const to = Math.max(top.pos, bottom.pos);
-  if (to <= from) {
-    return null;
-  }
-  return { from, to };
-}
-
 // ===========================================================================
 // Prompt bar
 // ===========================================================================
@@ -1252,10 +152,27 @@ type PromptBarPresetScopeChooser = {
 };
 
 type PromptBarProps = {
+  /**
+   * Gates surface-specific FEATURES only — the preset chips and the
+   * pending-suggestion badge are shown in `floating` surfaces (chats
+   * over a document) and hidden in `standalone` ones. It no longer
+   * drives any geometry: position, width, veil, chip offset, and
+   * status-row placement all live in `DockedComposer`, so every surface
+   * is docked identically regardless of this value.
+   */
   layout: FileAIChatLayout;
   status: FileAIChatStatus;
   canSubmitNow?: (() => boolean) | undefined;
-  onSubmit: (input: { prompt: string; presetId?: string }) => void;
+  /**
+   * Emitted on send. `files` carries any attachments the user added via
+   * the shared (+) menu (empty for preset chips, which never attach);
+   * callers thread them into `buildChatRequestMessage`.
+   */
+  onSubmit: (input: {
+    prompt: string;
+    presetId?: string;
+    files?: ChatInputDraft["files"];
+  }) => void;
   presetScopeChooser?: PromptBarPresetScopeChooser | undefined;
   /**
    * Pre-saved prompts surfaced as chips above the empty bar. Clicking a
@@ -1265,8 +182,6 @@ type PromptBarProps = {
    */
   presets?: AISuggestionPreset[] | undefined;
   threadHasMessages?: boolean | undefined;
-  onNewThread?: (() => void) | undefined;
-  newThreadLabel?: string | undefined;
   /**
    * Optional cancel callback. When provided AND `status` is
    * `"generating"`, the send button morphs into a stop button
@@ -1285,14 +200,11 @@ type PromptBarProps = {
   onRetry?: (() => void) | undefined;
 
   // ---- floating-only -----------------------------------------------------
-  // These three props drive UI that only exists in floating mode
-  // (thread open/close chevron, pending-suggestion badge). In
-  // standalone we still pass safe defaults — a discriminated union
-  // would be cleaner but doubles the type surface.
+  // Drives the pending-suggestion badge, which only exists in floating
+  // mode. Thread-card visibility is owned by the surface: the card
+  // carries its own collapse affordance (`ThreadCardCollapseButton`),
+  // so the pill renders no thread-visibility control.
   pendingCount: number;
-  panelOpen: boolean;
-  showThreadToggle: boolean;
-  onTogglePanel: () => void;
 
   /**
    * Rich-editor controller from `useChatEditor`. The bar renders
@@ -1324,10 +236,32 @@ type PromptBarProps = {
   /**
    * When true the composer keeps accepting input while a response
    * streams: pressing Enter queues a send via `useChatSession` and
-   * dispatches it once the turn finishes. The primary action stays
-   * Send; a separate Stop button is shown alongside it.
+   * dispatches it once the turn finishes. The single action button
+   * still morphs to Stop while generating (there is never a second
+   * button); sending mid-turn happens through Enter/submit, which
+   * queues the draft.
    */
   queueWhileGenerating?: boolean | undefined;
+  /**
+   * The status row rendered below the bar, mounted as one organism
+   * (`ChatComposerDock`) so a surface can never hand-assemble — or
+   * forget — a control. Omit on surfaces with no status row.
+   */
+  dock?: ReactNode | undefined;
+  /**
+   * Follow-up-prompt chips stacked above the bar (typically
+   * `SuggestedFollowupChips`). Routed through `DockedComposer` so the
+   * chip offset stays owned in one place instead of each surface
+   * hand-positioning it. Omit on surfaces without follow-up chips.
+   */
+  followupChips?: ReactNode | undefined;
+  /**
+   * Opt in to the shared (+) composer menu on the left (attach files via
+   * the controller's picker). Only surfaces that thread `files` through
+   * `onSubmit` set this; leaving it off keeps the affordance hidden so a
+   * surface that can't send attachments never offers a dead control.
+   */
+  attachmentsEnabled?: boolean | undefined;
 };
 
 /**
@@ -1349,7 +283,6 @@ export function PromptBarPlaceholderContent({
 }
 
 type PromptBarShellProps = {
-  layout: FileAIChatLayout;
   children: ReactNode;
 } & Omit<ComponentProps<"div">, "children">;
 
@@ -1367,20 +300,22 @@ const DOC_FLOAT_SURFACE_CLASS =
   "[--doc-float-surface:var(--color-white)] dark:[--doc-float-surface:var(--popover)] bg-(--doc-float-surface)";
 
 /**
- * Shared outer shell for the floating prompt bar. Both the live
- * `PromptBar` and the loading `PromptBarPlaceholder` (in the
- * inspector) render through this so they can never drift apart.
+ * The bar box itself — border, shadow, halo, and the doc-anchored
+ * surface — with no positioning or sizing of its own. `DockedComposer`
+ * owns where the bar sits and how wide it is; this shell just paints the
+ * box and fills the width it is given (`w-full`). Both the live
+ * `PromptBar` and the loading `PromptBarPlaceholder` render through it so
+ * they can never drift apart.
  *
- * The surface is solid on purpose: a translucent background lets
- * document text bleed through, and backdrop-blur cannot compensate
- * for children of this shell — the shell's own backdrop-filter makes
- * it the backdrop root for its descendants (the preset chips), whose
- * blur then samples nothing. In floating mode the solid color is the
- * document anchor (see `DOC_FLOAT_SURFACE_CLASS`); in standalone the
- * bar sits on app chrome, so it keeps the theme popover surface.
+ * The surface is solid on purpose: a translucent background lets content
+ * behind the bar bleed through, and backdrop-blur cannot compensate for
+ * children of this shell — the shell's own backdrop-filter would make it
+ * the backdrop root for its descendants (the preset chips), whose blur
+ * then samples nothing. The solid `DOC_FLOAT_SURFACE_CLASS` is the anchor
+ * (white in light, the theme popover in dark); the halo fades the content
+ * around the bar toward the page so it reads as floating over it.
  */
 export function PromptBarShell({
-  layout,
   children,
   className,
   ...rest
@@ -1389,24 +324,185 @@ export function PromptBarShell({
     <div
       {...rest}
       className={cn(
-        "group/bar border-foreground/15 relative flex items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
+        "group/bar border-foreground/15 relative flex w-full items-end gap-1 rounded-2xl border transition-[box-shadow,border-color]",
         "shadow-[0_0_0_1px_rgb(0_0_0/0.02),0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
         "after:pointer-events-none after:absolute after:-inset-6 after:-z-10 after:rounded-3xl after:bg-[radial-gradient(ellipse_at_center,var(--doc-float-halo)_0%,transparent_75%)] after:opacity-90",
-        "w-[min(560px,calc(100%-2rem))] py-1 ps-1.5 pe-1",
-        layout === "floating"
-          ? cn(
-              "absolute start-1/2 bottom-8 z-50 -translate-x-1/2",
-              DOC_FLOAT_SURFACE_CLASS,
-              // The halo fades document text around the bar, so it
-              // blends toward the page: white in light, the theme
-              // background (the folio canvas) in dark.
-              "[--doc-float-halo:var(--color-white)] dark:[--doc-float-halo:var(--background)]",
-            )
-          : "bg-popover relative mb-8 shrink-0 self-center [--doc-float-halo:var(--background)]",
+        // py-0.5 keeps the single-line pill slim (the inner editor cell's
+        // min-h-8 sets the line height; the shell adds only a hairline of
+        // breathing room) so the bar reads lighter than the transcript.
+        "py-0.5 ps-1.5 pe-1",
+        DOC_FLOAT_SURFACE_CLASS,
+        // The halo fades content around the bar, so it blends toward the
+        // page: white in light, the theme background in dark.
+        "[--doc-float-halo:var(--color-white)] dark:[--doc-float-halo:var(--background)]",
         className,
       )}
     >
       {children}
+    </div>
+  );
+}
+
+/**
+ * Shared width of the docked composer column and any floating thread
+ * card that aligns to it. One owner so the bar and the card can never
+ * drift to different widths.
+ */
+const DOCKED_COMPOSER_WIDTH_CLASS = "w-[min(560px,calc(100%-2rem))]";
+
+/**
+ * Bottom offset for a floating `ChatThreadCard` so it clears the docked
+ * composer stack that `DockedComposer` pins at `bottom-3.5` (14px).
+ *
+ * Stack, measured from the pane's bottom edge: 14px column offset +
+ * ~24px status row (icon-xs controls) + 6px bar-to-row gap (`mt-1.5`) +
+ * ~38px bar (min-h-8 cell + py-0.5 + border) ⇒ the bar's TOP sits ~82px
+ * up. `bottom-24` (96px) drops the card ~14px above that, matching the
+ * transcript's rhythm. (Both floating surfaces render a status row; a
+ * bar-only stack would clear this offset with room to spare.)
+ */
+const FLOATING_THREAD_CARD_OFFSET_CLASS = "bottom-24";
+
+type DockedComposerProps = {
+  /**
+   * Follow-up chips stacked directly above the bar. Owns no offset of
+   * its own — the chips component carries its own bottom spacing and
+   * collapses to nothing when it has nothing to show, so no phantom gap
+   * appears above the bar.
+   */
+  chips?: ReactNode;
+  /** The prompt bar itself (a `PromptBarShell`). */
+  bar: ReactNode;
+  /**
+   * Status row beneath the bar (matter picker, context meter, send-mode
+   * shield). Anchored flush under the bar with the single owned gap.
+   */
+  dock?: ReactNode;
+};
+
+/**
+ * The one and only owner of the docked-composer geometry.
+ *
+ * Every chat surface — the inspector chat tab, the file-overlay chat,
+ * the Template Studio chat — mounts its `PromptBar` through this, so the
+ * bar's width, its bottom offset from the host pane, the follow-up-chip
+ * offset, and the status-row placement live in exactly one place and can
+ * never drift between surfaces. The column pins to the bottom of the
+ * nearest positioned host pane and centres itself; the wrapper is
+ * click-through so scrolled content behind the composer stays reachable
+ * in the gaps, while the bar, chips, and dock capture their own clicks.
+ *
+ * The bar sits above a surface's own thread panel (z-50 vs the panel's
+ * z-40) so the two never fight where they meet, and the chips sit below
+ * it (z-30) so an open thread wins the overlap.
+ */
+export function DockedComposer({ chips, bar, dock }: DockedComposerProps) {
+  return (
+    <div className="pointer-events-none absolute inset-x-0 bottom-3.5 flex flex-col items-center">
+      {chips !== undefined && (
+        <div
+          className={cn(
+            "pointer-events-auto relative z-30 px-1",
+            DOCKED_COMPOSER_WIDTH_CLASS,
+          )}
+        >
+          {chips}
+        </div>
+      )}
+      <div
+        className={cn(
+          "pointer-events-auto relative z-50 flex flex-col",
+          DOCKED_COMPOSER_WIDTH_CLASS,
+        )}
+      >
+        {/* Shared glass veil behind the whole composer stack (bar + status
+            row). Legibility over live document content comes from this one
+            heavy blur band, not from per-control chrome: the status-row
+            controls stay quiet muted text/icons sitting directly on it.
+            Negative insets let it overhang the stack and reach the pane's
+            bottom edge (the column floats 3.5 above it). */}
+        <ComposerVeil className="-inset-x-3 -top-4 -bottom-3.5" />
+        {bar}
+        {/* No extra top margin: `ComposerStatusRow` owns the single
+            bar-to-row gap (mt-1.5), same rhythm as the main chat tray. */}
+        {dock !== undefined && <div className="px-1">{dock}</div>}
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Collapse affordance rendered by `ChatThreadCard` in its top end
+ * corner, so the composer bar never carries a thread-visibility
+ * control. The card reopens automatically on the next send.
+ */
+function ThreadCardCollapseButton({ onCollapse }: { onCollapse: () => void }) {
+  const t = useTranslations();
+  return (
+    <Button
+      aria-label={t("chat.hideThread")}
+      className="text-muted-foreground hover:text-foreground absolute end-1.5 top-1.5 z-20 rounded-full"
+      onClick={onCollapse}
+      size="icon-xs"
+      tooltip={t("chat.hideThread")}
+      type="button"
+      variant="ghost"
+    >
+      <ChevronDownIcon aria-hidden="true" className="size-3.5" />
+    </Button>
+  );
+}
+
+type ChatThreadCardProps = {
+  /** Scroll container ref for the transcript inside the card. */
+  scrollRef: RefObject<HTMLDivElement | null>;
+  onCollapse: () => void;
+  children: ReactNode;
+};
+
+/**
+ * The floating glass thread card shared by the file-chat overlay and
+ * Template Studio. One owner of the card's geometry (aligned to the
+ * `DockedComposer` stack via the shared width + offset constants), its
+ * glass treatment, the collapse affordance, and the scrolling transcript
+ * container, so the two surfaces can never drift. Surfaces pass only
+ * their transcript (and any suggestion list) as children.
+ */
+export function ChatThreadCard({
+  scrollRef,
+  onCollapse,
+  children,
+}: ChatThreadCardProps) {
+  const t = useTranslations();
+  return (
+    <div
+      aria-label={t("chat.aiThread")}
+      className={cn(
+        "absolute start-1/2 z-40 flex max-h-[min(45dvh,380px)] min-h-0 -translate-x-1/2 flex-col overflow-hidden rounded-2xl border",
+        FLOATING_THREAD_CARD_OFFSET_CLASS,
+        DOCKED_COMPOSER_WIDTH_CLASS,
+        "bg-popover/90 border-border text-popover-foreground",
+        "[backdrop-filter:blur(18px)_saturate(160%)] [-webkit-backdrop-filter:blur(18px)_saturate(160%)]",
+        "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
+        "hover:bg-popover focus-within:bg-popover",
+        "transition-[background-color,border-color] duration-200 ease-out",
+        "shadow-[0_1px_2px_rgb(0_0_0/0.06),0_20px_64px_rgb(0_0_0/0.18)]",
+        "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1",
+      )}
+      role="dialog"
+    >
+      <ThreadCardCollapseButton onCollapse={onCollapse} />
+      {/* Plain scroll container — bypasses the legacy Conversation's
+          `size-full` chain, which only resolves when the parent has an
+          explicit height (this card caps with `max-h` only, so flex-1
+          children get no definite size to base `size-full` on). */}
+      <div
+        className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto p-3"
+        ref={scrollRef}
+        style={{ scrollbarGutter: "stable" }}
+      >
+        {children}
+      </div>
     </div>
   );
 }
@@ -1474,8 +570,6 @@ export function PromptBar(props: PromptBarProps) {
     layout,
     status,
     pendingCount,
-    panelOpen,
-    showThreadToggle,
     canSubmitNow,
     onSubmit,
     presetScopeChooser,
@@ -1483,46 +577,58 @@ export function PromptBar(props: PromptBarProps) {
     threadHasMessages = false,
     onStop,
     onRetry,
-    onNewThread,
-    newThreadLabel,
-    onTogglePanel,
     editorController,
     emptyPlaceholder,
     attentionPulseSeq,
     sendDisabledReason,
     queueWhileGenerating = false,
+    dock,
+    followupChips,
+    attachmentsEnabled = false,
   } = props;
 
   const t = useTranslations();
   const format = useFormatter();
-  const { canSubmit, editor, isEmpty } = editorController;
+  const {
+    attachments,
+    canSubmit,
+    editor,
+    fileInputAccept,
+    fileInputRef,
+    handleFileInputChange,
+    isEmpty,
+    openFilePicker,
+    removeFile,
+  } = editorController;
 
   const isGenerating = status === "generating";
   const busy = isGenerating || status === "applying";
-  // The send button doubles as a stop button while a response is
-  // streaming, so users don't have to hunt a separate floating
-  // control (and the bar stays the single point of intent).
-  const showStop = isGenerating && onStop !== undefined;
   const isSendBlocked = sendDisabledReason !== undefined;
   const inputDisabled = isSendBlocked;
   const submitDisabled = busy || isSendBlocked;
   // With queuing enabled the composer keeps accepting input while a
   // response streams: `useChatSession` holds submitted drafts until the
-  // turn finishes. Keep Send as the primary action and show Stop beside it.
+  // turn finishes. The single action button still morphs to Stop while
+  // generating (on every surface); sending mid-turn happens through
+  // Enter/submit, which queues the draft — same behaviour as the main
+  // chat, and structurally no second button can appear beside it.
   const composerSubmitDisabled = queueWhileGenerating
     ? status === "applying" || isSendBlocked
     : submitDisabled;
-  const morphSendToStop = showStop && !queueWhileGenerating;
-  const showQueueStopButton = showStop && queueWhileGenerating;
   // After a stop the send arrow becomes Retry until the user starts
   // a new draft (the owner also clears `onRetry` then; the `isEmpty`
   // gate just avoids a one-render flash before that state lands).
-  const morphSendToRetry =
-    !morphSendToStop &&
-    onRetry !== undefined &&
-    isEmpty &&
-    !busy &&
-    !isSendBlocked;
+  // Passing `undefined` otherwise keeps the offer out of the button's
+  // state entirely, so it can never shadow Send while typing.
+  const retryOffer =
+    onRetry !== undefined && isEmpty && !busy && !isSendBlocked
+      ? onRetry
+      : undefined;
+  const composerActionMode = resolveChatComposerAction({
+    isGenerating,
+    onStop,
+    onRetry: retryOffer,
+  });
 
   // Glow on attention pulse — kicked from the inspector when the
   // user clicks the AI-suggestions chip so they see the bar light
@@ -1546,8 +652,8 @@ export function PromptBar(props: PromptBarProps) {
   // raw editor draft. Adapting here lets the rest of the wiring
   // (Enter handler, blur/setEditable, submit gating) stay shared.
   const handleComposerSubmit = useCallback(
-    (draft: { html: string }) => {
-      onSubmit({ prompt: draft.html });
+    (draft: ChatInputDraft) => {
+      onSubmit({ prompt: draft.html, files: draft.files });
     },
     [onSubmit],
   );
@@ -1564,7 +670,6 @@ export function PromptBar(props: PromptBarProps) {
   // empty input — accepts and sends the preset in one step.
   const presetChipsVisible =
     layout === "floating" &&
-    !panelOpen &&
     !threadHasMessages &&
     presets !== undefined &&
     presets.length > 0 &&
@@ -1579,12 +684,12 @@ export function PromptBar(props: PromptBarProps) {
    */
   const [scopePromptPreset, setScopePromptPreset] =
     useState<AISuggestionPreset | null>(null);
-  // Cancel the scope chooser during render (adjust-state-during-render) rather
-  // than in an effect when the preset chips lose visibility; guarded on
-  // scopePromptPreset !== null so it converges in one pass.
-  if (!presetChipsVisible && scopePromptPreset !== null) {
-    setScopePromptPreset(null);
-  }
+  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- event-relay (preset chips lose visibility → cancel the scope chooser); setScopePromptPreset is shared with submitPreset, so move into the visibility-change source
+  useEffect(() => {
+    if (!presetChipsVisible && scopePromptPreset !== null) {
+      setScopePromptPreset(null);
+    }
+  }, [presetChipsVisible, scopePromptPreset]);
   const submitPreset = useCallback(
     (preset: AISuggestionPreset) => {
       if (canSubmitNow !== undefined && !canSubmitNow()) {
@@ -1639,7 +744,7 @@ export function PromptBar(props: PromptBarProps) {
     [presetChipsVisible, presets, editor, scopePromptPreset],
   );
 
-  return (
+  const shell = (
     <PromptBarShell
       aria-busy={busy}
       aria-label={t("chat.aiPrompt")}
@@ -1652,7 +757,6 @@ export function PromptBar(props: PromptBarProps) {
         // catch the eye, not communicate ongoing work.
         attention && !inputDisabled && "border-primary ring-primary/40 ring-4",
       )}
-      layout={layout}
       role="toolbar"
       tabIndex={-1}
     >
@@ -1721,6 +825,47 @@ export function PromptBar(props: PromptBarProps) {
           ))}
         </div>
       )}
+      {attachmentsEnabled && (
+        <>
+          {attachments.length > 0 && (
+            // Attachments float above the bar in an opaque tray so the chips
+            // (translucent `bg-muted/50`) stay readable over a document in
+            // floating mode; the bar's own single row is left untouched.
+            <div
+              className={cn(
+                DOC_FLOAT_SURFACE_CLASS,
+                "border-foreground/15 absolute inset-x-1 bottom-full mb-2 overflow-hidden rounded-xl border shadow-[0_1px_2px_rgb(0_0_0/0.03),0_8px_20px_rgb(0_0_0/0.05)]",
+              )}
+            >
+              <ChatDraftAttachmentChips
+                files={attachments}
+                onRemove={removeFile}
+              />
+            </div>
+          )}
+          <input
+            accept={fileInputAccept}
+            className="hidden"
+            disabled={inputDisabled}
+            multiple
+            onChange={handleFileInputChange}
+            ref={fileInputRef}
+            type="file"
+          />
+          {/* Shared (+) affordance on the left, identical to the main chat
+              composer; opens the attach-file picker via the same controller.
+              The h-8 wrapper (same pattern as the pending badge below)
+              centers the size-7 circle on the editor cell's single-line
+              height: the shell is items-end, so the bare 28px button would
+              otherwise ride 2px below the placeholder's center line. */}
+          <span className="flex h-8 shrink-0 items-center">
+            <ComposerPlusMenu
+              disabled={inputDisabled}
+              onOpenFilePicker={openFilePicker}
+            />
+          </span>
+        </>
+      )}
       {layout === "floating" && pendingCount > 0 && (
         <span className="flex h-8 shrink-0 items-center ps-0.5">
           <span className="bg-muted text-foreground inline-flex h-[18px] min-w-[18px] items-center justify-center rounded-full px-1.5 text-[11px] font-semibold tabular-nums">
@@ -1778,71 +923,37 @@ export function PromptBar(props: PromptBarProps) {
         />
       </div>
 
-      {onNewThread && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              // Stays enabled while a response streams: starting a
-              // fresh thread is the escape hatch when a turn hangs
-              // or errors, so owners abort any live stream in their
-              // `onNewThread` and rotate regardless of bar state.
-              <Button
-                aria-label={newThreadLabel}
-                className="rounded-full"
-                onClick={onNewThread}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-              >
-                <SquarePenIcon aria-hidden="true" className="size-3.5" />
-              </Button>
-            }
-          />
-          <TooltipPopup side="top">{newThreadLabel}</TooltipPopup>
-        </Tooltip>
-      )}
-
-      {showQueueStopButton && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                aria-label={t("chat.stopResponse")}
-                className="rounded-full"
-                onClick={() => onStop()}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-              >
-                <SquareIcon aria-hidden="true" className="size-3.5" />
-              </Button>
-            }
-          />
-          <TooltipPopup side="top">{t("chat.stopResponse")}</TooltipPopup>
-        </Tooltip>
-      )}
-
       <Tooltip>
         <TooltipTrigger
           render={
-            <PromptBarActionButton
-              canSend={!composerSubmitDisabled && canSubmit}
-              morphSendToRetry={morphSendToRetry}
-              morphSendToStop={morphSendToStop}
-              onRetry={onRetry}
-              onSend={() => {
-                void submitDraft();
-              }}
-              onStop={onStop}
-            />
+            // The h-8 wrapper mirrors the (+) menu's centering: the shell
+            // is items-end, so a bare size-7 circle would sit 2px below
+            // the editor cell's single-line center. Bottom-aligned at the
+            // cell's min-h-8, the wrapper centers the circle on the
+            // placeholder line and rides the bottom text line as the
+            // editor grows.
+            <span className="flex h-8 shrink-0 items-center">
+              <ChatComposerActionButton
+                canSend={!composerSubmitDisabled && canSubmit}
+                isGenerating={isGenerating}
+                onRetry={retryOffer}
+                onSend={() => {
+                  void submitDraft();
+                }}
+                onStop={onStop}
+              />
+            </span>
           }
         />
         <TooltipPopup side="top">
+          {/* Labels the same state the button resolves internally —
+              `composerActionMode` comes from the button module's own
+              resolver, so the tooltip cannot drift from the morph. */}
           {(() => {
-            if (morphSendToStop) {
+            if (composerActionMode === "stop") {
               return t("chat.stopResponse");
             }
-            if (morphSendToRetry) {
+            if (composerActionMode === "retry") {
               return t("common.retry");
             }
             if (canSubmit) {
@@ -1852,533 +963,21 @@ export function PromptBar(props: PromptBarProps) {
           })()}
         </TooltipPopup>
       </Tooltip>
-
-      {showThreadToggle && (
-        <Tooltip>
-          <TooltipTrigger
-            render={
-              <Button
-                aria-expanded={panelOpen}
-                aria-label={
-                  panelOpen ? t("chat.hideThread") : t("chat.openThread")
-                }
-                className="rounded-full"
-                onClick={onTogglePanel}
-                size="icon-sm"
-                type="button"
-                variant="ghost"
-              >
-                <ChevronDownIcon
-                  aria-hidden="true"
-                  className={cn(
-                    "size-3.5 transition-transform duration-150",
-                    panelOpen && "rotate-180",
-                  )}
-                />
-              </Button>
-            }
-          />
-          <TooltipPopup side="top">
-            {panelOpen ? t("chat.hideThread") : t("chat.openThread")}
-          </TooltipPopup>
-        </Tooltip>
-      )}
     </PromptBarShell>
   );
-}
 
-type PromptBarActionButtonProps = {
-  canSend: boolean;
-  morphSendToRetry: boolean;
-  morphSendToStop: boolean;
-  onRetry?: (() => void) | undefined;
-  onSend: () => void;
-  onStop?: (() => void) | undefined;
-} & Omit<ComponentProps<"span">, "children">;
-
-const PromptBarActionButton = forwardRef<
-  HTMLSpanElement,
-  PromptBarActionButtonProps
->(
-  (
-    {
-      canSend,
-      morphSendToRetry,
-      morphSendToStop,
-      onRetry,
-      onSend,
-      onStop,
-      ...triggerProps
-    },
-    ref,
-  ) => {
-    const triggerClassName = triggerProps.className;
-
-    if (morphSendToStop && onStop !== undefined) {
-      return (
-        <span
-          {...triggerProps}
-          className={cn("inline-flex", triggerClassName)}
-          ref={ref}
-        >
-          <ChatComposerActionButton
-            className="rounded-full"
-            iconClassName="size-4"
-            mode="stop"
-            onStop={onStop}
-            size="icon"
-          />
-        </span>
-      );
-    }
-
-    if (morphSendToRetry && onRetry !== undefined) {
-      return (
-        <span
-          {...triggerProps}
-          className={cn("inline-flex", triggerClassName)}
-          ref={ref}
-        >
-          <ChatComposerActionButton
-            className="rounded-full"
-            iconClassName="size-4"
-            mode="retry"
-            onRetry={onRetry}
-            size="icon"
-          />
-        </span>
-      );
-    }
-
-    return (
-      <span
-        {...triggerProps}
-        className={cn("inline-flex", triggerClassName)}
-        ref={ref}
-      >
-        <ChatComposerActionButton
-          canSend={canSend}
-          className="rounded-full"
-          iconClassName="size-4"
-          mode="send"
-          onSend={onSend}
-          size="icon"
-        />
-      </span>
-    );
-  },
-);
-
-PromptBarActionButton.displayName = "PromptBarActionButton";
-
-// ===========================================================================
-// Thread panel
-// ===========================================================================
-
-type ThreadPanelProps = {
-  layout: FileAIChatLayout;
-  messages: ThreadMessage[];
-  focusedId: string | null;
-  activeCitationId: string | null;
-  showAcceptUI: boolean;
-  /** True while an accept is queued waiting for the apply-mode prompt. */
-  pendingFirstAccept: boolean;
-  onResolveFirstAccept: (mode: AISuggestionApplyMode) => void;
-  /** User-set height in px; null = default max-height. Floating only. */
-  height: number | null;
-  onResize: (next: number | null) => void;
-  onAcceptOne: (suggestionId: string) => void;
-  onRejectOne: (suggestionId: string) => void;
-  onAcceptGroup: (messageId: string) => void;
-  onRejectGroup: (messageId: string) => void;
-  onFocusSuggestion: (suggestionId: string) => void;
-  onActivateCitation: (citation: AICitation) => void;
-};
-
-function ThreadPanel(props: ThreadPanelProps) {
-  const t = useTranslations();
-  const {
-    layout,
-    messages,
-    focusedId,
-    activeCitationId,
-    showAcceptUI,
-    pendingFirstAccept,
-    onResolveFirstAccept,
-    height,
-    onResize,
-    onAcceptOne,
-    onRejectOne,
-    onAcceptGroup,
-    onRejectGroup,
-    onFocusSuggestion,
-    onActivateCitation,
-  } = props;
-
-  const panelRef = useRef<HTMLDivElement>(null);
-  const transcriptRef = useRef<HTMLDivElement>(null);
-  const isFloating = layout === "floating";
-
-  // Keep the newest message in view: jump to the bottom whenever the thread
-  // grows (a sent prompt appends the user bubble + assistant placeholder).
-  useExternalSyncEffect(() => {
-    const el = transcriptRef.current;
-    if (el) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-    }
-  }, [messages.length]);
-
-  const handleResizeStart = (e: React.PointerEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    const startY = e.clientY;
-    const startHeight = panelRef.current?.getBoundingClientRect().height ?? 360;
-    const minHeight = 180;
-    const maxHeight = Math.round(window.innerHeight * 0.85);
-
-    const onMove = (ev: PointerEvent) => {
-      const next = Math.min(
-        maxHeight,
-        Math.max(minHeight, startHeight + (startY - ev.clientY)),
-      );
-      onResize(next);
-    };
-    const onUp = () => {
-      document.removeEventListener("pointermove", onMove);
-      document.removeEventListener("pointerup", onUp);
-      document.body.style.cursor = "";
-      document.body.style.userSelect = "";
-    };
-    document.body.style.cursor = "ns-resize";
-    document.body.style.userSelect = "none";
-    document.addEventListener("pointermove", onMove);
-    document.addEventListener("pointerup", onUp);
-  };
-
+  // One docked layout for every surface: `DockedComposer` owns the bar's
+  // position, width, the follow-up-chip offset, and the status-row
+  // placement, so the inspector chat and the file-overlay chat are
+  // positionally identical by construction. Surface-specific features
+  // (preset chips, the pending badge, the thread-toggle chevron) stay
+  // gated on props above; only geometry is unified here.
   return (
-    <div
-      ref={panelRef}
-      // Floating: a transient overlay above the file, dismissable
-      // with Escape — `dialog` is the right semantic.
-      // Standalone: a chat transcript that grows as the assistant
-      // streams. `role="log"` is the ARIA pattern for "live region
-      // where new messages append in meaningful order"; we set
-      // `aria-live="polite"` explicitly (most screen readers infer
-      // it from `log`, but being explicit is portable) and
-      // `aria-relevant="additions"` so existing-bubble updates
-      // (e.g., status flips) don't get re-announced.
-      role={isFloating ? "dialog" : "log"}
-      aria-label={t("chat.aiThread")}
-      aria-live={isFloating ? undefined : "polite"}
-      aria-relevant={isFloating ? undefined : "additions"}
-      style={
-        isFloating && height !== null
-          ? { height: `${height}px`, maxHeight: "85dvh" }
-          : undefined
-      }
-      className={cn(
-        "text-popover-foreground flex flex-col overflow-hidden",
-        isFloating
-          ? cn(
-              // Glass-card thread. Heavy on the transparency at rest so the
-              // doc shines through and the blur is doing visible work; firms
-              // up sharply on hover/focus when the user is engaging.
-              // bottom-[88px] = bar at bottom-8 (32px) + bar height ~44px +
-              // ~12px gap. Keep this in sync with the bar's `bottom-8`.
-              "absolute start-1/2 bottom-[88px] z-40 min-h-[200px] w-[min(560px,calc(100%-2rem))] -translate-x-1/2 rounded-2xl border",
-              "bg-popover/35 border-border/50",
-              // Strong blur + saturation so the glass refraction is obvious.
-              "[backdrop-filter:blur(28px)_saturate(180%)] [-webkit-backdrop-filter:blur(28px)_saturate(180%)]",
-              // Subtle inset highlight on the top edge for the glass look.
-              "before:bg-foreground/[0.06] before:pointer-events-none before:absolute before:inset-x-0 before:top-0 before:h-px",
-              // Hover/focus: firmer, almost solid, for readability while
-              // engaging with the thread.
-              "hover:bg-popover/92 focus-within:bg-popover/92 hover:border-border focus-within:border-border",
-              "transition-[background-color,border-color] duration-200 ease-out",
-              "shadow-[0_1px_2px_rgb(0_0_0/0.04),0_16px_48px_rgb(0_0_0/0.10)]",
-              height === null && "max-h-[min(58dvh,520px)]",
-              "animate-in fade-in-0 zoom-in-95 slide-in-from-bottom-1",
-            )
-          : // Standalone: fills the chat tab between the bar and the
-            // top of the container. Parent sets the bounding height,
-            // we just stretch and scroll inside.
-            "min-h-0 flex-1",
-      )}
-    >
-      {/* Top-edge resize handle — floating only. Sits a few px
-       *  ABOVE the card's top border so it reads as a separate
-       *  affordance, not as part of the card chrome. Same idiom
-       *  the table uses for column-resize: thin pill that's
-       *  visible at rest, brightens to primary on hover/drag.
-       *  Double-click resets to default height. */}
-      {isFloating && (
-        <div
-          role="separator"
-          aria-orientation="horizontal"
-          aria-label={t("chat.resizeThread")}
-          onPointerDown={handleResizeStart}
-          onDoubleClick={() => onResize(null)}
-          tabIndex={-1}
-          className="group absolute inset-x-0 -top-3 z-20 flex h-3 cursor-ns-resize touch-none items-center justify-center select-none"
-        >
-          <div className="bg-foreground-subtle group-hover:bg-primary h-1 w-12 rounded-full transition-colors" />
-        </div>
-      )}
-
-      {pendingFirstAccept && (
-        <div
-          role="note"
-          className="border-border/40 bg-background/85 flex flex-col gap-1.5 border-b px-3 py-2 backdrop-blur-md"
-        >
-          <span className="text-[12px] font-medium">
-            {t("chat.applyMode.title")}
-          </span>
-          <span className="text-muted-foreground text-[11px]">
-            {t("chat.applyMode.description")}
-          </span>
-          <div className="mt-0.5 flex items-center gap-1.5">
-            <Button
-              type="button"
-              size="xs"
-              className="rounded-md"
-              onClick={() => onResolveFirstAccept("tracked-changes")}
-            >
-              {t("chat.applyMode.tracked")}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              size="xs"
-              className="rounded-md"
-              onClick={() => onResolveFirstAccept("direct")}
-            >
-              {t("chat.applyMode.direct")}
-            </Button>
-          </div>
-        </div>
-      )}
-
-      <div
-        className={cn(
-          "flex flex-1 flex-col gap-2.5 overflow-y-auto p-3",
-          // Floating-only: reserve space at top for the resize strip
-          // when there's no confirm banner above the messages.
-          isFloating && !pendingFirstAccept && "pt-3.5",
-        )}
-        ref={transcriptRef}
-        style={{ scrollbarGutter: "stable" }}
-      >
-        {messages.length === 0 && !isFloating ? (
-          // Standalone empty state. Floating mode never reaches this
-          // branch because the thread doesn't render until the first
-          // message arrives; standalone always renders, so we need a
-          // gentle landing surface instead of a blank canvas.
-          <div className="text-foreground-strong-muted m-auto flex max-w-[28ch] flex-col items-center gap-1 text-center text-[12px] text-balance">
-            <span className="text-foreground-strong-muted text-[13px] font-medium">
-              {t("chat.emptyThreadTitle")}
-            </span>
-            <span>{t("chat.emptyThreadDescription")}</span>
-          </div>
-        ) : (
-          messages.map((m) =>
-            m.role === "user" ? (
-              <UserBubble key={m.id} message={m} />
-            ) : (
-              <AssistantBubble
-                key={m.id}
-                message={m}
-                focusedId={focusedId}
-                activeCitationId={activeCitationId}
-                showAcceptUI={showAcceptUI}
-                onAcceptOne={onAcceptOne}
-                onRejectOne={onRejectOne}
-                onAcceptGroup={onAcceptGroup}
-                onRejectGroup={onRejectGroup}
-                onFocusSuggestion={onFocusSuggestion}
-                onActivateCitation={onActivateCitation}
-              />
-            ),
-          )
-        )}
-      </div>
-    </div>
-  );
-}
-
-function UserBubble({ message }: { message: UserThreadMessage }) {
-  const t = useTranslations();
-  const text =
-    message.prompt.length > 0 ? message.prompt : t("chat.noPromptPresetOnly");
-  return (
-    <Message from="user">
-      <MessageContent className="gap-1 px-3 py-1.5 text-[13px]">
-        {message.presetId && (
-          <span className="text-info bg-info/10 inline-flex w-fit items-center gap-0.5 rounded px-1.5 text-[10.5px] font-medium tabular-nums">
-            /{message.presetId}
-          </span>
-        )}
-        <span className="whitespace-pre-wrap">{text}</span>
-        {message.pastedText && (
-          <span className="text-info bg-info/10 inline-flex w-fit items-center gap-0.5 rounded px-1.5 text-[10.5px] font-medium tabular-nums">
-            {t("chat.pastedChars", {
-              count: message.pastedText.length.toLocaleString(
-                getFormattingLocale(),
-              ),
-            })}
-          </span>
-        )}
-      </MessageContent>
-    </Message>
-  );
-}
-
-type AssistantBubbleProps = {
-  message: AssistantThreadMessage;
-  focusedId: string | null;
-  activeCitationId: string | null;
-  showAcceptUI: boolean;
-  onAcceptOne: (id: string) => void;
-  onRejectOne: (id: string) => void;
-  onAcceptGroup: (messageId: string) => void;
-  onRejectGroup: (messageId: string) => void;
-  onFocusSuggestion: (id: string) => void;
-  onActivateCitation: (citation: AICitation) => void;
-};
-
-function AssistantBubble(props: AssistantBubbleProps) {
-  const t = useTranslations();
-  const {
-    message,
-    focusedId,
-    activeCitationId,
-    showAcceptUI,
-    onAcceptOne,
-    onRejectOne,
-    onAcceptGroup,
-    onRejectGroup,
-    onFocusSuggestion,
-    onActivateCitation,
-  } = props;
-
-  const pendingCount = message.suggestions.filter(
-    (s) => s.status === "pending",
-  ).length;
-
-  return (
-    <Message from="assistant">
-      <MessageContent className="gap-1.5 text-[13px] leading-relaxed">
-        {message.status === "loading" && (
-          <span className="text-muted-foreground inline-flex items-center gap-2 text-[12px]">
-            <span
-              className="border-border border-t-foreground inline-block size-3 animate-spin rounded-full border-[1.5px]"
-              aria-hidden="true"
-            />
-            {t("chat.thinking")}
-          </span>
-        )}
-        {message.status === "error" && (
-          <span className="text-destructive text-[12px]">{message.error}</span>
-        )}
-        {message.text && message.text.length > 0 && (
-          <MessageResponse className="text-[13px] leading-relaxed [&_p]:my-0">
-            {message.text}
-          </MessageResponse>
-        )}
-        {message.citations.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
-            <span className="text-muted-foreground text-[11px]">
-              {t("chat.sources")}
-            </span>
-            {message.citations.map((c) => (
-              <CitationChip
-                key={c.id}
-                citation={c}
-                active={activeCitationId === c.id}
-                onActivate={onActivateCitation}
-              />
-            ))}
-          </div>
-        )}
-        {message.suggestions.length > 0 && (
-          <div className="flex flex-col gap-2">
-            {showAcceptUI && pendingCount > 1 && (
-              <div className="flex items-center gap-1.5">
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="rounded-md"
-                  onClick={() => onAcceptGroup(message.id)}
-                >
-                  {t("chat.acceptAllCount", { count: String(pendingCount) })}
-                </Button>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="xs"
-                  className="rounded-md"
-                  onClick={() => onRejectGroup(message.id)}
-                >
-                  {t("docxReview.rejectAll")}
-                </Button>
-              </div>
-            )}
-            {message.suggestions.map((s) => (
-              <SuggestionCard
-                key={s.id}
-                suggestion={s}
-                focused={focusedId === s.id}
-                showAcceptUI={showAcceptUI}
-                onAccept={onAcceptOne}
-                onReject={onRejectOne}
-                onFocus={onFocusSuggestion}
-              />
-            ))}
-          </div>
-        )}
-      </MessageContent>
-    </Message>
-  );
-}
-
-type CitationChipProps = {
-  citation: AICitation;
-  active: boolean;
-  onActivate: (citation: AICitation) => void;
-};
-
-function CitationChip(props: CitationChipProps) {
-  const t = useTranslations();
-  const { citation, active, onActivate } = props;
-  const sourceLabel =
-    citation.source.kind === "pdf-bbox"
-      ? t("chat.pageNumber", { page: String(citation.source.pageNumber) })
-      : t("chat.inDocument");
-  return (
-    <Tooltip>
-      <TooltipTrigger
-        render={
-          <button
-            type="button"
-            className={cn(
-              "text-info bg-info/10 hover:bg-info/15 inline-flex h-5 items-center rounded-md px-1.5 text-[11px] font-medium tabular-nums transition-colors",
-              active && "bg-info/25 ring-info/40 ring-1",
-            )}
-            onClick={() => onActivate(citation)}
-            aria-label={t("chat.openCitation", { label: citation.label })}
-          >
-            <BidiText>[{citation.label}]</BidiText>
-          </button>
-        }
-      />
-      <TooltipPopup side="top" className="max-w-[260px]">
-        <div className="flex flex-col gap-0.5">
-          <span className="text-[10.5px] tracking-wider uppercase opacity-75">
-            {sourceLabel}
-          </span>
-          <span className="text-[12px] italic">“{citation.quote}”</span>
-        </div>
-      </TooltipPopup>
-    </Tooltip>
+    <DockedComposer
+      bar={shell}
+      {...(followupChips === undefined ? {} : { chips: followupChips })}
+      {...(dock === undefined ? {} : { dock })}
+    />
   );
 }
 

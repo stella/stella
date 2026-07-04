@@ -456,8 +456,22 @@ const StickyUserTurn = ({
           // it (z-auto). The page-level stacking order (see chat-thread-page)
           // keeps the floating composer above the whole transcript, so this
           // must NOT climb high enough to overlay it. `z-10` is the ceiling.
-          "group/sticky bg-background sticky top-0 z-10",
-          "data-[stuck=true]:border-border data-[stuck=true]:border-b data-[stuck=true]:shadow-sm",
+          "group/sticky sticky top-0 z-10",
+          // Unstuck: opaque band flush with the page (no chrome/box).
+          "data-[stuck=false]:bg-background",
+          // Stuck: near-opaque glass veil + blur matching the floating
+          // composer and sidebar, so the pinned message floats over the
+          // answer scrolling beneath. The veil is raised toward opaque
+          // (/95, /80 with backdrop-filter) so the moving answer text
+          // barely ghosts through instead of competing with the header.
+          "data-[stuck=true]:bg-background/95 supports-[backdrop-filter]:data-[stuck=true]:bg-background/80 data-[stuck=true]:backdrop-blur-md",
+          // The veil band stays pinned flush to the pane top (top-0) so it
+          // always covers the answer scrolling through beneath it; the top
+          // padding then insets the bubble by a sliver, so the pinned
+          // message floats with a little blurred breathing room above it
+          // rather than leaning against the pane's top edge. A rounded
+          // bottom + fine border reads as a floating shelf, not a hard cut.
+          "data-[stuck=true]:border-border/50 data-[stuck=true]:rounded-b-xl data-[stuck=true]:border-b data-[stuck=true]:pt-1",
         )}
         data-stuck={isStuck ? "true" : "false"}
       >
@@ -488,7 +502,17 @@ const StickyUserTurn = ({
             <div className="group-data-[stuck=true]/sticky:hidden">
               <UserAttachments parts={fileParts} />
             </div>
-            <div className="group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden">
+            <div
+              className={cn(
+                "group-data-[stuck=true]/sticky:max-h-11 group-data-[stuck=true]/sticky:overflow-hidden",
+                // Fade the clipped overflow so a long pinned message dissolves
+                // instead of ending in a hard mid-glyph cut. The absolute-length
+                // stop (~one line-height) keeps a single-line message wholly
+                // inside the opaque zone so it stays fully visible; the fade only
+                // bites once a second line overflows.
+                "group-data-[stuck=true]/sticky:[mask-image:linear-gradient(to_bottom,black_1.25rem,transparent)]",
+              )}
+            >
               {headerMessage.parts.map((part, partIndex) =>
                 part.type === "text" ? (
                   <UserMessageText

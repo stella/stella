@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# érvelési token} other {# érvelési token}}",
     "recapLoading": "A beszélgetés összefoglalása…",
     "removeSuggestion": "(eltávolítás)",
+    "renameThread": "Beszélgetés átnevezése",
     "resend": "Újraküldés",
     "resizeThread": "Beszélgetés méretezése",
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, vedd fel a kapcsolatot a támogatással.",

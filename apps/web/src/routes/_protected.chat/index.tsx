@@ -15,7 +15,6 @@ import {
 } from "@tanstack/react-router";
 import {
   HistoryIcon,
-  LayersIcon,
   MessageSquareIcon,
   Minimize2Icon,
   PinIcon,
@@ -29,7 +28,9 @@ import { cn } from "@stll/ui/lib/utils";
 
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
+import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
+import { MatterIcon } from "@/components/matter-icon";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import { StellaMark } from "@/components/stella-mark";
 import Tooltip from "@/components/tooltip";
@@ -40,7 +41,6 @@ import { api } from "@/lib/api";
 import {
   getChatSendMode,
   useChatAnonymized,
-  useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { createChatThreadId } from "@/lib/chat-thread-ref";
@@ -48,7 +48,6 @@ import { isPlaceholderThreadTitle } from "@/lib/chat-thread-title";
 import { useChatWebSearchPreferenceStore } from "@/lib/chat-web-search-store";
 import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { toAPIError } from "@/lib/errors";
-import { resolveMatterColor } from "@/lib/matter-colors";
 import { useModelSelectorStore } from "@/lib/model-selector-store";
 import { usePinnedStore } from "@/lib/pinned-store";
 import type { ChatPrompt } from "@/lib/prompts/types";
@@ -56,8 +55,6 @@ import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { formatRelativeTime } from "@/lib/relative-time";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
-import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
-import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatUserContext } from "@/routes/_protected.chat/-hooks/use-chat-user-context";
 import { buildChatRequestMessage } from "@/routes/_protected.chat/-lib/build-chat-request-message";
@@ -116,7 +113,6 @@ function ChatIndex() {
     [groupedThreadPages?.pages],
   );
   const anonymized = useChatAnonymized(threadRef);
-  const setAnonymized = useSetChatAnonymized(threadRef);
   const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
   const openInspectorChat = useInspectorStore((s) => s.openChat);
   const [contextMatterIds, setContextMatterIds] = useState<string[]>([]);
@@ -274,7 +270,6 @@ function ChatIndex() {
     pinnedMatters.length > 0
       ? t("chat.landing.pinnedMatters")
       : t("chat.landing.lastAccessedMatters");
-  const MattersHeadingIcon = pinnedMatters.length > 0 ? PinIcon : LayersIcon;
 
   const recentChats = useMemo(() => {
     const threads: RecentChat[] = [];
@@ -353,6 +348,7 @@ function ChatIndex() {
               anonymized={anonymized}
               autoFocus
               controller={controller}
+              variant="large"
               onOpenMcpServers={() => {
                 void navigate({
                   to: "/knowledge/tools",
@@ -362,23 +358,27 @@ function ChatIndex() {
               onOpenModelSelector={() => {
                 useModelSelectorStore.getState().open();
               }}
-              statusBarStart={
-                <div className="flex min-w-0 items-center gap-1">
-                  <ChatMatterPicker
-                    matterIds={contextMatterIds}
-                    onChange={setContextMatterIds}
-                  />
-                  {chatDraftMeta?.webSearchAvailable && (
-                    <ChatWebSearchToggle
-                      enabled={chatDraftMeta.webSearchEnabled}
-                      threadRef={threadRef}
+              dock={
+                <ChatComposerDock
+                  data={{
+                    webSearchAvailable:
+                      chatDraftMeta?.webSearchAvailable ?? false,
+                    webSearchEnabled: chatDraftMeta?.webSearchEnabled ?? false,
+                    // No thread yet, so no context estimate: the meter
+                    // stays hidden until the first send creates the row.
+                    context: null,
+                  }}
+                  leadingContext={
+                    <ChatMatterPicker
+                      matterIds={contextMatterIds}
+                      onChange={setContextMatterIds}
                     />
-                  )}
-                  <ChatAnonymizedToggle
-                    enabled={anonymized}
-                    onChange={setAnonymized}
-                  />
-                </div>
+                  }
+                  // The hero already IS a fresh thread; a new-chat
+                  // affordance here would be a no-op, so opt out.
+                  onNewThread={null}
+                  threadRef={threadRef}
+                />
               }
               onSubmit={async (draft) => {
                 const reservedCommand = matchReservedChatCommand(draft.html);
@@ -441,45 +441,46 @@ function ChatIndex() {
                 className="text-muted-foreground hover:text-foreground focus-visible:ring-ring flex items-center gap-2 rounded-md px-1 text-xs font-semibold tracking-widest uppercase transition-colors outline-none focus-visible:ring-2"
                 to="/workspaces"
               >
-                <MattersHeadingIcon className="size-4" />
+                {pinnedMatters.length > 0 ? (
+                  <PinIcon className="size-4" />
+                ) : (
+                  <MatterIcon className="size-4" variant="all" />
+                )}
                 {mattersHeading}
               </Link>
             }
           >
             {visibleMatters.length > 0 ? (
-              visibleMatters.map((matter) => {
-                const matterColor = resolveMatterColor(matter.id, matter.color);
-                return (
-                  <MatterContextMenu
-                    className="contents"
-                    key={matter.id}
-                    target={{
-                      id: matter.id,
-                      name: matter.name,
-                      color: matter.color,
-                      client: matter.client,
-                    }}
+              visibleMatters.map((matter) => (
+                <MatterContextMenu
+                  className="contents"
+                  key={matter.id}
+                  target={{
+                    id: matter.id,
+                    name: matter.name,
+                    color: matter.color,
+                    client: matter.client,
+                  }}
+                >
+                  <Link
+                    className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
+                    params={{ workspaceId: matter.id }}
+                    to="/workspaces/$workspaceId"
                   >
-                    <Link
-                      className="group hover:bg-accent/50 focus-visible:ring-ring rounded-md px-2 py-1.5 text-start transition-colors outline-none focus-visible:ring-2"
-                      params={{ workspaceId: matter.id }}
-                      to="/workspaces/$workspaceId"
-                    >
-                      <LandingItemText
-                        icon={
-                          <LayersIcon
-                            className="size-4"
-                            style={{ color: matterColor }}
-                          />
-                        }
-                        iconTone="matter"
-                        meta={formatRelativeTime(matter.lastActivityAt)}
-                        title={matter.name}
-                      />
-                    </Link>
-                  </MatterContextMenu>
-                );
-              })
+                    <LandingItemText
+                      icon={
+                        <MatterIcon
+                          className="size-4"
+                          matter={{ id: matter.id, color: matter.color }}
+                        />
+                      }
+                      iconTone="matter"
+                      meta={formatRelativeTime(matter.lastActivityAt)}
+                      title={matter.name}
+                    />
+                  </Link>
+                </MatterContextMenu>
+              ))
             ) : (
               <LandingEmpty>
                 <div className="flex flex-col items-start gap-2.5">

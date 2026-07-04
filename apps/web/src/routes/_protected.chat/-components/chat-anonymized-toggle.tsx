@@ -29,6 +29,10 @@ export const ChatAnonymizedToggle = ({
         <Button
           aria-label={t("chat.anonymizedMode")}
           aria-pressed={enabled}
+          // Quiet status-row control: muted at rest, borderless, only the
+          // usual ghost hover surface. The enabled state speaks through
+          // the info-tinted icon, not a filled chip.
+          className="text-muted-foreground hover:text-foreground"
           data-pressed={enabled ? "" : undefined}
           onClick={() => onChange(!enabled)}
           size={size}

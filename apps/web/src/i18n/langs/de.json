@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# Argumentations-Token} other {# Argumentations-Tokens}}",
     "recapLoading": "Unterhaltung wird zusammengefasst…",
     "removeSuggestion": "(entfernen)",
+    "renameThread": "Konversation umbenennen",
     "resend": "Erneut senden",
     "resizeThread": "Konversation vergrößern oder verkleinern",
     "sendError": "Beim Senden deiner Nachricht ist ein Problem aufgetreten. Wende dich an den Support, wenn der Fehler weiterhin auftritt.",

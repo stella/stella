@@ -1,16 +1,12 @@
 import { NodeViewWrapper } from "@tiptap/react";
 import type { NodeViewProps } from "@tiptap/react";
-import {
-  FileTextIcon,
-  FolderIcon,
-  LandmarkIcon,
-  LayersIcon,
-} from "lucide-react";
+import { FileTextIcon, FolderIcon, LandmarkIcon } from "lucide-react";
 
 import { cn } from "@stll/ui/lib/utils";
 
 import type { ChatReferenceCategory } from "@/components/chat-mention-extension";
 import { isMentionCategory } from "@/components/chat/chat-mention-href";
+import { MatterIcon } from "@/components/matter-icon";
 import { getMatterColor } from "@/lib/matter-colors";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 
@@ -119,9 +115,7 @@ const CategoryIcon = ({
   attrMimeType: string | null;
 }) => {
   if (category === "workspace") {
-    return (
-      <LayersIcon className={cls} style={{ color: getMatterColor(attrId) }} />
-    );
+    return <MatterIcon className={cls} matter={{ id: attrId, color: null }} />;
   }
 
   if (category === "decision") {

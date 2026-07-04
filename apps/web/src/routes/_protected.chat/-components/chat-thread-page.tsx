@@ -27,10 +27,12 @@ import {
 import { useChatEditor } from "@/components/chat-editor-provider";
 import { ChatInputSurface } from "@/components/chat-input-surface";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
+import { ChatComposerDock } from "@/components/chat/chat-composer-dock";
 import { ChatMatterPicker } from "@/components/chat/chat-matter-picker";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
 import { getUserMessageHtmlHistory } from "@/components/chat/chat-ui-tools";
+import { ComposerVeil } from "@/components/chat/composer-veil";
 import { PromptSuggestions } from "@/components/chat/prompt-suggestions";
 import { useAIKeyGate } from "@/components/require-ai-key";
 import Tooltip from "@/components/tooltip";
@@ -43,7 +45,6 @@ import { api } from "@/lib/api";
 import {
   getChatSendMode,
   useChatAnonymized,
-  useSetChatAnonymized,
 } from "@/lib/chat-anonymized-store";
 import { useIsChatDraftEmpty } from "@/lib/chat-draft-store";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
@@ -56,9 +57,7 @@ import { useSavedPrompts } from "@/lib/prompts/use-saved-prompts";
 import { matchReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { roleOptions } from "@/routes/-queries";
-import { ChatAnonymizedToggle } from "@/routes/_protected.chat/-components/chat-anonymized-toggle";
 import { ChatThreadRecap } from "@/routes/_protected.chat/-components/chat-thread-recap";
-import { ChatWebSearchToggle } from "@/routes/_protected.chat/-components/chat-web-search-toggle";
 import { SuggestedFollowupChips } from "@/routes/_protected.chat/-components/suggested-followup-chips";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 import { useChatSession } from "@/routes/_protected.chat/-hooks/use-chat-session";
@@ -118,7 +117,6 @@ export const ChatThreadPage = ({
     null,
   );
   const anonymized = useChatAnonymized(threadRef);
-  const setAnonymized = useSetChatAnonymized(threadRef);
   const getContextMatterIds = useEffectEvent(() => contextMatterIds ?? []);
   const getSendMode = useEffectEvent(() => getChatSendMode(threadRef));
 
@@ -382,6 +380,49 @@ export const ChatThreadPage = ({
     await resendLatestMessage({ sendMode: CHAT_SEND_MODE.rawOverride });
   });
 
+  // Dock new-chat: same destination as the header's labeled "New chat"
+  // button (which stays as the primary affordance); the dock icon keeps
+  // the status row uniform across chat surfaces. Abort any live stream
+  // first — `chatThreadOptions` keeps the in-flight Chat alive in the
+  // query cache, so navigating away would leave it streaming.
+  const startNewThread = () => {
+    stop();
+    if (threadRef.scope === "workspace") {
+      void navigate({
+        to: "/chat/workspaces/$workspaceId/new",
+        params: { workspaceId: threadRef.workspaceId },
+      });
+      return;
+    }
+    void navigate({ to: "/chat/new" });
+  };
+
+  // The floating composer block grows with the draft (multi-line text,
+  // attachment chips, followup chips), so a static bottom offset cannot
+  // keep the scroll-to-bottom button clear of it in every state. Publish
+  // the block's live height as a CSS variable on the page container; the
+  // button (inside <Conversation>) inherits it and floats just above the
+  // block at any composer height.
+  const pageContainerRef = useRef<HTMLDivElement>(null);
+  const composerBlockRef = useRef<HTMLDivElement>(null);
+  useExternalSyncEffect(() => {
+    const container = pageContainerRef.current;
+    const block = composerBlockRef.current;
+    if (container === null || block === null) {
+      return undefined;
+    }
+    const observer = new ResizeObserver(() => {
+      container.style.setProperty(
+        "--composer-block-h",
+        `${String(block.offsetHeight)}px`,
+      );
+    });
+    observer.observe(block);
+    return () => {
+      observer.disconnect();
+    };
+  }, []);
+
   return (
     <ChatMattersContext
       value={{
@@ -429,7 +470,10 @@ export const ChatThreadPage = ({
             value (sticky headers, scroll button) inside its own context so
             none of them can leak up and overlay the fade or the composer.
           */}
-          <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            className="relative flex min-h-0 flex-1 flex-col"
+            ref={pageContainerRef}
+          >
             <Conversation className="isolate min-h-0">
               <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-36">
                 {messages.length === 0 && !isGenerating && !error ? (
@@ -477,7 +521,7 @@ export const ChatThreadPage = ({
                   </>
                 )}
               </ConversationContent>
-              <ConversationScrollButton className="bottom-28" />
+              <ConversationScrollButton className="bottom-[calc(var(--composer-block-h,7rem)+0.75rem)]" />
             </Conversation>
 
             <ChatAnonymizationLayer
@@ -498,8 +542,20 @@ export const ChatThreadPage = ({
             {/* Top of the page stacking order: must stack above the sticky
                 transcript headers and the fade gradient. `z-20` beats the
                 isolated <Conversation> context (which caps its sticky
-                headers at z-10) and the z-auto fade sibling. */}
-            <div className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4 pb-4">
+                headers at z-10) and the z-auto fade sibling.
+
+                No bottom padding: the composer block hugs the pane bottom so
+                the glass veil (the shared `ComposerVeil` behind the tray)
+                reaches the bottom edge with no unblurred strip of transcript
+                showing through beneath the status row. The tray wrapper's
+                `p-2` keeps the composer breathing inside the veil.
+                `--composer-block-h` is measured from this block's live
+                height, so the scroll button's offset tracks the change
+                automatically. */}
+            <div
+              className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4"
+              ref={composerBlockRef}
+            >
               <SuggestedFollowupChips
                 isGenerating={isGenerating}
                 isEmpty={
@@ -519,78 +575,82 @@ export const ChatThreadPage = ({
                   });
                 }}
               />
-              <ChatInputSurface
-                anonymized={anonymized}
-                autoFocus
-                contextUsage={data.context ?? undefined}
-                controller={controller}
-                isGenerating={isGenerating}
-                onOpenMcpServers={() => {
-                  void navigate({
-                    to: "/knowledge/tools",
-                    search: { kind: "mcp" },
-                  });
-                }}
-                onOpenModelSelector={() => {
-                  useModelSelectorStore.getState().open();
-                }}
-                statusBarStart={
-                  <div className="flex min-w-0 items-center gap-1">
-                    {contextMatterIds !== null && (
-                      <ChatMatterPicker
-                        matterIds={contextMatterIds}
-                        onChange={setContextMatterIds}
-                      />
-                    )}
-                    {data.webSearchAvailable && (
-                      <ChatWebSearchToggle
-                        enabled={data.webSearchEnabled}
-                        threadRef={threadRef}
-                      />
-                    )}
-                    <ChatAnonymizedToggle
-                      enabled={anonymized}
-                      onChange={setAnonymized}
-                    />
-                  </div>
-                }
-                onStop={() => {
-                  stop();
-                }}
-                onSubmit={async (draft) => {
-                  const reservedCommand = matchReservedChatCommand(draft.html);
-                  if (reservedCommand?.id === "new") {
-                    // Abort any live stream first: `chatThreadOptions` keeps the
-                    // in-flight Chat alive in the query cache, so navigating away
-                    // would leave it streaming against the abandoned thread.
-                    stop();
-                    controller.setContent("");
-                    if (threadRef.scope === "workspace") {
-                      void navigate({
-                        to: "/chat/workspaces/$workspaceId/new",
-                        params: { workspaceId: threadRef.workspaceId },
-                        replace: true,
-                      });
-                    } else {
-                      void navigate({
-                        to: "/chat/new",
-                        replace: true,
-                      });
-                    }
-                    return;
-                  }
-                  if (reservedCommand?.id === "model") {
-                    controller.setContent("");
+              {/* Glass tray behind the composer + status row: the shared
+                  `ComposerVeil` (one owner of the blur/tint values across
+                  every chat surface) fills this `relative isolate` wrapper
+                  so the floating status-row text stays readable over the
+                  scrolled transcript. */}
+              <div className="relative isolate p-2">
+                <ComposerVeil />
+                <ChatInputSurface
+                  anonymized={anonymized}
+                  autoFocus
+                  controller={controller}
+                  isGenerating={isGenerating}
+                  onOpenMcpServers={() => {
+                    void navigate({
+                      to: "/knowledge/tools",
+                      search: { kind: "mcp" },
+                    });
+                  }}
+                  onOpenModelSelector={() => {
                     useModelSelectorStore.getState().open();
-                    return;
+                  }}
+                  dock={
+                    <ChatComposerDock
+                      data={data}
+                      leadingContext={
+                        contextMatterIds !== null ? (
+                          <ChatMatterPicker
+                            matterIds={contextMatterIds}
+                            onChange={setContextMatterIds}
+                          />
+                        ) : undefined
+                      }
+                      onNewThread={startNewThread}
+                      threadRef={threadRef}
+                    />
                   }
+                  onStop={() => {
+                    stop();
+                  }}
+                  onSubmit={async (draft) => {
+                    const reservedCommand = matchReservedChatCommand(
+                      draft.html,
+                    );
+                    if (reservedCommand?.id === "new") {
+                      // Abort any live stream first: `chatThreadOptions` keeps the
+                      // in-flight Chat alive in the query cache, so navigating away
+                      // would leave it streaming against the abandoned thread.
+                      stop();
+                      controller.setContent("");
+                      if (threadRef.scope === "workspace") {
+                        void navigate({
+                          to: "/chat/workspaces/$workspaceId/new",
+                          params: { workspaceId: threadRef.workspaceId },
+                          replace: true,
+                        });
+                      } else {
+                        void navigate({
+                          to: "/chat/new",
+                          replace: true,
+                        });
+                      }
+                      return;
+                    }
+                    if (reservedCommand?.id === "model") {
+                      controller.setContent("");
+                      useModelSelectorStore.getState().open();
+                      return;
+                    }
 
-                  if (!(await ensureAIAvailable())) {
-                    return;
-                  }
-                  await sendMessage(await buildChatRequestMessage(draft));
-                }}
-              />
+                    if (!(await ensureAIAvailable())) {
+                      return;
+                    }
+                    await sendMessage(await buildChatRequestMessage(draft));
+                  }}
+                />
+              </div>
             </div>
           </div>
         </div>

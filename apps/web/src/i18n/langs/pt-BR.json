@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# token de raciocínio} other {# tokens de raciocínio}}",
     "recapLoading": "Resumindo a conversa…",
     "removeSuggestion": "(remover)",
+    "renameThread": "Renomear conversa",
     "resend": "Reenviar",
     "resizeThread": "Redimensionar conversa",
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",

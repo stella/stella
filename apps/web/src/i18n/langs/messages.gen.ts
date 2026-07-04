@@ -482,6 +482,7 @@ type Messages = {
     "reasoningTokens": "{count, plural, one {# reasoning token} other {# reasoning tokens}}";
     "recapLoading": "Recapping the conversation…";
     "removeSuggestion": "(remove)";
+    "renameThread": "Rename conversation";
     "resend": "Resend";
     "resizeThread": "Resize conversation";
     "sendError": "There was an issue sending your message. Contact support if the error persists.";

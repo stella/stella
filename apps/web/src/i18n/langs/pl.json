@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# token rozumowania} few {# tokeny rozumowania} many {# tokenów rozumowania} other {# tokenu rozumowania}}",
     "recapLoading": "Podsumowywanie rozmowy…",
     "removeSuggestion": "(usuń)",
+    "renameThread": "Zmień nazwę rozmowy",
     "resend": "Wyślij ponownie",
     "resizeThread": "Zmień rozmiar konwersacji",
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",

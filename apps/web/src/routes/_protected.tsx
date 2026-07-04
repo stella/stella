@@ -9,7 +9,6 @@ import {
   useMatch,
 } from "@tanstack/react-router";
 import {
-  LayersIcon,
   MessageSquarePlusIcon,
   PanelRightIcon,
   PinIcon,
@@ -46,6 +45,7 @@ import {
   useInspectorStore,
 } from "@/components/inspector/inspector-store";
 import type { InspectorTab } from "@/components/inspector/inspector-store";
+import { MatterIcon } from "@/components/matter-icon";
 import { AIAvailabilityProvider } from "@/components/require-ai-key";
 import { SelfhostUpdateBanner } from "@/components/selfhost-update-banner";
 import { ShortcutHintsOverlay } from "@/components/shortcut-hints-overlay";
@@ -460,9 +460,9 @@ function ProtectedContent() {
             title={t("workspaces.matterInfo")}
             variant="ghost"
           >
-            <LayersIcon
+            <MatterIcon
               className="size-4"
-              style={matterColor ? { color: matterColor } : undefined}
+              matter={{ id: workspaceId, color: workspace?.color ?? null }}
             />
           </Button>
         </>

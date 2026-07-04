@@ -28,7 +28,13 @@ export type ChatContextUsage = {
 };
 
 type ChatContextMeterProps = {
-  usage: ChatContextUsage;
+  /**
+   * The next-send estimate, or `null` before the first message lands.
+   * A brand-new thread still renders the meter — an empty ring at 0% —
+   * so the affordance is present from the start; only the breakdown
+   * popover is withheld until there is a conversation to break down.
+   */
+  usage: ChatContextUsage | null;
 };
 
 // The percent label always shows before the ring; the tone escalates near the
@@ -67,6 +73,23 @@ type ContextPart = {
 export const ChatContextMeter = ({ usage }: ChatContextMeterProps) => {
   const t = useTranslations("chat.contextMeter");
   const format = useFormatter();
+
+  if (usage === null) {
+    // Zero-state for a brand-new/empty thread: the empty ring at 0% in the
+    // muted tone, with no popover — there is no conversation to break down
+    // yet, so the trigger is inert rather than opening an empty sheet.
+    return (
+      <span
+        aria-label={t("triggerLabel", { percent: format.number(0) })}
+        className="text-muted-foreground inline-flex items-center gap-1 px-1.5 text-xs font-normal"
+      >
+        <span aria-hidden="true" className="text-xs">
+          {t("percent", { percent: format.number(0) })}
+        </span>
+        <ContextRing percent={0} />
+      </span>
+    );
+  }
 
   const percent = Math.min(
     100,

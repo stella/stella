@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# jeton de raisonnement} other {# jetons de raisonnement}}",
     "recapLoading": "Récapitulatif de la conversation…",
     "removeSuggestion": "(supprimer)",
+    "renameThread": "Renommer la conversation",
     "resend": "Renvoyer",
     "resizeThread": "Redimensionner la conversation",
     "sendError": "Un problème est survenu lors de l’envoi de ton message. Contacte le support si l’erreur persiste.",

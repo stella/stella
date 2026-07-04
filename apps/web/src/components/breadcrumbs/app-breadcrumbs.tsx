@@ -58,11 +58,14 @@ const renderContactBreadcrumb = ({
 
 const renderChatThreadBreadcrumb = ({
   threadId,
+  workspaceId,
 }: Record<string, string | undefined>) => {
   if (!threadId) {
     return null;
   }
-  return <ChatBreadcrumb threadId={threadId} />;
+  // `workspaceId` is present only on the workspace-scoped chat route; it
+  // scopes the inline rename's PATCH the same way the thread query is scoped.
+  return <ChatBreadcrumb threadId={threadId} workspaceId={workspaceId} />;
 };
 
 const renderBreadcrumbEntry = (

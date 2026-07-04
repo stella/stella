@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# arutlustoken} other {# arutlustokenit}}",
     "recapLoading": "Vestlus võetakse kokku…",
     "removeSuggestion": "(eemalda)",
+    "renameThread": "Nimeta vestlus ümber",
     "resend": "Saada uuesti",
     "resizeThread": "Muuda vestluse suurust",
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",

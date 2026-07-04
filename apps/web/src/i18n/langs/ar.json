@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, zero {# رمز استدلال} one {# رمز استدلال} two {# رمزا استدلال} few {# رموز استدلال} many {# رمز استدلال} other {# رمز استدلال}}",
     "recapLoading": "جارٍ تلخيص المحادثة…",
     "removeSuggestion": "(إزالة)",
+    "renameThread": "إعادة تسمية المحادثة",
     "resend": "إعادة الإرسال",
     "resizeThread": "تغيير حجم المحادثة",
     "sendError": "حدثت مشكلة أثناء إرسال رسالتك. تواصل مع الدعم إذا استمرّ الخطأ.",

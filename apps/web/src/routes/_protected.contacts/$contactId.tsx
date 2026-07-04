@@ -24,11 +24,9 @@ import { ContactCustomFieldsEditor } from "@/routes/_protected.contacts/-compone
 import { ContactNotesEditor } from "@/routes/_protected.contacts/-components/contact-notes-editor";
 import { ContactOwnersEditor } from "@/routes/_protected.contacts/-components/contact-owners-editor";
 import { EditableRow } from "@/routes/_protected.contacts/-components/editable-row";
+import { MatterIcon } from "@/components/matter-icon";
 import { InfoRow } from "@/routes/_protected.contacts/-components/info-row";
-import {
-  MatterIcon,
-  PartyMatterRow,
-} from "@/routes/_protected.contacts/-components/party-matter-row";
+import { PartyMatterRow } from "@/routes/_protected.contacts/-components/party-matter-row";
 import { useDeleteContact } from "@/routes/_protected.contacts/-mutations";
 import {
   contactOptions,
@@ -432,7 +430,7 @@ function ContactDetailPage() {
                     className="hover:bg-muted flex items-center gap-2 rounded-md px-3 py-2 text-sm transition-colors"
                     workspaceId={matter.id}
                   >
-                    <MatterIcon matter={matter} />
+                    <MatterIcon className="size-4 shrink-0" matter={matter} />
                     <BidiText as="span" className="font-medium">
                       {matter.name}
                     </BidiText>

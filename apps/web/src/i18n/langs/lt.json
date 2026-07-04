@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# mąstymo tokenas} few {# mąstymo tokenai} many {# mąstymo tokeno} other {# mąstymo tokenų}}",
     "recapLoading": "Apibendrinamas pokalbis…",
     "removeSuggestion": "(pašalinti)",
+    "renameThread": "Pervadinti pokalbį",
     "resend": "Siųsti dar kartą",
     "resizeThread": "Keisti pokalbio dydį",
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",

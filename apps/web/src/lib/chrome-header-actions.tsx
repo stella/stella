@@ -1,7 +1,10 @@
+import { useRef } from "react";
 import type { ReactNode } from "react";
 import { createPortal } from "react-dom";
 
 import { create } from "zustand";
+
+import { useMountEffect } from "@/hooks/use-effect";
 
 // Route-scoped header actions slot. The protected shell renders a single
 // `ChromeHeaderActionsSlot` in its top bar and a page publishes its own
@@ -21,12 +24,26 @@ const useChromeHeaderActionsStore = create<ChromeHeaderActionsStore>((set) => ({
 }));
 
 // Rendered once in the app header. Registers the DOM node that pages portal
-// their actions into; clears it on unmount via the ref callback.
+// their actions into; clears it on unmount.
+//
+// The store write is deferred to a mount effect rather than done in the `ref`
+// callback: a ref callback fires during the commit/layout sub-phase, before
+// the passive mount effects of other components have run, so writing the store
+// there notifies a `ChromeHeaderActions` subscriber whose `useSyncExternalStore`
+// subscription is not yet committed — React 19 flags that as a state update on a
+// component that has not mounted yet. Publishing from `useMountEffect` (passive,
+// post-commit) means every subscriber is mounted by the time the container lands.
 export const ChromeHeaderActionsSlot = () => {
   const setContainer = useChromeHeaderActionsStore((s) => s.setContainer);
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  useMountEffect(() => {
+    setContainer(containerRef.current);
+    return () => setContainer(null);
+  });
 
   return (
-    <div className="flex shrink-0 items-center gap-0.5" ref={setContainer} />
+    <div className="flex shrink-0 items-center gap-0.5" ref={containerRef} />
   );
 };
 

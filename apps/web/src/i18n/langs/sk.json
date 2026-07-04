@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, one {# token uvažovania} few {# tokeny uvažovania} other {# tokenov uvažovania}}",
     "recapLoading": "Zhrnutie konverzácie…",
     "removeSuggestion": "(odstrániť)",
+    "renameThread": "Premenovať konverzáciu",
     "resend": "Odoslať znova",
     "resizeThread": "Zmeniť veľkosť konverzácie",
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",

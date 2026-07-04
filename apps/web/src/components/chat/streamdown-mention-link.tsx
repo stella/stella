@@ -8,7 +8,6 @@ import {
   FolderIcon,
   GlobeIcon,
   LandmarkIcon,
-  LayersIcon,
   ListTodoIcon,
   WandSparklesIcon,
 } from "lucide-react";
@@ -18,16 +17,15 @@ import { isFolioBlockId } from "@stll/folio-react";
 import { cn } from "@stll/ui/lib/utils";
 
 import { openCaseLawDecision } from "@/components/chat/case-law-open";
-import type { MentionCategory } from "@/components/chat/chat-mention-href";
 import { parseStellaMentionHref } from "@/components/chat/chat-mention-href";
 import { openEntityInInspector } from "@/components/chat/entity-open";
 import { useExternalSourceStore } from "@/components/chat/external-source-store";
 import { navigateToWorkspaceFolder } from "@/components/chat/folder-navigation";
 import { InlinePill } from "@/components/inline-pill";
+import { MatterIcon } from "@/components/matter-icon";
 import { PDF_MIME_TYPE } from "@/consts";
 import { DOCX_MIME } from "@/lib/consts";
 import { FOLIO_SCROLL_EVENT } from "@/lib/folio-scroll-event";
-import { getMatterColor } from "@/lib/matter-colors";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import { DocumentIcon } from "@/routes/_protected.workspaces/$workspaceId/-components/document-icon";
 import { useInspectorStore } from "@/routes/_protected.workspaces/$workspaceId/-components/inspector/inspector-store";
@@ -45,13 +43,6 @@ export const SKILL_REF_HASH_PREFIX = "#stella-skill-ref=";
 // pass through untouched, matching how `#stella-entity-ref=`
 // and friends already work.
 const FOLIO_BLOCK_PREFIX = "#folio:";
-
-const CATEGORY_ICON: Record<
-  Exclude<MentionCategory, "entity">,
-  React.ComponentType<{ className?: string; style?: React.CSSProperties }>
-> = {
-  workspace: LayersIcon,
-};
 
 const DOCUMENT_MIME_BY_EXTENSION: Record<string, string> = {
   csv: "text/csv",
@@ -335,7 +326,12 @@ const WorkspaceRefChip = ({
   interactive: boolean;
 }) => {
   const navigate = useNavigate();
-  const icon = <LayersIcon className="size-3 shrink-0" />;
+  const icon = (
+    <MatterIcon
+      className="size-3 shrink-0"
+      matter={{ id: workspaceId, color: null }}
+    />
+  );
   if (!interactive) {
     return (
       <InlinePill leadingIcon={icon} truncate>
@@ -445,7 +441,7 @@ const ParsedMentionChip = ({
     );
   }
 
-  const icon = <CategoryIcon category={category} id={id} />;
+  const icon = <CategoryIcon id={id} />;
   if (!interactive) {
     return (
       <InlinePill leadingIcon={icon} truncate>
@@ -469,18 +465,9 @@ const ParsedMentionChip = ({
   );
 };
 
-const CategoryIcon = ({
-  category,
-  id,
-}: {
-  category: Exclude<MentionCategory, "entity">;
-  id: string;
-}) => {
-  const Icon = CATEGORY_ICON[category];
-  return (
-    <Icon className="size-3 shrink-0" style={{ color: getMatterColor(id) }} />
-  );
-};
+const CategoryIcon = ({ id }: { id: string }) => (
+  <MatterIcon className="size-3 shrink-0" matter={{ id, color: null }} />
+);
 
 const MentionChip = ({
   label,

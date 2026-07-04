@@ -479,6 +479,7 @@
     "reasoningTokens": "{count, plural, zero {# argumentācijas tokenu} one {# argumentācijas tokens} other {# argumentācijas tokeni}}",
     "recapLoading": "Sarunas apkopošana…",
     "removeSuggestion": "(noņemt)",
+    "renameThread": "Pārdēvēt sarunu",
     "resend": "Nosūtīt vēlreiz",
     "resizeThread": "Mainīt sarunas izmēru",
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
