@@ -2228,6 +2228,13 @@ type Messages = {
       };
       "auditLogs": "Activity logs";
       "auditLogsAction": "Action";
+      "auditLogsActionAccess": "Access";
+      "auditLogsActionCreate": "Create";
+      "auditLogsActionDelete": "Delete";
+      "auditLogsActionDownload": "Download";
+      "auditLogsActionExecute": "Execute";
+      "auditLogsActionUpdate": "Update";
+      "auditLogsAllActions": "All Actions";
       "auditLogsChanges": "Changes";
       "auditLogsDescription": "View compliance and action logs for this organization";
       "auditLogsEmpty": "No activity logs found.";

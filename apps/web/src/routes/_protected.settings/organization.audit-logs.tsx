@@ -172,16 +172,16 @@ function AuditLogsPage() {
                   onValueChange={(val) => handleFilterChange(setFilterAction, !val || val === "all" ? "" : val)}
                 >
                   <SelectTrigger className="w-full">
-                    <SelectValue placeholder="All Actions" />
+                    <SelectValue placeholder={t("settings.organization.auditLogsAllActions")} />
                   </SelectTrigger>
                   <SelectPopup>
-                    <SelectItem value="all">All Actions</SelectItem>
-                    <SelectItem value="create">Create</SelectItem>
-                    <SelectItem value="update">Update</SelectItem>
-                    <SelectItem value="delete">Delete</SelectItem>
-                    <SelectItem value="download">Download</SelectItem>
-                    <SelectItem value="execute">Execute</SelectItem>
-                    <SelectItem value="access">Access</SelectItem>
+                    <SelectItem value="all">{t("settings.organization.auditLogsAllActions")}</SelectItem>
+                    <SelectItem value="create">{t("settings.organization.auditLogsActionCreate")}</SelectItem>
+                    <SelectItem value="update">{t("settings.organization.auditLogsActionUpdate")}</SelectItem>
+                    <SelectItem value="delete">{t("settings.organization.auditLogsActionDelete")}</SelectItem>
+                    <SelectItem value="download">{t("settings.organization.auditLogsActionDownload")}</SelectItem>
+                    <SelectItem value="execute">{t("settings.organization.auditLogsActionExecute")}</SelectItem>
+                    <SelectItem value="access">{t("settings.organization.auditLogsActionAccess")}</SelectItem>
                   </SelectPopup>
                 </Select>
               </div>
@@ -232,44 +232,12 @@ function AuditLogsPage() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {isLoading ? (
-                    <TableRow>
-                      <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
-                        {t("settings.organization.auditLogsLoading")}
-                      </TableCell>
-                    </TableRow>
-                  ) : isError ? (
-                    <TableRow>
-                      <TableCell className="text-destructive h-24 text-center font-medium" colSpan={6}>
-                        {t("settings.organization.auditLogsError")}
-                      </TableCell>
-                    </TableRow>
-                  ) : !data || data.items.length === 0 ? (
-                    <TableRow>
-                      <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
-                        {t("settings.organization.auditLogsEmpty")}
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    data.items.map((log) => (
-                      <TableRow key={log.id}>
-                        <TableCell className="whitespace-nowrap text-xs">
-                          {new Date(log.createdAt).toLocaleString(getFormattingLocale())}
-                        </TableCell>
-                        <TableCell className="text-xs font-mono">
-                          {log.user ? `${log.user.name} (${log.user.email})` : log.userId}
-                        </TableCell>
-                        <TableCell className="text-xs capitalize font-medium">{log.action}</TableCell>
-                        <TableCell className="text-xs">{log.resourceType}</TableCell>
-                        <TableCell className="text-xs font-mono max-w-[120px] truncate" title={log.resourceId}>
-                          {log.resourceId}
-                        </TableCell>
-                        <TableCell className="text-xs font-mono max-w-[200px] truncate" title={JSON.stringify(log.changes)}>
-                          {log.changes ? JSON.stringify(log.changes) : "-"}
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
+                  <AuditLogsTableBody
+                    isLoading={isLoading}
+                    isError={isError}
+                    data={data}
+                    t={t}
+                  />
                 </TableBody>
               </Table>
             </div>
@@ -293,6 +261,68 @@ function AuditLogsPage() {
           </div>
         </FramePanel>
       </Frame>
+    </>
+  );
+}
+
+type AuditLogsTableBodyProps = {
+  isLoading: boolean;
+  isError: boolean;
+  data: any;
+  t: (key: any) => string;
+};
+
+function AuditLogsTableBody({ isLoading, isError, data, t }: AuditLogsTableBodyProps) {
+  if (isLoading) {
+    return (
+      <TableRow>
+        <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
+          {t("settings.organization.auditLogsLoading")}
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  if (isError) {
+    return (
+      <TableRow>
+        <TableCell className="text-destructive h-24 text-center font-medium" colSpan={6}>
+          {t("settings.organization.auditLogsError")}
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  if (!data || data.items.length === 0) {
+    return (
+      <TableRow>
+        <TableCell className="text-muted-foreground h-24 text-center" colSpan={6}>
+          {t("settings.organization.auditLogsEmpty")}
+        </TableCell>
+      </TableRow>
+    );
+  }
+
+  return (
+    <>
+      {data.items.map((log: any) => (
+        <TableRow key={log.id}>
+          <TableCell className="whitespace-nowrap text-xs">
+            {new Date(log.createdAt).toLocaleString(getFormattingLocale())}
+          </TableCell>
+          <TableCell className="text-xs font-mono">
+            {log.user ? `${log.user.name} (${log.user.email})` : log.userId}
+          </TableCell>
+          <TableCell className="text-xs capitalize font-medium">{log.action}</TableCell>
+          <TableCell className="text-xs">{log.resourceType}</TableCell>
+          <TableCell className="text-xs font-mono max-w-[120px] truncate" title={log.resourceId}>
+            {log.resourceId}
+          </TableCell>
+          <TableCell className="text-xs font-mono max-w-[200px] truncate" title={JSON.stringify(log.changes)}>
+            {log.changes ? JSON.stringify(log.changes) : "-"}
+          </TableCell>
+        </TableRow>
+      ))}
     </>
   );
 }

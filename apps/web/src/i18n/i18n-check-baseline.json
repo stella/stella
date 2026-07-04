@@ -22,6 +22,8 @@
     "organization.invitations.emailAddressLabel",
     "search.kinds.matter",
     "search.updatedWithinOptions.day",
+    "settings.organization.auditLogsActionDelete",
+    "settings.organization.auditLogsActionDownload",
     "tasks.clearDate",
     "tasks.priorityValues.none",
     "tasks.status",
