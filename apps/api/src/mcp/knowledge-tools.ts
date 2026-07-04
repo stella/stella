@@ -460,14 +460,15 @@ const readClauseDetail = async ({
       return errorResult(result.error.message);
     }
     const version = result.value;
-    const textFields: McpStructuredTextField[] = [];
-    if (isClauseBody(version.body)) {
-      pushClauseBodyTexts({
-        body: version.body,
-        fields: textFields,
-        workspaceId: organizationId,
-      });
+    if (!isClauseBody(version.body)) {
+      return errorResult("Clause body has an unrecognized format");
     }
+    const textFields: McpStructuredTextField[] = [];
+    pushClauseBodyTexts({
+      body: version.body,
+      fields: textFields,
+      workspaceId: organizationId,
+    });
     return { egress: "structured", payload: { version }, textFields } as const;
   }
 
@@ -503,13 +504,14 @@ const readClauseDetail = async ({
     value: clause.usageNotes,
     workspaceId: organizationId,
   });
-  if (isClauseBody(clause.body)) {
-    pushClauseBodyTexts({
-      body: clause.body,
-      fields: textFields,
-      workspaceId: organizationId,
-    });
+  if (!isClauseBody(clause.body)) {
+    return errorResult("Clause body has an unrecognized format");
   }
+  pushClauseBodyTexts({
+    body: clause.body,
+    fields: textFields,
+    workspaceId: organizationId,
+  });
   for (const variant of clause.variants) {
     pushTextField({
       apply: (value) => {
@@ -519,13 +521,14 @@ const readClauseDetail = async ({
       value: variant.label,
       workspaceId: organizationId,
     });
-    if (isClauseBody(variant.body)) {
-      pushClauseBodyTexts({
-        body: variant.body,
-        fields: textFields,
-        workspaceId: organizationId,
-      });
+    if (!isClauseBody(variant.body)) {
+      return errorResult("Clause body has an unrecognized format");
     }
+    pushClauseBodyTexts({
+      body: variant.body,
+      fields: textFields,
+      workspaceId: organizationId,
+    });
   }
   return { egress: "structured", payload: { clause }, textFields } as const;
 };
@@ -771,7 +774,14 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
     if (!roles[context.memberRole].authorize({ clause: ["create"] }).success) {
       return errorResult("Forbidden");
     }
-    // The schema guarantees title and body are present on create.
+    // The schema guarantees title and body are present on create. Bind title
+    // in the narrowed scope (mirroring clauseBody above): inside the closure
+    // below TypeScript would otherwise widen input.title back to
+    // string | undefined.
+    const { title } = input;
+    if (title === undefined) {
+      return errorResult("title is required to create a clause");
+    }
     if (clauseBody === undefined) {
       return errorResult("body is required to create a clause");
     }
@@ -782,14 +792,18 @@ const handleSaveClauseTool: McpToolHandler = async ({ args, context }) => {
         userId: context.userId,
         recordAuditEvent: context.recordAuditEvent,
         body: {
-          title: input.title ?? "",
+          title,
           body: clauseBody,
           ...(input.category_id
             ? { categoryId: brandPersistedClauseCategoryId(input.category_id) }
             : {}),
           ...(input.language ? { language: input.language } : {}),
-          ...(input.description ? { description: input.description } : {}),
-          ...(input.usage_notes ? { usageNotes: input.usage_notes } : {}),
+          ...(input.description !== undefined && input.description !== null
+            ? { description: input.description }
+            : {}),
+          ...(input.usage_notes !== undefined && input.usage_notes !== null
+            ? { usageNotes: input.usage_notes }
+            : {}),
           ...(input.metadata ? { metadata: input.metadata } : {}),
         },
       }),

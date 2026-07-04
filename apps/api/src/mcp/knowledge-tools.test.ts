@@ -65,6 +65,19 @@ const createPlaybookScopedDb = (playbook: unknown) =>
     ),
   );
 
+/** A scopedDb whose clauses.findFirst resolves to `clause` (detail mode). */
+const createClauseDetailScopedDb = (clause: unknown) =>
+  asTestRaw<McpRequestContext["scopedDb"] & ReturnType<typeof mock>>(
+    mock(
+      async (run: (tx: unknown) => unknown) =>
+        await run({
+          query: {
+            clauses: { findFirst: async () => clause },
+          },
+        }),
+    ),
+  );
+
 const createContext = ({
   memberRole = "owner",
   scopedDb = createClauseScopedDb([]),
@@ -147,6 +160,46 @@ describe("MCP knowledge tools", () => {
       clauses: [{ title: "[REDACTED_0]", description: "[REDACTED_1]" }],
       nextCursor: null,
     });
+  });
+
+  test("list_clauses fails closed when a clause body is unrecognized, leaking nothing", async () => {
+    const clause = {
+      id: "c1",
+      title: "Governing Law",
+      categoryId: null,
+      description: null,
+      usageNotes: null,
+      language: null,
+      // Malformed: a clause body must be a non-empty paragraph array; a raw
+      // string here mimics a corrupted or hand-edited row.
+      body: "SECRET_UNREDACTED_MARKER",
+      metadata: null,
+      currentVersion: 1,
+      createdBy: "user_1",
+      createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      updatedAt: new Date("2026-01-01T00:00:00.000Z"),
+      variants: [],
+      versions: [],
+    };
+
+    const response = await KNOWLEDGE_TOOL_HANDLERS.list_clauses({
+      args: { clause_id: "c1" },
+      context: createContext({
+        scopedDb: createClauseDetailScopedDb(clause),
+      }),
+    });
+
+    expect(isMcpEgressPlan(response)).toBe(false);
+    if (isMcpEgressPlan(response)) {
+      throw new Error("Expected a finished error result, not an egress plan");
+    }
+    expect(response.isError).toBe(true);
+    const message = response.content.at(0);
+    expect(message?.type === "text" ? message.text : "").toBe(
+      "Clause body has an unrecognized format",
+    );
+    // The malformed body must never reach the payload, anonymized or not.
+    expect(JSON.stringify(response)).not.toContain("SECRET_UNREDACTED_MARKER");
   });
 
   test("save_clause rejects an update that changes nothing", async () => {
