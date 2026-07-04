@@ -8,6 +8,7 @@ import {
   isExternalMcpToolName,
   isSkillToolName,
 } from "@/api/lib/mcp-upstream/namespace";
+import { BILLING_TOOL_HANDLERS } from "@/api/mcp/billing-tools";
 import { COMPAT_TOOL_HANDLERS } from "@/api/mcp/compat-tools";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -81,6 +82,12 @@ const MCP_TOOL_HANDLERS = new Map<string, McpToolHandler>([
   ["delete_clause", KNOWLEDGE_TOOL_HANDLERS.delete_clause],
   ["list_playbooks", KNOWLEDGE_TOOL_HANDLERS.list_playbooks],
   ["run_playbook", KNOWLEDGE_TOOL_HANDLERS.run_playbook],
+  ["list_time_entries", BILLING_TOOL_HANDLERS.list_time_entries],
+  ["save_time_entry", BILLING_TOOL_HANDLERS.save_time_entry],
+  ["delete_time_entry", BILLING_TOOL_HANDLERS.delete_time_entry],
+  ["resolve_rate", BILLING_TOOL_HANDLERS.resolve_rate],
+  ["read_invoices", BILLING_TOOL_HANDLERS.read_invoices],
+  ["get_usage", BILLING_TOOL_HANDLERS.get_usage],
 ]);
 
 export const getMcpToolDefinition = async (

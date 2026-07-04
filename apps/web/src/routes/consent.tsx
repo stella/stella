@@ -70,6 +70,7 @@ const SCOPE_LABELS = {
   "stella:documents_write": "consent.scopeDocumentsWrite",
   "stella:matters_write": "consent.scopeMattersWrite",
   "stella:knowledge_write": "consent.scopeKnowledgeWrite",
+  "stella:billing_write": "consent.scopeBillingWrite",
   "stella:skills": "consent.scopeSkills",
   "stella:external_mcps": "consent.scopeExternalMcps",
   "stella:search_anonymized": "consent.scopeSearchAnonymized",

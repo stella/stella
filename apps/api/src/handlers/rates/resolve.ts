@@ -21,7 +21,7 @@ const resolveRateQuerySchema = t.Object({
 const resolveRateHandler = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "tool", name: "resolve_rate" },
     query: resolveRateQuerySchema,
   },
   async function* ({ safeDb, workspaceId, session, query }) {
@@ -57,7 +57,10 @@ const resolveRateHandler = createSafeHandler(
   },
 );
 
-const resolveRate = async function* ({
+// Shared effective-rate resolution reused by the HTTP handler and the
+// `resolve_rate` MCP tool: user-specific rate first, then the default table
+// rate, scoped to the workspace's default rate table.
+export const resolveRate = async function* ({
   safeDb,
   workspaceId,
   userId,

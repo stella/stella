@@ -881,6 +881,7 @@
     "error": "Něco se pokazilo. Zkuste to prosím znovu.",
     "missingJurisdictions": "Vaše organizace stella zatím nemá nastavené jurisdikce, ve kterých působí. Dokud nastavení nedokončíte, nebudou některé nástroje závislé na jurisdikci dostupné.",
     "permissions": "Tím aplikaci umožníte:",
+    "scopeBillingWrite": "Vytvoření, úprava a smazání vašich časových záznamů",
     "scopeDocumentsWrite": "Vytvoření, úprava a smazání vašich dokumentů",
     "scopeExternalMcps": "Použití vašich připojených integrací",
     "scopeKnowledgeWrite": "Vytvoření, úprava a smazání vašich vzorových ustanovení a spouštění playbooků",

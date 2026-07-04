@@ -14,7 +14,7 @@ const readTimeEntryByIdParamsSchema = workspaceParams({
 const readTimeEntryById = createSafeHandler(
   {
     permissions: { workspace: ["read"] },
-    mcp: { type: "pending" },
+    mcp: { type: "covered", by: "list_time_entries" },
     params: readTimeEntryByIdParamsSchema,
   },
   async function* ({ safeDb, session, workspaceId, params }) {

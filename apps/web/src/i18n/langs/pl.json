@@ -881,6 +881,7 @@
     "error": "Coś poszło nie tak. Spróbuj ponownie.",
     "missingJurisdictions": "Twoja organizacja w stelli nie skonfigurowała jeszcze swoich jurysdykcji praktyki. Niektóre narzędzia uwzględniające jurysdykcję będą niedostępne do czasu zakończenia konfiguracji.",
     "permissions": "Spowoduje to przyznanie aplikacji dostępu do:",
+    "scopeBillingWrite": "Tworzenie, edytowanie i usuwanie Twoich wpisów czasu",
     "scopeDocumentsWrite": "Tworzenie, edytowanie i usuwanie Twoich dokumentów",
     "scopeExternalMcps": "Korzystanie z połączonych narzędzi zewnętrznych",
     "scopeKnowledgeWrite": "Tworzenie, edytowanie i usuwanie Twoich klauzul oraz uruchamianie playbooków",

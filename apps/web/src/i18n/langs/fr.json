@@ -881,6 +881,7 @@
     "error": "Une erreur s’est produite. Veuillez réessayer.",
     "missingJurisdictions": "Votre organisation stella n’a pas encore configuré ses juridictions d’exercice. Certains outils tenant compte de la juridiction resteront indisponibles tant que vous n’aurez pas terminé la configuration.",
     "permissions": "Cela autorisera l’application à :",
+    "scopeBillingWrite": "Créer, modifier et supprimer vos saisies de temps",
     "scopeDocumentsWrite": "Créer, modifier et supprimer vos documents",
     "scopeExternalMcps": "Utiliser vos outils externes connectés",
     "scopeKnowledgeWrite": "Créer, modifier et supprimer vos clauses, et exécuter des playbooks",

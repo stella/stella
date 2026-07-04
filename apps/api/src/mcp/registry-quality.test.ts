@@ -26,24 +26,24 @@ const SURFACES = [
 
 type SurfaceMode = (typeof SURFACES)[number]["mode"];
 
-// Zero-buffer ceilings pinned to the measured counts: default 36 tools (31 +
-// the 5 clause/playbook knowledge tools), anonymized 19 tools (17 + the two new
-// read tools list_clauses and list_playbooks; the three knowledge write tools
-// save_clause/delete_clause/run_playbook stay excluded from the anonymized
-// projection). Any tool added to either surface must bump the matching ceiling
-// deliberately.
+// Zero-buffer ceilings pinned to the measured counts: default 42 tools (31 +
+// the 5 clause/playbook knowledge tools + the 6 time-and-billing tools),
+// anonymized 23 tools (17 + list_clauses/list_playbooks +
+// list_time_entries/resolve_rate/read_invoices/get_usage; the knowledge and
+// billing write tools stay excluded from the anonymized projection). Any tool
+// added to either surface must bump the matching ceiling deliberately.
 const TOOL_COUNT_CEILING: Record<SurfaceMode, number> = {
-  default: 36,
-  anonymized: 19,
+  default: 42,
+  anonymized: 23,
 };
 
 // Serialized `tools/list` tool array (the wire payload produced by
-// `toMcpTools`). Measured: default 38_629 chars (~9.7k tokens), anonymized
-// 14_562 chars (~3.6k tokens). Ceilings sit ~10-15% above so organic growth
+// `toMcpTools`). Measured: default 45_222 chars (~11.3k tokens), anonymized
+// 18_111 chars (~4.5k tokens). Ceilings sit ~10-15% above so organic growth
 // fits but a surface-size jump must be a deliberate constant bump.
 const TOOLS_LIST_PAYLOAD_CHAR_CEILING: Record<SurfaceMode, number> = {
-  default: 44_000,
-  anonymized: 16_500,
+  default: 51_000,
+  anonymized: 20_000,
 };
 
 // Longest description measured 2026-07-02: create_template at 791 chars
@@ -127,9 +127,10 @@ const serializeToolSurface = (
 ): string =>
   JSON.stringify(
     definitions.map(
-      ({ annotations, description, inputSchema, name, scope }) => ({
+      ({ annotations, description, feature, inputSchema, name, scope }) => ({
         name,
         scope,
+        feature,
         description,
         annotations,
         inputSchema,

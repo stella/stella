@@ -140,6 +140,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   {
     "name": "search_case_law",
     "scope": "stella:search",
+    "feature": "FEATURE_PUBLIC_LAW",
     "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type.",
     "annotations": {
       "readOnlyHint": true
@@ -232,6 +233,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   {
     "name": "read_case_law_decision",
     "scope": "stella:read",
+    "feature": "FEATURE_PUBLIC_LAW",
     "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, and source URLs. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "readOnlyHint": true
@@ -1803,6 +1805,259 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         "playbook_id"
       ]
     }
+  },
+  {
+    "name": "list_time_entries",
+    "scope": "stella:read",
+    "feature": "FEATURE_TIME_BILLING",
+    "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list time entries in; required unless time_entry_id is given"
+        },
+        "time_entry_id": {
+          "type": "string",
+          "description": "Time entry ID to read in detail"
+        },
+        "entity_id": {
+          "type": "string",
+          "description": "List only entries logged against this entity (document, folder, or task the time is billed to)"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "List only entries recorded by this user"
+        },
+        "date_from": {
+          "type": "string",
+          "description": "List only entries worked on or after this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "date_to": {
+          "type": "string",
+          "description": "List only entries worked on or before this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "approved",
+            "billed",
+            "written_off"
+          ],
+          "description": "List only entries with this status"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max entries to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_time_entries call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "save_time_entry",
+    "scope": "stella:billing_write",
+    "feature": "FEATURE_TIME_BILLING",
+    "description": "Create or update a time entry. Omit time_entry_id to create (matter_id, entity_id, date_worked, timezone_id, duration_minutes, rate_at_entry, currency, and narrative all required). Pass time_entry_id to update: set date_worked, duration_minutes, narrative, invoice_narrative, billable, no_charge, entity_id (move the entry), task_code, activity_code, rate_at_entry, currency, and/or status (draft or approved). Rates and amounts are integer minor currency units (e.g. cents); durations are whole minutes. Returns the time entry ID.",
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "time_entry_id": {
+          "type": "string",
+          "description": "Time entry ID to update; omit to create"
+        },
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to create the entry in; required when creating"
+        },
+        "entity_id": {
+          "type": "string",
+          "description": "Entity the time is logged against (document, folder, or task). Required when creating; when updating, moves the entry to a different entity in the same matter."
+        },
+        "date_worked": {
+          "type": "string",
+          "description": "Date the work was done (ISO YYYY-MM-DD); required when creating",
+          "maxLength": 10
+        },
+        "timezone_id": {
+          "type": "string",
+          "description": "IANA time zone the date_worked is interpreted in (e.g. Europe/Prague); required when creating",
+          "maxLength": 64
+        },
+        "duration_minutes": {
+          "type": "integer",
+          "description": "Minutes worked (whole minutes); required when creating",
+          "minimum": 1
+        },
+        "rate_at_entry": {
+          "type": "integer",
+          "description": "Hourly rate in integer minor currency units (e.g. cents); required when creating",
+          "minimum": 0
+        },
+        "currency": {
+          "type": "string",
+          "description": "3-letter ISO currency code; required when creating",
+          "maxLength": 3
+        },
+        "narrative": {
+          "type": "string",
+          "description": "Description of the work; required when creating",
+          "maxLength": 10000
+        },
+        "invoice_narrative": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "Client-facing narrative shown on the invoice; pass null to clear. Only valid when updating.",
+          "maxLength": 10000
+        },
+        "billable": {
+          "type": "boolean",
+          "description": "Whether the entry is billable to the client"
+        },
+        "no_charge": {
+          "type": "boolean",
+          "description": "Whether the entry is recorded but not charged. Only valid when updating."
+        },
+        "task_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "UTBMS/LEDES task code; pass null to clear",
+          "maxLength": 20
+        },
+        "activity_code": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "UTBMS/LEDES activity code; pass null to clear",
+          "maxLength": 20
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "approved"
+          ],
+          "description": "Set the entry's status. Only valid when updating."
+        }
+      }
+    }
+  },
+  {
+    "name": "delete_time_entry",
+    "scope": "stella:billing_write",
+    "feature": "FEATURE_TIME_BILLING",
+    "description": "Delete a time entry. A draft entry is permanently deleted; an approved entry is written off instead (kept for the audit trail, excluded from billing). A billed entry cannot be deleted until its invoice is reverted. Returns whether the entry was hard-deleted.",
+    "annotations": {
+      "destructiveHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "time_entry_id": {
+          "type": "string",
+          "description": "Time entry ID to delete or write off"
+        }
+      },
+      "required": [
+        "time_entry_id"
+      ]
+    }
+  },
+  {
+    "name": "resolve_rate",
+    "scope": "stella:read",
+    "feature": "FEATURE_TIME_BILLING",
+    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using the matter's default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to resolve the rate in"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User ID to resolve the rate for"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date to resolve the rate on (ISO YYYY-MM-DD)",
+          "maxLength": 10
+        }
+      },
+      "required": [
+        "matter_id",
+        "user_id",
+        "date"
+      ]
+    }
+  },
+  {
+    "name": "read_invoices",
+    "scope": "stella:read",
+    "feature": "FEATURE_TIME_BILLING",
+    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list invoices in; required unless invoice_id is given"
+        },
+        "invoice_id": {
+          "type": "string",
+          "description": "Invoice ID to read in detail"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max invoices to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous read_invoices call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "get_usage",
+    "scope": "stella:read",
+    "feature": "FEATURE_USAGE",
+    "description": "Read the organization's current usage entitlement: plan, seats, billing period, and how many usage units (AI credits) remain this period. Returns { entitlement: null } when the organization has no active plan. Requires organization-settings management access.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
+    }
   }
 ]"
 `;
@@ -1947,6 +2202,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
   {
     "name": "search_case_law",
     "scope": "stella:search_anonymized",
+    "feature": "FEATURE_PUBLIC_LAW",
     "description": "Search the shared case-law corpus. Supports free-text search plus optional filters such as court, country, language, date range, and decision type.",
     "annotations": {
       "readOnlyHint": true
@@ -2039,6 +2295,7 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
   {
     "name": "read_case_law_decision",
     "scope": "stella:read_anonymized",
+    "feature": "FEATURE_PUBLIC_LAW",
     "description": "Read a single case-law decision by its decision ID. Returns metadata, plain text, citation links, and source URLs. Long decision text and large citation lists are returned in windows; pass the returned nextCursor back as cursor to read more.",
     "annotations": {
       "readOnlyHint": true
@@ -2397,6 +2654,145 @@ exports[`MCP registry quality (anonymized surface) tool surface snapshot (name, 
           "maxLength": 512
         }
       }
+    }
+  },
+  {
+    "name": "list_time_entries",
+    "scope": "stella:read_anonymized",
+    "feature": "FEATURE_TIME_BILLING",
+    "description": "List time entries in a matter, or read one entry in detail. Pass time_entry_id to get a single entry. Otherwise pass matter_id to list the matter's entries, optionally filtered by entity_id (the item the time was logged against), user_id, a date-worked range (date_from/date_to, ISO YYYY-MM-DD), and status. Returns each entry's id, entity, user, date, minutes, rate (minor currency units), currency, narrative, and status.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list time entries in; required unless time_entry_id is given"
+        },
+        "time_entry_id": {
+          "type": "string",
+          "description": "Time entry ID to read in detail"
+        },
+        "entity_id": {
+          "type": "string",
+          "description": "List only entries logged against this entity (document, folder, or task the time is billed to)"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "List only entries recorded by this user"
+        },
+        "date_from": {
+          "type": "string",
+          "description": "List only entries worked on or after this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "date_to": {
+          "type": "string",
+          "description": "List only entries worked on or before this ISO date (YYYY-MM-DD)",
+          "maxLength": 10
+        },
+        "status": {
+          "type": "string",
+          "enum": [
+            "draft",
+            "approved",
+            "billed",
+            "written_off"
+          ],
+          "description": "List only entries with this status"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max entries to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous list_time_entries call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "resolve_rate",
+    "scope": "stella:read_anonymized",
+    "feature": "FEATURE_TIME_BILLING",
+    "description": "Resolve the effective hourly rate for a user on a given date in a matter, using the matter's default rate table (user-specific rate first, then the table default). Returns the hourly rate in integer minor currency units (e.g. cents) and the currency, or nulls when no rate applies.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to resolve the rate in"
+        },
+        "user_id": {
+          "type": "string",
+          "description": "User ID to resolve the rate for"
+        },
+        "date": {
+          "type": "string",
+          "description": "Date to resolve the rate on (ISO YYYY-MM-DD)",
+          "maxLength": 10
+        }
+      },
+      "required": [
+        "matter_id",
+        "user_id",
+        "date"
+      ]
+    }
+  },
+  {
+    "name": "read_invoices",
+    "scope": "stella:read_anonymized",
+    "feature": "FEATURE_TIME_BILLING",
+    "description": "List invoices in a matter, or read one invoice in detail. Pass invoice_id to get a single invoice with its line items (time entries and expenses). Otherwise pass matter_id to list the matter's invoices. Returns each invoice's id, number, reference, status, dates, currency, and total (integer minor currency units).",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {
+        "matter_id": {
+          "type": "string",
+          "description": "Matter/workspace ID to list invoices in; required unless invoice_id is given"
+        },
+        "invoice_id": {
+          "type": "string",
+          "description": "Invoice ID to read in detail"
+        },
+        "limit": {
+          "type": "integer",
+          "description": "Max invoices to return",
+          "minimum": 1,
+          "maximum": 100
+        },
+        "cursor": {
+          "type": "string",
+          "description": "Opaque cursor from a previous read_invoices call to fetch the next page",
+          "maxLength": 512
+        }
+      }
+    }
+  },
+  {
+    "name": "get_usage",
+    "scope": "stella:read_anonymized",
+    "feature": "FEATURE_USAGE",
+    "description": "Read the organization's current usage entitlement: plan, seats, billing period, and how many usage units (AI credits) remain this period. Returns { entitlement: null } when the organization has no active plan. Requires organization-settings management access.",
+    "annotations": {
+      "readOnlyHint": true
+    },
+    "inputSchema": {
+      "type": "object",
+      "properties": {}
     }
   }
 ]"

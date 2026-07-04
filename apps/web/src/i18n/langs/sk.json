@@ -881,6 +881,7 @@
     "error": "Niečo sa pokazilo. Skúste to znova.",
     "missingJurisdictions": "Vaša organizácia v stelle si zatiaľ nenastavila jurisdikcie svojej praxe. Niektoré nástroje závislé od jurisdikcie nebudú dostupné, kým nastavenie nedokončíte.",
     "permissions": "Toto umožní aplikácii:",
+    "scopeBillingWrite": "Vytvoriť, upraviť a vymazať vaše časové záznamy",
     "scopeDocumentsWrite": "Vytvoriť, upraviť a vymazať vaše dokumenty",
     "scopeExternalMcps": "Použitie vašich pripojených externých nástrojov",
     "scopeKnowledgeWrite": "Vytvoriť, upraviť a vymazať vaše vzorové ustanovenia a spúšťať playbooky",

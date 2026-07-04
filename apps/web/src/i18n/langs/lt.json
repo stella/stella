@@ -881,6 +881,7 @@
     "error": "Įvyko klaida. Bandykite dar kartą.",
     "missingJurisdictions": "Jūsų stella organizacija dar nenustatė savo praktikos jurisdikcijų. Kol neužbaigsite sąrankos, kai kurie jurisdikciją vertinantys įrankiai bus nepasiekiami.",
     "permissions": "Tai leis programai:",
+    "scopeBillingWrite": "Kurti, redaguoti ir ištrinti jūsų laiko įrašus",
     "scopeDocumentsWrite": "Kurti, redaguoti ir ištrinti jūsų dokumentus",
     "scopeExternalMcps": "Naudoti jūsų prijungtus išorinius įrankius",
     "scopeKnowledgeWrite": "Kurti, redaguoti ir ištrinti jūsų sąlygas ir vykdyti peržiūros vadovus",

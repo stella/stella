@@ -599,6 +599,10 @@ describe("OpenAI-compatible MCP tools", () => {
       "list_tasks",
       "list_clauses",
       "list_playbooks",
+      "list_time_entries",
+      "resolve_rate",
+      "read_invoices",
+      "get_usage",
     ]);
   });
 
@@ -2257,19 +2261,11 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
-  // list_tasks (list mode) runs through the structured egress pipeline, so in
-  // anonymized mode each task name is redacted under its matter's workspace
-  // scope before it leaves Stella.
-  const createTaskListScopedDb = (
-    rows: {
-      createdAt: string;
-      id: string;
-      name: string;
-      status: string | null;
-      priority: string | null;
-      dueDate: string | null;
-    }[],
-  ) =>
+  // A scopedDb whose single select builder returns the given rows from
+  // `.limit()`. Shared by the list_tasks and list_time_entries anonymized-egress
+  // tests, both of which run one `.select().from().where().orderBy().limit()`
+  // read through the structured egress pipeline.
+  const createSelectListScopedDb = (rows: readonly Record<string, unknown>[]) =>
     asTestRaw<McpRequestContext["scopedDb"]>(
       mock(async (callback: (tx: unknown) => unknown) => {
         const builder = {
@@ -2291,7 +2287,7 @@ describe("OpenAI-compatible MCP tools", () => {
     const result = await handleMcpToolCall({
       args: { matter_id: "ws_1" },
       context: createContext({
-        scopedDb: createTaskListScopedDb([
+        scopedDb: createSelectListScopedDb([
           {
             createdAt: "2026-01-01T00:00:00.000000",
             id: "task_1",
@@ -2324,5 +2320,222 @@ describe("OpenAI-compatible MCP tools", () => {
       ],
       nextCursor: null,
     });
+  });
+
+  // list_time_entries (list mode) runs through the structured egress pipeline,
+  // so in anonymized mode each entry's narrative is redacted under its matter's
+  // workspace scope before it leaves Stella. A null userId keeps the user-name
+  // lookup from running, so only the narrative is pushed.
+  test("list_time_entries anonymizes narratives in anonymized mode", async () => {
+    anonymizeTextFieldsMock.mockResolvedValue({
+      entityCount: 1,
+      fields: ["Call with [PERSON_1]"],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1" },
+      context: createContext({
+        scopedDb: createSelectListScopedDb([
+          {
+            id: "te_1",
+            entityId: "entity_1",
+            userId: null,
+            dateWorked: "2026-02-01",
+            durationMinutes: 60,
+            billedMinutes: 60,
+            rateAtEntry: 25_000,
+            currency: "EUR",
+            narrative: "Call with John Smith",
+            invoiceNarrative: null,
+            billable: true,
+            noCharge: false,
+            status: "draft",
+          },
+        ]),
+      }),
+      mode: "anonymized",
+      toolName: "list_time_entries",
+    });
+
+    const anonymizeInput = anonymizeTextFieldsMock.mock.calls.at(-1)?.[0];
+    expect(anonymizeInput).toMatchObject({
+      fields: ["Call with John Smith"],
+      workspaceId: "ws_1",
+    });
+
+    expect(parseToolPayload(result)).toEqual({
+      entries: [
+        {
+          id: "te_1",
+          entityId: "entity_1",
+          userId: null,
+          userName: null,
+          dateWorked: "2026-02-01",
+          durationMinutes: 60,
+          billedMinutes: 60,
+          rateAtEntry: 25_000,
+          currency: "EUR",
+          narrative: "Call with [PERSON_1]",
+          invoiceNarrative: null,
+          billable: true,
+          noCharge: false,
+          status: "draft",
+        },
+      ],
+      nextCursor: null,
+    });
+  });
+
+  // save_time_entry merges create and update. An update (time_entry_id present)
+  // with no other field is a no-op the caller almost certainly did not intend;
+  // the cross-field schema rejects it before touching the database.
+  test("save_time_entry rejects an update with no changes", async () => {
+    const result = await handleMcpToolCall({
+      args: { time_entry_id: "te_1" },
+      context: createContext(),
+      toolName: "save_time_entry",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "Provide at least one change to the time entry" },
+      ],
+      isError: true,
+    });
+  });
+
+  // Time-and-billing tools carry FEATURE_TIME_BILLING; get_usage carries
+  // FEATURE_USAGE. The gate hides a flagged tool from the list and rejects its
+  // dispatch when the flag is off outside dev. Both flags are flipped in place
+  // and restored in a finally so the change cannot leak into a neighbour.
+  const withBillingFlags = async (
+    {
+      featureTimeBilling,
+      featureUsage,
+      isDev,
+    }: { featureTimeBilling: boolean; featureUsage: boolean; isDev: boolean },
+    run: () => Promise<void>,
+  ) => {
+    const previousTimeBilling = env.FEATURE_TIME_BILLING;
+    const previousUsage = env.FEATURE_USAGE;
+    const previousIsDev = env.isDev;
+    env.FEATURE_TIME_BILLING = featureTimeBilling;
+    env.FEATURE_USAGE = featureUsage;
+    env.isDev = isDev;
+    try {
+      await run();
+    } finally {
+      env.FEATURE_TIME_BILLING = previousTimeBilling;
+      env.FEATURE_USAGE = previousUsage;
+      env.isDev = previousIsDev;
+    }
+  };
+
+  test("hides time-and-billing tools when FEATURE_TIME_BILLING is off outside dev", async () => {
+    await withBillingFlags(
+      { featureTimeBilling: false, featureUsage: true, isDev: false },
+      async () => {
+        const toolNames = (await listMcpTools(createContext())).map(
+          (tool) => tool.name,
+        );
+
+        expect(toolNames).not.toContain("list_time_entries");
+        expect(toolNames).not.toContain("save_time_entry");
+        // Untagged tools stay listed.
+        expect(toolNames).toContain("list_matters");
+      },
+    );
+  });
+
+  test("lists time-and-billing tools once FEATURE_TIME_BILLING is on", async () => {
+    await withBillingFlags(
+      { featureTimeBilling: true, featureUsage: true, isDev: false },
+      async () => {
+        const toolNames = (await listMcpTools(createContext())).map(
+          (tool) => tool.name,
+        );
+
+        expect(toolNames).toContain("list_time_entries");
+        expect(toolNames).toContain("save_time_entry");
+        expect(toolNames).toContain("delete_time_entry");
+      },
+    );
+  });
+
+  test("rejects dispatch of save_time_entry when FEATURE_TIME_BILLING is off outside dev", async () => {
+    await withBillingFlags(
+      { featureTimeBilling: false, featureUsage: true, isDev: false },
+      async () => {
+        const recordAuditEvent = createRecordAuditEventMock();
+        const result = await handleMcpToolCall({
+          args: {
+            matter_id: "ws_1",
+            entity_id: "entity_1",
+            date_worked: "2026-02-01",
+            timezone_id: "Europe/Prague",
+            duration_minutes: 60,
+            rate_at_entry: 25_000,
+            currency: "EUR",
+            narrative: "Call with client",
+          },
+          context: createContext({ recordAuditEvent }),
+          toolName: "save_time_entry",
+        });
+
+        expect(result).toEqual({
+          content: [
+            {
+              type: "text",
+              text: "This feature is not enabled on this deployment",
+            },
+          ],
+          isError: true,
+        });
+        // The gate short-circuits before the backing handler runs, so no audit
+        // row is written by guessing the tool name.
+        expect(recordAuditEvent).not.toHaveBeenCalled();
+      },
+    );
+  });
+
+  // get_usage is gated by FEATURE_USAGE, independently of FEATURE_TIME_BILLING:
+  // with time-billing on but usage off, the billing tools list but get_usage
+  // does not, and its dispatch is rejected.
+  test("gates get_usage on FEATURE_USAGE independently of FEATURE_TIME_BILLING", async () => {
+    await withBillingFlags(
+      { featureTimeBilling: true, featureUsage: false, isDev: false },
+      async () => {
+        const toolNames = (await listMcpTools(createContext())).map(
+          (tool) => tool.name,
+        );
+        expect(toolNames).toContain("list_time_entries");
+        expect(toolNames).not.toContain("get_usage");
+
+        const result = await handleMcpToolCall({
+          args: {},
+          context: createContext(),
+          toolName: "get_usage",
+        });
+        expect(result).toEqual({
+          content: [
+            {
+              type: "text",
+              text: "This feature is not enabled on this deployment",
+            },
+          ],
+          isError: true,
+        });
+      },
+    );
+
+    await withBillingFlags(
+      { featureTimeBilling: true, featureUsage: true, isDev: false },
+      async () => {
+        const toolNames = (await listMcpTools(createContext())).map(
+          (tool) => tool.name,
+        );
+        expect(toolNames).toContain("get_usage");
+      },
+    );
   });
 });

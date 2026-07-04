@@ -1,11 +1,15 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
+import type { Static } from "elysia";
 
+import type { SafeDb } from "@/api/db";
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { roundToIncrement } from "@/api/handlers/time-entries/create";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { AuditRecorder } from "@/api/lib/audit-log";
+import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
@@ -32,125 +36,149 @@ const updateTimeEntryBodySchema = t.Object({
   currency: t.Optional(t.String({ minLength: 3, maxLength: 3 })),
 });
 
-const updateTimeEntryById = createSafeHandler(
-  {
-    permissions: { timeEntry: ["update"] },
-    mcp: { type: "pending" },
-    body: updateTimeEntryBodySchema,
-  },
-  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
-    const existing = yield* Result.await(
+export type UpdateTimeEntryHandlerProps = {
+  safeDb: SafeDb;
+  workspaceId: SafeId<"workspace">;
+  recordAuditEvent: AuditRecorder;
+  body: Static<typeof updateTimeEntryBodySchema>;
+};
+
+// Shared time-entry update logic reused by the HTTP handler and the
+// `save_time_entry` MCP tool, so both enforce the billed/written-off guard and
+// emit the same audit diff.
+export const updateTimeEntryHandler = async function* ({
+  safeDb,
+  workspaceId,
+  recordAuditEvent,
+  body,
+}: UpdateTimeEntryHandlerProps) {
+  const existing = yield* Result.await(
+    safeDb((tx) =>
+      tx.query.timeEntries.findFirst({
+        where: {
+          id: { eq: body.id },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: {
+          status: true,
+          dateWorked: true,
+          durationMinutes: true,
+          billedMinutes: true,
+          narrative: true,
+          invoiceNarrative: true,
+          billable: true,
+          noCharge: true,
+          matterId: true,
+          taskCode: true,
+          activityCode: true,
+          rateAtEntry: true,
+          currency: true,
+        },
+      }),
+    ),
+  );
+
+  if (!existing) {
+    return Result.err(
+      new HandlerError({ status: 404, message: "Time entry not found" }),
+    );
+  }
+
+  if (
+    existing.status === BILLING_STATUS.BILLED ||
+    existing.status === BILLING_STATUS.WRITTEN_OFF
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 400,
+        message: "Cannot edit a billed or written-off entry",
+      }),
+    );
+  }
+
+  if (body.matterId !== undefined) {
+    const matter = yield* Result.await(
       safeDb((tx) =>
-        tx.query.timeEntries.findFirst({
+        tx.query.entities.findFirst({
           where: {
-            id: { eq: body.id },
+            id: { eq: body.matterId },
             workspaceId: { eq: workspaceId },
           },
-          columns: {
-            status: true,
-            dateWorked: true,
-            durationMinutes: true,
-            billedMinutes: true,
-            narrative: true,
-            invoiceNarrative: true,
-            billable: true,
-            noCharge: true,
-            matterId: true,
-            taskCode: true,
-            activityCode: true,
-            rateAtEntry: true,
-            currency: true,
-          },
+          columns: { id: true },
         }),
       ),
     );
 
-    if (!existing) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Time entry not found" }),
-      );
-    }
-
-    if (
-      existing.status === BILLING_STATUS.BILLED ||
-      existing.status === BILLING_STATUS.WRITTEN_OFF
-    ) {
+    if (!matter) {
       return Result.err(
         new HandlerError({
           status: 400,
-          message: "Cannot edit a billed or written-off entry",
+          message: "Matter not found in this workspace",
         }),
       );
     }
+  }
 
-    if (body.matterId !== undefined) {
-      const matter = yield* Result.await(
-        safeDb((tx) =>
-          tx.query.entities.findFirst({
-            where: {
-              id: { eq: body.matterId },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: { id: true },
-          }),
-        ),
-      );
+  const updates = {
+    ...pickDefined(body, [
+      "dateWorked",
+      "durationMinutes",
+      "narrative",
+      "invoiceNarrative",
+      "billable",
+      "noCharge",
+      "matterId",
+      "taskCode",
+      "activityCode",
+      "status",
+      "currency",
+    ]),
+    ...(body.rateAtEntry === undefined
+      ? {}
+      : { rateAtEntry: cents(body.rateAtEntry) }),
+    ...(body.durationMinutes !== undefined
+      ? { billedMinutes: roundToIncrement(body.durationMinutes) }
+      : {}),
+    updatedAt: new Date(),
+  };
 
-      if (!matter) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Matter not found in this workspace",
-          }),
+  yield* Result.await(
+    safeDb(async (tx) => {
+      await tx
+        .update(timeEntries)
+        .set(updates)
+        .where(
+          and(
+            eq(timeEntries.id, body.id),
+            eq(timeEntries.workspaceId, workspaceId),
+          ),
         );
-      }
-    }
 
-    const updates = {
-      ...pickDefined(body, [
-        "dateWorked",
-        "durationMinutes",
-        "narrative",
-        "invoiceNarrative",
-        "billable",
-        "noCharge",
-        "matterId",
-        "taskCode",
-        "activityCode",
-        "status",
-        "currency",
-      ]),
-      ...(body.rateAtEntry === undefined
-        ? {}
-        : { rateAtEntry: cents(body.rateAtEntry) }),
-      ...(body.durationMinutes !== undefined
-        ? { billedMinutes: roundToIncrement(body.durationMinutes) }
-        : {}),
-      updatedAt: new Date(),
-    };
+      await recordAuditEvent(tx, {
+        action: AUDIT_ACTION.UPDATE,
+        resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
+        resourceId: body.id,
+        changes: buildTimeEntryDiff(existing, updates),
+      });
+    }),
+  );
 
-    yield* Result.await(
-      safeDb(async (tx) => {
-        await tx
-          .update(timeEntries)
-          .set(updates)
-          .where(
-            and(
-              eq(timeEntries.id, body.id),
-              eq(timeEntries.workspaceId, workspaceId),
-            ),
-          );
+  return Result.ok({ id: body.id });
+};
 
-        await recordAuditEvent(tx, {
-          action: AUDIT_ACTION.UPDATE,
-          resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
-          resourceId: body.id,
-          changes: buildTimeEntryDiff(existing, updates),
-        });
-      }),
-    );
-
-    return Result.ok({ id: body.id });
+const updateTimeEntryById = createSafeHandler(
+  {
+    permissions: { timeEntry: ["update"] },
+    mcp: { type: "covered", by: "save_time_entry" },
+    body: updateTimeEntryBodySchema,
+  },
+  async function* ({ safeDb, workspaceId, body, recordAuditEvent }) {
+    return yield* updateTimeEntryHandler({
+      safeDb,
+      workspaceId,
+      recordAuditEvent,
+      body,
+    });
   },
 );
 
