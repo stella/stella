@@ -26,7 +26,7 @@ export const countTodaysAutomatedFlowRuns = async (
   definitionId: SafeId<"flowDefinition">,
   now: Date = new Date(),
 ): Promise<number> =>
-  rootDb.$count(
+  await rootDb.$count(
     flowRuns,
     and(
       eq(flowRuns.definitionId, definitionId),

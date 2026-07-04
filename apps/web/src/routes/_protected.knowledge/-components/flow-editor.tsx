@@ -811,7 +811,7 @@ const FileUploadConfig = ({
           <Checkbox
             checked={fileUpload.allWorkspaces}
             onCheckedChange={(checked) =>
-              onChange({ ...fileUpload, allWorkspaces: checked === true })
+              onChange({ ...fileUpload, allWorkspaces: checked })
             }
           />
           {t("flows.fileUpload.allWorkspaces")}
@@ -826,7 +826,7 @@ const FileUploadConfig = ({
                 <Checkbox
                   checked={fileUpload.workspaceIds.includes(workspace.id)}
                   onCheckedChange={(checked) =>
-                    toggleWorkspace(workspace.id, checked === true)
+                    toggleWorkspace(workspace.id, checked)
                   }
                 />
                 <span className="truncate" dir="auto">
@@ -844,7 +844,7 @@ const FileUploadConfig = ({
           <Checkbox
             checked={fileUpload.anyExtension}
             onCheckedChange={(checked) =>
-              onChange({ ...fileUpload, anyExtension: checked === true })
+              onChange({ ...fileUpload, anyExtension: checked })
             }
           />
           {t("flows.fileUpload.anyExtension")}
@@ -1027,7 +1027,7 @@ const FlowStepEditor = ({
             <Checkbox
               checked={step.includeDocuments}
               onCheckedChange={(checked) =>
-                onUpdate({ ...step, includeDocuments: checked === true })
+                onUpdate({ ...step, includeDocuments: checked })
               }
             />
             {t("flows.steps.includeDocuments")}

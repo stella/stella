@@ -20,12 +20,13 @@ const cancelFlowRunHandler = createSafeHandler(
     );
 
     yield* Result.await(
-      safeDb((tx) =>
-        recordAuditEvent(tx, {
-          action: AUDIT_ACTION.CANCEL,
-          resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
-          resourceId: params.runId,
-        }),
+      safeDb(
+        async (tx) =>
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.CANCEL,
+            resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+            resourceId: params.runId,
+          }),
       ),
     );
 

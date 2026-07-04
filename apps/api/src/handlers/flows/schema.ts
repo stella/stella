@@ -65,7 +65,7 @@ const tFlowTrigger = t.Union([
 
 export const flowDefinitionBodySchema = t.Object({
   name: tDefaultVarchar,
-  description: t.Union([t.String({ maxLength: 2_000 }), t.Null()]),
+  description: t.Union([t.String({ maxLength: 2000 }), t.Null()]),
   steps: t.Array(tFlowStep, { minItems: 1, maxItems: MAX_FLOW_STEPS }),
   trigger: tFlowTrigger,
   enabled: t.Boolean(),
@@ -107,5 +107,5 @@ export const startFlowRunBodySchema = t.Object({
 
 export const reviewFlowRunBodySchema = t.Object({
   decision: t.Union(FLOW_REVIEW_DECISIONS.map((d) => t.Literal(d))),
-  note: t.Optional(t.Union([t.String({ maxLength: 2_000 }), t.Null()])),
+  note: t.Optional(t.Union([t.String({ maxLength: 2000 }), t.Null()])),
 });

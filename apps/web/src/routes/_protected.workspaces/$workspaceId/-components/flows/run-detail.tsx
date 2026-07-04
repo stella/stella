@@ -62,7 +62,7 @@ export const RunDetail = ({ workspaceId, runId, onBack }: RunDetailProps) => {
     );
   }
 
-  if (isError || !data || !("stepRuns" in data)) {
+  if (isError) {
     return (
       <div className="flex flex-1 flex-col gap-3 p-6">
         <BackButton onBack={onBack} />
@@ -193,11 +193,11 @@ const RunDetailContent = ({
 
       {run.status === "awaiting_review" && (
         <ReviewGateCard
-          onResolved={() =>
-            queryClient.invalidateQueries({
+          onResolved={() => {
+            void queryClient.invalidateQueries({
               queryKey: flowRunsKeys.all(workspaceId),
-            })
-          }
+            });
+          }}
           run={run}
           workspaceId={workspaceId}
         />

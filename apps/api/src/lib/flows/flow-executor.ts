@@ -11,7 +11,6 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -29,6 +28,7 @@ import {
 import {
   FLOW_DOCUMENT_CONTEXT_CHAR_CAP,
   FLOW_STEP_OUTPUT_CONTEXT_CHAR_CAP,
+  MAX_FLOW_STEPS,
 } from "@/api/lib/flows/flow-types";
 import type {
   FlowReviewDecision,
@@ -39,7 +39,10 @@ import type {
 } from "@/api/lib/flows/flow-types";
 import { logger } from "@/api/lib/observability/logger";
 import { createRootScopedDb } from "@/api/lib/root-scoped-db";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
+import {
+  brandPersistedFlowRunId,
+  brandPersistedUserId,
+} from "@/api/lib/safe-id-boundaries";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -71,7 +74,7 @@ export const executeFlowStep = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
   signal: AbortSignal,
 ): Promise<void> => {
-  const runId = toSafeId<"flowRun">(rawRunId);
+  const runId = brandPersistedFlowRunId(rawRunId);
   const run = await loadRun(runId);
   if (!run) {
     logger.warn("flow.run_missing", { runId, stepIndex: String(stepIndex) });
@@ -210,7 +213,7 @@ const loadRun = async (runId: SafeId<"flowRun">): Promise<LoadedRun | null> => {
   return row ?? null;
 };
 
-const loadStep = async (runId: SafeId<"flowRun">, stepIndex: number) =>
+const loadStep = (runId: SafeId<"flowRun">, stepIndex: number) =>
   rootDb.query.flowRunSteps.findFirst({
     where: {
       runId: { eq: runId },
@@ -288,8 +291,8 @@ const runAiStep = async ({
   scopedDb,
   signal,
 }: RunAiStepArgs): Promise<FlowStepOutput> => {
-  const priorOutputs = await scopedDb((tx) =>
-    readPriorAiMarkdown(tx, run.id, stepIndex),
+  const priorOutputs = await scopedDb(
+    async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
   const documents = stepDef.includeDocuments
     ? await loadInputDocuments(scopedDb, organizationId, run.inputEntityIds)
@@ -382,7 +385,10 @@ const readPriorAiMarkdown = async (
         eq(flowRunSteps.status, "completed"),
       ),
     )
-    .orderBy(asc(flowRunSteps.index));
+    .orderBy(asc(flowRunSteps.index))
+    // Bounded: a run has at most MAX_FLOW_STEPS step rows (unique (runId,
+    // index), snapshot length capped at start).
+    .limit(MAX_FLOW_STEPS);
 
   const markdown: string[] = [];
   for (const row of rows) {
@@ -435,8 +441,8 @@ const runCreateDocumentStep = async ({
   actorUserId,
   scopedDb,
 }: RunCreateDocumentArgs): Promise<FlowStepOutput> => {
-  const priorMarkdown = await scopedDb((tx) =>
-    readPriorAiMarkdown(tx, run.id, stepIndex),
+  const priorMarkdown = await scopedDb(
+    async (tx) => await readPriorAiMarkdown(tx, run.id, stepIndex),
   );
   const markdown = priorMarkdown.at(-1);
   if (markdown === undefined) {
@@ -583,7 +589,9 @@ const readRunProgress = async (
     .select({ index: flowRunSteps.index, status: flowRunSteps.status })
     .from(flowRunSteps)
     .where(eq(flowRunSteps.runId, runId))
-    .orderBy(asc(flowRunSteps.index));
+    .orderBy(asc(flowRunSteps.index))
+    // Bounded: at most MAX_FLOW_STEPS step rows per run.
+    .limit(MAX_FLOW_STEPS);
 
   return {
     runId: runRow.id,
@@ -607,7 +615,7 @@ export const failFlowRunFromWorker = async (
   { runId: rawRunId, stepIndex }: FlowStepJobData,
   error: unknown,
 ): Promise<void> => {
-  const runId = toSafeId<"flowRun">(rawRunId);
+  const runId = brandPersistedFlowRunId(rawRunId);
   const run = await loadRun(runId);
   if (!run || isTerminalFlowRunStatus(run.status)) {
     return;
@@ -648,6 +656,19 @@ export const failFlowRunFromWorker = async (
 
 // ── Request-time services (handler side) ────────────────
 
+/** Run status a review gate resolves the run to, by transition kind. */
+const reviewGateNextStatus = (
+  kind: "cancel" | "finish" | "advance",
+): FlowRunStatus => {
+  if (kind === "cancel") {
+    return "cancelled";
+  }
+  if (kind === "finish") {
+    return "completed";
+  }
+  return "running";
+};
+
 export type FlowRunActionResult = {
   runId: SafeId<"flowRun">;
   status: FlowRunStatus;
@@ -667,7 +688,7 @@ export type ResolveFlowReviewGateOptions = {
  * advance to the next step (approved) or cancel the run (rejected). Scoped to
  * the caller's workspace via the handler's `safeDb`.
  */
-export const resolveFlowReviewGate = ({
+export const resolveFlowReviewGate = async ({
   safeDb,
   workspaceId,
   runId,
@@ -677,7 +698,7 @@ export const resolveFlowReviewGate = ({
 }: ResolveFlowReviewGateOptions): Promise<
   Result<FlowRunActionResult, HandlerError | SafeDbError>
 > =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const run = yield* Result.await(
       safeDb((tx) =>
         tx.query.flowRuns.findFirst({
@@ -752,12 +773,7 @@ export const resolveFlowReviewGate = ({
             ),
           );
 
-        const nextStatus: FlowRunStatus =
-          resolution.kind === "cancel"
-            ? "cancelled"
-            : resolution.kind === "finish"
-              ? "completed"
-              : "running";
+        const nextStatus = reviewGateNextStatus(resolution.kind);
 
         await tx
           .update(flowRuns)
@@ -780,8 +796,11 @@ export const resolveFlowReviewGate = ({
     if (resolution.kind === "advance") {
       yield* Result.await(
         Result.tryPromise({
-          try: () =>
-            enqueueFlowStep({ runId, stepIndex: resolution.nextStepIndex }),
+          try: async () =>
+            await enqueueFlowStep({
+              runId,
+              stepIndex: resolution.nextStepIndex,
+            }),
           catch: (cause) =>
             new HandlerError({
               status: 500,
@@ -805,14 +824,14 @@ export type CancelFlowRunOptions = {
  * Cancel a non-terminal run. Any queued step job is not removed here; the
  * executor's terminal-status guard makes it a no-op when it dequeues.
  */
-export const cancelFlowRun = ({
+export const cancelFlowRun = async ({
   safeDb,
   workspaceId,
   runId,
 }: CancelFlowRunOptions): Promise<
   Result<FlowRunActionResult, HandlerError | SafeDbError>
 > =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const run = yield* Result.await(
       safeDb((tx) =>
         tx.query.flowRuns.findFirst({

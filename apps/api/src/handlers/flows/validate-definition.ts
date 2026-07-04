@@ -21,7 +21,7 @@ import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
  * `safeDb`, so its RLS also confirms the caller can access that workspace — you
  * cannot schedule / target a flow onto a workspace you have no access to.
  */
-export const parseAndValidateFlowDefinition = ({
+export const parseAndValidateFlowDefinition = async ({
   safeDb,
   organizationId,
   body,
@@ -30,7 +30,7 @@ export const parseAndValidateFlowDefinition = ({
   organizationId: SafeId<"organization">;
   body: unknown;
 }): Promise<Result<FlowDefinitionInput, HandlerError | SafeDbError>> =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const parsed = v.safeParse(flowDefinitionInputSchema, body);
     if (!parsed.success) {
       return Result.err(

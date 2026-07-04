@@ -4,8 +4,8 @@ import { and, asc, desc, eq, sql } from "drizzle-orm";
 import type { SafeDb } from "@/api/db";
 import { flowRuns, flowRunSteps } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { MAX_FLOW_STEPS } from "@/api/lib/flows/flow-types";
 import type { FlowRunStatus } from "@/api/lib/flows/flow-types";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -14,6 +14,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 
 // ── List (newest first, optional status filter) ─────────
 
@@ -26,7 +27,7 @@ const decodeFlowRunCursor = (cursor: string): SafeId<"flowRun"> | null => {
   if (!isUuidPaginationCursorPart(rawId)) {
     return null;
   }
-  return toSafeId<"flowRun">(rawId);
+  return brandPersistedFlowRunId(rawId);
 };
 
 type ListFlowRunsProps = {
@@ -169,7 +170,10 @@ export const getFlowRunHandler = async function* ({
         })
         .from(flowRunSteps)
         .where(eq(flowRunSteps.runId, runId))
-        .orderBy(asc(flowRunSteps.index)),
+        .orderBy(asc(flowRunSteps.index))
+        // A run has at most MAX_FLOW_STEPS step rows (unique (runId, index),
+        // snapshot length bounded at start), so this ordered read is bounded.
+        .limit(MAX_FLOW_STEPS),
     ),
   );
 

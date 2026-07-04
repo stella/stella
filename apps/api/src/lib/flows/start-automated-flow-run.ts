@@ -54,7 +54,7 @@ export const startAutomatedFlowRun = async ({
   }
 
   const countResult = await Result.tryPromise({
-    try: () => countTodaysAutomatedFlowRuns(definitionId),
+    try: async () => await countTodaysAutomatedFlowRuns(definitionId),
     catch: (cause) => cause,
   });
   if (Result.isError(countResult)) {

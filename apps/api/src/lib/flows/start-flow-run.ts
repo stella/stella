@@ -50,7 +50,7 @@ export type StartFlowRunResult = {
   status: FlowRunStatus;
 };
 
-export const startFlowRun = ({
+export const startFlowRun = async ({
   safeDb,
   organizationId,
   workspaceId,
@@ -61,7 +61,7 @@ export const startFlowRun = ({
 }: StartFlowRunOptions): Promise<
   Result<StartFlowRunResult, FlowRunStartError | SafeDbError>
 > =>
-  Result.gen(async function* () {
+  await Result.gen(async function* () {
     const definition = yield* Result.await(
       safeDb((tx) =>
         tx.query.flowDefinitions.findFirst({
@@ -127,8 +127,8 @@ export const startFlowRun = ({
     // never permanently stranded.
     yield* Result.await(
       Result.tryPromise({
-        try: () =>
-          enqueueFlowStep({
+        try: async () =>
+          await enqueueFlowStep({
             runId,
             stepIndex: 0,
             ...(enqueueDelayMs !== undefined && { delayMs: enqueueDelayMs }),

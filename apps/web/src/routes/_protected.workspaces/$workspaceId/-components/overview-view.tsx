@@ -57,6 +57,7 @@ import { cn } from "@stll/ui/lib/utils";
 import { renderDragPreview } from "@/components/drag-preview";
 import { EmptyScreen } from "@/components/empty-screen";
 import { EMPTY_SCREEN_MATTERS_VIDEO } from "@/components/empty-screen-media";
+import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { PersonMentionLabel } from "@/components/person-mention-label";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
@@ -89,7 +90,6 @@ import {
 } from "@/routes/_protected.workspaces/$workspaceId/-components/tasks/task-detail-constants";
 import { useCreateFileEntities } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-create-file-entities";
 import { useInspectorFlash } from "@/routes/_protected.workspaces/$workspaceId/-hooks/use-inspector-flash";
-import { isTerminalFlowRunStatus } from "@/components/flows/flow-meta";
 import { entitiesKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import { flowRunsOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/flow-runs";
 import { taskKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/tasks";
@@ -182,9 +182,8 @@ export const OverviewView = ({ workspaceId }: OverviewViewProps) => {
   const { data: flowRunsData } = useQuery(flowRunsOptions({ workspaceId }));
   const activeFlowRunCount =
     flowRunsData && "items" in flowRunsData
-      ? flowRunsData.items.filter(
-          (run) => !isTerminalFlowRunStatus(run.status),
-        ).length
+      ? flowRunsData.items.filter((run) => !isTerminalFlowRunStatus(run.status))
+          .length
       : 0;
   const findViewByType = useCallback(
     (type: string) => views?.find((v) => v.layout.type === type),

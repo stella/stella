@@ -38,15 +38,16 @@ const reviewFlowRun = createSafeHandler(
     );
 
     yield* Result.await(
-      safeDb((tx) =>
-        recordAuditEvent(tx, {
-          action: AUDIT_ACTION.REVIEW,
-          resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
-          resourceId: params.runId,
-          changes: {
-            review: { old: null, new: { decision: body.decision } },
-          },
-        }),
+      safeDb(
+        async (tx) =>
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.REVIEW,
+            resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+            resourceId: params.runId,
+            changes: {
+              review: { old: null, new: { decision: body.decision } },
+            },
+          }),
       ),
     );
 

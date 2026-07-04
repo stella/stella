@@ -21,12 +21,12 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { api } from "@/lib/api";
 import { userErrorMessage } from "@/lib/errors";
 import { toSafeId } from "@/lib/safe-id";
-import { flowRunsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/flow-runs";
-import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
 import {
   FLOW_PICKER_LIMIT,
   flowsOptions,
 } from "@/routes/_protected.knowledge/-queries";
+import { entitySummariesOptions } from "@/routes/_protected.workspaces/$workspaceId/-queries/entities";
+import { flowRunsKeys } from "@/routes/_protected.workspaces/$workspaceId/-queries/flow-runs";
 
 type RunLauncherProps = {
   workspaceId: string;
@@ -59,7 +59,7 @@ export const RunLauncher = ({
       : [];
 
   const filteredEntities = (entities ?? []).filter((entity) =>
-    (entity.name ?? "").toLowerCase().includes(entityFilter.toLowerCase()),
+    entity.name.toLowerCase().includes(entityFilter.toLowerCase()),
   );
 
   const toggleEntity = (id: string, checked: boolean) => {
@@ -85,7 +85,10 @@ export const RunLauncher = ({
       stellaToast.add({
         type: "error",
         title: t("flows.runs.startFailed"),
-        description: userErrorMessage(response.error, t("common.unexpectedError")),
+        description: userErrorMessage(
+          response.error,
+          t("common.unexpectedError"),
+        ),
       });
       return;
     }
@@ -112,7 +115,9 @@ export const RunLauncher = ({
   return (
     <div className="grid gap-4 rounded-lg border p-4">
       <div className="grid gap-1.5">
-        <Label htmlFor="flow-run-definition">{t("flows.runs.selectFlow")}</Label>
+        <Label htmlFor="flow-run-definition">
+          {t("flows.runs.selectFlow")}
+        </Label>
         <Select
           onValueChange={(value) => setDefinitionId(value)}
           value={definitionId}
@@ -151,7 +156,7 @@ export const RunLauncher = ({
                 <Checkbox
                   checked={selectedEntityIds.includes(entity.id)}
                   onCheckedChange={(checked) =>
-                    toggleEntity(entity.id, checked === true)
+                    toggleEntity(entity.id, checked)
                   }
                 />
                 <span className="truncate" dir="auto">

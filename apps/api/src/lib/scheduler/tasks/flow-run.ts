@@ -3,9 +3,13 @@ import * as v from "valibot";
 
 import { rootDb } from "@/api/db/root";
 import { schedulerJobs } from "@/api/db/schema";
-import { toSafeId } from "@/api/lib/branded-types";
 import { shouldRunScheduledFlowNow } from "@/api/lib/flows/flow-trigger-logic";
 import { startAutomatedFlowRun } from "@/api/lib/flows/start-automated-flow-run";
+import {
+  brandPersistedFlowDefinitionId,
+  brandPersistedOrganizationId,
+  brandPersistedWorkspaceId,
+} from "@/api/lib/safe-id-boundaries";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 /**
@@ -35,7 +39,9 @@ export const runScheduledFlow: SchedulerTask = async ({ payload, logger }) => {
     return;
   }
 
-  const definitionId = toSafeId<"flowDefinition">(parsed.output.definitionId);
+  const definitionId = brandPersistedFlowDefinitionId(
+    parsed.output.definitionId,
+  );
   const definition = await rootDb.query.flowDefinitions.findFirst({
     where: { id: { eq: definitionId } },
     columns: {
@@ -77,8 +83,10 @@ export const runScheduledFlow: SchedulerTask = async ({ payload, logger }) => {
     return;
   }
 
-  const organizationId = toSafeId<"organization">(definition.organizationId);
-  const workspaceId = toSafeId<"workspace">(trigger.workspaceId);
+  const organizationId = brandPersistedOrganizationId(
+    definition.organizationId,
+  );
+  const workspaceId = brandPersistedWorkspaceId(trigger.workspaceId);
   const workspace = await rootDb.query.workspaces.findFirst({
     where: { id: { eq: workspaceId } },
     columns: { organizationId: true, status: true },

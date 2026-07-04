@@ -94,7 +94,7 @@ import {
   unredactedErrorFields,
 } from "@/api/lib/errors/utils";
 import { initFileDerivativeWorker } from "@/api/lib/file-derivative-queue";
-import { initFlowRunWorker } from "@/api/lib/flows/flow-run-queue";
+import { initFlowRunWorker } from "@/api/lib/flows/flow-run-worker";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import { FORMATTING_LOCALE_HEADER } from "@/api/lib/locale";
 import { logger } from "@/api/lib/observability/logger";

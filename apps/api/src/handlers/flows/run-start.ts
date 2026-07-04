@@ -75,13 +75,14 @@ const startFlowRunHandler = createSafeHandler(
     );
 
     yield* Result.await(
-      safeDb((tx) =>
-        recordAuditEvent(tx, {
-          action: AUDIT_ACTION.EXECUTE,
-          resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
-          resourceId: started.runId,
-          metadata: { definitionId: body.definitionId },
-        }),
+      safeDb(
+        async (tx) =>
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.EXECUTE,
+            resourceType: AUDIT_RESOURCE_TYPE.FLOW_RUN,
+            resourceId: started.runId,
+            metadata: { definitionId: body.definitionId },
+          }),
       ),
     );
 

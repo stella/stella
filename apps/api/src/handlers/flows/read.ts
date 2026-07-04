@@ -4,7 +4,6 @@ import { and, desc, eq, sql } from "drizzle-orm";
 import type { SafeDb } from "@/api/db";
 import { flowDefinitions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import {
@@ -13,6 +12,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { brandPersistedFlowDefinitionId } from "@/api/lib/safe-id-boundaries";
 
 // ── List ────────────────────────────────────────────────
 
@@ -27,7 +27,7 @@ const decodeFlowDefinitionCursor = (
   if (!isUuidPaginationCursorPart(rawId)) {
     return null;
   }
-  return toSafeId<"flowDefinition">(rawId);
+  return brandPersistedFlowDefinitionId(rawId);
 };
 
 type ListFlowDefinitionsProps = {

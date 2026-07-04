@@ -227,7 +227,7 @@ export const flowTriggerSchema = v.variant("type", [
  */
 export const flowDefinitionInputSchema = v.strictObject({
   name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(256)),
-  description: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2_000))),
+  description: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2000))),
   steps: v.pipe(
     v.array(flowStepSchema),
     v.minLength(1),
