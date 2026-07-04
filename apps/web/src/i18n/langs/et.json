@@ -880,7 +880,9 @@
     "error": "Midagi läks valesti. Palun proovige uuesti.",
     "missingJurisdictions": "Teie stella organisatsioon ei ole veel oma praktika jurisdiktsioone seadistanud. Mõned jurisdiktsioonipõhised tööriistad ei ole saadaval enne, kui seadistamise lõpetate.",
     "permissions": "See lubab rakendusel:",
+    "scopeDocumentsWrite": "Luua, muuta ja kustutada teie dokumente",
     "scopeExternalMcps": "Teie ühendatud väliste tööriistade kasutamine",
+    "scopeMattersWrite": "Luua ja muuta teie toimikuid, kontakte ja ülesandeid",
     "scopeOnboarding": "Seadistada teie organisatsiooni praktikajurisdiktsioonid",
     "scopeProfile": "Pääseda ligi teie profiiliandmetele",
     "scopeRead": "Lugeda teie dokumente, toimikuid ja kontakte",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Otsida teie dokumentide ja toimikute anonüümitud versioonidest",
     "scopeSkills": "Teie salvestatud stella oskuste kasutamine",
     "scopeTemplates": "Dokumendimallide loend, täitmine ja loomine",
+    "scopeTemplatesAnonymized": "Loendada, täita ja luua teie dokumendimallide anonüümitud versioone",
     "title": "Anna juurdepääs"
   },
   "contacts": {

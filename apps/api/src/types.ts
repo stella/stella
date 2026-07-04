@@ -54,3 +54,4 @@ export type { ChatMentionsData } from "@/api/handlers/chat/types";
 export type { TemplateRecipeDefinition } from "@/api/handlers/template-recipes/definition";
 export type { ChatSourceDocument } from "@/api/handlers/chat/tools/chat-source-document";
 export type { UserFileUrl } from "@/api/handlers/user-files/types";
+export type { McpOAuthScope } from "@/api/mcp/constants";

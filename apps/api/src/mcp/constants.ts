@@ -29,6 +29,14 @@ export const MCP_OAUTH_SCOPES = [
   ...MCP_ALL_RESOURCE_SCOPES,
 ] as const;
 
+/**
+ * Every scope the OAuth provider can grant (see `oauthProvider({ scopes: ... })`
+ * in `lib/auth.ts`). The consent page types its scope-label map against this
+ * union so a newly added scope fails the build instead of silently rendering
+ * without a disclosure line.
+ */
+export type McpOAuthScope = (typeof MCP_OAUTH_SCOPES)[number];
+
 export const MCP_HTTP_PATH = "/mcp";
 export const MCP_ANONYMIZED_HTTP_PATH = "/mcp-anonymized";
 

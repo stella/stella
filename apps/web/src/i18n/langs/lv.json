@@ -880,7 +880,9 @@
     "error": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
     "missingJurisdictions": "Jūsu stella organizācija vēl nav iestatījusi savas prakses jurisdikcijas. Daži ar jurisdikciju saistīti rīki nebūs pieejami, līdz pabeigsiet iestatīšanu.",
     "permissions": "Tas atļaus lietotnei:",
+    "scopeDocumentsWrite": "Izveidot, rediģēt un dzēst jūsu dokumentus",
     "scopeExternalMcps": "Izmantot jūsu pievienotos ārējos rīkus",
+    "scopeMattersWrite": "Izveidot un rediģēt jūsu lietas, kontaktus un uzdevumus",
     "scopeOnboarding": "Konfigurēt jūsu organizācijas prakses jurisdikcijas",
     "scopeProfile": "Piekļūt jūsu profila informācijai",
     "scopeRead": "Lasīt jūsu dokumentus, lietas un kontaktus",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Meklēt jūsu dokumentu un lietu anonimizētajās versijās",
     "scopeSkills": "Izmantot jūsu saglabātās stella prasmes",
     "scopeTemplates": "Dokumentu veidņu saraksts, aizpildīšana un izveide",
+    "scopeTemplatesAnonymized": "Skatīt, aizpildīt un izveidot jūsu dokumentu veidņu anonimizētās versijas",
     "title": "Autorizēt piekļuvi"
   },
   "contacts": {

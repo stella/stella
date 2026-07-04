@@ -880,7 +880,9 @@
     "error": "Hiba történt. Kérjük, próbálja újra.",
     "missingJurisdictions": "A stella-szervezete még nem állította be a praxis joghatóságait. Egyes joghatóságfüggő eszközök addig nem lesznek elérhetők, amíg be nem fejezi a beállítást.",
     "permissions": "Ez lehetővé teszi az alkalmazás számára, hogy:",
+    "scopeDocumentsWrite": "Dokumentumok létrehozása, szerkesztése és törlése",
     "scopeExternalMcps": "A csatlakoztatott külső eszközök használata",
+    "scopeMattersWrite": "Ügyek, kapcsolatok és feladatok létrehozása és szerkesztése",
     "scopeOnboarding": "A szervezet praxisának joghatóságainak beállítása",
     "scopeProfile": "Hozzáférés a profiladataihoz",
     "scopeRead": "A dokumentumok, ügyek és kapcsolatok olvasása",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Keresés a dokumentumok és ügyek anonimizált változatai között",
     "scopeSkills": "A mentett stella-készségek használata",
     "scopeTemplates": "Dokumentumsablonok listázása, kitöltése és létrehozása",
+    "scopeTemplatesAnonymized": "A dokumentumsablonok anonimizált változatainak listázása, kitöltése és létrehozása",
     "title": "Hozzáférés engedélyezése"
   },
   "contacts": {

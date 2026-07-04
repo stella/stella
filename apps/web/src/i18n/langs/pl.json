@@ -880,7 +880,9 @@
     "error": "Coś poszło nie tak. Spróbuj ponownie.",
     "missingJurisdictions": "Twoja organizacja w stelli nie skonfigurowała jeszcze swoich jurysdykcji praktyki. Niektóre narzędzia uwzględniające jurysdykcję będą niedostępne do czasu zakończenia konfiguracji.",
     "permissions": "Spowoduje to przyznanie aplikacji dostępu do:",
+    "scopeDocumentsWrite": "Tworzenie, edytowanie i usuwanie Twoich dokumentów",
     "scopeExternalMcps": "Korzystanie z połączonych narzędzi zewnętrznych",
+    "scopeMattersWrite": "Tworzenie i edytowanie Twoich spraw, kontaktów i zadań",
     "scopeOnboarding": "Skonfiguruj jurysdykcje praktyki swojej organizacji",
     "scopeProfile": "Dostęp do Twoich danych profilowych",
     "scopeRead": "Odczyt Twoich dokumentów, spraw i kontaktów",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Wyszukiwanie w zanonimizowanych wersjach Twoich dokumentów i spraw",
     "scopeSkills": "Korzystanie z zapisanych umiejętności stella",
     "scopeTemplates": "Wyświetlanie, wypełnianie i tworzenie szablonów dokumentów",
+    "scopeTemplatesAnonymized": "Wyświetlanie, wypełnianie i tworzenie zanonimizowanych wersji Twoich szablonów dokumentów",
     "title": "Autoryzacja dostępu"
   },
   "contacts": {

@@ -5,6 +5,7 @@ import { createFileRoute, Link, redirect } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
+import type { McpOAuthScope } from "@stll/api/types";
 import { Button } from "@stll/ui/components/button";
 import {
   Frame,
@@ -56,23 +57,36 @@ export const Route = createFileRoute("/consent")({
   component: ConsentPage,
 });
 
+// `satisfies Record<McpOAuthScope, TranslationKey>` makes this exhaustive
+// over every scope the OAuth provider can grant (`MCP_OAUTH_SCOPES` in
+// `apps/api/src/mcp/constants.ts`): adding a new grantable scope without a
+// consent label here fails the build instead of silently skipping
+// disclosure. The unknown-scope fallback below is a second, runtime-only
+// layer for scopes a client requests that the server does not grant.
 const SCOPE_LABELS = {
   "stella:search": "consent.scopeSearch",
   "stella:read": "consent.scopeRead",
   "stella:templates": "consent.scopeTemplates",
+  "stella:documents_write": "consent.scopeDocumentsWrite",
+  "stella:matters_write": "consent.scopeMattersWrite",
   "stella:skills": "consent.scopeSkills",
   "stella:external_mcps": "consent.scopeExternalMcps",
   "stella:search_anonymized": "consent.scopeSearchAnonymized",
   "stella:read_anonymized": "consent.scopeReadAnonymized",
+  "stella:templates_anonymized": "consent.scopeTemplatesAnonymized",
   "stella:onboarding": "consent.scopeOnboarding",
   email: "consent.scopeProfile",
   openid: "consent.scopeProfile",
   profile: "consent.scopeProfile",
-} as const satisfies Record<string, TranslationKey>;
+} as const satisfies Record<McpOAuthScope, TranslationKey>;
 
 type ScopeKey = keyof typeof SCOPE_LABELS;
 
 const isScopeKey = (scope: string): scope is ScopeKey => scope in SCOPE_LABELS;
+
+type ScopeDisplayEntry =
+  | { label: TranslationKey; type: "known" }
+  | { scope: string; type: "unknown" };
 
 function ConsentPage() {
   const t = useTranslations();
@@ -143,15 +157,25 @@ function ConsentPage() {
       (organization) => organization.id === activeOrganizationId,
     )?.name ?? null;
 
-  const uniqueLabels = new Map<TranslationKey, string>();
+  // Every requested scope must be disclosed, even one the server never
+  // grants (`isScopeKey` false): unknown scopes fall back to the raw scope
+  // string instead of being silently skipped.
+  const scopeEntries: ScopeDisplayEntry[] = [];
+  const seenLabels = new Set<TranslationKey>();
+  const seenUnknownScopes = new Set<string>();
   for (const requestedScope of scopes) {
-    if (!isScopeKey(requestedScope)) {
+    if (isScopeKey(requestedScope)) {
+      const label = SCOPE_LABELS[requestedScope];
+      if (!seenLabels.has(label)) {
+        seenLabels.add(label);
+        scopeEntries.push({ label, type: "known" });
+      }
       continue;
     }
 
-    const label = SCOPE_LABELS[requestedScope];
-    if (!uniqueLabels.has(label)) {
-      uniqueLabels.set(label, requestedScope);
+    if (!seenUnknownScopes.has(requestedScope)) {
+      seenUnknownScopes.add(requestedScope);
+      scopeEntries.push({ scope: requestedScope, type: "unknown" });
     }
   }
 
@@ -202,26 +226,19 @@ function ConsentPage() {
               <p className="text-sm font-medium">{organizationName}</p>
             </div>
           ) : null}
-          {uniqueLabels.size > 0 ? (
+          {scopeEntries.length > 0 ? (
             <div className="flex flex-col gap-2">
               <p className="text-muted-foreground text-sm">
                 {t("consent.permissions")}
               </p>
               <ul className="flex flex-col gap-1.5">
-                {[...uniqueLabels.keys()].map((label) => (
+                {scopeEntries.map((entry) => (
                   <li
                     className="text-foreground flex items-start gap-2 text-sm"
-                    key={label}
+                    key={entry.type === "known" ? entry.label : entry.scope}
                   >
                     <span className="text-muted-foreground mt-0.5">&bull;</span>
-                    {/* SAFETY: SCOPE_LABELS `satisfies Record<string,
-                        TranslationKey>` enforces at compile time that every
-                        value is a valid key. The `as never` is required only
-                        because use-intl's `t()` overloads bind tighter for
-                        literal keys; a non-literal `TranslationKey` is
-                        rejected by the no-args overload. */}
-                    {/* eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion */}
-                    {t(label as never)}
+                    <ScopeLabel entry={entry} />
                   </li>
                 ))}
               </ul>
@@ -273,4 +290,20 @@ function ConsentPage() {
       </Frame>
     </div>
   );
+}
+
+function ScopeLabel({ entry }: { entry: ScopeDisplayEntry }) {
+  const t = useTranslations();
+
+  if (entry.type === "unknown") {
+    return entry.scope;
+  }
+
+  // SAFETY: SCOPE_LABELS `satisfies Record<McpOAuthScope, TranslationKey>`
+  // enforces at compile time that every value is a valid key. The `as never`
+  // is required only because use-intl's `t()` overloads bind tighter for
+  // literal keys; a non-literal `TranslationKey` is rejected by the no-args
+  // overload.
+  // eslint-disable-next-line @typescript-eslint/no-unsafe-type-assertion
+  return t(entry.label as never);
 }

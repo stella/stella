@@ -880,7 +880,9 @@
     "error": "Įvyko klaida. Bandykite dar kartą.",
     "missingJurisdictions": "Jūsų stella organizacija dar nenustatė savo praktikos jurisdikcijų. Kol neužbaigsite sąrankos, kai kurie jurisdikciją vertinantys įrankiai bus nepasiekiami.",
     "permissions": "Tai leis programai:",
+    "scopeDocumentsWrite": "Kurti, redaguoti ir ištrinti jūsų dokumentus",
     "scopeExternalMcps": "Naudoti jūsų prijungtus išorinius įrankius",
+    "scopeMattersWrite": "Kurti ir redaguoti jūsų bylas, kontaktus ir užduotis",
     "scopeOnboarding": "Konfigūruoti jūsų organizacijos praktikos jurisdikcijas",
     "scopeProfile": "Pasiekti jūsų profilio informaciją",
     "scopeRead": "Skaityti jūsų dokumentus, bylas ir kontaktus",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Ieškoti anonimizuotose jūsų dokumentų ir bylų versijose",
     "scopeSkills": "Naudoti jūsų išsaugotus stella įgūdžius",
     "scopeTemplates": "Dokumentų šablonų sąrašas, pildymas ir kūrimas",
+    "scopeTemplatesAnonymized": "Peržiūrėti, pildyti ir kurti anonimizuotas jūsų dokumentų šablonų versijas",
     "title": "Suteikti prieigą"
   },
   "contacts": {

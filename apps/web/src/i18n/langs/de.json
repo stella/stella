@@ -880,7 +880,9 @@
     "error": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
     "missingJurisdictions": "Ihre stella-Organisation hat ihre Tätigkeitsgebiete noch nicht eingerichtet. Einige gebietsabhängige Tools sind erst verfügbar, wenn Sie die Einrichtung abschließen.",
     "permissions": "Dies erlaubt der Anwendung:",
+    "scopeDocumentsWrite": "Ihre Dokumente erstellen, bearbeiten und löschen",
     "scopeExternalMcps": "Ihre verbundenen externen Tools verwenden",
+    "scopeMattersWrite": "Ihre Akten, Kontakte und Aufgaben erstellen und bearbeiten",
     "scopeOnboarding": "Tätigkeitsgebiete Ihrer Organisation konfigurieren",
     "scopeProfile": "Auf Ihre Profilinformationen zugreifen",
     "scopeRead": "Ihre Dokumente, Akten und Kontakte lesen",
@@ -889,6 +891,7 @@
     "scopeSearchAnonymized": "Anonymisierte Versionen Ihrer Dokumente und Akten durchsuchen",
     "scopeSkills": "Ihre gespeicherten stella-Skills verwenden",
     "scopeTemplates": "Dokumentvorlagen auflisten, ausfüllen und erstellen",
+    "scopeTemplatesAnonymized": "Anonymisierte Versionen Ihrer Dokumentvorlagen auflisten, ausfüllen und erstellen",
     "title": "Zugriff autorisieren"
   },
   "contacts": {
