@@ -452,7 +452,11 @@ const StickyUserTurn = ({
       />
       <div
         className={cn(
-          "group/sticky bg-background sticky top-0 z-20",
+          // Only needs to cover in-flow transcript content scrolling beneath
+          // it (z-auto). The page-level stacking order (see chat-thread-page)
+          // keeps the floating composer above the whole transcript, so this
+          // must NOT climb high enough to overlay it. `z-10` is the ceiling.
+          "group/sticky bg-background sticky top-0 z-10",
           "data-[stuck=true]:border-border data-[stuck=true]:border-b data-[stuck=true]:shadow-sm",
         )}
         data-stuck={isStuck ? "true" : "false"}

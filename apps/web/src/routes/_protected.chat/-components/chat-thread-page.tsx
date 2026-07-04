@@ -417,8 +417,20 @@ export const ChatThreadPage = ({
             />
           </ChromeHeaderActions>
 
+          {/*
+            Page-level stacking order (bottom → top):
+              1. transcript content   — in-flow, z-auto
+              2. sticky user headers  — z-10 (capped inside <Conversation>)
+              3. scroll-to-bottom btn — z-10, painted after the headers
+              4. fade gradient        — z-auto sibling, above the isolated
+                                        <Conversation> stacking context
+              5. composer             — z-20, floats above everything
+            `isolate` on <Conversation> traps every transcript stacking
+            value (sticky headers, scroll button) inside its own context so
+            none of them can leak up and overlay the fade or the composer.
+          */}
           <div className="relative flex min-h-0 flex-1 flex-col">
-            <Conversation className="min-h-0">
+            <Conversation className="isolate min-h-0">
               <ConversationContent className="mx-auto w-full max-w-5xl gap-3 px-4 pb-36">
                 {messages.length === 0 && !isGenerating && !error ? (
                   <div className="m-auto w-full max-w-md px-4">
@@ -483,7 +495,11 @@ export const ChatThreadPage = ({
                 className="from-background pointer-events-none absolute inset-x-0 bottom-0 mx-auto h-48 w-full max-w-5xl bg-linear-to-t to-transparent"
               />
             )}
-            <div className="absolute inset-x-0 bottom-0 z-10 mx-auto w-full max-w-5xl px-4 pb-4">
+            {/* Top of the page stacking order: must stack above the sticky
+                transcript headers and the fade gradient. `z-20` beats the
+                isolated <Conversation> context (which caps its sticky
+                headers at z-10) and the z-auto fade sibling. */}
+            <div className="absolute inset-x-0 bottom-0 z-20 mx-auto w-full max-w-5xl px-4 pb-4">
               <SuggestedFollowupChips
                 isGenerating={isGenerating}
                 isEmpty={
