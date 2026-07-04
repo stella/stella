@@ -284,6 +284,7 @@ export const KanbanCard = ({
             "bg-card relative block w-full cursor-pointer rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
             isActiveTask && "ring-primary/30 ring-2",
           )}
+          // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; cardRef is handed to the helper, not read for rendered output
           onClick={containedHandler(cardRef, () =>
             useInspectorStore.getState().openTask({
               taskId: entity.entityId,
@@ -319,6 +320,7 @@ export const KanbanCard = ({
             "bg-card relative block w-full cursor-pointer rounded-lg border p-3 text-start shadow-xs transition-shadow hover:shadow-md",
             isActivePeek && "ring-primary/30 ring-2",
           )}
+          // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; cardRef is handed to the helper, not read for rendered output
           onClick={containedHandler(cardRef, () =>
             useInspectorStore.getState().openFile({
               id: file.fieldId,

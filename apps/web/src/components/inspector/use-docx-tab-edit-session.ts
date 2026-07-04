@@ -119,6 +119,7 @@ export const useDocxTabEditSession = ({
     if (!compatibility) {
       return;
     }
+    // eslint-disable-next-line react/react-compiler -- store-flag relay: handleStartDocxEdit's setState reacts to the pendingDocxEditTabId store flag AND must wait for the tab's async compatibility probe to land, so it cannot fold into the distant requestDocxEdit() call-site or a store-subscription callback
     void handleStartDocxEdit(target.id);
     clearDocxEditRequest();
   }, [

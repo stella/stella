@@ -42,6 +42,7 @@ export const PageCitation = ({
   // Reset when the scroll target is consumed so the same
   // justification can be scrolled to again on re-click.
   if (scrollTo === null) {
+    // eslint-disable-next-line react/react-compiler -- reset gated on scrollTo consumption; scrolledRef is read/written only in the commit-phase ref callback below, never for rendered output
     scrolledRef.current = null;
   }
 

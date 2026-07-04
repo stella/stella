@@ -99,6 +99,7 @@ type KanbanColumnProps = {
   taskOnly?: boolean | undefined;
 };
 
+// eslint-disable-next-line react/react-compiler -- react-compiler skips this component: an API it uses returns functions that cannot be memoized, so the compiler bails out of the whole component (Compilation Skipped: incompatible library)
 export const KanbanColumn = ({
   title,
   columnValue,

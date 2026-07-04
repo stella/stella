@@ -186,7 +186,9 @@ const useEventCallback = <T,>(
   const fn = useRef((value: T) => {
     callbackRef.current?.(value);
   });
+  // eslint-disable-next-line react/react-compiler -- sanctioned useEventCallback: latest handler kept in a ref so `fn` stays referentially stable (its identity is a dependency of downstream effects)
   callbackRef.current = handler;
+  // eslint-disable-next-line react/react-compiler -- sanctioned useEventCallback: returns the stable, lazily-created dispatcher held in the ref
   return fn.current;
 };
 
@@ -414,7 +416,9 @@ const InteractiveArea = ({
       {...rest}
       className="absolute inset-0 touch-none rounded-[inherit] outline-none"
       onKeyDown={handleKeyDown}
+      // eslint-disable-next-line react/react-compiler -- containedHandler receives the ref object, not a render-time `.current` read; this ref+containedHandler shape is mandated by require-contained-handler
       onMouseDown={containedHandler(container, handleStart)}
+      // eslint-disable-next-line react/react-compiler -- containedHandler receives the ref object, not a render-time `.current` read; this ref+containedHandler shape is mandated by require-contained-handler
       onTouchStart={containedHandler(container, handleStart)}
       ref={container}
       // eslint-disable-next-line jsx-a11y/role-has-required-aria-props -- aria-value* props are passed via ...rest by callers

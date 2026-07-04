@@ -1,5 +1,6 @@
 ---
 import "../styles/global.css";
+
 type Props = {
   title?: string;
   description?: string;
@@ -80,7 +81,7 @@ const socialImageUrl = new URL(socialImage, Astro.site);
           document.documentElement.classList.add("dark");
         }
         // When no manual override, follow system changes in real time
-        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", function(e) {
+        window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", (e) => {
           if (localStorage.getItem("theme")) return;
           document.documentElement.classList.toggle("dark", e.matches);
         });
@@ -201,8 +202,8 @@ const socialImageUrl = new URL(socialImage, Astro.site);
     -->
     <script is:inline>
       document.documentElement.classList.add("no-transitions");
-      requestAnimationFrame(function() {
-        requestAnimationFrame(function() {
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
           document.documentElement.classList.remove("no-transitions");
         });
       });
@@ -218,17 +219,17 @@ const socialImageUrl = new URL(socialImage, Astro.site);
         var targets = document.querySelectorAll("[data-reveal]");
         if (!targets.length) return;
         if (typeof IntersectionObserver === "undefined") {
-          targets.forEach(function (el) { el.setAttribute("data-in-view", ""); });
+          targets.forEach((el) => { el.setAttribute("data-in-view", ""); });
           return;
         }
-        var io = new IntersectionObserver(function (entries) {
-          entries.forEach(function (entry) {
+        var io = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
             if (!entry.isIntersecting) return;
             entry.target.setAttribute("data-in-view", "");
             io.unobserve(entry.target);
           });
         }, { rootMargin: "0px 0px -8% 0px", threshold: 0.05 });
-        targets.forEach(function (el) { io.observe(el); });
+        targets.forEach((el) => { io.observe(el); });
       })();
     </script>
   </body>

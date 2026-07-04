@@ -199,6 +199,7 @@ const OrganizationList = ({
   }, [singleOrg, isSelectPending, selectOrg]);
 
   // Show skeleton while auto-selecting the single org
+  // eslint-disable-next-line react/react-compiler -- one-time guard ref read during render only gates the initial skeleton (before the auto-select effect fires) and the error path; the re-render is driven by singleOrg/isSelectPending
   if (singleOrg && (isSelectPending || !autoSelected.current)) {
     return (
       <Frame className="w-full max-w-sm">

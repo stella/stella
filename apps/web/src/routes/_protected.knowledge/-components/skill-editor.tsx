@@ -169,6 +169,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
     if (!detail.data) {
       return;
     }
+    // eslint-disable-next-line react/react-compiler -- reconciles editable form fields with the server detail query on load and after each save-refetch; fields are user-edited via their own setters, so this is not pure derived state
     setName(detail.data.name);
     setDescription(detail.data.description);
     setEnabled(detail.data.enabled);

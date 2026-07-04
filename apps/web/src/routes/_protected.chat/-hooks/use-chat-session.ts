@@ -218,8 +218,11 @@ export const useChatSession = ({
     setOlderCursor(initialOlderCursor);
     setIsLoadingOlder(false);
     setLoadOlderError(false);
+    // eslint-disable-next-line react/react-compiler -- deliberate render-time ref write: mirrors the re-seed synchronously so an older-page response resolving in the commit→effect window is discarded by the stale-response guard
     olderCursorRef.current = initialOlderCursor;
+    // eslint-disable-next-line react/react-compiler -- deliberate render-time ref write: see above, closes the commit→effect race window for the stale-response guard
     isLoadingOlderRef.current = false;
+    // eslint-disable-next-line react/react-compiler -- deliberate render-time ref write: render-current runtime identity for the stale-response guard in loadOlder
     seededChatRef.current = chat;
   }
 

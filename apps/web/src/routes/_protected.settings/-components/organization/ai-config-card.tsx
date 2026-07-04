@@ -84,6 +84,7 @@ export const AIConfigCard = () => {
     }
     const nextProviders = providerDraftsFromStoredProviders(config.providers);
     const providerValues = getProviderValues(nextProviders);
+    // eslint-disable-next-line react/react-compiler -- seeds editable form state from the async config query without clobbering in-flight user edits; setters are also driven by the editor and save/delete mutations, so this is not pure derived state
     setProviders(nextProviders);
     setRoleModels(
       roleModelsFromOverrideModels({

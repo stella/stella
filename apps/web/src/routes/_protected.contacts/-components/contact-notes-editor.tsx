@@ -21,19 +21,22 @@ export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
     select: (ctx) => ctx.user.activeOrganizationId,
   });
   const [draft, setDraft] = useState(contact.notes ?? "");
-  const latestServerNotesRef = useRef(contact.notes ?? "");
+  const [latestServerNotes, setLatestServerNotes] = useState(
+    contact.notes ?? "",
+  );
   const skipNextSaveRef = useRef(false);
 
   // Reconcile the server notes prop into the local draft during render
-  // (React's sanctioned "adjust state when a prop changes" pattern). When the
-  // server value changes, accept it only if the user hasn't diverged from the
-  // value the server last gave us; otherwise keep the in-progress edit.
+  // (React's sanctioned "adjust state when a prop changes" pattern, tracking the
+  // last-seen server value in state). When the server value changes, accept it
+  // only if the user hasn't diverged from the value the server last gave us;
+  // otherwise keep the in-progress edit.
   const nextServerNotes = contact.notes ?? "";
-  if (nextServerNotes !== latestServerNotesRef.current) {
-    if (draft === latestServerNotesRef.current) {
+  if (nextServerNotes !== latestServerNotes) {
+    if (draft === latestServerNotes) {
       setDraft(nextServerNotes);
     }
-    latestServerNotesRef.current = nextServerNotes;
+    setLatestServerNotes(nextServerNotes);
   }
 
   const handleSave = () => {

@@ -174,6 +174,7 @@ export const AddEntityMenu = ({
     );
     return (
       <>
+        {/* eslint-disable-next-line react/react-compiler -- handleUploadClick reads fileInputRef only inside the click handler; cloneElement obscures the call graph so the compiler conservatively flags a render-time ref access */}
         {React.cloneElement(trigger, { onClick: handleUploadClick })}
         {fileInput}
       </>

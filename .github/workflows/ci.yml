@@ -257,6 +257,19 @@ jobs:
         # local loop. Regenerate: `bun scripts/rc-bailouts.ts --write-baseline`.
         run: bun scripts/rc-bailouts.ts --check
 
+      - name: Ratchet guard
+        if: needs.ci-changes.outputs.package_checks_required == 'true'
+        # Whole-repo convention metrics (as-casts, `?? []` fallbacks, barrel
+        # index files) that may only ever decrease. Each metric's current count
+        # is compared to a committed baseline; a rise fails CI (a new violation),
+        # a fall just prompts a `--write` to lock in the improvement. Line-based
+        # counters, no AST — fast. The --self-test run first proves each counter
+        # counts what it claims and that a rise regresses, so a broken guard
+        # cannot pass silently. Regenerate: `bun scripts/ratchet.ts --write`.
+        run: |
+          bun scripts/ratchet.ts --self-test
+          bun scripts/ratchet.ts --check
+
       - name: exactMirror route guard
         if: needs.ci-changes.outputs.package_checks_required == 'true'
         # Elysia builds an "exactMirror" serializer per route schema. Some

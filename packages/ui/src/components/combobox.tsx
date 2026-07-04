@@ -352,6 +352,7 @@ function ComboboxChips({
         className,
       )}
       data-slot="combobox-chips"
+      // eslint-disable-next-line react/react-compiler -- containedHandler receives the ref object, not a render-time `.current` read; this ref+containedHandler shape is mandated by require-contained-handler
       onMouseDown={containedHandler(chipsRef, (e) => {
         const { target } = e;
         if (!(target instanceof Element)) {

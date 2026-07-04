@@ -110,6 +110,7 @@ export const CalendarEntityChip = ({
               "border-s-muted-foreground")
           : "border-s-muted-foreground",
       )}
+      // eslint-disable-next-line react/react-compiler -- containedHandler house pattern; dragRef is handed to the helper, not read for rendered output
       onClick={containedHandler(dragRef, handleClick)}
       type="button"
     >

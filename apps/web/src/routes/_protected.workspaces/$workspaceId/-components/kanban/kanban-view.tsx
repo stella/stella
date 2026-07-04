@@ -1,4 +1,4 @@
-import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react";
+import { useEffectEvent, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode } from "react";
 
 import { autoScrollForElements } from "@atlaskit/pragmatic-drag-and-drop-auto-scroll/element";
@@ -150,11 +150,13 @@ export const KanbanView = ({ view, workspaceId }: KanbanViewProps) => {
   // column positions from the previous grouping don't leak through.
   // A `key` on the parent would remount the whole view and also wipe
   // `hiddenGroups` (which must survive a groupBy change), so this stays a
-  // scoped reset instead of a lift-to-key.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id resetting only localColumnOrder; lift-to-key would over-reset (also clears hiddenGroups) and the parent render site is out of scope
-  useEffect(() => {
+  // scoped reset. Adjust state during render (the React-sanctioned pattern)
+  // instead of a lift-to-key.
+  const [prevGroupBy, setPrevGroupBy] = useState(configuredGroupBy);
+  if (prevGroupBy !== configuredGroupBy) {
+    setPrevGroupBy(configuredGroupBy);
     setLocalColumnOrder([]);
-  }, [configuredGroupBy]);
+  }
 
   const grouping = useMemo(
     () => resolveKanbanGrouping(configuredGroupBy, properties),

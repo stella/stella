@@ -312,10 +312,16 @@ function RouteComponentInner({
   const [docxLatestVersionDialogOpen, setDocxLatestVersionDialogOpen] =
     useState(false);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset setDocxUnlocked(false) when fieldId changes; setDocxUnlocked is also called from several editor handlers (onClose/onSaved/onUnlockedChange), and a key remount on fieldId would reset unrelated state, so it is neither pure derived state nor lift-to-key
-  useEffect(() => {
+  // Reset the docx-unlocked flag when fieldId changes, using React's
+  // adjust-state-during-render pattern instead of a reset effect. setDocxUnlocked
+  // is also called from editor handlers (onClose/onSaved/onUnlockedChange), so it
+  // is not pure derived state; tracking the previous fieldId resets only on a
+  // real change without remounting unrelated state.
+  const [prevFieldId, setPrevFieldId] = useState(fieldId);
+  if (fieldId !== prevFieldId) {
+    setPrevFieldId(fieldId);
     setDocxUnlocked(false);
-  }, [fieldId]);
+  }
 
   // Find the active file field to determine mimeType and propertyId
   const activeFileField = entity.fields.find((f) => {
@@ -331,6 +337,7 @@ function RouteComponentInner({
   // older version (leave alone). Ref-assign during render is the
   // sanctioned latest-value pattern; the write is idempotent.
   if (activeFileField !== undefined) {
+    // eslint-disable-next-line react/react-compiler -- sanctioned latest-value ref mirror: idempotent write consumed only by the version-switch effect below, never during render
     currentFileFieldIdsByPropertyRef.current.set(
       activeFileField.propertyId,
       activeFileField.id,

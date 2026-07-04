@@ -221,6 +221,7 @@ export const ExistingFileOrganizerDialog = ({
     }
 
     if (cachedSuggestions?.key === requestKey) {
+      // eslint-disable-next-line react/react-compiler -- data-fetch effect seeding local rows from the AI-suggestion cache keyed by requestKey; a TanStack Query migration is the tracked follow-up
       setRows(cachedSuggestions.rows);
       setDeleteFolders(cachedSuggestions.deleteFolders);
       setSuggestionStatus("ready");
@@ -1278,10 +1279,14 @@ const InlineNameInput = ({
 }: InlineNameInputProps) => {
   const [draft, setDraft] = useState(value);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- reset-on-id: syncs external value into local draft. Rendered at two call sites (file + folder rename); a key prop would remount and drop focus mid-edit, so keep the in-place effect.
-  useEffect(() => {
+  // Sync the external value into the local draft. Adjust state during render
+  // (the React-sanctioned pattern): a key prop would remount and drop focus
+  // mid-edit, and this avoids the extra commit an effect would cost.
+  const [prevValue, setPrevValue] = useState(value);
+  if (prevValue !== value) {
+    setPrevValue(value);
     setDraft(value);
-  }, [value]);
+  }
 
   return (
     <Input

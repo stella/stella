@@ -60,6 +60,8 @@ export type DesktopMessages = typeof en;
 
 export const detectedLanguage = detectLanguage();
 
+const resolvedTimeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
 export const loadMessages = async (): Promise<DesktopMessages> => {
   try {
     return await messageLoaders[detectedLanguage]();
@@ -80,7 +82,7 @@ export const DesktopIntlProvider = ({
   <IntlProvider
     locale={detectedLanguage}
     messages={messages}
-    timeZone={Intl.DateTimeFormat().resolvedOptions().timeZone}
+    timeZone={resolvedTimeZone}
   >
     {children}
   </IntlProvider>

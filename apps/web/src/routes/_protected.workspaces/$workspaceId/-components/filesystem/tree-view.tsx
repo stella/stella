@@ -304,6 +304,7 @@ const collectFolderIds = (
   return ids;
 };
 
+// eslint-disable-next-line react/react-compiler -- react-compiler skips this component: an API it uses returns functions that cannot be memoized, so the compiler bails out of the whole component (Compilation Skipped: incompatible library)
 export const FilesystemView = ({ workspaceId, view }: FilesystemViewProps) => {
   const t = useTranslations();
   const { data: properties } = useSuspenseQuery(propertiesOptions(workspaceId));
@@ -1043,6 +1044,7 @@ const ColumnHeaderCell = ({
       };
       const handleUp = () => {
         window.removeEventListener("pointermove", handleMove);
+        // eslint-disable-next-line react/react-compiler -- self-referential local listener (handleUp removes itself); it is not an outer memo dependency of the useCallback
         window.removeEventListener("pointerup", handleUp);
         document.body.style.cursor = "";
       };
@@ -1224,7 +1226,9 @@ const FilesystemRow = ({
   };
 
   const isBulkSelected = selectedIds.size > 1 && isSelected;
-  const bulkEntitiesRef = useRef<WorkspaceEntity[] | undefined>(undefined);
+  const [bulkEntities, setBulkEntities] = useState<
+    WorkspaceEntity[] | undefined
+  >(undefined);
   const getBulkSelectedEntities = () =>
     isBulkSelected ? getSelectedEntities(selectedIds) : undefined;
 
@@ -1235,7 +1239,7 @@ const FilesystemRow = ({
     if (!isSelected) {
       onSelect(node.entityId, { meta: false, shift: false });
     }
-    bulkEntitiesRef.current = getBulkSelectedEntities();
+    setBulkEntities(getBulkSelectedEntities());
     const x = e.clientX;
     const y = e.clientY;
     setMenuState({
@@ -1583,9 +1587,9 @@ const FilesystemRow = ({
         onOpenChange={(o) => {
           if (!o) {
             setMenuState({ type: "closed" });
-            bulkEntitiesRef.current = undefined;
+            setBulkEntities(undefined);
           } else if (menuState.type === "closed") {
-            bulkEntitiesRef.current = getBulkSelectedEntities();
+            setBulkEntities(getBulkSelectedEntities());
             // Trigger-button click: Base UI positions the menu against
             // the trigger element, so no virtual anchor is needed.
             setMenuState({ type: "trigger" });
@@ -1594,7 +1598,7 @@ const FilesystemRow = ({
         onRename={startEditing}
         onSubfolderCreated={onSubfolderCreated}
         open={isContextOpen}
-        selectedEntities={isContextOpen ? bulkEntitiesRef.current : undefined}
+        selectedEntities={isContextOpen ? bulkEntities : undefined}
         workspaceId={workspaceId}
       />
     </span>

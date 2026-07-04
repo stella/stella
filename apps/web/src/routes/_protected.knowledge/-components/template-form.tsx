@@ -1594,8 +1594,10 @@ export const TemplateForm = ({
     Record<string, string | null>
   >({});
   const touchedRef = useRef(touched);
+  // eslint-disable-next-line react/react-compiler -- latest-value ref mirror read only from submit/validation callbacks, never during render
   touchedRef.current = touched;
   const valuesRef = useRef(values);
+  // eslint-disable-next-line react/react-compiler -- latest-value ref mirror read only from submit/validation callbacks, never during render
   valuesRef.current = values;
 
   /** Resolve a ValidationError to a translated string. */
@@ -1900,6 +1902,7 @@ export const TemplateForm = ({
     names: string;
   } | null>(null);
   const emptyWarningRef = useRef(emptyWarning);
+  // eslint-disable-next-line react/react-compiler -- latest-value ref mirror read only from the submit gate callback, never during render
   emptyWarningRef.current = emptyWarning;
 
   /** Gate every submit path: with optional fields still empty, the first

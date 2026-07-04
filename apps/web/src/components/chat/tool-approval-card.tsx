@@ -366,6 +366,7 @@ export const ToolApprovalCard = ({
       return;
     }
     autoDenyRef.current = true;
+    // eslint-disable-next-line react/react-compiler -- auto-deny effect reacts to the incoming approval-request prop transition and fires the onDeny callback side effect; not derivable in render
     setResponded(true);
     onDeny(id);
   }, [isApprovalRequested, isBlocked, part, onDeny]);
@@ -392,6 +393,7 @@ export const ToolApprovalCard = ({
       return;
     }
     autoApproveRef.current = true;
+    // eslint-disable-next-line react/react-compiler -- auto-approve effect reacts to the incoming approval-request prop/context transition and fires the onApprove callback side effect; not derivable in render
     setResponded(true);
     onApprove(id, name);
   }, [

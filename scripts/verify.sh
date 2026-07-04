@@ -108,6 +108,16 @@ run_typecheck() {
   fi
 }
 
+run_ratchet_guard() {
+  # Whole-repo convention metrics (as-casts, `?? []` fallbacks, barrel index
+  # files) that may only ever decrease vs a committed baseline. A rise fails; a
+  # fall just prompts `bun scripts/ratchet.ts --write`. The --self-test run
+  # first proves each counter counts what it claims, so a broken guard cannot
+  # pass silently.
+  bun scripts/ratchet.ts --self-test || return 1
+  bun scripts/ratchet.ts --check
+}
+
 run_exact_mirror_guard() {
   # Build the real app and force every route's Elysia exactMirror to compile;
   # fail if any route's schema cannot be mirrored (recursive schemas fall back
@@ -152,6 +162,7 @@ run_step "Lint" run_lint
 run_step "Format" run_format
 run_step "Rust format" run_rust_format
 run_step "Typecheck" run_typecheck
+run_step "Ratchet guard" run_ratchet_guard
 run_step "exactMirror route guard" run_exact_mirror_guard
 run_step "MCP coverage guard" run_mcp_coverage_guard
 run_step "Knip production deps" run_knip

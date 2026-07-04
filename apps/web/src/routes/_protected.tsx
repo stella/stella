@@ -521,6 +521,7 @@ function ProtectedContent() {
             nativeButton={false}
             render={<span className="sr-only" />}
           />
+          {/* eslint-disable-next-line react/react-compiler -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
           <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
             <MenuItem onClick={handleOpenNewChatFromMenu}>
               <MessageSquarePlusIcon />

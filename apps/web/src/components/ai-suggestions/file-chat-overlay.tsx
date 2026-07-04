@@ -787,6 +787,7 @@ const FileChatOverlayInner = ({
   // Suspense swap unmounts + remounts this subtree with fresh state,
   // and the poller racing with a second rerender can leave the gate
   // stuck closed even though the underlying view is live).
+  // eslint-disable-next-line react/react-compiler -- mount-time seed of readiness from the imperative Folio editor instance so a transition-induced remount of an already-ready editor starts ready; the ref read runs once in the useState initializer
   const [editorReady, setEditorReady] = useState(() =>
     Boolean(docxEditorRef?.current?.createAIEditSnapshot()),
   );
@@ -1007,6 +1008,7 @@ const FileChatOverlayInner = ({
     workspaceId,
   });
   const { ensureAIAvailable, openIfAIUnavailable } = useAIKeyGate();
+  const [panelOpen, setPanelOpen] = useState(false);
   const handlePromptSubmit = useEffectEvent(async (prompt: string) => {
     try {
       if (!(await ensureAIAvailable())) {
@@ -1165,19 +1167,22 @@ const FileChatOverlayInner = ({
     await handleApprove(approvalId, toolName);
   };
 
-  const [panelOpen, setPanelOpen] = useState(false);
   const threadScrollRef = useRef<HTMLDivElement>(null);
   const hasMessages = messages.length > 0;
   const hasThreadContent = hasMessages || error !== undefined;
-  // Auto-open the thread panel as soon as the first message
-  // lands so users see streaming without having to click the
-  // chevron themselves.
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state (panel openness follows thread content), compute in render
-  useEffect(() => {
+  // Auto-open the thread panel as soon as the first message lands so users see
+  // streaming without having to click the chevron. Adjust-state-during-render on
+  // the hasThreadContent transition (not every render) so the user can still
+  // minimise the panel afterwards while content is present.
+  // Seeded false (not hasThreadContent) so mounting with an already-hydrated
+  // thread counts as a transition and auto-opens, matching the former effect.
+  const [prevHasThreadContent, setPrevHasThreadContent] = useState(false);
+  if (hasThreadContent !== prevHasThreadContent) {
+    setPrevHasThreadContent(hasThreadContent);
     if (hasThreadContent) {
       setPanelOpen(true);
     }
-  }, [hasThreadContent]);
+  }
   useLayoutEffect(() => {
     const scrollElement = threadScrollRef.current;
     if (!scrollElement) {

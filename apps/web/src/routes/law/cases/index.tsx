@@ -219,10 +219,18 @@ function PublicCaseLawIndex() {
   const [filters, setFilters] = useState<DecisionListFilters>(routeFilters);
   const { data: browseFacets } = useSuspenseQuery(decisionFacetsOptions());
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- derived state, recomputing filters from search params; compute in render or lift to key prop
-  useEffect(() => {
+  // Resync filters when the route search params change. Adjust state during
+  // render (the React-sanctioned pattern) instead of an effect so there is no
+  // extra commit/paint cycle.
+  const [prevSearch, setPrevSearch] = useState({ country, court, year });
+  if (
+    prevSearch.country !== country ||
+    prevSearch.court !== court ||
+    prevSearch.year !== year
+  ) {
+    setPrevSearch({ country, court, year });
     setFilters(createDecisionFiltersFromSearch({ country, court, year }));
-  }, [country, court, year]);
+  }
 
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
     useInfiniteQuery({

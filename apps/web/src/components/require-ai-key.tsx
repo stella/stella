@@ -98,12 +98,17 @@ export function AIAvailabilityProvider({ children }: PropsWithChildren) {
     }
   }, [data, isFetching]);
 
-  // eslint-disable-next-line no-raw-use-effect/no-raw-use-effect -- force-closes the dialog whenever the availability query flips to available (e.g. keys configured elsewhere and refetched). `open` is independent user-controlled state set in several places, so it cannot be derived in render, and there is no single data handler that covers every way availability can become true.
-  useEffect(() => {
+  // Force-close the dialog whenever the availability query flips to available
+  // (e.g. keys configured elsewhere and refetched). Adjust-state-during-render on
+  // the availability transition rather than in an effect; `open` stays
+  // independent user-controlled state the rest of the time.
+  const [prevAvailable, setPrevAvailable] = useState(data?.available);
+  if (data?.available !== prevAvailable) {
+    setPrevAvailable(data?.available);
     if (data?.available) {
       setOpen(false);
     }
-  }, [data?.available]);
+  }
 
   const value = useMemo(
     () => ({
@@ -234,6 +239,7 @@ export function AIKeyRequiredDialog({
 
     if (!config?.configured) {
       const nextProviders = [createProviderCredentialDraft()];
+      // eslint-disable-next-line react/react-compiler -- one-way sync of form drafts from the external config query on open; deliberately ignores later refetches, so it is not pure derived state
       setProviders(nextProviders);
       setRoleModels(createDefaultRoleModels(getProviderValues(nextProviders)));
       return;

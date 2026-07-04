@@ -607,7 +607,10 @@ function SidebarMenuSkeleton({
 }: React.ComponentProps<"div"> & {
   showIcon?: boolean;
 }) {
-  // Impure Math.random() must be frozen to one value for this instance's lifetime.
+  // Impure Math.random() must be frozen to one value for this instance's
+  // lifetime. This file is on the React Compiler bailout list, so React's
+  // runtime useMemo (empty deps) is honored and keeps the width stable.
+  // eslint-disable-next-line react/react-compiler -- deliberate one-shot frozen random skeleton width; useMemo([]) is load-bearing here because the file is compiler-bailed
   const width = useMemo(() => `${Math.floor(Math.random() * 40) + 50}%`, []);
 
   return (
