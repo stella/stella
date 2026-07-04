@@ -11,18 +11,54 @@
 //   document.cookie += "; foo=bar";
 //   globalThis.document.cookie = value;
 //   window.document.cookie = value;
+//   document["cookie"] = "theme=dark";          // bracket-notation bypass
+//   window.document["cookie"] += value;         // bracket-notation bypass
 //
 // Allows:
 //   const raw = document.cookie;               // reads are fine
 //   const has = document.cookie.includes("x");  // reads are fine
 //   cookieStore.set("theme", "dark");           // different API entirely
 
-import { isIdentifier } from "./utils.ts";
+import { isIdentifier, isStringLiteral } from "./utils.ts";
 
 const DOCUMENT_HOSTS = new Set(["document", "globalThis", "window", "self"]);
 
+// True for a computed MemberExpression property that statically resolves
+// to the string "cookie": a string literal (`["cookie"]`) or a template
+// literal with no interpolations (`` [`cookie`] ``). A dynamic key
+// (`[someVar]`) cannot be proven to target `cookie`, so it is not matched.
+const isCookieStringValue = (node: unknown): boolean => {
+  if (isStringLiteral(node)) {
+    return node.value === "cookie";
+  }
+  if (
+    typeof node !== "object" ||
+    node === null ||
+    (node as { type?: unknown }).type !== "TemplateLiteral"
+  ) {
+    return false;
+  }
+  const template = node as { quasis?: unknown; expressions?: unknown };
+  if (
+    !Array.isArray(template.quasis) ||
+    !Array.isArray(template.expressions) ||
+    template.expressions.length !== 0 ||
+    template.quasis.length !== 1
+  ) {
+    return false;
+  }
+  const quasi = template.quasis[0] as { value?: { cooked?: unknown } };
+  return quasi.value?.cooked === "cookie";
+};
+
+// Match a `.cookie` (dot notation) or `["cookie"]` / `` [`cookie`] ``
+// (bracket notation) property access.
+const isCookieProperty = (property: unknown, computed: boolean): boolean =>
+  computed ? isCookieStringValue(property) : isIdentifier(property, "cookie");
+
 // Match `document.cookie` or `globalThis.document.cookie` /
-// `window.document.cookie` / `self.document.cookie`.
+// `window.document.cookie` / `self.document.cookie`, in either dot or
+// bracket notation.
 const isDocumentCookieAccess = (node: unknown): boolean => {
   if (
     typeof node !== "object" ||
@@ -38,7 +74,7 @@ const isDocumentCookieAccess = (node: unknown): boolean => {
     property?: unknown;
   };
 
-  if (member.computed !== false || !isIdentifier(member.property, "cookie")) {
+  if (!isCookieProperty(member.property, member.computed === true)) {
     return false;
   }
 

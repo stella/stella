@@ -81,3 +81,20 @@ void buildS3;
 // as a property, not as the called/constructed identifier itself.
 declare const someLib: { drizzle: (opts: unknown) => unknown };
 export const notFlagged = someLib.drizzle({ client });
+
+// Allowed — a non-static class field initializer runs once per
+// instantiation (`new NonStaticFieldClass()`), not at module evaluation
+// time, so it is not an eager singleton.
+export class NonStaticFieldClass {
+  db = drizzle({ client });
+}
+
+// MUST flag: a static class field initializer runs at module evaluation
+// time (class declaration time), same as a top-level statement. Carries an
+// instance field too so this isn't a static-only class (unrelated rules).
+export class StaticFieldClass {
+  // oxlint-disable-next-line no-eager-singleton/no-eager-singleton
+  static db = drizzle({ client });
+
+  id = 1;
+}

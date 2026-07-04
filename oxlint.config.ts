@@ -1613,12 +1613,14 @@ export default defineConfig({
       // packages, where these constructors are actually imported.
       files: [
         "apps/api/src/**/*.{ts,tsx}",
+        "apps/legal-atlas-runner/src/**/*.{ts,tsx}",
         "packages/**/*.{ts,tsx}",
         ".oxlint-plugins/__fixtures__/no-eager-singleton.fixture.ts",
       ],
       excludeFiles: [
         "apps/api/src/**/*.test.ts",
         "apps/api/src/tests/**/*.ts",
+        "apps/legal-atlas-runner/src/**/*.test.ts",
         "packages/**/*.test.{ts,tsx}",
         "packages/**/__tests__/**/*.{ts,tsx}",
       ],

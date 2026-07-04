@@ -21,11 +21,13 @@
 //   const auth = betterAuth({ ... });                   // top level
 //   const redis = createRedisClient();                  // top level
 //   if (cond) { const q = new Queue("x", opts); }        // still top level
+//   class X { static db = drizzle({ client }); }         // static field: module-eval time
 //
 // Allows:
 //   const getDb = () => drizzle({ client });            // behind a function
 //   let _db; const getDb = () => (_db ??= drizzle(...)); // lazy singleton
 //   function build() { return new S3Client(opts); }      // behind a function
+//   class X { db = drizzle({ client }); }                // non-static field: instantiation time
 //
 // Files that legitimately construct these at import time (the canonical,
 // always-imported-once singleton module; a standalone CLI entrypoint never
@@ -68,6 +70,15 @@ export default {
       },
       create(context) {
         let functionDepth = 0;
+        // A non-static class field initializer (`class X { db = drizzle() }`)
+        // evaluates once per instantiation, not at module evaluation time,
+        // so calls inside it must not be flagged. A static class field
+        // (`class X { static db = drizzle() }`) evaluates at module
+        // evaluation time (module load, or class declaration time), same as
+        // a top-level statement, so it stays flagged. Track this the same
+        // way as `functionDepth`: a counter maintained by the enclosing
+        // PropertyDefinition's enter/exit handlers, keyed on `static`.
+        let nonStaticClassFieldDepth = 0;
 
         const enterFunction = () => {
           functionDepth += 1;
@@ -76,9 +87,24 @@ export default {
           functionDepth -= 1;
         };
 
+        const enterPropertyDefinition = (node: { static?: unknown }) => {
+          if (node.static !== true) {
+            nonStaticClassFieldDepth += 1;
+          }
+        };
+        const exitPropertyDefinition = (node: { static?: unknown }) => {
+          if (node.static !== true) {
+            nonStaticClassFieldDepth -= 1;
+          }
+        };
+
+        const isSuppressed = () =>
+          functionDepth > 0 || nonStaticClassFieldDepth > 0;
+
         return {
           Program() {
             functionDepth = 0;
+            nonStaticClassFieldDepth = 0;
           },
           FunctionDeclaration: enterFunction,
           "FunctionDeclaration:exit": exitFunction,
@@ -86,9 +112,11 @@ export default {
           "FunctionExpression:exit": exitFunction,
           ArrowFunctionExpression: enterFunction,
           "ArrowFunctionExpression:exit": exitFunction,
+          PropertyDefinition: enterPropertyDefinition,
+          "PropertyDefinition:exit": exitPropertyDefinition,
 
           CallExpression(node) {
-            if (functionDepth > 0) {
+            if (isSuppressed()) {
               return;
             }
             const callee = node.callee;
@@ -102,7 +130,7 @@ export default {
           },
 
           NewExpression(node) {
-            if (functionDepth > 0) {
+            if (isSuppressed()) {
               return;
             }
             const callee = node.callee;
