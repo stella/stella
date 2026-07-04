@@ -30,6 +30,24 @@ const readEnvProvider = (env: Record<string, string | undefined>) => {
   return result.stdout.toString().trim();
 };
 
+const readSelfhostLocalPasswordAuth = (
+  env: Record<string, string | undefined>,
+) => {
+  const result = Bun.spawnSync({
+    cmd: [
+      process.execPath,
+      "-e",
+      "import { env } from './apps/api/src/env.ts'; console.log(String(env.SELFHOST_LOCAL_PASSWORD_AUTH));",
+    ],
+    env,
+    stderr: "pipe",
+    stdout: "pipe",
+  });
+
+  expect(result.exitCode).toBe(0);
+  return result.stdout.toString().trim();
+};
+
 describe("API environment", () => {
   test("infers SMTP provider from complete SMTP settings", () => {
     expect(
@@ -44,5 +62,14 @@ describe("API environment", () => {
 
   test("allows transactional email to be unconfigured", () => {
     expect(readEnvProvider(baseEnv)).toBe("undefined");
+  });
+
+  test("allows local password auth after bootstrap token removal", () => {
+    expect(
+      readSelfhostLocalPasswordAuth({
+        ...baseEnv,
+        SELFHOST_LOCAL_PASSWORD_AUTH: "true",
+      }),
+    ).toBe("true");
   });
 });

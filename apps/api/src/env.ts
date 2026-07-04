@@ -172,13 +172,7 @@ const envApi = createEnv({
      * limited to first-user bootstrap guarded by SELFHOST_BOOTSTRAP_TOKEN.
      * Hosted deployments should leave this off.
      */
-    SELFHOST_LOCAL_PASSWORD_AUTH: v.pipe(
-      featureFlagSchema,
-      v.check(
-        (enabled) => !enabled || !!process.env["SELFHOST_BOOTSTRAP_TOKEN"],
-        "SELFHOST_BOOTSTRAP_TOKEN is required when SELFHOST_LOCAL_PASSWORD_AUTH=true",
-      ),
-    ),
+    SELFHOST_LOCAL_PASSWORD_AUTH: featureFlagSchema,
     SELFHOST_BOOTSTRAP_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
 
     /**
