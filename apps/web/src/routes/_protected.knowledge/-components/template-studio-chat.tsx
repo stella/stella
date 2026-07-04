@@ -1060,8 +1060,9 @@ const TemplateStudioChatInner = ({
   // streaming without having to click the chevron. Adjust-state-during-render on
   // the hasThreadContent transition (not every render) so the user can still
   // close the panel afterwards while content is present.
-  const [prevHasThreadContent, setPrevHasThreadContent] =
-    useState(hasThreadContent);
+  // Seeded false (not hasThreadContent) so mounting with an already-hydrated
+  // chat counts as a transition and auto-opens, matching the former effect.
+  const [prevHasThreadContent, setPrevHasThreadContent] = useState(false);
   if (hasThreadContent !== prevHasThreadContent) {
     setPrevHasThreadContent(hasThreadContent);
     if (hasThreadContent) {
