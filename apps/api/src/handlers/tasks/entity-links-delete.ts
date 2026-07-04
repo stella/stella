@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
@@ -50,10 +50,13 @@ export const deleteEntityLinkHandler = async function* ({
       new HandlerError({ status: 404, message: "Link not found" }),
     );
   }
-  if (
-    link.sourceEntity?.kind !== "task" &&
-    link.targetEntity?.kind !== "task"
-  ) {
+  // Both endpoints are guaranteed by the notNull sourceEntityId/targetEntityId
+  // FKs, so a missing relation is a broken invariant, not an expected state.
+  const sourceEntity =
+    link.sourceEntity ?? panic("Entity link is missing its source entity");
+  const targetEntity =
+    link.targetEntity ?? panic("Entity link is missing its target entity");
+  if (sourceEntity.kind !== "task" && targetEntity.kind !== "task") {
     return Result.err(
       new HandlerError({
         status: 400,
@@ -62,8 +65,8 @@ export const deleteEntityLinkHandler = async function* ({
     );
   }
   if (
-    (link.sourceEntity?.kind === "task" && link.sourceEntity.readOnly) ||
-    (link.targetEntity?.kind === "task" && link.targetEntity.readOnly)
+    (sourceEntity.kind === "task" && sourceEntity.readOnly) ||
+    (targetEntity.kind === "task" && targetEntity.readOnly)
   ) {
     return Result.err(
       new HandlerError({ status: 409, message: "Task is read-only" }),
@@ -82,7 +85,7 @@ export const deleteEntityLinkHandler = async function* ({
         );
 
       const taskEntityId =
-        link.sourceEntity?.kind === "task"
+        sourceEntity.kind === "task"
           ? link.sourceEntityId
           : link.targetEntityId;
       await recordAuditEvent(tx, {

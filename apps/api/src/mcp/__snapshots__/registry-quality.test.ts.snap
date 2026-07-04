@@ -1096,12 +1096,18 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "description": "Version ID to annotate; required when setting label or description"
         },
         "label": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
           "maxLength": 128
         },
         "description": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
           "maxLength": 1024
         }
@@ -1244,7 +1250,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxLength": 64
         },
         "billing_reference": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Billing reference; pass null to clear. Only valid when updating.",
           "maxLength": 128
         },
@@ -1304,22 +1313,34 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxLength": 512
         },
         "first_name": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "First name; pass null to clear",
           "maxLength": 256
         },
         "last_name": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Last name; pass null to clear",
           "maxLength": 256
         },
         "organization_name": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Organization name; pass null to clear",
           "maxLength": 512
         },
         "notes": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Free-text notes; pass null to clear"
         }
       }
@@ -1461,7 +1482,10 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
           "maxLength": 16
         },
         "due_date": {
-          "type": "string",
+          "type": [
+            "string",
+            "null"
+          ],
           "description": "Due date (ISO YYYY-MM-DD); pass null to clear",
           "maxLength": 10
         },
@@ -1487,7 +1511,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
   {
     "name": "link_matter_contact",
     "scope": "stella:matters_write",
-    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id and role to link; pass workspace_contact_id (from get_matter_overview) to unlink.",
+    "description": "Link a contact to a matter in a party role (opposing party/counsel, co-counsel, witness, expert witness, third party, judge, mediator, or other), or remove such a link. Pass contact_id with role to link. To unlink, pass workspace_contact_id (precise, from get_matter_overview) or contact_id alone; contact_id alone is rejected when the contact holds several roles on the matter.",
     "inputSchema": {
       "type": "object",
       "properties": {
@@ -1497,7 +1521,7 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
         },
         "contact_id": {
           "type": "string",
-          "description": "Contact ID to link to the matter; requires role"
+          "description": "Contact ID: with role to link the contact, or alone to unlink it from the matter"
         },
         "role": {
           "type": "string",
@@ -1512,11 +1536,11 @@ exports[`MCP registry quality (default surface) tool surface snapshot (name, sco
             "mediator",
             "other"
           ],
-          "description": "Party role for the linked contact"
+          "description": "Party role for the linked contact; provide it only when linking"
         },
         "workspace_contact_id": {
           "type": "string",
-          "description": "Existing matter-contact link ID to remove"
+          "description": "Existing matter-contact link ID to remove, from get_matter_overview"
         }
       },
       "required": [

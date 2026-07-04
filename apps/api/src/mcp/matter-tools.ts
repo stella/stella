@@ -43,6 +43,7 @@ import {
   brandPersistedUserId,
   brandPersistedWorkspaceContactId,
 } from "@/api/lib/safe-id-boundaries";
+import { includes } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type {
   McpStructuredTextField,
@@ -56,6 +57,7 @@ import {
   errorResult,
   intProp,
   MAX_LIST_LIMIT,
+  nullableStringProp,
   stringProp,
   textResult,
 } from "@/api/mcp/tool-utils";
@@ -75,6 +77,13 @@ const MATTER_STATUSES = ["active", "archived"] as const;
 
 /** Contact discriminator accepted by save_contact. */
 const CONTACT_TYPES = ["person", "organization"] as const;
+
+/**
+ * Entity kinds save_task will link a task to. Mirrors link_entity_id's
+ * advertised contract (document, folder, or another task) so the up-front
+ * target check rejects a non-linkable kind before any mutation runs.
+ */
+const LINKABLE_ENTITY_KINDS = ["document", "folder", "task"] as const;
 
 /**
  * Roles a contact can hold on a matter. Mirrors the closed set in
@@ -125,7 +134,7 @@ export const MATTER_TOOL_DEFINITIONS = [
           "Matter reference (file number). Only valid when updating.",
           { maxLength: 64 },
         ),
-        billing_reference: stringProp(
+        billing_reference: nullableStringProp(
           "Billing reference; pass null to clear. Only valid when updating.",
           { maxLength: 128 },
         ),
@@ -171,16 +180,17 @@ export const MATTER_TOOL_DEFINITIONS = [
           "Display name; required when creating, non-empty when updating",
           { maxLength: 512 },
         ),
-        first_name: stringProp("First name; pass null to clear", {
+        first_name: nullableStringProp("First name; pass null to clear", {
           maxLength: 256,
         }),
-        last_name: stringProp("Last name; pass null to clear", {
+        last_name: nullableStringProp("Last name; pass null to clear", {
           maxLength: 256,
         }),
-        organization_name: stringProp("Organization name; pass null to clear", {
-          maxLength: 512,
-        }),
-        notes: stringProp("Free-text notes; pass null to clear"),
+        organization_name: nullableStringProp(
+          "Organization name; pass null to clear",
+          { maxLength: 512 },
+        ),
+        notes: nullableStringProp("Free-text notes; pass null to clear"),
       },
     },
     anonymized: { exposure: "excluded", reason: "write" },
@@ -302,9 +312,10 @@ export const MATTER_TOOL_DEFINITIONS = [
         priority: stringProp("Task priority (e.g. none, low, medium, high)", {
           maxLength: 16,
         }),
-        due_date: stringProp("Due date (ISO YYYY-MM-DD); pass null to clear", {
-          maxLength: 10,
-        }),
+        due_date: nullableStringProp(
+          "Due date (ISO YYYY-MM-DD); pass null to clear",
+          { maxLength: 10 },
+        ),
         add_assignee_user_id: stringProp(
           "User ID to assign to the task (must be a workspace member)",
         ),
@@ -325,21 +336,24 @@ export const MATTER_TOOL_DEFINITIONS = [
     description:
       "Link a contact to a matter in a party role (opposing party/counsel, " +
       "co-counsel, witness, expert witness, third party, judge, mediator, or " +
-      "other), or remove such a link. Pass contact_id and role to link; pass " +
-      "workspace_contact_id (from get_matter_overview) to unlink.",
+      "other), or remove such a link. Pass contact_id with role to link. To " +
+      "unlink, pass workspace_contact_id (precise, from get_matter_overview) " +
+      "or contact_id alone; contact_id alone is rejected when the contact " +
+      "holds several roles on the matter.",
     inputSchema: {
       type: "object",
       properties: {
         matter_id: stringProp("Matter/workspace ID"),
         contact_id: stringProp(
-          "Contact ID to link to the matter; requires role",
+          "Contact ID: with role to link the contact, or alone to unlink it " +
+            "from the matter",
         ),
         role: enumProp(
-          "Party role for the linked contact",
+          "Party role for the linked contact; provide it only when linking",
           WORKSPACE_CONTACT_ROLES,
         ),
         workspace_contact_id: stringProp(
-          "Existing matter-contact link ID to remove",
+          "Existing matter-contact link ID to remove, from get_matter_overview",
         ),
       },
       required: ["matter_id"],
@@ -477,6 +491,24 @@ const handleSaveMatterTool: McpToolHandler = async ({ args, context }) => {
       return errorResult("Forbidden");
     }
     const name = input.name ?? "";
+    // Validate the client contact up front so matter creation cannot half-run
+    // and then fail on an unknown client. Not transactional: the contact could
+    // be deleted between this check and creation (an accepted TOCTOU window).
+    if (input.client_id !== undefined) {
+      const clientId = brandPersistedContactId(input.client_id);
+      const client = await context.scopedDb((tx) =>
+        tx.query.contacts.findFirst({
+          where: {
+            id: { eq: clientId },
+            organizationId: { eq: context.organizationId },
+          },
+          columns: { id: true },
+        }),
+      );
+      if (!client) {
+        return errorResult("client_id contact not found");
+      }
+    }
     const workspaceId = createSafeId<"workspace">();
     const created = await Result.gen(() =>
       createWorkspaceHandler({
@@ -915,53 +947,59 @@ const readTaskDetail = async ({
     targetEntity: { columns: { id: true, name: true, kind: true } },
   } as const;
 
-  const [taskRow, assigneeRows, linksAsSource, linksAsTarget] =
-    await context.scopedDb(
-      async (tx) =>
-        await Promise.all([
-          tx.query.entities.findFirst({
-            where: { id: { eq: taskId }, workspaceId: { eq: workspaceId } },
-            columns: {
-              id: true,
-              name: true,
-              status: true,
-              priority: true,
-              dueDate: true,
-              startAt: true,
-              endAt: true,
-              location: true,
-              agendaKind: true,
-            },
-          }),
-          tx.query.taskAssignees.findMany({
-            where: {
-              entityId: { eq: taskId },
-              workspaceId: { eq: workspaceId },
-            },
-            columns: { role: true },
-            with: { user: { columns: { id: true, name: true } } },
-            limit: LIMITS.workspaceMembersCount,
-          }),
-          tx.query.entityLinks.findMany({
-            where: {
-              workspaceId: { eq: workspaceId },
-              sourceEntityId: { eq: taskId },
-            },
-            columns: linkColumns,
-            with: linkWith,
-            limit: LIMITS.taskEntityLinksPerDirectionMax,
-          }),
-          tx.query.entityLinks.findMany({
-            where: {
-              workspaceId: { eq: workspaceId },
-              targetEntityId: { eq: taskId },
-            },
-            columns: linkColumns,
-            with: linkWith,
-            limit: LIMITS.taskEntityLinksPerDirectionMax,
-          }),
-        ]),
-    );
+  // Serialize on one scopedDb client: a single pooled connection cannot
+  // multiplex concurrent queries, so these run sequentially rather than under
+  // Promise.all on the shared tx.
+  const { assigneeRows, linksAsSource, linksAsTarget, taskRow } =
+    await context.scopedDb(async (tx) => {
+      const task = await tx.query.entities.findFirst({
+        where: { id: { eq: taskId }, workspaceId: { eq: workspaceId } },
+        columns: {
+          id: true,
+          name: true,
+          status: true,
+          priority: true,
+          dueDate: true,
+          startAt: true,
+          endAt: true,
+          location: true,
+          agendaKind: true,
+        },
+      });
+      const assignees = await tx.query.taskAssignees.findMany({
+        where: {
+          entityId: { eq: taskId },
+          workspaceId: { eq: workspaceId },
+        },
+        columns: { role: true },
+        with: { user: { columns: { id: true, name: true } } },
+        limit: LIMITS.workspaceMembersCount,
+      });
+      const outgoing = await tx.query.entityLinks.findMany({
+        where: {
+          workspaceId: { eq: workspaceId },
+          sourceEntityId: { eq: taskId },
+        },
+        columns: linkColumns,
+        with: linkWith,
+        limit: LIMITS.taskEntityLinksPerDirectionMax,
+      });
+      const incoming = await tx.query.entityLinks.findMany({
+        where: {
+          workspaceId: { eq: workspaceId },
+          targetEntityId: { eq: taskId },
+        },
+        columns: linkColumns,
+        with: linkWith,
+        limit: LIMITS.taskEntityLinksPerDirectionMax,
+      });
+      return {
+        assigneeRows: assignees,
+        linksAsSource: outgoing,
+        linksAsTarget: incoming,
+        taskRow: task,
+      };
+    });
 
   return {
     taskRow,
@@ -1233,6 +1271,79 @@ const saveTaskArgsSchema = v.pipe(
   ),
 );
 
+/**
+ * Validate every failure-capable save_task target up front so no partial
+ * mutation can commit before a later step fails. Covers the matter_id/task_id
+ * pairing, the link target (existence and a linkable kind), assignee
+ * membership, and unlink-link ownership. Not transactional: a target could
+ * change kind, membership, or existence between this check and the mutation (an
+ * accepted TOCTOU window); this only removes the common partial-failure mode.
+ * Returns an error result, or null when valid.
+ */
+const validateSaveTaskTargets = async ({
+  context,
+  input,
+  taskId,
+  workspaceId,
+}: {
+  context: McpRequestContext;
+  input: v.InferOutput<typeof saveTaskArgsSchema>;
+  taskId: SafeId<"entity">;
+  workspaceId: SafeId<"workspace">;
+}): Promise<ReturnType<typeof errorResult> | null> => {
+  // matter_id is optional on update; when given it must name the task's matter.
+  if (input.matter_id !== undefined && input.matter_id !== workspaceId) {
+    return errorResult("task_id does not belong to matter_id");
+  }
+
+  if (input.link_entity_id !== undefined) {
+    const linkTargetId = brandPersistedEntityId(input.link_entity_id);
+    const target = await context.scopedDb((tx) =>
+      tx.query.entities.findFirst({
+        where: { id: { eq: linkTargetId }, workspaceId: { eq: workspaceId } },
+        columns: { kind: true },
+      }),
+    );
+    if (!target) {
+      return errorResult("Link target entity not found in this matter");
+    }
+    if (!includes(LINKABLE_ENTITY_KINDS, target.kind)) {
+      return errorResult("Link target must be a document, folder, or task");
+    }
+  }
+
+  if (input.add_assignee_user_id !== undefined) {
+    const userId = brandPersistedUserId(input.add_assignee_user_id);
+    const member = await context.scopedDb((tx) =>
+      tx.query.workspaceMembers.findFirst({
+        where: { workspaceId: { eq: workspaceId }, userId: { eq: userId } },
+        columns: { id: true },
+      }),
+    );
+    if (!member) {
+      return errorResult("add_assignee_user_id is not a member of this matter");
+    }
+  }
+
+  if (input.unlink_link_id !== undefined) {
+    const linkId = brandPersistedEntityLinkId(input.unlink_link_id);
+    const link = await context.scopedDb((tx) =>
+      tx.query.entityLinks.findFirst({
+        where: { id: { eq: linkId }, workspaceId: { eq: workspaceId } },
+        columns: { sourceEntityId: true, targetEntityId: true },
+      }),
+    );
+    if (!link) {
+      return errorResult("Entity-link not found in this matter");
+    }
+    if (link.sourceEntityId !== taskId && link.targetEntityId !== taskId) {
+      return errorResult("unlink_link_id does not belong to this task");
+    }
+  }
+
+  return null;
+};
+
 const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
   const parsed = v.safeParse(saveTaskArgsSchema, args);
   if (!parsed.success) {
@@ -1292,21 +1403,14 @@ const handleSaveTaskTool: McpToolHandler = async ({ args, context }) => {
   const workspaceId = owner.workspaceId;
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
 
-  // Validate the link target up front so a link request cannot fail after an
-  // earlier field update already committed. Not transactional: the target
-  // could change kind or be deleted between this check and the mutation (an
-  // accepted TOCTOU window); this only removes the common partial-failure mode.
-  if (input.link_entity_id !== undefined) {
-    const linkTargetId = brandPersistedEntityId(input.link_entity_id);
-    const target = await context.scopedDb((tx) =>
-      tx.query.entities.findFirst({
-        where: { id: { eq: linkTargetId }, workspaceId: { eq: workspaceId } },
-        columns: { id: true },
-      }),
-    );
-    if (!target) {
-      return errorResult("Link target entity not found in this matter");
-    }
+  const targetError = await validateSaveTaskTargets({
+    context,
+    input,
+    taskId,
+    workspaceId,
+  });
+  if (targetError) {
+    return targetError;
   }
 
   if (
@@ -1406,23 +1510,69 @@ const linkMatterContactArgsSchema = v.pipe(
     role: v.optional(v.picklist(WORKSPACE_CONTACT_ROLES)),
     workspace_contact_id: v.optional(v.pipe(v.string(), v.minLength(1))),
   }),
-  // Exactly one of link (contact_id) or unlink (workspace_contact_id).
+  // Exactly one target selector: contact_id (link with role, or unlink the
+  // contact) or workspace_contact_id (unlink one specific link).
   v.partialCheck(
     [["contact_id"], ["workspace_contact_id"]],
     ({ contact_id, workspace_contact_id }) =>
       (contact_id === undefined) !== (workspace_contact_id === undefined),
-    "Provide either contact_id (to link) or workspace_contact_id (to unlink), not both",
+    "Provide exactly one of contact_id or workspace_contact_id",
   ),
-  // Linking a contact requires a role.
+  // role selects the link operation, so it only pairs with contact_id.
   v.forward(
     v.partialCheck(
       [["contact_id"], ["role"]],
-      ({ contact_id, role }) => contact_id === undefined || role !== undefined,
-      "role is required when linking a contact",
+      ({ contact_id, role }) => role === undefined || contact_id !== undefined,
+      "role only applies when linking a contact by contact_id",
     ),
     ["role"],
   ),
 );
+
+/**
+ * Resolve the matter-contact link to remove. An explicit workspace_contact_id
+ * wins; otherwise the (matter, contact) row is looked up. A contact can hold
+ * several roles on one matter (several rows), so contact_id alone is ambiguous
+ * and the caller is told to pass workspace_contact_id. Returns the resolved id
+ * or an error result.
+ */
+const resolveUnlinkWorkspaceContactId = async ({
+  contactId,
+  context,
+  workspaceContactId,
+  workspaceId,
+}: {
+  contactId: string | undefined;
+  context: McpRequestContext;
+  workspaceContactId: string | undefined;
+  workspaceId: SafeId<"workspace">;
+}): Promise<SafeId<"workspaceContact"> | ReturnType<typeof errorResult>> => {
+  if (workspaceContactId !== undefined) {
+    return brandPersistedWorkspaceContactId(workspaceContactId);
+  }
+  // contact_id is guaranteed present by the schema when role is absent.
+  const contact = brandPersistedContactId(contactId ?? "");
+  const rows = await context.scopedDb((tx) =>
+    tx.query.workspaceContacts.findMany({
+      where: {
+        workspaceId: { eq: workspaceId },
+        contactId: { eq: contact },
+      },
+      columns: { id: true },
+      limit: 2,
+    }),
+  );
+  const first = rows.at(0);
+  if (!first) {
+    return errorResult("No matter-contact link found for that contact");
+  }
+  if (rows.length > 1) {
+    return errorResult(
+      "That contact holds multiple roles on the matter; pass workspace_contact_id to remove one link",
+    );
+  }
+  return brandPersistedWorkspaceContactId(first.id);
+};
 
 const handleLinkMatterContactTool: McpToolHandler = async ({
   args,
@@ -1452,11 +1602,17 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
   }
   const recordAuditEvent = bindWorkspaceRecorder(context, workspaceId);
 
-  // Unlink branch.
-  if (input.workspace_contact_id !== undefined) {
-    const workspaceContactId = brandPersistedWorkspaceContactId(
-      input.workspace_contact_id,
-    );
+  // Unlink branch: absence of role means remove an existing link.
+  if (input.role === undefined) {
+    const workspaceContactId = await resolveUnlinkWorkspaceContactId({
+      contactId: input.contact_id,
+      context,
+      workspaceContactId: input.workspace_contact_id,
+      workspaceId,
+    });
+    if (typeof workspaceContactId !== "string") {
+      return workspaceContactId;
+    }
     const removed = await Result.gen(() =>
       deleteWorkspaceContactHandler({
         safeDb: context.safeDb,
@@ -1471,7 +1627,10 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
     return textResult({ unlinked: true });
   }
 
-  // Link branch. The schema guarantees contact_id and role are present here.
+  // Link branch. The schema guarantees contact_id is present alongside role.
+  // Bind role to a local so its narrowed (non-undefined) type survives inside
+  // the handler closure.
+  const role = input.role;
   const created = await Result.gen(() =>
     createWorkspaceContactHandler({
       safeDb: context.safeDb,
@@ -1480,7 +1639,7 @@ const handleLinkMatterContactTool: McpToolHandler = async ({
       recordAuditEvent,
       body: {
         contactId: brandPersistedContactId(input.contact_id ?? ""),
-        role: input.role ?? "other",
+        role,
       },
     }),
   );

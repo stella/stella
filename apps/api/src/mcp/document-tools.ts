@@ -52,6 +52,7 @@ import {
   intProp,
   isToolErrorResult,
   MAX_LIST_LIMIT,
+  nullableStringProp,
   stringProp,
   textResult,
 } from "@/api/mcp/tool-utils";
@@ -213,11 +214,11 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         version_id: stringProp(
           "Version ID to annotate; required when setting label or description",
         ),
-        label: stringProp(
+        label: nullableStringProp(
           "New label for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
           { maxLength: 128 },
         ),
-        description: stringProp(
+        description: nullableStringProp(
           "New description for version_id; pass null to clear, empty string is not allowed, omit to leave unchanged",
           { maxLength: 1024 },
         ),

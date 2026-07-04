@@ -40,6 +40,22 @@ export const stringProp = (
     ...(opts?.maxLength === undefined ? {} : { maxLength: opts.maxLength }),
   }) as const;
 
+/**
+ * A nullable string parameter. Advertises `type: ["string", "null"]` so the MCP
+ * JSON schema matches a Valibot field that accepts null (the "pass null to
+ * clear" convention); a plain string type would mislead callers into believing
+ * null is rejected.
+ */
+export const nullableStringProp = (
+  description: string,
+  opts?: { maxLength?: number },
+) =>
+  ({
+    type: ["string", "null"],
+    description,
+    ...(opts?.maxLength === undefined ? {} : { maxLength: opts.maxLength }),
+  }) as const;
+
 export const intProp = (
   description: string,
   opts?: { max?: number; min?: number },

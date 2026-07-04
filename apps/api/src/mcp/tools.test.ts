@@ -1907,6 +1907,120 @@ describe("OpenAI-compatible MCP tools", () => {
     });
   });
 
+  // save_task ignored matter_id on update, so a mismatched pair silently
+  // updated a task under the wrong matter. The handler now rejects it.
+  test("save_task rejects a task whose matter_id does not match", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", matter_id: "ws_2", name: "Renamed" },
+      context: createContext({ scopedDb: createTaskKindScopedDb("task") }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [{ type: "text", text: "task_id does not belong to matter_id" }],
+      isError: true,
+    });
+  });
+
+  // unlink_link_id is validated against the task up front: a link belonging to
+  // a different task in the same matter is rejected before any mutation runs.
+  const createUnlinkMismatchScopedDb = () =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              entities: {
+                findFirst: () => Promise<{
+                  kind: string;
+                  workspaceId: string;
+                }>;
+              };
+              entityLinks: {
+                findFirst: () => Promise<{
+                  sourceEntityId: string;
+                  targetEntityId: string;
+                }>;
+              };
+            };
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              entities: {
+                findFirst: async () => ({ kind: "task", workspaceId: "ws_1" }),
+              },
+              entityLinks: {
+                findFirst: async () => ({
+                  sourceEntityId: "other_task",
+                  targetEntityId: "other_doc",
+                }),
+              },
+            },
+          }),
+      ),
+    );
+
+  test("save_task rejects an unlink_link_id that belongs to another task", async () => {
+    const result = await handleMcpToolCall({
+      args: { task_id: "task_1", unlink_link_id: "link_1" },
+      context: createContext({ scopedDb: createUnlinkMismatchScopedDb() }),
+      toolName: "save_task",
+    });
+
+    expect(result).toEqual({
+      content: [
+        { type: "text", text: "unlink_link_id does not belong to this task" },
+      ],
+      isError: true,
+    });
+  });
+
+  // link_matter_contact accepts contact_id as an unlink selector, but a contact
+  // holding several roles maps to several links, so it must ask for the precise
+  // workspace_contact_id instead of guessing.
+  const createMultiRoleContactScopedDb = () =>
+    asTestRaw<McpRequestContext["scopedDb"]>(
+      mock(
+        async (
+          callback: (tx: {
+            query: {
+              workspaceContacts: {
+                findMany: () => Promise<{ id: string }[]>;
+              };
+            };
+          }) => unknown,
+        ) =>
+          // oxlint-disable-next-line node/callback-return -- arrow body already returns the callback result
+          await callback({
+            query: {
+              workspaceContacts: {
+                findMany: async () => [{ id: "wc_1" }, { id: "wc_2" }],
+              },
+            },
+          }),
+      ),
+    );
+
+  test("link_matter_contact rejects an ambiguous contact_id unlink", async () => {
+    const result = await handleMcpToolCall({
+      args: { matter_id: "ws_1", contact_id: "contact_1" },
+      context: createContext({ scopedDb: createMultiRoleContactScopedDb() }),
+      toolName: "link_matter_contact",
+    });
+
+    expect(result).toEqual({
+      content: [
+        {
+          type: "text",
+          text: "That contact holds multiple roles on the matter; pass workspace_contact_id to remove one link",
+        },
+      ],
+      isError: true,
+    });
+  });
+
   // list_tasks (list mode) runs through the structured egress pipeline, so in
   // anonymized mode each task name is redacted under its matter's workspace
   // scope before it leaves Stella.
